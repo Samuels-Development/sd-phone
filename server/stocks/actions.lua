@@ -19,8 +19,7 @@ local ST = config.Stocks
 local actions = {}
 
 ---Stable per-character key (framework citizenid) every wallet/holding row is scoped to.
----Resolved from `src` only - the payload never names the actor, so a crafted payload can't
----trade as someone else.
+---Resolved from `src` only.
 ---@param src integer player server id
 ---@return string|nil citizenid, nil when the player isn't loaded
 local function cidOf(src) return player.getIdentifier(src) end
@@ -28,19 +27,11 @@ local function cidOf(src) return player.getIdentifier(src) end
 local util = require 'server.util'
 local wholeDollars = util.wholeAmount
 
--- Every money path is a read-modify-write that yields across MySQL awaits, and the wallet is
--- written back as an ABSOLUTE value while the bank moves by increments. Two interleaved calls
--- from the same character (double-tap / lag resend) would both read the same wallet balance -
--- a concurrent withdraw pair debits the wallet once but credits the bank twice, printing
--- money. One per-character gate covers all four money paths (deposit/withdraw/buy/sell) since
--- they share the wallet row; the overlapped call is rejected rather than queued.
 ---@type table<string, boolean> Citizenids with a wallet-mutating call currently in flight.
 local tradeBusy = {}
 
----Run a handler body while holding the caller's per-character trade gate, releasing it on
----every path - including an error, which is re-raised so lib.callback's failure behavior is
----unchanged. Keyed by citizenid (stable across reconnects) and released unconditionally, so it
----can't leak and needs no playerDropped sweep.
+---Runs a handler body while holding the caller's per-character trade gate, releasing it on every
+---path; errors are re-raised.
 ---@param cid string citizenid whose wallet the body mutates
 ---@param fn fun(): table handler body returning the response envelope
 ---@return table result response envelope, or the busy rejection
@@ -53,9 +44,7 @@ local function withTradeGate(cid, fn)
     return result
 end
 
----Push a fresh price snapshot to every online player, so a trade that moved the shared price
----is seen immediately rather than at the next tick. Ticks carry symbol/price/% change only -
----public market data, no player fields.
+---Pushes a fresh price snapshot to every online player. Ticks carry symbol/price/% change only.
 local function broadcastPrices()
     local ticks = engine.ticks()
     local players = GetPlayers()
@@ -64,10 +53,8 @@ local function broadcastPrices()
     end
 end
 
----Full market + the caller's positions + brokerage cash, for the app's main screen. Positions
----and cash are scoped to the caller's citizenid; other players' holdings are never in this
----payload. Creates the wallet row (seeded with ST.StartingCash) on first open; read-only
----otherwise.
+---Full market + the caller's positions + brokerage cash, for the app's main screen. Creates the
+---wallet row (seeded with ST.StartingCash) on first open; read-only otherwise.
 ---@param src integer player server id
 ---@return table result { success, data = { assets, cash } }
 function actions.market(src)
@@ -104,16 +91,10 @@ function actions.market(src)
     return { success = true, data = { assets = assets, cash = cash } }
 end
 
----Move whole dollars from the bank into the brokerage wallet. The amount is coerced +
----bounded server-side (wholeDollars, MinTrade/MaxTrade) and the bank balance is pre-checked
----because the banking bridge's removeMoney has no success return (bridge contract: callers
----check first). The bank debit lands before the wallet credit, so a failure between the two
----shorts the player rather than minting money. Runs under the trade gate: the wallet write is
----absolute, so two interleaved deposits would otherwise double-debit the bank for one credit.
----The returned bank figure is re-read after the debit so own-table banking resources report
----their real balance, falling back to arithmetic.
+---Moves whole dollars from the bank into the brokerage wallet. The amount is coerced + bounded
+---server-side and the bank balance is pre-checked; runs under the trade gate.
 ---@param src integer player server id
----@param payload any client-supplied { amount: number }; normalized to a table so a non-table payload can't error the handler
+---@param payload any client-supplied { amount: number }; normalized to a table
 ---@return table result { success, message? } or { success, data = { cash, bank } }
 function actions.deposit(src, payload)
     local cid = cidOf(src)
@@ -135,13 +116,10 @@ function actions.deposit(src, payload)
     end)
 end
 
----Move whole dollars from the brokerage wallet back to the bank. The wallet floor is enforced
----against a freshly-read balance; no upper bound is needed because the wallet balance itself
----is the cap. The wallet debit (absolute write) lands before the bank credit - the fail-safe
----order - and the body runs under the trade gate because an interleaved pair would debit the
----wallet once but credit the bank twice.
+---Moves whole dollars from the brokerage wallet back to the bank. The wallet floor is enforced
+---against a freshly-read balance; runs under the trade gate.
 ---@param src integer player server id
----@param payload any client-supplied { amount: number }; normalized to a table so a non-table payload can't error the handler
+---@param payload any client-supplied { amount: number }; normalized to a table
 ---@return table result { success, message? } or { success, data = { cash, bank } }
 function actions.withdraw(src, payload)
     local cid = cidOf(src)
@@ -162,17 +140,10 @@ function actions.withdraw(src, payload)
     end)
 end
 
----Buy `amount` dollars' worth of `symbol` (fee charged on top), paid from the brokerage
----wallet. Everything that prices the trade is server-side: the symbol must exist in the
----configured asset list (engine.meta whitelists it), the fill price comes from the live engine
----- never the payload - and the dollar amount is coerced + bounded here. Units are fractional;
----the cost basis is the weighted average of dollars invested per unit, fees excluded. The
----wallet debit is written BEFORE the holding is granted so a mid-write failure can't leave
----free units. The order then moves the shared price (applyImpact, sized by the order value)
----and the fresh snapshot is broadcast. Runs under the trade gate so an interleaved pair can't
----both spend the same cash read.
+---Buys `amount` dollars' worth of `symbol` (fee charged on top) from the brokerage wallet at the
+---live server price. Moves the shared price, broadcasts it, and runs under the trade gate.
 ---@param src integer player server id
----@param payload any client-supplied { symbol: string, amount: number }; normalized to a table so a non-table payload can't error the handler
+---@param payload any client-supplied { symbol: string, amount: number }; normalized to a table
 ---@return table result { success, message? } or { success, data = { cash, units, avgCost } }
 function actions.buy(src, payload)
     local cid = cidOf(src)
@@ -213,16 +184,10 @@ function actions.buy(src, payload)
     end)
 end
 
----Sell `amount` dollars' worth of `symbol` (or the whole position when `payload.all`),
----crediting the brokerage wallet. Sells only what the caller actually holds - unitsToSell is
----clamped to the stored quantity - at the live server price; the fee comes out of the proceeds
----and the net credit is rounded to whole dollars. Units leave the holding row BEFORE the
----wallet credit lands (debit-before-credit), a dust remainder below 1e-8 deletes the row
----outright, and the trade gate stops an interleaved pair from re-reading the same position.
----The sale pushes the shared price down (applyImpact, sized by the gross value) and broadcasts
----the move.
+---Sells `amount` dollars' worth of `symbol` (or the whole position when `payload.all`) at the
+---live server price, crediting the net proceeds. Moves the shared price and runs under the trade gate.
 ---@param src integer player server id
----@param payload any client-supplied { symbol: string, amount?: number, all?: boolean }; normalized to a table so a non-table payload can't error the handler
+---@param payload any client-supplied { symbol: string, amount?: number, all?: boolean }; normalized to a table
 ---@return table result { success, message? } or { success, data = { cash, units } }
 function actions.sell(src, payload)
     local cid = cidOf(src)
@@ -271,12 +236,8 @@ function actions.sell(src, payload)
     end)
 end
 
----Public ownership for an asset, measured against the FIXED total supply (most of which is the
----institutional "market" float). Returns the market float plus the top player holders, each as
----a share of total supply - so a small buy reads as a tiny %, not 100%. Citizenids from the
----top-holders query are used ONLY to compute the caller's `isYou` flag server-side; they are
----never sent to the client, so the whale view stays anonymous. Symbol is whitelist-checked
----against the configured assets. Read-only.
+---Public ownership for an asset: the market float plus the top player holders, each as a share
+---of the fixed total supply. Citizenids feed only the caller's `isYou` flag. Read-only.
 ---@param src integer player server id
 ---@param payload any client-supplied { symbol: string }; normalized to a table, symbol whitelist-checked here
 ---@return table result { success, data = { holders, investorCount, supply, topPlayerPct, whaleThreshold } }

@@ -7,9 +7,8 @@ local function newId() return util.newId(7) end
 
 store.newId = newId
 
----Decode a value into a Lua table. oxmysql auto-decodes JSON columns in recent versions;
----older builds hand back the raw string. This covers both paths so callers always see a
----table, and the pcall keeps a corrupted column from erroring the whole read.
+---Decodes a value into a Lua table, covering both auto-decoded JSON columns and raw strings;
+---anything else yields {}.
 ---@param value any
 ---@return table
 local function decodeJson(value)
@@ -44,11 +43,8 @@ local function hydrateRow(row)
     }
 end
 
----Create the phone_groups table idempotently and back-fill the avatar column on servers
----whose table predates it, so the resource is drop-in. `members` and `invites` are NOT NULL
----JSON columns so freshly-inserted groups round-trip cleanly through `JSON_SEARCH` without
----special-casing nulls. The shared phone_settings table (active-group pointers) is owned by
----server/settings/store.lua. Run once at boot.
+---Creates the phone_groups and phone_group_invites tables idempotently, back-filling the
+---avatar column on older installs and migrating legacy JSON invites once.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_groups (
@@ -87,10 +83,7 @@ function store.ensureSchema()
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
 
-    -- One-time, self-clearing migration of pending invites out of the old phone_groups.invites JSON
-    -- column into the indexed junction table. Idempotent: INSERT IGNORE (invite id PK) skips already
-    -- migrated rows, and each migrated group's JSON is cleared to '[]', so JSON_LENGTH filters it out
-    -- on every later boot - a fresh install or an already-migrated server does zero work here.
+    -- One-time migration of pending invites from the legacy invites JSON column into phone_group_invites.
     local legacy = MySQL.query.await("SELECT id, invites FROM phone_groups WHERE JSON_LENGTH(invites) > 0") or {}
     for _, row in ipairs(legacy) do
         for _, inv in ipairs(decodeJson(row.invites)) do
@@ -105,9 +98,7 @@ function store.ensureSchema()
     end
 end
 
----Read a single group by id, hydrated. Returns nil if missing. Rejects non-string / empty
----ids up front - group ids arrive in client-crafted payloads, and this is the choke-point
----that keeps a smuggled table (or anything else) from ever reaching oxmysql as a parameter.
+---Reads a single group by id, hydrated; nil if missing. Non-string / empty ids return nil.
 ---@param id string
 ---@return { id: string, name: string, leader_cid: string, color: string, members: table[], invites: table[] }|nil
 function store.getGroup(id)
@@ -119,7 +110,7 @@ function store.getGroup(id)
     return hydrateRow(row)
 end
 
----Count how many groups a player currently leads (the MaxOwnedPerPlayer cap check).
+---Counts how many groups a player currently leads.
 ---@param leaderCid string
 ---@return number
 function store.countOwnedBy(leaderCid)
@@ -145,9 +136,7 @@ function store.listForMember(citizenid)
     return rows
 end
 
----Return every pending invite for a citizenid paired with the parent group so the caller has all
----the data the React invite list needs. One indexed JOIN off phone_group_invites.target_cid, so it
----seeks the player's invites instead of scanning every group's JSON.
+---Returns every pending invite for a citizenid paired with the parent group.
 ---@param citizenid string
 ---@return { invite: table, group: table }[]
 function store.listInvitesFor(citizenid)
@@ -176,9 +165,8 @@ function store.listInvitesFor(citizenid)
     return results
 end
 
----Look up a single invite by id together with its owning group (an indexed PK lookup on the
----invite plus the group read). Invite ids arrive in client-crafted payloads, so non-string /
----empty ids are rejected before touching oxmysql - the same posture as store.getGroup.
+---Looks up a single invite by id together with its owning group; non-string / empty ids
+---return nil.
 ---@param inviteId string
 ---@return { invite: table, group: table }|nil
 function store.findInvite(inviteId)
@@ -208,8 +196,7 @@ function store.insertGroup(id, name, leaderCid, color, members)
     return affected ~= nil
 end
 
----Set (or clear) a group's custom picture URL. The permission check (leader-only) lives in
----actions.setAvatar; the data layer stays dumb.
+---Sets (or clears) a group's custom picture URL.
 ---@param id string
 ---@param avatar string|nil
 ---@return boolean
@@ -221,9 +208,7 @@ function store.setAvatar(id, avatar)
     return (affected or 0) > 0
 end
 
----Hard-delete a group and its pending invites. Members live inside the row (gone with it); invites
----are their own rows in phone_group_invites, so they're cascaded here (dangling active-group
----pointers are the caller's job via clearActiveGroupEverywhere).
+---Hard-deletes a group and its pending invites.
 ---@param id string
 ---@return boolean
 function store.deleteGroup(id)
@@ -232,11 +217,8 @@ function store.deleteGroup(id)
     return (affected or 0) > 0
 end
 
----Persist a hydrated group's member list back to MySQL. Used by addMember / removeMember after
----they mutate the in-memory copy. Whole-column last-write-wins on the members JSON: each caller
----re-reads the group immediately before mutating, so the window for a lost concurrent update stays
----as small as the design allows. (Invites moved to the phone_group_invites junction table, which
----each invite mutates by its own row - no whole-column rewrite there.)
+---Persists a hydrated group's member list back to MySQL; whole-column last-write-wins on the
+---members JSON.
 ---@param id string
 ---@param members table[]
 ---@return boolean
@@ -248,8 +230,7 @@ local function saveMembers(id, members)
     return (affected or 0) > 0
 end
 
----Add a player to a group's member list. Idempotent: a no-op returning false if they're
----already a member, so a replayed accept can't duplicate a roster entry.
+---Adds a player to a group's member list; returns false if they're already a member.
 ---@param groupId string
 ---@param citizenid string
 ---@param name string
@@ -263,8 +244,7 @@ function store.addMember(groupId, citizenid, name)
     return saveMembers(groupId, g.members)
 end
 
----Remove a player from a group. Returns true if they were a member (false leaves the row
----untouched, so callers can distinguish a real removal from a stale request).
+---Removes a player from a group. Returns true if they were a member.
 ---@param groupId string
 ---@param citizenid string
 ---@return boolean
@@ -283,8 +263,7 @@ function store.removeMember(groupId, citizenid)
     return saveMembers(groupId, filtered)
 end
 
----True iff the citizenid is currently in the group's members array. The membership gate the
----action layer leans on for permission checks, so it must never false-positive.
+---Returns true iff the citizenid is currently in the group's members array.
 ---@param groupId string
 ---@param citizenid string
 ---@return boolean
@@ -304,8 +283,7 @@ function store.countMembers(groupId)
     return #g.members
 end
 
----Add a pending invite as its own junction row, stamping sent_at server-side so the client can't
----forge the timestamp. One indexed insert, no whole-group rewrite.
+---Adds a pending invite as its own junction row, stamping sent_at server-side.
 ---@param groupId string
 ---@param invite { id: string, target_cid: string, invited_by: string, invited_name: string }
 ---@return boolean
@@ -318,9 +296,7 @@ function store.addInvite(groupId, invite)
     return affected ~= nil
 end
 
----Drop a single invite by its id (PK). Idempotent - silently no-ops if the invite has already
----been consumed elsewhere. Invite ids arrive in client-crafted payloads, so reject non-string /
----empty ids before touching oxmysql.
+---Drops a single invite by its id (PK); idempotent. Non-string / empty ids return false.
 ---@param inviteId string
 ---@return boolean removed
 function store.removeInvite(inviteId)
@@ -329,8 +305,7 @@ function store.removeInvite(inviteId)
     return (affected or 0) > 0
 end
 
----True iff there's an outstanding invite to `targetCid` on `groupId` (the duplicate-invite gate
----in actions.invite). Indexed lookup.
+---Returns true iff there's an outstanding invite to `targetCid` on `groupId`.
 ---@param groupId string
 ---@param targetCid string
 ---@return boolean
@@ -340,24 +315,21 @@ function store.hasPendingInvite(groupId, targetCid)
         { groupId, targetCid }) ~= nil
 end
 
----Pending-invite count for a group (the per-group invite cap check). Indexed COUNT.
+---Pending-invite count for a group.
 ---@param groupId string
 ---@return number
 function store.countInvitesForGroup(groupId)
     return MySQL.scalar.await('SELECT COUNT(*) FROM phone_group_invites WHERE group_id = ?', { groupId }) or 0
 end
 
----How many pending group invites a player has across all groups - the home-screen Groups badge,
----re-derived on every cross-app badge push. Now an indexed COUNT on target_cid instead of a
----JSON_SEARCH scan of every group. Clears as each invite is accepted or declined.
+---Counts a player's pending group invites across all groups.
 ---@param citizenid string
 ---@return number
 function store.pendingInviteCount(citizenid)
     return MySQL.scalar.await('SELECT COUNT(*) FROM phone_group_invites WHERE target_cid = ?', { citizenid }) or 0
 end
 
----The active group id stored for this player, or nil. Lives in the shared phone_settings
----row rather than phone_groups because it's per-player state, not per-group state.
+---Returns the active group id stored for this player (phone_settings row), or nil.
 ---@param citizenid string
 ---@return string|nil
 function store.getActiveGroupId(citizenid)
@@ -369,8 +341,7 @@ function store.getActiveGroupId(citizenid)
     return row and row.active_group_id or nil
 end
 
----Set (or clear) the active group for a player (upsert). Passing nil/empty clears the
----active selection. The membership check lives in actions.setActive; the data layer stays dumb.
+---Sets (or clears) the active group for a player (upsert); nil/empty clears the selection.
 ---@param citizenid string
 ---@param groupId string|nil
 ---@return boolean
@@ -383,8 +354,7 @@ function store.setActiveGroupId(citizenid, groupId)
     return affected ~= nil
 end
 
----Clear the active group for every player who had this group set as active. Called on
----disband so we don't leave dangling pointers at a deleted id.
+---Clears the active group for every player who had this group set as active.
 ---@param groupId string
 function store.clearActiveGroupEverywhere(groupId)
     if not groupId or groupId == '' then return end
@@ -394,8 +364,7 @@ function store.clearActiveGroupEverywhere(groupId)
     )
 end
 
----Clear the active group for one player if (and only if) it's currently set to `groupId`,
----so a leave/kick from one group can't clobber an active selection that already moved on.
+---Clears the active group for one player only when it's currently set to `groupId`.
 ---@param citizenid string
 ---@param groupId string
 function store.clearActiveGroupForPlayer(citizenid, groupId)

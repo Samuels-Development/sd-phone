@@ -2,11 +2,8 @@
 ---@field name 'qb'|'esx' Detected framework identifier.
 ---@field core any Live core object (`exports['qb-core']:GetCoreObject()` or ESX shared object).
 
----Detect which player framework is running and return a populated FrameworkInfo, or nil when
----neither qb-core nor es_extended is started. Resolved ONCE at first require - frameworks don't
----change at runtime - so every other bridge module dispatches on the cached `framework.name`.
----QBox counts as 'qb': qbx_core provides the 'qb-core' resource name and a compatible core object,
----so the same detection + API path covers both.
+---Detects the running player framework and returns a populated FrameworkInfo, or nil when
+---neither qb-core nor es_extended is started. QBox counts as 'qb'.
 ---@return FrameworkInfo|nil
 local function detect()
     if GetResourceState('qb-core') == 'started' then
@@ -18,8 +15,7 @@ local function detect()
     return nil
 end
 
----@type FrameworkInfo|nil Detection result; a nil here aborts the resource load below, on purpose -
----every bridge module (and every permission gate built on them) is meaningless without a framework.
+---@type FrameworkInfo|nil Detection result; nil aborts the resource load below.
 local info = detect()
 
 if not info then

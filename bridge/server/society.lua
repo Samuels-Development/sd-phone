@@ -5,28 +5,18 @@ local job       = require 'bridge.server.job'
 ---@type table Player bridge (bridge.server.player): identifier -> online source resolution.
 local player    = require 'bridge.server.player'
 
----@type table Society module; the table returned at end of file. Reads + moves a COMPANY's shared
----balance and reads its employee roster across the popular money + management resources - the
----society counterpart to bridge/server/banking.lua (personal balances), following the same shape:
----a KNOWN provider list, a lazily-resolved + cached provider(), and a try(fn) wrapper so a
----missing/renamed export in a forked copy degrades to a safe failure instead of erroring. No
----authority lives here: boss gating and amount hygiene (positive integer, NaN/inf rejection)
----belong to the callers in server/services/actions.lua. This layer's contract is that a reported
----success is a REAL balance movement and a provider decline propagates as false.
+---@type table Society module; the table returned at end of file. Reads and moves a company's
+---shared balance and reads its employee roster across the supported money + management resources;
+---a provider decline propagates as false.
 local society = {}
 
--- Society money providers, in detection priority: the first started resource wins, own-table
--- resources ahead of framework-coupled ones. Export shapes:
+-- Society money provider export shapes:
 --   qb-banking      : GetAccountBalance / AddMoney / RemoveMoney (account, amount, reason)
 --   Renewed-Banking : getAccountMoney / addAccountMoney / removeAccountMoney (account, amount)
---   qbx_management  : GetAccount / AddMoney / RemoveMoney (account[, amount]) - newer builds
---                     dropped these exports entirely; the pcall wrappers degrade them to 0/false.
+--   qbx_management  : GetAccount / AddMoney / RemoveMoney (account[, amount])
 --   qb-management   : GetAccount / AddMoney / RemoveMoney (account[, amount])
 --   esx_addonaccount / esx_society : esx_addonaccount:getSharedAccount('society_<job>') ->
 --                     { money, addMoney, removeMoney }
--- Deliberately NOT faked because no provider does them portably: offline hire/fire (needs a live
--- framework player object - callers surface "must be online") and a society transaction log
--- (unlike personal banking, the phone keeps none for societies).
 ---@type string[] Society money providers, in detection-priority order.
 local KNOWN = {
     'qb-banking', 'Renewed-Banking', 'qbx_management', 'qb-management',
@@ -36,9 +26,8 @@ local KNOWN = {
 ---@type boolean, string|nil Detection-ran flag + cached provider name (nil = none started).
 local resolved, providerName = false, nil
 
----The active society money provider, resolved lazily (and cached) on first use rather than at
----load, so a provider that starts after sd-phone is still detected. Nil when none is started -
----callers then hide the money UI (via society.available) instead of showing a misleading $0.
+---The active society money provider, resolved lazily and cached on first use. Nil when none is
+---started.
 ---@return string|nil
 local function provider()
     if not resolved then
@@ -51,12 +40,8 @@ local function provider()
     return providerName
 end
 
----Run a provider export/event call. Returns false if it errored OR the provider returned an
----explicit `false` (unknown account, insufficient funds) - so a credit / debit the provider
----DECLINED propagates as a failure instead of masquerading as success (qb-banking and
----Renewed-Banking signal declines with a boolean; treating "no error" as success silently lost
----the player's money on a bad account). A nil/other truthy return with no error still counts as
----success, since several providers return nothing on their happy path.
+---Run a provider export/event call. Returns false when it errored or the provider returned an
+---explicit `false`; any other no-error result counts as success.
 ---@param fn function
 ---@return boolean
 local function try(fn)
@@ -74,23 +59,14 @@ local function accName(jobName, override)
     return override or ('society_' .. jobName)
 end
 
----True when a society money provider is running. When false, callers should hide the balance /
----deposit / withdraw UI rather than show a misleading $0.
+---True when a society money provider is running.
 ---@return boolean
 function society.available()
     return provider() ~= nil
 end
 
 ---A company's shared balance; 0 when no provider is running or the account can't be read.
----Read-only. Keying differs per provider, hence the probing: qb-banking setups exist keyed by
----BOTH 'society_<job>' and the bare job name, so the first pass prefers whichever holds a NONZERO
----balance and the final call falls back to the society account's true value even when that's 0.
----Renewed-Banking keys its shared job accounts by the BARE job name (it seeds one per job at
----start via CreateJobAccount), so an explicit override is honoured first, then the job name, then
----the legacy 'society_<job>' just in case - its getAccountMoney returns false (not a number) for
----an unknown account, so the type() check naturally skips the misses. Stock esx_addonaccount
----fires its getSharedAccount callback synchronously, so the captured `bal` is populated before
----the pcall returns.
+---Read-only. Account keys are probed per provider ('society_<job>', bare job name, override).
 ---@param jobName string
 ---@param override? string society account name override
 ---@return number
@@ -129,10 +105,8 @@ function society.getBalance(jobName, override)
     return 0
 end
 
----Credit a company's shared balance. Returns true only if the credit landed - try() propagates a
----provider decline, so the caller can refund the player's side (services deposit does exactly
----that, debit-before-credit with a refund on a false here). Never falls through to personal
----money - the caller owns that side. Amount hygiene lives with the caller.
+---Credit a company's shared balance. Returns true only if the credit landed; a provider decline
+---propagates as false. Never falls through to personal money.
 ---@param jobName string
 ---@param amount number positive magnitude
 ---@param reason? string
@@ -162,13 +136,8 @@ function society.addMoney(jobName, amount, reason, override)
     return false
 end
 
----Debit a company's shared balance. Returns true only if the debit landed; callers MUST verify
----the balance first (getBalance). qb-banking and Renewed-Banking also decline internally on
----insufficient funds and try() propagates that. The esx_addonaccount path checks sufficiency
----HERE, before calling removeMoney: the stock shared-account object subtracts blindly (no floor),
----so without the check a raced double-withdraw could drive the shared account negative while this
----bridge reported success. Checked here (not just in the caller's pre-check) so the answer stays
----truthful under concurrency.
+---Debit a company's shared balance. Returns true only if the debit landed; the esx_addonaccount
+---path checks sufficiency before calling removeMoney.
 ---@param jobName string
 ---@param amount number positive magnitude
 ---@param reason? string
@@ -202,10 +171,7 @@ function society.removeMoney(jobName, amount, reason, override)
 end
 
 ---A job's grade ladder as `{ {level, label}, ... }` ordered by level. Read-only. On 'qb' the
----definition comes from framework.core.Shared.Jobs when populated, else the QBox export
----(qbx_core:GetJob) - QBox ships a compat core whose Shared table may be empty, so both probes
----are needed. On ESX the ladder is read straight from job_grades (parameterized). Yields an empty
----ladder when nothing is readable; gradeLabel then falls back to rendering "Grade N".
+---definition comes from Shared.Jobs, then the qbx_core GetJob export; on ESX from job_grades.
 ---@param jobName string
 ---@return { level: number, label: string }[]
 function society.getGrades(jobName)
@@ -242,8 +208,7 @@ function society.getGrades(jobName)
     return out
 end
 
----Resolve a grade level to its label for a job (used to render roster ranks). Falls back to
----"Grade N" when the ladder doesn't know the level.
+---Resolve a grade level to its label for a job; "Grade N" when the ladder doesn't know the level.
 ---@param jobName string
 ---@param level number
 ---@return string
@@ -254,12 +219,8 @@ function society.gradeLabel(jobName, level)
     return 'Grade ' .. tostring(level or 0)
 end
 
----A company's employees from the framework's player table as
----`{ {citizenid, name, grade}, ... }`. Read-only, DB-sourced (parameterized queries only), so
----OFFLINE employees are included. Online status is NOT set here - the actions layer annotates it
----via player.onlineCidMap() to keep this pure data. QBox caveat: the players table stores each
----character's ACTIVE job, so off-duty multijob members may not appear. Malformed charinfo/job
----JSON degrades that row to citizenid + grade 0 rather than dropping it.
+---A company's employees from the framework's player table as `{ {citizenid, name, grade}, ... }`,
+---offline employees included. Read-only; malformed charinfo/job JSON degrades a row to citizenid + grade 0.
 ---@param jobName string
 ---@return { citizenid: string, name: string, grade: number }[]
 function society.listEmployees(jobName)
@@ -307,10 +268,7 @@ function society.listEmployees(jobName)
 end
 
 ---Resolve character names for a set of citizenids from the framework player table (works for
----offline players): `{ [citizenid] = name }`. The IN clause is built purely from `?` placeholders
----with the cids passed as bound params, so caller values never reach the SQL text. Used to name
----saved-job employees who aren't in a job's active framework roster. A row with empty/malformed
----charinfo falls back to the citizenid itself.
+---offline players): `{ [citizenid] = name }`. Malformed charinfo falls back to the citizenid.
 ---@param cids string[]
 ---@return table<string, string>
 function society.namesByCids(cids)
@@ -351,11 +309,8 @@ function society.namesByCids(cids)
     return out
 end
 
----Set an ONLINE target's job to `jobName` at `grade`. Returns false when the target isn't
----currently connected - offline hire isn't portable (it needs a live framework player object).
----No permission checks here on purpose: authority (boss gating, the offered-grade-below-caller
----ceiling, invite-accept flow) is enforced by server/services/actions.lua before this runs; this
----is pure mechanism.
+---Set an online target's job to `jobName` at `grade`. Returns false when the target isn't
+---currently connected. No permission checks here.
 ---@param jobName string
 ---@param targetCid string
 ---@param grade? number
@@ -366,8 +321,8 @@ function society.hire(jobName, targetCid, grade)
     return job.set(src, jobName, grade or 0) == true
 end
 
----Reset an ONLINE target to the unemployed job. Returns false when offline, for the same
----portability reason as hire - callers surface "must be online". Authority lives with the caller.
+---Reset an online target to the unemployed job. Returns false when offline. No permission checks
+---here.
 ---@param targetCid string
 ---@param unemployedJob string
 ---@return boolean

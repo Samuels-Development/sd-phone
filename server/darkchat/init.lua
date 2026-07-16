@@ -3,8 +3,7 @@ local store   = require 'server.darkchat.store'
 ---@type table Dark Chat business logic (server.darkchat.actions): validated room/message/reaction handlers.
 local actions = require 'server.darkchat.actions'
 
--- Schema bootstrap runs once at load; a failure aborts loudly rather than letting every callback
--- die later on missing tables.
+-- Schema bootstrap runs once at load; a failure is printed.
 CreateThread(function()
     local ok, err = pcall(store.ensureSchema)
     if not ok then
@@ -14,18 +13,14 @@ CreateThread(function()
     print('^2[sd-phone:darkchat]^0 schema ready')
 end)
 
--- Live presence, in memory only: who is tabbed into which room, and who is sitting on the rooms
--- list. It drives pushing new messages/reactions straight to a room's current viewers and the
--- public rooms' live "active" counts; it deliberately resets on resource restart (viewers re-open
--- and re-register). Keyed by src, so playerDropped must scrub it (srcs recycle across sessions).
+-- Live presence, in memory only: who is tabbed into which room, and who is sitting on the
+-- rooms list. Resets on resource restart; keyed by src, scrubbed on playerDropped.
 ---@type table<string, table<integer, boolean>> Viewers currently inside a room, per room id.
 local present  = {}
 ---@type table<integer, boolean> Viewers currently on the rooms list, by src.
 local homepage = {}
 
----Mark `src` as viewing `roomId`. Only called after actions.open granted access, so the presence
----map can never hold a room the player couldn't read - and only open creates room sets, so
----arbitrary client roomIds can't grow the table.
+---Marks `src` as viewing `roomId`. Only called after actions.open granted access.
 ---@param src integer player server id
 ---@param roomId string room id
 local function joinPresence(src, roomId)
@@ -33,8 +28,7 @@ local function joinPresence(src, roomId)
     present[roomId][src] = true
 end
 
----Remove `src` from one room's viewer set. Pure lookup - a garbage roomId finds no set and
----changes nothing.
+---Removes `src` from one room's viewer set; a garbage roomId changes nothing.
 ---@param src integer player server id
 ---@param roomId string room id (may be raw client input; only ever used as a table key)
 local function leavePresence(src, roomId)
@@ -76,10 +70,8 @@ local function publicCounts()
     return counts
 end
 
----Push the current "active" (tabbed-in) viewer count for a public room to everyone who'd display
----it: the viewers inside the room AND anyone sitting on the rooms list, so both the header and the
----homepage tick live as people come and go. Private rooms show their total membership instead, so
----they're skipped. The payload is a room id and a number - nothing about WHO the viewers are.
+---Pushes the current "active" viewer count for a public room to the viewers inside it and
+---anyone sitting on the rooms list. Private rooms are skipped.
 ---@param roomId string room id (non-public ids no-op)
 local function broadcastActive(roomId)
     if not actions.isPublic(roomId) then return end
@@ -99,10 +91,8 @@ local function broadcastActive(roomId)
     end
 end
 
----Deliver a freshly-stored message to every OTHER live viewer of its room (the sender already has
----the authoritative copy from their callback return). The message carries only the author's
----nickname - no citizenid, phone number or server id ever rides in this payload, which is what
----keeps Dark Chat anonymous on the wire. Scoped to the room's present set, never -1.
+---Delivers a freshly-stored message to every other live viewer of its room. The message
+---carries only the author's nickname.
 ---@param roomId string room id
 ---@param exceptSrc integer sender to skip
 ---@param message table client-shaped message from actions.send
@@ -116,11 +106,7 @@ local function broadcast(roomId, exceptSrc, message)
     end
 end
 
----Push a message's new reaction set to everyone in the room except the reactor (who already has
----the authoritative set from the callback's return value). The set was computed from the REACTOR's
----viewpoint, so its `mine` flags mean nothing to recipients - the client deliberately merges only
----the emoji + counts and keeps its own local `mine` state (DarkChat.tsx mergeBroadcastReactions).
----Nothing in the payload identifies who reacted.
+---Pushes a message's new reaction set to everyone in the room except the reactor.
 ---@param roomId string room id
 ---@param exceptSrc integer reactor to skip
 ---@param messageId string message id
@@ -135,19 +121,15 @@ local function broadcastReaction(roomId, exceptSrc, messageId, reactions)
     end
 end
 
----Room list + preloaded histories (validated + built in actions.listRooms). Fetching the list also
----marks the caller as sitting on the homepage, so they receive live active-count pushes until they
----open a room or exit the app.
+---Room list + preloaded histories. Fetching the list also marks the caller as sitting on the
+---homepage for live active-count pushes.
 lib.callback.register('sd-phone:server:darkchat:rooms', function(src)
     joinHomepage(src)
     return actions.listRooms(src, publicCounts())
 end)
 
----Open one room: access-check + history via actions.open, then presence bookkeeping - the viewer
----moves from the homepage into the room, and a public room gets its live active count attached to
----the response (counting the opener) while everyone else's count is refreshed. roomId is
----type-checked here so no downstream lookup ever sees a non-string, and presence only changes when
----access was actually granted.
+---Opens one room: access-check + history via actions.open, then presence bookkeeping; a public
+---room gets its live active count attached and everyone else's count refreshed.
 ---@param payload table { roomId: string }
 lib.callback.register('sd-phone:server:darkchat:open', function(src, payload)
     local roomId = type(payload) == 'table' and payload.roomId or nil

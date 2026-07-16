@@ -1,12 +1,8 @@
----@type table Locale module; the table returned at end of file. Tiny i18n layer: loads
----locales/<lang>.json once at boot, flattens nested objects into dot-paths (so `menu.buy_title`
----reads `dict['menu.buy_title']`), and exposes a t(key, replacements) lookup that passes the key
----through when a translation is missing. Loaded by BOTH contexts - each side reads its own copy
----of the dictionary because LoadResourceFile is sided.
+---@type table Locale module: loads locales/<lang>.json, flattens it to dot-path keys, and exposes
+---a t(key, replacements) lookup.
 local locale = {}
 
----@type table|nil sd-phone config root (configs.config), nil when this context doesn't ship it -
----the pcall keeps this shared module loadable from either side without a hard dependency.
+---@type table|nil sd-phone config root (configs.config), nil when this context doesn't ship it.
 local config = (function()
     local ok, c = pcall(require, 'configs.config')
     return ok and c or nil
@@ -15,9 +11,8 @@ end)()
 ---@type table<string, any> Flattened dot-path -> translation dictionary for the loaded language.
 local dict = {}
 
----Recursively flatten a nested JSON-decoded table into dot-notation keys written into `target`
----(e.g. `{ menu = { buy = 'Buy' } }` becomes `target['menu.buy'] = 'Buy'`). Locale files come
----from this resource's own files, never from clients, so depth/shape isn't attacker-controlled.
+---Recursively flattens a nested JSON-decoded table into dot-notation keys written into `target`
+---(e.g. `{ menu = { buy = 'Buy' } }` becomes `target['menu.buy'] = 'Buy'`).
 ---@param prefix string|nil
 ---@param source table
 ---@param target table<string, any>
@@ -32,9 +27,8 @@ local function flatten(prefix, source, target)
     end
 end
 
----Localised lookup. Falls back to `key` when not present so missing translations are visible in
----the UI rather than rendering empty strings. Replacement values are %-escaped before the gsub so
----a value containing '%' can't act as a capture reference in the substitution.
+---Localised lookup; returns `key` when no translation exists. Replacement values are %-escaped
+---before substitution.
 ---@param key string
 ---@param replacements? table<string, any>
 ---@return string
@@ -49,9 +43,8 @@ function locale.t(key, replacements)
     return lstr or key
 end
 
----Load `locales/<lang>.json` into the dictionary, clearing the previous language first so keys
----removed from a file don't linger after a reload. Falls back to English when the requested file
----is missing; passes through silently if even English is absent (locale support is optional).
+---Loads `locales/<lang>.json` into the dictionary, clearing the previous language first. Falls
+---back to English when the requested file is missing; returns silently when no file exists.
 ---@param lang string
 function locale.load(lang)
     lang = lang or 'en'
@@ -77,8 +70,7 @@ function locale.load(lang)
     print(('^2[SD-PHONE] Loaded locale: %s^0'):format(lang))
 end
 
--- One-shot boot thread: load the configured language (config.Locale, default 'en') a beat after
--- start so it lands alongside the rest of the boot output. Until it runs, t() passes keys through.
+-- One-shot boot thread: loads the configured language (config.Locale, default 'en') shortly after start.
 CreateThread(function()
     Wait(100)
     locale.load(config and config.Locale or 'en')

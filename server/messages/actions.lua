@@ -27,32 +27,21 @@ local ok, fail, digits, trim, initialsFor, formatNumber = util.ok, util.fail, ut
 
 local colorFor = util.colorFor
 
--- Message kinds the composer can produce; anything else is coerced to text. `locrequest` is
--- deliberately absent: request cards are minted server-side (actions.appMessage, called by the
--- friends module), so a crafted composer payload can't forge one.
+-- Message kinds the composer can produce; anything else is coerced to text.
 ---@type table<string, boolean> Allowed payload.kind values.
 local VALID_KINDS = {
     text = true, image = true, gif = true, money = true, location = true, voice = true,
 }
 
--- Message kinds a system text (actions.systemText) may carry via its opts table. Strictly
--- presentational: image / gif render a picture, location renders a tappable waypoint card.
--- money is deliberately absent - composer money cards are minted against a real banking
--- transfer, so a caller-supplied money kind here would forge a payment card no funds ever
--- backed. voice is absent too: system senders have no recording/upload path, so there is
--- nothing legitimate for one to reference.
+-- Message kinds a system text (actions.systemText) may carry via its opts table.
 ---@type table<string, boolean> Allowed opts.kind values for system texts.
 local SYSTEM_KINDS = { image = true, gif = true, location = true }
 
--- The Tapback emoji the picker offers; reactions outside this set are rejected at the trust
--- boundary. Mirrors REACTIONS in the React MessageBubble.
+-- The Tapback emoji the picker offers; reactions outside this set are rejected.
 ---@type table<string, boolean> Allowed reaction emoji.
 local REACTION_SET = { ['❤️'] = true, ['👍'] = true, ['👎'] = true, ['😂'] = true }
 
----@type integer Upper bound on raw member entries scanned per group create / add call. Each
----entry costs a number-to-citizen DB lookup, so an unbounded client list would be a
----query-amplification lever; 64 is generous against the real roster cap (cfg.MaxGroupMembers)
----plus duplicates and typos, so a legitimate compose payload never gets near it.
+---@type integer Upper bound on raw member entries scanned per group create / add call.
 local MAX_MEMBER_SCAN = 64
 
 
@@ -60,9 +49,8 @@ local MAX_MEMBER_SCAN = 64
 
 
 
----Resolve a number into the React `Contact` shape the Messages UI renders. Prefers the viewer's
----saved contact card; falls back to a supplied display name (a group member's character name),
----then to the formatted number.
+---Resolves a number into the React `Contact` shape. Prefers the viewer's saved contact card,
+---then a supplied display name, then the formatted number.
 ---@param numberDigits string
 ---@param contactRow table|nil saved-contact row, or nil
 ---@param fallbackName string|nil
@@ -112,10 +100,8 @@ local function serializeContacts(contactMap)
     return out
 end
 
----Aggregate a message's reaction rows into the client's render shape: one entry per distinct
----emoji (first-appearance order) with how many people chose it and whether the viewer is one of
----them. Only counts and the viewer's own `mine` flag leave the server - reactor citizenids never
----reach a client.
+---Aggregates a message's reaction rows into the client's render shape: one entry per distinct
+---emoji (first-appearance order) with its count and whether the viewer chose it.
 ---@param rows { citizenid: string, emoji: string }[] oldest-first
 ---@param viewerCid string|nil
 ---@return table[]
@@ -133,10 +119,8 @@ local function buildReactions(rows, viewerCid)
     return out
 end
 
----Reshape a stored message row into the React `Message` shape, from a given viewer's
----perspective. `from` is 'me' when the viewer authored it, else the sender's number (which
----matches the resolved participant id). When a `reactionsByMid` lookup + viewer cid are
----supplied, the row's aggregated reactions ride along (counts + which one is the viewer's).
+---Reshapes a stored message row into the React `Message` shape from a viewer's perspective.
+---When a `reactionsByMid` lookup + viewer cid are supplied, aggregated reactions ride along.
 ---@param row table
 ---@param viewerNumber string
 ---@param viewerCid string|nil
@@ -171,8 +155,8 @@ local function serializeMessage(row, viewerNumber, viewerCid, reactionsByMid)
     return msg
 end
 
----Build a one-off serialized message straight from its fields, for the send-action return value
----and the live push (skips a DB round-trip).
+---Builds a serialized message straight from its fields, for the send-action return value and
+---the live push.
 ---@param id string
 ---@param senderNumber string
 ---@param kind string
@@ -247,17 +231,8 @@ local function buildConversation(viewerCid, viewerNumber, conversation, rows, co
     }
 end
 
----Sanitize composer metadata at the trust boundary - clamp lengths and coerce numbers so a
----malformed NUI payload can't poison a row. Money amounts are coerced to a non-negative Lua
----INTEGER: a crafted NaN/infinity (msgpack carries both) or a finite float too large to
----represent as an integer (1e300 floors to a float in Lua 5.4) would otherwise survive into the
----JSON meta encode and error the '%d' preview format mid-send. `requestStatus` only accepts
----'pending' - the composer never sends a status at all, so accepting 'paid'/'declined' here
----would let a crafted request arrive pre-marked as settled. Voice waveforms (amplitude bars
----sampled at record time) clamp to at most 64 ints 0-100 so a malformed payload can't bloat the
----row. Location waypoint codes run ~80-130 chars (base64 of the pin JSON); the 256 cap leaves
----headroom - a tighter cap corrupts them, which makes the recipient's decode fail and the map
----preview fall back to a fixed downtown coord.
+---Sanitizes composer metadata: clamps string lengths, coerces money amounts to a non-negative
+---integer, accepts only 'pending' request statuses, and bounds voice waveforms.
 ---@param kind string
 ---@param payload table
 ---@return table
@@ -296,8 +271,7 @@ local function sanitizeMeta(kind, payload)
     return meta
 end
 
----True if a message of `kind` carries something worth storing, given its body + sanitized meta.
----Guards against empty sends.
+---True if a message of `kind` carries content, given its body + sanitized meta.
 ---@param kind string
 ---@param body string
 ---@param meta table
@@ -311,8 +285,8 @@ local function hasContent(kind, body, meta)
     return body ~= ''
 end
 
----A short list/banner preview line for a message of any kind. `meta` may be nil only for kinds
----that never read it (text / locrequest - the systemText path passes nil).
+---Builds a short list/banner preview line for a message of any kind. `meta` may be nil only
+---for kinds that never read it.
 ---@param kind string
 ---@param body string
 ---@param meta table|nil
@@ -327,9 +301,8 @@ local function previewFor(kind, body, meta)
     return body
 end
 
----Fire an iOS-style phone notification at a recipient's client, then refresh their home-screen
----Messages badge from the DB. Every live delivery point funnels through here, so this is the
----single choke point that keeps the badge count in step with what just arrived.
+---Fires an iOS-style phone notification at a recipient's client, then refreshes their
+---home-screen Messages badge from the DB.
 ---@param targetSrc number
 ---@param title string
 ---@param body string
@@ -344,10 +317,8 @@ local function notify(targetSrc, title, body)
     badges.push(targetSrc)
 end
 
----Full message state for one player: every conversation (1:1 + group), their saved contacts for
----the compose picker, and their own number/name. Freshly-created groups the player belongs to
----but hasn't yet received a message in are surfaced as empty threads, so they're openable right
----away. Identity comes from `source` only. Read-only.
+---Returns full message state for one player: every conversation (1:1 + group, including empty
+---new groups), their saved contacts, and their own number/name. Read-only.
 ---@param source number
 ---@return table
 function actions.list(source)
@@ -379,13 +350,8 @@ function actions.list(source)
     })
 end
 
----Deliver one 1:1 message. The sender's copy is always stored; the recipient's copy + live push
----happen only when the number is in service. The target is rejected when empty, self, or longer
----than the conversation column (VARCHAR(48)) - past that length no phone can own it, and letting
----it through would only error the sender's own row insert. If the recipient has blocked the
----sender the message never reaches them (the sender's own copy is still stored, so it looks sent
----on their end). A recipient in airplane mode gets their copy withheld - no live push, no banner
----- until they turn it off (actions.releaseWithheld).
+---Delivers one 1:1 message: the sender's copy is always stored; the recipient's copy + live
+---push happen only when the number is in service, unblocked, and not in airplane mode.
 ---@param source number
 ---@param cid string
 ---@param myNumber string
@@ -429,15 +395,7 @@ local function sendDirect(source, cid, myNumber, target, kind, body, meta, ts, m
         end
     end
 
-    -- First-party send announcement: ONE payload table, fired once per logical send at all three
-    -- delivery sites (1:1 here, sendGroup's fan-out, actions.systemText) with system/group flags
-    -- telling the shapes apart. 1:1 shape: source/citizenid/senderNumber are the sender;
-    -- targetNumber is always present, targetCitizenid nil when the number is not in service, and
-    -- recipientId/targetSource nil when the recipient copy was never stored (not in service, or
-    -- sender blocked) - targetSource also nil while the recipient is offline. kind/body/meta are
-    -- the stored content, mid the logical id shared by both copies, messageId the sender's copy,
-    -- withheld whether airplane mode held the live push. Carries citizenids: server-trusted
-    -- consumers only, never forward the payload to clients.
+    -- First-party send announcement (1:1 shape).
     TriggerEvent('sd-phone:server:messages:sent', {
         system          = false,
         group           = false,
@@ -460,13 +418,8 @@ local function sendDirect(source, cid, myNumber, target, kind, body, meta, ts, m
     return ok(buildMessage(outId, myNumber, kind, body, meta, ts, true, myNumber))
 end
 
----Deliver a rich app-generated 1:1 message on a player's behalf - e.g. the location-share
----request Maps sends (kind `locrequest`). Internal, module-to-module only (never a client
----callback), which is why `kind` and `meta` are trusted here rather than run through the
----composer whitelist - it's the one path that can mint request cards. Reuses the normal mailbox
----plumbing (both copies share a mid, the recipient gets the live push and banner), and mirrors
----the outgoing copy into the sender's own Messages UI, since unlike a composer send there's no
----NUI round-trip to return it through.
+---Delivers a rich app-generated 1:1 message on a player's behalf (internal, module-to-module
+---only) and mirrors the outgoing copy into the sender's own Messages UI.
 ---@param source number sender
 ---@param targetNumber string recipient number
 ---@param kind string
@@ -494,9 +447,8 @@ function actions.appMessage(source, targetNumber, kind, body, meta)
     return res
 end
 
----Locate the caller's newest still-pending location-request card in the 1:1 thread with
----`peerNumber` - for answering a request from outside Messages (Maps > People), where no copy id
----rides along. Scoped to the caller's own mailbox. Read-only.
+---Locates the caller's newest still-pending location-request card in the 1:1 thread with
+---`peerNumber`. Scoped to the caller's own mailbox. Read-only.
 ---@param citizenid string
 ---@param peerNumber string
 ---@return string|nil copy id
@@ -504,11 +456,8 @@ function actions.findRequestCopy(citizenid, peerNumber)
     return store.latestPendingRequest(citizenid, digits(peerNumber), 'locrequest')
 end
 
----Flip a request card's status (e.g. a location-share request being accepted) on EVERY mailbox
----copy of the message, pushing the change live to online owners - so the requester's card
----updates the moment the target responds. `copyId` must be the caller's own copy: the mid lookup
----enforces ownership, so a copy id lifted from someone else's mailbox resolves to nothing and
----the call is a no-op.
+---Sets a request card's status on every mailbox copy of the message, pushing the change live
+---to online owners. `copyId` must be the caller's own copy.
 ---@param citizenid string the responder
 ---@param copyId string the responder's copy id
 ---@param status string 'accepted' | 'declined'
@@ -534,16 +483,8 @@ function actions.setRequestStatus(citizenid, copyId, status)
     return true
 end
 
----Deliver a one-way system text (verification codes etc.) from a service short code. No sender
----mailbox copy, ignores contact blocking - acceptable only because this is internal: it's
----reachable solely from other server modules (accounts delivery) and the trusted
----sendSystemMessage export, never from a client. `opts` may carry a presentation-safe kind
----(SYSTEM_KINDS: image / gif with a gifUrl, location with wpCode/wpSub) whose meta is rebuilt
----by sanitizeMeta exactly like a composer send; any other kind - money above all - is delivered
----as plain text. Returns false when the target number is blank or not in service, or when the
----message carries no content for its kind (empty body for text, no gifUrl for image/gif); on
----success also returns the recipient row id, for callers (the lb-phone compat shim) that need
----to reference the stored message.
+---Delivers a one-way system text from a service short code: no sender mailbox copy, contact
+---blocking ignored, non-whitelisted kinds delivered as plain text.
 ---@param senderNumber string
 ---@param senderName string
 ---@param targetNumber string
@@ -585,10 +526,7 @@ function actions.systemText(senderNumber, senderName, targetNumber, body, opts)
         notify(targetSrc, participant.name, previewFor(kind, body, meta))
     end
 
-    -- First-party send announcement - the system shape of sd-phone:server:messages:sent (full
-    -- contract documented at the sendDirect emission): no sender source/citizenid exists, so
-    -- senderName rides along instead, and messageId equals recipientId (the recipient's copy is
-    -- the only copy).
+    -- First-party send announcement (system shape).
     TriggerEvent('sd-phone:server:messages:sent', {
         system          = true,
         group           = false,
@@ -609,10 +547,8 @@ function actions.systemText(senderNumber, senderName, targetNumber, body, opts)
     return true, inId
 end
 
----Fan a message out to every member of a group thread - an outgoing copy for the sender, an
----incoming copy (plus live push + banner) for everyone else. Membership is checked against the
----store, not the payload, so a non-member calling with a real group id is rejected before
----anything is written. Airplane-mode members get their copy withheld exactly like the 1:1 path.
+---Fans a message out to every member of a group thread: an outgoing copy for the sender, an
+---incoming copy (plus live push + banner) for everyone else. Membership is store-checked.
 ---@param source number
 ---@param cid string
 ---@param myNumber string
@@ -660,10 +596,7 @@ local function sendGroup(source, cid, myNumber, groupId, kind, body, meta, ts, m
         end
     end
 
-    -- First-party send announcement - the group shape of sd-phone:server:messages:sent (full
-    -- contract documented at the sendDirect emission): groupId + members (the stored
-    -- { citizenid, number, name } roster) replace the per-recipient fields and messageId is the
-    -- sender's copy. Fired once per send, after the fan-out, never per member.
+    -- First-party send announcement (group shape), fired once per send.
     TriggerEvent('sd-phone:server:messages:sent', {
         system       = false,
         group        = true,
@@ -683,18 +616,8 @@ local function sendGroup(source, cid, myNumber, groupId, kind, body, meta, ts, m
     return ok(buildMessage(outId, myNumber, kind, body, meta, ts, true, myNumber))
 end
 
----Send a message from the composer. `payload.conversation` routes it: a 'g-' prefix is a group,
----anything else is treated as a destination number (which implicitly opens a new 1:1 thread).
----Everything client-shaped is re-validated here at the trust boundary: kind is
----whitelist-coerced, the body is trimmed + capped at cfg.MaxBodyLength, and the flat composer
----meta fields are rebuilt by sanitizeMeta. Money payments move real bank funds and are 1:1
----only; requests are just delivered (no transfer until the recipient pays). The transfer runs
----BEFORE storing so a failed payment - bad amount, insufficient funds, offline recipient -
----never leaves a phantom "you sent $X" card behind. We reuse the Banking app's transfer: it
----re-validates + clamps the amount server-side, resolves the recipient by number, debits/credits
----the bank (with refund-on-failure) and logs both sides into the Wallet - so a crafted amount
----here can't print money. Every mailbox copy of one send shares a logical `mid`, so reactions
----correlate across participants (see actions.react).
+---Sends a message from the composer. `payload.conversation` routes it ('g-' prefix = group,
+---else a destination number); kind, body, and meta are re-validated, money runs a bank transfer.
 ---@param source number
 ---@param payload table
 ---@return table
@@ -740,13 +663,8 @@ function actions.send(source, payload)
     return sendDirect(source, cid, myNumber, digits(conversation), kind, body, meta, ts, mid)
 end
 
----Toggle one of the caller's reactions on a message: tapping an emoji they already chose removes
----it, otherwise it's added - a player can stack any number of distinct emoji. The emoji is
----whitelist-checked against REACTION_SET, and the copy id is resolved through midForCopy, which
----verifies the row is in the caller's own mailbox - so reacting to someone else's copy id fails.
----The new aggregate (each emoji + count, with the viewer's own flagged) is returned to the
----caller and pushed live to every other participant who's online, each addressed by their own
----copy id + thread key with their own `mine` flags.
+---Toggles one of the caller's reactions on a message (whitelist- and ownership-checked),
+---returns the new aggregate, and pushes it live to every other online participant.
 ---@param source number
 ---@param payload { id?: string, emoji?: string }
 ---@return table
@@ -783,11 +701,8 @@ function actions.react(source, payload)
     return ok({ id = id, reactions = buildReactions(rows, cid) })
 end
 
----Create a group thread from a set of recipient numbers + a name. Recipient numbers are
----resolved to citizens (de-duped, minus the creator, scan bounded by MAX_MEMBER_SCAN) and the
----roster is capped at cfg.MaxGroupMembers - membership is only ever what resolved here, never a
----client-supplied citizenid. Returns the new (empty) conversation for the creator; online
----members get it pushed so it appears in their list immediately.
+---Creates a group thread from a set of recipient numbers + a name, resolving numbers to
+---citizens and capping the roster. Returns the new empty conversation; online members get it pushed.
 ---@param source number
 ---@param payload { name?: string, members?: string[] }
 ---@return table
@@ -853,13 +768,8 @@ function actions.createGroup(source, payload)
     return ok(buildConversation(cid, myNumber, key, {}, contactMap))
 end
 
----Add one or more members to an existing group. The caller must already be a member (any
----member may add, by design - only edits and removals are creator-only). Recipient numbers are
----resolved to citizens with the de-dupe seeded from the CURRENT roster so re-adds are skipped,
----the scan is bounded by MAX_MEMBER_SCAN, and the combined roster is capped at
----cfg.MaxGroupMembers. New members start with empty history (per-mailbox rows aren't
----backfilled). Pushes the refreshed thread to every online member so the new roster appears
----live; the caller gets it via the return value.
+---Adds one or more members to an existing group (any member may add; roster capped). Pushes
+---the refreshed thread to every online member and returns the caller's updated conversation.
 ---@param source number
 ---@param payload { conversation?: string, members?: string[] }
 ---@return table
@@ -922,11 +832,8 @@ function actions.addGroupMember(source, payload)
     return ok(buildConversation(cid, myNumber, key, {}, contactMap))
 end
 
----Rename a group and/or set its picture. Creator-only, checked against the stored owner_cid -
----never the payload. An omitted (or non-string) avatar means leave the picture unchanged;
----strings are capped to the column (VARCHAR(512)) so an oversized URL can't kill the update.
----Pushes the refreshed thread to every online member so the new name/picture appears live, and
----returns the caller's updated conversation.
+---Renames a group and/or sets its picture. Creator-only; pushes the refreshed thread to every
+---online member and returns the caller's updated conversation.
 ---@param source number
 ---@param payload { conversation?: string, name?: string, avatar?: string }
 ---@return table
@@ -976,10 +883,8 @@ function actions.updateGroup(source, payload)
     return ok(buildConversation(cid, myNumber, key, {}, contactMap))
 end
 
----Remove a member from a group. Creator-only, checked against the stored owner_cid, and the
----creator themselves can't be removed. The target is identified by number and must resolve to a
----current member. Drops the thread from the removed member's app live, refreshes the roster for
----everyone still in, and returns the caller's updated conversation.
+---Removes a member (identified by number) from a group. Creator-only; drops the thread from
+---the removed member's app, refreshes the roster, and returns the caller's conversation.
 ---@param source number
 ---@param payload { conversation?: string, member?: string }
 ---@return table
@@ -1031,9 +936,8 @@ function actions.removeGroupMember(source, payload)
     return ok(buildConversation(cid, myNumber, key, {}, contactMap))
 end
 
----Mark a thread's inbound messages as read for the caller, then refresh their badge - reading a
----thread decrements the home-screen Messages count. Scoped to the caller's own mailbox, so a
----crafted conversation key can only ever mark the caller's own rows. Idempotent.
+---Marks a thread's inbound messages as read for the caller, then refreshes their badge.
+---Idempotent.
 ---@param source number
 ---@param payload { conversation?: string }
 ---@return table
@@ -1050,9 +954,8 @@ function actions.markRead(source, payload)
     return ok({ conversation = conversation })
 end
 
----Delete the caller's copy of a thread - other participants' copies are separate rows and stay
----put. Deleting a group thread also leaves the group; an emptied group is removed entirely. The
----badge refresh at the end drops any unread the deleted thread held from the count.
+---Deletes the caller's copy of a thread. Deleting a group thread also leaves the group; an
+---emptied group is removed entirely.
 ---@param source number
 ---@param payload { conversation?: string }
 ---@return table
@@ -1076,10 +979,8 @@ function actions.deleteConversation(source, payload)
     return ok({ conversation = conversation })
 end
 
----Deliver every message withheld while the player had airplane mode on (called when they turn
----it off - the settings module fires the server-side event init.lua listens on). Pushes each
----affected thread into the live UI and fires one summary banner. Idempotent: a second call finds
----no withheld conversations and returns before touching anything.
+---Delivers every message withheld while the player had airplane mode on: pushes each affected
+---thread into the live UI and fires one summary banner. Idempotent.
 ---@param source number
 function actions.releaseWithheld(source)
     local cid = player.getIdentifier(source)
@@ -1101,12 +1002,8 @@ function actions.releaseWithheld(source)
     notify(source, 'Messages', ('You have new messages in %d conversation%s.'):format(n, n == 1 and '' or 's'))
 end
 
----Upload a recorded voice message to Fivemanage and return its hosted URL, so the composer can
----then send a `voice` message referencing it. Mirrors the Voice Memos uploader, but as a
----request/response so the URL comes straight back instead of via an event. The payload must be
----a data:audio/ URI within config.VoiceMemos.MaxAudioBytes - checked here (not just in the
----composer) so calling the callback directly can't push arbitrary blobs. The file extension is
----derived from the MIME prefix so Fivemanage stores it sensibly.
+---Uploads a recorded voice message to Fivemanage and returns its hosted URL. The payload must
+---be a data:audio/ URI within config.VoiceMemos.MaxAudioBytes.
 ---@param source number
 ---@param payload { audio?: string }
 ---@return table

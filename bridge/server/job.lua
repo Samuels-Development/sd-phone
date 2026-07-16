@@ -4,14 +4,11 @@ local framework  = require 'bridge.shared.framework'
 local player_mod = require 'bridge.server.player'
 
 ---@type table Job module; the table returned at end of file. Job identity/permission primitives
----for the server bridge - every `source` these take must come from the server's own event context
----(lib.callback src / net event source), never from a client payload, since app permission gates
----(boss dashboards, job whitelists) build directly on these answers.
+---for the server bridge.
 local job = {}
 
----The player's current job name, read live from the framework player object so a mid-session job
----change is always reflected. Nil when the player can't be resolved (offline / between characters)
----or the framework path yields nothing.
+---The player's current job name, read live from the framework player object. Nil when the player
+---can't be resolved or the framework path yields nothing.
 ---@param source number player server id
 ---@return string|nil
 function job.getName(source)
@@ -22,8 +19,7 @@ function job.getName(source)
     return nil
 end
 
----The player's current job grade level. Returns 0 (not nil) when the player or grade can't be
----resolved, so numeric comparisons at call sites never see nil.
+---The player's current job grade level. Returns 0 when the player or grade can't be resolved.
 ---@param source number player server id
 ---@return integer
 function job.getGrade(source)
@@ -36,9 +32,8 @@ function job.getGrade(source)
     return 0
 end
 
----Predicate: does the player currently hold `jobName` at grade >= `minGrade`? Checks the ACTIVE
----job only - an off-duty saved job doesn't count. Fails closed (false) when the player can't be
----resolved, so a permission gate built on this can't be passed by an unresolvable source.
+---Predicate: does the player currently hold `jobName` at grade >= `minGrade`? Checks the active
+---job only; fails closed when the player can't be resolved.
 ---@param source number player server id
 ---@param jobName string
 ---@param minGrade? integer Default 0.
@@ -62,9 +57,7 @@ function job.has(source, jobName, minGrade)
     return false
 end
 
----Convenience: true if the player matches any `{ name=..., minGrade=? }` entry. An EMPTY list
----returns true so callers can use it as a default-allow gate (an unset config whitelist means
----everyone) - callers gating something sensitive must pass a non-empty list.
+---True if the player matches any `{ name=..., minGrade=? }` entry. An empty list returns true.
 ---@param source number player server id
 ---@param options { name: string, minGrade?: integer }[]
 ---@return boolean
@@ -78,9 +71,8 @@ function job.hasAny(source, options)
     return false
 end
 
----True when the player is currently on `jobName` AND a boss of it. QBCore/QBox expose an `isboss`
----flag on the active job grade; ESX has no such flag, so it falls back to "grade >= esxBossGrade"
----(default 0 = any grade - pass a real threshold to gate it). Fails closed when unresolvable.
+---True when the player is currently on `jobName` and a boss of it: QBCore/QBox check the grade's
+---`isboss` flag, ESX checks grade >= esxBossGrade. Fails closed when unresolvable.
 ---@param source number player server id
 ---@param jobName string
 ---@param esxBossGrade? integer ESX boss-grade threshold. Default 0.
@@ -99,11 +91,8 @@ function job.isBoss(source, jobName, esxBossGrade)
     return false
 end
 
----Set the player's job through the framework's REAL job system (so paychecks, duty and every
----other consumer see it - not just the phone). Mutating: callers own the permission check (the
----Services app only reaches this via a server-validated accepted offer or the player's own saved
----job). Returns the framework's own verdict on QBCore (false when the job doesn't exist); ESX
----setJob returns nothing, so success is assumed there.
+---Set the player's job through the framework's job system. Mutating; callers own the permission
+---check. Returns the framework's own verdict on QBCore, always true on ESX.
 ---@param source number player server id
 ---@param jobName string
 ---@param grade? integer Default 0.
@@ -118,8 +107,8 @@ function job.set(source, jobName, grade)
     return false
 end
 
----The player's current on-duty state. QBCore/QBox expose `job.onduty`; ESX has no native duty
----concept, so this returns nil there and callers fall back to their own stored preference.
+---The player's current on-duty state via QBCore/QBox `job.onduty`. Nil on ESX or when the player
+---can't be resolved.
 ---@param source number player server id
 ---@return boolean|nil
 function job.getDuty(source)
@@ -131,17 +120,14 @@ function job.getDuty(source)
     return nil
 end
 
----True when the framework supports a multi-job ("saved jobs") model - QBCore and QBox both do (a
----player can hold several jobs and switch the active one via SetJob). ESX has no portable
----multi-job concept, so the phone's Jobs tab is hidden there.
+---True when the framework supports a multi-job ("saved jobs") model (QBCore/QBox); false on ESX.
 ---@return boolean
 function job.supportsMultijob()
     return framework.name == 'qb'
 end
 
----Resolve a job's display label ('Police') from the framework's job definitions: qb-core's
----Shared.Jobs first, then the qbx_core GetJob export (pcall-guarded - the export doesn't exist on
----plain QBCore). Falls back to nil so callers can use the bare job name. Read-only.
+---Resolve a job's display label ('Police'): qb-core's Shared.Jobs first, then the pcall-guarded
+---qbx_core GetJob export. Nil when unknown. Read-only.
 ---@param jobName string
 ---@return string|nil
 function job.getLabel(jobName)
@@ -157,10 +143,8 @@ function job.getLabel(jobName)
     return nil
 end
 
----Drive the player's on-duty state through the framework's REAL duty system so blips, /duty
----gating, dispatch and paychecks all see it - not just the phone. QBCore/QBox route through
----SetJobDuty; ESX has no native duty, so this is a no-op there (returns false) and the caller
----keeps its own pref as the source of truth.
+---Drive the player's on-duty state through QBCore/QBox SetJobDuty. A no-op returning false on
+---ESX.
 ---@param source number player server id
 ---@param onDuty boolean
 ---@return boolean applied true when the framework applied it
@@ -174,10 +158,8 @@ function job.setDuty(source, onDuty)
     return false
 end
 
----Drop the player's framework membership of `jobName` (QBox's multi-job table) so it stops paying
----out / showing duty. The RemovePlayerFromJob export is pcall-guarded because it only exists on
----qbx_core. No-op on plain QBCore and ESX, which have no separate membership table - there the
----phone's own saved-jobs list is the only record. Returns true when the framework handled it.
+---Drop the player's framework membership of `jobName` via qbx_core's pcall-guarded
+---RemovePlayerFromJob export. No-op on plain QBCore and ESX. True when the framework handled it.
 ---@param source number player server id
 ---@param jobName string
 ---@return boolean

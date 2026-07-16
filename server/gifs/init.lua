@@ -1,8 +1,7 @@
 ---@type table sd-phone config root (configs/config.lua).
 local config = require 'configs.config'
 
----@type string GIPHY v1 API base URL - every request is proxied through the server so the API
----key never reaches a client.
+---@type string GIPHY v1 API base URL; every request is proxied through the server.
 local GIPHY = 'https://api.giphy.com/v1/'
 
 local util = require 'server.util'
@@ -13,8 +12,7 @@ local ok, fail = util.ok, util.fail
 local function cfg() return config.Giphy or {} end
 
 ---The GIPHY API key, read from the server-only configs/server/apikeys.lua (merged into
----config.ApiKeys server-side). Only ever appears in the api_key query param of this server ->
----GIPHY request; it never flows back toward a client (only mapped media URLs do).
+---config.ApiKeys server-side).
 ---@return string key the API key, or '' when unconfigured
 local function apiKey() return (config.ApiKeys or {}).Giphy or '' end
 
@@ -23,10 +21,7 @@ local function hasKey()
     return apiKey() ~= ''
 end
 
----Percent-encode a value for use as a single query-string parameter. Every value in every
----outbound GIPHY URL passes through here - including the client-supplied search text - so a
----crafted string can't splice extra parameters (a different rating, a bigger limit) onto the
----proxied request.
+---Percent-encodes a value for use as a single query-string parameter.
 ---@param s any value to encode (tostring'd; nil becomes '')
 ---@return string encoded
 local function urlencode(s)
@@ -35,9 +30,8 @@ local function urlencode(s)
     end))
 end
 
----Call a GIPHY v1 endpoint and return the decoded JSON, or nil on any failure (missing key,
----transport error, non-200, unparseable body). The API key (config.ApiKeys.Giphy) and the content
----rating are appended here, never from the payload, and every param value is urlencoded.
+---Calls a GIPHY v1 endpoint and returns the decoded JSON, or nil on any failure. The API key and
+---content rating are appended here, and every param value is urlencoded.
 ---@param path string endpoint path under the v1 base
 ---@param params? table<string, string> extra query parameters
 ---@return table|nil decoded response body
@@ -64,11 +58,8 @@ local function giphyGet(path, params)
     return Citizen.Await(p)
 end
 
----Flatten GIPHY's `images` renditions into the { id, preview, full } shape the UI wants.
----`fixed_width` is a grid-sized loop; `downsized` keeps the sent GIF small. Each falls back
----through the others so a missing rendition is fine; an entry with no usable full URL is
----dropped. Only these media URLs ever reach the client - never the API request URLs (which
----carry the key).
+---Flattens GIPHY's `images` renditions into the { id, preview, full } shape the UI wants;
+---renditions fall back through each other and an entry with no usable full URL is dropped.
 ---@param results table[]|nil GIPHY result objects
 ---@return table[] gifs { id: string, preview: string, full: string }[]
 local function mapGifs(results)
@@ -89,22 +80,19 @@ local function mapGifs(results)
     return out
 end
 
--- Browse-grid categories. GIPHY has no category endpoint with images, so the live trending
--- search terms stand in (falling back to this built-in set when that request fails), and each
--- tile resolves a representative GIF via its own limit=1 search.
+-- Browse-grid categories: live trending search terms, falling back to this built-in set.
 ---@type string[] Category terms used when the trending-searches request fails.
 local FALLBACK_CATEGORIES = {
     'happy', 'lol', 'love', 'excited', 'sad', 'dance', 'no', 'yes',
     'hello', 'bye', 'hug', 'wow', 'thank you', 'sorry', 'facepalm', 'wink',
 }
 
----@type integer Max category tiles resolved per refresh - each costs one HTTP search, so this
----bounds the fan-out.
+---@type integer Max category tiles resolved per refresh.
 local CATEGORY_LIMIT = 14
 ---@type table|nil, integer Resolved category list shared by all players + the GetGameTimer ms it
 ---was resolved at (0 = never).
 local categoriesCache, categoriesCacheAt = nil, 0
----@type integer Category cache lifetime in ms (30 minutes) - tiles are cosmetic, staleness is fine.
+---@type integer Category cache lifetime in ms (30 minutes).
 local CATEGORIES_TTL = 30 * 60 * 1000
 
 ---First GIF rendition URL from a /gifs/search response (a category tile), or ''.
@@ -120,11 +108,8 @@ local function firstPreview(data)
         or ''
 end
 
----Browse-grid categories for the GIF picker: the live trending search terms, each resolved to a
----representative tile image via one limit=1 search fired concurrently per term. Pricey to
----refetch, so the resolved list is cached for CATEGORIES_TTL and shared by every player - which
----also bounds how often ANY client can make the server fan out HTTP requests. Takes no client
----input at all. Read-only.
+---Browse-grid categories for the GIF picker: live trending search terms, each resolved to a tile
+---image via one limit=1 search. Cached for CATEGORIES_TTL and shared by every player. Read-only.
 lib.callback.register('sd-phone:server:gifs:categories', function()
     if not hasKey() then return fail('GIPHY API key not configured') end
 
@@ -170,15 +155,13 @@ lib.callback.register('sd-phone:server:gifs:categories', function()
 end)
 
 ---@type table|nil, integer Cached trending payload shared by all players + the GetGameTimer ms it
----was fetched (0 = never). Trending is identical for everyone and changes slowly, so a short cache
----turns "one GIPHY request per Featured-tab open, per player" into at most one request per TTL.
+---was fetched (0 = never).
 local featuredCache, featuredCacheAt = nil, 0
 ---@type integer Featured cache lifetime in ms (5 minutes).
 local FEATURED_TTL = 5 * 60 * 1000
 
----Trending GIFs for the picker's featured tab. No client input; the page size comes from config
----(Giphy.Limit), never the payload. Served from a shared 5-minute cache so many players opening the
----tab don't each hit GIPHY; a failed fetch is not cached, so it retries next time. Read-only.
+---Trending GIFs for the picker's featured tab, served from a shared 5-minute cache; the page size
+---comes from config. A failed fetch is not cached. Read-only.
 lib.callback.register('sd-phone:server:gifs:featured', function()
     if not hasKey() then return fail('GIPHY API key not configured') end
     local now = GetGameTimer()
@@ -189,11 +172,8 @@ lib.callback.register('sd-phone:server:gifs:featured', function()
     return ok(payload)
 end)
 
----Search GIFs. `q` and `pos` are the only client-supplied values and both reach GIPHY only as
----urlencoded single query values, so a crafted string can't steer the proxied request; the page
----size comes from config, never the payload. Both are also length-capped (well above any real
----search term - the UI sends short text and never sends pos at all) so a crafted megabyte string
----can't burn server CPU in urlencode or balloon the outbound request URL. Read-only.
+---Searches GIFs. `q` and `pos` reach GIPHY only as urlencoded, length-capped single query values;
+---the page size comes from config. Read-only.
 ---@param payload table { q?: string, pos?: string|number }
 lib.callback.register('sd-phone:server:gifs:search', function(_, payload)
     if not hasKey() then return fail('GIPHY API key not configured') end

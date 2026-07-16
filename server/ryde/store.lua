@@ -7,10 +7,8 @@ local function newId() return util.newId(12) end
 
 store.newId = newId
 
----Create every Ryde table idempotently, so the resource is drop-in. Run once at boot. Driver
----identity is the Ryde *account* username (the shared accounts engine), not the citizenid - a
----player keeps their driver record across characters as long as they sign into the same Ryde
----account. Rides key the rider by citizenid and the driver by username, hence the two indexes.
+---Creates every Ryde table idempotently: drivers keyed by Ryde account username, rides keyed by
+---rider citizenid and driver username.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_ryde_drivers (
@@ -57,22 +55,21 @@ function store.ensureSchema()
     util.ensureIndex('phone_ryde_rides', 'idx_ryde_rides_rider_recent', '(rider_username, created_at)')
 end
 
----Fetch a driver record by account username. Read-only.
+---Fetches a driver record by account username. Read-only.
 ---@param username string
 ---@return table|nil
 function store.getDriver(username)
     return MySQL.single.await('SELECT * FROM phone_ryde_drivers WHERE username = ?', { username })
 end
 
----Remove a driver record (on account deletion). Past rides are left intact - they're shared
----history with the rider, and the driver simply drops off the leaderboard once their row is gone.
+---Removes a driver record; past rides are left intact.
 ---@param username string
 function store.deleteDriver(username)
     MySQL.query.await('DELETE FROM phone_ryde_drivers WHERE username = ?', { username })
 end
 
----Create or update a driver's profile (vehicle details), preserving stats - the upsert only
----touches the cosmetic columns, never the rating/trip/earnings counters.
+---Creates or updates a driver's profile; the upsert only touches the cosmetic columns, never
+---the rating/trip/earnings counters.
 ---@param username string
 ---@param displayName string
 ---@param vehicle string
@@ -90,8 +87,7 @@ function store.upsertDriver(username, displayName, vehicle, plate, color)
     ]], { username, displayName, vehicle, plate, color })
 end
 
----Credit a completed trip to a driver: one more trip, plus their earnings (0 when the fare
----couldn't be collected - the trip still counts, the money doesn't).
+---Credits a completed trip to a driver: one more trip plus their earnings (0 when uncollected).
 ---@param username string
 ---@param earnings number
 function store.bumpDriverStats(username, earnings)
@@ -102,8 +98,7 @@ function store.bumpDriverStats(username, earnings)
     ]], { earnings, username })
 end
 
----Fold a rider's star rating into the driver's running average (sum + count, so the average is
----derived at read time and never drifts).
+---Folds a rider's star rating into the driver's stored rating sum + count.
 ---@param username string
 ---@param stars number
 function store.addRating(username, stars)
@@ -114,8 +109,7 @@ function store.addRating(username, stars)
     ]], { stars, username })
 end
 
----Persist a finished (or cancelled) ride. Live requests and in-flight trips are deliberately
----never written - only terminal states reach this table.
+---Persists a finished or cancelled ride; only terminal states reach this table.
 ---@param r table trip record from server.ryde.actions
 function store.insertRide(r)
     MySQL.insert.await([[
@@ -131,17 +125,15 @@ function store.insertRide(r)
     })
 end
 
----Fetch one ride row by id. The caller owns the ownership check (rider_username vs the caller's
----citizenid); the data layer stays dumb. Read-only.
+---Fetches one ride row by id. Read-only.
 ---@param rideId string
 ---@return table|nil
 function store.getRide(rideId)
     return MySQL.single.await('SELECT * FROM phone_ryde_rides WHERE id = ?', { rideId })
 end
 
----Attach a rider's star rating to a ride, but only if it has none yet - the IS NULL predicate
----makes the write single-shot at the DB level, so the returned affected-row count is the
----caller's replay/race guard (0 means someone already rated it).
+---Attaches a rider's star rating to a ride only when it has none yet; returns the affected-row
+---count.
 ---@param rideId string
 ---@param stars number
 ---@return number affected rows
@@ -152,8 +144,8 @@ function store.setRideRating(rideId, stars)
     )
 end
 
----Every ride a player took part in, newest first (capped at 100). Riders are keyed by citizenid,
----drivers by account username, so the two keys can differ for one caller. Read-only.
+---Every ride a player took part in, newest first (capped at 100); riders keyed by citizenid,
+---drivers by account username. Read-only.
 ---@param riderKey string citizenid
 ---@param driverKey string account username (falls back to citizenid)
 ---@return table[]
@@ -166,9 +158,7 @@ function store.ridesForUser(riderKey, driverKey)
     ]], { riderKey, driverKey }) or {}
 end
 
----The rider's most recent ride (any status). Used to resolve a trip that ended while their phone
----was closed: if it matches the stale local ride's trip id, the client knows whether it
----completed (rate it) or was cancelled. Read-only.
+---The rider's most recent ride (any status). Read-only.
 ---@param riderKey string citizenid
 ---@return table|nil
 function store.latestRiderRide(riderKey)
@@ -181,9 +171,8 @@ function store.latestRiderRide(riderKey)
     ]], { riderKey })
 end
 
----Top drivers server-wide, ranked by a confidence-weighted rating then trip count, so one lucky
----5-star can't outrank a high-volume driver (see configs/ryde.lua for the formula). Drivers with
----no ratings yet score a provisional 5 so a new driver isn't buried. Read-only.
+---Top drivers server-wide, ranked by confidence-weighted rating then trip count; unrated
+---drivers score a provisional 5. Read-only.
 ---@param limit number max rows
 ---@param prior number confidence-weighting prior rating (configs.ryde LeaderboardPriorRating)
 ---@param weight number confidence weight in trips (configs.ryde LeaderboardWeight)

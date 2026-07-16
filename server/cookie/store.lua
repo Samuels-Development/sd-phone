@@ -1,13 +1,8 @@
 ---@type table Store module; the table returned at end of file.
 local store = {}
 
----Create the save table if it doesn't exist and back-fill the nickname column on tables created
----before it existed, so the resource is drop-in. One row per character holds the whole save:
----spendable `cookies`, lifetime `earned` (drives achievements and the leaderboard), owned
----upgrades + unlocked achievements as JSON, and the rain toggle. `name` is denormalised so the
----leaderboard can list offline players. Counts are DOUBLE - idle play pushes them past INT
----range, and the UI only ever shows abbreviated values so float precision is fine. Run once at
----boot.
+---Creates the save table if it doesn't exist and back-fills the nickname column. One row per
+---character holds the whole save; counts are DOUBLE. Runs once at boot.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS `phone_cookie` (
@@ -34,7 +29,7 @@ function store.ensureSchema()
 end
 
 ---A character's full save row, or nil when they've never played. Caller decodes the JSON
----columns; the data layer stays dumb. Read-only.
+---columns. Read-only.
 ---@param cid string framework per-character id
 ---@return table|nil row
 function store.get(cid)
@@ -65,8 +60,8 @@ function store.save(cid, name, cookies, earned, ownedJson, achJson, rainOn, ts)
     ]], { cid, name, cookies, earned, ownedJson, achJson, rainOn, ts })
 end
 
----Top `limit` other players by total baked, excluding the caller (the client splices itself in
----live). Only display fields leave the table - never citizenids. Read-only.
+---Top `limit` other players by total baked, excluding the caller. Only display fields leave the
+---table. Read-only.
 ---@param limit integer row cap
 ---@param excludeCid string caller's citizenid ('' when unresolvable)
 ---@return table rows { name, nickname, earned }[]
@@ -76,8 +71,7 @@ function store.topRivals(limit, excludeCid)
         { excludeCid, limit }) or {}
 end
 
----Set (or clear, when nil) the caller's custom leaderboard alias. Upserts so an alias can be
----set before the first save row exists.
+---Sets (or clears, when nil) the caller's custom leaderboard alias (upsert).
 ---@param cid string framework per-character id
 ---@param nickname string|nil validated alias (nil clears)
 function store.setNickname(cid, nickname)

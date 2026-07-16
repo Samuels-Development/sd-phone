@@ -15,13 +15,12 @@ local player  = require 'bridge.server.player'
 local SV         = config.Services
 ---@type integer Max saved jobs per player (0 = no cap).
 local MAX        = SV.MaxSavedJobs or 5
----@type boolean Drop the player off duty when they switch active job (mirrors sd-multijob).
+---@type boolean Drop the player off duty when they switch active job.
 local OFF_DUTY   = SV.SwitchOffDuty ~= false
 ---@type string Job the player is reset to when removing their active job.
 local UNEMPLOYED = SV.UnemployedJob or 'unemployed'
 
--- Jobs that are never listed, switchable, or accept-able (you go unemployed via the Actions tab's
--- Quit, not here).
+-- Jobs that are never listed, switchable, or accept-able.
 ---@type table<string, boolean> Set of blacklisted job names.
 local BLACKLIST = {}
 for _, j in ipairs(SV.JobBlacklist or { 'unemployed' }) do BLACKLIST[j] = true end
@@ -57,13 +56,8 @@ local function savedCount(map)
     return n
 end
 
----A player's saved jobs + pending offers. When the framework has no multi-job model (ESX) this
----returns `multijob = false` and the UI hides the tab. The caller's CURRENT framework job is
----seeded/refreshed into their saved map first, so the list is never empty and a promotion on the
----active job is reflected - the framework stays authoritative for the job they're actually
----working. Sorted active first, then alphabetically; offers ship the inviter's display name
----('A manager' when an invite predates names). Everything is keyed off the caller's own
----citizenid.
+---Returns a player's saved jobs + pending offers, or `multijob = false` when the framework has
+---no multi-job model; the caller's current framework job is seeded/refreshed into the map first.
 ---@param src number
 ---@return table
 function jobs.list(src)
@@ -112,12 +106,8 @@ function jobs.list(src)
     return ok({ multijob = true, jobs = list, invites = invites, max = MAX })
 end
 
----Make a saved job the active one (framework SetJob at its SAVED grade). The target job comes
----from the payload but must already exist in the caller's own saved map - which is only ever
----written by accepted offers, boss promotions/demotions, and framework seeding - so a crafted
----payload can't switch into a job or grade the player was never given. Blacklisted jobs are
----rejected outright. Mirrors sd-multijob: switching drops you off duty (config SwitchOffDuty),
----and the rosters of the job you left and the one you joined both refresh live.
+---Makes a saved job the active one (framework SetJob at its saved grade); blacklisted jobs are
+---rejected, switching can drop the player off duty, and both affected rosters refresh.
 ---@param src number
 ---@param payload { job?: string }
 ---@return table
@@ -147,10 +137,8 @@ function jobs.switch(src, payload)
     return jobs.list(src)
 end
 
----Forget a saved job, dropping the framework membership on QBox so it truly goes away. Removing
----the job you're actively working resigns you to unemployed (and off duty) first, then refreshes
----the bosses' rosters of the job you left. Scoped entirely to the caller's own saved map, so an
----arbitrary payload job at worst removes nothing.
+---Forgets a saved job, dropping the framework membership on QBox; removing the active job
+---resigns the player to unemployed and off duty first, then refreshes the roster.
 ---@param src number
 ---@param payload { job?: string }
 ---@return table
@@ -175,12 +163,8 @@ function jobs.remove(src, payload)
     return jobs.list(src)
 end
 
----Accept a pending offer: save the job (you switch to it from "My Jobs" when ready) and clear the
----offer. The invite is looked up scoped to the caller's own citizenid, so an invite id can't be
----replayed against someone else's offer, and the saved grade comes from the stored invite - never
----the payload - so accepting is the ONLY way a hire lands, and it lands exactly as the boss
----offered it. Enforces the MaxSavedJobs cap (0 = no cap; already holding the job doesn't
----double-count). The hiring boss's Manage Employees list updates live.
+---Accepts a pending offer: saves the job at the invite's stored grade, clears the offer, and
+---enforces the MaxSavedJobs cap (0 = no cap).
 ---@param src number
 ---@param payload { id?: string }
 ---@return table
@@ -205,8 +189,7 @@ function jobs.accept(src, payload)
     return jobs.list(src)
 end
 
----Decline (delete) a pending offer. Scoped to the caller's own citizenid, so deleting an unknown
----or foreign id is a no-op. Idempotent.
+---Declines (deletes) a pending offer, scoped to the caller's own citizenid; idempotent.
 ---@param src number
 ---@param payload { id?: string }
 ---@return table

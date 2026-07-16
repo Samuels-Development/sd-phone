@@ -10,7 +10,7 @@ local settings = require 'server.settings.store'
 local registerLbExport, stubLbExport, warnOnce = shim.registerLbExport, shim.stubLbExport, shim.warnOnce
 
 ---The caller's live call snapshot ({ channel, phase, number, name, elapsed }) or nil, unwrapped
----from the actions.current envelope the way the first-party read exports do it.
+---from the actions.current envelope.
 ---@param source any
 ---@return table|nil
 local function currentFor(source)
@@ -20,12 +20,9 @@ local function currentFor(source)
     return nil
 end
 
----CreateCall(caller { source, phoneNumber }, callee?, options?): start a 1:1 call on the
----caller's behalf through actions.dial, so the full player-originated validation applies
----(busy/airplane, digit normalisation, self-call guard, number-in-service, callee
----reachability). The caller resolves by source first, then by phoneNumber for source-less
----payloads. Returns the pma-voice channel number as the call id, nil when the call could not be
----placed. options.company / options.hideNumber have no equivalent and warn once.
+---CreateCall(caller { source, phoneNumber }, callee?, options?): starts a 1:1 call through
+---actions.dial, resolving the caller by source then phoneNumber. Returns the pma-voice channel
+---as the call id, nil when the call could not be placed.
 registerLbExport('CreateCall', function(caller, callee, options)
     if type(caller) ~= 'table' then return nil end
     if type(options) == 'table' and (options.company ~= nil or options.hideNumber ~= nil) then
@@ -44,9 +41,8 @@ registerLbExport('CreateCall', function(caller, callee, options)
     return res.success and res.data.channel or nil
 end)
 
----EndCall(source): end whatever call the player is in, resolving their OWN channel through
----actions.current and hanging up through actions.hangup so the ownership checks apply - the
----same shape as the first-party endCallFor export. Idempotent: not being in a call is success.
+---EndCall(source): ends whatever call the player is in, resolving their own channel through
+---actions.current and hanging up through actions.hangup. Not being in a call is success.
 registerLbExport('EndCall', function(source)
     if type(source) ~= 'number' then return false end
     local call = currentFor(source)
@@ -55,14 +51,11 @@ registerLbExport('EndCall', function(source)
 end)
 
 ---IsInCall(source): whether the player is in a call or pending group ring, plus the channel as
----the call id second return. lb's third return (the raw call object) is not honoured - sd-phone
----keeps session internals private.
+---the call id second return. lb's third return (the raw call object) is not honoured.
 registerLbExport('IsInCall', function(source)
     local call = currentFor(source)
     if not call then return false end
     return true, call.channel
 end)
 
--- Call sessions live in server.calls.actions locals keyed per player, not addressable by id
--- from outside, so a by-id lookup has nothing to read.
 stubLbExport('GetCall', nil, 'is not supported: sd-phone call sessions are not addressable by id')

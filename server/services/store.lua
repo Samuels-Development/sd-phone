@@ -4,13 +4,8 @@ local store = {}
 local util = require 'server.util'
 local isTruthy = util.truthy
 
----Create the phone_service_prefs table if it doesn't exist and back-fill the later job_messages
----column, so the resource is drop-in. This is the phone-owned per-(character, job) home of the
----Duty / Job Calls / Job Messages toggles - its own table (rather than columns on phone_settings)
----so the schema is self-contained and the value is per job: a player who works two jobs gets
----independent toggles. Defaults are ON, matching the app's "on duty / accepting calls" baseline.
----The migration probes information_schema rather than using ADD COLUMN IF NOT EXISTS, so it also
----works on MySQL builds without that syntax. Run once at boot.
+---Creates the phone_service_prefs table if it doesn't exist and back-fills the job_messages
+---column; toggles default to ON.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_service_prefs (
@@ -33,7 +28,7 @@ function store.ensureSchema()
     end
 end
 
----Read a character's prefs for a job. Unset (or blank keys) -> all default to ON.
+---Reads a character's prefs for a job; unset (or blank keys) all default to ON.
 ---@param citizenid string
 ---@param job string
 ---@return { duty: boolean, jobCalls: boolean, jobMessages: boolean }
@@ -48,8 +43,7 @@ function store.getPrefs(citizenid, job)
     return { duty = isTruthy(row.duty), jobCalls = isTruthy(row.job_calls), jobMessages = isTruthy(row.job_messages) }
 end
 
----Persist the Duty toggle for a (character, job), leaving the other toggles intact (upsert
----touches only its own column, and unset columns keep their DEFAULT 1).
+---Persists the Duty toggle for a (character, job), leaving the other toggles intact.
 ---@param citizenid string
 ---@param job string
 ---@param on boolean
@@ -61,7 +55,7 @@ function store.setDuty(citizenid, job, on)
     ]], { citizenid, job, on and 1 or 0 })
 end
 
----Persist the Job-Calls toggle for a (character, job), leaving the other toggles intact.
+---Persists the Job-Calls toggle for a (character, job), leaving the other toggles intact.
 ---@param citizenid string
 ---@param job string
 ---@param on boolean
@@ -73,7 +67,7 @@ function store.setJobCalls(citizenid, job, on)
     ]], { citizenid, job, on and 1 or 0 })
 end
 
----Persist the Job-Messages toggle for a (character, job), leaving the other toggles intact.
+---Persists the Job-Messages toggle for a (character, job), leaving the other toggles intact.
 ---@param citizenid string
 ---@param job string
 ---@param on boolean

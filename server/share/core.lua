@@ -11,20 +11,14 @@ local core = {}
 ---at query time.
 local openPhones = {}
 
----Track a player's phone-open state. Self-reported by the owning client, which is safe: being
----"open" only makes THAT player a potential share target (they receive popups); it grants the
----reporter nothing, and every delivery is still gated by the live server-side distance check.
+---Tracks a player's phone-open state, self-reported by the owning client.
 ---@param src number player server id
 ---@param open boolean whether the phone is now open
 function core.setOpen(src, open)
     if open then openPhones[src] = true else openPhones[src] = nil end
 end
 
--- AirShare request handshake. A share isn't delivered immediately: the sender opens a request,
--- the recipient gets an accept/decline popup, and only on accept does the per-kind handler run -
--- so nothing ever lands on a phone without its owner's consent. Requests are short-lived (60s),
--- keyed by a monotonically-increasing id, and swept on every new request plus on either party's
--- disconnect, so unanswered ones can't accumulate.
+-- AirShare request handshake: delivery runs only after the recipient accepts; requests expire after 60s.
 ---@type table<string, table> Pending requests: [id] = { kind, fromSrc, target, payload, expires }.
 local requests  = {}
 ---@type table<string, fun(targetSrc: number, payload: table): boolean> Delivery handler per kind.
@@ -32,8 +26,7 @@ local handlers  = {}
 ---@type integer Next request id ordinal.
 local nextReqId = 1
 
----Register the delivery handler for a share kind (e.g. 'contact', 'voice'). Registration is the
----kind whitelist: a request whose kind has no handler is rejected up front.
+---Registers the delivery handler for a share kind (e.g. 'contact', 'voice').
 ---@param kind string share kind
 ---@param fn fun(targetSrc: number, payload: table): boolean delivery function, true on success
 function core.registerHandler(kind, fn) handlers[kind] = fn end
@@ -51,9 +44,7 @@ local function kindLabel(kind)
     return 'contact'
 end
 
----Drop every expired pending request. Swept on each new request: before this, a request whose
----recipient never responded (and never disconnected) stayed in memory for the resource's
----lifetime, so spammed requests could grow the table without bound.
+---Drops every expired pending request.
 local function pruneExpired()
     local now = os.time()
     for id, req in pairs(requests) do
@@ -61,11 +52,8 @@ local function pruneExpired()
     end
 end
 
----Open an AirShare request to a nearby, phone-open player. `target` and `kind` are
----client-supplied: the kind must have a registered handler, and the target must pass the live
----canShareTo check (phone open + within config.Share.Range of the sender, measured server-side),
----so a crafted request can't reach an arbitrary player. The payload is held server-side until
----the recipient answers; only the request id, kind and sender name are pushed to the target.
+---Opens an AirShare request to a nearby, phone-open player. The kind must have a registered
+---handler and the target must pass canShareTo; the payload is held server-side until answered.
 ---@param src number sender server id
 ---@param target any client-supplied recipient server id
 ---@param kind string share kind
@@ -88,11 +76,8 @@ function core.request(src, target, kind, payload)
     return true
 end
 
----Recipient's accept/decline. Only the request's addressed target may answer - a crafted id from
----anyone else fails the `req.target ~= src` check, so a share can't be stolen or dismissed by a
----third party. The request is consumed either way (idempotent: a replayed answer finds nothing),
----an expired one is refused, and on accept the registered per-kind handler performs the actual
----delivery; the sender is notified of the outcome.
+---Recipient's accept/decline; only the request's addressed target may answer. The request is
+---consumed either way, on accept the per-kind handler delivers, and the sender is notified.
 ---@param src number responder server id
 ---@param id any client-supplied request id
 ---@param accept boolean whether the share was accepted
@@ -122,8 +107,8 @@ function core.respond(src, id, accept)
     return { success = ok }
 end
 
----Forget a departing player entirely: their open flag and every pending request they sent OR
----were addressed to, so a recycled src can't inherit stale state or answer a ghost request.
+---Forgets a departing player: their open flag and every pending request they sent or were
+---addressed to.
 ---@param src number player server id
 function core.clear(src)
     openPhones[src] = nil
@@ -142,8 +127,7 @@ local function coordsOf(src)
 end
 
 ---Players (other than `src`) with their phone open, within config.Share.Range, nearest first,
----capped at config.Share.MaxTargets. Positions are read server-side at query time, never taken
----from the client. Read-only.
+---capped at config.Share.MaxTargets. Read-only.
 ---@param src number player server id
 ---@return { id: number, name: string }[] targets
 function core.nearby(src)
@@ -174,9 +158,7 @@ function core.nearby(src)
 end
 
 ---Guard for opening a share request: true only if `target` is a phone-open player within
----config.Share.Range of `src`, measured from live server-side coords. Checked here (not just in
----the client's share-sheet listing) so calling the share callbacks directly can't reach a
----distant or phone-closed player.
+---config.Share.Range of `src`, measured from live server-side coords.
 ---@param src number sender server id
 ---@param target number recipient server id
 ---@return boolean allowed

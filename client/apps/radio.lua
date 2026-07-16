@@ -1,6 +1,5 @@
----Frequency (1.0-999.9) maps to an integer pma-voice radio channel: 12.5 -> 125. Radio and
----call channels are independent in pma-voice, so there's no collision with phone calls.
----Anything below the 1.0 floor means "off" and returns channel 0.
+---Maps a frequency (1.0-999.9) to an integer pma-voice radio channel: 12.5 -> 125. Anything
+---below the 1.0 floor returns channel 0.
 ---@param freq number|string|nil user-facing frequency
 ---@return integer channel pma-voice radio channel (0 = leave the radio)
 local function freqToChannel(freq)
@@ -10,27 +9,20 @@ local function freqToChannel(freq)
     return math.floor(f * 10 + 0.5)
 end
 
--- Live session state, seeded from the player's saved prefs on first read. The radio keeps its
--- channel when the phone closes and only leaves when powered off in the app; pma-voice's own
--- push-to-talk key handles transmitting once you're on a channel. `standby` = left the channel
--- from the Dynamic Island (voice dropped) but the island still shows it in red for a quick
--- rejoin, until the app is opened.
+-- Live session state, seeded from the player's saved prefs on first read. `standby` = left the
+-- channel from the Dynamic Island but still shown in red for a quick rejoin.
 ---@type table Session radio state: { on: boolean, freq: number, volume: integer, standby: boolean }.
 local state  = { on = false, freq = 1.0, volume = 50, standby = false }
----@type boolean True once the saved prefs were fetched (or the fetch failed) - seed only once.
+---@type boolean True once the saved prefs were fetched (or the fetch failed).
 local seeded = false
 
----Broadcast on/off (+ standby + frequency) to the NUI so the Dynamic Island can show a live
----indicator even when the Radio app (or the whole phone) is closed.
+---Broadcasts on/off + standby + frequency to the NUI.
 local function pushStatus()
     SendNUIMessage({ action = 'sd-phone:radio:status', data = { on = state.on, freq = state.freq, standby = state.standby } })
 end
 
----Apply the session state to pma-voice (volume + channel; channel 0 when off), announce the
----channel to the server so it can report how many players share it, and push the status to the
----NUI. Both exports are pcall'd so a missing/stopped pma-voice can't error the app. The
----presence announcement is a report, not an authority - the server independently validates
----restricted bands and force-kicks violators (see the forceoff handler).
+---Applies the session state to pma-voice (volume + channel; channel 0 when off), announces the
+---channel to the server, and pushes the status to the NUI. Both exports are pcall'd.
 local function applyVoice()
     local channel = state.on and freqToChannel(state.freq) or 0
     pcall(function() exports['pma-voice']:setRadioVolume(state.volume) end)
@@ -39,9 +31,8 @@ local function applyVoice()
     pushStatus()
 end
 
----Fetch the saved frequency/volume once per session. The flag is set BEFORE the await so a
----second caller during the round-trip can't double-seed; a failed fetch simply keeps the
----defaults (deliberately no retry - the save path overwrites them on the next tune anyway).
+---Fetches the saved frequency/volume once per session; the flag is set before the await and a
+---failed fetch keeps the defaults.
 local function seedFromServer()
     if seeded then return end
     seeded = true
@@ -52,11 +43,8 @@ local function seedFromServer()
     end
 end
 
----React -> Lua: current radio state when the app opens. Seeds saved prefs on first read and
----resolves a "standby" (left-from-island) state - the red island indicator clears and the app
----shows the off screen. Also re-announces our channel so the server re-pushes the live
----head-count: the app's count resets every time the phone (re)opens, but the radio stays
----connected while the phone is closed, so the figure must be refreshed here.
+---React -> Lua: current radio state when the app opens. Seeds saved prefs on first read, clears
+---standby, and re-announces the channel for a fresh head-count.
 RegisterNUICallback('sd-phone:radio:get', function(_, cb)
     seedFromServer()
     if state.standby then
@@ -67,9 +55,8 @@ RegisterNUICallback('sd-phone:radio:get', function(_, cb)
     cb({ success = true, data = { on = state.on, freq = state.freq, volume = state.volume } })
 end)
 
----React -> Lua: quick-leave from the Dynamic Island - drop the voice channel but keep the
----frequency and show the island in red (standby) so it can be rejoined. applyVoice does the
----rest: channel 0 (leaves voice), presence 0, and the status push carrying the standby flag.
+---React -> Lua: quick-leave from the Dynamic Island - drops the voice channel, keeps the
+---frequency, and marks standby.
 RegisterNUICallback('sd-phone:radio:leave', function(_, cb)
     state.on = false
     state.standby = true
@@ -77,14 +64,8 @@ RegisterNUICallback('sd-phone:radio:leave', function(_, cb)
     cb({ success = true })
 end)
 
----React -> Lua: power/tune/volume changes from the app. The desired frequency and power are
----resolved BEFORE anything commits (frequency clamped to 1.0-999.9 and snapped to one decimal,
----volume clamped to 0-100), because job-restricted bands are gated through the server's canTune
----callback when turning on or (re)tuning to a live frequency - a denial leaves the running
----state untouched and hands the app the unchanged state to render. Any explicit set/tune clears
----the island standby. The committed freq + volume are persisted fire-and-forget for the next
----session. The client-side gate is a convenience; the server independently force-kicks
----restricted bands.
+---React -> Lua: power/tune/volume changes from the app. Clamps frequency and volume, gates
+---restricted bands through the server's canTune callback, clears standby, and persists.
 RegisterNUICallback('sd-phone:radio:set', function(payload, cb)
     payload = payload or {}
 
@@ -124,32 +105,26 @@ end)
 ---@type fun(nuiAction: string, serverEvent: string) NUI->server pass-through registrar (client.nui).
 local proxy = require 'client.nui'
 
--- Saved-channel CRUD: thin delegates into the Radio server module, which owns the validation
--- (each handler is documented there).
+-- Saved-channel CRUD proxies into the Radio server module.
 proxy('sd-phone:radio:saved:list',   'sd-phone:server:radio:saved:list')
 proxy('sd-phone:radio:saved:add',    'sd-phone:server:radio:saved:add')
 proxy('sd-phone:radio:saved:update', 'sd-phone:server:radio:saved:update')
 proxy('sd-phone:radio:saved:remove', 'sd-phone:server:radio:saved:remove')
 
----Best-effort on-air indicator. pma-voice fires this locally when the local player transmits;
----if a build names it differently the handler simply never runs and the indicator stays dark.
----AddEventHandler (not RegisterNetEvent) on purpose - a purely local event stays untriggerable
----from the network.
+---Forwards pma-voice's local transmit announcement to the NUI on-air indicator.
 ---@param active boolean whether the local player is transmitting
 AddEventHandler('pma-voice:radioActive', function(active)
     SendNUIMessage({ action = 'sd-phone:radio:onair', data = { active = active == true } })
 end)
 
----Head-count of players sharing our channel, pushed by the server - forwarded straight into the
----NUI. Server-pushed, so the payload shape is trusted as-is.
+---Forwards the server-pushed channel head-count into the NUI.
 ---@param data table head-count payload
 RegisterNetEvent('sd-phone:client:radio:count', function(data)
     SendNUIMessage({ action = 'sd-phone:radio:count', data = data })
 end)
 
----The server kicked us off a restricted band (e.g. we lost the job). Leave the channel locally,
----clear standby (a rejoin would be denied anyway) and let the app + island reflect it. The
----server is authoritative here - this handler only makes the local voice state match.
+---Server kick off a restricted band: leaves the channel locally, clears standby, and forwards
+---the denial to the app.
 ---@param data table denial payload for the app's message
 RegisterNetEvent('sd-phone:client:radio:forceoff', function(data)
     state.on = false

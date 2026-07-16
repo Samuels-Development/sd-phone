@@ -1,14 +1,10 @@
 ---@type table Store module; the table returned at end of file. One row per note, scoped to a
----citizenid: the id is client-generated and unique per player (the PK is citizenid+id), and every
----statement filters by citizenid, so a client can only ever read or mutate its own notes. Sketches
----and images are stored inline as JSON arrays (PNG data URLs / hosted photo URLs - the same
----self-contained model the UI uses) and timestamps are kept as the client's ISO strings, which
----sort chronologically. Caller encodes/decodes the JSON; the data layer stays dumb.
+---citizenid (PK citizenid+id); every statement filters by citizenid. Sketches and images are
+---stored inline as JSON arrays, timestamps as the client's ISO strings.
 local store = {}
 
----Create the phone_notes table if it doesn't exist, and back-fill the `images` column for tables
----created before it existed - added nullable so the existing rows need no default (they read back
----as []). Run once at boot, so the resource is drop-in.
+---Creates the phone_notes table if it doesn't exist, and back-fills the `images` column. Runs
+---once at boot.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS `phone_notes` (
@@ -43,8 +39,7 @@ function store.forPlayer(cid)
     ]], { cid }) or {}
 end
 
----Insert or update a note. `created_at` is only set on first insert - an update leaves the
----original creation time untouched.
+---Inserts or updates a note. `created_at` is only set on first insert.
 ---@param cid string owner citizenid
 ---@param id string note id (client-generated, <= 40 chars)
 ---@param body string note text
@@ -64,15 +59,14 @@ function store.upsert(cid, id, body, sketches, images, createdAt, updatedAt)
     ]], { cid, id, body, sketches, images, createdAt, updatedAt })
 end
 
----Delete a note, scoped to its owner - a bare id is never enough. Idempotent.
+---Deletes a note, scoped to its owner. Idempotent.
 ---@param cid string owner citizenid
 ---@param id string note id
 function store.delete(cid, id)
     MySQL.query.await('DELETE FROM `phone_notes` WHERE citizenid = ? AND id = ?', { cid, id })
 end
 
----Whether this player already has a note with this id (a primary-key lookup, so it's cheap enough
----to run on every save). Read-only.
+---Whether this player already has a note with this id (a primary-key lookup). Read-only.
 ---@param cid string owner citizenid
 ---@param id string note id
 ---@return boolean exists

@@ -8,8 +8,6 @@ local store = {}
 local ID_CHARS = '0123456789abcdefghijklmnopqrstuvwxyz'
 
 ---A fresh random 7-char base36 id for any photogram row (post/comment/story/notification/DM).
----36^7 (~78 billion) keys make a PRIMARY KEY collision negligible at phone scale while staying
----short enough to ship to the React side verbatim.
 ---@return string id
 function store.newId()
     local out = {}
@@ -20,10 +18,8 @@ function store.newId()
     return table.concat(out)
 end
 
----Tolerant JSON-column reader. oxmysql hands JSON columns back as strings (and some call sites
----already hold decoded tables), so both are accepted; NULL, garbage, or non-table JSON all
----collapse to {} so callers can iterate without branching. The pcall guards json.decode raising
----on malformed input.
+---Decodes a JSON column value; accepts strings or already-decoded tables and returns {} for
+---anything absent or invalid.
 ---@param value any raw column value (string | table | nil)
 ---@return table decoded table ({} when absent or invalid)
 function store.decodeJson(value)
@@ -36,8 +32,7 @@ function store.decodeJson(value)
     return {}
 end
 
----Encode a table for a JSON column, mapping empty/absent to nil so unused columns stay SQL NULL
----instead of storing '{}' noise.
+---Encodes a table for a JSON column; empty or absent tables map to nil.
 ---@param tbl table|nil
 ---@return string|nil json
 local function encodeJson(tbl)
@@ -48,18 +43,8 @@ end
 ---@type fun(tbl: table|nil): string|nil Public alias of encodeJson for sibling modules.
 store.encodeJson = encodeJson
 
----Create every photogram table if missing and back-fill columns added after the tables first
----shipped, so the resource is drop-in on fresh and old databases alike. Run once at boot
----(server.photogram.init). Identity throughout the schema is the photogram ACCOUNT USERNAME -
----the accounts engine owns credentials/sessions, so a profile follows the account across
----characters. Counts (likes/comments/followers) are computed live from the relation tables,
----never denormalized, so they can't drift. Timestamps are unix seconds (BIGINT); the actions
----layer multiplies to millis for React. The nested ensureColumn back-fill exists because CREATE
----TABLE IF NOT EXISTS never alters an existing table - without it, servers whose photogram
----tables predate is_private/verified/status silently lose the private-account toggle and follow
----requests (the upsert/insert can't write the column). Its ALTER is built with :format, but both
----arguments are literals owned by this function - no client input ever reaches it. Follow rows
----that predate the request flow are defaulted to 'accepted' by the back-filled status column.
+---Creates every photogram table if missing and back-fills columns added after the tables first
+---shipped. Runs once at boot.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_photogram_profiles (
@@ -219,11 +204,7 @@ function store.getProfile(username)
     return MySQL.single.await('SELECT * FROM phone_photogram_profiles WHERE username = ?', { username })
 end
 
----Insert or update a profile. ON DUPLICATE deliberately leaves verified and created_at alone:
----verified isn't self-service (actions.updateProfile only passes the existing flag through, and
----this upsert wouldn't write it anyway) and the join date never moves - so a crafted profile
----update can't mint a checkmark or reset account age. Length caps live in the actions layer;
----the data layer stays dumb.
+---Inserts or updates a profile. ON DUPLICATE leaves verified and created_at untouched.
 ---@param username string account handle
 ---@param p table { displayName?, bio?, avatar?, isPrivate?, verified?, createdAt? }
 function store.upsertProfile(username, p)
@@ -239,9 +220,7 @@ function store.upsertProfile(username, p)
     })
 end
 
----Profiles for a list of usernames, keyed by username (batch hydration of notification / DM
----lists). Placeholders are generated per entry and every value is bound - nothing from the list
----is concatenated into the SQL. Blank entries are skipped; an all-blank list short-circuits.
+---Profiles for a list of usernames, keyed by username. Blank entries are skipped.
 ---@param list string[] usernames
 ---@return table<string, table> rows by username
 function store.profilesByUsernames(list)
@@ -258,9 +237,7 @@ function store.profilesByUsernames(list)
     return out
 end
 
----Match accounts by handle or display name (Search / DM new-message / mentions). The query
----string travels as a bound LIKE parameter, never concatenated; the LIMIT is floored to an
----integer and is always supplied by the actions layer, not the client.
+---Matches accounts by handle or display name.
 ---@param query string search text
 ---@param limit? integer max rows (default 20)
 ---@return table[] rows
@@ -294,8 +271,7 @@ function store.followStatus(follower, target)
     )
 end
 
----Create (or re-status) a follow edge. Upsert so re-following after an unfollow, or a request
----replayed by a double-tap, lands on the same (follower, target) row instead of erroring.
+---Creates (or re-statuses) a follow edge via upsert.
 ---@param follower string account handle
 ---@param target string account handle
 ---@param status string 'pending' | 'accepted'
@@ -327,8 +303,7 @@ function store.removeFollow(follower, target)
     MySQL.update.await('DELETE FROM phone_photogram_follows WHERE follower = ? AND target = ?', { follower, target })
 end
 
----True when the follower-to-target edge exists AND is accepted - the single visibility test
----every private-account gate (posts, stories, lives, follow lists) rides on.
+---True when the follower-to-target edge exists and is accepted.
 ---@param follower string account handle
 ---@param target string account handle
 ---@return boolean accepted
@@ -362,8 +337,7 @@ function store.countFollowing(username)
 end
 
 ---Accounts that follow `username` (any kind value) or that `username` follows
----(kind='following'), each row a full profile card. Accepted edges only - pending requests
----never appear in either list.
+---(kind='following'), each row a full profile card. Accepted edges only.
 ---@param username string account handle
 ---@param kind string 'following' for the following list; anything else means followers
 ---@return table[] profile rows
@@ -397,8 +371,7 @@ function store.pendingRequests(username)
     ]], { username }) or {}
 end
 
----Usernames of everyone who accepted-follows `username` (for fanning a new-post notification
----out to their feed audience).
+---Usernames of everyone who accepted-follows `username`.
 ---@param username string account handle
 ---@return string[] follower usernames
 function store.followerUsernames(username)
@@ -412,7 +385,7 @@ function store.followerUsernames(username)
 end
 
 ---@type string Shared post projection: the post row + its author's card fields + live counts +
----the viewer's own liked/saved flags. Binds the viewer TWICE up front (liked, saved), so every
+---the viewer's own liked/saved flags. Binds the viewer TWICE up front (liked, saved); every
 ---caller passes viewer, viewer first, then its own params.
 local POST_SELECT = [[
     SELECT p.id, p.author, p.images, p.caption, p.location, p.created_at,
@@ -425,8 +398,7 @@ local POST_SELECT = [[
     JOIN phone_photogram_profiles pr ON pr.username = p.author
 ]]
 
----Persist a new post. Images arrive already sanitized (actions caps them at 10 http(s) URLs of
----512 chars); caption/location are pre-capped to their column widths.
+---Persists a new post.
 ---@param id string post id (store.newId)
 ---@param author string account handle
 ---@param images string[] image URLs
@@ -448,8 +420,7 @@ function store.getPost(viewer, id)
     return MySQL.single.await(POST_SELECT .. ' WHERE p.id = ? LIMIT 1', { viewer, viewer, id })
 end
 
----Plain post row (no projection) - used for ownership checks before a mutation, so the caller
----can compare author against the acting account without paying for the full viewer projection.
+---Plain post row (no projection). Read-only.
 ---@param id string post id
 ---@return table|nil row { id, author }
 function store.getPostRow(id)
@@ -472,8 +443,7 @@ function store.feedPosts(viewer, limit)
 end
 
 ---Explore: recent posts from public accounts (or private ones the viewer follows), never the
----viewer's own - the discovery grid. The privacy filter lives in the SQL so a private author's
----posts can't leak into anyone's explore page. Read-only.
+---viewer's own. Read-only.
 ---@param viewer string viewing account handle
 ---@param limit? integer max rows (default 60, server-supplied)
 ---@return table[] rows
@@ -489,8 +459,7 @@ function store.explorePosts(viewer, limit)
     ]]):format(n), { viewer, viewer, viewer, viewer }) or {}
 end
 
----A single author's posts (profile grid), newest first. Private-account gating is the CALLER's
----job (actions.profilePosts checks canView before asking). Read-only.
+---A single author's posts (profile grid), newest first. Read-only.
 ---@param viewer string viewing account handle
 ---@param author string profile being viewed
 ---@param limit? integer max rows (default 60, server-supplied)
@@ -517,10 +486,8 @@ function store.savedPosts(viewer, limit)
     ]]):format(n), { viewer, viewer, viewer }) or {}
 end
 
----Delete a post and every dependent row, children before parents (comment likes, comments,
----likes, saves, notifications, then the post) so nothing is orphaned and a future id collision
----can't inherit stale rows. Ownership is checked by the caller (actions.deletePost) before this
----runs; the data layer stays dumb.
+---Deletes a post and every dependent row, children before parents (comment likes, comments,
+---likes, saves, notifications, then the post).
 ---@param id string post id
 function store.deletePost(id)
     MySQL.update.await('DELETE FROM phone_photogram_comment_likes WHERE comment_id IN (SELECT id FROM phone_photogram_comments WHERE post_id = ?)', { id })
@@ -539,8 +506,7 @@ function store.isLiked(postId, username)
     return MySQL.scalar.await('SELECT 1 FROM phone_photogram_likes WHERE post_id = ? AND username = ?', { postId, username }) ~= nil
 end
 
----Record a like. INSERT IGNORE + the (post_id, username) PRIMARY KEY make a replayed like
----idempotent - a lag resend can't double-count.
+---Records a like. INSERT IGNORE makes a replayed like idempotent.
 ---@param postId string post id
 ---@param username string account handle
 ---@param createdAt integer unix seconds
@@ -563,7 +529,7 @@ function store.isSaved(postId, username)
     return MySQL.scalar.await('SELECT 1 FROM phone_photogram_saves WHERE post_id = ? AND username = ?', { postId, username }) ~= nil
 end
 
----Record a save. INSERT IGNORE + the composite PRIMARY KEY make a replay idempotent.
+---Records a save. INSERT IGNORE makes a replay idempotent.
 ---@param postId string post id
 ---@param username string account handle
 ---@param createdAt integer unix seconds
@@ -578,8 +544,7 @@ function store.removeSave(postId, username)
     MySQL.update.await('DELETE FROM phone_photogram_saves WHERE post_id = ? AND username = ?', { postId, username })
 end
 
----Persist a comment. body/gifUrl arrive pre-capped and at-least-one-present validated by
----actions.addComment.
+---Persists a comment.
 ---@param id string comment id (store.newId)
 ---@param postId string parent post id
 ---@param author string account handle
@@ -614,7 +579,7 @@ function store.commentsFor(postId, viewer, limit)
     ]]):format(n), { viewer, postId }) or {}
 end
 
----Plain comment row - existence/ownership checks before a mutation. Read-only.
+---Plain comment row. Read-only.
 ---@param id string comment id
 ---@return table|nil row { id, post_id, author }
 function store.getCommentRow(id)
@@ -629,7 +594,7 @@ function store.isCommentLiked(commentId, username)
     return MySQL.scalar.await('SELECT 1 FROM phone_photogram_comment_likes WHERE comment_id = ? AND username = ?', { commentId, username }) ~= nil
 end
 
----Record a comment like. INSERT IGNORE + the composite PRIMARY KEY make a replay idempotent.
+---Records a comment like. INSERT IGNORE makes a replay idempotent.
 ---@param commentId string comment id
 ---@param username string account handle
 ---@param createdAt integer unix seconds
@@ -652,8 +617,7 @@ function store.commentLikeCount(commentId)
     return row and tonumber(row.n) or 0
 end
 
----Persist a story frame. The image URL arrives pre-validated (http-prefixed, capped 512) from
----actions.addStory.
+---Persists a story frame.
 ---@param id string story id (store.newId)
 ---@param author string account handle
 ---@param image string image URL
@@ -666,8 +630,7 @@ function store.insertStory(id, author, image, createdAt)
 end
 
 ---Active (non-expired) stories from the viewer + the accounts they accepted-follow, ordered by
----author then chronologically so frames group per author. The follow filter doubles as the
----privacy gate: a private author's stories only reach accepted followers. Read-only.
+---author then chronologically. Read-only.
 ---@param viewer string viewing account handle
 ---@param cutoff integer unix seconds - stories created at or before this are expired
 ---@return table[] rows
@@ -685,8 +648,7 @@ function store.activeStoriesFor(viewer, cutoff)
     ]], { cutoff, viewer, viewer }) or {}
 end
 
----Story ids the viewer has already seen (across all stories), as a set for O(1) lookup while
----grouping the tray. Read-only.
+---Story ids the viewer has already seen, as a set. Read-only.
 ---@param viewer string viewing account handle
 ---@return table<string, boolean> seen set
 function store.seenStoryIds(viewer)
@@ -696,8 +658,7 @@ function store.seenStoryIds(viewer)
     return set
 end
 
----Record that `username` viewed a story. INSERT IGNORE + the composite PRIMARY KEY make a
----replayed view idempotent.
+---Records that `username` viewed a story. INSERT IGNORE makes a replayed view idempotent.
 ---@param storyId string story id
 ---@param username string account handle
 ---@param createdAt integer unix seconds
@@ -705,23 +666,21 @@ function store.markStorySeen(storyId, username, createdAt)
     MySQL.query.await('INSERT IGNORE INTO phone_photogram_story_views (story_id, username, created_at) VALUES (?, ?, ?)', { storyId, username, createdAt })
 end
 
----Plain story row - existence checks before marking one seen. Read-only.
+---Plain story row. Read-only.
 ---@param id string story id
 ---@return table|nil row { id, author }
 function store.getStoryRow(id)
     return MySQL.single.await('SELECT id, author FROM phone_photogram_stories WHERE id = ?', { id })
 end
 
----Drop expired stories and their view rows - called opportunistically from actions.stories.
----Views go first while the subquery can still see the expiring story ids.
+---Drops expired stories and their view rows, views first.
 ---@param cutoff integer unix seconds - stories created at or before this are expired
 function store.pruneExpiredStories(cutoff)
     MySQL.update.await('DELETE FROM phone_photogram_story_views WHERE story_id IN (SELECT id FROM phone_photogram_stories WHERE created_at <= ?)', { cutoff })
     MySQL.update.await('DELETE FROM phone_photogram_stories WHERE created_at <= ?', { cutoff })
 end
 
----Persist an Activity notification. preview arrives pre-capped (actions caps comment previews
----at 120 chars, well under the 200 column).
+---Persists an Activity notification.
 ---@param id string notification id (store.newId)
 ---@param recipient string account handle receiving it
 ---@param kind string notification kind (like/comment/mention/follow/...)
@@ -736,8 +695,7 @@ function store.insertNotification(id, recipient, kind, actor, postId, preview, c
     ]], { id, recipient, kind, actor, postId, preview, createdAt })
 end
 
----A recipient's notifications, newest first, each with the actor's profile card (LEFT JOIN so a
----wiped actor still shows the row). Read-only.
+---A recipient's notifications, newest first, each with the actor's profile card. Read-only.
 ---@param recipient string account handle
 ---@param limit? integer max rows (default 60, server-supplied)
 ---@return table[] rows
@@ -754,22 +712,20 @@ function store.notificationsFor(recipient, limit)
     ]]):format(n), { recipient }) or {}
 end
 
----Mark every unseen notification seen (opening the Activity tab clears the badge contribution).
+---Marks every unseen notification seen.
 ---@param recipient string account handle
 function store.markNotificationsSeen(recipient)
     MySQL.update.await('UPDATE phone_photogram_notifications SET seen = 1 WHERE recipient = ? AND seen = 0', { recipient })
 end
 
----Delete one of the recipient's own notifications (swipe-to-dismiss). Scoped to the owner so a
----forged id can't clear someone else's feed.
+---Deletes one of the recipient's own notifications, scoped to the owner.
 ---@param id string notification id
 ---@param recipient string owning account handle
 function store.deleteNotification(id, recipient)
     MySQL.update.await('DELETE FROM phone_photogram_notifications WHERE id = ? AND recipient = ?', { id, recipient })
 end
 
----Drop the pending follow-request notification when the requester cancels it, so it doesn't
----linger on the recipient's Activity or inflate their unread badge.
+---Deletes the pending follow-request notification from actor to recipient.
 ---@param recipient string account handle that received the request
 ---@param actor string account handle that withdrew it
 function store.deleteRequestNotification(recipient, actor)
@@ -798,10 +754,8 @@ function store.postThumb(postId)
     return imgs[1]
 end
 
----First image (thumbnail) for MANY posts in one query - the batch form of postThumb, so the
----Activity feed resolves all its notification thumbnails in a single round-trip instead of one
----SELECT per row. Returns a postId -> first-image-url map; ids with no post or no images are
----absent. Read-only.
+---First image (thumbnail) for many posts in one query. Returns a postId -> first-image-url map;
+---ids with no post or no images are absent. Read-only.
 ---@param postIds string[]
 ---@return table<string, string> postId -> first image url
 function store.thumbsFor(postIds)
@@ -823,8 +777,7 @@ function store.thumbsFor(postIds)
     return out
 end
 
----Persist a DM. body/kind/meta arrive validated by actions.dmSend (kind whitelisted, body
----capped, meta sanitized per kind).
+---Persists a DM.
 ---@param id string message id (store.newId)
 ---@param fromUser string sending account handle
 ---@param toUser string receiving account handle
@@ -839,16 +792,14 @@ function store.insertDm(id, fromUser, toUser, body, kind, meta, createdAt)
     ]], { id, fromUser, toUser, body, kind, encodeJson(meta), createdAt })
 end
 
----One DM row by id. The CALLER must verify the viewer is a participant before acting on it
----(actions.dmReact does). Read-only.
+---One DM row by id. Read-only.
 ---@param id string message id
 ---@return table|nil row
 function store.getDm(id)
     return MySQL.single.await('SELECT * FROM phone_photogram_dms WHERE id = ?', { id })
 end
 
----Overwrite a DM's reactions blob (the actions layer owns the toggle logic; the data layer
----stays dumb).
+---Overwrites a DM's reactions blob.
 ---@param id string message id
 ---@param reactions table|nil emoji -> usernames map
 function store.updateDmReactions(id, reactions)
@@ -883,8 +834,7 @@ function store.dmLast(a, b)
     ]], { a, b, b, a })
 end
 
----Messages between two users. Fetches newest-first so the LIMIT keeps the most RECENT n, then
----reverses in Lua so the chat view still receives them oldest-first. Read-only.
+---Messages between two users, limited to the most recent n, returned oldest-first. Read-only.
 ---@param a string account handle
 ---@param b string account handle
 ---@param limit? integer max rows (default 200, server-supplied, clamped >= 1)
@@ -903,8 +853,7 @@ function store.dmThread(a, b, limit)
     return out
 end
 
----Mark every unread message FROM peer TO username read (opening the thread). Scoped to the
----reader's own inbox, so it can't clear a peer's receipts.
+---Marks every unread message from peer to username read, scoped to the reader's own inbox.
 ---@param username string reading account handle
 ---@param peer string conversation partner
 function store.markDmRead(username, peer)
@@ -926,10 +875,8 @@ function store.dmUnreadFrom(username, peer)
     return row and tonumber(row.n) or 0
 end
 
----Unread DM counts grouped by sender in ONE query - the batch form of dmUnreadFrom, so the DM
----inbox resolves every peer's unread badge in a single round-trip instead of one COUNT per peer.
----Rides the (to_user, read_flag) index. Returns a peer -> unread-count map (peers with zero unread
----are absent). Read-only.
+---Unread DM counts grouped by sender in one query. Returns a peer -> unread-count map (peers
+---with zero unread are absent). Read-only.
 ---@param username string viewer handle
 ---@return table<string, integer> peer -> unread count
 function store.dmUnreadByPeer(username)
@@ -949,14 +896,8 @@ function store.dmUnreadTotal(username)
     return row and tonumber(row.n) or 0
 end
 
----Erase every trace of an account (Settings delete-account): the user's own rows plus other
----users' rows that hang off them (likes/comments/saves on their posts, likes on their comments,
----views of their stories), children before parents so no orphans survive. Comment likes are
----cleared for BOTH comment populations - comments under the user's posts and comments the user
----authored under anyone's posts - before either comment set is deleted. Notifications and
----follows go both ways (they were recipient or actor, follower or target), so everyone else's
----counts settle immediately. Ownership is the caller's job: actions.deleteAccount only ever
----passes the signed-in account's own username.
+---Erases every trace of an account: the user's own rows plus other users' rows that hang off
+---them, children before parents.
 ---@param username string account handle being wiped
 function store.wipeUser(username)
     MySQL.update.await('DELETE FROM phone_photogram_comment_likes WHERE comment_id IN (SELECT id FROM phone_photogram_comments WHERE post_id IN (SELECT id FROM phone_photogram_posts WHERE author = ?))', { username })

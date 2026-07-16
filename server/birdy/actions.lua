@@ -22,9 +22,7 @@ local actions = {}
 local util = require 'server.util'
 local ok, fail = util.ok, util.fail
 
-
----Trim surrounding whitespace. Returns nil for non-strings, so every free-text payload field
----funnels through one type check before use.
+---Trims surrounding whitespace. Returns nil for non-strings.
 ---@param s any
 ---@return string|nil
 local function trimmed(s)
@@ -32,19 +30,15 @@ local function trimmed(s)
     return (s:gsub('^%s+', ''):gsub('%s+$', ''))
 end
 
----Coerce an untrusted callback payload into a table. Payloads are attacker-controlled and can be
----nil or any scalar; indexing a number/boolean raises, so every payload-taking handler routes
----through this one guard before reading fields. Scalars collapse to {} - handlers already treat
----absent fields as "not provided".
+---Coerces an untrusted callback payload into a table; scalars collapse to {}.
 ---@param payload any
 ---@return table
 local function tbl(payload)
     return type(payload) == 'table' and payload or {}
 end
 
----Normalise a user-supplied username into a handle: lowercase, keeping only letters, digits and
----underscores. The result is the only shape ever used in handle lookups, so hostile input never
----reaches a query un-normalised.
+---Normalises a user-supplied username into a handle: lowercase, keeping only letters, digits
+---and underscores.
 ---@param raw any
 ---@return string|nil
 local function normalizeHandle(raw)
@@ -52,9 +46,8 @@ local function normalizeHandle(raw)
     return (raw:lower():gsub('[^a-z0-9_]', ''))
 end
 
----Clean a client-supplied image list into at most 3 valid URL strings, or nil. Entries are
----whitelisted by shape only (non-empty string, capped at 512 chars so the stored JSON stays
----bounded); anything else is dropped rather than rejecting the whole post.
+---Cleans a client-supplied image list into at most 3 non-empty URL strings (each capped at 512
+---chars), or nil.
 ---@param raw any
 ---@return string[]|nil
 local function sanitizeImages(raw)
@@ -96,11 +89,8 @@ local function timeLabel(ms)
     return os.date('%H:%M', math.floor(ms / 1000))
 end
 
----Resolve the requesting player's signed-in Birdy profile through the shared accounts engine
----session (source -> citizenid -> session account -> profile by handle), so any character who
----logs into an account acts as that persona. The actor is ALWAYS derived from `source`; nothing
----identity-shaped is ever read from a payload. Returns nil when signed out - every write action
----bails in that case.
+---Resolves the requesting player's signed-in Birdy profile through the shared accounts engine
+---session. Returns nil when signed out.
 ---@param source number player server id
 ---@return table|nil profile
 local function viewer(source)
@@ -111,10 +101,8 @@ local function viewer(source)
     return store.getProfileByHandle(acc.username)
 end
 
----Resolve a viewer citizenid for the PUBLIC read actions (feed, post). Returns the signed-in
----account's cid, or '' for a guest. The post projection only uses this for the per-row `liked`
----flag, so '' simply yields liked=false - letting account-less players browse without unlocking
----any write/personal action.
+---Resolves a viewer citizenid for the public read actions: the signed-in account's cid, or ''
+---for a guest.
 ---@param source number player server id
 ---@return string viewerCid '' = anonymous guest
 local function optionalViewerCid(source)
@@ -122,16 +110,14 @@ local function optionalViewerCid(source)
     return prof and prof.citizenid or ''
 end
 
----Public author shape embedded in posts, notifications and conversation heads. Deliberately
----citizenid-free - handles are the public identity.
+---Public author shape embedded in posts, notifications and conversation heads.
 ---@param profile table
 ---@return { name: string, handle: string, verified: boolean }
 local function serializeAuthor(profile)
     return { name = profile.displayName, handle = profile.handle, verified = profile.verified }
 end
 
----Shape a full profile (with live follow counts) for the profile page. Counts are read fresh
----from the follows table on every call, so the header can never drift from the stored edges.
+---Shapes a full profile (with live follow counts) for the profile page.
 ---@param profile table
 ---@return table
 local function serializeProfile(profile)
@@ -147,9 +133,8 @@ local function serializeProfile(profile)
     }
 end
 
----Shape a hydrated post row into the React `BirdyPost` form. `images` is nil (omitted on the
----wire) or the store-decoded array of up to 3 URLs. Reposts aren't implemented, so the count is
----pinned at 0.
+---Shapes a hydrated post row into the React `BirdyPost` form. `images` is nil or the
+---store-decoded array of up to 3 URLs; the repost count is pinned at 0.
 ---@param p table
 ---@return table
 local function serializePost(p)
@@ -177,13 +162,8 @@ function actions.me(source)
     return ok({ loggedIn = true, me = serializeAuthor(prof) })
 end
 
----Register a new Birdy account and sign the character in. The engine owns credentials + recovery
----contacts (email/phone are validated there: the email must belong to a real Mail-app account,
----the phone must look plausible); the profile row stays Birdy's content anchor, keyed by the
----CREATING character's citizenid. One profile per character. Handle uniqueness is checked
----against both stores, and a failed profile insert compensates by deleting the just-created
----engine account so the two stores can't drift. Every field is trimmed and bounds-checked
----against config.Birdy before insert; all caps sit inside the DB column widths.
+---Registers a new Birdy account and signs the character in. Handle uniqueness is checked
+---against both stores; every field is trimmed and bounds-checked against config.Birdy.
 ---@param source number player server id
 ---@param payload { name?: string, username?: string, password?: string, bio?: string, email?: string, phone?: string }
 ---@return table envelope
@@ -240,12 +220,8 @@ function actions.register(source, payload)
     return ok({ me = serializeAuthor(store.getProfile(cid)) })
 end
 
----Sign in to any existing Birdy account by handle + password. Accounts are global: knowing the
----credentials is enough, whichever character made it. Accepts the handle or the linked email -
----emails go through the contact lookup BEFORE handle normalization would strip their @ and dots,
----and a bare handle that matches no account also retries as handle@<mail domain>. Password
----verification lives in the engine and is type-safe (non-strings verify false), so a crafted
----payload can't error its way past the check.
+---Signs in to any existing Birdy account by handle + password. Accepts the handle or the linked
+---email; a bare handle that matches no account retries as handle@<mail domain>.
 ---@param source number player server id
 ---@param payload { username?: string, password?: string }
 ---@return table envelope
@@ -280,9 +256,7 @@ function actions.login(source, payload)
     return ok({ me = serializeAuthor(prof) })
 end
 
----Sign out - keeps the account, just drops this character's engine session. The logged_in column
----touched here is informational only; authorization always re-derives from the engine session,
----so this can't lock anyone in or out. Idempotent.
+---Signs out: keeps the account, drops this character's engine session. Idempotent.
 ---@param source number player server id
 ---@return table envelope
 function actions.logout(source)
@@ -294,9 +268,8 @@ function actions.logout(source)
     return ok()
 end
 
----A profile page: another account's when payload.handle is given (normalized before lookup),
----otherwise the signed-in viewer's own. isFollowing is only computed for a signed-in viewer
----looking at someone else; guests with no handle get 'Profile not found'. Read-only.
+---A profile page: another account's when payload.handle is given, otherwise the signed-in
+---viewer's own. isFollowing is only computed for a signed-in viewer. Read-only.
 ---@param source number player server id
 ---@param payload { handle?: string }|nil
 ---@return table envelope
@@ -320,9 +293,7 @@ function actions.profile(source, payload)
 end
 
 ---Posts for a profile tab: 'posts', 'replies', 'media', or 'likes'. targetCid = whose posts,
----viewerCid = whose like-state colours the hearts. 'likes' reads the like join; the other three
----are author-scoped filters the store picks from server-side literals, so an arbitrary `kind`
----string just falls back to 'posts'. Read-only.
+---viewerCid = whose like-state colours the hearts. Read-only.
 ---@param source number player server id
 ---@param payload { kind?: string, handle?: string }|nil
 ---@return table envelope
@@ -352,10 +323,8 @@ function actions.profilePosts(source, payload)
     return ok({ posts = posts })
 end
 
----Search accounts by handle/display name substring for the Search tab. The query reaches the
----store only as a parameterized LIKE value, capped at 64 chars so a crafted megabyte string
----can't become an expensive scan needle; % and _ act as user wildcards, which is harmless here.
----Read-only.
+---Searches accounts by handle/display name substring for the Search tab (query capped at 64
+---chars). Read-only.
 ---@param source number player server id
 ---@param payload { query?: string }|nil
 ---@return table envelope
@@ -372,9 +341,8 @@ function actions.search(source, payload)
     return ok({ users = users })
 end
 
----Update the signed-in user's editable profile fields. Missing fields keep their current value;
----everything is trimmed and bounds-checked against config.Birdy / the DB column widths, and the
----write is scoped to the session profile's own citizenid - no payload can point it elsewhere.
+---Updates the signed-in user's editable profile fields. Missing fields keep their current
+---value; everything is trimmed and bounds-checked.
 ---@param source number player server id
 ---@param payload { name?: string, bio?: string, joinLabel?: string, protected?: boolean }|nil
 ---@return table envelope
@@ -395,9 +363,8 @@ function actions.updateProfile(source, payload)
     return ok({ profile = serializeProfile(store.getProfile(prof.citizenid)) })
 end
 
----Change the signed-in user's password. The engine hash is authoritative; the Passwords-app
----vault copy and Birdy's legacy profile-row hash are synced in the same step so no verifier can
----diverge. The account comes from the caller's session - payloads carry only the new secret.
+---Changes the signed-in user's password, syncing the engine hash, the Passwords-app vault copy,
+---and Birdy's legacy profile-row hash.
 ---@param source number player server id
 ---@param payload { password?: string }|nil
 ---@return table envelope
@@ -418,10 +385,8 @@ function actions.changePassword(source, payload)
     return ok()
 end
 
----Permanently delete the signed-in user's account and all of its content. Account-level
----authority: any character signed into the account may delete it, same as changing its password.
----Content rows (keyed by the creating character's citizenid) go first, then the engine account -
----a partial failure leaves live credentials rather than orphaned content.
+---Permanently deletes the signed-in user's account and all of its content: content rows first,
+---then the engine account.
 ---@param source number player server id
 ---@return table envelope
 function actions.deleteAccount(source)
@@ -435,8 +400,7 @@ function actions.deleteAccount(source)
 end
 
 ---Top-level feed, newest first. The "Following" filter needs a signed-in viewer; guests always
----get the public "all" feed (their '' viewer cid only means every liked flag reads false).
----Read-only.
+---get the public "all" feed. Read-only.
 ---@param source number player server id
 ---@param payload { following?: boolean }|nil
 ---@return table envelope
@@ -450,9 +414,7 @@ function actions.feed(source, payload)
     return ok({ posts = posts })
 end
 
----A single post with its reply thread. The view counter bumps for non-authors (guests included)
----before the read, so the count the author sees already includes this fetch; the id is only ever
----used as a parameterized lookup key. Read-only apart from that counter.
+---A single post with its reply thread. The view counter bumps for non-authors before the read.
 ---@param source number player server id
 ---@param payload { id?: string }|nil
 ---@return table envelope
@@ -475,9 +437,8 @@ function actions.post(source, payload)
     return ok({ post = post })
 end
 
----Create a top-level post as the session profile. A post needs text OR at least one image; the
----body is trimmed and capped at config.Birdy.MaxPostLength (mirroring the composer), images are
----whitelisted by sanitizeImages, and the row id is server-generated - clients never supply ids.
+---Creates a top-level post as the session profile. A post needs text OR at least one image; the
+---body is trimmed and capped, images are whitelisted, and the row id is server-generated.
 ---@param source number player server id
 ---@param payload { body?: string, images?: string[] }|nil
 ---@return table envelope
@@ -501,9 +462,8 @@ function actions.create(source, payload)
     return ok({ post = serializePost(store.getPost(id, prof.citizenid)) })
 end
 
----Reply to a post. The parent must exist (checked before insert, which also bounds the stored
----parent id to a real row key). Returns the new reply plus the recipient citizenid so init can
----push a notification to the parent's author when online - never for self-replies.
+---Replies to a post; the parent must exist. Returns the new reply plus the recipient citizenid
+---for the parent-author notification (never for self-replies).
 ---@param source number player server id
 ---@param payload { parentId?: string, body?: string }|nil
 ---@return table envelope
@@ -531,9 +491,8 @@ function actions.reply(source, payload)
     return ok({ post = serializePost(store.getPost(id, prof.citizenid)), notifyCid = notifyCid })
 end
 
----Toggle the viewer's like on a post. The like row is keyed (post, viewer), so a replayed toggle
----simply flips the state back rather than double-counting. Returns the new liked state plus the
----author citizenid to notify when a like was just added (not on unlike, never for self-likes).
+---Toggles the viewer's like on a post. Returns the new liked state plus the author citizenid to
+---notify when a like was just added (not on unlike, never for self-likes).
 ---@param source number player server id
 ---@param payload { id?: string }|nil
 ---@return table envelope
@@ -564,10 +523,8 @@ function actions.toggleLike(source, payload)
     return ok({ liked = nowLiked, notifyCid = notifyCid })
 end
 
----Toggle following another account, addressed by handle (preferred) or citizenid. The target is
----only ever the ACTION TARGET - the follower is always the session profile - and it is type +
----length checked against the DB column before any row is written. Self-follows are rejected.
----Returns the target to notify on a new follow (not on unfollow).
+---Toggles following another account, addressed by handle (preferred) or citizenid. Self-follows
+---are rejected. Returns the target to notify on a new follow (not on unfollow).
 ---@param source number player server id
 ---@param payload { handle?: string, targetCid?: string }|nil
 ---@return table envelope
@@ -598,10 +555,8 @@ function actions.toggleFollow(source, payload)
     return ok({ following = nowFollowing, notifyCid = notifyCid })
 end
 
----List the viewer's notifications, serialized into the React union shape. Reply notifications
----embed the reply post itself; like/follow rows resolve the actor's public profile, falling back
----to a placeholder when the actor deleted their account. Recipient-scoped by the session
----profile, so nobody can read another inbox. Read-only.
+---Lists the viewer's notifications, serialized into the React union shape. Reply notifications
+---embed the reply post; like/follow rows resolve the actor's public profile. Read-only.
 ---@param source number player server id
 ---@return table envelope
 function actions.notifications(source)
@@ -640,17 +595,12 @@ function actions.notifications(source)
     return ok({ notifications = items })
 end
 
--- Rich DM messages (text / image / gif / money / location / voice). Mirrors the Messages +
--- Cherry message vocabulary so the same bubbles render on both ends.
+-- Rich DM messages (text / image / gif / money / location / voice).
 ---@type table<string, boolean> Whitelist of DM kinds a client may send; anything else sends as text.
 local VALID_DM_KINDS = { text = true, image = true, gif = true, money = true, location = true, voice = true }
 
----Clamp/coerce composer metadata at the trust boundary, per kind. Only whitelisted fields
----survive, every string is length-capped and every number floored + clamped, so a crafted
----payload can't smuggle arbitrary keys into the stored meta JSON. Money amounts additionally
----reject non-finite doubles (NaN already collapses to 0 through math.max; +inf is zeroed
----explicitly) - a `requested` card skips banking validation entirely, so an Infinity amount
----would otherwise be stored and re-serialized to both phones.
+---Clamps/coerces composer metadata per kind: only whitelisted fields survive, strings are
+---length-capped, numbers floored + clamped, money amounts reject non-finite doubles.
 ---@param kind string validated DM kind (a VALID_DM_KINDS member)
 ---@param payload table raw client payload
 ---@return table meta whitelisted, clamped metadata
@@ -684,9 +634,8 @@ local function sanitizeDmMeta(kind, payload)
     return meta
 end
 
----True when a message of `kind` actually carries content, so blank cards can't be spammed: text
----needs a body, media needs a URL, money a positive amount, voice a positive duration, location
----a body or a waypoint code.
+---True when a message of `kind` carries content: text needs a body, media a URL, money a
+---positive amount, voice a positive duration, location a body or waypoint code.
 ---@param kind string
 ---@param body string
 ---@param meta table
@@ -701,9 +650,7 @@ local function dmHasContent(kind, body, meta)
 end
 
 ---DB row -> the client DM message shape: `fromMe` from the viewer's perspective plus whichever
----rich fields the bubble renders. Reactions are re-shaped per viewer (emoji, count, whether the
----viewer reacted); the raw citizenid lists inside the stored reactions JSON never leave the
----server.
+---rich fields the bubble renders. Reactions are re-shaped per viewer.
 ---@param row table
 ---@param viewerCid string
 ---@return table
@@ -739,11 +686,8 @@ local function serializeDm(row, viewerCid)
     return msg
 end
 
----List the viewer's DM conversations (one row per other party, latest message as the preview),
----newest-first. The store query is pinned to the viewer's own citizenid, so nobody can list
----someone else's inbox. read_flag is a TINYINT(1) that oxmysql hands back as a Lua boolean (or
----1/'1' from older drivers) - the nested isRead accepts every truthy shape, mirroring the
----store's isTruthy. Unread counts only messages TO the viewer that they haven't opened.
+---Lists the viewer's DM conversations (one row per other party, latest message as the preview),
+---newest-first. Unread counts only messages to the viewer that they haven't opened. Read-only.
 ---@param source number player server id
 ---@return table envelope
 function actions.dmList(source)
@@ -784,9 +728,8 @@ function actions.dmList(source)
     return ok({ conversations = convos })
 end
 
----Full message thread with one other party (conversation id = their cid). The store query keeps
----the viewer's own citizenid on one side of every row, so an arbitrary id can only ever select
----messages the viewer participates in. Opening the thread clears its unread flags.
+---Full message thread with one other party (conversation id = their cid). Opening the thread
+---clears its unread flags.
 ---@param source number player server id
 ---@param payload { id?: string }|nil
 ---@return table envelope
@@ -810,9 +753,7 @@ function actions.dmThread(source, payload)
     })
 end
 
----Mark a conversation read without fetching it (used when a message arrives in the thread the
----viewer is already looking at). Only messages TO the viewer flip, so it can't touch the other
----party's read state. Idempotent.
+---Marks a conversation read without fetching it; only messages to the viewer flip. Idempotent.
 ---@param source number player server id
 ---@param payload { id?: string }|nil
 ---@return table envelope
@@ -825,14 +766,8 @@ function actions.markRead(source, payload)
     return ok()
 end
 
----Send a DM of any kind. Returns the sender's own message + the recipient's copy (for the live
----push) + the routing data init needs to deliver it; init strips those internal fields before
----the envelope reaches the sender's NUI. `toCid` is the ACTION TARGET only (type + length
----checked against the DB column) - the sender is always the session profile. Money moves real
----funds (like Messages / Cherry): the transfer clears through banking.send, which re-validates
----amount, caps and balance server-side against the CALLER's account, BEFORE the row is stored,
----so a failed payment never leaves a phantom card. Requested money never moves funds here - the
----recipient pays through their own flow.
+---Sends a DM of any kind. Returns the sender's own message + the recipient's copy + the routing
+---data init needs. Money clears through banking.send before the row is stored.
 ---@param source number player server id
 ---@param payload table { toCid, kind, body, gifUrl, amount, requested, duration, audioUrl, waveform, wpCode, wpSub }
 ---@return table envelope
@@ -869,11 +804,8 @@ function actions.dmSend(source, payload)
     })
 end
 
----Toggle the viewer's reaction on a DM; both parties get the new set. Only a participant of the
----message may react - checked against the stored row, never the payload - and the emoji key is
----length-capped before it lands in the reactions JSON. Keyed per user, so a replayed toggle just
----flips back. For the recipient the conversation is keyed by the sender's cid, hence
----conversationId = the caller.
+---Toggles the viewer's reaction on a DM; both parties get the new set. Only a participant may
+---react; the emoji key is length-capped. conversationId = the caller's cid.
 ---@param source number player server id
 ---@param payload { id?: string, emoji?: string }|nil
 ---@return table envelope

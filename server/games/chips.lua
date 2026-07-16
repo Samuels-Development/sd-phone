@@ -5,16 +5,14 @@ local player  = require 'bridge.server.player'
 ---@type table Banking actions (server.banking.actions): Wallet transaction log (log-only, moves no money).
 local banking = require 'server.banking.actions'
 
----@type table Chips module; the table returned at end of file. Shared casino-chip wallet - one
----persistent balance per character, used by Blackjack. Chips convert to/from bank money 1:1 and
----every conversion is mirrored into the Wallet as a signed transaction tagged with the
----originating game so the right app icon renders. Online wagers settle in chips through the
----engine; solo/co-op sessions are client-run, so their net result arrives as a clamped delta.
+---@type table Chips module; the table returned at end of file. Shared casino-chip wallet, one
+---persistent balance per character. Chips convert to/from bank money 1:1 and every conversion is
+---logged to the Wallet as a signed transaction tagged with the originating game.
 local chips = {}
 
----@type integer Absolute wallet ceiling - credits clamp here so the BIGINT can never run away.
+---@type integer Absolute wallet ceiling; credits clamp here.
 local CHIP_CEILING = 100000000
----@type integer Max single buy / sell, keeping one conversion at Wallet-log scale.
+---@type integer Max single buy / sell.
 local TX_MAX       = 1000000
 ---@type integer Max absolute chip swing one client-run solo/co-op session may report via settle.
 local SETTLE_MAX   = 1000000
@@ -22,13 +20,12 @@ local SETTLE_MAX   = 1000000
 ---@return string|nil citizenid for a server-trusted src (nil when offline)
 local function cidOf(src) return player.getIdentifier(src) end
 
----Wallet-log category for a chip conversion. Blackjack is the only chips game today, so unknown
----or missing game ids collapse to it rather than trusting an arbitrary client string into the log.
+---Wallet-log category for a chip conversion; unknown or missing game ids collapse to 'blackjack'.
 ---@param game string|nil originating game id
 ---@return string category
 local function categoryOf(game) return game == 'blackjack' and game or 'blackjack' end
 
----Create the chip-wallet table if it doesn't exist, so the resource is drop-in. Run once at boot.
+---Creates the chip-wallet table if it doesn't exist. Runs once at boot.
 function chips.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_casino_chips (
@@ -54,9 +51,8 @@ local toAmount = util.wholeAmount
 ---@return integer amount clamped to [0, TX_MAX] for a single buy / sell
 local function clampTx(n) return math.min(TX_MAX, toAmount(n)) end
 
----Credit chips as a single atomic upsert increment (capped at CHIP_CEILING in SQL) and return the
----new balance. Atomic so two overlapping credits can't lose an update the way the old
----read-modify-write could. Negative / non-finite / missing amounts are a no-op.
+---Credits chips as a single atomic upsert increment (capped at CHIP_CEILING in SQL) and returns
+---the new balance. Negative / non-finite / missing amounts are a no-op.
 ---@param cid string|nil citizenid
 ---@param n number chips to credit
 ---@return integer balance new balance (unchanged when cid is missing or n <= 0)
@@ -72,11 +68,8 @@ function chips.add(cid, n)
     return chips.get(cid)
 end
 
----Debit chips atomically, all-or-nothing: one conditional UPDATE (`AND chips >= ?`) so a
----concurrent debit can't slip between a balance check and the write - the read-modify-write it
----replaces let two overlapping cashouts each pass the pre-check and sell the same chips twice.
----Returns the new balance, or nil when the wallet can't cover the full amount; callers must treat
----nil as a failed debit and credit nothing against it.
+---Debits chips atomically via one conditional UPDATE. Returns the new balance, or nil when the
+---wallet can't cover the full amount.
 ---@param cid string|nil citizenid
 ---@param n number chips to debit
 ---@return integer|nil balance new balance, nil when insufficient (or no identity)
@@ -91,9 +84,7 @@ function chips.remove(cid, n)
     return chips.get(cid)
 end
 
----Buy chips with bank money (1:1), debit-before-credit. The bank check and debit run in one
----synchronous block (no yields between them), so the affordability check can't be raced; the chip
----credit after it is the atomic chips.add. Logs a -amount Wallet transaction.
+---Buys chips with bank money (1:1), debit-before-credit. Logs a -amount Wallet transaction.
 ---@param src integer player server id
 ---@param amount any client-supplied amount (clamped to [1, TX_MAX])
 ---@param game string|nil originating game id (Wallet-log tag only)
@@ -110,10 +101,7 @@ function chips.buy(src, amount, game)
     return { chips = bal, bank = money.get(src, 'bank') or 0 }
 end
 
----Sell chips back for bank money (1:1), debit-before-credit: the chips leave via chips.remove's
----atomic conditional UPDATE and the bank is only credited after that succeeds, so overlapping
----sell calls can't cash the same chips out twice (the old pre-check + clamped write allowed
----exactly that through the await window). Logs a +amount Wallet transaction.
+---Sells chips back for bank money (1:1), debit-before-credit. Logs a +amount Wallet transaction.
 ---@param src integer player server id
 ---@param amount any client-supplied amount (clamped to [1, TX_MAX])
 ---@param game string|nil originating game id (Wallet-log tag only)
@@ -130,10 +118,8 @@ function chips.sell(src, amount, game)
     return { chips = bal, bank = money.get(src, 'bank') or 0 }
 end
 
----Apply a client-asserted net chip change from a solo / co-op session. Client-run games can't be
----server-verified, so the trust model is a hard clamp: one session may swing the wallet at most
----SETTLE_MAX either way, non-finite deltas collapse to 0, and a loss larger than the balance
----floors at 0 in SQL (GREATEST) rather than failing - the player simply had less to lose.
+---Applies a client-asserted net chip change from a solo / co-op session. Deltas clamp to
+---SETTLE_MAX either way, non-finite deltas collapse to 0, and losses floor the balance at 0.
 ---@param src integer player server id
 ---@param delta any client-supplied signed chip change
 ---@return table|nil result { chips }, nil when the caller has no identity
@@ -181,8 +167,7 @@ lib.callback.register('sd-phone:server:games:chipsSettle', function(src, payload
     return { success = true, data = r }
 end)
 
--- One-shot boot thread: create the wallet schema before any handler needs it. pcall'd so a broken
--- DB prints one tagged line instead of killing the resource load.
+-- One-shot boot thread: creates the wallet schema.
 CreateThread(function()
     local good, err = pcall(chips.ensureSchema)
     if not good then print(('^1[sd-phone:games]^0 chips schema bootstrap failed: %s'):format(err)) end

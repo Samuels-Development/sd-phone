@@ -1,15 +1,11 @@
 ---@type table Store module; the table returned at end of file.
 local store = {}
 
--- Server-side pepper folded into every password hash, mirroring the Mail and Birdy stores. The
--- engine has its own pepper; legacy hashes are verified via those modules' hashers and upgraded
--- on first successful login (see actions.verifyPassword). Never log or broadcast this string.
+-- Server-side pepper folded into every password hash.
 ---@type string Engine password pepper.
 local PEPPER = 'sd-phone-v1::accounts::do-not-leak-this-string'
 
----Hash a password into a stable 24-char hex digest - the same three-lane digest the mail/birdy
----stores use, with the engine's own pepper. Deterministic on purpose: verification is a straight
----string compare in the caller, and the digest fits comfortably in the VARCHAR(64) hash column.
+---Hashes a password into a stable 24-char hex digest using the engine's pepper.
 ---@param password string plaintext password
 ---@return string hash 24-char hex digest
 function store.hashPassword(password)
@@ -24,12 +20,8 @@ function store.hashPassword(password)
     return ('%08x%08x%08x'):format(h1, h2, h3)
 end
 
----Create the engine tables idempotently, so the resource is drop-in. phone_app_accounts holds one
----row per (app, username) - the UNIQUE key is the authoritative duplicate guard behind the actions
----layer's friendlier pre-check. phone_app_sessions maps which account each citizen is signed into
----per app. phone_passwords is the per-character credential vault behind the Passwords app -
----plaintext by design: a password manager has to display what it stores, so its rows must only
----ever be read through citizenid-scoped queries. Run once at boot.
+---Creates the engine tables idempotently: phone_app_accounts, phone_app_sessions, and the
+---phone_passwords vault.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_app_accounts (
@@ -69,9 +61,7 @@ function store.ensureSchema()
     ]])
 end
 
----Map a phone_app_accounts row to the camelCase account shape the actions layer uses. The
----passwordHash rides along for verification - callers strip it (publicAccount) before anything
----leaves the server.
+---Maps a phone_app_accounts row to the camelCase account shape, passwordHash included.
 ---@param row table|nil raw DB row
 ---@return table|nil account
 local function rowToAccount(row)
@@ -107,9 +97,8 @@ function store.getAccountById(id)
     ))
 end
 
----Accounts in `app` whose linked email or phone matches. Pass nil for the side that isn't being
----searched - each side is guarded by an IS NOT NULL check in the SQL, so a nil never matches a
----NULL column. Read-only.
+---Returns accounts in `app` whose linked email or phone matches; nil skips that side of the
+---search. Read-only.
 ---@param app string account app key
 ---@param email string|nil linked email to match
 ---@param phone string|nil linked phone (digits) to match
@@ -124,9 +113,7 @@ function store.findAccountsByContact(app, email, phone)
     return out
 end
 
----Insert a new account row. Returns nil when the insert fails - including the UNIQUE
----(app, username) key rejecting a duplicate that raced past the actions layer's pre-check - so
----the caller reports failure instead of assuming success.
+---Inserts a new account row; returns nil when the insert fails.
 ---@param app string account app key
 ---@param username string account username
 ---@param displayName string display name
@@ -141,25 +128,21 @@ function store.insertAccount(app, username, displayName, passwordHash, email, ph
     ]], { app, username, displayName, passwordHash, email, phone })
 end
 
----Replace an account's stored hash. Takes the already-hashed value so plaintext never enters the
----data layer.
+---Replaces an account's stored hash.
 ---@param id number account row id
 ---@param passwordHash string peppered hash
 function store.setPassword(id, passwordHash)
     MySQL.update.await('UPDATE phone_app_accounts SET password_hash = ? WHERE id = ?', { passwordHash, id })
 end
 
----Delete an account and its sessions - sessions first, so no window exists where a session row
----resolves to a missing account.
+---Deletes an account and its sessions, sessions first.
 ---@param id number account row id
 function store.deleteAccount(id)
     MySQL.update.await('DELETE FROM phone_app_sessions WHERE account_id = ?', { id })
     MySQL.update.await('DELETE FROM phone_app_accounts WHERE id = ?', { id })
 end
 
----Sign a citizen into an account. Single-session apps (everything except mail, which keeps its
----own logged_in_citizens json) replace any prior session: delete-then-insert keyed off
----(app, citizenid), so one citizen can never hold two live sessions in the same app here.
+---Signs a citizen into an account, replacing any prior session for (app, citizenid).
 ---@param app string account app key
 ---@param citizenid string framework per-character id
 ---@param accountId number account row id
@@ -178,9 +161,7 @@ function store.clearSession(app, citizenid)
     MySQL.update.await('DELETE FROM phone_app_sessions WHERE app = ? AND citizenid = ?', { app, citizenid })
 end
 
----Every citizen currently signed into an account in `app` - for apps that need to push live
----updates at "whoever is logged into this account" (e.g. Cherry delivering a chat message to the
----match's owner). Read-only.
+---Returns every citizen currently signed into an account in `app`. Read-only.
 ---@param app string account app key
 ---@param accountId number account row id
 ---@return string[] citizenids
@@ -208,12 +189,11 @@ function store.getSessionAccount(app, citizenid)
     return rowToAccount(row)
 end
 
----Upsert one vault entry for a character - the UNIQUE (citizenid, app, username) key makes a
----re-save of the same login update in place rather than duplicate.
+---Upserts one vault entry for a character, keyed UNIQUE (citizenid, app, username).
 ---@param citizenid string framework per-character id (the vault's owner)
 ---@param app string account app key
 ---@param username string saved login username
----@param password string saved login password (plaintext by design - see ensureSchema)
+---@param password string saved login password, stored plaintext
 ---@param email string|nil saved linked email
 ---@param phone string|nil saved linked phone (digits)
 function store.saveVaultEntry(citizenid, app, username, password, email, phone)
@@ -224,9 +204,8 @@ function store.saveVaultEntry(citizenid, app, username, password, email, phone)
     ]], { citizenid, app, username, password, email, phone })
 end
 
----All of one character's vault entries, ordered app then username, with the creation date
----pre-formatted for the UI. Scoped to `citizenid` - the only way vault plaintext should ever be
----read. Read-only.
+---Returns all of one character's vault entries, ordered app then username, with the creation
+---date pre-formatted. Read-only.
 ---@param citizenid string framework per-character id
 ---@return table[] entries
 function store.listVaultEntries(citizenid)
@@ -236,16 +215,14 @@ function store.listVaultEntries(citizenid)
     ]], { citizenid }) or {}
 end
 
----Delete one vault entry. Owner-scoped (`citizenid AND id`), so a guessed or leaked row id can
----only ever remove the caller's own entry.
+---Deletes one vault entry, scoped to citizenid AND id.
 ---@param citizenid string framework per-character id
 ---@param id number vault row id
 function store.deleteVaultEntry(citizenid, id)
     MySQL.update.await('DELETE FROM phone_passwords WHERE citizenid = ? AND id = ?', { citizenid, id })
 end
 
----Keep saved vault copies in sync when an account's password changes - every character who saved
----this login sees the new password, matching what the account now accepts.
+---Updates every saved vault copy of this login to the new password.
 ---@param app string account app key
 ---@param username string account username
 ---@param password string the new plaintext password
@@ -256,11 +233,8 @@ function store.syncVaultPassword(app, username, password)
     )
 end
 
----One-time credential migration from the Birdy and Mail tables. Birdy handles/passwords live on
----phone_birdy_profiles - copied once, with currently-logged-in profiles becoming engine sessions.
----Mail accounts copy from phone_mail_accounts with the email as both username and linked email;
----mail sessions stay in mail's own logged_in_citizens json (multi-account per citizen). INSERT
----IGNORE makes re-runs no-ops; missing source tables are caught by the pcall in init.lua.
+---Migrates credentials once from the Birdy and Mail tables: Birdy profiles become accounts and
+---sessions, Mail accounts copy with the email as username; INSERT IGNORE makes re-runs no-ops.
 function store.migrateLegacy()
     MySQL.query.await([[
         INSERT IGNORE INTO phone_app_accounts (app, username, display_name, password_hash)

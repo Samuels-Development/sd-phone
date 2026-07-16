@@ -2,7 +2,7 @@
 local proxyCallback = require 'client.nui'
 
 -- Thin delegates into server/cherry: profile CRUD, deck swipes, match threads, reactions and
--- blocking - validation + persistence live in each server handler, documented there.
+-- blocking.
 proxyCallback('sd-phone:cherry:state',         'sd-phone:server:cherry:state')
 proxyCallback('sd-phone:cherry:saveProfile',   'sd-phone:server:cherry:saveProfile')
 proxyCallback('sd-phone:cherry:swipe',         'sd-phone:server:cherry:swipe')
@@ -18,29 +18,25 @@ proxyCallback('sd-phone:cherry:unblock',       'sd-phone:server:cherry:unblock')
 proxyCallback('sd-phone:cherry:watch',         'sd-phone:server:cherry:watch')
 proxyCallback('sd-phone:cherry:deleteAccount', 'sd-phone:server:cherry:deleteAccount')
 
----Server push: a message arrived in one of our match threads - relay it so an open thread
----updates live. Server-originated, so the payload is trusted as-is.
+---Server push: relays a message that arrived in one of our match threads.
 ---@param payload table { matchId, message } from server/cherry/actions.lua
 RegisterNetEvent('sd-phone:client:cherry:message', function(payload)
     SendNUIMessage({ action = 'sd-phone:cherry:message', data = payload })
 end)
 
----Server push: someone we liked swiped right back - relay the fresh match card so the "It's a
----match" moment shows without a resync.
+---Server push: relays a fresh match card.
 ---@param payload table serialized match record from server/cherry/actions.lua
 RegisterNetEvent('sd-phone:client:cherry:match', function(payload)
     SendNUIMessage({ action = 'sd-phone:cherry:match', data = payload })
 end)
 
----Server push: the other side reacted to one of our thread messages - relay the updated
----reaction set so the bubble patches in place.
+---Server push: relays an updated thread-message reaction set.
 ---@param payload table reaction patch from server/cherry/actions.lua
 RegisterNetEvent('sd-phone:client:cherry:reaction', function(payload)
     SendNUIMessage({ action = 'sd-phone:cherry:reaction', data = payload })
 end)
 
----Server push: the other side unmatched (or blocked) us - relay so the match and its thread
----drop out of the app immediately.
+---Server push: relays an unmatch/block notice.
 ---@param payload table { matchId } from server/cherry/actions.lua
 RegisterNetEvent('sd-phone:client:cherry:unmatch', function(payload)
     SendNUIMessage({ action = 'sd-phone:cherry:unmatch', data = payload })

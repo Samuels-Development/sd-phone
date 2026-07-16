@@ -1,5 +1,4 @@
----@type table Shared server helpers; the table returned at end of file. Consumers `require` this
----once and alias what they use (`local ok, fail = util.ok, util.fail`) so call sites stay short.
+---@type table Shared server helpers; the table returned at end of file.
 local util = {}
 
 ---Success response envelope - the shape every callback/action returns on the happy path. `data`
@@ -17,9 +16,7 @@ function util.fail(message) return { success = false, message = message } end
 ---@type string Alphabet for generated row ids (base-36, lowercase) - matches the frontend's id shape.
 local ID_CHARS = '0123456789abcdefghijklmnopqrstuvwxyz'
 
----Generate a random base-36 id of `len` characters. Different stores use different widths (7-12)
----to match the frontend id shape of their app, so the width is a required argument; a
----(vanishingly rare) collision fails the PK insert, which callers already treat as a failed save.
+---Generates a random base-36 id of `len` characters.
 ---@param len integer id length in characters
 ---@return string
 function util.newId(len)
@@ -31,10 +28,8 @@ function util.newId(len)
     return table.concat(out)
 end
 
----Strip everything but the digits from a value (phone numbers, ids typed by the player). An
----integral float formats as a plain integer first - tostring(5551234.0) is '5551234.0' in Lua 5.4
----and a bare digit-strip would turn that into the different number '55512340'. Non-string and nil
----inputs coerce to '' first, so it never errors on a crafted payload.
+---Strips everything but the digits from a value. An integral float formats as a plain integer
+---first; non-string and nil inputs coerce to ''.
 ---@param s any
 ---@return string digits only
 function util.digits(s)
@@ -42,15 +37,13 @@ function util.digits(s)
     return (tostring(s or ''):gsub('%D', ''))
 end
 
----Interpret a value as a boolean the way oxmysql hands back a TINYINT(1): a real boolean, the
----number 1, or the string '1' are all true; everything else is false. Use this to deserialize
----flag columns - `tonumber(v) == 1` is wrong because oxmysql may already have coerced to a boolean.
+---Interprets a value as a boolean the way oxmysql hands back a TINYINT(1): a real boolean, the
+---number 1, or the string '1' are all true; everything else is false.
 ---@param v any raw column value
 ---@return boolean
 function util.truthy(v) return v == true or v == 1 or v == '1' end
 
----Trim leading/trailing whitespace. A non-string coerces to '' (never nil), so callers can trim a
----possibly-absent field without a type check.
+---Trims leading/trailing whitespace. A non-string coerces to '' (never nil).
 ---@param s any
 ---@return string trimmed, or '' when not a string
 function util.trim(s)
@@ -59,8 +52,7 @@ function util.trim(s)
 end
 
 ---Two-letter uppercase initials from a display name (first letters of the first two words), for
----avatar fallbacks. Falls back to the first character, then '#', so it always returns something.
----Nil-safe.
+---avatar fallbacks. Falls back to the first character, then '#'. Nil-safe.
 ---@param name any display name
 ---@return string initials (1-2 chars, or '#')
 function util.initialsFor(name)
@@ -83,16 +75,14 @@ function util.formatNumber(number)
     return d
 end
 
----@type string[] iOS system-colour palette, mirrored from the frontend so a name maps to the same
----avatar colour client- and server-side and across every app.
+---@type string[] iOS system-colour palette, mirrored from the frontend.
 local PALETTE = {
     '#0a84ff', '#30d158', '#ff375f', '#ff9f0a', '#bf5af2',
     '#ff453a', '#5e5ce6', '#64d2ff', '#ffd60a', '#636366',
 }
 
----Deterministically pick a palette colour for a string via a 32-bit rolling hash. Identical to the
----frontend hash so a person's avatar tint lines up everywhere it's rendered - do NOT "simplify" the
----arithmetic (the & 0xffffffff wrap and the signed fold are what make it match JS).
+---Deterministically picks a palette colour for a string via a 32-bit rolling hash, identical to
+---the frontend hash (the & 0xffffffff wrap and the signed fold match JS).
 ---@param str string key to colour (a name, number, or handle)
 ---@return string hex colour
 function util.colorFor(str)
@@ -105,19 +95,15 @@ function util.colorFor(str)
     return PALETTE[(h % #PALETTE) + 1]
 end
 
----True when a number is finite (not NaN, not +/-inf). A modded client can deliver NaN/inf through
----msgpack, and every comparison against NaN is false, so `not util.finite(n)` is the correct guard
----before any money/amount arithmetic. Non-numbers are not finite.
+---True when a number is finite (not NaN, not +/-inf). Non-numbers are not finite.
 ---@param n any
 ---@return boolean
 function util.finite(n)
     return type(n) == 'number' and n == n and n ~= math.huge and n ~= -math.huge
 end
 
----Add an index to a table if it isn't already present - a drop-in upgrade for installs whose table
----predates the index (MySQL has no ADD INDEX IF NOT EXISTS). tableName/indexName/columnsDDL are
----hardcoded literals at every call site, never client input, so formatting them into the ALTER is
----safe. No-op when the index already exists. Call it from ensureSchema after the CREATE TABLE.
+---Adds an index to a table if it isn't already present; a no-op when it exists. Call from
+---ensureSchema after the CREATE TABLE.
 ---@param tableName string
 ---@param indexName string
 ---@param columnsDDL string column list incl. parens, e.g. "(recipient, seen)"
@@ -131,9 +117,8 @@ function util.ensureIndex(tableName, indexName, columnsDDL)
     end
 end
 
----Coerce a client-supplied value to a whole, non-negative amount: non-numbers and NaN/inf collapse
----to 0, everything else floors and clamps at 0. Callers still apply their own min/max bounds - this
----only guarantees a safe integer to compare against them.
+---Coerces a client-supplied value to a whole, non-negative amount: non-numbers and NaN/inf
+---collapse to 0, everything else floors and clamps at 0.
 ---@param v any
 ---@return integer amount >= 0
 function util.wholeAmount(v)

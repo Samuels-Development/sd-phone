@@ -3,10 +3,8 @@ local framework  = require 'bridge.shared.framework'
 ---@type table Player bridge (bridge.server.player): framework-native player object resolution.
 local player_mod = require 'bridge.server.player'
 
----@type table Gang module; the table returned at end of file. Gangs are a QBCore/QBox concept -
----ESX has no equivalent, so every helper here returns its zero/false default on ESX servers and
----any gate built on these fails closed there. `source` must come from the server's own event
----context, never from a client payload.
+---@type table Gang module; the table returned at end of file. QBCore/QBox gang lookups; every
+---helper returns its zero/false default on ESX.
 local gang = {}
 
 ---The player's current gang name (QBCore only). Nil when unresolvable or on ESX.
@@ -19,8 +17,8 @@ function gang.getName(source)
     return nil
 end
 
----The player's current gang grade level (QBCore only). Returns 0 (not nil) when the player or
----grade can't be resolved, so numeric comparisons at call sites never see nil.
+---The player's current gang grade level (QBCore only). Returns 0 when the player or grade can't
+---be resolved.
 ---@param source number player server id
 ---@return integer
 function gang.getGrade(source)
@@ -52,9 +50,7 @@ function gang.has(source, gangName, minGrade)
     return false
 end
 
----Convenience: true if the player matches any `{ name=..., minGrade=? }` entry. An EMPTY list
----returns true so callers can use it as a default-allow gate (an unset config whitelist means
----everyone) - callers gating something sensitive must pass a non-empty list.
+---True if the player matches any `{ name=..., minGrade=? }` entry. An empty list returns true.
 ---@param source number player server id
 ---@param options { name: string, minGrade?: integer }[]
 ---@return boolean

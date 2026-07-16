@@ -12,17 +12,15 @@ local WZ = config.WeazelNews
 
 ---@type table Actions module; the table returned at end of file. Handlers return the phone's
 ---{ success, message?, data? } envelope. The feed is public; publishing is staff-only. Byline,
----author citizenid and timestamps are stamped server-side and every input is clamped, so clients
----can't spoof bylines or smuggle oversized payloads.
+---author citizenid and timestamps are stamped server-side and every input is clamped.
 local actions = {}
 
----@type table<string, boolean> Whitelist set of allowed article categories (WZ.Categories) -
----mirrors the web Category union. Anything else is rejected outright, never coerced.
+---@type table<string, boolean> Whitelist set of allowed article categories (WZ.Categories);
+---mirrors the web Category union.
 local CATS = {}
 for _, c in ipairs(WZ.Categories) do CATS[c] = true end
 
----The acting player's citizenid, always resolved from src via the player bridge - identity is
----never read from a payload.
+---The acting player's citizenid, resolved from src via the player bridge.
 ---@param src integer player server id
 ---@return string|nil citizenid nil when the player can't be resolved
 local function cidOf(src) return player.getIdentifier(src) end
@@ -30,9 +28,8 @@ local function cidOf(src) return player.getIdentifier(src) end
 local util = require 'server.util'
 local trim = util.trim
 
----Coerce a client-supplied article id to a positive integer, or nil. Callback payloads are
----msgpack, so a modded client can send real NaN/inf/fractional floats - tonumber passes those
----through and the SQL layer errors serializing them, so they are rejected here instead.
+---Coerces a client-supplied article id to a positive integer, or nil; NaN/inf/fractional values
+---are rejected.
 ---@param v any client-supplied id value
 ---@return integer|nil id positive integer, nil when malformed
 local function articleId(v)
@@ -41,13 +38,8 @@ local function articleId(v)
     return n
 end
 
----True when `src` is news staff allowed to manage the newsroom. With CheckIsBoss = false, anyone
----on a listed job qualifies (any grade). With CheckIsBoss = true, only a boss of a configured job
----(QBCore/QBox `isboss`; ESX falls back to grade >= BossGrade), or - when ManageMinGrade is set -
----someone on a listed job at that grade or above. The job always comes from the framework via the
----job bridge, so a client can't claim staff status through a payload. Every write handler
----(save/delete/setBreaking) passes through here; the feed only uses it to drive the manage
----cogwheel in the app.
+---True when `src` is news staff allowed to manage the newsroom: any listed job when CheckIsBoss
+---is false, otherwise a boss (or ManageMinGrade+) of a configured job.
 ---@param src integer player server id
 ---@return boolean canManage
 local function canManage(src)
@@ -73,9 +65,8 @@ local function relTime(ts)
     return math.floor(d / 86400) .. 'd'
 end
 
----Split blank-line-separated text back into the paragraph array the reader expects. `(.-)\n\n` is
----non-greedy and `.` spans newlines in Lua patterns, so a paragraph keeps any single internal
----newlines while double newlines delimit. Falls back to the whole trimmed text as one paragraph.
+---Splits blank-line-separated text back into the paragraph array the reader expects. Falls back
+---to the whole trimmed text as one paragraph.
 ---@param text string|nil stored body text
 ---@return string[] body paragraph array
 local function splitParas(text)
@@ -91,9 +82,8 @@ local function splitParas(text)
     return body
 end
 
----Public article shape sent to the app. Deliberately omits author_cid: readers only ever see the
----display byline, so citizenids never reach other players' clients. Handles oxmysql's TINYINT(1)
----reads arriving as either a Lua boolean or a number.
+---Public article shape sent to the app; omits author_cid. Handles oxmysql's TINYINT(1) reads
+---arriving as either a Lua boolean or a number.
 ---@param row table article DB row
 ---@return table article public article payload
 local function pubArticle(row)
@@ -112,11 +102,8 @@ local function pubArticle(row)
     }
 end
 
----Validate + clamp a client save payload into a row-ready table. Category is whitelist-checked
----and the headline required (hard failures); everything else is clamped to the configured caps,
----which all fit their DB columns. The body arrives as an array of paragraphs and is stored as
----blank-line-separated text (splitParas is the inverse). A non-table payload sanitizes as empty -
----and so fails the category check - rather than crashing the handler.
+---Validates + clamps a client save payload into a row-ready table. Category is whitelist-checked
+---and the headline required; everything else is clamped to the configured caps.
 ---@param payload any client-supplied article draft
 ---@return table|nil row row-ready fields, nil on a hard validation failure
 ---@return string? message failure reason when row is nil
@@ -160,8 +147,8 @@ local function sanitize(payload)
     }
 end
 
----Public feed: the latest articles plus the breaking ticker, and whether the caller is news staff
----(drives the manage cogwheel in the app). Read-only - safe for any caller.
+---Public feed: the latest articles plus the breaking ticker, and whether the caller is news
+---staff. Read-only.
 ---@param src integer player server id
 ---@return table result envelope with { articles, ticker, canManage }
 function actions.feed(src)
@@ -175,9 +162,7 @@ function actions.feed(src)
     return { success = true, data = { articles = articles, ticker = ticker, canManage = canManage(src) } }
 end
 
----Count one read of an article and return its new view total. Best-effort and unauthenticated by
----design (any reader counts): a bad or unknown id just no-ops with the count it can find (0 for
----missing rows).
+---Counts one read of an article and returns its new view total. A bad or unknown id no-ops.
 ---@param src integer player server id
 ---@param id any client-supplied article id
 ---@return table result envelope with { id, views }
@@ -188,12 +173,8 @@ function actions.view(src, id)
     return { success = true, data = { id = tostring(id), views = store.viewsOf(id) } }
 end
 
----Staff-only: create a new article, or update an existing one when `id` is set. Gated by
----canManage here (not just the client-side cogwheel), so calling the callback directly can't skip
----it; any staff member may edit any story - the newsroom is job-scoped, not per-author. Byline +
----author citizenid + created_at are stamped only on first insert, so edits never re-attribute a
----story. Setting `featured` demotes every other story so there's a single hero. A present-but-
----malformed id fails as not-found rather than silently inserting a duplicate article.
+---Staff-only: creates a new article, or updates an existing one when `id` is set. Byline, author
+---citizenid and created_at are stamped on first insert only; `featured` demotes every other story.
 ---@param src integer player server id
 ---@param payload any client-supplied article draft (sanitize documents the shape)
 ---@return table result envelope with { article } on success
@@ -230,8 +211,7 @@ function actions.save(src, payload)
     return { success = true, data = { article = saved and pubArticle(saved) or nil } }
 end
 
----Staff-only: delete an article by id. Same canManage gate as save, checked server-side so the
----callback can't be reached without the job - any staff member can retire any story.
+---Staff-only: deletes an article by id.
 ---@param src integer player server id
 ---@param id any client-supplied article id
 ---@return table result envelope with { id } on success
@@ -243,10 +223,8 @@ function actions.delete(src, id)
     return { success = true, data = { id = tostring(id) } }
 end
 
----Clamp candidate ticker lines to what the store accepts: non-strings and empties are dropped,
----the rest trimmed, capped per line (MaxBreakingLength fits the ticker column) and capped to
----MaxBreakingLines in order. Shared by the staff setBreaking handler and the setBreakingTicker
----export so both paths store identically clamped lines. A non-table clamps to an empty list.
+---Clamps candidate ticker lines: non-strings and empties are dropped, the rest trimmed, capped
+---per line and capped to MaxBreakingLines in order. A non-table clamps to an empty list.
 ---@param raw any candidate lines array
 ---@return string[] lines row-ready ticker lines in display order
 local function clampTickerLines(raw)
@@ -264,8 +242,7 @@ local function clampTickerLines(raw)
     return lines
 end
 
----Staff-only: replace the whole breaking ticker. Lines walk the clampTickerLines clamps.
----Wholesale replace matches the editor - there are no per-line ids to track on the client.
+---Staff-only: replaces the whole breaking ticker. Lines walk the clampTickerLines clamps.
 ---@param src integer player server id
 ---@param payload any client-supplied { lines: string[] }
 ---@return table result envelope with { ticker } echoing the stored lines
@@ -278,12 +255,8 @@ function actions.setBreaking(src, payload)
     return { success = true, data = { ticker = lines } }
 end
 
----Trusted-caller publish for the postArticle export: another server resource files the story, so
----only the canManage staff gate is skipped - the draft still walks every sanitize clamp (category
----whitelist, required headline, length caps). Timestamps are stamped server-side, the byline
----defaults to 'Weazel News' (capped to the 80-char author column) and author_cid is the 'export'
----sentinel so the row is traceable to an export caller. A featured article demotes every other
----story, exactly like a staff save. Insert-only; edits stay staff-only through actions.save.
+---Trusted-caller publish for the postArticle export: skips the staff gate but walks every
+---sanitize clamp. Byline defaults to 'Weazel News', author_cid is the 'export' sentinel. Insert-only.
 ---@param article any export-supplied article draft (sanitize documents the shape)
 ---@return integer|nil articleId new article id, nil on validation failure
 ---@return string? reason failure reason when articleId is nil
@@ -305,9 +278,8 @@ function actions.publish(article)
     return id
 end
 
----Trusted-caller ticker replace for the setBreakingTicker export: no staff gate (the caller
----vouches), same clampTickerLines clamps as the staff path. An empty array legitimately clears
----the ticker; a non-table is a caller bug and returns false without touching the stored lines.
+---Trusted-caller ticker replace for the setBreakingTicker export: no staff gate, same
+---clampTickerLines clamps. An empty array clears the ticker; a non-table returns false.
 ---@param lines any string[] ticker lines in display order
 ---@return boolean replaced
 function actions.replaceTicker(lines)

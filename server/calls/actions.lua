@@ -12,19 +12,15 @@ local badges   = require 'server.badges.init'
 ---@type table Actions module; the table returned at end of file.
 local actions = {}
 
--- Live call state is transient and in-memory - only a FINISHED call is persisted, to each
--- side's recents log. Channels double as pma-voice call channels and are handed out
--- monotonically from 1000, so a stale client event can never collide with a newer call's
--- channel within a server run.
+-- Live call state is transient and in-memory; only a finished call is persisted. Channels
+-- double as pma-voice call channels, handed out monotonically from 1000.
 ---@type table<number, table> Active 1:1 sessions keyed by channel: { channel, state ('ringing'|'active'), startedAt, caller, callee, company? (display name when promoted from a group ring) }.
 local sessions = {}
 ---@type number Next pma-voice call channel to hand out.
 local nextChannel = 1000
 
--- Pending "ring everyone" group calls (e.g. calling a company's on-duty staff), keyed by
--- channel. Unlike `sessions` these have MANY ringing callees; the first to accept is promoted
--- into a normal 1:1 `sessions` entry and the rest are cancelled. Nothing is persisted until a
--- promoted call ends.
+-- Pending "ring everyone" group calls keyed by channel; the first to accept is promoted into
+-- a normal 1:1 `sessions` entry and the rest are cancelled.
 ---@type table<number, table> Pending group rings keyed by channel: { channel, caller, targets = { [src] = callee }, display }.
 local groupRings = {}
 
@@ -55,8 +51,7 @@ local function ringForSource(src)
     return nil
 end
 
----Resolve a number to a saved-contact name for a given owner, or nil. Nil-guarded on the owner
----so a player dropping mid-callback can't push a nil citizenid into the contacts query.
+---Resolves a number to a saved-contact name for a given owner, or nil.
 ---@param citizenid string|nil
 ---@param numberDigits string
 ---@return string|nil
@@ -69,16 +64,15 @@ local function contactNameFor(citizenid, numberDigits)
     return nil
 end
 
----Move a player in/out of a pma-voice call channel, pcall-guarded so a voice-resource hiccup
----can't break call signaling.
+---Moves a player in/out of a pma-voice call channel, pcall-guarded.
 ---@param src number
 ---@param channel number
 local function setVoice(src, channel)
     pcall(function() exports['pma-voice']:setPlayerCall(src, channel) end)
 end
 
----Persist one side of a finished call to its owner's recents log, pruning to the configured
----cap (config.Contacts.MaxRecents) so the log stays bounded.
+---Persists one side of a finished call to its owner's recents log, pruning to the configured
+---cap.
 ---@param citizenid string
 ---@param number string
 ---@param name string|nil
@@ -95,9 +89,8 @@ local function logCall(citizenid, number, name, direction, duration)
     contacts.pruneCalls(citizenid, config.Contacts.MaxRecents)
 end
 
----Reshape one stored call party for a first-party lifecycle event payload: the internal
----src/cid keys become source/citizenid, and the fresh copy keeps consumers from mutating live
----session state. Nil in, nil out, so an unknown party is simply absent.
+---Reshapes one stored call party for a first-party lifecycle event payload: src/cid become
+---source/citizenid on a fresh copy. Nil in, nil out.
 ---@param p { src: number, cid: string, name: string, number: string }|nil
 ---@return { source: number, citizenid: string, name: string, number: string }|nil
 local function eventParty(p)
@@ -105,10 +98,8 @@ local function eventParty(p)
     return { source = p.src, citizenid = p.cid, name = p.name, number = p.number }
 end
 
----Shared payload for the first-party 'sd-phone:server:call:*' lifecycle events, built ONLY
----from a stored session table - never fresh bridge lookups, which can fail while a participant
----is disconnecting. company is the ring's display name on a promoted company/group call and
----nil on a plain 1:1 call.
+---Builds the shared payload for the first-party 'sd-phone:server:call:*' lifecycle events from
+---a stored session table. company is nil on a plain 1:1 call.
 ---@param s table session from `sessions`
 ---@return table
 local function eventCall(s)
@@ -120,10 +111,8 @@ local function eventCall(s)
     }
 end
 
----Ring variant of eventCall for a group ring that never got answered: there is no single
----callee, so callee stays nil, company is the ring's display name and targets lists everyone
----still ringing at the time of the event. Same rule as eventCall: stored ring state only,
----never fresh lookups.
+---Ring variant of eventCall for an unanswered group ring: callee stays nil, company is the
+---ring's display name, targets lists everyone still ringing.
 ---@param ring table ring from `groupRings`
 ---@return table
 local function eventRing(ring)
@@ -137,14 +126,8 @@ local function eventRing(ring)
     }
 end
 
----Tear a call down: drop both sides from voice (only if the call went active), persist both
----recents rows, and notify both clients so their UI closes and recents refresh. The caller
----always logs 'outgoing'; the callee logs 'incoming' when answered, else 'missed' - and a
----missed call lights the callee's home-screen Phone badge. Idempotent: an unknown or
----already-ended channel is a no-op, so replayed hangups change nothing. Fires the first-party
----'sd-phone:server:call:ended' lifecycle event as (call, endedBy) with answered, duration and
----reason folded into the payload; the payload comes from the stored session only, never fresh
----bridge lookups, so it stays correct when the teardown came from a player disconnect.
+---Tears a call down: drops both sides from voice, persists both recents rows, notifies both
+---clients, and fires the 'sd-phone:server:call:ended' lifecycle event. Idempotent.
 ---@param channel number
 ---@param reason string
 ---@param endedBy number|nil source that caused the teardown, nil when it came from a disconnect
@@ -169,7 +152,7 @@ local function endCall(channel, reason, endedBy)
     TriggerClientEvent('sd-phone:client:call:ended', s.caller.src, { channel = channel, reason = reason })
     TriggerClientEvent('sd-phone:client:call:ended', s.callee.src, { channel = channel, reason = reason })
 
-    -- Server-local lifecycle event, synchronous: the call is over; payload is the stored session reshaped, never fresh lookups.
+    -- Server-local lifecycle event: the call ended.
     local call = eventCall(s)
     call.answered = answered
     call.duration = duration
@@ -179,17 +162,8 @@ end
 
 actions.endCall = endCall
 
----Start a call to a dialed number. The caller's identity comes from src only; the payload
----contributes nothing but the dialed digits, so a crafted payload can't spoof who is calling.
----The caller's own number is read through ensurePhoneNumber (idempotent, mirrors actions.list),
----so an export-originated call from a player who has never opened their phone still presents a
----real assigned number instead of '' on the callee's screen and in both recents logs.
----Rejects when the caller is already mid-call/ring or in airplane mode, when the number is
----unassigned, and when the callee is unreachable. Offline, airplane mode, and having blocked
----the caller all return the SAME wording on purpose, so a caller can't probe whether they've
----been blocked. A callee already in a session OR a pending group ring reports busy, keeping the
----one-call-at-a-time invariant on both ends (the caller-side check already enforced both). On
----success both sides get their ring events and the session waits in 'ringing'.
+---Starts a call to a dialed number. Rejects when the caller is mid-call/ring or in airplane
+---mode, the number is unassigned, or the callee is unreachable, blocked, or busy.
 ---@param source number caller server id
 ---@param payload { number?: string }
 ---@return table
@@ -237,23 +211,14 @@ function actions.dial(source, payload)
         number  = sessions[channel].caller.number,
     })
 
-    -- Server-local lifecycle event, synchronous: a 1:1 call just started ringing; payload is the stored session reshaped.
+    -- Server-local lifecycle event: a 1:1 call started ringing.
     TriggerEvent('sd-phone:server:call:started', eventCall(sessions[channel]))
 
     return ok({ channel = channel })
 end
 
----Ring a set of recipients at once (a company's on-duty staff). Not registered as a client
----callback - reachable only server-side (services' callCompany and the startGroupCall export
----wrapper in init.lua), both of which build `targets` themselves, so nothing here is
----attacker-controlled. The caller sees a single
----outgoing call to `displayName`/`displayNumber`; every recipient rings as an incoming call
----from the caller (resolved to a saved-contact name where they have one). The caller's own
----number is read through ensurePhoneNumber, so a caller who has never opened their phone still
----rings out with a real assigned number instead of ''. Recipients who are
----the caller themselves, already in a call or ring, or in airplane mode are filtered out here;
----if nobody survives the filter the caller is told so and nothing rings. The FIRST to accept
----is connected and the rest are cancelled (see actions.accept).
+---Rings a set of recipients at once (server-side callers only). Unavailable recipients are
+---filtered out; the first to accept is connected and the rest are cancelled.
 ---@param source number caller server id
 ---@param targets { src: number, cid: string }[] server-built recipient list
 ---@param displayName string what the caller sees they're calling (e.g. 'Police')
@@ -302,20 +267,14 @@ function actions.callGroup(source, targets, displayName, displayNumber)
         })
     end
 
-    -- Server-local lifecycle event, synchronous: a company/group ring just started; no callee yet, targets lists every ringer.
+    -- Server-local lifecycle event: a company/group ring started.
     TriggerEvent('sd-phone:server:call:started', eventRing(groupRings[channel]))
 
     return ok({ channel = channel })
 end
 
----Callee answers. On a group ring the FIRST acceptor wins: the ring is promoted into a normal
----active session and every other ringer is cancelled. The promoted callee record keeps the
----acceptor's src/cid (they drive voice + their recents) but the COMPANY's display name/number
----(what the caller sees + logs), falling back to the employee's own number when the company has
----none. On a 1:1 session only the ringing callee may answer - a forged accept on someone else's
----channel fails, and a replayed accept fails the 'ringing' state check, so answering is
----idempotent. Marks the session active, joins both sides to the pma-voice channel and notifies
----both clients.
+---Callee answers. On a group ring the first acceptor is promoted into an active session and
+---every other ringer is cancelled. Joins both sides to the pma-voice channel.
 ---@param source number
 ---@param payload { channel?: number }
 ---@return table
@@ -348,7 +307,7 @@ function actions.accept(source, payload)
         TriggerClientEvent('sd-phone:client:call:connected', ring.caller.src, { channel = channel })
         TriggerClientEvent('sd-phone:client:call:connected', t.src, { channel = channel })
 
-        -- Server-local lifecycle event, synchronous: the group ring was answered; payload is the promoted session reshaped.
+        -- Server-local lifecycle event: the group ring was answered.
         local s = sessions[channel]
         local call = eventCall(s)
         call.startedAt = s.startedAt
@@ -371,7 +330,7 @@ function actions.accept(source, payload)
     TriggerClientEvent('sd-phone:client:call:connected', s.caller.src, { channel = channel })
     TriggerClientEvent('sd-phone:client:call:connected', s.callee.src, { channel = channel })
 
-    -- Server-local lifecycle event, synchronous: the call was answered; payload is the stored session reshaped.
+    -- Server-local lifecycle event: the call was answered.
     local call = eventCall(s)
     call.startedAt = s.startedAt
     TriggerEvent('sd-phone:server:call:answered', call)
@@ -379,11 +338,8 @@ function actions.accept(source, payload)
     return ok({ channel = channel })
 end
 
----Callee declines. On a group ring a recipient declining just drops them from the ring; when
----the LAST one declines, the ring is torn down, the caller's outgoing side ends as
----'unavailable' and their attempt is logged to recents. On a 1:1 session only the callee may
----decline (the caller cancels via hangup instead), and someone else's decline can't end a call
----they aren't in. An unknown channel returns success - the call already ended, nothing to do.
+---Callee declines. On a group ring a decline drops that recipient; the last decline tears the
+---ring down. On a 1:1 session only the callee may decline. Unknown channels return success.
 ---@param source number
 ---@param payload { channel?: number }
 ---@return table
@@ -402,7 +358,7 @@ function actions.decline(source, payload)
                 logCall(ring.caller.cid, ring.display.number ~= '' and ring.display.number or ring.display.name,
                         ring.display.name, 'outgoing', 0)
 
-                -- Server-local lifecycle event, synchronous: the last ringer declined so the group ring ended unanswered; payload from the stored ring.
+                -- Server-local lifecycle event: the group ring ended unanswered.
                 local call = eventRing(ring)
                 call.answered = false
                 call.duration = 0
@@ -421,11 +377,8 @@ function actions.decline(source, payload)
     return ok()
 end
 
----Either party hangs up. On a group ring the CALLER hanging up cancels the whole ring for every
----recipient and logs the attempt; a recipient hanging up on the ring is just a decline. On a
----1:1 session either member may end it (cancelling a ring or ending an active call); anyone
----else is rejected, so a crafted channel can't end someone else's call. An unknown channel
----returns success - the call already ended.
+---Either party hangs up. A group-ring caller hanging up cancels the whole ring; a recipient
+---hanging up is a decline. Unknown channels return success.
 ---@param source number
 ---@param payload { channel?: number }
 ---@return table
@@ -444,7 +397,7 @@ function actions.hangup(source, payload)
             logCall(ring.caller.cid, ring.display.number ~= '' and ring.display.number or ring.display.name,
                     ring.display.name, 'outgoing', 0)
 
-            -- Server-local lifecycle event, synchronous: the caller cancelled the ring before anyone answered; payload from the stored ring.
+            -- Server-local lifecycle event: the caller cancelled the ring.
             local call = eventRing(ring)
             call.answered = false
             call.duration = 0
@@ -464,10 +417,7 @@ function actions.hangup(source, payload)
     return ok()
 end
 
----Report the caller's live call from their own perspective, or nil. Lets the UI re-sync after
----the phone was closed and reopened mid-call, so a call can never be left running with no way
----to hang up. A pending group ring re-syncs the same way: the caller sees their outgoing
----company call, a ringer sees the incoming call (with a way to answer or dismiss it).
+---Reports the caller's live call (or pending group ring) from their own perspective, or nil.
 ---Read-only and scoped to src's own session.
 ---@param source number
 ---@return table
@@ -501,14 +451,10 @@ function actions.current(source)
     })
 end
 
--- Video calling is layered on top of an existing voice call: audio stays on pma-voice, the
--- picture is a peer-to-peer WebRTC stream between the two clients' CEF instances. The server
--- only relays signaling (offer/answer/ICE) to the OTHER member of the sender's live session -
--- never to anyone else - so a crafted event can't push video signaling at an arbitrary player.
+-- Video calling layers on an existing voice call: audio stays on pma-voice, the picture is a
+-- peer-to-peer WebRTC stream; the server only relays signaling to the sender's session peer.
 
----The source of the other party in `src`'s current call, or nil. Nil outside a live 1:1
----session (a still-pending group ring has no single peer yet), which is what gates every
----video relay below.
+---The source of the other party in `src`'s current call, or nil outside a live 1:1 session.
 ---@param src number
 ---@return number|nil
 local function peerSrc(src)
@@ -519,8 +465,8 @@ local function peerSrc(src)
     return nil
 end
 
----Relay a WebRTC signaling blob to the call peer, verbatim and opaque - the server never
----inspects SDP/ICE contents. Dropped silently when the sender isn't in a live call.
+---Relays a WebRTC signaling blob to the call peer, verbatim. Dropped silently when the sender
+---isn't in a live call.
 ---@param src number
 ---@param payload any opaque signaling blob
 function actions.videoSignal(src, payload)
@@ -550,10 +496,8 @@ function actions.videoStop(src)
     if peer then TriggerClientEvent('sd-phone:client:call:video:stop', peer) end
 end
 
----ICE servers for the browser RTCPeerConnection. Google STUN by default; a TURN relay (for
----symmetric-NAT players) is added when the sd_phone_turn_* convars are set. The TURN credential
----is necessarily handed to any client that asks - the browser needs it verbatim to connect -
----so deployments should use dedicated throwaway TURN credentials, never a shared secret.
+---Returns ICE servers for the browser RTCPeerConnection: Google STUN by default, plus a TURN
+---relay when the sd_phone_turn_* convars are set.
 ---@return { iceServers: table }
 function actions.iceConfig()
     local servers = { { urls = 'stun:stun.l.google.com:19302' } }
@@ -568,10 +512,8 @@ function actions.iceConfig()
     return { iceServers = servers }
 end
 
----End whatever call a dropped player was in, so per-src state can't leak or collide when srcs
----recycle. A live session tears down normally ('disconnected'); a group-ring CALLER dropping
----cancels the whole ring for every recipient, and a dropping ringer is removed - ending the
----ring as 'unavailable' if they were the last one still ringing.
+---Ends whatever call a dropped player was in: a live session tears down as 'disconnected', a
+---dropping ring caller cancels the whole ring, and a dropping ringer is removed.
 ---@param src number
 function actions.onDrop(src)
     local channel = sessionForSource(src)
@@ -585,7 +527,7 @@ function actions.onDrop(src)
             TriggerClientEvent('sd-phone:client:call:ended', tsrc, { channel = rchannel, reason = 'disconnected' })
         end
 
-        -- Server-local lifecycle event, synchronous: the ring's caller disconnected; payload from the stored ring, no lookups on the dropping src.
+        -- Server-local lifecycle event: the ring's caller disconnected.
         local call = eventRing(ring)
         call.answered = false
         call.duration = 0
@@ -597,7 +539,7 @@ function actions.onDrop(src)
             groupRings[rchannel] = nil
             TriggerClientEvent('sd-phone:client:call:ended', ring.caller.src, { channel = rchannel, reason = 'unavailable' })
 
-            -- Server-local lifecycle event, synchronous: the last ringer disconnected leaving nobody to answer; payload from the stored ring.
+            -- Server-local lifecycle event: the ring ended with nobody left to answer.
             local call = eventRing(ring)
             call.answered = false
             call.duration = 0

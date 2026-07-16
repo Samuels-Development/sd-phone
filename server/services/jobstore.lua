@@ -1,14 +1,8 @@
 ---@type table Saved-jobs store module; the table returned at end of file.
 local store = {}
 
----Create the saved-jobs, job-offer and pending-fire tables if they don't exist, so the resource
----is drop-in. phone_saved_jobs is the phone's OWN multi-job list (framework-agnostic, so it works
----on both QBCore and QBox); its `jobs` column is a JSON map of jobName -> { grade }.
----phone_job_invites holds the offers a player must accept - one per (citizenid, job), so
----re-hiring just refreshes the grade, and DB-backed so an offline player sees the offer on next
----login. phone_job_fires records players fired from their ACTIVE framework job while offline (an
----offline framework job can't be changed), consumed on their next load by reconcileJobs. Run once
----at boot.
+---Creates the saved-jobs, job-offer and pending-fire tables. phone_saved_jobs holds a JSON map
+---of jobName -> { grade }; offers are unique per (citizenid, job).
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_saved_jobs (
@@ -41,8 +35,7 @@ function store.ensureSchema()
     ]])
 end
 
----Queue an unemployment to apply on the player's next load (offline fire). Idempotent: INSERT
----IGNORE, so re-firing the same (citizenid, job) changes nothing.
+---Queues an unemployment to apply on the player's next load (offline fire); idempotent.
 ---@param citizenid string
 ---@param job string
 function store.addPendingFire(citizenid, job)
@@ -50,8 +43,7 @@ function store.addPendingFire(citizenid, job)
     MySQL.update.await('INSERT IGNORE INTO phone_job_fires (citizenid, job) VALUES (?, ?)', { citizenid, job })
 end
 
----Consume a pending fire for (citizenid, job): returns true and clears it if one existed, so the
----caller sets them unemployed exactly once.
+---Consumes a pending fire for (citizenid, job): returns true and clears it if one existed.
 ---@param citizenid string
 ---@param job string
 ---@return boolean
@@ -63,8 +55,7 @@ function store.takePendingFire(citizenid, job)
     return true
 end
 
----Citizenids with a pending fire for `jobName` (set), so a just-fired offline member can be
----hidden from the roster immediately rather than lingering until they reconnect. Non-consuming.
+---Returns the set of citizenids with a pending fire for `jobName`. Non-consuming.
 ---@param jobName string
 ---@return table<string, boolean>
 function store.pendingFireCids(jobName)
@@ -75,16 +66,14 @@ function store.pendingFireCids(jobName)
     return set
 end
 
----Fresh offer id (time + random suffix). Real uniqueness is enforced by the table's
----(citizenid, job) unique key; the id only needs to be practically collision-free.
+---Generates a fresh offer id (time + random suffix).
 ---@return string
 function store.newId()
     return ('inv_%d_%d'):format(os.time(), math.random(100000, 999999))
 end
 
----Read a player's saved-jobs map. Returns `{ [job] = { grade } }`, or `{}`. oxmysql may hand the
----JSON column back pre-decoded as a table; a raw string is decoded under a pcall guard so a
----corrupt row degrades to an empty map instead of erroring the caller.
+---Reads a player's saved-jobs map as `{ [job] = { grade } }`, or `{}`; a raw JSON string is
+---decoded under a pcall guard.
 ---@param citizenid string
 ---@return table
 function store.getSaved(citizenid)
@@ -96,10 +85,7 @@ function store.getSaved(citizenid)
     return (ok and type(decoded) == 'table') and decoded or {}
 end
 
----Everyone who has `jobName` in their saved jobs -> `{ {citizenid, grade}, ... }`. Used to roster
----employees who were hired here but are currently working another of their jobs (so bosses can
----still see + manage them). The JSON path is built from a framework/config job name (never client
----input) and rides as a bound `?` parameter either way.
+---Returns everyone who has `jobName` in their saved jobs as `{ {citizenid, grade}, ... }`.
 ---@param jobName string
 ---@return { citizenid: string, grade: number }[]
 function store.savedJobMembers(jobName)
@@ -128,8 +114,7 @@ function store.setSaved(citizenid, map)
     ]], { citizenid, json.encode(map or {}) })
 end
 
----Add (or update the grade of) one saved job. The grade is coerced to a non-negative-safe
----integer here so every write path stores the same shape.
+---Adds (or updates the grade of) one saved job, with the grade coerced to an integer.
 ---@param citizenid string
 ---@param job string
 ---@param grade number
@@ -139,7 +124,7 @@ function store.addSaved(citizenid, job, grade)
     store.setSaved(citizenid, map)
 end
 
----Remove one saved job. No-op when the job isn't saved, so it never churns the row.
+---Removes one saved job; no-op when the job isn't saved.
 ---@param citizenid string
 ---@param job string
 function store.removeSaved(citizenid, job)
@@ -159,8 +144,7 @@ function store.listInvites(citizenid)
         { citizenid }) or {}
 end
 
----Fetch a single offer for a player. Scoped to the caller's citizenid as well as the id, so a
----player can't act on someone else's invite id.
+---Fetches a single offer for a player, scoped to citizenid and id.
 ---@param citizenid string
 ---@param id string
 ---@return table|nil
@@ -171,8 +155,7 @@ function store.getInvite(citizenid, id)
         { citizenid, id })
 end
 
----Create or refresh a pending offer. Unique per (citizenid, job): re-inviting upserts the grade,
----inviter and timestamp rather than stacking a second offer.
+---Creates or refreshes a pending offer, unique per (citizenid, job).
 ---@param inv { id: string, cid: string, job: string, grade: number, invitedBy?: string, createdAt: number }
 function store.addInvite(inv)
     MySQL.update.await([[

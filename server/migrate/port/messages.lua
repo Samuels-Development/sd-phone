@@ -2,8 +2,7 @@
 ---as sd-phone's per-mailbox message copies: each message becomes one row per participating migrated
 ---player, keyed by that player's citizenid, with the conversation set to the peer's number (1:1) or
 ---'g-'..groupId (group). Group channels also seed a phone_message_groups row and its members.
----Historical copies are marked read, and copy ids are derived from the lb-phone message id so a
----re-run inserts nothing twice.
+---Historical copies are marked read; copy ids are derived from the lb-phone message id.
 local M = {}
 
 local store = require 'server.migrate.store'
@@ -34,9 +33,8 @@ local function groupByChannel(rows)
     return out
 end
 
----Best-effort body: lb-phone stores attachments as a JSON array. sd-phone's media-message meta
----shape differs, so rather than guess it we keep text as text and, when a message is attachment-only,
----surface the first attachment as a plain link. Lossy but safe; nothing renders broken.
+---Best-effort body: keeps text as text and, when a message is attachment-only, surfaces the first
+---attachment as a plain link.
 ---@param content string|nil
 ---@param attachments string|nil
 ---@return string|nil

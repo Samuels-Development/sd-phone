@@ -1,8 +1,6 @@
 ---@type table Notes porter (server.migrate.port.notes). Copies each player's lb-phone notes into
----sd-phone. lb-phone notes have a title + content; sd-phone notes are body-only, so the title
----becomes a markdown heading on the body. Note ids are prefixed from the lb-phone id so a re-run
----inserts nothing twice; sketches/images are stored as empty JSON arrays (lb-phone notes have
----neither).
+---sd-phone: the title becomes a markdown heading on the body, note ids are prefixed from the
+---lb-phone id, and sketches/images are stored as empty JSON arrays.
 local M = {}
 
 local store = require 'server.migrate.store'

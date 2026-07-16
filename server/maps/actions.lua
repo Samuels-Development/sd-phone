@@ -11,8 +11,7 @@ local share  = require 'server.share.core'
 ---@type table Actions module; the table returned at end of file.
 local actions = {}
 
--- Icon keys the UI exposes (mirrors ICON_KEYS in web/src/apps/maps/data.ts). An unknown icon
--- falls back to 'MapPin' so a tampered payload can't inject strings React won't render.
+-- Icon keys the UI exposes (mirrors ICON_KEYS in web/src/apps/maps/data.ts).
 ---@type table<string, boolean> Whitelist of pin icon keys accepted from the client.
 local ICON_KEYS = {
     MapPin = true, Home = true, Star = true, Flag = true, Skull = true,
@@ -25,15 +24,13 @@ local ICON_KEYS = {
 local DEFAULT_COLOR = '#f0c43a'
 
 ---Actor identity for every handler: the caller's citizenid, resolved from src via the player
----bridge - never from the payload - so one player can never read or write another's pins.
+---bridge.
 ---@param src number player server id
 ---@return string|nil citizenid or nil when the character isn't loaded
 local function cidOf(src) return player.getIdentifier(src) end
 
----Return a cleaned marker, or nil to drop it. The payload is attacker-controlled: coordinates
----must coerce to finite numbers (the NaN self-compare plus the +-20000 world-range check also
----rejects the infinities), the label is trimmed and clamped to config.MaxLabel, and icon/colour
----are whitelisted so nothing un-renderable reaches the DB or another player's phone.
+---Returns a cleaned marker, or nil to drop it: coordinates must be finite numbers in world
+---range, the label is trimmed and clamped to config.MaxLabel, and icon/colour are whitelisted.
 ---@param m any client-supplied marker candidate
 ---@return table|nil marker cleaned { id, label, x, y, icon, color }, nil when malformed
 local function sanitizeMarker(m)
@@ -57,9 +54,8 @@ local function sanitizeMarker(m)
     return { id = id, label = label, x = x + 0.0, y = y + 0.0, icon = icon, color = color }
 end
 
----List the caller's saved pins, scoped to their citizenid. Always returns an array in `data`
----(never nil) so the React side can render straight from it; a row that fails to JSON-decode
----degrades to an empty list rather than an error. Read-only.
+---Lists the caller's saved pins, scoped to their citizenid. Always returns an array in `data`;
+---a row that fails to JSON-decode degrades to an empty list. Read-only.
 ---@param src number player server id
 ---@return table result { success, data = marker[] }
 function actions.list(src)
@@ -75,10 +71,8 @@ function actions.list(src)
     return { success = true, data = decoded }
 end
 
----Persist the caller's whole pin array (the client always sends the full set, so this is
----naturally idempotent - a replayed save writes the same row). Every marker passes
----sanitizeMarker or is silently dropped, and the array is capped at config.MaxMarkers, so a
----crafted payload can neither bloat the row nor smuggle un-sanitized fields into it.
+---Persists the caller's whole pin array. Every marker passes sanitizeMarker or is silently
+---dropped, and the array is capped at config.MaxMarkers.
 ---@param src number player server id
 ---@param payload { markers: table } client payload
 ---@return table result { success, message? }
@@ -102,10 +96,8 @@ function actions.save(src, payload)
     return { success = true }
 end
 
----Send an AirShare request offering one pin to a nearby, phone-open player. The marker is
----sanitized HERE, at request time, so the payload the handshake stores server-side is already
----clean when deliverShare runs on accept. Target validation (nearby + phone open) is
----share.request's job; delivery happens only if the recipient accepts.
+---Sends an AirShare request offering one pin to a nearby, phone-open player. The marker is
+---sanitized at request time; delivery happens only if the recipient accepts.
 ---@param src number sender server id
 ---@param target number recipient server id (client-chosen, validated by share.request)
 ---@param payload { marker: table } client payload
@@ -119,12 +111,8 @@ function actions.requestShare(src, target, payload)
     return { success = true }
 end
 
----Deliver an accepted pin share into the recipient's saved pins (AirShare handler - registered
----in init.lua). Only reachable through share.respond, so `m` is the marker sanitizeMarker
----cleaned at request time, never raw client data. The pin is stored under a freshly rolled id
----so it can never collide with the recipient's own pins, then live-pushed so an OPEN Maps app
----shows it immediately (the app otherwise only fetches its pin list on mount). Refused (false)
----when the recipient is at the config.MaxMarkers cap or has no loaded character.
+---Delivers an accepted pin share into the recipient's saved pins under a freshly rolled id, then
+---live-pushes it. Refused (false) at the config.MaxMarkers cap or with no loaded character.
 ---@param targetSrc number recipient server id
 ---@param m table sanitized marker from the stored share request
 ---@return boolean delivered

@@ -10,12 +10,10 @@ local share   = require 'server.share.core'
 local util    = require 'server.util'
 local fail    = util.fail
 
--- Deliver an accepted contact AirShare into the recipient's contacts (guards + validation live
--- in actions.deliverShare).
+-- Deliver an accepted contact AirShare into the recipient's contacts.
 share.registerHandler('contact', actions.deliverShare)
 
----Schema bootstrap. Threaded so it yields until oxmysql is ready without blocking resource
----start; a failure is loud but non-fatal, so the rest of the phone still boots.
+---Boots the contacts schema; a failure is printed and non-fatal.
 CreateThread(function()
     local success, err = pcall(store.ensureSchema)
     if not success then
@@ -25,33 +23,31 @@ CreateThread(function()
     print('^2[sd-phone:contacts]^0 schema ready')
 end)
 
--- Authoritative contact/recents callbacks: thin delegates into server.contacts.actions, which
--- owns the payload validation + ownership scoping (each handler is documented there).
+-- Authoritative contact/recents callbacks: thin delegates into server.contacts.actions.
 lib.callback.register('sd-phone:server:contacts:list', function(src) return actions.list(src) end)
 lib.callback.register('sd-phone:server:contacts:add', function(src, payload) return actions.add(src, payload) end)
 lib.callback.register('sd-phone:server:contacts:update', function(src, payload) return actions.update(src, payload) end)
 lib.callback.register('sd-phone:server:contacts:delete', function(src, payload) return actions.delete(src, payload) end)
 
----AirShare a contact card to a nearby player. The payload carries both the recipient (target)
----and the card fields, so it's guarded against non-table payloads BEFORE the target is read;
----the fields are validated and the recipient range-checked in actions.requestShare.
+---AirShares a contact card to a nearby player; the payload carries both the recipient and the
+---card fields.
 lib.callback.register('sd-phone:server:contacts:share', function(src, payload)
     if type(payload) ~= 'table' then payload = {} end
     return actions.requestShare(src, payload.target, payload)
 end)
 
--- More thin delegates into server.contacts.actions (documented there).
+-- More thin delegates into server.contacts.actions.
 lib.callback.register('sd-phone:server:contacts:favorite', function(src, payload) return actions.favorite(src, payload) end)
 lib.callback.register('sd-phone:server:contacts:logCall', function(src, payload) return actions.logCall(src, payload) end)
 lib.callback.register('sd-phone:server:contacts:deleteRecent', function(src, payload) return actions.deleteRecent(src, payload) end)
 lib.callback.register('sd-phone:server:contacts:clearRecents', function(src) return actions.clearRecents(src) end)
 
----The Phone app opened - mark missed calls acknowledged so the home-screen badge clears.
+---Marks missed calls acknowledged when the Phone app opens.
 lib.callback.register('sd-phone:server:calls:seen', function(src)
     return actions.markCallsSeen(src)
 end)
 
--- Block-list delegates into server.contacts.actions (documented there).
+-- Block-list delegates into server.contacts.actions.
 lib.callback.register('sd-phone:server:contacts:block', function(src, payload) return actions.block(src, payload) end)
 lib.callback.register('sd-phone:server:contacts:unblock', function(src, payload) return actions.unblock(src, payload) end)
 lib.callback.register('sd-phone:server:contacts:isBlocked', function(src, payload) return actions.isBlocked(src, payload) end)
@@ -74,11 +70,8 @@ exports('getContacts', function(source)
     return result.success and result.data.contacts or nil
 end)
 
----Create a contact for a player from another resource. Mirrors the NUI `add` payload
----({ name?, phone, email?, address?, avatar? }) and walks the exact same validation in
----actions.add - number in service, not their own, not a duplicate, under the per-player cap -
----so a sloppy caller can't plant a contact the UI couldn't have made. On success the player's
----open phone is pushed the new card live, the same event an accepted AirShare uses.
+---Creates a contact for a player from another resource. Mirrors the NUI `add` payload and
+---walks the same validation; on success the player's open phone is pushed the new card live.
 ---@param source number acting player's server id
 ---@param fields { name?: string, phone: string, email?: string, address?: string, avatar?: string }
 ---@return table
@@ -91,10 +84,8 @@ exports('addContact', function(source, fields)
     return result
 end)
 
----Remove every contact matching a number from a player's list, for other resources. The number
----is accepted in any format and re-validated in actions.removeByNumber (digit-normalised, so
----formatting on either side still matches). Answers { success, data = { removed = n } }; a
----number that matches nothing still succeeds with removed = 0.
+---Removes every contact matching a number from a player's list, for other resources. Answers
+---{ success, data = { removed = n } }; no match still succeeds with removed = 0.
 ---@param source number acting player's server id
 ---@param number string|number phone number, any format
 ---@return table
@@ -103,10 +94,8 @@ exports('removeContactByNumber', function(source, number)
     return actions.removeByNumber(source, number)
 end)
 
----Look up one of a player's own contacts by number, already serialized to the React shape.
----The number is digit-normalised before matching, so any format hits. Read-only; nil when the
----player, the digits, or a matching contact can't be resolved, so a caller bug reads as
----"no such contact" rather than an error.
+---Looks up one of a player's own contacts by number, serialized to the React shape. The number
+---is digit-normalised before matching. Read-only; nil when nothing resolves.
 ---@param source number acting player's server id
 ---@param number string|number phone number, any format
 ---@return table|nil
@@ -124,10 +113,8 @@ exports('getContactByNumber', function(source, number)
     return nil
 end)
 
----Whether a player has a number on their block list, for other resources (e.g. a calling
----system deciding whether to ring them). Read-only, scoped to the player's own list via
----actions.isBlocked; garbage input (unknown player, digit-free number) answers false rather
----than an error.
+---Whether a player has a number on their block list, for other resources. Read-only; garbage
+---input answers false.
 ---@param source number acting player's server id
 ---@param number string|number phone number, any format
 ---@return boolean

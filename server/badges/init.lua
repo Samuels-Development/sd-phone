@@ -16,8 +16,8 @@ local photogramStore = require 'server.photogram.store'
 ---@type table Badges module; the table returned at end of file.
 local badges = {}
 
----Photogram unread = unseen Activity notifications + unread DMs, keyed by the photogram account
----signed in on this character (0 if not signed in - a signed-out app never shows a badge).
+---Photogram unread = unseen Activity notifications + unread DMs, keyed by the photogram
+---account signed in on this character; 0 if not signed in.
 ---@param cid string framework per-character id
 ---@return number unread
 local function photogramCount(cid)
@@ -26,11 +26,8 @@ local function photogramCount(cid)
     return photogramStore.unseenNotificationCount(acc.username) + photogramStore.dmUnreadTotal(acc.username)
 end
 
----Per-app unread counts for one character, keyed by home-screen app id. Computed straight from
----the database on every call (no in-memory bookkeeping to drift): Messages = unread inbound,
----Phone = unacknowledged missed calls, Mail = unread inbox mail, Groups = pending invites,
----Photogram = photogramCount. The React app displays the numbers verbatim; add a key here as
----other apps gain persistent unread state.
+---Per-app unread counts for one character, keyed by home-screen app id, computed straight from
+---the database on every call.
 ---@param cid string framework per-character id
 ---@return { messages: number, phone: number, mail: number, groups: number, photogram: number }
 function badges.snapshot(cid)
@@ -43,10 +40,8 @@ function badges.snapshot(cid)
     }
 end
 
----Recompute a player's badge counts and push the exact numbers to their phone. Because the
----counts are recomputed from the DB rather than incremented, a replayed or missed push can never
----drift the numbers. Cheap (a handful of COUNTs) and safe to call from any hook point; a no-op
----when the source has no resolvable citizenid (e.g. mid-disconnect).
+---Recomputes a player's badge counts from the DB and pushes the exact numbers to their phone.
+---A no-op when the source has no resolvable citizenid.
 ---@param source number player server id
 function badges.push(source)
     if not source or source <= 0 then return end
@@ -55,28 +50,24 @@ function badges.push(source)
     TriggerClientEvent('sd-phone:client:badges', source, badges.snapshot(cid))
 end
 
----Fetched once by the React app on phone open, so unread state that predates this session (or a
----resource restart) shows immediately. Scoped to the citizenid resolved from src; an
----unresolvable caller gets all-zero counts rather than an error. Read-only.
+---Fetched once by the React app on phone open. An unresolvable caller gets all-zero counts.
+---Read-only.
 lib.callback.register('sd-phone:server:badges:get', function(src)
     local cid = player.getIdentifier(src)
     if not cid then return { messages = 0, phone = 0, mail = 0, groups = 0, photogram = 0 } end
     return badges.snapshot(cid)
 end)
 
----Server export: recompute and push a player's badge counts from another resource -
----exports['sd-phone']:pushBadges(source). Call after mutating anything the counts derive from.
----Delegates to badges.push; a non-number source is a silent no-op, matching push's own handling
----of unresolvable players.
+---Recomputes and pushes a player's badge counts from another resource. A non-number source is
+---a silent no-op.
 ---@param source number player server id
 exports('pushBadges', function(source)
     if type(source) ~= 'number' then return end
     badges.push(source)
 end)
 
----Server export: a player's current per-app unread counts without pushing them -
----exports['sd-phone']:getBadgeCounts(source). Nil when the source doesn't resolve to a loaded
----character, so callers can tell "no player" apart from all-zero counts.
+---A player's current per-app unread counts without pushing them. Nil when the source doesn't
+---resolve to a loaded character.
 ---@param source number player server id
 ---@return { messages: number, phone: number, mail: number, groups: number, photogram: number }|nil counts
 exports('getBadgeCounts', function(source)

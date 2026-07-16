@@ -1,11 +1,8 @@
 ---@type table Store module; the table returned at end of file.
 local store = {}
 
----Create the phone_bank_transactions table if it doesn't exist, so the resource is drop-in.
----The phone owns this table because most banking resources don't expose a portable transaction
----history: the phone records an entry for every transfer it makes, and external resources append
----their own rows through the addBankTransaction export. One row per SIDE of a transfer (the
----sender gets a debit, the recipient a credit), each keyed to its own citizenid. Run once at boot.
+---Creates the phone_bank_transactions table if it doesn't exist: one row per side of a
+---transfer, each keyed to its own citizenid.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS `phone_bank_transactions` (
@@ -22,9 +19,8 @@ function store.ensureSchema()
     ]])
 end
 
----Append one transaction row. `amount` is a signed whole-currency value: negative = outflow,
----positive = inflow. The caller validates and caps every field to its column width
----(server.banking.actions does); we keep the data layer dumb.
+---Appends one transaction row. `amount` is a signed whole-currency value: negative = outflow,
+---positive = inflow.
 ---@param citizenid string owning character's citizenid
 ---@param label string display label (VARCHAR(120))
 ---@param amount integer signed whole-currency amount
@@ -38,8 +34,8 @@ function store.insert(citizenid, label, amount, category, counterparty, ts)
         { citizenid, label, amount, category or 'transfer', counterparty, ts })
 end
 
----Most-recent `limit` transactions for a character, newest-first by insert id (so two rows
----sharing a same-second timestamp still order deterministically). Read-only.
+---Returns the most-recent `limit` transactions for a character, newest-first by insert id.
+---Read-only.
 ---@param citizenid string owning character's citizenid
 ---@param limit integer row cap (Banking.TransactionLimit at the call site)
 ---@return table[] rows raw DB rows, {} when none

@@ -7,14 +7,8 @@ local function newId() return util.newId(7) end
 
 store.newId = newId
 
----Create the contacts, call-log, and blocked-numbers tables idempotently, so the resource is
----drop-in. Run once at boot. `phone_calls` stores `called_at` as a unix epoch (BIGINT) so the
----React side owns all relative-date formatting; `phone_blocked` maps a player (citizenid) to
----each phone number (bare digits) they've blocked. Two backfills cover servers whose tables
----predate newer columns: `avatar` on phone_contacts, and `seen` on phone_calls (whether a
----missed call has been acknowledged in the Phone app). `seen` is added with DEFAULT 1 so every
----pre-existing missed call counts as already acknowledged - old logs don't all light the badge
----at once - then the default is flipped to 0 for rows inserted from that point on.
+---Creates the contacts, call-log, and blocked-numbers tables idempotently, back-filling the
+---`avatar` and `seen` columns on older installs. Run once at boot.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_contacts (
@@ -98,10 +92,8 @@ function store.isBlocked(citizenid, number)
     return row ~= nil
 end
 
----Add a number to the owner's block list. Idempotent (upsert), and a silent no-op on garbage
----input (no citizenid, no digits, or more digits than the column's VARCHAR(32) can hold - no
----real number is that long, and letting it through would fail the insert) so callers can
----fire-and-forget.
+---Adds a number to the owner's block list. Idempotent (upsert); a silent no-op on garbage
+---input.
 ---@param citizenid string
 ---@param number string
 function store.blockNumber(citizenid, number)
@@ -134,8 +126,7 @@ function store.listContacts(citizenid)
     ]], { citizenid }) or {}
 end
 
----Read one contact, scoped to its owner. nil if missing or not theirs, so a crafted id can't
----read another player's row. Read-only.
+---Reads one contact, scoped to its owner; nil if missing or not theirs. Read-only.
 ---@param id string
 ---@param citizenid string
 ---@return table|nil
@@ -148,7 +139,7 @@ function store.getContact(id, citizenid)
     ]], { id, citizenid })
 end
 
----Count a player's contacts for the per-player cap check. Read-only.
+---Counts a player's contacts. Read-only.
 ---@param citizenid string
 ---@return number
 function store.countContacts(citizenid)
@@ -159,8 +150,7 @@ function store.countContacts(citizenid)
     return row and tonumber(row.n) or 0
 end
 
----Insert a new contact row. Fields arrive already validated + length-capped by the actions
----layer; the data layer stays dumb.
+---Inserts a new contact row.
 ---@param id string
 ---@param citizenid string
 ---@param c { name: string, phone: string, email: string|nil, address: string|nil, color: string, avatar: string|nil }
@@ -173,8 +163,8 @@ function store.insertContact(id, citizenid, c)
     return affected ~= nil
 end
 
----Update an existing contact's editable fields. The citizenid in the WHERE clause is the
----ownership boundary - someone else's row matches zero rows and reports failure.
+---Updates an existing contact's editable fields. The citizenid in the WHERE clause is the
+---ownership boundary.
 ---@param id string
 ---@param citizenid string
 ---@param c { name: string, phone: string, email: string|nil, address: string|nil, avatar: string|nil }
@@ -213,9 +203,8 @@ function store.setFavorite(id, citizenid, favorite)
     return (affected or 0) > 0
 end
 
----List a player's recent calls, newest first, capped at `limit`. The cap is a validated integer
----interpolated into the query - never client text - because MySQL rejects a bound parameter in
----`LIMIT` on prepared statements. Read-only.
+---Lists a player's recent calls, newest first, capped at `limit`. The cap is a validated
+---integer interpolated into the query. Read-only.
 ---@param citizenid string
 ---@param limit number
 ---@return table[]
@@ -231,8 +220,7 @@ function store.listCalls(citizenid, limit)
     ]]):format(n), { citizenid }) or {}
 end
 
----Insert a call-log entry. Fields arrive already validated + length-capped by the actions
----layer; the data layer stays dumb.
+---Inserts a call-log entry.
 ---@param id string
 ---@param citizenid string
 ---@param call { number: string, name: string|nil, direction: string, duration: number, calledAt: number }
@@ -245,10 +233,8 @@ function store.insertCall(id, citizenid, call)
     return affected ~= nil
 end
 
----Prune a player's call log down to the newest `keep` rows, so the log stays bounded. The
----double-nested subquery is the standard workaround for MySQL's "can't LIMIT inside an IN
----subquery" restriction; like listCalls, the validated integer is interpolated because LIMIT
----can't be a bound parameter.
+---Prunes a player's call log down to the newest `keep` rows. The LIMIT is a validated integer
+---interpolated into the query.
 ---@param citizenid string
 ---@param keep number
 function store.pruneCalls(citizenid, keep)
@@ -286,7 +272,7 @@ function store.clearCalls(citizenid)
     MySQL.update.await('DELETE FROM phone_calls WHERE citizenid = ?', { citizenid })
 end
 
----Count a player's unacknowledged missed calls - the home-screen Phone badge number. Read-only.
+---Counts a player's unacknowledged missed calls. Read-only.
 ---@param citizenid string
 ---@return number
 function store.unreadMissedCount(citizenid)
@@ -297,8 +283,7 @@ function store.unreadMissedCount(citizenid)
     return row and tonumber(row.n) or 0
 end
 
----Mark every unseen missed call as acknowledged (the player opened the Phone app), clearing the
----badge. Scoped to its owner; idempotent.
+---Marks every unseen missed call as acknowledged. Scoped to its owner; idempotent.
 ---@param citizenid string
 function store.markMissedSeen(citizenid)
     MySQL.update.await(

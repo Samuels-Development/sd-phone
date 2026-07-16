@@ -1,22 +1,18 @@
 ---@type table Store module; the table returned at end of file.
 local store = {}
 
-
 local util = require 'server.util'
 local isTruthy = util.truthy
 local function newId() return util.newId(9) end
 
 store.newId = newId
 
--- Server-side pepper folded into every password hash, mirroring the Mail app. Not real crypto -
--- an in-game phone isn't a credentials store - but it keeps stored hashes from being trivially
--- reversible if the table leaks.
+-- Server-side pepper folded into every password hash.
 ---@type string Static hash pepper; changing it invalidates every stored Birdy-side hash.
 local PEPPER = 'sd-phone-v1::birdy::do-not-leak-this-string'
 
----Hash a password into a stable 24-char hex digest. Deterministic, so a signin re-hash can be
----compared against the stored value. Also registered with the accounts engine as Birdy's legacy
----hasher, so pre-engine accounts keep verifying until their first login upgrades them.
+---Hashes a password into a stable 24-char hex digest. Also registered with the accounts engine
+---as Birdy's legacy hasher.
 ---@param password string
 ---@return string
 function store.hashPassword(password)
@@ -31,13 +27,8 @@ function store.hashPassword(password)
     return ('%08x%08x%08x'):format(h1, h2, h3)
 end
 
----Create every Birdy table idempotently and back-fill columns added after first release, so the
----resource is drop-in on an existing database. The nested ensureColumn probes
----information_schema before ALTERing (older MariaDB lacks ADD COLUMN IF NOT EXISTS); its table
----and DDL strings are hardcoded literals below, never derived from input, so the format() into
----SQL is safe. Back-filled columns: profile credentials/bio/session flags, post `images` (a JSON
----array of up to 3 URLs), and the rich-DM columns kind/meta/reactions (mirrors the Messages +
----Cherry message model so the same bubbles render). Run once at boot.
+---Creates every Birdy table idempotently and back-fills columns added after first release. Runs
+---once at boot.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_birdy_profiles (
@@ -142,9 +133,8 @@ function store.ensureSchema()
     ensureColumn('phone_birdy_dms',      'reactions',  'reactions TEXT NULL')
 end
 
----Decode a JSON column into a Lua table, tolerating nil / empty / corrupt values (always returns
----a table, so callers can index without guards). Client-shaped strings only ever reach here from
----our own columns; the pcall covers hand-edited or legacy rows.
+---Decodes a JSON column into a Lua table, tolerating nil / empty / corrupt values (always
+---returns a table).
 ---@param value any
 ---@return table
 function store.decodeJson(value)
@@ -157,8 +147,7 @@ function store.decodeJson(value)
     return {}
 end
 
-
----Reshape a raw profile row, normalising every TINYINT flag to a boolean.
+---Reshapes a raw profile row, normalising every TINYINT flag to a boolean.
 ---@param row table|nil
 ---@return { citizenid: string, handle: string, displayName: string, verified: boolean }|nil
 local function hydrateProfile(row)
@@ -188,7 +177,7 @@ function store.getProfile(citizenid)
     return hydrateProfile(row)
 end
 
----Look up a profile by its unique handle (also the availability check at registration).
+---Looks up a profile by its unique handle.
 ---@param handle string
 ---@return table|nil
 function store.getProfileByHandle(handle)
@@ -198,9 +187,7 @@ function store.getProfileByHandle(handle)
     ))
 end
 
----Search accounts by handle or display name (substring), excluding the viewer. The query string
----is bound as a `?` LIKE parameter - never concatenated into the SQL - so user % / _ only act as
----extra wildcards inside the pattern.
+---Searches accounts by handle or display name (substring), excluding the viewer.
 ---@param query string
 ---@param viewerCid string
 ---@param limit number
@@ -220,10 +207,8 @@ function store.searchProfiles(query, viewerCid, limit)
     return out
 end
 
----Create a fresh, signed-in profile row for a citizenid. The UNIQUE handle key is the last-line
----race guard: two simultaneous registrations of the same handle can both pass the action's
----availability check, but only one insert survives (the other returns false and the caller
----compensates).
+---Creates a fresh, signed-in profile row for a citizenid; a duplicate handle fails the UNIQUE
+---key and returns false.
 ---@param citizenid string
 ---@param handle string
 ---@param displayName string
@@ -239,8 +224,7 @@ function store.insertAccount(citizenid, handle, displayName, passwordHash, bio, 
     ]], { citizenid, handle, displayName, passwordHash, bio, verified and 1 or 0, joinLabel or '' }) ~= nil
 end
 
----Update the editable profile fields (name, bio, join label, protected). Caller validates and
----bounds every value; the write is scoped to the given citizenid.
+---Updates the editable profile fields (name, bio, join label, protected).
 ---@param citizenid string
 ---@param displayName string
 ---@param bio string
@@ -273,9 +257,8 @@ function store.countFollowers(citizenid)
     return tonumber(MySQL.scalar.await('SELECT COUNT(*) FROM phone_birdy_follows WHERE target_cid = ?', { citizenid })) or 0
 end
 
----Reshape a joined POST_SELECT row into the hydrated post table actions serialize from. `images`
----is stored as a JSON array string ('["url",...]'); decode to a Lua array, tolerating legacy
----NULL / empty / corrupt values by falling back to nil (the post just renders without media).
+---Reshapes a joined POST_SELECT row into the hydrated post table. `images` decodes from a JSON
+---array string to a Lua array, falling back to nil.
 ---@param row table|nil
 ---@return table|nil
 local function hydratePost(row)
@@ -302,10 +285,6 @@ local function hydratePost(row)
     }
 end
 
--- Shared post projection every post read builds on. The leading `?` binds the viewer's citizenid
--- for the per-row `liked` flag, so every caller must pass viewerCid as the FIRST parameter.
--- Declared before its first users (listPostsBy / listLikedBy) - as a local it is invisible to
--- functions defined above it.
 ---@type string SELECT prefix producing hydratePost-shaped rows (viewer cid is always param #1).
 local POST_SELECT = [[
     SELECT
@@ -319,10 +298,8 @@ local POST_SELECT = [[
     JOIN phone_birdy_profiles pr ON pr.citizenid = p.author_cid
 ]]
 
----List a single author's posts for a profile tab, newest first. 'replies' = posts with a parent;
----'media' = any post (top-level OR reply) carrying images; anything else = top-level only. The
----WHERE clause is chosen from three server-side literals - `kind` itself is never spliced into
----the SQL, so an arbitrary client string just falls through to the default filter.
+---Lists a single author's posts for a profile tab, newest first. 'replies' = posts with a
+---parent; 'media' = any post carrying images; anything else = top-level only.
 ---@param authorCid string
 ---@param kind string
 ---@param viewerCid string
@@ -362,10 +339,8 @@ function store.listLikedBy(likerCid, viewerCid, limit)
     return rows
 end
 
----Delete an account and every row it owns or references: its likes, likes ON its posts, the
----posts themselves, both directions of follows, both directions of DMs, notifications either
----sent or received, and finally the profile row. Order matters only for the likes-on-own-posts
----subquery, which must run while the posts still exist.
+---Deletes an account and every row it owns or references: likes, likes on its posts, posts,
+---follows, DMs, notifications, then the profile row.
 ---@param citizenid string
 function store.deleteAccount(citizenid)
     MySQL.update.await('DELETE FROM phone_birdy_likes WHERE citizenid = ?', { citizenid })
@@ -377,8 +352,7 @@ function store.deleteAccount(citizenid)
     MySQL.update.await('DELETE FROM phone_birdy_profiles WHERE citizenid = ?', { citizenid })
 end
 
----Overwrite an existing profile's editable fields and sign it in. Legacy path kept for
----compatibility; current actions register via insertAccount instead.
+---Overwrites an existing profile's editable fields and signs it in.
 ---@param citizenid string
 ---@param handle string
 ---@param displayName string
@@ -392,8 +366,7 @@ function store.updateAccount(citizenid, handle, displayName, passwordHash, bio)
     ]], { handle, displayName, passwordHash, bio, citizenid })
 end
 
----Flip a citizenid's informational signed-in flag. Nothing reads it for authorization - sessions
----live in the accounts engine.
+---Flips a citizenid's informational signed-in flag.
 ---@param citizenid string
 ---@param value boolean
 function store.setLoggedIn(citizenid, value)
@@ -403,9 +376,7 @@ function store.setLoggedIn(citizenid, value)
     )
 end
 
----Batch-load profiles keyed by citizenid. The IN (...) list is built purely of `?` placeholders
----(one per cid) with the values bound as parameters, so list length is the only thing formatted
----into the SQL.
+---Batch-loads profiles keyed by citizenid.
 ---@param cids string[]
 ---@return table<string, table>
 function store.getProfilesByCids(cids)
@@ -435,10 +406,8 @@ function store.getPost(id, viewerCid)
     ))
 end
 
----Hydrated posts for MANY ids in one query - the batch form of getPost, so a notification list
----resolving its reply posts fires one SELECT instead of one per row. Returns an id -> hydrated
----post map (missing ids absent); the viewer's `liked` flag is still resolved per row by the
----POST_SELECT subquery. Read-only.
+---Hydrated posts for many ids in one query. Returns an id -> hydrated post map (missing ids
+---absent). Read-only.
 ---@param ids string[] post ids
 ---@param viewerCid string viewer citizenid (for the liked flag)
 ---@return table<string, table> id -> hydrated post
@@ -464,8 +433,7 @@ function store.postsByIds(ids, viewerCid)
     return out
 end
 
----List top-level posts newest-first, optionally limited to accounts the viewer follows (the
----follow filter re-binds the viewer cid, hence it appears twice in that parameter list).
+---Lists top-level posts newest-first, optionally limited to accounts the viewer follows.
 ---@param viewerCid string
 ---@param limit number
 ---@param onlyFollowing boolean
@@ -499,8 +467,7 @@ function store.listReplies(parentId, viewerCid)
     return rows
 end
 
----Insert a post row. Caller owns validation (body length, sanitized images, parent existence);
----we keep the data layer dumb.
+---Inserts a post row.
 ---@param id string
 ---@param authorCid string
 ---@param body string
@@ -514,8 +481,7 @@ function store.insertPost(id, authorCid, body, parentId, images)
     ]], { id, authorCid, body, parentId, imagesJson }) ~= nil
 end
 
----Increment a post's view count, but never for the author's own views (the author guard lives in
----the WHERE clause, so it costs nothing extra).
+---Increments a post's view count, but never for the author's own views.
 ---@param id string
 ---@param viewerCid string
 function store.bumpViews(id, viewerCid)
@@ -531,8 +497,7 @@ function store.getPostAuthor(id)
     return MySQL.scalar.await('SELECT author_cid FROM phone_birdy_posts WHERE id = ?', { id })
 end
 
----Add a like. INSERT IGNORE onto the (post, citizenid) primary key makes replays a no-op, so a
----double-tapped or resent toggle can never double-count.
+---Adds a like. INSERT IGNORE makes replays a no-op.
 ---@param postId string
 ---@param cid string
 function store.addLike(postId, cid)
@@ -576,8 +541,7 @@ function store.isFollowing(follower, target)
     ) ~= nil
 end
 
----Insert a DM row. Caller owns validation (kind whitelist, body cap, sanitized meta); the meta
----table is encoded here so callers stay JSON-free.
+---Inserts a DM row; the meta table is JSON-encoded here.
 ---@param id string
 ---@param fromCid string
 ---@param toCid string
@@ -592,8 +556,7 @@ function store.insertDm(id, fromCid, toCid, kind, body, meta)
     ]], { id, fromCid, toCid, kind or 'text', body or '', metaJson }) ~= nil
 end
 
----Every message involving a player, oldest-first, with `created_ms` added. Always scoped to the
----given cid on one side, so a caller can only ever page its own traffic.
+---Every message involving a player, oldest-first, with `created_ms` added.
 ---@param cid string
 ---@return table[]
 function store.listMessagesFor(cid)
@@ -605,8 +568,7 @@ function store.listMessagesFor(cid)
     return rows
 end
 
----Mark every message FROM `otherCid` TO `viewerCid` as read (called when the viewer opens that
----thread). Direction-scoped, so a caller can only clear its own inbound flags. Idempotent.
+---Marks every message from `otherCid` to `viewerCid` as read. Idempotent.
 ---@param viewerCid string
 ---@param otherCid string
 function store.markThreadRead(viewerCid, otherCid)
@@ -616,8 +578,7 @@ function store.markThreadRead(viewerCid, otherCid)
         { viewerCid, otherCid })
 end
 
----Messages between two players, oldest-first, with `created_ms` added. Both directions of
----exactly this pair - the caller pins one side to the requesting viewer.
+---Messages between two players (both directions), oldest-first, with `created_ms` added.
 ---@param cidA string
 ---@param cidB string
 ---@return table[]
@@ -632,8 +593,7 @@ function store.listThread(cidA, cidB)
     return rows
 end
 
----A single DM row by id, with `created_ms` added. Caller enforces participant checks before
----acting on it.
+---A single DM row by id, with `created_ms` added.
 ---@param id string
 ---@return table|nil
 function store.getDm(id)
@@ -645,8 +605,8 @@ function store.getDm(id)
     return row
 end
 
----Overwrite a DM's reactions (a JSON object of emoji -> array of citizenids). An empty table
----stores NULL so untouched rows and cleared rows look the same.
+---Overwrites a DM's reactions (a JSON object of emoji -> array of citizenids); an empty table
+---stores NULL.
 ---@param id string
 ---@param reactions table
 function store.updateDmReactions(id, reactions)

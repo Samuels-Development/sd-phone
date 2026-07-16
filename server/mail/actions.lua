@@ -18,27 +18,21 @@ local mailCfg = config.Mail
 ---@type table Actions module; the table returned at end of file.
 local actions = {}
 
--- Server-side compose caps. The web composer imposes no hard limits of its own, so these bound
--- what a modified client can persist: every message copy lives inside an account row's JSON
--- column, so an unbounded subject/body/recipient list is a row-bloat + NUI DoS vector, and each
--- recipient costs a DB read at delivery - the count cap bounds that work too.
+-- Server-side compose caps.
 ---@type integer Max recipients accepted per send/draft; larger lists are rejected outright.
 local MAX_RECIPIENTS = 20
----@type integer Subject cap (chars); longer subjects are truncated (messages-app convention).
+---@type integer Subject cap (chars); longer subjects are truncated.
 local MAX_SUBJECT_LEN = 200
----@type integer Body cap (chars); longer bodies are truncated (messages-app convention).
+---@type integer Body cap (chars); longer bodies are truncated.
 local MAX_BODY_LEN = 10000
----@type integer Sign-in password length bound: the larger of mailCfg.MaxPasswordLength and the
----accounts engine's hardcoded 64, so lowering the mail cap can't lock out engine-reset credentials.
+---@type integer Sign-in password length bound: the larger of mailCfg.MaxPasswordLength and 64.
 local MAX_SIGNIN_PASSWORD_LEN = math.max(mailCfg.MaxPasswordLength, 64)
 
 local util = require 'server.util'
 local ok, fail, trim = util.ok, util.fail, util.trim
 
 
----Resolve a connected source to its citizenid + display name. The only identity path in this
----module: every handler derives the actor from src via the player bridge, never from a payload
----field, so a crafted payload can't act as another player.
+---Resolves a connected source to its citizenid + display name.
 ---@param source number
 ---@return { cid: string, name: string }|nil
 local function whois(source)
@@ -48,13 +42,8 @@ local function whois(source)
 end
 
 
----Permissive email-format check for RECIPIENT addresses: a `@` separator with non-empty local +
----host parts, no whitespace anywhere, and a host that either is the configured own domain or
----contains at least one `.` - validateEmail accepts a dotless mailCfg.Domain (e.g. 'weazel') at
----sign-up, so its addresses must pass here too or systemSend silently drops them. Foreign
----domains pass on purpose - a recipient that doesn't resolve to a registered account is silently
----skipped at delivery. Real validation is deferred to deliverability checks we don't have (no
----real SMTP).
+---Permissive email-format check for recipient addresses: an `@` with non-empty local + host
+---parts, no whitespace, and a host that is the configured domain or contains at least one `.`.
 ---@param email string
 ---@return boolean
 local function looksLikeEmail(email)
@@ -68,11 +57,8 @@ local function looksLikeEmail(email)
     return true
 end
 
----Normalize a player-supplied OWN address (a bare username or a full email) into the canonical
----local@Domain form. Foreign domains are rejected, so every registered account lives under the
----one configured domain; the local part is whitelist-matched (alnum start, then alnum/._-) and
----the finished address is capped at mailCfg.MaxEmailLength, matching the VARCHAR(64) email
----column it becomes the primary key of.
+---Normalizes a player-supplied own address (bare username or full email) into the canonical
+---local@Domain form. Foreign domains are rejected; the finished address is length-capped.
 ---@param raw any
 ---@return string|nil normalized, string? message
 local function validateEmail(raw)
@@ -95,9 +81,7 @@ local function validateEmail(raw)
     return email, nil
 end
 
----Validate password length only - content rules (must include a digit etc.) are deliberately
----omitted for in-game roleplay friendliness. Bounds come from configs/mail.lua; the type check
----matters because the raw value flows into the hash function on success.
+---Validates password length against the configs/mail.lua bounds.
 ---@param raw any
 ---@return string|nil normalized, string? message
 local function validatePassword(raw)
@@ -111,8 +95,7 @@ local function validatePassword(raw)
     return raw, nil
 end
 
----Validate display-name length against the configs/mail.lua bounds. Trimmed but not
----character-whitelisted - it's a mailbox label, not an address.
+---Validates display-name length against the configs/mail.lua bounds; the name is trimmed.
 ---@param raw any
 ---@return string|nil normalized, string? message
 local function validateDisplayName(raw)
@@ -129,18 +112,16 @@ local function validateDisplayName(raw)
     return trimmed, nil
 end
 
----Reshape a hydrated store account into the React `MailAccount` shape. Deliberately narrow:
----password_hash and the logged_in_citizens session list never leave the server.
+---Reshapes a hydrated store account into the React `MailAccount` shape; password_hash and the
+---logged_in_citizens session list are omitted.
 ---@param acc { email: string, display_name: string }
 ---@return { id: string, name: string, email: string }
 local function serializeAccount(acc)
     return { id = acc.email, name = acc.display_name, email = acc.email }
 end
 
----Reshape a hydrated message (already-decoded JSON inside the account row) into the React
----`MailMessage` shape. The store keeps every message as `{ id, folder, from = {name, email},
----to = [], subject, body, sentAt, read, flagged }` - same shape - so this is mostly identity
----plus the `accountId` injection, with fallbacks for rows written by older builds.
+---Reshapes a hydrated message into the React `MailMessage` shape, injecting `accountId` and
+---filling fallbacks for rows written by older builds.
 ---@param accountEmail string
 ---@param msg table
 ---@return table
@@ -159,16 +140,11 @@ local function serializeMessage(accountEmail, msg)
     }
 end
 
----Public alias: init.lua's mailbox export reshapes stored messages through the same serializer,
----so every surface emits the identical MailMessage shape.
+---Public alias used by init.lua's mailbox export.
 actions.serializeMessage = serializeMessage
 
----The one delivery fan-out. Every path that persists an inbox copy - the send callback, the
----mail exports and the accounts-engine mailer - ends here: each entry resolves its citizenid to
----a live source and, when online, gets the message as a live UI event plus a badge repush, so
----the Mail badge can never lag a push. Offline citizens are skipped; they see the message on
----their next mail-list fetch. Callers must strip the pushes list (and the citizenids inside it)
----from anything that leaves the server.
+---Delivery fan-out: resolves each entry's citizenid to a live source and, when online, sends
+---the message as a live UI event plus a badge repush. Offline citizens are skipped.
 ---@param pushes { citizenid: string, message: table }[]
 function actions.deliver(pushes)
     if type(pushes) ~= 'table' then return end
@@ -181,9 +157,8 @@ function actions.deliver(pushes)
     end
 end
 
----Load the full Mail snapshot for the calling player - every account their citizenid is signed
----into and every message inside those accounts. Scope comes entirely from src (whois), so a
----client can only ever pull mailboxes it has authenticated into. Read-only.
+---Loads the full Mail snapshot for the calling player: every account their citizenid is signed
+---into and every message inside those accounts. Read-only.
 ---@param source number
 ---@return table
 function actions.list(source)
@@ -203,15 +178,8 @@ function actions.list(source)
     return ok({ accounts = outAccounts, messages = outMessages })
 end
 
----Create a brand-new email account and sign the caller straight into it. Every field is
----validated server-side (address shape + domain, password/name lengths, and an optional
----recovery phone normalized to digits and length-checked). The phone-uniqueness and
----taken-email checks run BEFORE the insert so a rejected sign-up never leaves a half-created
----account behind; if two sign-ups race the same address anyway, the store's primary-key
----collision is the authoritative duplicate guard. The plaintext password is hashed before
----storage and also mirrored into the shared accounts engine, which is the source of truth for
----password resets - a duplicate from the one-time migration is harmless, so the mirror's
----result is intentionally ignored.
+---Creates a brand-new email account and signs the caller straight into it. Every field is
+---validated server-side; the password is hashed and mirrored into the accounts engine.
 ---@param source number
 ---@param payload { email?: string, password?: string, displayName?: string, phone?: string }
 ---@return table
@@ -255,17 +223,8 @@ function actions.signUp(source, payload)
     return ok({ account = serializeAccount(acc) })
 end
 
----Sign into an existing email account. Credentials-gated, not identity-gated: any player who
----knows the password may sign in - shared mailboxes are a feature (see configs/mail.lua). The
----failure message is identical whether the address exists or the password is wrong, so this
----callback can't be used to enumerate registered addresses; a password over
----MAX_SIGNIN_PASSWORD_LEN gets that same uniform failure BEFORE any hashing, because both
----creation paths (signUp here, the accounts engine's validPassword) enforce the bound - so the
----attempt can never be correct - and the hash functions walk the string per byte, which a
----crafted multi-megabyte password would turn into free server CPU burn. The accounts engine is
----verified first (it is canonical after password resets); the legacy hash column keeps
----pre-engine accounts working. Idempotent: signing into an account you're already in returns
----success without re-adding a session or counting against the per-player cap.
+---Signs into an existing email account; any player who knows the password may sign in. The
+---accounts engine is verified first, then the legacy hash column. Idempotent.
 ---@param source number
 ---@param payload { email?: string, password?: string }
 ---@return table
@@ -306,10 +265,8 @@ function actions.signIn(source, payload)
     return ok({ account = serializeAccount(acc) })
 end
 
----Sign out of an account on this player's phone. The account itself survives - only the
----caller's session is dropped. No ownership gate is needed: the store only ever removes the
----CALLER's citizenid (from src), so pointing this at a mailbox you never joined is a harmless
----no-op and it can never drop anyone else's session.
+---Signs out of an account on this player's phone; the account survives, only the caller's
+---session is dropped.
 ---@param source number
 ---@param payload { email?: string }
 ---@return table
@@ -324,17 +281,8 @@ function actions.signOut(source, payload)
     return ok({ email = email })
 end
 
----Send a new message. The payload only NAMES the sending mailbox; the right to use it is proven
----by the caller's citizenid (from src) appearing in that account's signed-in list, and the From
----header is rebuilt from the account row - a crafted payload can't spoof another sender's name
----or address. Recipients are trimmed, lowercased, deduped, capped at MAX_RECIPIENTS and
----length-limited to mailCfg.MaxEmailLength (a longer address can't exist as an account, so
----nothing deliverable is lost); subject/body are truncated to their caps. Persists a `sent`
----copy on the sender and an `inbox` copy on every recipient that exists - unknown addresses are
----silently skipped, so the response can't be used to probe which addresses are registered.
----Returns the citizenids currently signed into each recipient account so the caller can run the
----shared fan-out (actions.deliver); init.lua strips that list from the envelope before it
----reaches the sender's client.
+---Sends a new message: persists a `sent` copy on the sender and an `inbox` copy on every
+---recipient that exists, returning the signed-in citizenids for the delivery fan-out.
 ---@param source number
 ---@param payload { fromEmail?: string, to?: string[], subject?: string, body?: string }
 ---@return table
@@ -415,7 +363,7 @@ function actions.send(source, payload)
         end
     end
 
-    ---First-party server-local event: fired once per compose after the sent copy and every recipient inbox copy are stored; payload carries the sender citizenid for server-trusted consumers but never the pushes list or its citizenids.
+    ---First-party send announcement, fired once per compose.
     TriggerEvent('sd-phone:server:mail:sent', {
         system    = false,
         id        = sentMessage.id,
@@ -433,15 +381,8 @@ function actions.send(source, payload)
     })
 end
 
----Compose and deliver mail as the SYSTEM rather than a player: no sender account, no ownership
----proof and no sent copy - callers are other server modules (the accounts-engine mailer, the
----sendMail export), trusted to speak for the system, so validation here exists to fail cleanly
----on caller bugs. Recipients walk the same normalization as send (trim/lowercase, dedupe,
----looksLikeEmail, MAX_RECIPIENTS cap) and subject/body the same truncation caps; the From header
----defaults to System <no-reply@Domain> and is length-capped, never resolved to an account.
----Persists an `inbox` copy on every recipient that exists - unknown addresses are silently
----skipped - then runs the shared fan-out itself, so the returned envelope never carries pushes
----or citizenids, only the count of recipient accounts that existed.
+---Composes and delivers mail as the system: no sender account, no ownership proof, no sent
+---copy. Persists an `inbox` copy on every recipient that exists, then runs the fan-out.
 ---@param mail { to: string|string[], subject?: string, body?: string, from?: { name?: string, email?: string } }
 ---@return table envelope; data.delivered counts recipient accounts that existed
 function actions.systemSend(mail)
@@ -507,7 +448,7 @@ function actions.systemSend(mail)
         end
     end
 
-    ---Same contract as the send-path emission, system-flagged: fired once before the fan-out, id is the first stored copy's (absent when delivered is 0), never the pushes list or its citizenids.
+    ---First-party send announcement (system shape), fired once before the fan-out.
     TriggerEvent('sd-phone:server:mail:sent', {
         system    = true,
         id        = sentId,
@@ -523,9 +464,8 @@ function actions.systemSend(mail)
     return ok({ delivered = delivered })
 end
 
----Save the caller's compose as a draft on the sender account. Same ownership proof and compose
----caps as `send`, but persists a single `drafts` copy and delivers to nobody - recipients are
----optional here and kept only if they parse as addresses.
+---Saves the caller's compose as a draft on the sender account: same ownership proof and caps
+---as `send`, persisting a single `drafts` copy and delivering to nobody.
 ---@param source number
 ---@param payload { fromEmail?: string, to?: string[], subject?: string, body?: string }
 ---@return table
@@ -580,10 +520,8 @@ function actions.saveDraft(source, payload)
     return ok({ draft = serializeMessage(sender.email, draft) })
 end
 
----Ownership gate for the per-message mutators: the caller's citizenid (from src, never the
----payload) must appear in the account's signed-in list before anything inside that mailbox may
----change. Centralised so every mutator runs the exact same check; the string type check also
----keeps a non-string payload field from ever reaching the SQL layer as a query parameter.
+---Ownership gate for the per-message mutators: the caller's citizenid must appear in the
+---account's signed-in list.
 ---@param source number
 ---@param accountEmail string
 ---@return string|nil cid, table|nil err
@@ -597,9 +535,7 @@ local function requireOwnership(source, accountEmail)
     return nil, fail('You are not signed into that account')
 end
 
----Mark a message as read. Ownership-gated; a bogus message id matches nothing in the store
----(the row is left untouched), so success is returned unconditionally - the client treats this
----as best-effort.
+---Marks a message as read. Ownership-gated; a bogus message id is a no-op.
 ---@param source number
 ---@param payload { accountEmail?: string, messageId?: string }
 ---@return table
@@ -613,8 +549,7 @@ function actions.markRead(source, payload)
     return ok()
 end
 
----Toggle a message's flag. Ownership-gated; the new state derives from the STORED message, not
----the payload, so a crafted call can only ever flip the real flag.
+---Toggles a message's flag. Ownership-gated; the new state derives from the stored message.
 ---@param source number
 ---@param payload { accountEmail?: string, messageId?: string }
 ---@return table
@@ -628,9 +563,8 @@ function actions.toggleFlag(source, payload)
     return ok()
 end
 
----Move a message to the bin, or hard-delete it if it's already there (the mutator returning nil
----removes it from the array). The flag clears on the way in so the Flagged view never shows
----binned mail. Ownership-gated.
+---Moves a message to the bin, or hard-deletes it if it's already there. The flag clears on the
+---way in. Ownership-gated.
 ---@param source number
 ---@param payload { accountEmail?: string, messageId?: string }
 ---@return table
@@ -646,10 +580,8 @@ function actions.moveToBin(source, payload)
     return ok()
 end
 
----Move a message to a specific folder (the Move action sheet). The destination is
----whitelist-checked against the five real folders - 'flagged' is a virtual view, never a real
----destination, and anything else from a crafted payload is rejected. Moving into the bin clears
----the flag, matching moveToBin. Ownership-gated.
+---Moves a message to a specific folder, whitelist-checked against the five real folders.
+---Moving into the bin clears the flag. Ownership-gated.
 ---@param source number
 ---@param payload { accountEmail?: string, messageId?: string, folder?: string }
 ---@return table
@@ -669,10 +601,8 @@ function actions.move(source, payload)
     return ok()
 end
 
----Permanently delete an account the caller is signed into - the row carries the messages and
----session list, so all its mail dies with it. Gated by the same signed-in ownership check as
----the message mutators; by design ANY signed-in citizen can delete a shared mailbox, because
----credentials are the authority here, exactly as they are for sign-in.
+---Permanently deletes an account the caller is signed into, along with all its mail and
+---sessions. Gated by the signed-in ownership check.
 ---@param source number
 ---@param payload { email?: string }
 ---@return table

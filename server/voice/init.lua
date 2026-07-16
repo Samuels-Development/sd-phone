@@ -17,11 +17,7 @@ local TURN  = CFG.Turn or {}
 ---@return boolean true when nearby-voice capture is switched on (config.Voice.RecordNearbyVoices)
 local function enabled() return CFG.RecordNearbyVoices == true end
 
--- ICE provisioning for the client-to-client WebRTC mesh that captures nearby players' voices
--- into camera videos and Photogram Live. Public STUN is always offered; Cloudflare Realtime TURN
--- relays are appended when configured, so peers on different networks can still connect. The
--- provisioned credential set is cached per player for its lifetime so a recording session
--- doesn't re-hit the Cloudflare API. The audio itself never touches the server.
+-- ICE provisioning for the client-to-client WebRTC mesh that captures nearby players' voices.
 ---@type table<number, { servers: table, expires: number }> Cached ICE servers per player src.
 local iceCache = {}
 
@@ -33,10 +29,7 @@ local function baseStun()
     return servers
 end
 
----Provision a Cloudflare Realtime TURN credential set. The long-lived API token lives in server
----convars (sd_cf_turn_token_id / sd_cf_turn_api_token - never in the repo, never sent to any
----client); only the short-lived credential set Cloudflare returns (urls/username/credential,
----TtlSeconds lifetime) is handed out, so a leaked client credential expires on its own. Returns
+---Provisions a Cloudflare Realtime TURN credential set from the sd_cf_turn_* convars. Returns
 ---nil when unconfigured or on any transport/decode failure.
 ---@return table|nil iceServers Cloudflare's iceServers object, nil on failure
 local function fetchCloudflareTurn()
@@ -65,10 +58,7 @@ local function fetchCloudflareTurn()
 end
 
 ---ICE servers for one player: STUN always, TURN appended when the Cloudflare provider is
----configured. Cached per src until a minute before the provisioned credential actually lapses,
----so repeated recordings don't re-provision - which also means any client can only make the
----server call Cloudflare once per TTL, not once per request. A failed TURN fetch caches the
----STUN-only result for the same window rather than retrying every call.
+---configured. Cached per src until a minute before the provisioned credential lapses.
 ---@param src number player server id
 ---@return table servers iceServers array for RTCPeerConnection
 local function iceServersFor(src)
@@ -94,8 +84,8 @@ local function coordsOf(src)
     return GetEntityCoords(ped)
 end
 
----True if `a` and `b` are within `range` metres of each other, from live server-side coords -
----false when either has no ped, so a mid-disconnect player can never pass.
+---True if `a` and `b` are within `range` metres of each other, from live server-side coords;
+---false when either has no ped.
 ---@param a number player server id
 ---@param b number player server id
 ---@param range number metres
@@ -141,20 +131,15 @@ lib.callback.register('sd-phone:server:voice:ice', function(src)
     return { success = true, data = { iceServers = iceServersFor(src) } }
 end)
 
----Who can the recorder capture right now (+ its ICE servers). Proximity is computed entirely
----server-side, so the client can't nominate its own capture list. Empty when the feature is
----disabled - the client then simply records its own voice.
+---Who the recorder can capture right now (+ its ICE servers). Proximity is computed server-side;
+---empty when the feature is disabled.
 lib.callback.register('sd-phone:server:voice:nearby', function(src)
     if not enabled() then return { success = true, data = { targets = {}, iceServers = iceServersFor(src) } } end
     return { success = true, data = { targets = nearbyTargets(src), iceServers = iceServersFor(src) } }
 end)
 
----Relay one WebRTC signaling message (offer/answer/ICE candidate) to another player. Only this
----tiny signaling text crosses the server - the audio itself flows peer-to-peer. Proximity is
----re-checked on EVERY hop (1.5x RANGE, slack for movement between hops) and the master switch is
----honoured, so a modded client can't use the relay to negotiate a capture of a far-away mic or
----keep signaling while the feature is off. `sid`/`kind`/`data` are opaque session text the
----receiving client validates; `from` is stamped from the trusted source, never from the payload.
+---Relays one WebRTC signaling message (offer/answer/ICE candidate) to another player. Proximity
+---is re-checked on every hop (1.5x RANGE) and `from` is stamped from the trusted source.
 ---@param payload table { to: number, sid?: any, kind?: any, data?: any }
 RegisterNetEvent('sd-phone:server:voice:signal', function(payload)
     local src = source
@@ -171,7 +156,7 @@ RegisterNetEvent('sd-phone:server:voice:signal', function(payload)
     })
 end)
 
----A departing player's cached ICE credentials are dropped (srcs recycle across sessions).
+---Drops a departing player's cached ICE credentials.
 AddEventHandler('playerDropped', function()
     iceCache[source] = nil
 end)

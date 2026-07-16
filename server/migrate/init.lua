@@ -1,14 +1,12 @@
----@type table Boot orchestration for the lb-phone import (server.migrate.init). On resource start
----it detects lb-phone's tables and, when they are present and the import has not already run, runs
----each domain porter once in order, then records a marker so it never repeats. It also registers
----`sdphone:migrate [dry]` for running it by hand (which ignores the marker, for previews or forced
----re-runs). Every porter runs inside pcall, so one domain failing cannot abort the rest.
+---@type table Boot orchestration for the lb-phone import (server.migrate.init). Runs each domain
+---porter once when lb-phone tables are present and the import has not already run, records a
+---completion marker, and registers `sdphone:migrate [dry]` for manual runs.
 local config    = require 'configs.config'
 local framework = require 'bridge.shared.framework'
 local store     = require 'server.migrate.store'
 local identity  = require 'server.migrate.identity'
 
----@type string Marker name. Bump the suffix if a future version needs everyone re-imported.
+---@type string Marker name.
 local MIGRATION = 'lbphone-import-v1'
 
 ---@type { key: string, label: string, run: fun(ctx: table): table }[] Domains, in run order.
@@ -33,8 +31,7 @@ local TARGETS = {
 ---@param msg string
 local function log(msg) print(('^5[sd-phone:migrate]^0 %s'):format(msg)) end
 
----Run the import. `force` ignores the completed marker (used by the manual command); `dryRun`
----counts without writing. Safe to call more than once thanks to the marker plus idempotent writes.
+---Runs the import. `force` ignores the completed marker; `dryRun` counts without writing.
 ---@param opts { force?: boolean, dryRun?: boolean }
 local function run(opts)
     local cfg = config.Migrate or {}
@@ -79,8 +76,7 @@ local function run(opts)
     log(('%simport complete.'):format(dryRun and '[DRY RUN] no data was written. ' or ''))
 end
 
--- Boot: run once automatically when enabled. Threaded so the schema polling yields instead of
--- blocking resource start; wrapped so a failure prints and is swallowed like every other module.
+-- Boot: runs once automatically when enabled.
 CreateThread(function()
     local cfg = config.Migrate
     if not cfg or cfg.enabled == false then return end
@@ -88,8 +84,8 @@ CreateThread(function()
     if not ok then log(('^1import crashed:^0 %s'):format(err)) end
 end)
 
--- Manual trigger from the SERVER CONSOLE only (source 0): `sdphone:migrate` runs it for real,
--- `sdphone:migrate dry` previews without writing. Ignores the marker so an operator can re-run.
+-- Manual trigger from the server console only (source 0): `sdphone:migrate` runs it for real,
+-- `sdphone:migrate dry` previews without writing. Ignores the marker.
 RegisterCommand('sdphone:migrate', function(source, args)
     if source ~= 0 then return end
     local dryRun = (args[1] or ''):lower() == 'dry'

@@ -58,13 +58,8 @@ local ok, fail, digits, trim = util.ok, util.fail, util.digits, util.trim
 
 
 
----Parse a client message draft into what gets stored: a kind, a body (a placeholder caption for
----non-text kinds, used for thread previews + push notifications) and a JSON meta blob of the
----extras. The kind is effectively whitelist-checked by the branching - anything that isn't
----'image' or 'location' is stored as plain text. Every client string is length-capped to the same
----limits server.messages uses (mediaUrl 512, wpCode 256, wpSub 128, body 300), so a crafted
----payload can't bloat the TEXT columns or the recipients' NUI. Returns `nil, errorMessage` when
----the draft is empty/invalid - on failure the second return is the error, not a body.
+---Parses a client message draft into a kind, a body, and a JSON meta blob of the extras, with
+---every client string length-capped. Returns `nil, errorMessage` when the draft is empty/invalid.
 ---@param payload { kind?: string, body?: string, mediaUrl?: string, wpCode?: string, wpSub?: string }
 ---@return string|nil kind, string body, string|nil meta
 local function parseDraft(payload)
@@ -87,12 +82,8 @@ local function parseDraft(payload)
     return 'text', body, nil
 end
 
----Assert the caller is a boss of their CURRENT job - the single gate every management callback
----passes through. Boss status comes from the framework's isboss grade flag (esxBossGrade only
----matters on ESX, which has no flag), so it works for any job, configured company or not. Checked
----here (never client-side only), and the client never names which company it's acting on, so a
----player can only ever manage the company they actually work for. Returns `(jobName, citizenid)`
----on success, or `(nil, errorMessage)` so callers can `if not myJob then return fail(err) end`.
+---Asserts the caller is a boss of their current job. Returns `(jobName, citizenid)` on success,
+---or `(nil, errorMessage)`.
 ---@param src number caller server id
 ---@return string|nil jobName, string citizenidOrError
 local function requireBoss(src)
@@ -104,25 +95,8 @@ local function requireBoss(src)
     return myJob, cid
 end
 
----Build the `myCompany` block for the caller, or nil when they hold no real job. Any
----non-blacklisted job gets an Actions tab (duty toggle + quit), even one that isn't a configured
----Company - the company-only bits (Job Calls, bank, employees) stay gated behind a config entry.
----Balance + roster are included ONLY for bosses, so that data never leaves the server for a
----regular employee; `myGrade` ships so the UI can hide manage actions on equal/higher ranks. Duty
----prefers the framework's REAL duty state (so the toggle reflects /duty, MDT, etc.), falling back
----to the stored pref on frameworks without native duty (ESX) - checked explicitly rather than via
----the and/or idiom, which would collapse a genuine OFF-duty (false) back onto prefs.duty and read
----as "off duty but the toggle shows on". The boss roster is framework members (their active job
----is this one) UNION saved-job holders (hired here but currently working another of their jobs),
----keyed by citizenid so a person who's both appears once; the grade ladder is mapped to labels
----once so the roster doesn't re-query grades per employee (N+1), saved-only members are named in
----one namesByCids batch, just-fired offline members (pendingFireCids) drop out at once, and the
----caller's own row is marked `self` so the UI hides "fire" on it. Status dot per row: working
----this job on duty = 'duty', working it off duty = 'offduty', offline or on another job = 'away'
----(a nil framework duty means no duty native, treated as on); the grade shown is the one that
----applies to THIS job - the framework grade while actively working it, else the saved grade.
----Sorted on-duty first, then off-duty, then away; within each by rank then name; capped at
----EMP_LIMIT rows.
+---Builds the `myCompany` block for the caller, or nil when they hold no real job; balance and
+---the merged framework + saved-job roster (sorted, capped at EMP_LIMIT) ship only for bosses.
 ---@param src number caller server id
 ---@return table|nil
 local function buildMyCompany(src)
@@ -219,9 +193,7 @@ local function buildMyCompany(src)
     return mc
 end
 
----Tell every online boss of a job to refresh their roster (someone joined, left, changed rank or
----flipped duty). buildMyCompany only ships the roster to bosses, so only they need the nudge; the
----push carries no data - each boss's client re-pulls through the directory callback.
+---Tells every online boss of a job to refresh their roster; the push carries no data.
 ---@param jobName string|nil
 function actions.notifyRoster(jobName)
     if not jobName or BLACKLIST[jobName] then return end
@@ -233,9 +205,7 @@ function actions.notifyRoster(jobName)
     end
 end
 
----Public directory rows for every configured company: config data only, nothing caller-specific.
----Shared by the directory callback and the getCompanyDirectory export so both list the same
----shape. Builds a fresh array per call, so callers may mutate their copy freely.
+---Returns public directory rows for every configured company, built fresh per call.
 ---@return table[] companies
 function actions.companyList()
     local companies = {}
@@ -254,10 +224,8 @@ function actions.companyList()
     return companies
 end
 
----Public company directory + the caller's own company block. The directory itself is open to
----everyone (it's config data); everything sensitive lives in myCompany, which buildMyCompany
----gates per caller. `multijob` gates the Jobs tab (qb/qbx only) and `pendingOffers` feeds its
----badge. Read-only.
+---Returns the public company directory plus the caller's own company block, `multijob`, and
+---`pendingOffers`. Read-only.
 ---@param src number
 function actions.directory(src)
     local cid = player.getIdentifier(src)
@@ -269,13 +237,8 @@ function actions.directory(src)
     })
 end
 
----Toggle the caller's duty status for their current job (any employee, not just bosses). Drives
----the framework's REAL duty state (blips, /duty, pay) where one exists and always persists the
----pref (the ESX fallback, and it survives a relog). Fires the caller's own dutyChanged push, a
----generic server event other resources can hook, and nudges the bosses' rosters so the on/off
----duty status dot updates live while they're watching the Actions tab (not only after a re-open).
----Identity comes from src alone; the payload only carries the desired state, coerced to a strict
----boolean.
+---Toggles the caller's duty status for their current job: sets the framework duty state,
+---persists the pref, fires the dutyChanged pushes, and nudges the bosses' rosters.
 ---@param src number
 ---@param payload { on?: boolean }
 function actions.setDuty(src, payload)
@@ -294,9 +257,7 @@ function actions.setDuty(src, payload)
     return ok({ myCompany = buildMyCompany(src) })
 end
 
----Toggle whether the caller receives customer job calls. Only meaningful for a configured
----company (unconfigured jobs have no call path), and only for the job the caller currently
----works - both resolved from src, never the payload.
+---Toggles whether the caller receives customer job calls for their current configured company.
 ---@param src number
 ---@param payload { on?: boolean }
 function actions.setJobCalls(src, payload)
@@ -310,8 +271,7 @@ function actions.setJobCalls(src, payload)
     return ok({ myCompany = buildMyCompany(src) })
 end
 
----Toggle whether the caller is notified of messages sent to their company. Same posture as
----setJobCalls: company + identity resolved from src, payload only carries the flag.
+---Toggles whether the caller is notified of messages sent to their company.
 ---@param src number
 ---@param payload { on?: boolean }
 function actions.setJobMessages(src, payload)
@@ -325,12 +285,8 @@ function actions.setJobMessages(src, payload)
     return ok({ myCompany = buildMyCompany(src) })
 end
 
----Move money from the boss's personal bank into the company account. Boss-only (requireBoss).
----The amount is coerced to a positive integer with NaN/inf rejected explicitly - every comparison
----against NaN is false, so an unguarded NaN would sail past both the sign check and the balance
----check and reach the money bridges. Debit-before-credit: the personal debit is pre-checked
----against the live balance (the banking bridge exposes no success signal on the debit itself),
----and a society credit that fails refunds the debit, mirroring banking.send.
+---Moves money from the boss's personal bank into the company account; the amount is coerced to
+---a positive integer with NaN/inf rejected, and a failed society credit refunds the debit.
 ---@param src number
 ---@param payload { amount?: number }
 function actions.deposit(src, payload)
@@ -351,10 +307,8 @@ function actions.deposit(src, payload)
     return ok({ myCompany = buildMyCompany(src) })
 end
 
----Move money from the company account into the boss's personal bank. Boss-only. Same amount
----hygiene as deposit (positive integer, NaN/inf rejected). The society debit runs FIRST and its
----return is checked (the society bridge propagates a declined debit), so the personal credit only
----happens once the company money actually left - a failed debit can't print money.
+---Moves money from the company account into the boss's personal bank; the society debit runs
+---first and its return is checked before the personal credit.
 ---@param src number
 ---@param payload { amount?: number }
 function actions.withdraw(src, payload)
@@ -376,14 +330,8 @@ function actions.withdraw(src, payload)
     return ok({ myCompany = buildMyCompany(src) })
 end
 
----Send a job OFFER to an online player by their server ID - never an instant SetJob, so a job
----only ever lands on a player through an invite THEY accept (jobs.accept). Boss-only. Resolving
----the server ID requires the target to be connected (server IDs only exist for online players),
----which also means the offer notification can go straight to that id. The offered grade is
----clamped to a non-negative integer and must sit BELOW the caller's own grade - the same ceiling
----promote enforces - so a boss can't mint an equal or higher-ranked hire who could then out-rank
----and fire them. Re-offering upserts on (citizenid, job), refreshing the grade rather than
----stacking invites.
+---Sends a job offer to an online player by server ID, with the offered grade clamped below the
+---caller's own; re-offering upserts on (citizenid, job).
 ---@param src number
 ---@param payload { serverId?: number, grade?: number }
 function actions.hire(src, payload)
@@ -421,12 +369,8 @@ function actions.hire(src, payload)
     return ok({ myCompany = buildMyCompany(src) })
 end
 
----Resolve a target's standing in `myJob`: whether they're actively working it (management goes
----through the framework), or just hold it as a saved job while working another (managed via the
----saved-jobs store). The grade returned is the one that currently applies - the framework grade
----while they're actively on the job, else their saved grade. nil = not an employee at all, which
----callers treat as a hard stop, so a payload-supplied citizenid can only ever act on a real
----member of the boss's own company.
+---Resolves a target's standing in `myJob`: active/saved membership, the currently applicable
+---grade, and online state; nil when they are not an employee.
 ---@param myJob string the boss's company job
 ---@param targetCid string target citizenid (payload-supplied; validated here by membership)
 ---@return { src?: number, online: boolean, activeHere: boolean, grade: number, fw: boolean, saved: boolean }|nil
@@ -445,14 +389,8 @@ local function memberInfo(myJob, targetCid)
     return { src = tsrc, online = tsrc ~= nil, activeHere = activeHere, grade = grade, fw = fwGrade ~= nil, saved = savedGrade ~= nil }
 end
 
----Remove an employee (by citizenid) from the caller's company. Boss-only, self-fire blocked, and
----rank-gated: the target's applicable grade must be strictly below the caller's. Works on members
----who only hold the job as a saved job (currently working elsewhere), not just the actively
----on-shift ones. An actively-working member goes through the framework (online-only); one whose
----ACTIVE framework job is this one but who is offline gets a pending fire queued instead, applied
----on their next load by reconcileJobs - the fire branch there runs first, so the job is never
----re-added. The saved-jobs entry is dropped in every branch that has one, an online-elsewhere
----target gets their Jobs tab refreshed, and the bosses' rosters update live.
+---Removes an employee from the caller's company (boss-only, self-fire blocked, rank-gated):
+---framework fire when actively working, pending fire when offline, saved entry dropped.
 ---@param src number
 ---@param payload { citizenid?: string }
 function actions.fire(src, payload)
@@ -481,15 +419,8 @@ function actions.fire(src, payload)
     return ok({ myCompany = buildMyCompany(src) })
 end
 
----Promote an employee one grade up the company's ladder (the first level above their current
----applicable grade; the ladder comes from the framework, never the payload). Boss-only,
----self-promote blocked, and the new grade must stay below the caller's own - so nobody can be
----raised to a rank that could then manage the promoter. An actively-working member's framework
----grade is set (must succeed) with the saved grade mirroring it; a saved-away member just gets
----their saved grade bumped and reconcileJobs syncs the framework side when they next work the
----job. A member who exists only on the framework roster (no saved entry) can't be adjusted
----portably while away, so that path requires them online. Notifies + live-refreshes the target
----when online, and nudges the bosses' rosters.
+---Promotes an employee one grade up the company's ladder, kept below the caller's own rank:
+---framework write when actively working, saved grade only when working elsewhere.
 ---@param src number
 ---@param payload { citizenid?: string }
 function actions.promote(src, payload)
@@ -534,11 +465,8 @@ function actions.promote(src, payload)
     return ok({ myCompany = buildMyCompany(src) })
 end
 
----Demote an employee one grade down the company's ladder (the highest level below their current
----applicable grade, walked from the framework's ascending ladder). Boss-only, self-demote
----blocked, can't act on someone of equal or higher rank, and can't go below the lowest grade.
----Same active/saved-away split as promote: framework write for an actively-working member, saved
----grade only for one working elsewhere, online required for a framework-only member.
+---Demotes an employee one grade down the company's ladder (boss-only, rank-gated): framework
+---write when actively working, saved grade only when working elsewhere.
 ---@param src number
 ---@param payload { citizenid?: string }
 function actions.demote(src, payload)
@@ -583,11 +511,8 @@ function actions.demote(src, payload)
     return ok({ myCompany = buildMyCompany(src) })
 end
 
----Resign from the job the caller currently works: reset to the configured unemployed job, forget
----the phone's saved-jobs entry, and drop the framework membership (QBox-only; a no-op elsewhere)
----so it doesn't linger as a job they can switch back to - mirroring jobs.remove. (A boss can't
----fire themselves, but anyone can quit.) notifyRoster is a no-op for non-company jobs, and the
----returned myCompany is nil so the UI flips to "not in a company".
+---Resigns the caller from their current job: resets to the unemployed job, forgets the saved
+---entry, drops the framework membership, and refreshes the roster.
 ---@param src number
 ---@return table
 function actions.quit(src)
@@ -602,14 +527,8 @@ function actions.quit(src)
     return ok({ myCompany = buildMyCompany(src) })
 end
 
----Call a company: ring every ONLINE, on-duty, call-accepting employee of that job at once; the
----first to answer is connected (the rest stop ringing), via the phone's group-ring call plumbing.
----The company comes from the payload but is whitelist-checked against the configured directory
----and must be flagged callable. Calling your own company is refused outright - the ring loop
----skips the caller anyway, but the dedicated message is clearer than "no one is on duty". The
----duty read prefers the framework's native state and falls back to the stored pref (ESX);
----`anyOnDuty` tracks whether staff were working at all so the failure can distinguish "nobody
----working" (No one is on duty) from "working but not taking calls" (No one is available).
+---Calls a company: rings every online, on-duty, call-accepting employee of the whitelisted job
+---at once via the group-ring plumbing; calling your own company is refused.
 ---@param src number
 ---@param payload { job?: string }
 ---@return table
@@ -643,11 +562,8 @@ function actions.callCompany(src, payload)
     return calls.callGroup(src, targets, entry.label, entry.callNumber)
 end
 
----Reshape stored inbox rows for a viewer. `viewerKind` is 'citizen' (Personal tab, the customer)
----or 'staff' (Job tab, an employee) - it decides which side of the conversation renders as "me".
----Rich extras (image URL / shared-location waypoint) are unpacked from the JSON meta blob under a
----pcall guard: meta is server-written, but a decode failure must degrade to a plain bubble rather
----than kill the whole inbox. Plain text rows have no meta.
+---Reshapes stored inbox rows for a viewer; `viewerKind` decides which side renders as "me", and
+---rich extras are unpacked from the JSON meta blob under a pcall guard.
 ---@param rows table[]
 ---@param viewerKind 'citizen'|'staff'
 ---@return table[]
@@ -677,11 +593,8 @@ local function serializeInbox(rows, viewerKind)
     return out
 end
 
----The caller's full Services inbox: `personal` (companies they've messaged as a customer, keyed
----by their own phone number) + `job` (customer threads for the configured company they currently
----work at, visible to every employee). Unread counts are per viewer - the job inbox is shared, so
----read state can't live on the message. Everything is scoped to the caller's own number and
----current job resolved from src; thread bodies are capped at the newest 100 rows each. Read-only.
+---Returns the caller's full Services inbox: `personal` threads keyed by their own number and
+---`job` customer threads for their configured company, with per-viewer unread counts. Read-only.
 ---@param src number
 ---@return table
 function actions.inbox(src)
@@ -730,12 +643,8 @@ function actions.inbox(src)
     return ok({ personal = personal, job = jobThreads, hasJob = e ~= nil })
 end
 
----Mark a message thread read for the caller. `scope` 'job' keys the thread by the customer's
----number and requires the caller to actually work a configured company; anything else is treated
----as 'personal', keyed by the company job and scoped to the caller's own number. The key is
----length-capped to its destination column (customer number 32 / job name 64) so a crafted key
----can't overflow the read-state insert; an unknown key merely writes an inert read-state row
----scoped to the caller. Idempotent - the stored read timestamp never moves backwards.
+---Marks a message thread read for the caller: scope 'job' keys by the customer's number,
+---anything else is 'personal' keyed by the company job. Idempotent.
 ---@param src number
 ---@param payload { scope?: string, key?: string }
 ---@return table
@@ -756,10 +665,8 @@ function actions.markThreadRead(src, payload)
     return ok()
 end
 
----Notify (+ live-refresh) every online, ON-DUTY employee of a job about a customer message. The
----banner is opt-in (the Job Messages toggle) and quiet while they're already inside the Services
----app - the message lands in the inbox they're looking at anyway; the inbox push always fires so
----an open app stays current either way. Off-duty staff get nothing.
+---Notifies and live-refreshes every online, on-duty employee of a job about a customer message;
+---the banner is opt-in (Job Messages toggle) and quiet inside the Services app.
 ---@param jobName string
 ---@param title string
 ---@param body string
@@ -782,12 +689,8 @@ local function notifyStaff(jobName, title, body)
     end
 end
 
----Customer -> company. The company comes from the payload but is whitelist-checked against the
----configured directory; the sender's number + name come from src alone (the number is created on
----first use). The draft goes through parseDraft (kind whitelist + length caps) - on failure its
----second return is the error message, which rides back in the fail envelope. Files the message
----into the (job, my number) thread, pings on-duty staff, and returns the customer's refreshed
----inbox so the app updates in place.
+---Sends a customer message to a whitelisted company: files it into the (job, my number) thread,
+---pings on-duty staff, and returns the customer's refreshed inbox.
 ---@param src number
 ---@param payload { job?: string, kind?: string, body?: string, mediaUrl?: string, wpCode?: string, wpSub?: string }
 ---@return table
@@ -812,8 +715,7 @@ function actions.messageCompany(src, payload)
     })
     notifyStaff(entry.job, entry.label, myName .. ': ' .. body)
 
-    ---First-party hook: fires once per stored customer -> company message (never per employee).
-    ---Server-local and synchronous; the citizenid is for server-trusted consumers only.
+    ---First-party hook: fires once per stored customer -> company message.
     TriggerEvent('sd-phone:server:services:message', {
         source = src, citizenid = cid, job = entry.job, label = entry.label,
         number = myNumber, name = myName, kind = kind, body = body, meta = meta,
@@ -822,12 +724,8 @@ function actions.messageCompany(src, payload)
     return ok({ inbox = actions.inbox(src).data })
 end
 
----Staff -> customer. The company is derived from the caller's CURRENT job (never the payload),
----so an employee can only ever reply on behalf of their own company. The recipient number is
----digit-stripped and capped to its column width (VARCHAR(32)); the draft goes through the same
----parseDraft validation as the customer side (failure message in the second return). Notifies the
----customer if online (quiet while they're already in the Services app - the reply shows live).
----Returns the staff member's refreshed inbox.
+---Sends a staff reply to a customer on behalf of the caller's current company; notifies the
+---customer if online and returns the staff member's refreshed inbox.
 ---@param src number
 ---@param payload { citizen?: string, kind?: string, body?: string, mediaUrl?: string, wpCode?: string, wpSub?: string }
 ---@return table
@@ -864,20 +762,11 @@ function actions.replyCompany(src, payload)
     return ok({ inbox = actions.inbox(src).data })
 end
 
--- src -> citizenid for currently-loaded players, so a disconnect can refresh the right rosters
--- even though the framework has already dropped the player by then.
 ---@type table<number, string> Cached citizenid per connected src (set on load, cleared on drop).
 local srcToCid = {}
 
----Apply phone-managed job changes that happened while the player was offline, run from the
----framework's player-loaded event (server-fired, so src is trustworthy):
----  - fired while offline: set them unemployed (consumes the pending fire, so it applies once).
----  - promoted/demoted offline: sync their active job's framework grade to the saved grade
----    (saved-jobs is authoritative for phone-managed jobs).
----  - already hold a job with no saved entry (existing servers): record it so it shows in their
----    Jobs tab and bosses can manage them - configured companies AND plain jobs alike. This runs
----    only when NOT fired (the fire branch returns first), so a just-fired job is never re-added.
----Also caches src -> citizenid for onPlayerDropped.
+---Applies phone-managed job changes from while the player was offline: consumes a pending fire,
+---syncs the active job's grade to the saved grade, or seeds a missing saved entry; caches src -> cid.
 ---@param src number
 function actions.reconcileJobs(src)
     local cid = player.getIdentifier(src)
@@ -903,11 +792,8 @@ function actions.reconcileJobs(src)
     end
 end
 
----On disconnect, refresh the rosters of every company the player belonged to so a boss watching
----the Actions tab sees them flip offline live. The framework has already dropped them by now, so
----their jobs come from the cached cid + their saved jobs (reconcileJobs ensures their active
----company job is among them). The DB read runs on a fresh thread so the drop handler itself never
----blocks; the cache entry is cleared first so recycled srcs can't collide.
+---Refreshes the rosters of every company a disconnecting player belonged to, using the cached
+---citizenid and their saved jobs on a fresh thread.
 ---@param src number
 function actions.onPlayerDropped(src)
     local cid = srcToCid[src]

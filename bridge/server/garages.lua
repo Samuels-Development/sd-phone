@@ -20,16 +20,9 @@ local BASE = framework.name == 'esx'
     and { table = 'owned_vehicles',  idCol = 'owner' }
     or  { table = 'player_vehicles', idCol = 'citizenid' }
 
--- Nearly every supported garage persists owned vehicles in the FRAMEWORK table above; only the
--- garage-name + state columns differ between systems, plus where the fuel/engine/body condition
--- lives (dedicated columns vs. the saved vehicle-properties JSON). So list() queries the
--- framework table once and resolves those fields DEFENSIVELY via a per-system column profile
--- (with a permissive default), falling back to the properties JSON. garage/state columns are
--- tried in order; the first present one wins. `stored`/`impound` are the state VALUES meaning
--- parked / impounded (boolean `stored`/`in_garage` columns treat 1 as stored). `impoundCol`
--- names a separate truthy flag some systems keep. op_garages inverts the stored value
--- (0 = stored) and sets storedFallback=false to opt out of statusOf's generic 1-means-stored
--- fallback. Researched storage per system:
+-- Profile fields: garage/state columns are tried in order, first present wins; `stored`/`impound`
+-- are the state values meaning parked / impounded; `impoundCol` names a separate truthy flag;
+-- storedFallback=false opts out of statusOf's generic 1-means-stored fallback. Storage per system:
 --   qb-garages / qbx_garages / jg-advancedgarages : player_vehicles
 --       garage=`garage`, state=`state` (0 out / 1 stored / 2 impound),
 --       fuel=`fuel` (0-100), engine/body=`engine`/`body` (0-1000), props=`mods`
@@ -63,8 +56,7 @@ local PROFILES = {
 }
 
 ---Resolve which supported garage system is running: an explicit config override wins, else the
----first resource in G.Resources that reports `started`. One-shot at module load - a garage
----system doesn't change identity mid-session.
+---first resource in G.Resources that reports `started`.
 ---@return string|nil name active system's resource name, nil when none is running
 local function detectSystem()
     if G.System and G.System ~= 'auto' then return G.System end
@@ -92,8 +84,7 @@ local function pick(row, names)
 end
 
 ---Decode the saved vehicle-properties blob (qb `mods`, esx `vehicle`, some forks
----`modifications`): already-decoded tables pass through, only strings that look like a JSON
----object/array are attempted, and a decode failure yields nil rather than throwing.
+---`modifications`): tables pass through, JSON-looking strings are decoded, failures yield nil.
 ---@param row table vehicle DB row
 ---@return table|nil props decoded properties, nil when absent/undecodable
 local function decodeProps(row)
@@ -135,9 +126,8 @@ local function condition(row, props, cols, propKey, default)
     return clampPct(v) or default
 end
 
----A separate impound-flag column (jg `impound`, cd_garage's int `impound`, op_garages
----`isTowedOut`) - truthy means impounded. Any non-zero number, true, or a non-empty / non-'0' /
----non-'false' string counts, so int flags (cd's impound > 0) work.
+---Truthiness of a separate impound-flag column: any non-zero number, true, or a non-empty /
+---non-'0' / non-'false' string counts.
 ---@param f any flag column value
 ---@return boolean set
 local function isFlagSet(f)
@@ -147,12 +137,8 @@ local function isFlagSet(f)
     return f == true
 end
 
----Base status from the DB row: 'stored' (in a garage) or 'out', plus an impound flag for an
----explicit police/admin impound. A set impound-flag column wins outright; otherwise the first
----present state column is matched against the profile's impound then stored value sets. No state
----column at all means parked. Most systems use 1 = stored, so that's the final fallback -
----op_garages inverts it (0 = stored) and opts out via storedFallback = false. list() then
----refines 'out' into 'impound' for vehicles not currently spawned in the world.
+---Base status from the DB row: 'stored' or 'out', plus an explicit impound flag. A set
+---impound-flag column wins; else the first present state column matches the profile's value sets.
 ---@param row table vehicle DB row
 ---@return string status 'stored' | 'out'
 ---@return boolean impound explicitly impound-flagged
@@ -173,7 +159,7 @@ local function trim(s)
     return type(s) == 'string' and (s:gsub('%s+$', '')) or s
 end
 
----Normalised plate (trimmed both ends + uppercased) for matching DB plates against live ones.
+---Normalised plate (trimmed both ends + uppercased).
 ---@param p any plate value
 ---@return string|nil
 local function normPlate(p)
@@ -181,10 +167,7 @@ local function normPlate(p)
     return (p:gsub('^%s+', ''):gsub('%s+$', '')):upper()
 end
 
----Set of plates currently spawned in the world (server-side). An "out" vehicle whose plate ISN'T
----here is sitting in the depot/impound (retrievable) rather than being driven - the same live
----check garage scripts use for depot lists. Framework-agnostic, so it classifies impound even
----for systems that persist no impound flag at all (esx / lunar / okok-esx).
+---Set of plates currently spawned in the world (server-side).
 ---@return table<string, boolean> plateSet normalised plate -> true
 local function spawnedPlates()
     local set = {}
@@ -198,9 +181,7 @@ local function spawnedPlates()
     return set
 end
 
----Mileage is shown ONLY when jg-vehiclemileage is running, sourced exclusively from its exports
----(no generic odometer-column fallback). Checked at call time so resource start order doesn't
----matter.
+---True when jg-vehiclemileage is running. Checked at call time.
 ---@return boolean
 local function mileageActive()
     return GetResourceState('jg-vehiclemileage') == 'started'
@@ -219,10 +200,8 @@ local function mileageUnit()
     return cachedUnit
 end
 
----A vehicle's mileage in the configured display unit. getMileageByPlate returns kilometres (or
----false); the converted value is truncated - not rounded - to match jg-vehiclemileage's own HUD,
----which only ticks to the next whole number once the odometer reaches it. Nil when unavailable
----so the field is omitted entirely.
+---A vehicle's mileage in the configured display unit, truncated to a whole number. Nil when
+---unavailable.
 ---@param plate string|nil plate to look up
 ---@return integer|nil mileage
 ---@return string|nil unit 'km' | 'mi'
@@ -235,17 +214,12 @@ local function mileageFor(plate)
     return math.floor(val), unit
 end
 
--- Garage waypoint resolution: where a stored vehicle's garage sits on the map, so the app can
--- drop a waypoint. Each system that exposes its garage data via a runtime EXPORT is read
--- directly (no DB / config-file parsing, which escrow would break): qbx_garages, qb-garages,
--- jg-advancedgarages, cd_garage, op_garages. Systems without a usable export (esx, codem, okok,
--- nc, lunar) fall back to the manual coordinate map in configs.garages -> Locations. Everything
--- is pcall-guarded so an old / missing garage resource can never break the list.
+-- Garage waypoint resolution: systems with a runtime export (qbx_garages, qb-garages,
+-- jg-advancedgarages, cd_garage, op_garages) are read directly; the rest fall back to the manual
+-- coordinate map in configs.garages -> Locations.
 
----Pull the active system's full garage collection once per list() call (static data, one export
----call): qbx GetGarages (keyed by garage id), qb/jg getAllGarages (arrays), cd GetConfig
----(Locations array). Nil for op_garages (which uses per-garage export lookups instead) and for
----unsupported systems.
+---Pull the active system's full garage collection once per list() call. Nil for op_garages
+---(per-garage export lookups) and for unsupported systems.
 ---@return table|nil collection
 local function loadGarageCollection()
     local ok, data = pcall(function()
@@ -259,10 +233,7 @@ local function loadGarageCollection()
 end
 
 ---Coords (a vector with .x/.y) for the vehicle's garage from the active system's own data.
----op_garages keys vehicles by a numeric index in a `vehicleGarage` column, looked up per garage
----via its export; qbx keys its collection by garage id (first access point, a vector4); qb/jg
----return arrays matched on `name` (takeVehicle coords); cd matches Garage_ID inside its config's
----Locations array. pcall-guarded so any shape surprise yields nil.
+---pcall-guarded; any shape surprise yields nil.
 ---@param gcol table|nil pre-loaded garage collection (nil for op_garages / unsupported)
 ---@param row table the vehicle's DB row
 ---@param garageId any the row's garage name/id
@@ -295,9 +266,8 @@ local function systemCoords(gcol, row, garageId)
     return ok and c or nil
 end
 
--- Manual waypoint fallback: coords from configs.garages -> Locations, keyed by the exact
--- Location text the app shows, normalised (lowercased, trailing whitespace stripped) at both
--- build and lookup so case/spacing differences still match. Covers systems we can't auto-read.
+-- Manual waypoint fallback: coords from configs.garages -> Locations, keyed by the Location text
+-- normalised (lowercased, trailing whitespace stripped) at both build and lookup.
 ---@type table<string, any> Normalised location text -> configured vec2.
 local LOC_MAP = {}
 do
@@ -320,12 +290,8 @@ end
 ---@return boolean carDepot whether a depot serves cars (vehicleType car/all/unset) - not the air or sea lot
 local function isCarDepot(vt) return vt == nil or vt == 'car' or vt == 'all' end
 
----Coords of the impound/depot lot an impounded vehicle is retrievable from. op_garages knows the
----exact lot (`vehicleImpound`). On qbx a police impound points the vehicle's own garage at the
----depot it went to, so that exact one wins when it applies; otherwise any depot is picked,
----preferring one that serves cars over the air/sea lot. qb/jg scan for a depot/impound-type
----garage the same way. Nil when nothing matches, so resolveWaypoint can try the manual
----Locations['Impound'] fallback. pcall-guarded like systemCoords.
+---Coords of the impound/depot lot an impounded vehicle is retrievable from, preferring a depot
+---that serves cars. Nil when nothing matches; pcall-guarded like systemCoords.
 ---@param gcol table|nil pre-loaded garage collection (nil for op_garages / unsupported)
 ---@param row table the vehicle's DB row
 ---@param garageId any the row's garage name/id
@@ -367,9 +333,8 @@ local function impoundCoords(gcol, row, garageId)
     return ok and c or nil
 end
 
----Waypoint for one vehicle: the active garage system's own data first, the manual Locations map
----second. Impounded vehicles mark the impound/depot lot instead of the garage. Returns a plain
----{ x, y } (NUI serialisable), or nil when no meaningful spot exists.
+---Waypoint for one vehicle: the active system's own data first, the manual Locations map second.
+---Impounded vehicles mark the impound/depot lot. Returns a plain { x, y }, or nil.
 ---@param gcol table|nil pre-loaded garage collection
 ---@param row table the vehicle's DB row
 ---@param garageId any the row's garage name/id
@@ -391,16 +356,8 @@ end
 ---@return string|nil
 function garages.activeSystem() return ACTIVE end
 
----Normalised list of the caller's owned vehicles. Identity comes from `source` only (player
----bridge) and the table/column names are server-side constants, so the query can't be steered by
----a payload. Per row: the base stored/out status is refined so an "out" vehicle that is
----impound-flagged OR not currently spawned in the world shows as 'impound' (it's retrievable
----from the depot); the raw `model` is qb's spawn-name string when `vehicle` holds one, else the
----model from the props JSON / `hash` column (esx stores props JSON in `vehicle`), enriched into
----a display name + class on the client; `locked` marks garaged/impounded vehicles as locked
----away; waypoints only attach to stored/impounded vehicles (out ones aren't at a fixed spot);
----mileage fields are only present while jg-vehiclemileage runs, so the app hides that row
----entirely otherwise. Read-only.
+---Normalised list of the caller's owned vehicles: stored/out/impound status, condition fields,
+---waypoints on stored/impounded rows, and mileage while jg-vehiclemileage runs. Read-only.
 ---@param source number caller server id
 ---@return table[] vehicles (empty when disabled / no character / table missing)
 function garages.list(source)

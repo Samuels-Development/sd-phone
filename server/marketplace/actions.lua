@@ -8,14 +8,14 @@ local player = require 'bridge.server.player'
 ---@type table Marketplace app config (configs/marketplace.lua): feed limit + field caps.
 local MP = config.Marketplace
 ---@type table Actions module; the table returned at end of file. Every handler returns the
----{ success, message?, data? } envelope. Listings are server-authoritative: the owner is the
----caller's citizenid and the timestamp is set here, so clients can't spoof authorship or dates.
+---{ success, message?, data? } envelope. The owner is the caller's citizenid and the timestamp is
+---set here.
 local actions = {}
 
 local util = require 'server.util'
 local digits, trim = util.digits, util.trim
 
----Caller identity, resolved from src via the player bridge - never read from the payload.
+---Caller identity, resolved from src via the player bridge.
 ---@param src integer player server id
 ---@return string|nil citizenid (nil while no character is loaded)
 local function cidOf(src) return player.getIdentifier(src) end
@@ -35,7 +35,7 @@ local function ordinal(d)
 end
 
 ---Display string matching the UI: "Today, 14:52", "Yesterday, 09:10" or "May 25th, 2026" for
----anything older. Rendered server-side so every phone shows identical feed dates.
+---anything older. Rendered server-side.
 ---@param ts integer unix seconds (the server-written created_at)
 ---@return string date display string
 local function fmtDate(ts)
@@ -54,9 +54,7 @@ local function fmtDate(ts)
 end
 
 ---A row's photo URLs: the JSON `images` array when present, else the legacy single `image`
----column (so pre-multi-image rows still carry their photo). The decode is pcall-guarded - the
----column is server-written, but a corrupt or hand-edited row must degrade to "no photos", not
----error the whole feed.
+---column. A corrupt array degrades to no photos.
 ---@param row table listing DB row
 ---@return string[] urls photo URLs (possibly empty)
 local function decodeImages(row)
@@ -73,10 +71,8 @@ local function decodeImages(row)
     return out
 end
 
----DB row -> the shape the React app renders. `price`/`image` stay nil (and so drop out of the
----JSON) when unset, which the UI treats as "wanted" / no photo. The owner's citizenid is never
----sent: authorship is exposed only as the `mine` boolean, computed against the viewer's cid
----(nil for broadcast copies, so no recipient of a feed push is ever marked as the author).
+---DB row -> the shape the React app renders. The owner's citizenid is never sent; authorship is
+---exposed only as the `mine` boolean, computed against the viewer's cid.
 ---@param row table listing DB row
 ---@param cid string|nil viewer citizenid (nil when building a broadcast copy)
 ---@return table listing UI listing shape
@@ -111,21 +107,11 @@ function actions.list(src)
     return { success = true, data = { listings = out } }
 end
 
----Validate + normalise a listing payload into the columns we store: the fields table, or nil +
----an error message for a missing title/description/contact. Shared by create and update so both
----apply exactly the same rules. Every field is attacker-controlled and coerced by type before
----use:
---- - title/body: required (Min*Length), truncated to Max*Length (both inside the DB columns).
---- - price: numbers only, non-negative, floored and clamped to MaxPrice; anything else (NaN
----   included - it fails the >= 0 check) stays nil, which the UI renders as a "wanted" post.
---- - images: up to MaxImages URLs, each truncated to MaxImageUrlLength; `payload.images` is the
----   array, a lone `payload.image` is still accepted for back-compat.
---- - number: raw digits exactly as provided, truncated to MaxContactLength - no auto-fill, so a
----   listing only advertises the contact methods the seller actually attached.
---- - email: trimmed + lowercased, capped to the column's 128 chars, nil when blank.
----A listing must carry at least one way to reach the seller (number or email).
+---Validates + normalises a listing payload into the columns we store, or nil + an error message.
+---Title/body are required and capped, price clamps to MaxPrice (nil = "wanted"), images cap at
+---MaxImages, and a number or email is required.
 ---@param payload table client payload (all fields untrusted)
----@param cid string caller citizenid (unused today - kept so create/update share one call shape)
+---@param cid string caller citizenid (unused)
 ---@return table|nil fields columns to store, nil when invalid
 ---@return string? err rejection message when fields is nil
 local function parseFields(payload, cid)
@@ -171,10 +157,8 @@ local function parseFields(payload, cid)
     }
 end
 
----Push a live feed change to every OTHER player so anyone with Marketplace open sees it without
----reopening. The author is excluded - they already have the canonical row from their own callback
----response. Broadcast items are built with cid=nil so every recipient sees mine=false, and they
----carry only fields the public feed already exposes (never a citizenid).
+---Pushes a live feed change to every OTHER player; the author is excluded. Broadcast items are
+---built with cid=nil and carry only public feed fields.
 ---@param exceptSrc integer author server id to skip
 ---@param payload table feed push { type, item? } or { type, id? }
 local function broadcastFeed(exceptSrc, payload)
@@ -186,11 +170,8 @@ local function broadcastFeed(exceptSrc, payload)
     end
 end
 
----Create a listing. Owner and timestamp are server-authoritative (caller's citizenid + os.time()
----set here), so authorship and dates can't be spoofed. Capped at MP.MaxListingsPerPlayer active
----listings per character, and every field passes parseFields. The caller gets the canonical row
----back; everyone else gets a feed push. A non-table payload (crafted client) is coerced to {} so
----field access can't error before validation rejects it.
+---Creates a listing. Owner and timestamp are server-authoritative, listings cap at
+---MP.MaxListingsPerPlayer per character, and every field passes parseFields. Everyone else gets a feed push.
 ---@param src integer player server id
 ---@param payload table|nil client payload (untrusted)
 ---@return table result { success, message?, data = { listing }? }
@@ -222,11 +203,8 @@ function actions.create(src, payload)
     return { success = true, data = { listing = toListing(row, cid) } }
 end
 
----Edit a listing. Ownership-gated: the row's stored citizenid must equal the caller's, so a bare
----row id is never trusted, and a missing row fails the same check without revealing whether the
----id exists. The id must be a finite integer (NaN/inf/fractional values are rejected before they
----reach the SQL layer). The row is re-read after the write so the response and the feed push
----both carry the canonical stored shape.
+---Edits a listing. Ownership-gated: the row's stored citizenid must equal the caller's; the id
+---must be a finite integer. The row is re-read after the write.
 ---@param src integer player server id
 ---@param payload table|nil client payload { id, ...fields } (untrusted)
 ---@return table result { success, message?, data = { listing }? }
@@ -250,10 +228,8 @@ function actions.update(src, payload)
     return { success = true, data = { listing = toListing(row, cid) } }
 end
 
----Delete a listing. Ownership-gated like update. The id is normalised to a finite integer both
----for SQL hygiene and because the feed push echoes it back as a string - other phones match that
----string against their cached rows, so it must render exactly like the id the feed originally
----carried ('7', never '7.0').
+---Deletes a listing. Ownership-gated like update; the id is normalised to a finite integer and
+---the feed push echoes it back as a string.
 ---@param src integer player server id
 ---@param id any listing id from the client (untrusted)
 ---@return table result { success, message?, data = { id }? }

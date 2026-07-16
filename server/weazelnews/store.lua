@@ -1,11 +1,8 @@
 ---@type table Store module; the table returned at end of file. Two tables: published articles and
----the ordered "Breaking" ticker lines. Both start empty on a fresh install - staff publish the
----first stories from the in-app manage dashboard. Every statement is parameterized; validation +
----clamping live in server.weazelnews.actions, the data layer stays dumb.
+---the ordered "Breaking" ticker lines. Every statement is parameterized.
 local store = {}
 
----Create the article + ticker tables if they don't exist, so the resource is drop-in. Run once at
----boot from init.lua.
+---Creates the article + ticker tables if they don't exist. Runs once at boot from init.lua.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS `phone_weazel_articles` (
@@ -51,7 +48,7 @@ function store.articleById(id)
     return MySQL.single.await('SELECT * FROM `phone_weazel_articles` WHERE id = ?', { id })
 end
 
----Insert a freshly-sanitized article row (views always start at 0 - reach is never client-set).
+---Inserts a freshly-sanitized article row; views always start at 0.
 ---@param a table row-ready fields from actions.sanitize plus the stamped author/timestamps
 ---@return integer id auto-increment id of the new article
 function store.insertArticle(a)
@@ -62,8 +59,7 @@ function store.insertArticle(a)
     ]], { a.category, a.headline, a.dek, a.body, a.author, a.author_cid, a.image, a.featured, a.created_at, a.updated_at })
 end
 
----Update the editable fields of an existing article. Author/views/created_at are never touched
----here - editing a story doesn't re-stamp who filed it or reset its reach.
+---Updates the editable fields of an existing article. Author/views/created_at are never touched.
 ---@param id integer article id
 ---@param a table row-ready fields from actions.sanitize plus updated_at
 function store.updateArticle(id, a)
@@ -80,8 +76,7 @@ function store.deleteArticle(id)
     MySQL.query.await('DELETE FROM `phone_weazel_articles` WHERE id = ?', { id })
 end
 
----Clear the featured flag on every article except `keepId` (pass nil/0 to clear all), so there is
----only ever one hero story.
+---Clears the featured flag on every article except `keepId` (pass nil/0 to clear all).
 ---@param keepId integer|nil article id keeping its featured flag
 function store.clearFeatured(keepId)
     MySQL.query.await('UPDATE `phone_weazel_articles` SET featured = 0 WHERE id <> ?', { keepId or 0 })
@@ -106,9 +101,8 @@ function store.breaking()
     return MySQL.query.await('SELECT text FROM `phone_weazel_breaking` ORDER BY pos ASC, id ASC') or {}
 end
 
----Replace the whole ticker with `lines` (already trimmed/clamped by the caller), preserving their
----order. Wholesale replace keeps the editor dead simple - there's no per-line id to track on the
----client.
+---Replaces the whole ticker with `lines` (already trimmed/clamped by the caller), preserving
+---their order.
 ---@param lines string[] ticker lines in display order
 ---@param ts integer unix seconds stamp for the new rows
 function store.replaceBreaking(lines, ts)

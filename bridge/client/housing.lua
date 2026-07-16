@@ -1,20 +1,5 @@
----Owner-gated housing actions, run on THIS client on the server bridge's behalf. Some housing
----systems gate lock/key control on the property OWNER - either a client-only export (origen) or
----a net event whose handler reads `source` as the owner (ps-housing, vms_housing). The phone NUI
----runs on the owner, so bridge/server/housing.lua's clientExec awaits this callback instead of
----calling the system directly. Trusted direction: a client lib.callback can only be invoked by
----the server (never by another player), and the server bridge chooses `system` itself from its
----own detection - but every export call is still pcall-wrapped, so a missing/renamed export
----degrades to a no-op result rather than erroring, matching the server bridge's philosophy.
----
----origen's toggleDoor() FLIPS the door, so 'lock' reads getHouseDoor() first and only toggles
----when the current state differs from what was requested - idempotent for replays, and the
----requested state is returned either way. ps-housing / vms_housing 'give'/'remove' fire those
----systems' own owner-gated server events and report true (fire-and-forget; their servers do the
----real permission work). 'keyHolders' normalises whatever row shape ps-housing's callback
----returns to { id, name } pairs for the app, skipping non-table rows, and returns {} on any
----failure. An unhandled system/action pair returns nil so the server bridge treats it as
----unsupported.
+---Runs owner-gated housing actions on this client for the server bridge, dispatched per housing
+---system: lock toggle, key give/remove, and key-holder listing. Unhandled pairs return nil.
 ---@param system string|nil detected housing resource name (the server bridge's ACTIVE)
 ---@param action string 'lock'|'give'|'remove'|'keyHolders'
 ---@param id any property identifier in the active system's own terms

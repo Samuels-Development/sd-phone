@@ -12,17 +12,13 @@ local ACTIONS = {
     'liveStart', 'liveJoin', 'liveLeave', 'liveEnd', 'liveComment', 'liveHeart',
 }
 
--- Thin delegates: each action proxies straight into its server callback, which owns the
--- validation + persistence (handlers are documented in server/photogram/actions.lua).
+-- Thin delegates: each action proxies straight into its server callback.
 for _, action in ipairs(ACTIONS) do
     proxyCallback('sd-phone:photogram:' .. action, 'sd-phone:server:photogram:' .. action)
 end
 
----Friendly area name for a world point (e.g. "Vinewood", "Chumash") for the New Post location
----field. The zone code GetNameOfZone returns doubles as a GXT label key, so GetLabelText turns
----it into the display name - the same trick client/apps/ryde.lua uses. Resolved entirely
----client-side; no server round-trip. Falls back to the raw code when a zone has no label, and
----nil when the point has no zone code at all.
+---Returns a friendly area name for a world point, falling back to the raw zone code, or nil
+---when the point has no zone.
 ---@param x number world x
 ---@param y number world y
 ---@param z number|nil world z (0.0 when absent)
@@ -43,7 +39,6 @@ RegisterNUICallback('sd-phone:photogram:currentZone', function(_, cb)
 end)
 
 -- Server live pushes relayed 1:1 into the React app: activity ping, new DM, DM reaction.
--- Server-originated (trusted); only an open Photogram app consumes the NUI message.
 RegisterNetEvent('sd-phone:client:photogram:notification', function(payload)
     SendNUIMessage({ action = 'sd-phone:photogram:notification', data = payload })
 end)
@@ -56,8 +51,7 @@ RegisterNetEvent('sd-phone:client:photogram:dmReaction', function(payload)
     SendNUIMessage({ action = 'sd-phone:photogram:dmReaction', data = payload })
 end)
 
--- Live content sync, broadcast to all phones (post edited / feed changed / post removed);
--- only an open Photogram app reacts, everyone else drops the NUI message on the floor.
+-- Live content sync, broadcast to all phones: post edited / feed changed / post removed.
 RegisterNetEvent('sd-phone:client:photogram:postChanged', function(payload)
     SendNUIMessage({ action = 'sd-phone:photogram:postChanged', data = payload })
 end)
@@ -76,10 +70,7 @@ RegisterNetEvent('sd-phone:client:photogram:followChanged', function(payload)
     SendNUIMessage({ action = 'sd-phone:photogram:followChanged', data = payload })
 end)
 
----Host frame push (JPEG fallback): the React broadcaster hands us a base64 frame; relay it to
----the server (server/photogram/init.lua liveFrame) over a LATENT event so the stream is
----bandwidth-paced onto the wire instead of spiking the net thread. The string check only saves
----a pointless trip - the server validates the host + payload regardless.
+---Host frame push (JPEG fallback): relays a base64 frame to the server over a latent event.
 ---@param payload table { liveId: any, frame: string }
 RegisterNUICallback('sd-phone:photogram:liveFrame', function(payload, cb)
     local frame = payload and payload.frame
@@ -92,11 +83,8 @@ RegisterNUICallback('sd-phone:photogram:liveFrame', function(payload, cb)
     cb({ ok = true })
 end)
 
----Host video chunk push: a single encoded-stream segment (MediaRecorder output). Latent so the
----steady ~150 KB/s (plus the slightly larger keyframe-anchor chunks) is paced onto the wire
----rather than spiking the net thread. `init` marks the stream-header chunk the server caches
----for clean late-joins; the server validates the host + payload, the string check here only
----saves a pointless trip.
+---Host video chunk push: relays a MediaRecorder segment to the server over a latent event;
+---`init` marks the stream-header chunk.
 ---@param payload table { liveId: any, chunk: string, init?: boolean, mime?: string }
 RegisterNUICallback('sd-phone:photogram:liveChunk', function(payload, cb)
     local chunk = payload and payload.chunk
@@ -115,7 +103,7 @@ end)
 ---React app under the matching 'sd-phone:photogram:<name>' NUI action.
 local LIVE_EVENTS = { 'liveFrame', 'liveChunk', 'liveComment', 'liveHeart', 'liveViewers', 'liveEnded', 'liveChanged' }
 
--- Thin relays: each live push forwards unchanged; only a mounted live view consumes them.
+-- Thin relays: each live push forwards unchanged.
 for _, ev in ipairs(LIVE_EVENTS) do
     RegisterNetEvent('sd-phone:client:photogram:' .. ev, function(payload)
         SendNUIMessage({ action = 'sd-phone:photogram:' .. ev, data = payload })

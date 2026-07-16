@@ -5,12 +5,10 @@ local mpStore    = require 'server.marketplace.store'
 ---@type table Player bridge (bridge.server.player): citizenid/name/phone-number lookups.
 local player     = require 'bridge.server.player'
 
----@type string Sentinel citizenid that owns the "someone else's" seed rows - they render without
----the runner's Edit/Remove controls, and every re-run can sweep them wholesale by this key.
+---@type string Sentinel citizenid that owns the "someone else's" seed rows.
 local OTHER = 'DEVSEED'
 
----Unix timestamp for a fixed past date, so older seed entries render "Month Dayth, Year" exactly
----like the web dev mock data instead of all showing "today".
+---Unix timestamp for a fixed past date.
 ---@param y integer year
 ---@param m integer month
 ---@param d integer day
@@ -24,15 +22,8 @@ end
 ---@type string Base URL for in-game-loadable vehicle photos (docs.fivem.net renders).
 local VEH = 'https://docs.fivem.net/vehicles/'
 
----/seedclassifieds - DEV TOOL: seed the Yellow Pages + Marketplace tables with the exact entries
----from the web dev mock data (web/src/apps/{pages,marketplace}/data.ts) so the in-game apps can
----be compared side-by-side with the dev browser. Idempotent: prior seed rows (the sentinel's,
----plus the runner's seeded titles) are deleted first, so a re-run resets rather than piling up
----duplicates. Entries owned by the runner render as "your posts" (Edit/Remove) and the
----sentinel's as someone else's, mirroring the `mine` flags in the dev data; rows are inserted
----oldest-first so ids ascend and the id-DESC feeds show the dev array's order. Admin-gated: it
----writes and deletes rows every player's feed sees, so it must not be runnable by arbitrary
----players even on a test server. Remove this file entirely before production.
+---/seedclassifieds - DEV TOOL: seeds the Yellow Pages + Marketplace tables with the entries from
+---the web dev mock data (web/src/apps/{pages,marketplace}/data.ts). Idempotent; admin-gated.
 ---@param source integer player server id
 lib.addCommand('seedclassifieds', {
     help = 'Dev: seed Yellow Pages + Marketplace with the dev mock entries',

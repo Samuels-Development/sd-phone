@@ -16,9 +16,8 @@ local ok, fail, isTruthy = util.ok, util.fail, util.truthy
 
 
 
----Shape a DB photo row into the React `Photo` type. `favorite` goes through the TINYINT(1)
----guard; `created_at` stays as whatever oxmysql hands us (epoch-ms number) - the React side
----normalises it.
+---Shapes a DB photo row into the React `Photo` type; `favorite` goes through the TINYINT(1)
+---guard and `created_at` passes through unchanged.
 ---@param row { id: string, url: string, favorite: any, created_at: any }
 ---@return table
 local function shapePhoto(row)
@@ -30,8 +29,7 @@ local function shapePhoto(row)
     }
 end
 
----List every photo the caller owns, newest first. Identity comes from `source` via the
----player bridge - no payload field can choose whose gallery is read. Read-only.
+---Lists every photo the caller owns, newest first. Read-only.
 ---@param source number player server id
 ---@return table result { success, data = { photos } }
 function actions.list(source)
@@ -45,18 +43,11 @@ function actions.list(source)
     return ok({ photos = out })
 end
 
----@type integer Longest accepted photo URL in bytes - matches the phone_photos.url
----VARCHAR(512) column, so an oversized client-supplied URL is rejected here instead of
----erroring the INSERT.
+---@type integer Longest accepted photo URL in bytes, matching the phone_photos.url VARCHAR(512) column.
 local MAX_URL_BYTES = 512
 
----Persist a photo URL against the caller. Two callers: the upload pipeline (init.lua) hands
----it the Fivemanage CDN URL the server itself just received, and the saveUrl callback
----forwards a raw client string - so the URL is treated as attacker-controlled either way
----and must be a non-empty http(s) string that fits the DB column. After the insert the
----caller's gallery is pruned back under config.Photos.MaxPhotosPerPlayer, so a spammed
----shutter can't grow the table without bound. The returned `createdAt` is a UTC string
----while listed rows carry the DB timestamp - the React side normalises both.
+---Persists a photo URL against the caller: the URL must be a non-empty http(s) string within
+---the column cap, and the gallery is pruned back under config.Photos.MaxPhotosPerPlayer.
 ---@param source number player server id
 ---@param url string http(s) URL of the hosted media
 ---@return table result { success, data = { photo } }
@@ -90,10 +81,7 @@ function actions.saveFromUrl(source, url)
     store.pruneOldest(cid, photosCfg.MaxPhotosPerPlayer)
     print(('^2[sd-phone:photos]^0 saved photo id=%s for cid=%s'):format(id, cid))
 
-    ---First-party hook: fires once per saved photo; the NUI capture path, the saveUrl callback
-    ---and the addPhoto export all funnel through here. `source` is the parameter this function
-    ---was handed (the capture path runs inside an async HTTP callback, so the global would be
-    ---stale). Server-local and synchronous.
+    ---Fires the first-party photos:added hook once per saved photo; server-local and synchronous.
     TriggerEvent('sd-phone:server:photos:added', { source = source, citizenid = cid, id = id, url = url })
 
     return ok({
@@ -106,11 +94,8 @@ function actions.saveFromUrl(source, url)
     })
 end
 
----Set the favourite flag on a photo. `value` is coerced to a strict boolean before it
----reaches the store; ownership is enforced by the store's citizenid scope, so a foreign
----photo id matches nothing and reads as 'Photo not found'. Idempotent: re-sending the same
----value still reports success (oxmysql connects with CLIENT_FOUND_ROWS, so an unchanged
----UPDATE still counts its matched row).
+---Sets the favourite flag on a photo; `value` is coerced to a strict boolean and ownership is
+---enforced by the store's citizenid scope. Idempotent.
 ---@param source number player server id
 ---@param photoId string photo row id
 ---@param value boolean desired favourite state
@@ -125,8 +110,7 @@ function actions.setFavorite(source, photoId, value)
     return ok({ id = photoId, favorite = value and true or false })
 end
 
----Hard-delete a photo. Ownership is enforced by the store (WHERE id AND citizenid), which
----also clears the photo's album-membership rows so no album keeps pointing at a ghost.
+---Hard-deletes a photo the caller owns, clearing its album-membership rows.
 ---@param source number player server id
 ---@param photoId string photo row id
 ---@return table result { success, data = { id } }
@@ -140,14 +124,13 @@ function actions.delete(source, photoId)
     if not url then
         return fail('Photo not found')
     end
-    ---First-party hook: fires once per owner-initiated delete; retention pruning and admin
-    ---wipes bypass this deliberately. Server-local and synchronous.
+    ---Fires the first-party photos:deleted hook once per owner-initiated delete; server-local and synchronous.
     TriggerEvent('sd-phone:server:photos:deleted', { source = source, citizenid = cid, id = photoId, url = url })
     return ok({ id = photoId })
 end
 
----List the caller's custom albums, each annotated by the store with a photo count and a
----cover URL (newest photo in the album). Read-only.
+---Lists the caller's custom albums, each annotated with a photo count and a cover URL (newest
+---photo in the album). Read-only.
 ---@param source number player server id
 ---@return table result { success, data = { albums } }
 function actions.listAlbums(source)
@@ -167,11 +150,8 @@ function actions.listAlbums(source)
     return ok({ albums = out })
 end
 
----Create a custom album. The name is trimmed the same way the React input trims, then
----bounded by config.Photos.Min/MaxAlbumNameLength - the max mirrors the input's maxLength,
----and the byte-length check keeps even multi-byte names inside the VARCHAR(64) column. The
----per-player album cap is enforced here (not just in the UI) so calling the callback
----directly can't skip it.
+---Creates a custom album: the name is trimmed and bounded by
+---config.Photos.Min/MaxAlbumNameLength, and the per-player album cap is enforced.
 ---@param source number player server id
 ---@param name string requested album name
 ---@return table result { success, data = { album } }
@@ -197,8 +177,8 @@ function actions.createAlbum(source, name)
     })
 end
 
----Delete a custom album (never the photos in it). The store verifies the caller owns the
----album before removing it and its membership rows.
+---Deletes a custom album and its membership rows (never the photos in it); the store verifies
+---ownership.
 ---@param source number player server id
 ---@param albumId string album row id
 ---@return table result { success, data = { id } }
@@ -212,12 +192,8 @@ function actions.deleteAlbum(source, albumId)
     return ok({ id = albumId })
 end
 
----Add one or more photos to an album. The id list is attacker-controlled: every entry must
----be a non-empty string (each becomes one INSERT in the store loop) and the batch is capped
----at config.Photos.MaxPhotosPerPlayer - nobody can own more photos than that, so a larger
----list is garbage and an uncapped one is a free DB hammer. Ownership of the album AND of
----each photo is enforced by the store (its WHERE EXISTS guard), so foreign photo ids are
----silently skipped rather than linked.
+---Adds one or more photos to an album: every entry must be a non-empty string, the batch is
+---capped at config.Photos.MaxPhotosPerPlayer, and foreign photo ids are silently skipped.
 ---@param source number player server id
 ---@param albumId string target album id
 ---@param photoIds string[] photo ids to add
@@ -237,8 +213,7 @@ function actions.addPhotosToAlbum(source, albumId, photoIds)
     return ok({ id = albumId, added = #photoIds })
 end
 
----Remove a single photo from an album. Ownership is enforced through the ALBUM row in the
----store, so a caller can only edit membership of albums they own.
+---Removes a single photo from an album; ownership is enforced through the album row.
 ---@param source number player server id
 ---@param albumId string album row id
 ---@param photoId string photo row id
@@ -254,8 +229,8 @@ function actions.removePhotoFromAlbum(source, albumId, photoId)
     return ok({ albumId = albumId, photoId = photoId })
 end
 
----List the photos in one album, newest first. The store joins through the album row, so a
----foreign albumId simply reads as an empty album. Read-only.
+---Lists the photos in one album, newest first; a foreign albumId reads as an empty album.
+---Read-only.
 ---@param source number player server id
 ---@param albumId string album row id
 ---@return table result { success, data = { photos } }

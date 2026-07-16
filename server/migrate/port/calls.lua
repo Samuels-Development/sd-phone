@@ -1,8 +1,6 @@
 ---@type table Call-history porter (server.migrate.port.calls). Each lb-phone call yields up to two
----sd-phone rows: one for the caller (outgoing) and one for the callee (incoming, or missed when the
----call went unanswered), but only for the parties who resolved to a migrated player. Historical
----rows are marked seen so they never light the missed-call badge, and their ids are derived from
----the lb-phone call id so a re-run inserts nothing twice.
+---sd-phone rows: one for the caller (outgoing) and one for the callee (incoming, or missed when
+---unanswered), for parties who resolved. Rows are marked seen; ids derive from the lb-phone call id.
 local M = {}
 
 local store = require 'server.migrate.store'

@@ -1,17 +1,13 @@
 ---@type table Messages handlers (server.messages.actions): systemText for targeted SMS delivery.
 local msgActions = require 'server.messages.actions'
 
----@type table|nil Mail handlers (server.mail.actions), resolved lazily inside sendCodeEmail: a
----boot-time require would close a load cycle (server.mail.actions -> server.accounts.actions ->
----this module), so the reference is fetched on first use, long after every module has loaded.
+---@type table|nil Mail handlers (server.mail.actions), resolved lazily inside sendCodeEmail.
 local mailActions
 
 ---@type table Delivery module; the table returned at end of file.
 local delivery = {}
 
--- Per-app delivery identity: the SMS short code (the "sender number" of verification texts,
--- keypad-spelling the app name) and the pretty name used on both channels. An app with no entry
--- here cannot deliver reset codes, so every ALL_APPS key in server.accounts.actions needs a row.
+-- Per-app delivery identity: SMS short code and display name.
 ---@type table<string, { name: string, code: string }> Sender identity per account app.
 local APPS = {
     photogram = { name = 'Photogram', code = '74682' },
@@ -29,12 +25,8 @@ function delivery.appLabel(app)
     return APPS[app] and APPS[app].name or app
 end
 
----Deliver a verification mail to `email`'s inbox through the shared system-sender path
----(server.mail.actions.systemSend): the inbox copy persists and each of the mailbox's signed-in
----citizens gets a targeted live push + badge repush - never a broadcast, and the code is never
----printed; it exists solely inside the recipient's mailbox. Returns false (so the caller can
----report a delivery failure without leaking anything) when the app has no delivery identity or
----the mailbox no longer exists.
+---Delivers a verification mail to `email`'s inbox through server.mail.actions.systemSend.
+---Returns false when the app has no delivery identity or the mailbox no longer exists.
 ---@param email string recipient mail address
 ---@param app string account app key
 ---@param code string 6-digit reset code
@@ -52,10 +44,8 @@ function delivery.sendCodeEmail(email, app, code)
     return (result.data.delivered or 0) > 0
 end
 
----Text a verification code to `phone` from the app's short code. systemText resolves the number
----to its single owning citizen and delivers to that player alone - never a broadcast - and
----returns false when the number isn't active (or the app has no delivery identity), so the
----caller can surface the failure.
+---Texts a verification code to `phone` from the app's short code. Returns false when the number
+---is not active or the app has no delivery identity.
 ---@param phone string recipient phone number (digits)
 ---@param app string account app key
 ---@param code string 6-digit reset code

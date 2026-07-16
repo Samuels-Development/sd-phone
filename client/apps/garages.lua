@@ -11,30 +11,20 @@ local CLASS_NAMES = {
     [20] = 'Commercial', [21] = 'Train',
 }
 
--- Vehicle-image source - toggle, default and URL template all live in configs/garages.lua. The
--- actual show/hide is decided in the web (players flip it live when AllowImageToggle is on), so
--- the client just attaches the URL plus the config flags, and only bothers building URLs when
--- images could be shown at all.
+-- Vehicle-image source: toggle, default and URL template live in configs/garages.lua.
 ---@type table Garages app config (configs.garages): system pick, image knobs, waypoint fallbacks.
 local GARAGES_CFG     = require 'configs.garages'
 ---@type boolean Whether players may flip photos <-> icons from the app header.
 local ALLOW_TOGGLE    = GARAGES_CFG.AllowImageToggle == true
----@type boolean Default photos-on state (the starting value each player overrides when the toggle is allowed).
+---@type boolean Default photos-on state.
 local SHOW_IMAGES_DEF = GARAGES_CFG.ShowVehicleImages ~= false
----@type boolean True when images could show at all - when false, URL building is skipped entirely.
+---@type boolean True when images could show at all.
 local IMAGES_POSSIBLE = ALLOW_TOGGLE or SHOW_IMAGES_DEF
 ---@type string Image URL template with a `{model}` placeholder ('' disables images).
 local IMAGE_TEMPLATE  = type(GARAGES_CFG.VehicleImageUrl) == 'string' and GARAGES_CFG.VehicleImageUrl or ''
 
----Enrich one server vehicle row in place: resolve the raw model (a spawn-name string on QB/QBox,
----a model hash on ESX) into a pretty display name + class label using client natives - this is
----the only place those resolve, and it works for every garage system. The spawn name doubles as
----the image key: the raw string when the server sent one, else the model's game display name
----lowercased (the usual filename for base-game vehicles); the photo URL is only attached when
----images could show at all, and the app falls back to the coloured icon when the URL 404s
----(unknown / add-on model) or the template is disabled. Class falls back by garageType
----(boat/air) when the model didn't resolve to one. garageType and hash are internal fields the
----web never needs, so they're stripped before the row leaves.
+---Enriches one server vehicle row in place: resolves the raw model into a display name + class
+---label, attaches the photo URL when images can show, and strips internal fields.
 ---@param v table vehicle row from the server list callback (mutated in place)
 ---@return table v the same row, for call-through convenience
 local function enrich(v)
@@ -75,11 +65,8 @@ local function enrich(v)
     return v
 end
 
----React -> Lua: the player's vehicle list. Forwards to the server callback (which owns the
----garage-system bridging and scopes rows to the caller), then enriches each row via client
----natives - enrichment is pcall'd per row so one bad model can't sink the whole list. The
----response also tells the web whether players may switch photos/icons and the default state,
----so the header toggle renders correctly.
+---React -> Lua: the player's vehicle list. Forwards to the server callback, enriches each row
+---(pcall'd per row), and attaches the image toggle flags.
 RegisterNUICallback('sd-phone:garages:list', function(_payload, cb)
     local result = lib.callback.await('sd-phone:server:garages:list', false)
     if not result then result = { success = false, message = 'No response from server', data = {} } end
@@ -92,10 +79,7 @@ RegisterNUICallback('sd-phone:garages:list', function(_payload, cb)
     cb(result)
 end)
 
----React -> Lua: drop a map waypoint at coords the SERVER resolved (from the active garage
----system's export, or the configs.garages Locations fallback) - the web just hands the
----vehicle's { x, y } back. Non-numeric input is rejected so a malformed payload can't feed the
----native junk.
+---React -> Lua: drops a map waypoint at server-resolved coords; non-numeric input is rejected.
 RegisterNUICallback('sd-phone:garages:waypoint', function(payload, cb)
     local x = type(payload) == 'table' and tonumber(payload.x) or nil
     local y = type(payload) == 'table' and tonumber(payload.y) or nil
@@ -105,15 +89,12 @@ RegisterNUICallback('sd-phone:garages:waypoint', function(payload, cb)
     cb({ success = true })
 end)
 
--- Live mileage (jg-vehiclemileage). Resolved on the client so the vehicle the player is
--- CURRENTLY driving reports its live odometer (exactly what jg's own HUD shows) rather than the
--- last value saved to the DB. The Garages detail view calls this each time it opens, so it
--- never goes stale without a phone restart.
----@type string|nil Cached 'mi'/'km' from jg-vehiclemileage's getUnit (the unit can't change at runtime).
+-- Live mileage (jg-vehiclemileage), resolved on the client.
+---@type string|nil Cached 'mi'/'km' from jg-vehiclemileage's getUnit.
 local cachedUnit
 
----The short unit label for mileage figures, cached after the first successful export read.
----Defaults to 'km' when the export is missing or errors - km is jg's base unit too.
+---Returns the short unit label for mileage figures, cached after the first successful export
+---read. Defaults to 'km'.
 ---@return string unit 'mi' or 'km'
 local function unitShort()
     if cachedUnit then return cachedUnit end
@@ -136,10 +117,8 @@ end
 ---across the supported key resources.
 local vehiclekeys = require 'bridge.client.vehiclekeys'
 
----React -> Lua: live lock state for one of the player's vehicles. The bridge reads the spawned
----entity by plate, so this only answers for a vehicle streamed near the player - stored or
----far-away vehicles return success=false and the UI keeps its sensible default (stored =
----locked). Read-only.
+---React -> Lua: live lock state for one of the player's vehicles; answers only for a vehicle
+---streamed near the player. Read-only.
 RegisterNUICallback('sd-phone:garages:lockstate', function(payload, cb)
     local plate = type(payload) == 'table' and payload.plate or nil
     if not vehiclekeys.active() or type(plate) ~= 'string' or plate == '' then return cb({ success = false }) end
@@ -148,12 +127,8 @@ RegisterNUICallback('sd-phone:garages:lockstate', function(payload, cb)
     cb({ success = true, locked = locked })
 end)
 
----React -> Lua: lock/unlock a nearby spawned vehicle from the garages app, chirping the hazards
----like a key fob. Fails (success=false) when the car isn't streamed near the player, so the UI
----can revert + nudge "must be nearby". The app only lists the caller's own vehicles; ownership
----is not re-verified here because none of the supported key systems expose a
----"does-this-player-hold-keys" query - the qbx path goes through that resource's own server
----event, the rest apply the door-lock native locally.
+---React -> Lua: locks/unlocks a nearby spawned vehicle, chirping the hazards. Fails when the
+---car isn't streamed near the player.
 RegisterNUICallback('sd-phone:garages:setlock', function(payload, cb)
     local plate  = type(payload) == 'table' and payload.plate or nil
     local locked = type(payload) == 'table' and payload.locked == true
@@ -163,11 +138,8 @@ RegisterNUICallback('sd-phone:garages:setlock', function(payload, cb)
     cb({ success = true, locked = applied })
 end)
 
----React -> Lua: a vehicle's odometer reading. Prefers the live export value when the player is
----sitting in that exact vehicle right now, else falls back to the latest persisted value by
----plate. Every export call is pcall'd (the resource can stop mid-session) and type-checked. The
----final figure converts km -> mi when jg is configured in miles, then floors to match
----jg-vehiclemileage's own HUD (it floors, doesn't round).
+---React -> Lua: a vehicle's odometer reading: the live export value when the player sits in
+---that vehicle, else the persisted value by plate; converts km -> mi per jg's unit and floors.
 RegisterNUICallback('sd-phone:garages:mileage', function(payload, cb)
     if GetResourceState('jg-vehiclemileage') ~= 'started' then return cb({ success = false }) end
     local plate = type(payload) == 'table' and payload.plate or nil

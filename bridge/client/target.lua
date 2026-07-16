@@ -1,15 +1,11 @@
 ---@type table Target module; the table returned at end of file. One API over the supported
----target resources: ox_target is the gold standard - its exports map 1:1 to this module's
----signatures - while qb-target / qtarget get the option shape shimmed and their equivalent
----exports called.
+---target resources (ox_target, qb-target, qtarget).
 local target = {}
 
 ---@type string[] Supported target resources, in detection-priority order.
 local SUPPORTED = { 'ox_target', 'qb-target', 'qtarget' }
 
----The first supported target resource that's currently started, or nil when none is. Resolved
----once at require time - target systems don't change at runtime, so every function below
----branches on the cached result.
+---Returns the first supported target resource that's currently started, or nil when none is.
 ---@return string|nil resource name, or nil if none are started.
 local function detect()
     for i = 1, #SUPPORTED do
@@ -20,19 +16,14 @@ local function detect()
     return nil
 end
 
----@type string|nil Detection result; a nil here aborts the module load below, on purpose - every
----consumer of this bridge is meaningless without a target backend, and failing at require time
----(bridge/client/init.lua eager-loads this module) surfaces the problem at boot rather than at
----the first interaction.
+---@type string|nil Detection result; nil aborts the module load below.
 local active = detect()
 if not active then
     error('No target resource found. Install ox_target, qb-target, or qtarget.')
 end
 
----Translate ox_target option entries to the qb-target/qtarget shape: ox_target uses `onSelect`
----and a flat option list, the others want `action` plus a wrapping `options = {}` field at call
----time (each target.add* function below supplies that wrapper). A pass-through when ox_target is
----active.
+---Translate ox_target option entries to the qb-target/qtarget shape. A pass-through when
+---ox_target is active.
 ---@param options table[] ox_target-shaped option entries
 ---@return table[] options in the active backend's shape
 local function convertOptions(options)
@@ -56,10 +47,8 @@ local function convertOptions(options)
     return out
 end
 
----Register a box-shaped interaction zone at fixed world coordinates. On qb-target/qtarget the ox
----shape is mapped onto AddBoxZone: a random name is minted when none is given, the size defaults
----to a 2x2x2 box, and minZ/maxZ are derived from the centre + height because those backends take
----an explicit vertical band instead of a size vector.
+---Register a box-shaped interaction zone at fixed world coordinates. On qb-target/qtarget a
+---random name is minted when none is given, size defaults to 2x2x2, and minZ/maxZ derive from centre + height.
 ---@param data table ox_target box-zone data.
 function target.addBoxZone(data)
     if active == 'ox_target' then
@@ -102,8 +91,7 @@ function target.addSphereZone(data)
 end
 
 ---Register a polygon-shaped interaction zone defined by an array of points. On qb-target/qtarget
----the vertical band (minZ/maxZ) is derived from the centre coords + thickness when coords are
----provided; without them the zone is unbounded vertically, matching those backends' defaults.
+---minZ/maxZ derive from the centre coords + thickness when coords are provided.
 ---@param data table ox_target poly-zone data.
 function target.addPolyZone(data)
     if active == 'ox_target' then
@@ -122,8 +110,8 @@ function target.addPolyZone(data)
     })
 end
 
----Attach target options to a NETWORKED entity addressed by its net id. ox_target takes the net
----id directly; qb-target/qtarget want the local entity handle, so it's resolved at call time.
+---Attach target options to a networked entity addressed by its net id; the local entity handle
+---is resolved for the qb-target/qtarget call.
 ---@param netId number
 ---@param options table[]
 function target.addEntity(netId, options)
@@ -153,7 +141,7 @@ function target.addLocalEntity(entity, options)
 end
 
 ---Attach target options to every entity matching one or more model hashes. A single model is
----wrapped into a list for the qb-target/qtarget call, which only accepts arrays.
+---wrapped into a list for the qb-target/qtarget call.
 ---@param models string|number|(string|number)[]
 ---@param options table[]
 function target.addModel(models, options)
@@ -253,7 +241,7 @@ function target.removeLocalEntity(entity, label)
 end
 
 ---Remove a target option attached via `addModel`. A single model is wrapped into a list for the
----qb-target/qtarget call, mirroring addModel.
+---qb-target/qtarget call.
 ---@param models string|number|(string|number)[]
 ---@param label? string Specific option label to remove. Removes all when omitted.
 function target.removeModel(models, label)

@@ -1,15 +1,8 @@
 ---@type table Company inbox store module; the table returned at end of file.
 local store = {}
 
----Create the shared company-inbox tables if they don't exist, so the resource is drop-in. One
----flat message table: a customer message lands in a thread keyed by (job, customer number) that
----EVERY employee of that job sees under the Job tab, while the customer sees it under Personal;
----staff replies append to the same thread, and "threads" are just DISTINCT (job, citizen_number)
----groupings. `kind`/`meta` were added later for rich messages - kind tags the type and meta holds
----a JSON blob of its extras (image URL, shared-location waypoint); existing text rows default to
----kind='text'/meta=NULL. Read state is per (viewer, thread): the inbox is shared, so "read" can't
----be a flag on the message - it's the timestamp up to which that viewer has read, and unread =
----messages newer than last_read that came from the OTHER side. Run once at boot.
+---Creates the company-inbox tables: one flat message table keyed by (job, citizen_number) and a
+---per-(viewer, thread) read-state table.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_service_messages (
@@ -48,9 +41,7 @@ local util = require 'server.util'
 local function newId() return util.newId(7) end
 store.newId = newId
 
----Append one message to a (job, citizen) thread. The actions layer validates + length-caps every
----field first (parseDraft caps body/meta, recipient numbers are digit-stripped and capped); the
----data layer stays dumb.
+---Appends one message to a (job, citizen) thread.
 ---@param rec { id: string, job: string, citizenNumber: string, citizenName?: string, sender: string, staffCid?: string, staffName?: string, body: string, kind?: string, meta?: string, createdAt: number }
 function store.insert(rec)
     MySQL.insert.await([[
@@ -101,8 +92,8 @@ function store.jobThreads(job)
     ]], { job, job, job }) or {}
 end
 
----Mark a (viewer, job, citizen) thread read up to `ts`. GREATEST keeps the stored timestamp from
----ever moving backwards, so a stale or replayed call can't resurrect unread counts.
+---Marks a (viewer, job, citizen) thread read up to `ts`; the stored timestamp never moves
+---backwards.
 ---@param viewer string
 ---@param job string
 ---@param citizenNumber string

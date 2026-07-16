@@ -12,19 +12,15 @@ local util = require 'server.util'
 local ok, fail = util.ok, util.fail
 
 
--- Downloadable = every homescreen app NOT flagged `base`. Base apps are always installed and
--- can't be downloaded, so they're excluded. Built once at load from config.Homescreen.Apps; this
--- set is the whitelist every client-supplied app id is checked against, so the stored
--- installed_apps column only ever holds catalog slugs.
+-- Downloadable = every homescreen app NOT flagged `base`, built once from config.Homescreen.Apps.
 ---@type table<string, boolean> Set of app ids a player may install/uninstall.
 local DOWNLOADABLE = {}
 for _, app in ipairs(config.Homescreen.Apps or {}) do
     if app.id and app.base ~= true then DOWNLOADABLE[app.id] = true end
 end
 
----Drop ids that aren't currently valid downloadables (e.g. the config changed since they were
----installed, or a hand-edited row holds junk) and de-dupe, preserving order. Run on EVERY read of
----the stored list, so stale or crafted ids never reach the UI or get written back.
+---Drops ids that aren't currently valid downloadables and de-dupes, preserving order. Runs on
+---every read of the stored list.
 ---@param ids string[] stored app ids
 ---@return string[] clean valid, de-duped ids
 local function sanitize(ids)
@@ -51,11 +47,8 @@ function actions.list(source)
     })
 end
 
----Install one downloadable app for the caller. The id is whitelist-checked against DOWNLOADABLE
----(checked here, not just in the store UI, so calling the callback directly can't store an
----arbitrary string), and the stored list is re-sanitized before the append so junk never
----propagates. Idempotent: a replayed install of an already-installed app returns the unchanged
----list without a duplicate entry.
+---Installs one downloadable app for the caller. The id is whitelist-checked against DOWNLOADABLE
+---and the stored list re-sanitized before the append. Idempotent.
 ---@param source number player server id
 ---@param payload { id?: string } client payload
 ---@return table result { success, data = { installed } }
@@ -78,9 +71,8 @@ function actions.install(source, payload)
     return ok({ installed = installed })
 end
 
----Uninstall one app for the caller. The id is only ever used as an equality filter over the
----already-sanitized list, so any type or unknown value is safe and simply removes nothing.
----Idempotent: uninstalling something not installed rewrites the same list.
+---Uninstalls one app for the caller; the id is an equality filter over the already-sanitized
+---list. Idempotent.
 ---@param source number player server id
 ---@param payload { id?: string } client payload
 ---@return table result { success, data = { installed } }
@@ -99,10 +91,8 @@ function actions.uninstall(source, payload)
     return ok({ installed = remaining })
 end
 
----Persist the caller's home-screen layout - an opaque JSON string from the UI (the slot
----arrangement). The server never parses it; the frontend owns the shape, so validation is type +
----a 16k size cap, which keeps a crafted payload from ballooning the TEXT column or DoS-ing the
----NUI that later renders it. Scoped to the citizenid resolved from src.
+---Persists the caller's home-screen layout, an opaque JSON string from the UI. Validation is
+---type + a 16k size cap; scoped to the citizenid resolved from src.
 ---@param source number player server id
 ---@param payload { layout?: string } client payload
 ---@return table result { success }

@@ -4,7 +4,7 @@ local store = {}
 ---@type integer How many recent timer durations recentsFor returns (newest first).
 local RECENTS_LIMIT = 8
 
----True if a column already exists, so column adds stay idempotent on older tables.
+---True if a column already exists.
 ---@param tbl string table name
 ---@param col string column name
 ---@return boolean exists
@@ -15,12 +15,8 @@ local function columnExists(tbl, col)
     ]], { tbl, col }) ~= nil
 end
 
----Create the clock tables if they don't exist and back-fill alarm columns added after the table
----first shipped, so the resource is drop-in on older installs. `phone_alarms` holds one row per
----alarm, primary-keyed (citizenid, id) - the id is client-generated, and pairing it with the
----citizenid both scopes every read/write to the owner and keeps ids from colliding across
----characters. `phone_timer_recents` holds one row per distinct duration a player has started,
----timestamped so the most-recently-used surface first. Run once at boot.
+---Creates the clock tables if they don't exist and back-fills later alarm columns. `phone_alarms`
+---is keyed (citizenid, id); `phone_timer_recents` holds one row per distinct duration. Runs once at boot.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS `phone_alarms` (
@@ -71,9 +67,8 @@ function store.alarmsFor(cid)
     ]], { cid }) or {}
 end
 
----Insert or update one alarm, matched on the client-owned id. The (citizenid, id) primary key
----scopes the upsert to the caller's own rows, so a replayed or forged save can only ever touch
----the caller's alarm.
+---Inserts or updates one alarm, matched on the client-owned id; the (citizenid, id) primary key
+---scopes the upsert to the caller's own rows.
 ---@param cid string framework per-character id
 ---@param a table validated alarm { id, hour, minute, label, days, enabled, sound, snooze, snoozeSecs }
 function store.upsertAlarm(cid, a)
@@ -99,8 +94,7 @@ function store.deleteAlarm(cid, id)
     MySQL.query.await('DELETE FROM `phone_alarms` WHERE citizenid = ? AND id = ?', { cid, id })
 end
 
----Whether the caller already owns an alarm with this id - lets the actions layer apply its cap
----to brand-new alarms only.
+---Whether the caller already owns an alarm with this id.
 ---@param cid string framework per-character id
 ---@param id string client-generated alarm id
 ---@return boolean exists
@@ -115,8 +109,7 @@ function store.countAlarms(cid)
     return MySQL.scalar.await('SELECT COUNT(*) FROM `phone_alarms` WHERE citizenid = ?', { cid }) or 0
 end
 
----The character's most-recently-used timer durations (seconds), newest first. RECENTS_LIMIT is
----concatenated as a module constant - client data never touches the SQL string.
+---The character's most-recently-used timer durations (seconds), newest first.
 ---@param cid string framework per-character id
 ---@return table seconds integer[]
 function store.recentsFor(cid)
@@ -128,8 +121,7 @@ function store.recentsFor(cid)
     return out
 end
 
----Record a started duration, bumping its recency when already seen - the (citizenid, seconds)
----upsert makes replays refresh the stamp instead of inserting duplicates.
+---Records a started duration, bumping its recency when already seen (upsert on (citizenid, seconds)).
 ---@param cid string framework per-character id
 ---@param seconds integer validated duration
 ---@param usedAt integer unix seconds

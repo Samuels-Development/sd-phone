@@ -15,8 +15,7 @@ local live = {}
 local CFG = (config.Photogram and config.Photogram.Live) or {}
 ---@type integer Concurrent viewers allowed on one stream (0 = unlimited).
 local MAX_VIEWERS = tonumber(CFG.MaxViewers) or 50
----@type integer Per-viewer latent-event send ceiling (bytes/s) - paces each relayed chunk onto
----the wire instead of slamming the net thread.
+---@type integer Per-viewer latent-event send ceiling (bytes/s).
 local RELAY_BPS   = tonumber(CFG.RelayBytesPerSec) or 512 * 1024
 ---@type table Encoder hints handed to the broadcaster by live.start: target bitrate, capture
 ---fps, chunk cadence, and how often it re-anchors with a keyframe.
@@ -27,9 +26,7 @@ local ENC = {
     keyframeMs  = tonumber(CFG.KeyframeMs) or 4000,
 }
 
--- Sessions live in memory only - a live has no meaning once it ends, so nothing is persisted.
--- hostLive/viewerLive invert lives' membership so the media-push handlers and disconnect
--- cleanup resolve a source's session in O(1).
+-- Sessions live in memory only; hostLive/viewerLive invert lives' membership.
 ---@type table<string, table> Live sessions by liveId (host identity, transport cache, viewers).
 local lives      = {}
 ---@type table<integer, string> liveId being broadcast, per hosting player src.
@@ -37,36 +34,25 @@ local hostLive   = {}
 ---@type table<integer, string> liveId being watched, per viewer src.
 local viewerLive = {}
 
--- Ingest ceilings on the host's media pushes. A legitimate chunk is ~30 KB (Bitrate x
--- TimesliceMs, base64-inflated) and a legitimate keyframe group well under 1 MB, so these only
--- bite a modified client trying to balloon server memory or the relay fan-out.
+-- Ingest ceilings on the host's media pushes.
 ---@type integer Base64 byte ceiling per JPEG frame / video chunk (~600 KB).
 local MAX_FRAME = 600000
----@type integer Cap on cached current-GOP chunk COUNT (a runaway host that never re-anchors).
+---@type integer Cap on cached current-GOP chunk COUNT.
 local MAX_GOP   = 240
----@type integer Cap on cached current-GOP total BYTES. MAX_GOP alone still allowed 240 max-size
----chunks (~140 MB) resident per session; 8 MB is roughly 10x a legitimate keyframe group, so
----only a hostile host ever trips it.
+---@type integer Cap on cached current-GOP total BYTES.
 local MAX_GOP_BYTES = 8 * 1024 * 1024
 
 local util = require 'server.util'
 local ok, fail, trim, flag = util.ok, util.fail, util.trim, util.truthy
 
-
-
-
----Coerce a raw client payload to a table. Callback / net-event arguments are attacker-controlled
----and can arrive as nil, a number, or a string - indexing a number would raise inside the
----handler, so every entry point normalises through this before touching a field.
+---Coerces a raw client payload to a table; any non-table becomes {}.
 ---@param payload any raw client payload
 ---@return table payload the same table, or {} for any non-table
 local function tbl(payload)
     return type(payload) == 'table' and payload or {}
 end
 
----The photogram account the character behind `src` is signed into (nil when signed out). The
----ONLY identity source for every handler in this module - usernames are never read from
----payloads.
+---The photogram account the character behind `src` is signed into (nil when signed out).
 ---@param src integer player server id
 ---@return table|nil account accounts-engine record (username, displayName, ...)
 local function viewerAccount(src)
@@ -75,8 +61,8 @@ local function viewerAccount(src)
     return acctStore.getSessionAccount('photogram', cid)
 end
 
----A user card for relayed host/comment payloads, tolerating a missing profile row (falls back
----to a bare handle-only card) so a live never breaks on an unbootstrapped profile.
+---A user card for relayed host/comment payloads; a missing profile row falls back to a bare
+---handle-only card.
 ---@param username string account handle
 ---@return table card { id, handle, avatar, verified, name }
 local function cardFor(username)
@@ -92,14 +78,14 @@ local function cardFor(username)
 end
 
 ---@param session table live session
----@return integer n current viewer count (viewers is a src-keyed set, so counting walks it)
+---@return integer n current viewer count
 local function viewerCount(session)
     local n = 0
     for _ in pairs(session.viewers) do n = n + 1 end
     return n
 end
 
----Every source attached to a session (host + viewers) - the relay targets.
+---Every source attached to a session (host + viewers).
 ---@param session table live session
 ---@return integer[] sources
 local function participants(session)
@@ -108,8 +94,7 @@ local function participants(session)
     return out
 end
 
----Fan a session-scoped event to the host and every viewer. Only ever carries session-public
----data (ids, counts, comment text, public profile cards) - never another player's identifiers.
+---Fans a session-scoped event to the host and every viewer.
 ---@param session table live session
 ---@param event string event suffix under sd-phone:client:photogram:
 ---@param data table payload
@@ -125,15 +110,8 @@ local function pushViewers(session)
     relay(session, 'liveViewers', { liveId = session.id, viewers = viewerCount(session) })
 end
 
----Start (or resume) a broadcast for the caller's account. Identity comes from `src` alone.
----Idempotent: a re-entrant start (double-tap, app re-open while already live) returns the
----existing session instead of minting a second one, so one source can never host two lives. The
----session records which transport the host settles on once content arrives: 'image' is the
----legacy JPEG slideshow (the host's CEF lacks the video encoder), 'video' the real encoded
----stream whose codec header + current keyframe group are cached for clean late-joins. The empty
----liveChanged broadcast makes every phone refresh its stories tray so followers see the live
----ring - it deliberately carries no data, since WHO may see the live is decided per viewer by
----live.activeForViewer.
+---Starts (or resumes) a broadcast for the caller's account. Idempotent: a re-entrant start
+---returns the existing session. Broadcasts an empty liveChanged to every phone.
 ---@param src integer hosting player server id
 ---@return table result { liveId, startedAt (ms), enc } or failure
 function live.start(src)
@@ -166,11 +144,8 @@ function live.start(src)
     return ok({ liveId = id, startedAt = lives[id].startedAt * 1000, enc = ENC })
 end
 
----Host JPEG push (latent net event, not a callback) - the fallback path for CEF builds without
----the video encoder. Trust posture: only the session's recorded hostSrc may feed it (the host
----was authenticated at live.start), so a forged liveId from anyone else is a silent no-op; the
----frame must be a non-empty string under MAX_FRAME. The latest frame is kept on the session so
----a late joiner gets a picture immediately, then relayed to current viewers.
+---Host JPEG push (latent net event). Only the session's recorded hostSrc may feed it; the frame
+---must be a non-empty string under MAX_FRAME. Keeps the latest frame and relays it to viewers.
 ---@param src integer sender server id (must be the session host)
 ---@param payload table { liveId, frame } attacker-controlled
 function live.frame(src, payload)
@@ -187,14 +162,8 @@ function live.frame(src, payload)
     end
 end
 
----Host video chunk push (latent net event) - the real-time path: the broadcaster encodes its
----camera view to a VP8/VP9 stream and ships ~quarter-second chunks. Trust posture matches
----live.frame: host-only, string-typed, MAX_FRAME-capped. `init` chunks carry the codec header
----and re-anchor the stream (a fresh keyframe group), so the latest header is cached and the GOP
----buffer reset; media chunks append to that buffer under BOTH caps (MAX_GOP chunks and
----MAX_GOP_BYTES bytes, oldest dropped first) so a hostile host that never re-anchors can't grow
----server-resident memory unbounded. Every chunk is relayed to current viewers; the cached
----header + GOP let a late joiner start cleanly (see live.join).
+---Host video chunk push (latent net event): host-only, string-typed, MAX_FRAME-capped. Caches
+---the codec header + current keyframe group and relays every chunk to current viewers.
 ---@param src integer sender server id (must be the session host)
 ---@param payload table { liveId, chunk, init?, mime? } attacker-controlled
 function live.chunk(src, payload)
@@ -232,17 +201,8 @@ function live.chunk(src, payload)
     end
 end
 
----Join a live as a viewer. The caller must be signed in, and the host's account privacy is
----enforced HERE - not only in the stories tray that live.activeForViewer filters - so a leaked
----or guessed liveId can't watch a private account the viewer doesn't follow; the refusal
----deliberately reads as an ended live so probing can't confirm one exists. The host joining
----their own live is refused (they're already broadcasting). Capacity (MAX_VIEWERS, 0 =
----unlimited) only gates NEW viewers - a re-join by someone already watching always succeeds.
----Joining while attached to a DIFFERENT live detaches from that one first, keeping the
----one-live-per-viewer invariant that leave / playerDropped cleanup relies on. In video mode the
----cached codec header + current keyframe group replay to just this viewer so they decode a
----clean picture right away - sent before any further live chunk can reach them (those only fire
----on the next host tick), so ordering holds.
+---Joins a live as a viewer, enforcing the host's account privacy and MAX_VIEWERS. Detaches from
+---any prior live first; in video mode the cached header + keyframe group replay to the joiner.
 ---@param src integer viewer server id
 ---@param payload table { liveId } attacker-controlled
 ---@return table result { liveId, host, mode, mime, frame, viewers, startedAt (ms) } or failure
@@ -297,10 +257,8 @@ function live.join(src, payload)
     })
 end
 
----Leave a live. Scoped to the caller's own membership (only session.viewers[src] is ever
----touched), so a forged liveId can't evict anyone else. Falls back to the caller's tracked live
----when the payload omits the id (the disconnect-cleanup path). Always reports success - leaving
----twice, or leaving a live that already ended, is a no-op.
+---Leaves a live, scoped to the caller's own membership. Falls back to the caller's tracked live
+---when the payload omits the id. Always reports success.
 ---@param src integer viewer server id
 ---@param payload table { liveId? } attacker-controlled
 ---@return table result success envelope
@@ -316,10 +274,8 @@ function live.leave(src, payload)
     return ok()
 end
 
----Post an ephemeral comment to a live - relayed to everyone in the session, never persisted
----(the session dies with the stream). Only the host or an active viewer may comment, so an
----outsider can't inject text into a stream they're not watching. Text is trimmed and capped at
----200 chars; an empty result is silently absorbed.
+---Posts an ephemeral comment to a live, relayed to everyone in the session, never persisted.
+---Only the host or an active viewer may comment; text is trimmed and capped at 200 chars.
 ---@param src integer sender server id
 ---@param payload table { liveId, text } attacker-controlled
 ---@return table result success envelope
@@ -341,8 +297,7 @@ function live.comment(src, payload)
     return ok()
 end
 
----Float a heart on a live. Same membership gate as comments, but every outcome - unknown live,
----outsider - returns plain success, so hearts can't be used to probe which liveIds exist.
+---Floats a heart on a live. Unknown lives and outsiders return plain success.
 ---@param src integer sender server id
 ---@param payload table { liveId } attacker-controlled
 ---@return table result success envelope
@@ -355,11 +310,8 @@ function live.heart(src, payload)
     return ok()
 end
 
----End a broadcast. Host-only: a forged or someone else's liveId fails the hostSrc check and
----returns plain success - nothing changed, nothing to learn. Every viewer is kicked out of the
----watch screen (their viewerLive pointer cleared first so a subsequent leave / disconnect can't
----double-fire on a dead session), the session is dropped, and every phone is told to refresh
----its stories tray so the live ring disappears.
+---Ends a broadcast, host-only. Kicks every viewer, drops the session, and tells every phone to
+---refresh its stories tray.
 ---@param src integer hosting player server id
 ---@param payload table { liveId? } attacker-controlled (falls back to the caller's hosted live)
 ---@return table result success envelope
@@ -381,10 +333,7 @@ function live.endLive(src, payload)
 end
 
 ---Active lives the given account is allowed to watch (public hosts, or private hosts they
----accepted-follow), newest first - merged into the stories tray by actions.stories, which
----resolves `username` from its own authenticated session. Visibility twin of the gate in
----live.join: both must agree, or the tray would advertise lives the join then refuses (or a
----join would admit viewers the tray hides). Read-only.
+---accepted-follow), newest first. Read-only.
 ---@param username string viewer account handle
 ---@return table[] lives [{ user, liveId, startedAt (ms) }]
 function live.activeForViewer(username)
@@ -402,9 +351,8 @@ function live.activeForViewer(username)
     return out
 end
 
----A departing player's live state is torn down (srcs recycle across sessions): a hosted live
----ends for everyone, a watched live loses them as a viewer. Both paths reuse the exact code the
----explicit callbacks run, so disconnect cleanup can never drift from the user-initiated flows.
+---Tears down a departing player's live state: a hosted live ends for everyone, a watched live
+---loses them as a viewer.
 AddEventHandler('playerDropped', function()
     local src = source
     local hid = hostLive[src]

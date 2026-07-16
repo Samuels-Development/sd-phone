@@ -15,24 +15,17 @@ local actions = {}
 local util = require 'server.util'
 local ok, fail, trim, flag = util.ok, util.fail, util.trim, util.truthy
 
-
-
-
 ---@type table<string, boolean> Whitelisted profile genders - anything else falls back to 'Man'.
 local GENDERS   = { Man = true, Woman = true, Nonbinary = true }
 ---@type table<string, boolean> Whitelisted interest settings - anything else falls back to 'Everyone'.
 local INTERESTS = { Women = true, Men = true, Everyone = true }
----@type table<string, boolean> Whitelisted message kinds - the Messages app's rich-kind vocabulary
----(text/image/gif/money/location/voice), so the same bubbles render on both ends of a match chat.
+---@type table<string, boolean> Whitelisted message kinds (text/image/gif/money/location/voice).
 local VALID_KINDS = { text = true, image = true, gif = true, money = true, location = true, voice = true }
----@type table<string, boolean> Allowed reaction emoji - mirrors REACTIONS in the shared chat
----MessageBubble and the Messages module's REACTION_SET; anything else is rejected at the boundary.
+---@type table<string, boolean> Allowed reaction emoji; anything else is rejected.
 local REACTION_SET = { ['❤️'] = true, ['👍'] = true, ['👎'] = true, ['😂'] = true }
 
 ---Does `interest` cover `gender`? 'Everyone' matches all, and Nonbinary profiles count toward
----BOTH 'Women' and 'Men' seekers; otherwise Man pairs with 'Men' and Woman with 'Women'.
----Discovery applies this in BOTH directions - each side's interest must cover the other's gender
----before a card enters the deck.
+---both 'Women' and 'Men' seekers; otherwise Man pairs with 'Men' and Woman with 'Women'.
 ---@param interest string one of INTERESTS
 ---@param gender string one of GENDERS
 ---@return boolean covered
@@ -43,9 +36,7 @@ local function wants(interest, gender)
     return interest == 'Women'
 end
 
----The signed-in cherry account for this player, or nil. The ONLY identity source in this module:
----the account is resolved from the caller's src via the accounts engine session, never from the
----payload, so a client can't act as (or on) an account it isn't signed into.
+---The signed-in cherry account for this player, or nil.
 ---@param src integer player server id
 ---@return table|nil account accounts-engine row { id, username, displayName, ... }
 local function viewerAccount(src)
@@ -72,9 +63,8 @@ local function serializeProfile(row)
     }
 end
 
----Load (or bootstrap) the viewer's profile. A fresh account gets a starter profile seeded from
----the account's display name, visible right away - so a player appears in others' decks as soon
----as they've opened the app once (they can hide themselves with the visibility toggle).
+---Loads (or bootstraps) the viewer's profile. A fresh account gets a visible starter profile
+---seeded from the account's display name.
 ---@param acc table accounts-engine account row
 ---@return table row phone_cherry_profiles row
 local function ensureProfile(acc)
@@ -96,8 +86,8 @@ local function partnerOf(matchRow, username)
     return matchRow.a == username and matchRow.b or matchRow.a
 end
 
----Compact partner card used by the matches list and the match push. A partner whose profile row
----has vanished still renders (username stands in for the name) instead of nil-crashing the list.
+---Compact partner card used by the matches list and the match push; a vanished profile row
+---falls back to a username-only card.
 ---@param username string partner's account username
 ---@return table card { username, name, age, gender?, photo?, about?, photos? }
 local function partnerCard(username, row)
@@ -112,8 +102,7 @@ local function partnerCard(username, row)
     }
 end
 
----Online sources signed into `username`'s cherry account - the delivery set for live pushes.
----Cherry is a single-session app, so this is at most one player in practice.
+---Online sources signed into `username`'s cherry account.
 ---@param username string account username
 ---@return integer[] srcs online player server ids
 local function sourcesFor(username)
@@ -136,26 +125,23 @@ local function notify(src, body)
     })
 end
 
----@type table<integer, boolean> Players with the Cherry app on screen right now, by src. They get
----live pushes (the in-app match overlay), so the banner notification is skipped for them.
+---@type table<integer, boolean> Players with the Cherry app on screen right now, by src.
 local watchers = {}
 
----Mark/unmark the caller as having Cherry on screen. Keyed by the trusted src, so a client can
----only ever toggle its own entry.
+---Marks/unmarks the caller as having Cherry on screen.
 ---@param src integer player server id
 ---@param on boolean whether the app is on screen
 function actions.setWatch(src, on)
     if on then watchers[src] = true else watchers[src] = nil end
 end
 
----A departing player's watcher flag is dropped (srcs recycle across sessions).
+---Drops a departing player's watcher flag.
 AddEventHandler('playerDropped', function()
     watchers[source] = nil
 end)
 
----Message DB row -> the React `Message` shape. The sender stays a username (the web maps it to
----'me' against its own account), sanitized meta fields are flattened onto the message, and the
----reactions JSON collapses to per-emoji counts with a `mine` flag computed against the viewer.
+---Message DB row -> the React `Message` shape: sanitized meta fields are flattened onto the
+---message and the reactions JSON collapses to per-emoji counts with a viewer `mine` flag.
 ---@param row table phone_cherry_messages row
 ---@param viewer string viewing username (drives reactions[].mine)
 ---@return table msg
@@ -204,11 +190,8 @@ local function previewFor(kind, body, meta)
     return body
 end
 
----Clamp/coerce composer metadata at the trust boundary (same recipe as the Messages module's
----sanitizeMeta): URLs trimmed + byte-capped, voice duration/waveform bars clamped, waypoint
----strings capped. The money amount is forced to a finite non-negative integer with a hard
----ceiling - a crafted +inf would survive a plain max/floor clamp, corrupt the stored JSON and
----crash the '%d' banner format mid-delivery. Only whitelisted fields ever reach the DB row.
+---Clamps/coerces composer metadata per kind: URLs trimmed + byte-capped, voice duration and
+---waveform bars clamped, waypoint strings capped, money forced to a finite capped integer.
 ---@param kind string whitelisted message kind
 ---@param payload table raw client payload
 ---@return table meta sanitized meta (possibly empty)
@@ -242,8 +225,7 @@ local function sanitizeMeta(kind, payload)
     return meta
 end
 
----Whether a sanitized message actually carries something to send - an empty text, a moneyless
----money card or a urlless image would otherwise store a blank bubble.
+---Whether a sanitized message carries something to send for its kind.
 ---@param kind string message kind
 ---@param body string trimmed body
 ---@param meta table sanitized meta
@@ -272,13 +254,8 @@ local function serializeMatch(matchRow, username, profiles)
     }
 end
 
----Everything the app needs on open: my profile (bootstrapped on first open), the swipe deck and
----my matches. The deck applies the interest matrix in BOTH directions, and photoless profiles
----still surface (the card renders a monogram placeholder) - otherwise nobody shows up until
----everyone has decorated their profile. canReset answers whether "Start over" (clearing swipes)
----would actually surface anyone: with the deck empty AND nobody resettable, the UI shows a
----"no one around" state instead of a pointless Start over button. Read-only apart from the
----profile bootstrap.
+---Everything the app needs on open: my profile (bootstrapped on first open), the swipe deck
+---(interest matrix applied in both directions), my matches, and the canReset flag.
 ---@param src integer player server id
 ---@return table result { me, profile, deck, matches, canReset }
 function actions.state(src)
@@ -322,11 +299,8 @@ function actions.state(src)
     return ok({ me = acc.username, profile = mine, deck = deck, matches = matches, canReset = canReset })
 end
 
----Save the viewer's own profile. Every field is clamped server-side to its DB column: name
----required and capped at 50, age clamped 18-99, about capped at 300, gender/interest
----whitelist-checked with safe fallbacks, visibility a strict boolean, and photos capped at 6
----http(s) URLs of at most 512 bytes each. Checked here (not just in the editor UI) so calling
----the callback directly can't store oversized or malformed rows.
+---Saves the viewer's own profile. Every field is clamped server-side: name required and capped
+---at 50, age 18-99, about 300, gender/interest whitelisted, photos capped at 6 http(s) URLs.
 ---@param src integer player server id
 ---@param payload table { name, age, about, gender, interestedIn, visible, photos }
 ---@return table result fresh serialized profile
@@ -358,13 +332,8 @@ function actions.saveProfile(src, payload)
     return ok(serializeProfile(store.getProfile(acc.username)))
 end
 
----Record a swipe on a card; mutual likes become a match and both sides learn about it live (the
----in-app overlay for watchers, a banner otherwise). The target must exist and not be blocked in
----either direction - blocks already remove a profile from the deck, but a forged payload could
----still name one directly, so it's enforced at the trust boundary too. Match creation is
----idempotent (normalized pair + INSERT IGNORE), and the match push/banner only fires when the
----match is genuinely NEW, so a replayed swipe on an already-matched pair returns the existing
----match without re-spamming the partner.
+---Records a swipe on a card; mutual likes become a match and both sides learn about it live.
+---The target must exist and not be blocked in either direction; match creation is idempotent.
 ---@param src integer player server id
 ---@param payload table { target: string, liked: boolean }
 ---@return table result { matched, match? }
@@ -400,9 +369,8 @@ function actions.swipe(src, payload)
     return ok({ matched = true, match = serializeMatch(matchRow, acc.username) })
 end
 
----Rewind names the exact card it's restoring. A swipe that became a MATCH is not rewindable -
----the match is a committed two-sided state; reverting it would let you re-judge (or nope)
----someone who already matched you. Deletion is scoped to the caller's own swipe row.
+---Restores the named card by deleting the caller's own swipe row. A swipe that became a match
+---is not rewindable.
 ---@param src integer player server id
 ---@param payload table { target: string }
 ---@return table result
@@ -419,8 +387,7 @@ function actions.rewind(src, payload)
     return ok()
 end
 
----Clear every one of the viewer's swipes (the deck's "Start over"). Matches persist - matched
----users stay excluded from the deck via the matches table.
+---Clears every one of the viewer's swipes (the deck's "Start over"). Matches persist.
 ---@param src integer player server id
 ---@return table result
 function actions.resetDeck(src)
@@ -430,9 +397,7 @@ function actions.resetDeck(src)
     return ok()
 end
 
----Verify the viewer belongs to a match - the single membership gate every chat handler passes
----through, so a forged matchId can't read or write someone else's thread. Type-checks the id
----before it touches the store.
+---Verifies the viewer belongs to a match. Type-checks the id before it touches the store.
 ---@param src integer player server id
 ---@param matchId any client-supplied match id
 ---@return table|nil acc viewer account (nil = not signed in or not a member)
@@ -446,7 +411,7 @@ local function memberOf(src, matchId)
 end
 
 ---A match's chat thread: the newest 100 messages, serialized oldest-first for the viewer.
----Membership gated via memberOf; the page size is a server-side constant. Read-only.
+---Membership gated. Read-only.
 ---@param src integer player server id
 ---@param payload table { matchId: string }
 ---@return table result { matchId, messages }
@@ -461,14 +426,8 @@ function actions.thread(src, payload)
     return ok({ matchId = m.id, messages = out })
 end
 
----Send a chat message into a match. Membership gated; the kind is whitelist-coerced, the body
----trimmed + capped at 1000, the meta sanitized before anything is stored, and blank results are
----rejected. Money moves real funds, like the Messages app: the transfer goes through Banking
----BEFORE the row is stored, so a failed payment never leaves a phantom card - Banking
----re-validates the amount against its own caps, checks the balance and debits-then-credits with
----refund on failure. The recipient is whoever is signed into the match's account right now -
----they must be online to be paid. The partner's online sources get the live message push plus a
----kind-aware banner preview; the thread is pruned to its newest 200 rows after each insert.
+---Sends a chat message into a match: membership gated, whitelisted kind, capped body, sanitized
+---meta. Money clears through Banking first; the partner gets a live push + banner preview.
 ---@param src integer player server id
 ---@param payload table { matchId, kind?, body?, gifUrl?, amount?, requested?, duration?, audioUrl?, waveform?, wpCode?, wpSub? }
 ---@return table result the serialized message
@@ -510,12 +469,8 @@ function actions.send(src, payload)
     return ok(msg)
 end
 
----Toggle the viewer's reaction on a message; both sides get the new set. Membership is
----re-derived from the message's own match row (never from the payload), so a forged id can't
----react into a thread the caller isn't part of. The emoji is whitelist-checked against
----REACTION_SET (the picker's exact set - a forged payload can't attach arbitrary text or grow
----the reactions JSON with unbounded keys), and the stored JSON maps emoji -> usernames, so the
----toggle is idempotent per user.
+---Toggles the viewer's reaction on a message; both sides get the new set. Membership is
+---re-derived from the message's own match row; the emoji is whitelist-checked.
 ---@param src integer player server id
 ---@param payload table { id: string, emoji: string }
 ---@return table result { id, reactions }
@@ -567,9 +522,7 @@ function actions.blockedList(src)
     return ok(out)
 end
 
----Lift one of the viewer's blocks - the pair can appear in each other's decks again (their
----swipes were already cleared when the block was placed). Deletion is scoped to the caller's
----own block row, so it can't lift someone else's block.
+---Lifts one of the viewer's blocks, scoped to the caller's own block row.
 ---@param src integer player server id
 ---@param payload table { username: string }
 ---@return table result
@@ -583,8 +536,7 @@ function actions.unblock(src, payload)
     return ok()
 end
 
----Drop a match thread for both sides and tell the partner's open app (no banner - dating apps
----treat this as silent).
+---Drops a match thread for both sides and tells the partner's open app (no banner).
 ---@param m table match row
 ---@param partner string the other username
 local function dissolveMatch(m, partner)
@@ -594,8 +546,7 @@ local function dissolveMatch(m, partner)
     end
 end
 
----Unmatch - a clean slate: the match, thread AND the pair's swipes on each other are forgotten,
----so both can resurface in each other's decks and even match again someday. Membership gated.
+---Unmatches: forgets the match, thread, and the pair's swipes on each other. Membership gated.
 ---@param src integer player server id
 ---@param payload table { matchId: string }
 ---@return table result
@@ -610,9 +561,8 @@ function actions.unmatch(src, payload)
     return ok()
 end
 
----Block - the match dissolves like an unmatch, but a block row makes the exclusion permanent:
----neither ever appears in the other's deck again (the store checks blocks in both directions).
----Membership gated, so only a current match partner can be blocked through this path.
+---Blocks a match partner: dissolves the match like an unmatch and adds a permanent block row.
+---Membership gated.
 ---@param src integer player server id
 ---@param payload table { matchId: string }
 ---@return table result
@@ -628,9 +578,8 @@ function actions.block(src, payload)
     return ok()
 end
 
----Delete the cherry account outright: profile, swipes, matches, threads, and the credentials
----themselves (via the accounts engine, which also drops the login sessions). Scoped to the
----account the caller is signed into - the payload names nothing.
+---Deletes the cherry account outright: profile, swipes, matches, threads, and the credentials
+---via the accounts engine.
 ---@param src integer player server id
 ---@return table result
 function actions.deleteAccount(src)

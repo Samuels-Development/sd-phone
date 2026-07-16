@@ -1,9 +1,8 @@
 ---@type table Store module; the table returned at end of file.
 local store = {}
 
----Create the phone_map_markers table if it doesn't exist, so the resource is drop-in. One row
----per citizenid holding that player's whole pin set as a JSON array - the client always sends
----the complete array on save, so per-pin rows would buy nothing. Run once at boot.
+---Creates the phone_map_markers table if it doesn't exist: one row per citizenid holding that
+---player's whole pin set as a JSON array. Runs once at boot.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS `phone_map_markers` (
@@ -15,16 +14,15 @@ function store.ensureSchema()
     ]])
 end
 
----A player's stored markers as a raw JSON string (nil if none saved yet).
----Caller decodes; we keep the data layer dumb. Read-only.
+---A player's stored markers as a raw JSON string (nil if none saved yet); caller decodes.
+---Read-only.
 ---@param cid string framework per-character id
 ---@return string|nil json JSON-encoded array of markers
 function store.forPlayer(cid)
     return MySQL.scalar.await('SELECT markers FROM `phone_map_markers` WHERE citizenid = ?', { cid })
 end
 
----Persist a player's whole marker set (upsert). The row is overwritten wholesale on every save;
----the actions layer has already sanitized and capped the array, so the data layer stays dumb.
+---Persists a player's whole marker set (upsert); the row is overwritten wholesale on every save.
 ---@param cid string framework per-character id
 ---@param markersJson string JSON-encoded array of sanitized markers
 ---@param updatedAt string ISO-8601 timestamp

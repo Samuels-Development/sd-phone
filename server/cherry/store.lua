@@ -15,9 +15,8 @@ function store.newId()
     return table.concat(out)
 end
 
----Decode a JSON column into a table across oxmysql versions (newer builds auto-decode, older
----ones hand back the raw string). Garbage decodes to {} instead of erroring, so callers always
----get a table.
+---Decodes a JSON column into a table; accepts strings or already-decoded tables and returns {}
+---for anything absent or invalid.
 ---@param value any raw column value
 ---@return table decoded
 function store.decodeJson(value)
@@ -30,8 +29,8 @@ function store.decodeJson(value)
     return {}
 end
 
----Encode a table for a JSON column; empty or absent tables store NULL so the column stays
----sparse. Also exported as store.encodeJson.
+---Encodes a table for a JSON column; empty or absent tables store NULL. Also exported as
+---store.encodeJson.
 ---@param tbl table|nil source table
 ---@return string|nil json
 local function encodeJson(tbl)
@@ -41,12 +40,7 @@ end
 
 store.encodeJson = encodeJson
 
----Create the cherry tables if they don't exist, so the resource is drop-in. Run once at boot.
----Identity everywhere is the cherry ACCOUNT USERNAME (the accounts engine owns credentials and
----sessions; profiles ride on top), so a profile follows the account across characters. Matches
----store their two usernames normalized (a < b) under a unique key so a pair can only ever match
----once; chat messages are single rows shared by both sides (no per-mailbox copies - there's no
----blocking/airplane semantics inside Cherry).
+---Creates the cherry tables if they don't exist. Runs once at boot.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_cherry_profiles (
@@ -117,9 +111,8 @@ function store.getProfile(username)
     return MySQL.single.await('SELECT * FROM phone_cherry_profiles WHERE username = ?', { username })
 end
 
----Profiles for MANY usernames in one query - the batch form of getProfile, so the matches list
----resolves every partner card in a single round-trip instead of one SELECT per match. Returns a
----username -> row map (missing usernames absent). Read-only.
+---Profiles for many usernames in one query. Returns a username -> row map (missing usernames
+---absent). Read-only.
 ---@param list string[] usernames
 ---@return table<string, table> username -> profile row
 function store.profilesByUsernames(list)
@@ -137,8 +130,7 @@ function store.profilesByUsernames(list)
     return out
 end
 
----Insert-or-update a profile. The actions layer owns clamping every field to its column; the
----store writes what it's given (caller sanitizes; we keep the data layer dumb).
+---Inserts-or-updates a profile.
 ---@param username string account username
 ---@param p table clamped profile fields { name, age, about, gender, interested, visible, photos }
 function store.upsertProfile(username, p)
@@ -156,9 +148,7 @@ function store.upsertProfile(username, p)
 end
 
 ---Every visible profile except the viewer's own and anyone they've already swiped on, matched
----with, or blocked in EITHER direction. Interest filtering happens in Lua (the gender matrix is
----simpler there than in SQL). The limit is interpolated after a numeric floor and only ever
----receives a server-side constant, never a client value.
+---with, or blocked in either direction.
 ---@param username string viewer's username
 ---@param limit integer max rows (server-side constant)
 ---@return table[] rows profile rows
@@ -181,9 +171,7 @@ function store.deckCandidates(username, limit)
     ]]):format(math.floor(tonumber(limit) or 30)), { username, username, username, username, username, username }) or {}
 end
 
----Like deckCandidates, but IGNORING the viewer's swipes - used to tell a "you swiped through
----everyone, start over" empty deck apart from a "there is genuinely no one for you on Cherry"
----one. Same interpolated server-side limit convention as deckCandidates.
+---Like deckCandidates, but ignoring the viewer's swipes.
 ---@param username string viewer's username
 ---@param limit integer max rows (server-side constant)
 ---@return table[] rows profile rows
@@ -216,8 +204,7 @@ function store.isBlocked(x, y)
     ]], { x, y, y, x }) ~= nil
 end
 
----Everyone `blocker` has blocked, joined with their profile card fields (LEFT JOIN, so a since-
----deleted profile still lists by username).
+---Everyone `blocker` has blocked, joined with their profile card fields.
 ---@param blocker string blocker's username
 ---@return table[] rows { username, name, age, photos }
 function store.blockedBy(blocker)
@@ -230,15 +217,14 @@ function store.blockedBy(blocker)
     ]], { blocker }) or {}
 end
 
----Remove one block row, scoped to the blocker (so a caller can only lift its own block).
+---Removes one block row, scoped to the blocker.
 ---@param blocker string blocker's username
 ---@param blocked string blocked username
 function store.removeBlock(blocker, blocked)
     MySQL.update.await('DELETE FROM phone_cherry_blocks WHERE blocker = ? AND blocked = ?', { blocker, blocked })
 end
 
----Add a block row. Idempotent: the (blocker, blocked) primary key plus INSERT IGNORE means a
----replayed block changes nothing.
+---Adds a block row. Idempotent (INSERT IGNORE).
 ---@param blocker string blocker's username
 ---@param blocked string blocked username
 function store.addBlock(blocker, blocked)
@@ -248,8 +234,7 @@ function store.addBlock(blocker, blocked)
     )
 end
 
----Forget the pair's swipes on each other (unmatch = clean slate; both can swipe and even
----re-match later).
+---Forgets the pair's swipes on each other.
 ---@param x string username
 ---@param y string username
 function store.clearPairSwipes(x, y)
@@ -259,8 +244,7 @@ function store.clearPairSwipes(x, y)
     )
 end
 
----Record (or overwrite) a swipe - (swiper, target) is the primary key, so a re-swipe updates in
----place rather than duplicating.
+---Records (or overwrites) a swipe.
 ---@param swiper string swiper's username
 ---@param target string swiped profile's username
 ---@param liked boolean like (true) or nope (false)
@@ -272,8 +256,7 @@ function store.recordSwipe(swiper, target, liked)
     ]], { swiper, target, liked and 1 or 0, os.time() })
 end
 
----True if `swiper` has a live like on `target` - the mutual-like probe behind match creation
----(the actions layer passes the partner as `swiper` to ask "did they like me?").
+---True if `swiper` has a live like on `target`.
 ---@param swiper string the side whose like is being checked
 ---@param target string the side being liked
 ---@return boolean liked
@@ -284,15 +267,14 @@ function store.hasLiked(swiper, target)
     ) ~= nil
 end
 
----Drop one specific swipe (the deck's rewind button names its card).
+---Drops one specific swipe.
 ---@param swiper string swiper's username
 ---@param target string swiped profile's username
 function store.deleteSwipe(swiper, target)
     MySQL.update.await('DELETE FROM phone_cherry_swipes WHERE swiper = ? AND target = ?', { swiper, target })
 end
 
----The match row (id only) between two users, if any - the pair is normalized before lookup so
----argument order doesn't matter.
+---The match row (id only) between two users, if any; the pair is normalized before lookup.
 ---@param x string username
 ---@param y string username
 ---@return table|nil row { id }
@@ -302,14 +284,13 @@ function store.matchBetween(x, y)
     return MySQL.single.await('SELECT id FROM phone_cherry_matches WHERE a = ? AND b = ?', { a, b })
 end
 
----Clear every swipe by this user (the deck's "Start over"). Matches persist - matched users stay
----excluded from the deck via the matches table.
+---Clears every swipe by this user. Matches persist.
 ---@param swiper string swiper's username
 function store.clearSwipes(swiper)
     MySQL.update.await('DELETE FROM phone_cherry_swipes WHERE swiper = ?', { swiper })
 end
 
----Normalize the pair so (x, y) and (y, x) hit the same unique key.
+---Normalizes the pair into sorted order (a < b).
 ---@param x string username
 ---@param y string username
 ---@return string a, string b sorted pair (a < b)
@@ -318,9 +299,8 @@ local function pairOf(x, y)
     return y, x
 end
 
----Create the pair's match, idempotently: INSERT IGNORE against the unique (a, b) key means a
----pair that already matched keeps its existing row, whose id is re-read and returned instead of
----the freshly generated one.
+---Creates the pair's match idempotently; a pair that already matched keeps its existing row,
+---whose id is re-read and returned.
 ---@param x string username
 ---@param y string username
 ---@return string id match id (the existing one when the pair already matched)
@@ -363,7 +343,7 @@ function store.matchesFor(username)
     return rows
 end
 
----The newest message of a thread (nil when empty) - the matches-list preview.
+---The newest message of a thread (nil when empty).
 ---@param matchId string match id
 ---@return table|nil row
 function store.lastMessage(matchId)
@@ -373,8 +353,7 @@ function store.lastMessage(matchId)
     )
 end
 
----Insert one chat message row. The actions layer owns kind/body/meta sanitisation; the data
----layer stays dumb.
+---Inserts one chat message row.
 ---@param id string message id
 ---@param matchId string match id
 ---@param sender string sender's username
@@ -389,8 +368,7 @@ function store.insertMessage(id, matchId, sender, kind, body, meta, createdAt)
     ]], { id, matchId, sender, kind, body, encodeJson(meta), createdAt })
 end
 
----Newest `limit` messages of a thread, returned oldest-first (the DESC page is reversed in Lua).
----The limit is interpolated after a numeric floor and only ever receives a server-side constant.
+---Newest `limit` messages of a thread, returned oldest-first.
 ---@param matchId string match id
 ---@param limit integer max rows (server-side constant)
 ---@return table[] rows oldest-first
@@ -423,8 +401,7 @@ function store.updateReactions(id, reactions)
     MySQL.update.await('UPDATE phone_cherry_messages SET reactions = ? WHERE id = ?', { encodeJson(reactions), id })
 end
 
----Keep a thread bounded: delete everything but its newest `keep` rows (mirrors the Messages
----prune; the nested subquery dodges MySQL's LIMIT-in-IN restriction). Server-side constant only.
+---Deletes everything but a thread's newest `keep` rows.
 ---@param matchId string match id
 ---@param keep integer rows to retain
 function store.pruneThread(matchId, keep)
@@ -440,8 +417,8 @@ function store.pruneThread(matchId, keep)
     ]]):format(n), { matchId, matchId })
 end
 
----Remove every trace of a user: their match threads, matches, swipes (both directions), blocks
----(both directions) and profile. Used by Delete Account and the seed wipe.
+---Removes every trace of a user: their match threads, matches, swipes (both directions), blocks
+---(both directions) and profile.
 ---@param username string account username
 function store.wipeUser(username)
     local matches = MySQL.query.await(

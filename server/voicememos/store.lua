@@ -1,9 +1,8 @@
 ---@type table Store module; the table returned at end of file.
 local store = {}
 
----Create the phone_voice_memos table if it doesn't exist, so the resource is drop-in. One row
----per recording; the audio itself lives on Fivemanage and only its hosted URL is stored here.
----Run once at boot.
+---Creates the phone_voice_memos table if it doesn't exist. One row per recording; only the
+---Fivemanage-hosted URL is stored. Runs once at boot.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS `phone_voice_memos` (
@@ -19,8 +18,7 @@ function store.ensureSchema()
     ]])
 end
 
----Insert one memo row. The actions layer has already trimmed/capped the name and clamped the
----duration; the data layer stays dumb.
+---Inserts one memo row (name and duration already sanitized by the actions layer).
 ---@param citizenid string owner's framework per-character id
 ---@param name string display name
 ---@param url string Fivemanage-hosted audio URL
@@ -43,16 +41,14 @@ function store.recent(citizenid, limit)
         { citizenid, limit }) or {}
 end
 
----How many memos a player has stored - the actions layer enforces the per-player cap against
----this. Read-only.
+---How many memos a player has stored. Read-only.
 ---@param citizenid string owner's framework per-character id
 ---@return integer count
 function store.countFor(citizenid)
     return MySQL.scalar.await('SELECT COUNT(*) FROM `phone_voice_memos` WHERE citizenid = ?', { citizenid }) or 0
 end
 
----The citizenid that owns a memo (nil when the row doesn't exist) - the actions layer's
----ownership gate for rename/delete. Read-only.
+---The citizenid that owns a memo (nil when the row doesn't exist). Read-only.
 ---@param id integer memo id
 ---@return string|nil citizenid
 function store.ownerOf(id)
@@ -66,14 +62,14 @@ function store.getById(id)
     return MySQL.single.await('SELECT * FROM `phone_voice_memos` WHERE id = ?', { id })
 end
 
----Rename a memo. Ownership was checked by the caller; the data layer stays dumb.
+---Renames a memo; ownership was checked by the caller.
 ---@param id integer memo id
 ---@param name string new display name (already trimmed/capped)
 function store.rename(id, name)
     MySQL.query.await('UPDATE `phone_voice_memos` SET name = ? WHERE id = ?', { name, id })
 end
 
----Delete a memo row. Ownership was checked by the caller; the data layer stays dumb.
+---Deletes a memo row; ownership was checked by the caller.
 ---@param id integer memo id
 function store.delete(id)
     MySQL.query.await('DELETE FROM `phone_voice_memos` WHERE id = ?', { id })

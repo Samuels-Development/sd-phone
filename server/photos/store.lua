@@ -3,12 +3,10 @@ local store = {}
 
 ---@type string Alphabet for generated row ids (base-36, lowercase).
 local ID_CHARS = '0123456789abcdefghijklmnopqrstuvwxyz'
----@type integer Generated id length - fits the VARCHAR(16) id columns with headroom.
+---@type integer Generated id length.
 local ID_LEN   = 12
 
----Generate a 12-character base-36 id for a photo or album row. Not cryptographic - ids are
----never an authority boundary (every read/write is additionally scoped by citizenid), and a
----freak collision just fails the PRIMARY KEY insert, which the caller reports as a failure.
+---Generates a 12-character base-36 id for a photo or album row; not cryptographic.
 ---@return string id
 function store.newId()
     local out = {}
@@ -19,11 +17,8 @@ function store.newId()
     return table.concat(out)
 end
 
----Create the Photos tables if they don't exist and back-fill newer columns, so the resource
----is drop-in. `phone_photos` holds one row per image (the URL is a remote CDN address, never
----the binary). `phone_photo_albums` holds player-created albums; `phone_photo_album_items`
----is the many-to-many join between albums and photos. The `favorite` back-fill goes through
----information_schema because MySQL 8 lacks ADD COLUMN IF NOT EXISTS. Run once at boot.
+---Creates the Photos tables if they don't exist and back-fills newer columns: phone_photos,
+---phone_photo_albums, and the phone_photo_album_items join table.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_photos (
@@ -69,8 +64,7 @@ function store.ensureSchema()
     ]])
 end
 
----Persist a freshly-uploaded photo against its owner. The caller validates the URL; we keep
----the data layer dumb.
+---Persists a freshly-uploaded photo against its owner.
 ---@param id string generated row id
 ---@param citizenid string owner's framework per-character id
 ---@param url string hosted media URL
@@ -95,10 +89,8 @@ function store.listForCitizen(citizenid)
     ]], { citizenid }) or {}
 end
 
----Set the favourite flag on a photo the caller owns. The citizenid in the WHERE clause is
----the ownership check - a foreign photo id matches zero rows and reports false. A same-value
----replay still reports true (the pool connects with CLIENT_FOUND_ROWS, so affectedRows
----counts matched rows, not changed ones).
+---Sets the favourite flag on a photo the caller owns; a foreign photo id matches zero rows and
+---reports false, and a same-value replay still reports true.
 ---@param photoId string photo row id
 ---@param citizenid string caller's framework per-character id
 ---@param value boolean desired favourite state
@@ -111,10 +103,8 @@ function store.setFavorite(photoId, citizenid, value)
     return (affected or 0) > 0
 end
 
----Hard-delete a photo, but only if the caller owns it (the citizenid in the WHERE clause).
----The row's url is read first so the caller can report WHAT was deleted, and its
----album-membership rows are cleared only after the owned delete actually removed a row, so a
----foreign photo id can't be used to strip someone else's album memberships.
+---Hard-deletes a photo the caller owns, returning its url and clearing its album-membership
+---rows after a confirmed delete.
 ---@param photoId string photo row id
 ---@param citizenid string caller's framework per-character id
 ---@return string|nil url of the deleted photo, nil when nothing matched
@@ -135,12 +125,8 @@ function store.deletePhoto(photoId, citizenid)
     return nil
 end
 
----Trim the oldest photos for one player so their row count stays at `maxRetained`
----(config.Photos.MaxPhotosPerPlayer). No-op when they're already at or under the cap. The
----excess ids are resolved first so their album-membership rows are deleted with them - a
----bare DELETE ... LIMIT would leave orphaned phone_photo_album_items rows that permanently
----inflate album counts. Only `?` placeholders are formatted into the IN-lists; the ids
----themselves stay parameterized.
+---Trims the oldest photos for one player down to `maxRetained`, deleting their
+---album-membership rows with them; no-op at or under the cap.
 ---@param citizenid string owner's framework per-character id
 ---@param maxRetained number cap on retained photo rows
 function store.pruneOldest(citizenid, maxRetained)
@@ -170,8 +156,7 @@ function store.pruneOldest(citizenid, maxRetained)
     MySQL.update.await(('DELETE FROM phone_photos WHERE id IN (%s)'):format(inList), ids)
 end
 
----Create a custom album for the player. The caller bounds the name; we keep the data layer
----dumb.
+---Creates a custom album for the player.
 ---@param id string generated row id
 ---@param citizenid string owner's framework per-character id
 ---@param name string trimmed album name
@@ -184,8 +169,7 @@ function store.createAlbum(id, citizenid, name)
     return affected ~= nil
 end
 
----How many albums a player owns - the caller compares it against the per-player cap before
----creating another. Read-only.
+---Returns how many albums a player owns. Read-only.
 ---@param citizenid string owner's framework per-character id
 ---@return number count
 function store.countAlbums(citizenid)
@@ -195,9 +179,8 @@ function store.countAlbums(citizenid)
     ) or 0
 end
 
----Delete a custom album and its membership rows, but only if the caller owns it - the
----ownership SELECT runs first so a foreign albumId deletes nothing. The photos themselves
----are never touched.
+---Deletes a custom album and its membership rows, but only if the caller owns it; the photos
+---themselves are never touched.
 ---@param albumId string album row id
 ---@param citizenid string caller's framework per-character id
 ---@return boolean deleted
@@ -212,8 +195,8 @@ function store.deleteAlbum(albumId, citizenid)
     return true
 end
 
----One player's custom albums, newest first, each annotated with a photo count and a cover
----URL (the newest photo in the album). Read-only.
+---Returns one player's custom albums, newest first, each annotated with a photo count and a
+---cover URL (the newest photo in the album). Read-only.
 ---@param citizenid string owner's framework per-character id
 ---@return { id: string, name: string, count: number, cover: string|nil, created_at: number }[] rows
 function store.listAlbums(citizenid)
@@ -235,10 +218,8 @@ function store.listAlbums(citizenid)
     ]], { citizenid }) or {}
 end
 
----Add photos to an album. Album ownership is verified up front, and the INSERT only takes
----photos the same caller also owns (the WHERE EXISTS guard) - so neither a foreign album id
----nor a foreign photo id links anything. Duplicate memberships are silently ignored
----(INSERT IGNORE against the composite primary key), which makes a replayed add harmless.
+---Adds photos to an album: album ownership is verified up front, only photos the caller owns
+---are inserted, and duplicate memberships are silently ignored (INSERT IGNORE).
 ---@param albumId string album row id
 ---@param citizenid string caller's framework per-character id
 ---@param photoIds string[] photo ids to add (caller caps and type-checks the list)
@@ -259,8 +240,7 @@ function store.addPhotosToAlbum(albumId, citizenid, photoIds)
     return true
 end
 
----Remove a single photo from an album. Ownership is enforced via the ALBUM row - the
----membership delete only runs once the caller is confirmed as the album's owner.
+---Removes a single photo from an album once the caller is confirmed as the album's owner.
 ---@param albumId string album row id
 ---@param photoId string photo row id
 ---@param citizenid string caller's framework per-character id
@@ -278,8 +258,8 @@ function store.removePhotoFromAlbum(albumId, photoId, citizenid)
     return (affected or 0) > 0
 end
 
----The photos in one album, newest first. Joins through the album row so a foreign citizenid
----can't read someone else's album - it just comes back empty. Read-only.
+---Returns the photos in one album, newest first; a foreign citizenid reads as an empty album.
+---Read-only.
 ---@param albumId string album row id
 ---@param citizenid string caller's framework per-character id
 ---@return { id: string, url: string, favorite: any, created_at: number }[] rows

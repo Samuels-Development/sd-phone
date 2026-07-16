@@ -3,10 +3,8 @@ local store   = require 'server.accounts.store'
 ---@type table Authoritative account handlers (server.accounts.actions): validation + all mutation.
 local actions = require 'server.accounts.actions'
 
----Schema bootstrap + one-time legacy credential migration, in a thread so it can yield until
----oxmysql is ready without blocking resource start. Each step is pcall-guarded independently: a
----failed migration (the Birdy/Mail source tables may not exist on a fresh install) must not take
----the schema down with it, and migrateLegacy's INSERT IGNORE makes re-runs no-ops.
+---Bootstraps the schema and runs the one-time legacy credential migration in a thread, each
+---step pcall-guarded independently.
 CreateThread(function()
     local okSchema, err = pcall(store.ensureSchema)
     if not okSchema then
@@ -20,9 +18,7 @@ CreateThread(function()
     print('^2[sd-phone:accounts]^0 schema ready')
 end)
 
--- Authoritative account callbacks: thin delegates into server.accounts.actions, which owns the
--- validation + persistence (each handler is documented there). Reachable by ANY connected client
--- with ANY payload - the actions layer trusts `src` alone and validates everything else.
+-- Authoritative account callbacks: thin delegates into server.accounts.actions.
 lib.callback.register('sd-phone:server:accounts:register',     function(src, payload) return actions.register(src, payload) end)
 lib.callback.register('sd-phone:server:accounts:login',        function(src, payload) return actions.login(src, payload) end)
 lib.callback.register('sd-phone:server:accounts:logout',       function(src, payload) return actions.logout(src, payload) end)
@@ -37,9 +33,6 @@ lib.callback.register('sd-phone:server:accounts:savePassword',   function(src, p
 lib.callback.register('sd-phone:server:accounts:listPasswords',  function(src)          return actions.listPasswords(src) end)
 lib.callback.register('sd-phone:server:accounts:deletePassword', function(src, payload) return actions.deletePassword(src, payload) end)
 
--- Every table that holds app accounts or content keyed to them. Wiping the engine tables alone is
--- not enough: the bootstrap migration would re-import credentials from the mail/birdy tables on
--- the next restart, so those (and birdy's account-keyed content) go too.
 ---@type string[] Tables truncated by /wipephoneaccounts.
 local WIPE_TABLES = {
     'phone_app_accounts',
@@ -54,11 +47,8 @@ local WIPE_TABLES = {
     'phone_birdy_notifications',
 }
 
----/wipephoneaccounts - truncate every account-bearing table (admin-only via `restricted`; a
----player client can't invoke it). Table names come from the constant list above, never from
----input, and each TRUNCATE is pcall-guarded so a missing table on a partial install skips
----instead of aborting the sweep. Also runnable from the server console (source 0), where the
----notify is skipped.
+---/wipephoneaccounts - truncates every table in WIPE_TABLES (admin-only), each TRUNCATE
+---pcall-guarded; runnable from the server console.
 ---@param source integer player server id (0 from console)
 lib.addCommand('wipephoneaccounts', {
     help = 'Wipe EVERY phone app account (mail, birdy, photogram, cherry, vibez), all birdy content, and the passwords vault',
@@ -84,11 +74,8 @@ lib.addCommand('wipephoneaccounts', {
     end
 end)
 
----/wipephotogram - remove just the Photogram accounts (plus their sessions and saved
----Passwords-app logins), leaving every other app's accounts intact (admin-only via `restricted`).
----The engine tables are shared and keyed by `app`, so this DELETEs WHERE app = 'photogram' rather
----than truncating. Photogram's feed/DMs are client-side mock data with no DB tables, so nothing
----else needs clearing. Everyone must re-register afterwards.
+---/wipephotogram - deletes Photogram accounts, their sessions, and saved Passwords-app logins,
+---leaving every other app's accounts intact (admin-only).
 ---@param source integer player server id (0 from console)
 lib.addCommand('wipephotogram', {
     help = 'Wipe ALL Photogram accounts (plus their sessions and saved logins). Everyone must re-register.',
@@ -112,11 +99,8 @@ lib.addCommand('wipephotogram', {
     end
 end)
 
----Public export: does an account exist for `app`? -
----exports['sd-phone']:accountExists(app, username). Read-only; `app` must be one of the engine's
----account apps (photogram, cherry, vibez, birdy, mail, ryde) and the username is trimmed and
----lowercased before the lookup, matching how accounts register. Callers are other server
----resources - a non-string or blank argument returns false instead of erroring.
+---Public export: exports['sd-phone']:accountExists(app, username). Returns whether an account
+---exists for one of the engine's account apps; the username is trimmed and lowercased.
 ---@param app string account app key
 ---@param username string account username
 ---@return boolean exists
@@ -124,10 +108,8 @@ exports('accountExists', function(app, username)
     return actions.accountExists(app, username)
 end)
 
----Public export: one account in its public shape -
----exports['sd-phone']:getAppAccount(app, username). Returns { username, name, email, phone } -
----NEVER the password hash - or nil when the app is unknown, the arguments are malformed, or no
----such account exists. Read-only.
+---Public export: exports['sd-phone']:getAppAccount(app, username). Returns one account as
+---{ username, name, email, phone }, or nil when the app is unknown or no such account exists.
 ---@param app string account app key
 ---@param username string account username
 ---@return table|nil account public shape { username, name, email, phone }
@@ -135,10 +117,8 @@ exports('getAppAccount', function(app, username)
     return actions.getPublicAccount(app, username)
 end)
 
----Public export: the account a citizen is currently signed into for `app` -
----exports['sd-phone']:getSessionAccount(app, citizenid). Same public shape as getAppAccount,
----never the password hash. nil means "not signed in" (or an unknown app / malformed citizenid),
----not an error. Read-only.
+---Public export: exports['sd-phone']:getSessionAccount(app, citizenid). Returns the account a
+---citizen is currently signed into for `app`, in the same public shape as getAppAccount, or nil.
 ---@param app string account app key
 ---@param citizenid string framework per-character id
 ---@return table|nil account public shape { username, name, email, phone }

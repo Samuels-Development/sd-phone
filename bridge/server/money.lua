@@ -6,13 +6,8 @@ local inventoryId = require 'bridge.shared.inventory_id'
 local player_mod  = require 'bridge.server.player'
 
 ---@type table Money module; the table returned at end of file. Personal money + black-money
----operations. Black money is the special case: ox_inventory models it as an item (black_money),
----QBCore via the markedbills item with metadata-stored worth, and ESX as a true account - each
----path is dispatched once at module load. Contracts differ on purpose: the black-money debit is
----strict (true means the FULL amount left the player), while add/remove/get keep their legacy
----void/number shapes, so debit callers follow the phone's check-then-move convention (pre-check
----money.get, then remove). Amount hygiene lives with the callers - every server action coerces to
----a positive integer before reaching this layer.
+---operations. Black money is the black_money item on ox_inventory, the markedbills item with
+---metadata worth on QBCore, and a true account on ESX; each path is dispatched once at module load.
 local money = {}
 
 ---Normalise caller-passed money type names across frameworks. ESX wants `money` for cash, QBCore
@@ -26,7 +21,7 @@ local function convertType(t)
 end
 
 ---Credit one of the player's framework accounts (cash, bank, ...). Returns nothing by contract;
----a no-op when the player can't be resolved (disconnected mid-callback).
+---a no-op when the player can't be resolved.
 ---@param source number
 ---@param moneyType string
 ---@param amount number
@@ -42,10 +37,8 @@ function money.add(source, moneyType, amount, reason)
     end
 end
 
----Debit one of the player's framework accounts. Returns nothing by contract, so it CANNOT report
----a declined debit - callers MUST pre-check money.get(src, type) >= amount first, and every
----caller in server/ does (games, ryde, streaks). The qb path's internal decline signal
----(RemoveMoney returning false) is deliberately left unconsumed to keep the legacy void shape.
+---Debit one of the player's framework accounts. Returns nothing and cannot report a declined
+---debit; callers must pre-check money.get(src, type) >= amount first.
 ---@param source number
 ---@param moneyType string
 ---@param amount number
@@ -61,8 +54,8 @@ function money.remove(source, moneyType, amount, reason)
     end
 end
 
----The player's current balance for one of their accounts. Read-only; 0 (never nil) when the
----player or account can't be resolved, so callers' numeric comparisons stay safe.
+---The player's current balance for one of their accounts. Read-only; 0 when the player or
+---account can't be resolved.
 ---@param source number
 ---@param moneyType string
 ---@return number
@@ -79,10 +72,8 @@ function money.get(source, moneyType)
     return 0
 end
 
----Pick the "read black-money balance" implementation once at module load. ox_inventory counts
----the black_money item; qb-inventory sums every markedbills instance's `info.worth`; ESX reads
----the real account. The inventory bridge is required in-branch so non-ox setups never bind it.
----0 with no supported path.
+---Pick the "read black-money balance" implementation once at module load: ox counts black_money,
+---qb-inventory sums markedbills `info.worth`, ESX reads the account. 0 with no supported path.
 ---@return fun(source: number): number
 local function chooseGetBlack()
     if inventoryId.name == 'ox_inventory' then
@@ -120,11 +111,8 @@ local getBlack = chooseGetBlack()
 ---@return number
 function money.getBlack(source) return getBlack(source) end
 
----Pick the "credit black money" implementation once at module load. The ox path inherits the
----inventory bridge's AddItem result; the qb path mints one markedbills instance whose
----`info.worth` metadata carries the whole amount; ESX credits the account (no failure mode once
----the player resolves). False with no supported path, so a credit that went nowhere never
----reports success.
+---Pick the "credit black money" implementation once at module load: ox adds black_money, qb mints
+---one markedbills with the amount in `info.worth`, ESX credits the account. False with no path.
 ---@return fun(source: number, amount: number): boolean
 local function chooseAddBlack()
     if inventoryId.name == 'ox_inventory' then
@@ -156,17 +144,8 @@ local addBlack = chooseAddBlack()
 ---@return boolean
 function money.addBlack(source, amount) return addBlack(source, amount) end
 
----Pick the "debit black money" implementation once at module load. The contract every path must
----uphold: true ONLY when the full amount actually left the player - callers credit against this
----answer. The ox path inherits RemoveItem's own held-count check. The qb-inventory path pre-sums
----every bill's worth and refuses outright when the total falls short, so the walk can never
----consume bills and then report failure; a whole bill only counts once its RemoveItem succeeded,
----and a partial consume replaces the last bill (remove, then re-add at the reduced worth) because
----GetItemsByName hands back serialized COPIES across the resource boundary - mutating a copy's
----metadata changes nothing real. Each removal targets the bill's own `slot` field, not its
----position in the returned array. The ESX path reads the account and refuses when short:
----removeAccountMoney subtracts blindly (no floor), so an unchecked call could drive the account
----negative while reporting success. False with no supported path.
+---Pick the "debit black money" implementation once at module load; true only when the full amount
+---left the player. The qb path removes bills by slot, re-adding a reduced bill on a partial consume.
 ---@return fun(source: number, amount: number): boolean
 local function chooseRemoveBlack()
     if inventoryId.name == 'ox_inventory' then

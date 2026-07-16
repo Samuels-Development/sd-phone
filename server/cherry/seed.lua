@@ -5,10 +5,10 @@ local store     = require 'server.cherry.store'
 
 ---@type string Username prefix every seeded profile carries - /cherryseedwipe removes exactly this set.
 local PREFIX   = 'test_'
----@type string Password every seeded account gets, so a tester can sign into one.
+---@type string Password every seeded account gets.
 local PASSWORD = 'cherry123'
 
----@type table<string, string[]> Name pools per gender, so a seeded card's name fits its profile data.
+---@type table<string, string[]> Name pools per gender.
 local NAMES = {
     Man       = { 'Marcus', 'Diego', 'Tyrone', 'Vince', 'Lukas', 'Andre', 'Nikolai', 'Trevor', 'Dante', 'Jaxon' },
     Woman     = { 'Klara', 'Sofia', 'Mia', 'Aaliyah', 'Ivy', 'Nova', 'Jess', 'Lena', 'Bianca', 'Rosa' },
@@ -33,13 +33,11 @@ local ABOUT = {
     'Will beat you at pool. Sorry in advance.',
 }
 
----@type string[] Weighted interest mix, leaning toward Everyone so seeded cards show up
----regardless of the tester's own gender/interest settings.
+---@type string[] Weighted interest mix, leaning toward Everyone.
 local INTERESTS = { 'Everyone', 'Everyone', 'Women', 'Men' }
 
----2-4 photos per profile: a face for the lead photo (pravatar serves stable portraits by id) and
----scenic picsum fillers for the carousel, both seeded off the username so reruns stay
----deterministic per account.
+---2-4 photos per profile: a pravatar face for the lead photo and picsum fillers for the
+---carousel, seeded off the username.
 ---@param username string seeded username (keys the picsum seed)
 ---@param faceId integer pravatar portrait id
 ---@return string[] photos hosted photo URLs
@@ -51,11 +49,8 @@ local function photoUrls(username, faceId)
     return photos
 end
 
----/cherryseed [count] - dev tooling (admin-only): fabricate real accounts + visible profiles
----with random names, ages, bios, interests and hosted photos, so the deck/match/chat flows can
----be exercised without a second player. Count is clamped 1-50 server-side; a username collision
----simply skips that roll. Seeded accounts are fully functional - a tester can even sign into one
----with the shared PASSWORD. Console-safe: the in-game notify only fires for a real player src.
+---/cherryseed [count] (admin-only): fabricates real accounts + visible profiles with random
+---names, ages, bios, interests and hosted photos. Count is clamped 1-50 server-side.
 ---@param source integer player server id (0 when run from console)
 ---@param args table parsed command args { count? }
 lib.addCommand('cherryseed', {
@@ -100,10 +95,8 @@ lib.addCommand('cherryseed', {
     end
 end)
 
----/cherryseedwipe - dev tooling (admin-only): remove every Cherry profile created by
----/cherryseed, plus their accounts, matches and chats. Targets exactly the PREFIX-ed usernames -
----the LIKE underscore is escaped so an organic 'testX...' account can't be swept up. Console-safe
----like /cherryseed.
+---/cherryseedwipe (admin-only): removes every Cherry profile created by /cherryseed, plus their
+---accounts, matches and chats.
 ---@param source integer player server id (0 when run from console)
 lib.addCommand('cherryseedwipe', {
     help = 'Remove every Cherry profile created by /cherryseed (and their accounts, matches, chats)',

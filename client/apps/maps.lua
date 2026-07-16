@@ -6,32 +6,24 @@ local notify = require 'bridge.client.notify'
 ---@type fun(nuiAction: string, serverEvent: string) NUI->server pass-through registrar (client.nui).
 local proxyCallback = require 'client.nui'
 
--- Pin persistence proxies: thin delegates into the Maps server module, which owns the validation
--- (pin cap, label length, share targets - each handler is documented there). The GPS waypoint and
--- the live "you are here" dot below are handled entirely client-side; no server round-trip needed.
+-- Pin persistence proxies into the Maps server module.
 proxyCallback('sd-phone:maps:list', 'sd-phone:server:maps:list')
 proxyCallback('sd-phone:maps:save', 'sd-phone:server:maps:save')
 proxyCallback('sd-phone:maps:sharePin', 'sd-phone:server:maps:sharePin')
 
----React -> Lua: UI-relevant Maps config. `people` gates the whole People tab (live location
----sharing) - when false the web app hides the tab and the chats' location button goes straight
----to the one-time share confirm. Read-only.
+---React -> Lua: returns UI-relevant Maps config; `people` gates the People tab. Read-only.
 RegisterNUICallback('sd-phone:maps:config', function(_, cb)
     cb({ success = true, data = { people = config.People ~= false } })
 end)
 
----An accepted pin AirShare was saved server-side - forward it into the NUI so an open Maps app
----can append it live instead of waiting for a remount. Server-pushed, so the marker shape is
----trusted as-is.
+---Forwards a server-saved pin AirShare into the NUI.
 ---@param marker table saved pin row
 RegisterNetEvent('sd-phone:client:maps:pinAdded', function(marker)
     SendNUIMessage({ action = 'sd-phone:maps:pinAdded', data = marker })
 end)
 
----React -> Lua: set the in-game GPS waypoint to a pin's world coords. Guarded against
----non-numeric input so a malformed payload can't feed the native junk. Optionally closes the
----phone afterward (configs.maps CloseOnWaypoint) so the route is immediately visible on the
----minimap.
+---React -> Lua: sets the in-game GPS waypoint to a pin's world coords, guarded against
+---non-numeric input. Optionally closes the phone afterward (configs.maps CloseOnWaypoint).
 RegisterNUICallback('sd-phone:maps:waypoint', function(data, cb)
     local x, y = tonumber(data and data.x), tonumber(data and data.y)
     if not x or not y then
@@ -50,13 +42,8 @@ RegisterNUICallback('sd-phone:maps:waypoint', function(data, cb)
     cb({ success = true })
 end)
 
----React -> Lua: estimate distance + arrival time to a pin, for the Apple-Maps style directions
----card. Distance prefers the live minimap GPS route length (exact, matches the minimap) while a
----waypoint route is active, then the road-network distance (so the figure still matches a GPS
----route), then straight-line for targets the pathfinder can't reach (an off-road or island
----point). ETA uses a steady cruising speed per travel mode (configs.maps Navigation) so it
----doesn't jump around when you stop; the speed floor guards a nonsense <= 0 config value. The
----card polls this while it's open (Navigation.RefreshInterval). Read-only.
+---React -> Lua: estimates distance + ETA to a pin: live GPS route length, then road-network
+---distance, then straight-line, with a per-mode cruising speed. Read-only.
 RegisterNUICallback('sd-phone:maps:route', function(data, cb)
     local tx, ty = tonumber(data and data.x), tonumber(data and data.y)
     if not tx or not ty then
@@ -91,29 +78,23 @@ RegisterNUICallback('sd-phone:maps:route', function(data, cb)
     })
 end)
 
----React -> Lua: the player's current world coords. Used when sharing "current location" in
----Messages so the bubble carries a real point the recipient can open in Maps / set a waypoint
----to. Read-only.
+---React -> Lua: the player's current world coords. Read-only.
 RegisterNUICallback('sd-phone:maps:here', function(_, cb)
     local c = GetEntityCoords(PlayerPedId())
     cb({ success = true, data = { x = c.x, y = c.y } })
 end)
 
--- Live "you are here" dot. The React Maps app turns the stream on while it's mounted and off
--- when it closes (mirroring the weather feed's "only poll while needed" pattern): one thread
--- reads the local ped's coords + heading and pushes them to the NUI, stopping the moment the
--- app closes or the phone is put away.
+-- Live "you are here" dot: one thread pushes the local ped's coords + heading to the NUI while
+-- the Maps app is mounted.
 ---@type boolean True while the Maps app is on screen and wants position pushes.
 local watching = false
----@type boolean True while the stream thread is alive - guards against spawning a second one.
+---@type boolean True while the stream thread is alive.
 local streamRunning = false
 ---@type boolean True while a /mapcal calibration run is active (arms the in-app capture banner).
 local calArmed = false
 
----Spawn the position-stream thread unless it's already running. The loop re-checks both the
----watch flag and the phone's open state every tick, so it self-terminates when either drops and
----can be started again cleanly on the next watch(on). Cadence comes from configs.maps
----LiveLocation.Interval - smooth without being chatty.
+---Spawns the position-stream thread unless it's already running; the loop self-terminates when
+---the watch flag or the phone's open state drops.
 local function startLocationStream()
     if streamRunning then return end
     streamRunning = true
@@ -131,11 +112,8 @@ local function startLocationStream()
     end)
 end
 
----React -> Lua: start/stop the live-location stream. Fired when the Maps app mounts
----(`on = true`) and unmounts (`on = false`); configs.maps LiveLocation.Enabled = false
----hard-disables the stream no matter what the NUI asks for. Also re-arms the calibration
----banner each time Maps opens while a /mapcal run is in progress - the phone steals NUI focus,
----so the command has to be run with the phone closed, and this restores calib mode on open.
+---React -> Lua: starts/stops the live-location stream; configs.maps LiveLocation.Enabled =
+---false hard-disables it. Re-arms the calibration banner while a /mapcal run is in progress.
 RegisterNUICallback('sd-phone:maps:watch', function(data, cb)
     local enabled = not (config.LiveLocation and config.LiveLocation.Enabled == false)
     watching = enabled and (data and data.on == true) or false
@@ -148,17 +126,9 @@ RegisterNUICallback('sd-phone:maps:watch', function(data, cb)
     cb({ success = true })
 end)
 
--- Map calibration helper (TEMPORARY - remove once the WORLD bounds are locked). /mapcal
--- teleports through a handful of spread, visually-distinct spots and arms the in-app capture
--- banner. At each spot: open the phone -> Maps -> tap the satellite exactly where you really
--- are (ignore the blue dot). The app logs { real = live GPS coord, placed = tap }. Hit Copy in
--- the banner and paste the blob back so the WORLD bounds in data.ts can be solved. /mapcaldone
--- (or the banner's Done button) disarms it.
----@type vector3[] Calibration teleport spots, spread to the map EXTREMES so the linear fit
----anchors its line ends instead of extrapolating from a clustered middle: LSIA runway (far S),
----Chumash coast (far W), Legion Square (centre), RON wind farm (far E), Sandy Shores strip (NE
----centre), Grapeseed (NE) and Paleto Bay pier (far N) bracket the playable square, and each is
----visually distinct enough to find your real spot in the imagery and tap it precisely.
+-- Map calibration helper (temporary): /mapcal teleports through the calibration spots and arms
+-- the in-app capture banner; /mapcaldone disarms it.
+---@type vector3[] Calibration teleport spots, spread across the map extremes.
 local CAL_POINTS = {
     vec3(-1336.0, -3044.0, 13.9),
     vec3(-3192.0,  1100.0,  4.5),
@@ -171,9 +141,8 @@ local CAL_POINTS = {
 ---@type integer 1-based index of the last visited calibration point (0 = run not started).
 local calIndex = 0
 
----/mapcal - arm the calibration run and teleport to the next point, wrapping back to the first
----after the last. Ace-restricted (command.mapcal) because it teleports the player: left open,
----any connected player could hop across the map through the calibration spots.
+---/mapcal - arms the calibration run and teleports to the next point, wrapping after the last.
+---Ace-restricted (command.mapcal).
 RegisterCommand('mapcal', function()
     calArmed = true
     calIndex = calIndex % #CAL_POINTS + 1
@@ -189,29 +158,21 @@ RegisterCommand('mapcal', function()
         calIndex, #CAL_POINTS, p.x, p.y))
 end, true)
 
----/mapcaldone - disarm the calibration run so the banner stops reappearing. Left unrestricted
----on purpose: it only clears this client's own local flag, which is a no-op unless a run was
----armed here in the first place.
+---/mapcaldone - disarms the calibration run.
 RegisterCommand('mapcaldone', function()
     calArmed = false
     print('[sd-phone:mapcal] calibration disarmed.')
 end, false)
 
----/maptiles - high-res tile pack verifier (dev tool). After dropping a deep tile pack in (see
----web HIGH_RES_TILES.md), this asks the NUI to probe one tile per zoom level for each style
----(whatever TILE_SOURCES point at - local nui:// pack or CDN) and report which levels loaded,
----so you can confirm the pack is complete and how deep it really goes. Works with the phone
----open or closed. Read-only, so it stays unrestricted.
+---/maptiles - asks the NUI to probe one tile per zoom level for each style and report which
+---levels loaded.
 RegisterCommand('maptiles', function()
     SendNUIMessage({ action = 'sd-phone:maps:tilecheck' })
     notify.show({ description = 'Checking map tiles… results in the F8 console.', type = 'info' })
     print('[sd-phone:maptiles] probing tile levels — results below in a moment…')
 end, false)
 
----NUI -> Lua: the tile-probe results from /maptiles, printed to the F8 console. The per-style
----verdict compares the deepest zoom that actually loaded against the depth enabled in data.ts,
----so a broken base URL, a short pack, or a pack deeper than what's enabled each get called out
----explicitly.
+---NUI -> Lua: prints the /maptiles tile-probe results and per-style verdicts to the F8 console.
 RegisterNUICallback('sd-phone:maps:tilecheckResult', function(data, cb)
     print('[sd-phone:maptiles] ===== map tile check =====')
     for _, s in ipairs(data and data.styles or {}) do
@@ -239,8 +200,7 @@ RegisterNUICallback('sd-phone:maps:tilecheckResult', function(data, cb)
     cb({ success = true })
 end)
 
----React -> Lua: the in-app calibration "Done" button disarms the run so the banner stops
----reappearing when Maps is reopened.
+---React -> Lua: the in-app calibration "Done" button disarms the run.
 RegisterNUICallback('sd-phone:maps:calibrateDone', function(_, cb)
     calArmed = false
     cb({ success = true })

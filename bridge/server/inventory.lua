@@ -6,14 +6,11 @@ local inventoryId = require 'bridge.shared.inventory_id'
 local player_mod  = require 'bridge.server.player'
 
 ---@type table Inventory module; the table returned at end of file. Server-side inventory
----operations dispatcher: each operation is picked ONCE at module load (bound by the detected
----inventory resource), so call sites are direct calls into the chosen exports rather than
----repeated `if active == ...` chains. `system` exposes the detected resource name (nil =
----framework-native paths) for callers that need to branch on it.
+---operations dispatcher, bound once at module load to the detected inventory resource. `system`
+---exposes the detected resource name (nil = framework-native paths).
 local inventory = { system = inventoryId.name }
 
--- Inventory resource names, aliased so the choosers read as `active == OX` instead of repeating
--- string literals.
+-- Inventory resource name aliases.
 ---@type string ox_inventory resource name.
 local OX = 'ox_inventory'
 ---@type string tgiann-inventory resource name.
@@ -34,14 +31,8 @@ local CD = 'codem-inventory'
 ---@type string|nil Detected inventory resource; nil routes every chooser to the framework paths.
 local active = inventoryId.name
 
----Pick the inventory backend's AddItem implementation once at module load - the active inventory
----doesn't change at runtime, so binding once keeps call sites branch-free. Dedicated backends
----return their own success signal (jaksam's truthy return coerced to a strict boolean); the qs
----family takes slot as its 4th argument, so metadata rides 5th. Framework fallbacks: core ESX's
----addInventoryItem has no failure signal (it enforces no carry limit on add - use canCarry
----first), so a resolved player always reports true there; the qb path returns AddItem's own
----boolean. With no backend at all, always false - a grant that went nowhere must not report
----success.
+---Pick the inventory backend's AddItem implementation once at module load. Dedicated backends
+---return their own success signal; framework paths cover the rest; with no backend, always false.
 ---@return fun(source: number, item: string, count: number, metadata?: table): boolean
 local function chooseAdd()
     if active == OX then
@@ -92,11 +83,7 @@ end
 inventory.add = chooseAdd()
 
 ---Pick the inventory backend's count-of-item implementation once at module load. Read-only.
----ox_inventory has no direct total, so its path sums the counts of every matching slot from
----Search; the others expose a total directly. Framework fallbacks read the player's item row
----(ESX and qb name the count field differently, hence the `count or amount` probing). Every path
----answers 0 - never nil - when the player or item can't be resolved, so `has` and other numeric
----comparisons at call sites never see nil.
+---Every path answers 0, never nil, when the player or item can't be resolved.
 ---@return fun(source: number, item: string): number
 local function chooseCount()
     if active == OX then
@@ -138,9 +125,8 @@ end
 ---@type fun(source: number, item: string): number Backend item-count reader, bound once at load.
 inventory.count = chooseCount()
 
----Predicate form of `count` - true when the player has at least `amount` of `item` (default 1).
----Fails closed on a nil item name, so ownership gates built on this can't be passed by a missing
----config value.
+---Predicate form of `count`: true when the player has at least `amount` of `item` (default 1).
+---Fails closed on a nil item name.
 ---@param source number
 ---@param item string
 ---@param amount? number Defaults to 1.
@@ -150,14 +136,8 @@ function inventory.has(source, item, amount)
     return inventory.count(source, item) >= (amount or 1)
 end
 
----Pick the inventory backend's RemoveItem implementation once at module load. Debits must be
----truthful: a `true` from this function means the items actually left the player, because
----money-shaped callers (the black-money debit in bridge.server.money) credit against the answer.
----Dedicated backends report their own result (jaksam coerced to a strict boolean). The qb
----framework fallback drops metadata - qb-core's RemoveItem takes none. The ESX fallback verifies
----the held count BEFORE removing: core ESX's removeInventoryItem silently no-ops when the player
----holds fewer than `count`, which would otherwise report a successful debit that never happened.
----With no backend, always false.
+---Pick the inventory backend's RemoveItem implementation once at module load. Dedicated backends
+---report their own result; the ESX path verifies the held count first; with no backend, always false.
 ---@return fun(source: number, item: string, count: number, metadata?: table): boolean
 local function chooseRemove()
     if active == OX then
@@ -208,11 +188,8 @@ end
 ---@type fun(source: number, item: string, count: number, metadata?: table): boolean Backend RemoveItem, bound once at load.
 inventory.remove = chooseRemove()
 
----Pick the backend's "can the player carry this?" check once at module load. codem exposes no
----such check, so its path optimistically allows - grant paths there rely on AddItem's own result
----instead. ESX has no export either, so we emulate the answer with weight maths from the item's
----registered weight; an item ESX doesn't know at all answers false. With no backend, always
----false: better to refuse a grant than promise space that may not exist.
+---Pick the backend's carry check once at module load. codem always allows, ESX is answered with
+---weight maths, and with no backend the answer is always false.
 ---@return fun(source: number, item: string, count: number, slot?: any): boolean
 local function chooseCanCarry()
     if active == CD then
@@ -262,13 +239,8 @@ end
 ---@type fun(source: number, item: string, count: number, slot?: any): boolean Backend carry check, bound once at load.
 inventory.canCarry = chooseCanCarry()
 
----Pick the right "register a usable item" implementation once at module load. ox_inventory has
----no single registration API - it instead dispatches item use to a per-item export on the owning
----resource, so the ox path auto-derives that export name from the item key ('phone' ->
----'usePhone') and registers it, forwarding only the 'usingItem' phase to the callback with the
----holder's inventory id as the source. Other inventories expose their own CreateUsableItem /
----CreateUseableItem, and the framework cores cover the rest. With no path at all, registration
----raises loudly at boot - a phone item that silently can't be used would be undebuggable.
+---Pick the "register a usable item" implementation once at module load. The ox path derives a
+---per-item export ('phone' -> 'usePhone'); with no path at all, registration errors at boot.
 ---@return fun(item: string, cb: fun(source: number, item?: any, inv?: table, slot?: any, data?: any)): nil
 local function chooseRegisterUsable()
     if active == OX then
@@ -303,10 +275,8 @@ end
 ---@type fun(item: string, cb: function): nil Usable-item registrar, bound once at load.
 inventory.registerUsable = chooseRegisterUsable()
 
----Pick the right item-label resolver once at module load. Falls back to the framework's shared
----items table for backends that don't expose a dedicated label API, and to the raw key when
----nothing knows the item. The ox/tgiann path calls the Items export via pcall since an unknown
----item can throw there.
+---Pick the item-label resolver once at module load. Falls back to the framework's shared items
+---table, then to the raw key.
 ---@return fun(itemName: string): string|nil
 local function chooseLabel()
     if active == OX or active == TG then
@@ -336,13 +306,11 @@ end
 
 ---@type fun(itemName: string): string|nil Label resolver, bound once at load.
 local resolveLabel = chooseLabel()
----@type table<string, string> Resolved labels by item key - item definitions don't change at
----runtime, so first lookup wins forever.
+---@type table<string, string> Resolved labels by item key.
 local labelCache = {}
 
----The player-readable label for an item key, falling back to the raw key when the backend has no
----label registered. Cached after first lookup; an empty string for a nil key keeps string
----call sites safe.
+---The player-readable label for an item key, falling back to the raw key. Cached after first
+---lookup; returns '' for a nil key.
 ---@param itemName string
 ---@return string
 function inventory.label(itemName)

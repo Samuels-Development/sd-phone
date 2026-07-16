@@ -3,8 +3,7 @@ local store = require 'server.pages.store'
 ---@type table Authoritative pages handlers (server.pages.actions).
 local actions = require 'server.pages.actions'
 
--- One-shot boot thread: create/migrate the pages table before the first callback can hit it.
--- pcall'd so a DB fault surfaces as a tagged console line instead of an unhandled error.
+-- One-shot boot thread: creates/migrates the pages table.
 CreateThread(function()
     local ok, err = pcall(store.ensureSchema)
     if not ok then
@@ -14,16 +13,12 @@ CreateThread(function()
     print('^2[sd-phone:pages]^0 schema ready')
 end)
 
--- Authoritative callbacks, reachable by any connected client with any payload: thin delegates
--- into server.pages.actions, which owns the validation + ownership checks (each handler is
--- documented there). Posts are plain persisted rows - no live presence needed, the feed is
--- re-fetched whenever the app opens and kept fresh in between by the actions-layer feed pushes.
+-- Callbacks: thin delegates into server.pages.actions.
 lib.callback.register('sd-phone:server:pages:list', function(src) return actions.list(src) end)
 lib.callback.register('sd-phone:server:pages:create', function(src, payload) return actions.create(src, payload) end)
 lib.callback.register('sd-phone:server:pages:update', function(src, payload) return actions.update(src, payload) end)
 
----Delete unwraps { id } here before delegating; a non-table payload (crafted client) is coerced
----to {} so the field access can't error before actions.delete's own id validation rejects it.
+---Unwraps { id } before delegating; a non-table payload is coerced to {}.
 ---@param src integer player server id
 ---@param payload table|nil { id } (untrusted)
 lib.callback.register('sd-phone:server:pages:delete', function(src, payload)

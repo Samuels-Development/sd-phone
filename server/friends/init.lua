@@ -9,8 +9,7 @@ local actions = require 'server.friends.actions'
 ---targets), by src.
 local watchers = {}
 
--- Schema bootstrap, once at boot: create/upgrade the phone_friends table. A failure is loud but
--- doesn't take the resource down.
+-- Schema bootstrap, once at boot: creates/upgrades the phone_friends table.
 CreateThread(function()
     local ok, err = pcall(store.ensureSchema)
     if not ok then
@@ -20,11 +19,7 @@ CreateThread(function()
     print('^2[sd-phone:friends]^0 schema ready')
 end)
 
--- Authoritative roster callbacks: thin delegates into server.friends.actions, which owns the
--- validation + persistence (each handler is documented there). Payloads are attacker-controlled
--- and may be any type, so they're coerced to a table here before field access; every field is
--- then validated inside the action it reaches. `accept` is pinned to a strict boolean at the
--- boundary.
+-- Roster callbacks: thin delegates into server.friends.actions; payloads are coerced to tables here.
 lib.callback.register('sd-phone:server:friends:list', function(src)
     return actions.list(src)
 end)
@@ -54,10 +49,7 @@ lib.callback.register('sd-phone:server:friends:status', function(src, payload)
     return actions.status(src, payload.phone)
 end)
 
----The app flips this on while it's open and off when it closes, so live positions are pushed
----only to players actually looking at the map. Self-scoped: the payload can only subscribe or
----unsubscribe the CALLER, and a subscription only ever earns them their own roster snapshot -
----there's nothing here to aim at anyone else.
+---Subscribes or unsubscribes the caller to the live position push while the app is open.
 ---@param payload table { on: boolean }
 lib.callback.register('sd-phone:server:friends:watch', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
@@ -65,8 +57,7 @@ lib.callback.register('sd-phone:server:friends:watch', function(src, payload)
     return { success = true }
 end)
 
----A departing watcher's entry is dropped (srcs recycle across sessions, so a stale key would
----push another player's roster to the wrong client).
+---Drops a departing watcher's entry.
 AddEventHandler('playerDropped', function()
     watchers[source] = nil
 end)
@@ -74,13 +65,8 @@ end)
 ---@type table Player bridge (bridge.server.player): the once-per-tick online cid->src map.
 local player = require 'bridge.server.player'
 
--- Live push loop: every UpdateInterval ms, hand each watcher their fresh roster snapshot -
--- positions included only for online, accepted, sharing friends (actions.snapshot owns that
--- privacy gate). The online cid->src map is viewer-agnostic, so it's built ONCE per tick and
--- shared across every watcher's snapshot rather than rebuilt per watcher. The app replaces its
--- list wholesale, so friends who go offline or stop sharing drop off the map in near real time.
--- Watchers whose player vanished without firing playerDropped are pruned in-line. Coarse (3s
--- default) - nothing here is frame-sensitive.
+-- Live push loop: every UpdateInterval ms, hands each watcher their fresh roster snapshot,
+-- sharing one online cid->src map per tick; vanished watchers are pruned in-line.
 CreateThread(function()
     while true do
         Wait(config.UpdateInterval or 3000)

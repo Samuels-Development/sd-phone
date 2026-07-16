@@ -7,8 +7,7 @@ local actions = require 'server.banking.actions'
 ---@type table Shared server helpers (server.util): finite-number guard for the export boundary.
 local util = require 'server.util'
 
--- One-shot boot thread: create the transaction-log schema before any handler needs it. pcall'd
--- so a broken DB prints one tagged line instead of killing the resource load.
+-- Schema bootstrap.
 CreateThread(function()
     local ok, err = pcall(store.ensureSchema)
     if not ok then
@@ -18,20 +17,12 @@ CreateThread(function()
     print('^2[sd-phone:banking]^0 schema ready')
 end)
 
--- Authoritative NUI-facing callbacks: thin delegates into server.banking.actions, which owns the
--- validation + money movement (each handler is documented there).
+-- Authoritative NUI-facing callbacks: thin delegates into server.banking.actions.
 lib.callback.register('sd-phone:server:banking:overview', function(src) return actions.overview(src) end)
 lib.callback.register('sd-phone:server:banking:send', function(src, payload) return actions.send(src, payload) end)
 
----Public export: append a transaction to a character's Wallet list. Log-only - it does NOT move
----money; the calling resource owns the actual credit/debit. `amount` is signed: positive =
----money in, negative = money out. Set `notify` only for incoming payments the player didn't
----initiate (true pops a default "You received $X", a string pops that exact line); omit it for
----self-initiated moves (cashouts, wagers) so players aren't notified about their own. Usage:
----  exports['sd-phone']:addBankTransaction(citizenid, {
----      label = 'Paycheck', amount = 500, category = 'income', counterparty = 'LSPD',
----      notify = true,
----  })
+---Public export: exports['sd-phone']:addBankTransaction(citizenid, data). Appends a transaction
+---to a character's Wallet list (log-only); `amount` is signed and `notify` pops a banner.
 ---@param identifier string recipient citizenid
 ---@param data table transaction fields (validated + capped in actions.addExternal)
 ---@return boolean ok
@@ -39,22 +30,15 @@ exports('addBankTransaction', function(identifier, data)
     return actions.addExternal(identifier, data)
 end)
 
----Same append as the export, for resources that prefer TriggerEvent. Deliberately a plain
----AddEventHandler (NOT RegisterNetEvent): only server-side code can raise it, so a modded client
----can't inject fake Wallet rows or notification spam.
+---Server-only event form of the addBankTransaction export.
 ---@param identifier string recipient citizenid
 ---@param data table transaction fields (validated + capped in actions.addExternal)
 AddEventHandler('sd-phone:bank:addTransaction', function(identifier, data)
     actions.addExternal(identifier, data)
 end)
 
----Public export: read a character's Wallet transaction log, newest first -
----exports['sd-phone']:getBankTransactions(citizenid, limit?). Read-only: returns the raw
----phone_bank_transactions rows (id, citizenid, label, amount signed, category, counterparty,
----created_at unix seconds). `limit` is optional and defaults to Banking.TransactionLimit; a
----supplied value must coerce to a FINITE number (NaN/inf are caller bugs - every comparison
----against NaN is false, so it must never reach the query - and return nil) and is floored then
----clamped to 1..100. A non-string or empty citizenid also returns nil instead of erroring.
+---Public export: exports['sd-phone']:getBankTransactions(citizenid, limit?). Returns raw rows
+---newest first; limit defaults to Banking.TransactionLimit, clamped 1..100. Read-only.
 ---@param citizenid string owning character's citizenid
 ---@param limit? number row cap, defaults to Banking.TransactionLimit, clamped 1..100
 ---@return table[]|nil rows raw transaction rows ({} when none), nil on a malformed call

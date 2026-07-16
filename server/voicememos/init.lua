@@ -11,23 +11,20 @@ local uploader = require 'server.photos.uploader'
 ---@type table AirShare core (server.share.core): per-kind delivery handler registry.
 local share    = require 'server.share.core'
 
--- Deliver an accepted voice-memo AirShare into the recipient's Voice Memos (payload was built
--- server-side from the sender's row; the handler is documented in server.voicememos.actions).
+-- Delivers an accepted voice-memo AirShare into the recipient's Voice Memos.
 share.registerHandler('voice', actions.deliverShare)
 
 ---@type table Voice Memos config (config.VoiceMemos): list/name/size caps.
 local VM = config.VoiceMemos
 
----@type table<number, boolean> Srcs with a Fivemanage upload currently in flight - one upload
----at a time per player, so a replayed/spammed upload event can't double-insert a memo or burn
----Fivemanage bandwidth with parallel 12MB pushes.
+---@type table<number, boolean> Srcs with a Fivemanage upload currently in flight; one upload at
+---a time per player.
 local uploading = {}
 
----A departing player's in-flight upload marker is dropped (srcs recycle across sessions).
+---Drops a departing player's in-flight upload marker.
 AddEventHandler('playerDropped', function() uploading[source] = nil end)
 
----Bootstrap the memos schema once at boot; a failed bootstrap is reported and leaves the
----callbacks in place (they degrade to empty lists / failed saves rather than hard errors).
+---Bootstraps the memos schema once at boot.
 CreateThread(function()
     local ok, err = pcall(store.ensureSchema)
     if not ok then
@@ -37,23 +34,14 @@ CreateThread(function()
     print('^2[sd-phone:voice]^0 schema ready')
 end)
 
--- Authoritative NUI callbacks: thin delegates into server.voicememos.actions, which owns the
--- validation + ownership gates (each handler is documented there). Identity always comes from
--- src; the payload is type-guarded before any field access so a crafted non-table can't error.
+-- NUI callbacks: thin delegates into server.voicememos.actions; payloads are type-guarded here.
 lib.callback.register('sd-phone:server:voice:list',   function(src)          return actions.list(src) end)
 lib.callback.register('sd-phone:server:voice:rename', function(src, payload) payload = type(payload) == 'table' and payload or {}; return actions.rename(src, payload.id, payload.name) end)
 lib.callback.register('sd-phone:server:voice:delete', function(src, payload) payload = type(payload) == 'table' and payload or {}; return actions.delete(src, payload.id) end)
 lib.callback.register('sd-phone:server:voice:share',  function(src, payload) payload = type(payload) == 'table' and payload or {}; return actions.requestShare(src, payload.target, payload.id) end)
 
----Audio upload: the client sends a base64 audio data-URL, we push it to Fivemanage (reusing
----the Photos uploader) and persist the hosted URL via actions.saveUploaded, which owns the
----name/duration sanitisation and the per-player cap. Reachable by any client with any payload,
----so the audio is gated up front: must be a string with a data:audio/ prefix and within
----VM.MaxAudioBytes, and only ONE upload may be in flight per src (see `uploading`) - the lock
----is released in the uploader's callback, which fires exactly once. The stored extension is
----sniffed from the MIME prefix (mp3/ogg/wav, defaulting to webm) so Fivemanage files it
----sensibly. Success pushes the saved memo back; every failure path notifies the client instead
----of failing silently.
+---Audio upload: the client sends a base64 audio data-URL, pushed to Fivemanage and persisted via
+---actions.saveUploaded. Gated: data:audio/ prefix, VM.MaxAudioBytes cap, one upload per src.
 ---@param payload table client payload { audio: string, name?: string, duration?: number }
 RegisterNetEvent('sd-phone:server:voice:upload', function(payload)
     local src = source

@@ -7,16 +7,11 @@ local settings = require 'server.settings.store'
 
 local registerLbExport, stubLbExport = shim.registerLbExport, shim.stubLbExport
 
----@type table Self-export proxy for sd-phone's own server surface. hasPhone closes over
----server/main.lua locals (the same inventory gate the keybind open uses), so the export is the
----one reusable entry point; a resource may call its own exports.
+---@type table Self-export proxy for sd-phone's own server surface.
 local sd = exports['sd-phone']
 
----GetEquippedPhoneNumber(source | identifier): the target's phone number. sd-phone has no
----equipped-phone concept - one number per character - so a server id resolves through the same
----assign-on-first-access path the first-party getPhoneNumber export uses, and a string is
----treated as a citizenid (lb-phone's offline form) with a read-only lookup, matching
----getPhoneNumberByIdentifier without ensure.
+---GetEquippedPhoneNumber(source | identifier): the target's phone number. A server id resolves
+---with assign-on-first-access; a string is treated as a citizenid with a read-only lookup.
 registerLbExport('GetEquippedPhoneNumber', function(target)
     if type(target) == 'number' then
         local cid = player.getIdentifier(target)
@@ -29,46 +24,40 @@ registerLbExport('GetEquippedPhoneNumber', function(target)
 end)
 
 ---GetSourceFromNumber(number): the connected server id owning a phone number, nil when the
----number is unassigned or its owner is offline. Any formatting is accepted (the store
----digit-normalises both sides).
+---number is unassigned or its owner is offline. Any formatting is accepted.
 registerLbExport('GetSourceFromNumber', function(number)
     local cid = settings.getCitizenByNumber(number)
     return cid and player.getSourceByIdentifier(cid) or nil
 end)
 
 ---HasPhoneItem(source, number?): whether the player owns any configured phone item, answered by
----the first-party hasPhone export (the authoritative inventory gate). The per-number refinement
----is meaningless under sd-phone's one-number-per-character model and is ignored.
+---the first-party hasPhone export. The per-number refinement is ignored.
 registerLbExport('HasPhoneItem', function(source, _phoneNumber)
     if type(source) ~= 'number' then return false end
     return sd:hasPhone(source) ~= nil
 end)
 
----HasAirplaneMode(number): airplane state of the number's owner, served from the settings
----store's memory cache. An unassigned number reads as false rather than blocking a caller.
+---HasAirplaneMode(number): airplane state of the number's owner. An unassigned number reads as
+---false.
 registerLbExport('HasAirplaneMode', function(number)
     local cid = settings.getCitizenByNumber(number)
     if not cid then return false end
     return settings.isAirplane(cid)
 end)
 
----ResetSecurity(number): clear the owner's lock passcode. The store forces Face Unlock off
----whenever no passcode is stored, so the pair can never disagree. A number nobody owns is a
----no-op, matching lb-phone's nothing-returned contract.
+---ResetSecurity(number): clears the owner's lock passcode (Face Unlock switches off with it).
+---A number nobody owns is a no-op.
 registerLbExport('ResetSecurity', function(number)
     local cid = settings.getCitizenByNumber(number)
     if cid then settings.setSecurity(cid, nil, false) end
 end)
 
--- Battery family: sd-phone has no battery system, so a phone is never dead and battery saves
--- are meaningless. Silent by design - these are poll-shaped calls, not integrations worth a
--- degraded-mode breadcrumb.
+-- Battery family: sd-phone has no battery system; silent no-ops.
 registerLbExport('IsPhoneDead', function() return false end)
 registerLbExport('SaveBattery', function() end)
 registerLbExport('SaveAllBatteries', function() end)
 
--- Phone/user surfaces with no sd-phone equivalent: the settings table is not exposed to other
--- resources, and there is no factory-reset path.
+-- Phone/user surfaces with no sd-phone equivalent.
 stubLbExport('GetSettings', nil)
 stubLbExport('FactoryReset', nil)
 stubLbExport('GetPin', nil, 'is never disclosed: sd-phone does not hand lock passcodes to other resources, a privacy decision')

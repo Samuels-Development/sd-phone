@@ -17,9 +17,7 @@ local engine = {}
 ---@type table<string, { price: number, history: number[] }> Live in-memory market, per symbol.
 local market = {}
 
----A standard-normal sample via the Box-Muller transform, so per-tick moves cluster around the
----trend with occasional larger swings instead of being uniformly jumpy. u1 is floored away
----from zero because log(0) is -inf.
+---A standard-normal sample via the Box-Muller transform. u1 is floored away from zero.
 ---@return number sample standard-normal random value
 local function gaussian()
     local u1 = math.random()
@@ -50,9 +48,8 @@ local function changePct(history, price)
     return (price - first) / first
 end
 
----Config meta for a symbol (nil if unknown). This is the whitelist every trade callback
----validates client-supplied symbols against: only symbols configured in config.Stocks.Assets
----resolve, so a crafted symbol can't reach the price or holdings tables.
+---Config meta for a symbol (nil if unknown); the whitelist trade callbacks validate
+---client-supplied symbols against.
 ---@param symbol string asset symbol
 ---@return table|nil meta the configured asset entry, nil when not configured
 function engine.meta(symbol)
@@ -62,10 +59,8 @@ function engine.meta(symbol)
     return nil
 end
 
----Seed the in-memory market at boot: a persisted price (with its history) wins so the market
----is continuous across restarts; otherwise the asset starts at basePrice with a short flat
----history so the first sparkline isn't a single dot. Also seeds math.random for the tick's
----gaussian draws.
+---Seeds the in-memory market at boot: a persisted price (with its history) wins, otherwise the
+---asset starts at basePrice with a short flat history. Also seeds math.random.
 function engine.init()
     math.randomseed(os.time())
     local persisted = store.loadPrices()
@@ -85,10 +80,8 @@ function engine.init()
     end
 end
 
----One simulation step for every asset: movePct = trend*DriftScale + volatility*VolatilityScale
----* gaussian(), the new price clamped to the asset's [min, max] and appended to the rolling
----history (capped at ST.HistoryPoints). Called only by the init.lua tick thread - never from
----client input.
+---One simulation step for every asset: a trend + volatility random-walk move, the new price
+---clamped to the asset's [min, max] and appended to the rolling history.
 function engine.tick()
     local cap = ST.HistoryPoints or 48
     for _, a in ipairs(META) do
@@ -104,8 +97,7 @@ function engine.tick()
     end
 end
 
----The live server-side price for a symbol (nil if unknown). This - never a client payload - is
----the only price trades fill at.
+---The live server-side price for a symbol (nil if unknown); the only price trades fill at.
 ---@param symbol string asset symbol
 ---@return number|nil price
 function engine.priceOf(symbol)
@@ -113,9 +105,7 @@ function engine.priceOf(symbol)
     return m and m.price or nil
 end
 
----Fixed total shares outstanding for a symbol: MarketCap / basePrice. Constant (based on the
----seed price), so ownership % is a stable slice of the whole company, almost all of which is
----the institutional "market" float.
+---Fixed total shares outstanding for a symbol: MarketCap / basePrice.
 ---@param symbol string asset symbol
 ---@return integer supply total shares outstanding (0 for an unknown symbol)
 function engine.supplyOf(symbol)
@@ -126,11 +116,8 @@ function engine.supplyOf(symbol)
     return math.max(1, math.floor(cap / base))
 end
 
----Move the shared price in response to a trade. `value` is the dollar size of the order -
----always server-computed by the actions layer (the validated deposit amount or units*price),
----never a raw payload figure. Buying pushes the price up, selling pushes it down, scaled by
----the asset's liquidity and capped at ST.MaxImpact. The jump is recorded in history so it
----shows on the chart.
+---Moves the shared price in response to a trade of dollar size `value`. Buying pushes the price
+---up, selling down, scaled by the asset's liquidity, capped at ST.MaxImpact, recorded in history.
 ---@param symbol string asset symbol
 ---@param value number dollar size of the order (server-computed)
 ---@param isBuy boolean true pushes the price up, false down
@@ -151,8 +138,8 @@ function engine.applyImpact(symbol, value, isBuy)
     return np
 end
 
----Full per-asset state for the market() fetch: price, % change, and the whole history array
----(for the detail chart + first sparkline render). Public market data only. Read-only.
+---Full per-asset state for the market() fetch: price, % change, and the whole history array.
+---Read-only.
 ---@return table[] snapshot { symbol, price, changePct, history }[]
 function engine.snapshot()
     local out = {}
@@ -170,8 +157,7 @@ function engine.snapshot()
     return out
 end
 
----Lightweight per-tick broadcast payload: price + % change only (no history - clients append
----the new price to the history they already hold). Read-only.
+---Lightweight per-tick broadcast payload: price + % change only. Read-only.
 ---@return table[] ticks { symbol, price, changePct }[]
 function engine.ticks()
     local out = {}

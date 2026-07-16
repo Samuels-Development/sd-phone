@@ -6,12 +6,11 @@ local player = require 'bridge.server.player'
 ---@type table Actions module; the table returned at end of file.
 local actions = {}
 
----@type integer Alarm cap per character - keeps the list UI-sized and bounds how many rows one
----client can insert.
+---@type integer Alarm cap per character.
 local MAX_ALARMS = 25
 
 ---Stable per-character key (framework citizenid) scoping every read/write. Resolved from src via
----the bridge - never from the payload - so a client can't act on another character's rows.
+---the bridge.
 ---@param src integer player server id
 ---@return string|nil citizenid (nil when the player can't be resolved)
 local function cidOf(src) return player.getIdentifier(src) end
@@ -44,13 +43,8 @@ function actions.listAlarms(src)
     return { success = true, data = { alarms = out } }
 end
 
----Create or update one alarm, matched on the CLIENT-generated id (the app owns alarm identity;
----the store's (citizenid, id) primary key keeps ids from colliding across characters). Every
----field is validated server-side: the id must be a modest string, hour/minute/snoozeSecs are
----clamped into range, label/days capped to their column widths, and the flag fields coerced to
----real booleans, so a crafted payload can't push out-of-range or mistyped values into the DB.
----The MAX_ALARMS cap applies only to brand-new ids - updates to an existing alarm skip the
----COUNT so a full list can still be edited. Idempotent: a replayed save upserts the same row.
+---Creates or updates one alarm, matched on the client-generated id. Every field is validated and
+---clamped server-side; the MAX_ALARMS cap applies only to brand-new ids.
 ---@param src integer player server id
 ---@param payload table { id, hour, minute, label?, days?, enabled?, sound?, snooze?, snoozeSecs? }
 ---@return table result
@@ -84,9 +78,8 @@ function actions.saveAlarm(src, payload)
     return { success = true }
 end
 
----Delete one alarm by client id, scoped to the caller in the store. Deleting an id that doesn't
----exist (or belongs to another character) is a silent no-op, so a replayed delete can't surface
----a spurious error.
+---Deletes one alarm by client id, scoped to the caller in the store; a missing id is a silent
+---no-op.
 ---@param src integer player server id
 ---@param id string client-generated alarm id
 ---@return table result
@@ -107,10 +100,7 @@ function actions.listRecents(src)
     return { success = true, data = { recents = store.recentsFor(cid) } }
 end
 
----Record a started timer duration for the recents list, bounded to 1s-24h. The range check
----rejects NaN explicitly - NaN fails both < and > comparisons, so the plain bounds pair alone
----would wave it through to the SQL layer as an unencodable parameter. Replays are harmless: the
----store upserts on (citizenid, seconds) and just bumps recency.
+---Records a started timer duration for the recents list, bounded to 1s-24h; NaN is rejected.
 ---@param src integer player server id
 ---@param seconds any raw client duration in seconds
 ---@return table result

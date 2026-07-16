@@ -6,12 +6,8 @@ local framework = require 'bridge.shared.framework'
 local player = require 'bridge.server.player'
 
 ---@type table Housing bridge module; the table returned at end of file. Abstracts the supported
----third-party housing systems behind one normalised property list plus capability-gated actions
----(lock / key list / key management) so the Homes app never talks to a housing script directly.
----Read paths are escrow-safe (public export or DB); write paths prefer the system's own API and
----degrade to a no-op (never an error) when unavailable. Action execution side differs per system:
----bcs/rtx/rx are server exports; ps/origen/vms gate on the OWNER (client exports or
----owner-`source` net events), so those delegate to the caller's client via clientExec.
+---housing systems behind one normalised property list plus capability-gated actions (lock / key
+---list / key management).
 local housing = {}
 
 ---@type table Homes config (configs/housing.lua): Enabled flag + System override + Resources
@@ -19,8 +15,7 @@ local housing = {}
 local H = config.Housing or { Enabled = false }
 
 ---Resolve which supported housing system is running: an explicit config override wins, else the
----first resource in H.Resources that reports `started`. One-shot at module load (mirrors the
----garage bridge) - a housing system doesn't change identity mid-session.
+---first resource in H.Resources that reports `started`.
 ---@return string|nil name active system's resource name, nil when none is running
 local function detectSystem()
     if H.System and H.System ~= 'auto' then return H.System end
@@ -33,8 +28,7 @@ end
 ---@type string|nil Active housing system's resource name, resolved once at load (nil = none).
 local ACTIVE = detectSystem()
 
----Parameterised query that can never throw: a missing table / different schema version degrades
----to nil so an adapter can fall through to its next source.
+---Parameterised query; returns nil on error or a non-table result.
 ---@param sql string parameterised SQL
 ---@param params table bind parameters
 ---@return table|nil rows result rows, nil on error or non-table result
@@ -44,8 +38,8 @@ local function dbQuery(sql, params)
     return nil
 end
 
----Decode a JSON column defensively: already-decoded tables pass through, only strings that look
----like a JSON object/array are attempted, and a decode failure yields nil rather than throwing.
+---Decode a JSON column: tables pass through, JSON-looking strings are decoded, failures yield
+---nil.
 ---@param raw any column value (table, JSON string, or anything else)
 ---@return table|nil decoded
 local function decodeJson(raw)
@@ -61,12 +55,11 @@ end
 local function num(v) return tonumber(v) or 0 end
 ---@return boolean truthiness across the mixed flag encodings housing rows use (nil/false/0/'0' are false)
 local function truthy(v) return v ~= nil and v ~= 0 and v ~= false and v ~= '0' end
----@return string|nil v when it's a non-empty string, else nil - keeps `or` fallback chains clean
+---@return string|nil v when it's a non-empty string, else nil
 local function s(v) return (type(v) == 'string' and v ~= '') and v or nil end
 
----Pull a flat { x, y } out of the many coord shapes housing scripts use: a vector table
----{ x, y, z }, a JSON string, or an array { 1, 2, 3 }. Returns nil when neither x nor y can be
----found, so a waypoint button only shows when real coords exist.
+---Pull a flat { x, y } out of the coord shapes housing scripts use: a vector table, a JSON
+---string, or an array. Nil when neither x nor y can be found.
 ---@param v any candidate coord value
 ---@return { x: number, y: number }|nil
 local function asXY(v)
@@ -91,8 +84,7 @@ local function coordsFrom(row, ...)
     return nil
 end
 
----A property id round-trips through the NUI as a string; restore a number for exports that key
----on numeric ids, but keep genuine strings (addresses) intact.
+---Coerce a client-echoed property id to a number when numeric, else return it unchanged.
 ---@param id any client-echoed property id
 ---@return any id a number when numeric, else unchanged
 local function pid(id) return tonumber(id) or id end
@@ -120,10 +112,7 @@ local function resolveCids(list)
 end
 
 ---Build a normalised Home with safe defaults, matching the React `Home` shape (id, address,
----type, area, value, status, coords?, locked?). `coords` is the flat { x, y } that drives the
----waypoint button; `locked` only appears for lock-capable systems and drives the lock pill;
----`accent` is assigned client-side. The id is stringified here, which is why every later
----ownership comparison stringifies too.
+---type, area, value, status, coords?, locked?). The id is stringified.
 ---@param o table raw field bag from an adapter
 ---@return table home normalised property record
 local function home(o)
@@ -139,9 +128,7 @@ local function home(o)
     }
 end
 
--- Per-system adapters, keyed by resource name: (source, id) -> Home[]. Each reads its system's
--- documented public API first (server export) and falls back to a defensive DB query only where
--- the schema is public. Researched per system (export-first; DB only where schema is public):
+-- Per-system adapters, keyed by resource name: (source, id) -> Home[]. Sources per system:
 --   ps-housing   DB `properties` (owner_citizenid, street, region, apartment, price, door_data) - open source
 --   qs-housing   DB `player_houses` joined to `houselocations` (owner, rented, label, price, coords, keyholders)
 --   vms_housing  export GetProperty(id).metadata.enter | DB `houses`; keys via vms_housing:sv:giveKey/removeKey
@@ -154,8 +141,8 @@ end
 ---@type table<string, fun(source: number, id: string): table[]> Per-system property-list adapters.
 local ADAPTERS = {}
 
----ps-housing (open source) - single `properties` table, no rental concept. The door_data JSON
----carries the entrance coords for the waypoint.
+---ps-housing: single `properties` table, no rental concept; entrance coords from the door_data
+---JSON.
 ---@param _source number caller server id (unused - the table keys by citizenid)
 ---@param id string caller citizenid
 ---@return table[] homes
@@ -178,9 +165,8 @@ ADAPTERS['ps-housing'] = function(_source, id)
     return out
 end
 
----qs-housing - ownership/rental in `player_houses`; label/price/coords/keyholders live in the
----joined `houselocations`. The join column is best-effort: if the joined query fails (older
----schema) we fall back to the ownership table alone.
+---qs-housing: ownership/rental in `player_houses`, label/price/coords/keyholders from the joined
+---`houselocations`; falls back to the ownership table alone when the join fails.
 ---@param _source number caller server id (unused - the table keys by owner identifier)
 ---@param id string caller identifier
 ---@return table[] homes
@@ -207,9 +193,8 @@ ADAPTERS['qs-housing'] = function(_source, id)
     return out
 end
 
----vms_housing - single `houses` table; `owner` owns, `renter` rents (the renter query is tried
----first and degrades to owner-only on older schemas). Entrance coords live in the metadata JSON
----(`metadata.enter`).
+---vms_housing: single `houses` table; `owner` owns, `renter` rents, with an owner-only fallback
+---query. Entrance coords from `metadata.enter`.
 ---@param _source number caller server id (unused - the table keys by identifier)
 ---@param id string caller identifier
 ---@return table[] homes
@@ -324,8 +309,7 @@ ADAPTERS['tk_housing'] = function(_source, id)
     return out
 end
 
----rx_housing - export namespace is `RxHousing`. The coords field is undocumented, so probe the
----common names defensively.
+---rx_housing: export namespace is `RxHousing`; coords probed across common field names.
 ---@param _source number caller server id (unused - the export keys by identifier)
 ---@param id string caller identifier
 ---@return table[] homes
@@ -349,8 +333,8 @@ ADAPTERS['rx_housing'] = function(_source, id)
     return out
 end
 
----loaf_housing - export probe, tried with the server id then the identifier (versions differ);
----entrance coords from the row JSON when present.
+---loaf_housing: export probe, tried with the server id then the identifier; entrance coords from
+---the row JSON when present.
 ---@param source number caller server id
 ---@param id string caller identifier
 ---@return table[] homes
@@ -408,9 +392,7 @@ ADAPTERS['origen_housing'] = function(source, id)
     return out
 end
 
--- Capability map: which detail-view actions each system supports, so the app auto-hides the
--- rest. `waypoint` is deliberately absent - it's decided per-home by whether the adapter could
--- attach `coords`, not per-system.
+-- Capability map: which detail-view actions each system supports.
 ---@type table<string, { lock: boolean, keyList: boolean, keyManage: boolean }> Per-system action support.
 local CAPS = {
     ['bcs_housing']    = { lock = true,  keyList = true,  keyManage = true  },
@@ -428,12 +410,8 @@ local CAPS = {
 ---@return { lock: boolean, keyList: boolean, keyManage: boolean }
 local function caps() return CAPS[ACTIVE or ''] or { lock = false, keyList = false, keyManage = false } end
 
----Run an owner-gated action on the property owner's client. Some systems expose lock/key control
----only as a client export (origen) or a net event whose handler reads `source` as the acting
----owner (ps-housing, vms_housing) - so the action executes AS the calling player and the housing
----system applies its own permission model. `src` is always the phone caller (never a looked-up
----third party), so this path can't impersonate anyone. Degrades to nil when the client callback
----errors. Client twin: bridge/client/housing.lua.
+---Run an owner-gated action on the caller's client via the 'sd-phone:client:housing:exec'
+---callback; nil when the client callback errors. Client twin: bridge/client/housing.lua.
 ---@param src number caller server id (the property owner using the app)
 ---@param action string 'lock' | 'give' | 'remove' | 'keyHolders'
 ---@param ... any action arguments, forwarded verbatim
@@ -447,8 +425,7 @@ local function clientExec(src, action, ...)
     return nil
 end
 
----bcs requires a pre-existing key name when adding a holder; pick the first defined key for the
----home, defaulting to 'Resident' when none can be read.
+---The first defined key name for a bcs home, defaulting to 'Resident' when none can be read.
 ---@param id any property id
 ---@return string keyName
 local function bcsDefaultKey(id)
@@ -473,9 +450,8 @@ function housing.capabilities()
     return { lock = c.lock, keyList = c.keyList, keyManage = c.keyManage }
 end
 
----Normalised list of the caller's own properties via the active system's adapter. Identity comes
----from `source` only (player bridge), never from a payload, so a client can only ever list its
----own homes. An adapter failure degrades to an empty list with a console warning, not an error.
+---Normalised list of the caller's own properties via the active system's adapter. An adapter
+---failure degrades to an empty list with a console warning.
 ---@param source number caller server id
 ---@return table[] homes (empty when disabled / no character / unsupported system / adapter failure)
 function housing.list(source)
@@ -494,14 +470,8 @@ function housing.list(source)
     return list
 end
 
----Ownership gate for every action that arrives with a client-echoed property id: the id must
----match a property in the caller's OWN normalised list (the exact list the app renders), resolved
----fresh from the active adapter. Checked here (not just implied by the UI only showing your own
----homes) so calling the homes callbacks directly with someone else's property id can't lock,
----unlock, key, or enumerate a home the caller doesn't hold - the bcs/rtx/rx paths run through
----bare server exports with full authority, so without this gate the bridge is a confused deputy.
----Ids compare as strings because home() stringifies them for the NUI round-trip; a non-scalar id
----therefore never matches and is rejected too.
+---Ownership gate: true only when the id matches a property in the caller's own normalised list,
+---resolved fresh from the active adapter. Ids compare as strings.
 ---@param src number caller server id
 ---@param id any client-echoed property id
 ---@return boolean owns true only when the property is in the caller's own list
@@ -514,13 +484,8 @@ local function ownsProperty(src, id)
     return false
 end
 
----Set the front-door lock state. Ownership-gated (see ownsProperty): rtx and bcs act through
----bare server exports that would otherwise let any client lock or unlock strangers' homes. rtx
----sets the state directly; bcs only exposes a toggle, so the current state is read first and
----flipped only when it differs from `want` (and toggled blind when isLocked itself fails, since
----the state is then unknowable either way); origen locks are client-side, so the action
----delegates to the caller's own client. Returns the resulting locked boolean, or nil when the
----active system has no lock API or the gate rejects.
+---Set the front-door lock state. Ownership-gated. Returns the resulting locked boolean, or nil
+---when the active system has no lock API or the gate rejects.
 ---@param src number  owner source
 ---@param id any       property id (client-echoed)
 ---@param want boolean desired locked state
@@ -545,10 +510,8 @@ function housing.lock(src, id, want)
     return nil
 end
 
----List the property's key holders as { id, name } records (id = citizenid). Ownership-gated so
----one player can't enumerate who holds keys to another player's home. bcs/rx read server
----exports, qs reads the keyholders JSON column, ps asks the caller's own client (its access list
----is a client-reachable callback there).
+---List the property's key holders as { id, name } records (id = citizenid). Ownership-gated;
+---read via server exports, the qs keyholders column, or the caller's client, per system.
 ---@param src number caller source
 ---@param id any property id (client-echoed)
 ---@return table[] holders (empty when unsupported or rejected)
@@ -577,12 +540,8 @@ function housing.keyHolders(src, id)
     return {}
 end
 
----Grant a key to an online player. Ownership-gated: without it, any client could key itself into
----any home through the bare bcs/rx server exports. The UI always sends the recipient's server
----id; it's coerced to a positive integer (rejecting fractions / infinities a crafted payload
----could carry) and converted to the identifier each system expects - rx wants a citizenid, bcs
----takes the server id, and the ps/origen/vms owner-client paths forward the server id. Returns
----true on apparent success (fire-and-forget paths can't confirm).
+---Grant a key to an online player, addressed by server id (coerced to a positive integer and
+---converted to each system's identifier). Ownership-gated; true on apparent success.
 ---@param src number  owner source
 ---@param id any property id (client-echoed)
 ---@param targetSrc number|string  the recipient's server id
@@ -606,9 +565,7 @@ function housing.giveKey(src, id, targetSrc)
 end
 
 ---Revoke a key holder by their identifier (citizenid), as returned by housing.keyHolders.
----Ownership-gated (any client could otherwise strip key holders from arbitrary homes through the
----bare bcs/rx server exports), and the holder id must be a plain non-empty string or a number so
----crafted payload types never reach another resource's API. Returns true on apparent success.
+---Ownership-gated; the holder id must be a non-empty string or number. True on apparent success.
 ---@param src number owner source
 ---@param id any property id (client-echoed)
 ---@param holderId string holder citizenid

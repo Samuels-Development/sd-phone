@@ -5,8 +5,7 @@ local actions = require 'server.photogram.actions'
 ---@type table Photogram Live module (server.photogram.live): in-memory livestream sessions + host-media relay.
 local live    = require 'server.photogram.live'
 
--- One-shot boot thread: create/patch the photogram tables before any callback can hit them.
--- A failed bootstrap aborts loudly here instead of letting every later query fail one by one.
+-- Boot thread: creates/patches the photogram tables.
 CreateThread(function()
     local ok, err = pcall(store.ensureSchema)
     if not ok then
@@ -16,17 +15,14 @@ CreateThread(function()
     print('^2[sd-phone:photogram]^0 schema ready')
 end)
 
----Register one photogram callback under the app's namespace. Every handler receives
----(src, payload) where src is server-injected and trustworthy while the payload is
----attacker-controlled - validation and authorization live in the handler modules, never here.
+---Registers one photogram callback under the app's namespace.
 ---@param action string callback name suffix
 ---@param fn function handler
 local function register(action, fn)
     lib.callback.register('sd-phone:server:photogram:' .. action, fn)
 end
 
--- Authoritative app callbacks: thin delegates into server.photogram.actions, which owns the
--- validation, privacy gating, and world mutation (each handler is documented there).
+-- App callbacks: thin delegates into server.photogram.actions.
 register('feed',             function(src) return actions.feed(src) end)
 register('explore',          function(src) return actions.explore(src) end)
 register('post',             function(src, payload) return actions.post(src, payload) end)
@@ -58,8 +54,7 @@ register('dmSend',           function(src, payload) return actions.dmSend(src, p
 register('dmReact',          function(src, payload) return actions.dmReact(src, payload) end)
 register('deleteAccount',    function(src) return actions.deleteAccount(src) end)
 
--- Live session callbacks: thin delegates into server.photogram.live (ephemeral cross-player
--- streams; sessions are in-memory and each handler is documented in live.lua).
+-- Live session callbacks: thin delegates into server.photogram.live.
 register('liveStart',        function(src) return live.start(src) end)
 register('liveJoin',         function(src, payload) return live.join(src, payload) end)
 register('liveLeave',        function(src, payload) return live.leave(src, payload) end)
@@ -67,19 +62,14 @@ register('liveEnd',          function(src, payload) return live.endLive(src, pay
 register('liveComment',      function(src, payload) return live.comment(src, payload) end)
 register('liveHeart',        function(src, payload) return live.heart(src, payload) end)
 
----Host JPEG frame push - the image-mode fallback for CEF builds without the video encoder.
----Sent latent by the client so the base64 payload is bandwidth-throttled onto the wire rather
----than slamming the net thread. Any client can fire this with any payload: non-tables are
----dropped here, and live.frame only accepts frames from the session's actual host.
+---Host JPEG frame push: drops non-table payloads and forwards to live.frame.
 ---@param payload table { liveId: string, frame: string }
 RegisterNetEvent('sd-phone:server:photogram:liveFrame', function(payload)
     if type(payload) ~= 'table' then return end
     live.frame(source, payload)
 end)
 
----Host encoded-video chunk push - the real-time stream path, latent for the same bandwidth
----reason. Non-tables are dropped here; live.chunk verifies the sender hosts the session and
----size-caps every chunk before caching or relaying it.
+---Host encoded-video chunk push: drops non-table payloads and forwards to live.chunk.
 ---@param payload table { liveId: string, chunk: string, init?: boolean, mime?: string }
 RegisterNetEvent('sd-phone:server:photogram:liveChunk', function(payload)
     if type(payload) ~= 'table' then return end

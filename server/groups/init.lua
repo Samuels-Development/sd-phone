@@ -7,8 +7,7 @@ local player  = require 'bridge.server.player'
 ---@type table Badge engine (server.badges.init): recomputes + pushes home-screen unread counts.
 local badges  = require 'server.badges.init'
 
----Schema bootstrap. Runs in a thread so it can yield until oxmysql is ready without
----blocking resource start.
+---Schema bootstrap, run in a thread.
 CreateThread(function()
     local ok, err = pcall(store.ensureSchema)
     if not ok then
@@ -18,8 +17,7 @@ CreateThread(function()
     print('^2[sd-phone:groups]^0 schema ready')
 end)
 
----Push a group-related event to a single player. No-op if they're offline - there's no
----listener to receive it and they'll pick up the new state next time their Groups app reloads.
+---Pushes a group-related event to a single player; no-op if they're offline.
 ---@param src number|nil
 ---@param eventName string
 ---@param payload any
@@ -28,9 +26,7 @@ local function pushTo(src, eventName, payload)
     TriggerClientEvent(eventName, src, payload)
 end
 
--- Authoritative NUI-facing callbacks: the validation + permission checks (leader-only
--- mutations, invite-target checks, caps) live in server.groups.actions, where each handler
--- is documented. Handlers here only add the push fan-out that needs cid-to-source resolution.
+-- Authoritative NUI-facing callbacks: validation + permission checks live in server.groups.actions.
 lib.callback.register('sd-phone:server:groups:list', function(src)
     return actions.list(src)
 end)
@@ -39,10 +35,8 @@ lib.callback.register('sd-phone:server:groups:create', function(src, payload)
     return actions.create(src, payload)
 end)
 
----Send an invite (leader-gated in actions.invite), then alert the online target three ways:
----the raw inviteReceived push for an open Groups app, a notification banner, and a badge
----recount. `targetSource` is stripped from the response so the inviting client only gets the
----invite row back.
+---Sends an invite, then alerts the online target: an inviteReceived push, a notification
+---banner, and a badge recount. `targetSource` is stripped from the response.
 lib.callback.register('sd-phone:server:groups:invite', function(src, payload)
     local result = actions.invite(src, payload)
     if result.success and result.data and result.data.invite then
@@ -62,10 +56,8 @@ lib.callback.register('sd-phone:server:groups:invite', function(src, payload)
     return result
 end)
 
----Accept an invite (target-gated in actions.accept). On success the leader, if online, gets a
----memberJoined push so an open detail page refreshes; the leader's raw citizenid is stripped
----from the response. The badge recount runs on success AND failure - a dead invite consumed
----elsewhere still needs the caller's Groups badge corrected.
+---Accepts an invite. On success the online leader gets a memberJoined push and the leader's
+---raw citizenid is stripped from the response; the badge recount runs on success and failure.
 lib.callback.register('sd-phone:server:groups:accept', function(src, payload)
     local result = actions.accept(src, payload)
     if result.success and result.data then
@@ -79,16 +71,14 @@ lib.callback.register('sd-phone:server:groups:accept', function(src, payload)
     return result
 end)
 
----Decline an invite (idempotent in actions.decline) and recount the caller's Groups badge -
----declining is one of the two ways a pending-invite badge unit clears.
+---Declines an invite and recounts the caller's Groups badge.
 lib.callback.register('sd-phone:server:groups:decline', function(src, payload)
     local result = actions.decline(src, payload)
     badges.push(src)
     return result
 end)
 
----Leave a group (member-only; actions.leave rejects leaders). The leader is re-read from the
----store AFTER the removal so the memberLeft push only fires for a group that still exists.
+---Leaves a group (member-only) and pushes memberLeft to the group's online leader.
 lib.callback.register('sd-phone:server:groups:leave', function(src, payload)
     local result = actions.leave(src, payload)
     if result.success and result.data then
@@ -103,9 +93,8 @@ lib.callback.register('sd-phone:server:groups:leave', function(src, payload)
     return result
 end)
 
----Disband a group (leader-gated in actions.disband) and push a disbanded notice to every
----OTHER online ex-member. The member-cid list is stripped from the response - the disbanding
----client only needs the group id back.
+---Disbands a group and pushes a disbanded notice to every other online ex-member; the
+---member-cid list is stripped from the response.
 lib.callback.register('sd-phone:server:groups:disband', function(src, payload)
     local result = actions.disband(src, payload)
     if result.success and result.data then
@@ -124,8 +113,7 @@ lib.callback.register('sd-phone:server:groups:disband', function(src, payload)
     return result
 end)
 
----Kick a member by citizenid (leader-gated in actions.kick) and, if the kicked player is
----online, push them a kicked notice so their app drops the group immediately.
+---Kicks a member by citizenid and pushes the online kicked player a kicked notice.
 lib.callback.register('sd-phone:server:groups:kick', function(src, payload)
     local result = actions.kick(src, payload)
     if result.success and result.data then
@@ -137,9 +125,8 @@ lib.callback.register('sd-phone:server:groups:kick', function(src, payload)
     return result
 end)
 
----Change the group photo (leader-gated in actions.setAvatar) and push an updated notice to
----every OTHER online member so their list refreshes. Member cids are stripped from the
----response - the leader's client only needs the group id and the stored URL back.
+---Changes the group photo and pushes an updated notice to every other online member; member
+---cids are stripped from the response.
 lib.callback.register('sd-phone:server:groups:setAvatar', function(src, payload)
     local result = actions.setAvatar(src, payload)
     if result.success and result.data then
@@ -157,8 +144,7 @@ lib.callback.register('sd-phone:server:groups:setAvatar', function(src, payload)
     return result
 end)
 
--- Thin delegates: active-group selection (membership-gated) and the cheap active-id read,
--- both documented in server.groups.actions.
+-- Thin delegates: active-group selection and the active-id read.
 lib.callback.register('sd-phone:server:groups:setActive', function(src, payload)
     return actions.setActive(src, payload)
 end)
@@ -167,11 +153,8 @@ lib.callback.register('sd-phone:server:groups:activeId', function(src)
     return actions.getActiveGroupIdFor(src)
 end)
 
----Full export-view (real citizenids + live member sources) for the caller's client-side
----cache. Membership-gated: the view names every member's citizenid and current server id, so
----only a current member may pull it - a kicked player, or any modded client probing group
----ids, gets nil. The legitimate client only ever asks for its own active group, which
----membership always covers.
+---Returns the full export-view (real citizenids + live member sources) for the caller's
+---client-side cache. Membership-gated; non-members get nil.
 lib.callback.register('sd-phone:server:groups:exportView', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local cid = player.getIdentifier(src)
@@ -179,8 +162,7 @@ lib.callback.register('sd-phone:server:groups:exportView', function(src, payload
     return actions.getGroupForExport(payload.groupId or '')
 end)
 
--- Server-side exports for other resources. Trusted callers (never reachable by a client), so
--- they return the unmasked export view; each delegate is documented in server.groups.actions.
+-- Server-side exports for other resources, returning the unmasked export view.
 ---@param source number player whose active group is requested
 ---@return table|nil export-view of the player's active group
 exports('getActiveGroup', function(source)

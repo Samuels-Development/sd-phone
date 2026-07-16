@@ -6,13 +6,10 @@ local actions = require 'server.notes.actions'
 ---@type table AirShare core (server.share.core): nearby/phone-open share request handshake.
 local share   = require 'server.share.core'
 
--- Deliver an accepted note AirShare into the recipient's Notes. The share core runs this only
--- after the recipient accepts; the handler is documented in server.notes.actions.
+-- Delivers an accepted note AirShare into the recipient's Notes.
 share.registerHandler('note', actions.deliverShare)
 
--- Boot-time schema bootstrap, pcall-wrapped so a DB outage prints a tagged error instead of
--- killing the resource. Notes are plain per-player rows re-fetched whenever the app opens and
--- saved as the user edits, so this is the module's only thread - no live presence or broadcast.
+-- Boot-time schema bootstrap.
 CreateThread(function()
     local ok, err = pcall(store.ensureSchema)
     if not ok then
@@ -22,9 +19,7 @@ CreateThread(function()
     print('^2[sd-phone:notes]^0 schema ready')
 end)
 
--- Authoritative NUI callbacks: thin delegates into server.notes.actions, which owns the
--- citizenid scoping + validation (each handler is documented there). Payloads are
--- attacker-controlled msgpack, so shims that index a field normalize non-table payloads first.
+-- NUI callbacks: thin delegates into server.notes.actions; shims normalize non-table payloads.
 lib.callback.register('sd-phone:server:notes:list', function(src)
     return actions.list(src)
 end)

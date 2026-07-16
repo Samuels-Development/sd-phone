@@ -1,7 +1,6 @@
 ---@type table Contacts porter (server.migrate.port.contacts). Copies each player's lb-phone
----contacts into sd-phone, keeping the contact's number as-is (numbers are preserved across the
----migration) and synthesising the required avatar colour with the same hash the app uses. Dedupes
----against contacts the player already has, so a re-run adds nothing twice.
+---contacts into sd-phone, keeping the contact's number as-is and synthesising the avatar colour.
+---Dedupes against contacts the player already has.
 local M = {}
 
 local store = require 'server.migrate.store'

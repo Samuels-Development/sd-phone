@@ -1,12 +1,8 @@
 ---@type table AirShare core (server.share.core): request handshake + server-side proximity checks.
 local share = require 'server.share.core'
 
----Deliver an accepted single-song share: push the track to the recipient's client. The music
----library lives client-side (localStorage in the NUI), so there is no DB row to write - this
----push IS the delivery; the recipient's client merges the track into its library even while the
----Music app is closed. Runs only after the recipient explicitly accepted, via the AirShare
----handshake in server.share.core. The track table is sender-supplied and forwarded verbatim;
----the accept is the recipient's consent to receive it.
+---Delivers an accepted single-song share: pushes the track to the recipient's client, which
+---merges it into its localStorage library even while the Music app is closed.
 ---@param targetSrc number recipient server id
 ---@param payload table share payload ({ track: table })
 ---@return boolean delivered
@@ -16,9 +12,8 @@ local function deliverTrack(targetSrc, payload)
     return true
 end
 
----Deliver an accepted playlist share: push the playlist name + all its tracks in one event, so
----the recipient gets the songs in their library AND a playlist folder referencing them. Same
----trust posture as deliverTrack - runs only on the recipient's accept.
+---Delivers an accepted playlist share: pushes the playlist name + all its tracks in one event.
+---Runs only on the recipient's accept.
 ---@param targetSrc number recipient server id
 ---@param payload table share payload ({ name: string, tracks: table[] })
 ---@return boolean delivered
@@ -34,11 +29,8 @@ end
 share.registerHandler('music-track',    deliverTrack)
 share.registerHandler('music-playlist', deliverPlaylist)
 
----Open an AirShare request for a song or playlist. Every trust check lives in share.request:
----`kind` must be one of the two handlers registered above (an arbitrary kind finds no handler
----and is rejected), and `target` must be a nearby player with their phone open - verified
----server-side from live coords at request time, so a crafted target can't reach a player across
----the map; the request then expires after 60s unanswered.
+---Opens an AirShare request for a song or playlist; share.request validates the kind and the
+---nearby target, and the request expires after 60s unanswered.
 ---@param src number sender server id
 ---@param payload table { target: number, kind: string, track?/name?/tracks?: any }
 lib.callback.register('sd-phone:server:music:share', function(src, payload)
@@ -47,14 +39,8 @@ lib.callback.register('sd-phone:server:music:share', function(src, payload)
     return { success = ok == true, message = message }
 end)
 
----Give a track straight to a player's music library from another resource -
----exports['sd-phone']:giveTrack(source, track). Delivers through the same
----'sd-phone:client:music:receive' push as an accepted AirShare, but skips the nearby-share
----consent handshake entirely: the caller vouches for the delivery (a quest reward, a purchased
----song). `track` must be a table with non-empty string `title` and `url`; any extra fields
----(artist, artwork, duration, ...) ride along untouched - the recipient's client merges the
----table verbatim into their localStorage library, even while the Music app is closed. Returns
----false for an offline source or a malformed track instead of pushing a broken event.
+---Gives a track straight to a player's music library (exports['sd-phone']:giveTrack), skipping
+---the consent handshake. Returns false for an offline source or a malformed track.
 ---@param source number recipient server id, must be an online player
 ---@param track table { title: string, url: string, artist?: string, ... }
 ---@return boolean delivered

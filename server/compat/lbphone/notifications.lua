@@ -8,8 +8,7 @@ local settings = require 'server.settings.store'
 local registerLbExport, warnOnce = shim.registerLbExport, shim.warnOnce
 
 ---@type table<string, true> Every sd-phone app id the home screen knows, mirrored from
----web/src/shell/appRegistry.tsx APP_REGISTRY so a lowercase lb app name that already matches an
----sd id passes straight through. Keep in sync when apps are added.
+---web/src/shell/appRegistry.tsx APP_REGISTRY. Keep in sync when apps are added.
 local SD_APPS = {}
 for _, id in ipairs({
     'photos', 'bank', 'settings', 'clock', 'messages', 'phone', 'calendar', 'mail', 'weather',
@@ -36,9 +35,8 @@ local APP_MAP = {
     yellowpages = 'pages',
 }
 
----Map an lb-phone app name onto an sd-phone app id: known renames first, then a lowercase
----passthrough for names that already match an sd id. Anything else yields nil so the banner
----falls back to the generic icon instead of a broken one.
+---Maps an lb-phone app name onto an sd-phone app id: known renames first, then a lowercase
+---passthrough for names that already match an sd id; anything else yields nil.
 ---@param app any lb-phone app name
 ---@return string|nil
 local function mapApp(app)
@@ -47,10 +45,8 @@ local function mapApp(app)
     return APP_MAP[key] or (SD_APPS[key] and key) or nil
 end
 
----Shape an lb notification payload ({ app, title, content?, thumbnail? }) into the sd banner
----funnel's shape ({ app, appId, title, body?, image? }). content promotes to the title when the
----title is missing so a sloppy payload still shows something; the mapped app id doubles as
----appId so tapping the banner opens the sd equivalent. nil when nothing displayable exists.
+---Shapes an lb notification payload ({ app, title, content?, thumbnail? }) into the sd banner
+---funnel's shape ({ app, appId, title, body?, image? }); nil when nothing displayable exists.
 ---@param data any lb notification payload
 ---@return table|nil
 local function bannerFor(data)
@@ -71,9 +67,8 @@ local function bannerFor(data)
     }
 end
 
----Resolve lb's dual-typed notification target: a number (or a numeric string naming an online
----player) is a server id, any other string is a phone number. Generated sd numbers are 10
----digits, so they can never shadow a live server id.
+---Resolves lb's dual-typed notification target: a number (or a numeric string naming an online
+---player) is a server id, any other string is a phone number.
 ---@param target any
 ---@return number|nil source
 local function targetSource(target)
@@ -89,9 +84,8 @@ local function targetSource(target)
     return nil
 end
 
----SendNotification(target, data): push an iOS-style banner through the same client funnel the
----first-party notify/notifyNumber exports use. Always returns nil - sd-phone notifications have
----no ids, so lb's number return cannot be honoured.
+---SendNotification(target, data): pushes an iOS-style banner through the sd client notify
+---funnel. Always returns nil.
 registerLbExport('SendNotification', function(target, data)
     local payload = bannerFor(data)
     if not payload then return nil end
@@ -101,10 +95,8 @@ registerLbExport('SendNotification', function(target, data)
     return nil
 end)
 
----NotifyEveryone(notify, data): the same banner at every ONLINE player. Argument order is
----sniffed (the payload is whichever argument is a table) because integrations disagree on it;
----an 'all' scope warns once that sd-phone has no offline notification store and is treated as
----'online'.
+---NotifyEveryone(notify, data): the same banner at every ONLINE player. The payload is whichever
+---argument is a table; an 'all' scope warns once and is treated as 'online'.
 registerLbExport('NotifyEveryone', function(a, b)
     local scope = type(a) == 'string' and a or (type(b) == 'string' and b or nil)
     local payload = bannerFor(type(a) == 'table' and a or b)
@@ -117,9 +109,8 @@ registerLbExport('NotifyEveryone', function(a, b)
     end
 end)
 
----EmergencyNotification(source, data { title, content?, icon? }): a plain banner - sd-phone has
----no special emergency surface, so title/content/icon map straight onto title/body/image.
----Returns nil (no notification ids).
+---EmergencyNotification(source, data { title, content?, icon? }): a plain banner;
+---title/content/icon map onto title/body/image. Returns nil.
 registerLbExport('EmergencyNotification', function(source, data)
     if type(source) ~= 'number' or not GetPlayerName(source) then return nil end
     if type(data) ~= 'table' then return nil end

@@ -11,25 +11,21 @@ local share  = require 'server.share.core'
 local N = config.Notes
 
 ---@type table Actions module; the table returned at end of file. Handlers return the phone's
----{ success, message?, data? } envelope. Notes are pure per-player storage - the client owns the
----id and the ISO timestamps; the server validates, clamps and persists them, scoped to the
----caller's citizenid so one player can never touch another's notes.
+---{ success, message?, data? } envelope. The client owns the id and the ISO timestamps; the
+---server validates, clamps and persists them, scoped to the caller's citizenid.
 local actions = {}
 
----@type integer Upper bound (bytes) for each encoded sketches/images JSON column - just under the
----MEDIUMTEXT limit (16,777,215), so a hostile oversized payload fails cleanly here instead of
----erroring at the INSERT (or, in non-strict SQL mode, truncating into corrupt JSON).
+---@type integer Upper bound (bytes) for each encoded sketches/images JSON column, just under the
+---MEDIUMTEXT limit (16,777,215).
 local MAX_MEDIA_JSON = 16000000
 
----The acting player's citizenid, always resolved from src via the player bridge - identity is
----never read from a payload.
+---The acting player's citizenid, resolved from src via the player bridge.
 ---@param src integer player server id
 ---@return string|nil citizenid nil when the player can't be resolved
 local function cidOf(src) return player.getIdentifier(src) end
 
----Keep only well-formed, non-empty strings from a client-supplied array, capped at `limit`
----entries. Used for both sketches (PNG data URLs) and images (hosted photo URLs); anything that
----isn't a table yields an empty list rather than erroring.
+---Keeps only well-formed, non-empty strings from a client-supplied array, capped at `limit`
+---entries. A non-table yields an empty list.
 ---@param arr any client-supplied array
 ---@param limit integer max entries to keep
 ---@return string[] out sanitized list
@@ -46,8 +42,7 @@ local function sanitizeList(arr, limit)
     return out
 end
 
----Decode a JSON-array text column back into a Lua array (empty on null/garbage). pcall-guarded:
----the column is server-written, but a truncated or hand-edited row must not crash the list.
+---Decodes a JSON-array text column back into a Lua array (empty on null/garbage).
 ---@param raw string|nil stored JSON text
 ---@return table arr decoded array, empty when absent or malformed
 local function decodeArr(raw)
@@ -58,8 +53,7 @@ local function decodeArr(raw)
     return {}
 end
 
----All of the caller's notes, newest-edited first. Scoped to the caller's citizenid - there is no
----way to request another player's notes. Read-only.
+---All of the caller's notes, newest-edited first, scoped to the caller's citizenid. Read-only.
 ---@param src integer player server id
 ---@return table result envelope with { notes }
 function actions.list(src)
@@ -80,13 +74,8 @@ function actions.list(src)
     return { success = true, data = { notes = out } }
 end
 
----Insert or update one of the caller's notes. The id is client-generated but only ever used under
----the caller's citizenid (the PK is citizenid+id), so a forged id can at worst create or overwrite
----the caller's own rows. The per-player cap is enforced only when this would be a brand-new note;
----the existence check is a cheap primary-key lookup, so updates skip the COUNT entirely (matters
----because the editor saves on every keystroke pause). Timestamps are the client's ISO strings
----(they sort chronologically) but fall back to server time when malformed or longer than their
----VARCHAR(40) columns, and each encoded media array is size-capped to fit its MEDIUMTEXT column.
+---Inserts or updates one of the caller's notes (PK citizenid+id). The per-player cap applies only
+---to brand-new notes; timestamps fall back to server time when malformed, media JSON is size-capped.
 ---@param src integer player server id
 ---@param payload any client-supplied note { id, body?, sketches?, images?, createdAt?, updatedAt? }
 ---@return table result envelope
@@ -122,8 +111,7 @@ function actions.save(src, payload)
     return { success = true }
 end
 
----Delete one of the caller's notes. The store scopes the DELETE to citizenid + id, so a forged id
----can only ever remove the caller's own row. Idempotent - a missing id deletes nothing.
+---Deletes one of the caller's notes, scoped to citizenid + id. A missing id deletes nothing.
 ---@param src integer player server id
 ---@param id any client-supplied note id
 ---@return table result envelope with { id } on success
@@ -135,10 +123,8 @@ function actions.delete(src, id)
     return { success = true, data = { id = id } }
 end
 
----Open an AirShare request offering this note's text, sketches and image URLs to a nearby player.
----The share core owns the real trust boundary (the target must be nearby with their phone open,
----and must accept); content is clamped with the same caps as a save so a pending request can't
----carry more than a note may hold. Delivery happens only on accept (actions.deliverShare).
+---Opens an AirShare request offering this note's text, sketches and image URLs to a nearby
+---player. Content is clamped with the same caps as a save; delivery happens only on accept.
 ---@param src integer sender server id
 ---@param target any client-supplied recipient server id (validated by share.request)
 ---@param payload any client-supplied note content { body?, sketches?, images? }
@@ -162,11 +148,8 @@ function actions.requestShare(src, target, payload)
     return { success = true }
 end
 
----Deliver an accepted note share as a fresh note in the recipient's list. Not a client callback:
----it only runs as the AirShare 'note' handler (registered in init.lua) after the recipient
----accepts, with a payload requestShare already clamped - re-validated here anyway so the module
----stands alone. The id is server-generated so it can't collide with one of the recipient's own
----notes, and the recipient's note cap still applies. The new note is pushed only to the recipient.
+---Delivers an accepted note share as a fresh note in the recipient's list; runs only as the
+---AirShare 'note' handler. The id is server-generated, the recipient's note cap applies.
 ---@param targetSrc number recipient server id
 ---@param payload { body: string, sketches: string[], images: string[] } vetted share payload
 ---@return boolean delivered

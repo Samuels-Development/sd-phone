@@ -5,10 +5,8 @@ local util = require 'server.util'
 ---is parameterized, callers own validation and serialize their own read-modify-writes.
 local store = {}
 
----Create the three stocks tables if they don't exist, so the resource is drop-in: the
----per-character brokerage wallet (cash set aside for trading, separate from the bank),
----per-character holdings, and the shared live price/history per symbol so the market is
----continuous across restarts. History is stored as a JSON array of numbers. Run once at boot.
+---Creates the three stocks tables if they don't exist: the per-character brokerage wallet,
+---per-character holdings, and the shared live price/history per symbol. Runs once at boot.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS `phone_stock_wallet` (
@@ -41,10 +39,8 @@ function store.ensureSchema()
     util.ensureIndex('phone_stock_holdings', 'idx_stock_holdings_symbol', '(symbol, quantity)')
 end
 
----Read a character's wallet cash, creating the row (seeded with `starting`) the first time we
----see them. The insert is INSERT IGNORE because two callbacks can interleave across the SELECT
----await on a character's very first open - both see no row, and the loser's plain INSERT would
----throw on the primary key. IGNORE makes the loser a no-op and both return the same seed.
+---Reads a character's wallet cash, creating the row (seeded with `starting`) via INSERT IGNORE
+---the first time.
 ---@param citizenid string framework per-character id
 ---@param starting? number seed cash for a brand-new wallet row (defaults to 0)
 ---@return number cash
@@ -57,9 +53,7 @@ function store.ensureWallet(citizenid, starting)
     return starting or 0
 end
 
----Persist a character's wallet cash (upsert, ABSOLUTE value). Callers serialize their
----read-modify-write around this (the actions layer's per-character trade gate); the data layer
----stays dumb.
+---Persists a character's wallet cash (upsert, ABSOLUTE value).
 ---@param citizenid string framework per-character id
 ---@param cash number new wallet balance
 ---@param ts? integer unix seconds for updated_at (defaults to now)
@@ -79,8 +73,7 @@ function store.listHoldings(citizenid)
         { citizenid }) or {}
 end
 
----One character's position in one symbol (nil when they hold none). Scoped to the caller's
----citizenid so a row can only ever be read through its owner. Read-only.
+---One character's position in one symbol (nil when they hold none). Read-only.
 ---@param citizenid string framework per-character id
 ---@param symbol string asset symbol
 ---@return { symbol: string, quantity: number, avg_cost: number }|nil row
@@ -103,17 +96,14 @@ function store.upsertHolding(citizenid, symbol, quantity, avgCost, ts)
         { citizenid, symbol, quantity, avgCost, ts or os.time() })
 end
 
----Delete one character's position in one symbol (a sell that emptied it). Scoped to the
----owner's citizenid, so a bare symbol can never clear someone else's row.
+---Deletes one character's position in one symbol, scoped to the owner's citizenid.
 ---@param citizenid string framework per-character id
 ---@param symbol string asset symbol
 function store.deleteHolding(citizenid, symbol)
     MySQL.prepare.await('DELETE FROM `phone_stock_holdings` WHERE citizenid = ? AND symbol = ?', { citizenid, symbol })
 end
 
----Largest holders of a symbol, biggest first. Used for the public ownership / whale view on
----the asset detail - the actions layer strips the citizenids before anything reaches a client.
----Read-only.
+---Largest holders of a symbol, biggest first. Read-only.
 ---@param symbol string asset symbol
 ---@param limit integer max rows (server-chosen, never client input)
 ---@return { citizenid: string, quantity: number }[] rows
@@ -133,9 +123,8 @@ function store.holderStats(symbol)
     return { holders = row and tonumber(row.holders) or 0, total = row and tonumber(row.total) or 0 }
 end
 
----All persisted prices, keyed by symbol, for seeding the engine at boot. The history JSON is
----decoded under pcall so one corrupt row degrades to an empty history instead of failing the
----whole boot. Read-only.
+---All persisted prices, keyed by symbol, for seeding the engine at boot. Corrupt history JSON
+---degrades to an empty history. Read-only.
 ---@return table<string, { price: number, history: number[] }> prices
 function store.loadPrices()
     local out = {}

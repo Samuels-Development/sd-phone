@@ -3,13 +3,10 @@ local player = require 'bridge.server.player'
 
 ---@type table Rail Runner module; the table returned at end of file. Per-character high scores,
 ---coin wallet and unlocked cosmetics - one row per character - powering the real (all-players)
----leaderboard and the coin shop. Callbacks live under the shared `sd-phone:server:games:*`
----namespace so the generic client bridge (client/apps/games.lua) proxies them for free.
+---leaderboard and the coin shop. Callbacks live under the shared `sd-phone:server:games:*` namespace.
 local rr = {}
 
--- Authoritative skin catalog: the web mirrors it for display, but the server is the source of
--- truth for what a purchase costs and whether an id is valid - a client can never name its own
--- price. Cost 0 = the free default everyone owns.
+-- Authoritative skin catalog; cost 0 = the free default everyone owns.
 ---@type table<string, integer> Skin id -> coin cost.
 local SKINS = {
     classic = 0, teal = 150, crimson = 150, gold = 350, neon = 500,
@@ -18,8 +15,6 @@ local SKINS = {
 ---@type string The free default skin every profile owns.
 local DEFAULT_SKIN = 'classic'
 
--- Trust model (mirrors the single-player chip settle): the game runs entirely in NUI, so the
--- client reports its own run and the server clamps what one run can claim.
 ---@type integer Max coins one reported run may credit.
 local COIN_MAX_PER_RUN = 1000
 ---@type integer Max distance one reported run may claim.
@@ -30,8 +25,8 @@ local function cidOf(src)  return player.getIdentifier(src) end
 ---@return string display name for DB rows, capped to the column's VARCHAR(64)
 local function nameOf(src) return (player.getName(src) or ('Player ' .. tostring(src))):sub(1, 64) end
 
----Coerce a client-reported run value to a safe integer in [0, cap]. Non-numbers, NaN and +-inf
----collapse to 0 - a NaN would otherwise resolve through min/max to the cap itself.
+---Coerces a client-reported run value to an integer in [0, cap]. Non-numbers, NaN and +-inf
+---collapse to 0.
 ---@param v any client-supplied value
 ---@param cap integer inclusive upper bound
 ---@return integer clamped
@@ -41,7 +36,7 @@ local function clampRun(v, cap)
     return math.max(0, math.min(cap, math.floor(n)))
 end
 
----Create the profile table if it doesn't exist, so the resource is drop-in. Run once at boot.
+---Creates the profile table if it doesn't exist. Runs once at boot.
 function rr.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_railrunner (
@@ -58,8 +53,8 @@ function rr.ensureSchema()
     ]])
 end
 
----Decode a stored unlocked-skins JSON array, tolerating NULL / garbage (json.decode is pcall'd
----and non-array results are discarded) by falling back to just the default skin.
+---Decodes a stored unlocked-skins JSON array, falling back to just the default skin on NULL or
+---garbage.
 ---@param s string|nil raw column value
 ---@return table unlocked skin id array (never empty)
 local function decodeUnlocked(s)
@@ -68,8 +63,8 @@ local function decodeUnlocked(s)
     return { DEFAULT_SKIN }
 end
 
----Fetch a character's row, creating the starter row (default skin owned + selected) on first
----play. Idempotent - the PRIMARY KEY means a raced first-create simply reads the winner's row.
+---Fetches a character's row, creating the starter row (default skin owned + selected) on first
+---play.
 ---@param cid string citizenid
 ---@param name string display name for the row
 ---@return table row phone_railrunner row
@@ -84,8 +79,8 @@ local function ensureRow(cid, name)
     return r
 end
 
----Shape a DB row into the profile the web renders, guaranteeing the default skin is always
----present in unlocked (older rows may predate it).
+---Shapes a DB row into the profile the web renders, guaranteeing the default skin is always
+---present in unlocked.
 ---@param r table phone_railrunner row
 ---@return table profile { best, coins, totalCoins, plays, unlocked, selected }
 local function profileOf(r)
@@ -111,10 +106,8 @@ function rr.getProfile(src)
     return profileOf(ensureRow(cid, nameOf(src)))
 end
 
----Bank a finished run: credit coins, bump plays, raise best. dist/coins are client-reported and
----clamped (see the trust-model note on the caps above); a replayed submit re-credits within the
----same caps, which the trust model already accepts. Returns the updated profile plus whether this
----run set a new personal best.
+---Banks a finished run: credits coins, bumps plays, raises best; dist/coins are clamped. Returns
+---the updated profile plus whether this run set a new personal best.
 ---@param src integer player server id
 ---@param dist any client-reported distance
 ---@param coins any client-reported coins collected
@@ -136,10 +129,8 @@ function rr.submit(src, dist, coins)
     return { profile = profileOf(ensureRow(cid, name)), newBest = newBest }
 end
 
----Buy a skin from the catalog. The cost comes from SKINS only (never the client), and the debit
----is a guarded compare-and-swap: the UPDATE only lands if the coin balance still covers the cost
----AND the unlocked list is unchanged since we read it, so a double-tapped buy can't charge twice
----or drive coins negative - the losing call re-reads and reports the honest reason.
+---Buys a skin from the catalog. The cost comes from SKINS only, debited via a guarded
+---compare-and-swap on the coin balance and unlocked list.
 ---@param src integer player server id
 ---@param skin any skin id to buy
 ---@return table|nil profile updated profile, nil + message on failure
@@ -164,8 +155,8 @@ function rr.buy(src, skin)
     return profileOf(ensureRow(cid, nameOf(src)))
 end
 
----Equip a skin the caller owns (the default is always owned). Ownership is checked against the
----stored unlocked list, so a client can't select a skin it never bought.
+---Equips a skin the caller owns (the default is always owned). Ownership is checked against the
+---stored unlocked list.
 ---@param src integer player server id
 ---@param skin any skin id to equip
 ---@return table|nil profile updated profile, nil + message on failure
@@ -241,8 +232,7 @@ lib.callback.register('sd-phone:server:games:rrLeaderboard', function(src)
     return { success = true, data = rr.leaderboard(src) }
 end)
 
--- One-shot boot thread: create the profile schema before any handler needs it. pcall'd so a
--- broken DB prints one tagged line instead of killing the resource load.
+-- One-shot boot thread: creates the profile schema.
 CreateThread(function()
     local good, err = pcall(rr.ensureSchema)
     if not good then print(('^1[sd-phone:games]^0 railrunner schema bootstrap failed: %s'):format(err)) end

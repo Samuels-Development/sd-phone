@@ -2,15 +2,11 @@
 local framework = require 'bridge.shared.framework'
 
 ---@type table Player module; the table returned at end of file. Player resolution + identity
----helpers - every other server bridge module routes through player.get(src) so framework dispatch
----stays in one place. Identity always derives from a server-trusted `source`; nothing here reads
----identity out of client payloads.
+---helpers for the server bridge.
 local player = {}
 
----Pick the framework's GetPlayer implementation once at module load - frameworks don't change at
----runtime, so call sites are a direct call instead of a per-call branch. The unsupported fallback
----raises loudly rather than returning nil, but is unreachable in practice: bridge.shared.framework
----already hard-errors at require time when no supported framework is started.
+---Pick the framework's GetPlayer implementation once at module load; the unsupported fallback
+---raises an error.
 ---@return fun(source: number): any|nil
 local function chooseGet()
     if framework.name == 'qb' then
@@ -28,7 +24,7 @@ end
 local resolveGet = chooseGet()
 
 ---Resolve a framework-native player object for the given source. Nil when the source isn't a
----loaded player (disconnected, between characters) - callers must nil-check before field access.
+---loaded player.
 ---@param source number player server id
 ---@return any|nil framework-specific player object
 function player.get(source) return resolveGet(source) end
@@ -49,8 +45,7 @@ end
 local resolveIdentifier = chooseIdentifier()
 
 ---The player's persistent per-character identifier (citizenid on QBCore/QBox, identifier on ESX).
----This is the primary key the phone's DB tables (settings, accounts, badges, game stats) are
----scoped by, so it must only ever be resolved from a server-trusted source. Nil when offline.
+---Nil when offline.
 ---@param source number player server id
 ---@return string|nil
 function player.getIdentifier(source)
@@ -58,8 +53,7 @@ function player.getIdentifier(source)
     return p and resolveIdentifier(p) or nil
 end
 
----A friendly "First Last" name for the player. Falls back to 'Unknown' when the player can't be
----resolved, so display paths never have to nil-check a name.
+---A friendly "First Last" name for the player; 'Unknown' when the player can't be resolved.
 ---@param source number player server id
 ---@return string
 function player.getName(source)
@@ -84,7 +78,7 @@ function player.getJob(source)
     return nil
 end
 
----The player's current gang name. QBCore-only - always nil on ESX, which has no gang concept.
+---The player's current gang name. QBCore-only; always nil on ESX.
 ---@param source number player server id
 ---@return string|nil
 function player.getGang(source)
@@ -94,9 +88,7 @@ function player.getGang(source)
     return nil
 end
 
----Find the currently-connected source for a citizenid. O(n) scan over GetPlayers - fine up to
----~512 connected players; above that, keep a reverse map in sync via playerJoining/playerDropped
----instead. Read-only.
+---Find the currently-connected source for a citizenid via a scan over GetPlayers. Read-only.
 ---@param citizenid string
 ---@return number|nil source nil if offline
 function player.getSourceByIdentifier(citizenid)
@@ -109,7 +101,6 @@ function player.getSourceByIdentifier(citizenid)
 end
 
 ---Build a `{ [citizenid] = source }` lookup of every currently-connected player in a single pass.
----Cheaper than calling getSourceByIdentifier in a loop when annotating many records at once.
 ---Read-only.
 ---@return table<string, number>
 function player.onlineCidMap()

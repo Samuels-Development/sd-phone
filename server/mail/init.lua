@@ -10,9 +10,7 @@ local badges  = require 'server.badges.init'
 local util    = require 'server.util'
 local fail, trim = util.fail, util.trim
 
----Schema bootstrap. Runs in a thread so it can yield until oxmysql is ready without blocking
----resource start; a failure is loud but non-fatal (the callbacks still register and surface
----their own errors).
+---Boots the mail schema; a failure is printed and non-fatal.
 CreateThread(function()
     local ok, err = pcall(store.ensureSchema)
     if not ok then
@@ -22,10 +20,8 @@ CreateThread(function()
     print('^2[sd-phone:mail]^0 schema ready')
 end)
 
----Complete a successful send envelope: run the shared delivery fan-out (actions.deliver, a live
----UI event + badge repush per online signed-in citizen), then strip the pushes list - and the
----citizenids inside it - from the envelope so the caller only ever learns about its own sent
----copy, never who is signed into which mailbox.
+---Completes a successful send envelope: runs the delivery fan-out, then strips the pushes list
+---from the envelope.
 ---@param result table envelope from actions.send
 ---@return table
 local function dispatchSend(result)
@@ -36,11 +32,7 @@ local function dispatchSend(result)
     return result
 end
 
--- Authoritative Mail callbacks: thin delegates into server.mail.actions, which owns the
--- validation + mutation (each handler is documented there). src is trusted (the server injects
--- it); every payload field is validated inside the action. Handlers that can change which
--- messages count as unread also repush the caller's badge snapshot afterwards - pushed, not
--- incremented, so the badge can't drift.
+-- Authoritative Mail callbacks: thin delegates into server.mail.actions.
 lib.callback.register('sd-phone:server:mail:list', function(src)
     return actions.list(src)
 end)
@@ -49,22 +41,21 @@ lib.callback.register('sd-phone:server:mail:signUp', function(src, payload)
     return actions.signUp(src, payload)
 end)
 
----Sign-in repushes the badge snapshot: a freshly signed-in mailbox's unread now counts.
+---Sign-in repushes the badge snapshot.
 lib.callback.register('sd-phone:server:mail:signIn', function(src, payload)
     local result = actions.signIn(src, payload)
     badges.push(src)
     return result
 end)
 
----Sign-out repushes the badge snapshot: a signed-out mailbox's unread no longer counts.
+---Sign-out repushes the badge snapshot.
 lib.callback.register('sd-phone:server:mail:signOut', function(src, payload)
     local result = actions.signOut(src, payload)
     badges.push(src)
     return result
 end)
 
----Send is the one non-thin delegate: on success the persisted inbox copies fan out through the
----shared delivery path and the push list is stripped before the envelope returns (dispatchSend).
+---Send fans out the persisted inbox copies and strips the push list before the envelope returns.
 lib.callback.register('sd-phone:server:mail:send', function(src, payload)
     return dispatchSend(actions.send(src, payload))
 end)
@@ -73,7 +64,7 @@ lib.callback.register('sd-phone:server:mail:saveDraft', function(src, payload)
     return actions.saveDraft(src, payload)
 end)
 
----Reading an email can decrement the Mail badge, so the snapshot repushes after.
+---Mark-read repushes the badge snapshot.
 lib.callback.register('sd-phone:server:mail:markRead', function(src, payload)
     local result = actions.markRead(src, payload)
     badges.push(src)
@@ -84,21 +75,21 @@ lib.callback.register('sd-phone:server:mail:toggleFlag', function(src, payload)
     return actions.toggleFlag(src, payload)
 end)
 
----Binning an unread email decrements the Mail badge, so the snapshot repushes after.
+---Move-to-bin repushes the badge snapshot.
 lib.callback.register('sd-phone:server:mail:moveToBin', function(src, payload)
     local result = actions.moveToBin(src, payload)
     badges.push(src)
     return result
 end)
 
----Moving to/from the inbox changes what counts as unread, so the snapshot repushes after.
+---Move repushes the badge snapshot.
 lib.callback.register('sd-phone:server:mail:move', function(src, payload)
     local result = actions.move(src, payload)
     badges.push(src)
     return result
 end)
 
----A deleted account's unread mail no longer counts, so the snapshot repushes after.
+---Delete-account repushes the badge snapshot.
 lib.callback.register('sd-phone:server:mail:deleteAccount', function(src, payload)
     local result = actions.deleteAccount(src, payload)
     badges.push(src)
@@ -109,17 +100,10 @@ end)
 ---view, matching the actions.move whitelist.
 local FOLDERS = { inbox = true, drafts = true, sent = true, spam = true, bin = true }
 
--- Public Mail exports. Reachable only by other server resources - never by clients - so the
--- shape checks exist to fail cleanly on caller bugs rather than to distrust the values: a bad
--- argument returns false/nil/an empty list/a failure envelope instead of erroring. Any acting
--- identity is honoured as given, and the real validation lives in server.mail.actions.
+-- Public Mail exports, reachable only by other server resources.
 
----Send mail as the system - exports['sd-phone']:sendMail(mail). `mail.to` is one address or a
----list (deduped, capped at 20); optional subject/body are truncated to the compose caps;
----optional `from` { name, email } defaults to System <no-reply@Domain> and is display-only,
----never resolved to an account. Recipient addresses with no registered account are silently
----skipped; `delivered` counts the ones that existed, each getting a persisted inbox copy plus a
----live push + badge repush for its signed-in online citizens.
+---Sends mail as the system - exports['sd-phone']:sendMail(mail). Unknown recipient addresses
+---are silently skipped; `delivered` counts recipient accounts that existed.
 ---@param mail { to: string|string[], subject?: string, body?: string, from?: { name?: string, email?: string } }
 ---@return { success: boolean, delivered: number }
 exports('sendMail', function(mail)
@@ -130,13 +114,8 @@ exports('sendMail', function(mail)
     }
 end)
 
----Send mail on a player's behalf from another resource -
----exports['sd-phone']:sendMailFromPlayer(source, payload). Mirrors the NUI send payload:
----{ fromEmail, to = string[], subject?, body? }. The caller is trusted to name the acting
----player, but the payload still walks the full compose validation in actions.send: the player
----must be signed into fromEmail, the From header is rebuilt from the account row, and the
----recipient/subject/body caps apply. The delivery fan-out runs here and the push list is
----stripped, so the envelope only carries the sender's own sent copy (data.sent).
+---Sends mail on a player's behalf from another resource. Mirrors the NUI send payload and
+---walks the full compose validation in actions.send; the push list is stripped.
 ---@param source number acting player's server id (the sender's identity resolves from it)
 ---@param payload table
 ---@return table envelope; data.sent is the serialized sent copy on success
@@ -146,9 +125,8 @@ exports('sendMailFromPlayer', function(source, payload)
     return dispatchSend(actions.send(source, payload))
 end)
 
----Every mail account a player is signed into - exports['sd-phone']:getMailAccounts(source).
----Returns { id, name, email } per account in creation order; empty when the source is offline
----or signed into nothing. Never carries password_hash or the signed-in citizen list.
+---Lists every mail account a player is signed into as { id, name, email }; empty when the
+---source is offline or signed into nothing.
 ---@param source number player server id
 ---@return { id: string, name: string, email: string }[]
 exports('getMailAccounts', function(source)
@@ -157,11 +135,8 @@ exports('getMailAccounts', function(source)
     return result.success and result.data.accounts or {}
 end)
 
----Same account shape keyed by citizenid instead of a live source -
----exports['sd-phone']:getMailAddresses(citizenid). Works for offline players. The citizenid
----must be a non-empty string without % or _: the store's session lookup rides JSON_SEARCH,
----which treats both as wildcards, so a patterned input could match other citizens' sessions.
----Never carries password_hash or the signed-in citizen list.
+---Same account shape keyed by citizenid instead of a live source; works for offline players.
+---The citizenid must be a non-empty string without % or _.
 ---@param citizenid string
 ---@return { id: string, name: string, email: string }[]
 exports('getMailAddresses', function(citizenid)
@@ -174,9 +149,8 @@ exports('getMailAddresses', function(citizenid)
     return out
 end)
 
----Whether a mail address resolves to a registered account -
----exports['sd-phone']:mailAddressExists(email). Trimmed + lowercased before the lookup; a
----non-string or empty address is simply false.
+---Whether a mail address resolves to a registered account. Trimmed + lowercased before the
+---lookup; a non-string or empty address is false.
 ---@param email string
 ---@return boolean
 exports('mailAddressExists', function(email)
@@ -185,10 +159,8 @@ exports('mailAddressExists', function(email)
     return store.getAccount(addr) ~= nil
 end)
 
----Read a mailbox's messages - exports['sd-phone']:getMailbox(email, folder?). Returns the same
----serialized MailMessage shape the app renders, nil when the account doesn't exist or the
----folder isn't one of the five real ones (inbox/drafts/sent/spam/bin; 'flagged' is a virtual
----view). Omit folder for every message in the account.
+---Reads a mailbox's messages in the serialized MailMessage shape; nil when the account doesn't
+---exist or the folder isn't one of the five real ones. Omit folder for every message.
 ---@param email string
 ---@param folder? string
 ---@return table[]|nil

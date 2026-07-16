@@ -3,25 +3,19 @@ local player = require 'bridge.server.player'
 ---@type table Settings persistence layer (server.settings.store): citizenid -> number lookups.
 local settings = require 'server.settings.store'
 
--- Each handler below listens on a first-party 'sd-phone:server:*' lifecycle event and re-fires
--- it under the lb-phone event name third-party listeners already know, with the payload
--- reshaped to lb-phone's documented contract. Everything stays server-local; nothing here is
--- ever sent to a client. Phone numbers resolve through the non-ensuring settings getter, a
--- mirror must never mint a number.
+-- Each handler listens on a first-party 'sd-phone:server:*' lifecycle event and re-fires it
+-- under the lb-phone event name with the payload reshaped to lb-phone's contract. Server-local only.
 
----Number mint -> lb-phone:phoneNumberGenerated (source, number). lb fires it for online
----players at generation, so the citizenid resolves to a source first and offline mints (the
----getPhoneNumberByIdentifier ensure=true path) are skipped silently.
+---Number mint -> lb-phone:phoneNumberGenerated (source, number). The citizenid resolves to a
+---source first; offline mints are skipped silently.
 AddEventHandler('sd-phone:server:number:assigned', function(citizenid, number)
     local src = player.getSourceByIdentifier(citizenid)
     if not src then return end
     TriggerEvent('lb-phone:phoneNumberGenerated', src, number)
 end)
 
----1:1 and system texts -> lb-phone:messages:messageSent. Group sends have no lb analog and
----are skipped. channelId is a synthetic 0 (sd-phone has no channel ids, the same stand-in the
----SendMessage export shim returns) and attachments is a JSON-ENCODED STRING of a one-url
----array when the message carries media, lb encodes it as a string, not a table.
+---1:1 and system texts -> lb-phone:messages:messageSent; group sends are skipped. channelId is a
+---synthetic 0 and attachments is a JSON-encoded string of a one-url array for media messages.
 AddEventHandler('sd-phone:server:messages:sent', function(m)
     if m.group then return end
     local attachments
@@ -38,10 +32,8 @@ AddEventHandler('sd-phone:server:messages:sent', function(m)
     })
 end)
 
----Mail compose -> lb-phone:mail:mailSent, which lb fires once per recipient address, so the
----single first-party event fans out here over the normalized recipient list. Player composes
----and system sends both pass through; a system send's id can be nil when nothing was
----delivered.
+---Mail compose -> lb-phone:mail:mailSent, fired once per recipient address. A system send's id
+---can be nil when nothing was delivered.
 AddEventHandler('sd-phone:server:mail:sent', function(m)
     for i = 1, #m.to do
         TriggerEvent('lb-phone:mail:mailSent', {
@@ -55,10 +47,8 @@ AddEventHandler('sd-phone:server:mail:sent', function(m)
     end
 end)
 
----Reshape a first-party call payload into lb-phone's CallData: callId is the pma-voice
----channel, the party tables keep source + number (nearby stays empty, sd-phone has no
----call-sharing) and a group ring's missing callee yields a callee with nil source/number.
----videoCall and hideCallerId are hard false, features sd-phone does not have.
+---Reshapes a first-party call payload into lb-phone's CallData: callId is the pma-voice channel,
+---the party tables keep source + number, nearby stays empty, videoCall/hideCallerId are hard false.
 ---@param call table first-party call payload (server.calls.actions eventCall/eventRing shape)
 ---@param answered boolean
 ---@param started number epoch seconds lb consumers read as the call start
@@ -86,17 +76,14 @@ AddEventHandler('sd-phone:server:call:answered', function(call)
     TriggerEvent('lb-phone:callAnswered', callData(call, true, call.startedAt or os.time()))
 end)
 
----A call ended -> lb-phone:callEnded (CallData, endedBy). The payload carries no start
----timestamp, so started is reconstructed as now minus the talk duration: the answer time for
----answered calls, now for never-answered ones. endedBy is nil when the teardown came from a
----disconnect.
+---A call ended -> lb-phone:callEnded (CallData, endedBy). started is reconstructed as now minus
+---the talk duration; endedBy is nil when the teardown came from a disconnect.
 AddEventHandler('sd-phone:server:call:ended', function(call, endedBy)
     TriggerEvent('lb-phone:callEnded', callData(call, call.answered == true, os.time() - (call.duration or 0)), endedBy)
 end)
 
----Customer -> company text -> lb-phone:newCompanyMessage. sentByEmployee is hard false (the
----first-party event only covers the customer direction) and lb's coords/anonymous options
----have no sd analog, so coords stays nil and anonymous false.
+---Customer -> company text -> lb-phone:newCompanyMessage. sentByEmployee is hard false, coords
+---stays nil and anonymous false.
 AddEventHandler('sd-phone:server:services:message', function(e)
     TriggerEvent('lb-phone:newCompanyMessage', {
         company        = e.job,
@@ -107,28 +94,23 @@ AddEventHandler('sd-phone:server:services:message', function(e)
     })
 end)
 
----Logged external transaction -> lb-phone:onAddTransaction (type, number, amount, company,
----logo). lb keeps the SIGN on amount and derives type from it, so the signed amount passes
----through untouched. The whole mirror is skipped when the citizen has no number row (lb keys
----wallets by phone number); the trailing logo argument has no sd analog.
+---Logged external transaction -> lb-phone:onAddTransaction (type, number, amount, company, logo).
+---The signed amount passes through untouched; skipped when the citizen has no number row.
 AddEventHandler('sd-phone:server:banking:transaction', function(t)
     local number = settings.getPhoneNumber(t.citizenid)
     if not number then return end
     TriggerEvent('lb-phone:onAddTransaction', t.amount > 0 and 'received' or 'paid', number, t.amount, t.counterparty or t.label, nil)
 end)
 
----Owner-initiated gallery delete -> lb-phone:deletedFromGallery (source, number, url).
----Skipped when the url is unknown; a missing number row degrades to '' rather than dropping
----an event for a delete that really happened.
+---Owner-initiated gallery delete -> lb-phone:deletedFromGallery (source, number, url). Skipped
+---when the url is unknown; a missing number row degrades to ''.
 AddEventHandler('sd-phone:server:photos:deleted', function(p)
     if not p.url then return end
     TriggerEvent('lb-phone:deletedFromGallery', p.source, settings.getPhoneNumber(p.citizenid) or '', p.url)
 end)
 
----New Birdy post -> lb-phone:birdy:newPost. The id stringifies (lb ids are strings), the
----image list JSON-encodes into lb's attachments string (nil for text-only posts), and fields
----sd-phone does not track (reply_to, replyToAuthor, profile_image) stay nil with verified
----hard false.
+---New Birdy post -> lb-phone:birdy:newPost. The id stringifies, the image list JSON-encodes into
+---the attachments string (nil for text-only posts), untracked fields stay nil, verified hard false.
 AddEventHandler('sd-phone:server:birdy:post', function(p)
     TriggerEvent('lb-phone:birdy:newPost', {
         id           = tostring(p.id),
@@ -141,9 +123,8 @@ AddEventHandler('sd-phone:server:birdy:post', function(p)
     })
 end)
 
----New Photogram post -> lb-phone:instapic:newPost. media is the image url array. A private
----author's post passes through unchanged: server-side listeners are trusted, the first-party
----payload's privacy note concerns forwarding to clients.
+---New Photogram post -> lb-phone:instapic:newPost; media is the image url array. A private
+---author's post passes through unchanged.
 AddEventHandler('sd-phone:server:photogram:post', function(p)
     TriggerEvent('lb-phone:instapic:newPost', {
         id       = tostring(p.id),
@@ -155,7 +136,7 @@ AddEventHandler('sd-phone:server:photogram:post', function(p)
 end)
 
 ---New Pages post -> lb-phone:pages:newPost. body becomes description and the single legacy
----image url rides as attachment (lb's Yellow Pages posts carry at most one).
+---image url rides as attachment.
 AddEventHandler('sd-phone:server:pages:post', function(p)
     TriggerEvent('lb-phone:pages:newPost', {
         id          = p.id,
@@ -168,8 +149,7 @@ AddEventHandler('sd-phone:server:pages:post', function(p)
 end)
 
 ---New Marketplace listing -> lb-phone:marketplace:newPost. body becomes description and the
----stored images JSON string passes through as attachments (lb stores the same shape), with an
----empty table standing in when the listing has no photos.
+---stored images pass through as attachments (empty table when the listing has no photos).
 AddEventHandler('sd-phone:server:marketplace:post', function(p)
     TriggerEvent('lb-phone:marketplace:newPost', {
         id          = p.id,
@@ -181,8 +161,4 @@ AddEventHandler('sd-phone:server:marketplace:post', function(p)
     })
 end)
 
--- Not mirrored, lb-phone events with no sd-phone analog: lb-phone:numberChanged (sd numbers
--- never change post-mint), lb-phone:factoryReset, lb-phone:toggleVerified,
--- lb-phone:trendy:newPost and lb-phone:darkchat:newMessage (no Trendy or Darkchat apps). In
--- the other direction, the first-party banking:transfer, photos:added, contacts:added/removed
--- and the group shape of messages:sent have no lb event name to translate to.
+-- Not mirrored (no sd-phone analog): lb-phone:numberChanged, factoryReset, toggleVerified, trendy:newPost, darkchat:newMessage.

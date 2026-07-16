@@ -1,13 +1,8 @@
 ---@type table Store module; the table returned at end of file.
 local store = {}
 
----Create the phone_friends table if it doesn't exist and back-fill the `pending` column on
----installs that predate it, so the resource is drop-in. Each row is one DIRECTED edge: `owner`
----has added `friend`, and `share` says whether owner broadcasts their location TO friend - you
----can see a friend only when THEY hold an edge back to you with share = 1. `pending` marks a
----share request still awaiting the target's acceptance; legacy rows back-fill to 0 (accepted),
----so mutual adds from before the request flow keep working unchanged. Identity is the citizenid
----(stable across phone-number changes). Run once at boot.
+---Creates the phone_friends table if it doesn't exist and back-fills the `pending` column. Each
+---row is one directed edge: `owner` added `friend`; `share` = owner broadcasts to friend.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS `phone_friends` (
@@ -43,17 +38,15 @@ function store.ensureSchema()
 end
 
 ---Edges the owner has added: `{ { friend = cid, share = 0|1, pending = 0|1 }, ... }`.
----Caller normalises the TINYINT flags; we keep the data layer dumb. Read-only.
+---Caller normalises the TINYINT flags. Read-only.
 ---@param owner string owner citizenid
 ---@return table[] rows
 function store.friendsOf(owner)
     return MySQL.query.await('SELECT friend, share, pending FROM `phone_friends` WHERE owner = ?', { owner }) or {}
 end
 
----Set of citizenids currently sharing their location WITH `cid` (reverse edges with share = 1).
----One query instead of a per-friend lookup. Pending edges are excluded - a requester is never
----visible to the target until the target accepts - which makes this the single privacy gate
----deciding whose live coords a roster snapshot may carry. Read-only.
+---Set of citizenids currently sharing their location WITH `cid` (reverse edges with share = 1,
+---pending excluded). Read-only.
 ---@param cid string citizenid
 ---@return table<string, boolean> set of sharer citizenids
 function store.sharersOf(cid)
@@ -98,8 +91,7 @@ function store.count(owner)
     return MySQL.scalar.await('SELECT COUNT(*) FROM `phone_friends` WHERE owner = ?', { owner }) or 0
 end
 
----Insert a directed edge with sharing on (upsert, so a replayed insert can't error or duplicate:
----the (owner, friend) primary key absorbs it and just refreshes share/pending).
+---Inserts a directed edge with sharing on (upsert on the (owner, friend) primary key).
 ---@param owner string owner citizenid
 ---@param friend string friend citizenid
 ---@param createdAt string ISO-8601 creation stamp
@@ -112,10 +104,8 @@ function store.add(owner, friend, createdAt, pending)
     ]], { owner, friend, pending and 1 or 0, createdAt })
 end
 
----The target accepted the requester's share request: the requester's edge goes live, and the
----target gets a reverse edge so both see each other right away. The reverse insert is the same
----upsert as store.add, so a target who already held their own pending edge (mutual simultaneous
----requests) has it resolved to accepted in the same step.
+---Accepts the requester's share request: the requester's edge goes live and the target gains a
+---reverse edge via the store.add upsert.
 ---@param requester string requesting citizenid (their edge flips live)
 ---@param target string accepting citizenid (gains the reverse edge)
 ---@param createdAt string ISO-8601 creation stamp for the reverse edge
@@ -124,16 +114,15 @@ function store.accept(requester, target, createdAt)
     store.add(target, requester, createdAt, false)
 end
 
----Delete the owner's directed edge to `friend`. Scoped to (owner, friend), so it can never touch
----anyone else's edge; a no-op when the edge doesn't exist.
+---Deletes the owner's directed edge to `friend`; a no-op when the edge doesn't exist.
 ---@param owner string owner citizenid
 ---@param friend string friend citizenid
 function store.remove(owner, friend)
     MySQL.query.await('DELETE FROM `phone_friends` WHERE owner = ? AND friend = ?', { owner, friend })
 end
 
----Flip whether `owner` broadcasts their location to `friend`. Scoped to the owner's own directed
----edge, so a player can only ever change what THEY share; a no-op when the edge doesn't exist.
+---Flips whether `owner` broadcasts their location to `friend`; a no-op when the edge doesn't
+---exist.
 ---@param owner string owner citizenid
 ---@param friend string friend citizenid
 ---@param share boolean broadcast on/off

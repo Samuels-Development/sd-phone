@@ -16,11 +16,8 @@ local config    = require 'configs.ryde'
 ---@type table Actions module; the table returned at end of file.
 local actions = {}
 
--- Live matching state. Authoritative and in-memory only - a request or an in-flight trip is
--- meaningless across a restart, so only finished rides are persisted (see store.insertRide).
--- Driver-side keys are the Ryde account username; the citizenid is stored alongside so the live
--- source can be re-resolved on every push (reconnect-safe). Riders need no account and are keyed
--- by citizenid throughout.
+-- Live matching state, in-memory only; finished rides persist via store.insertRide. Driver-side
+-- keys are the Ryde account username, riders are keyed by citizenid.
 ---@type table<string, table> On-duty drivers by username: { cid, name, vehicle, plate, color, rating, since }.
 local online       = {}
 ---@type table<string, table> Pending ride requests by id (no driver locked in yet).
@@ -43,10 +40,8 @@ local util = require 'server.util'
 local ok, fail = util.ok, util.fail
 
 
----Coerce a client-supplied value to a finite number, rejecting non-numbers, NaN and the
----infinities. NaN in particular slips plain < / > range checks (every comparison on it is
----false), so money amounts, stars and coordinates must pass through here before any arithmetic
----or DB write.
+---Coerces a client-supplied value to a finite number, rejecting non-numbers, NaN and the
+---infinities.
 ---@param v any
 ---@return number|nil n the finite number, nil when unusable
 local function finite(v)
@@ -60,7 +55,7 @@ end
 ---@return integer|nil
 local function srcOf(cid) return cid and player.getSourceByIdentifier(cid) or nil end
 
----Push an event straight to a player by citizenid. No-op when offline.
+---Pushes an event straight to a player by citizenid. No-op when offline.
 ---@param cid string|nil
 ---@param event string suffix appended to EV
 ---@param data table
@@ -69,8 +64,8 @@ local function pushTo(cid, event, data)
     if src then TriggerClientEvent(EV .. event, src, data) end
 end
 
----Fan an event out to every on-duty driver (the live requests board). A driver whose live source
----can't be resolved is logged rather than evicted here - onPlayerDropped owns removing them.
+---Fans an event out to every on-duty driver; a driver whose live source can't be resolved is
+---logged.
 ---@param event string suffix appended to EV
 ---@param data table
 local function broadcastToDrivers(event, data)
@@ -92,17 +87,12 @@ local function waitingCount()
     return n
 end
 
----Tell every player how many riders are waiting. Off-duty drivers are dropped from the requests
----fan-out, so this is how their dashboard still sees live demand (a nudge to go online). It's
----just an integer - broadcasting to all is reconnect-safe, and non-driver clients simply ignore it.
+---Broadcasts the current waiting-rider count to every player.
 local function broadcastWaiting()
     TriggerClientEvent(EV .. 'waitingCount', -1, { count = waitingCount() })
 end
 
----Fire a Ryde phone notification to a player (by citizenid) for a trip milestone.
----quietInApp = true so the banner is dropped if they're already in Ryde watching it live; when
----the phone's closed it peeks / lands on the lockscreen, so a player who isn't looking (rider
----mid-trip, driver who offered then closed) still finds out.
+---Fires a Ryde phone notification (quietInApp) to a player by citizenid for a trip milestone.
 ---@param cid string|nil
 ---@param body string
 local function notifyRyde(cid, body)
@@ -113,9 +103,7 @@ local function notifyRyde(cid, body)
     })
 end
 
----Fire a Bank/Wallet notification for a Ryde money movement (logging a Wallet entry doesn't
----notify on its own). quietInApp drops it only if the player is literally in the Bank app,
----where the new row is already visible.
+---Fires a Bank/Wallet notification (quietInApp) for a Ryde money movement.
 ---@param cid string|nil
 ---@param body string
 local function notifyBank(cid, body)
@@ -126,10 +114,8 @@ local function notifyBank(cid, body)
     })
 end
 
----Resolve the caller's signed-in Ryde account from src alone - identity is never read from a
----payload. Returns the account with the citizenid attached as `_cid` and the display name
----resolved (displayName falling back to username), or nil when not signed in. Also refreshes the
----src -> citizenid cache used for disconnect cleanup while the source is live.
+---Resolves the caller's signed-in Ryde account from src, attaching the citizenid as `_cid` and
+---the resolved display name; refreshes the src -> citizenid cache.
 ---@param src integer player server id
 ---@return table|nil account
 local function account(src)
@@ -143,9 +129,8 @@ local function account(src)
     return acc
 end
 
----Resolve the caller as a rider - no Ryde account required (anyone can hail a cab). Identity is
----the citizenid from src; the display name is their character name. Refreshes the disconnect
----cleanup cache the same way account() does.
+---Resolves the caller as a rider (no Ryde account required): citizenid from src, character
+---name; refreshes the src -> citizenid cache.
 ---@param src integer player server id
 ---@return table|nil rider { cid, name }
 local function rider(src)
@@ -163,8 +148,7 @@ local function onlineCount()
     return n
 end
 
----Straight-line 2D distance in km between two {x, y} points. Display only - fares are
----driver-quoted, so this never feeds money math.
+---Straight-line 2D distance in km between two {x, y} points.
 ---@param a table
 ---@param b table
 ---@return number
@@ -172,8 +156,8 @@ local function distanceKm(a, b)
     return math.sqrt((a.x - b.x) ^ 2 + (a.y - b.y) ^ 2) / 1000
 end
 
----Trim a pending request down to what a driver's board card needs. This is the shape broadcast
----to EVERY on-duty driver, so it deliberately omits the rider's citizenid and payment choice.
+---Trims a pending request down to a driver's board card, omitting the rider's citizenid and
+---payment choice.
 ---@param r table request record
 ---@return table
 local function publicRequest(r)
@@ -184,10 +168,8 @@ local function publicRequest(r)
     }
 end
 
----Trip as seen by one side. `role` tags which end this payload is for so the client knows
----whether to drop a driver waypoint / show a rating prompt. Each side gets the OTHER party's
----phone number so they can call/message - the rider sees the driver's, the driver the rider's,
----never both.
+---Builds the trip as seen by one side; `role` tags which end the payload is for, and each side
+---gets the other party's phone number.
 ---@param t table trip record
 ---@param role string 'rider'|'driver'
 ---@return table
@@ -202,10 +184,8 @@ local function publicTrip(t, role)
     }
 end
 
----Tear down an engaged trip, record it as cancelled, and notify the party who didn't trigger
----the cancel. The rider's active slot is cleared only when it points at THIS trip - an offered
----trip's slot still points at the open request (the offer never claimed the rider). `by` is
----'rider' | 'driver' | 'disconnect'.
+---Tears down an engaged trip, records it as cancelled, and notifies the party who didn't
+---trigger the cancel. `by` is 'rider' | 'driver' | 'disconnect'.
 ---@param trip table
 ---@param by string
 local function cancelTrip(trip, by)
@@ -223,12 +203,8 @@ local function cancelTrip(trip, by)
     end
 end
 
----Drop a single offered trip and free its driver. The rider's open request is left untouched
----(other offers still stand); callers notify whoever needs it. The driver took this request off
----their board when they bid, so if it is STILL open (the rider didn't accept someone else or
----cancel the whole request - both of those remove it from `requests` before offers are dropped)
----it goes back on this driver's board, so a withdrawn or declined offer doesn't make the request
----vanish for them.
+---Drops a single offered trip and frees its driver, leaving the rider's open request untouched;
+---a still-open request goes back on this driver's board.
 ---@param trip table
 local function dropOffer(trip)
     trips[trip.id] = nil
@@ -239,7 +215,7 @@ local function dropOffer(trip)
     end
 end
 
----Drop every outstanding offer on a request except `keepId` (nil = drop all), bumping each
+---Drops every outstanding offer on a request except `keepId` (nil = drop all), bumping each
 ---passed-over driver back to free with a `notify` status push.
 ---@param requestId string
 ---@param keepId string|nil
@@ -253,10 +229,8 @@ local function clearOffersFor(requestId, keepId, notify)
     end
 end
 
----Are the trip's rider and driver currently sitting in the same vehicle? Read from server-side
----OneSync entities so the client can't fake it - both must be live, both in a vehicle, and it
----must be the SAME vehicle entity. Gates starting the trip (no specific vehicle required, just a
----shared one).
+---Returns whether the trip's rider and driver currently sit in the same vehicle, read from
+---server-side OneSync entities.
 ---@param trip table
 ---@return boolean
 local function inSameVehicle(trip)
@@ -268,8 +242,8 @@ local function inSameVehicle(trip)
     return dv ~= 0 and dv == rv
 end
 
----Is a live player within `radius` metres of a world point? Server-side ped coords, so a crafted
----client call can't spoof being there.
+---Returns whether a live player is within `radius` metres of a world point, using server-side
+---ped coords.
 ---@param src number|nil
 ---@param x number
 ---@param y number
@@ -282,13 +256,8 @@ local function withinOf(src, x, y, radius)
     return (dx * dx + dy * dy) <= (radius * radius)
 end
 
----A rider (no Ryde account needed) posts a ride request onto the open board - one live
----request/trip per rider, so a double-tap can't double-post. Pickup/dropoff coords are
----client-supplied by design (the pickup is the rider's own position, the dropoff a map pin) but
----are coerced to finite numbers - NaN/inf would poison the distance math, the counterpart's
----cancel/complete paths and every later DB write - and labels are type-checked + capped to the
----VARCHAR(96) ride columns. Payment is whitelisted to cash/card. Free on-duty drivers get a
----notification; drivers mid-trip only get the board update (they can't take it anyway).
+---Posts a rider's ride request onto the open board, one live request/trip per rider; coords are
+---coerced finite, labels capped, payment whitelisted, and free on-duty drivers notified.
 ---@param src integer player server id
 ---@param payload table { pickup: { label?, x, y }, dropoff: { label?, x, y }, payment?: string }
 ---@return table result { requestId } on success
@@ -333,13 +302,8 @@ function actions.requestRide(src, payload)
     return ok({ requestId = req.id })
 end
 
----Rider responds to a driver's offer. Accept locks the trip in: the request leaves the board,
----every other outstanding bid is bounced back to its driver as 'declined', and both parties get
----the engaged trip (the driver's copy carries a pickup waypoint, plus a notification in case
----they offered then closed the app). Decline drops just this offer - the request stays open and
----any other bids stand, so the rider keeps choosing/searching. Ownership: only the request's own
----rider (matched by citizenid from src) can respond, and only while the trip is still 'offered',
----so a replayed accept changes nothing.
+---Rider responds to a driver's offer: accept locks the trip in, pulls the request off the board,
+---bounces other bids and pushes the engaged trip to both parties; decline drops just this offer.
 ---@param src integer player server id
 ---@param payload table { tripId: string, accept?: boolean }
 ---@return table result
@@ -374,11 +338,8 @@ function actions.respond(src, payload)
     return ok({ declined = true })
 end
 
----Go on/off duty. Going online registers/refreshes the driver's vehicle card - client-supplied
----cosmetics only (the server computes nothing from them), each capped to its DB column length -
----and hands back the current board. Going offline is blocked mid-trip so an engaged rider can't
----be silently stranded; the response carries the live waiting count so the dashboard's greyed
----badge is right the instant they go off duty (no waiting for the next pool change to push).
+---Goes on/off duty. Going online registers/refreshes the driver's vehicle card and hands back
+---the current board; going offline is blocked mid-trip and returns the live waiting count.
 ---@param src integer player server id
 ---@param payload table { online: boolean, vehicle?: string, plate?: string, color?: string }
 ---@return table result
@@ -409,9 +370,7 @@ function actions.setOnline(src, payload)
     return ok({ online = false, waiting = waitingCount() })
 end
 
----Lightweight demand read: how many riders are waiting right now. Available to any signed-in
----account regardless of duty, so an off-duty driver's dashboard can hydrate its greyed "riders
----waiting" badge on open. Read-only.
+---Returns how many riders are waiting right now, for any signed-in account. Read-only.
 ---@param src integer player server id
 ---@return table result { count }
 function actions.waitingCount(src)
@@ -433,15 +392,8 @@ function actions.requestsBoard(src)
     return ok({ requests = pending })
 end
 
----Driver bids on a pending request by quoting a fare -> an 'offered' trip. The fare is the money
----the rider will later be charged, so it is coerced to a finite integer (NaN slips plain range
----checks) and clamped to the config rails. The request stays on the board - other drivers keep
----bidding until the rider picks one; the offer is its own trip record linked back via requestId,
----and riderActive stays on the open request until acceptance. A driver cannot bid on their own
----request: self-dealing would let one player farm trips and self-ratings essentially for free.
----Phone-number provisioning yields (DB awaits), so the free/on-duty/board gates are re-checked
----afterwards - otherwise two concurrent accepts could hand one driver two live trips, or bind an
----offer to a request the rider cancelled mid-await.
+---Driver bids on a pending request by quoting a fare, creating an 'offered' trip; the fare is
+---coerced to a finite integer and clamped, and the gates are re-checked after the DB awaits.
 ---@param src integer player server id
 ---@param payload table { requestId: string, fare: number }
 ---@return table result { tripId } on success
@@ -492,12 +444,8 @@ function actions.accept(src, payload)
     return ok({ tripId = trip.id })
 end
 
----Driver advances an accepted trip: 'arriving' at the pickup, then 'in_progress' once the rider
----boards. Only the trip's own driver may advance it, and never from 'offered' - an offer the
----rider hasn't accepted must not be able to progress toward a fare charge (checked here, not
----just in the UI, so calling the callback directly can't skip acceptance). Starting the trip
----additionally requires rider and driver to share a vehicle right now (server-side OneSync
----check), which stops the button being spammed before pickup.
+---Driver advances an accepted trip to 'arriving' or 'in_progress'; only the trip's own driver,
+---never from 'offered', and starting requires rider and driver to share a vehicle.
 ---@param src integer player server id
 ---@param payload table { tripId: string, status: 'arriving'|'in_progress' }
 ---@return table result { status }
@@ -528,8 +476,7 @@ function actions.tripStatus(src, payload)
     return ok({ status = nextStatus })
 end
 
----Driver UI poll: has the rider boarded the driver's vehicle yet? Drives the "Start trip"
----button's enabled state; tripStatus enforces the same check for real. Read-only.
+---Driver UI poll: returns whether rider and driver share a vehicle right now. Read-only.
 ---@param src integer player server id
 ---@param payload table { tripId: string }
 ---@return table result { same }
@@ -542,16 +489,8 @@ function actions.sameVehicle(src, payload)
     return ok({ same = inSameVehicle(trip) })
 end
 
----Driver completes the trip: charge the rider, pay the driver their cut, persist the ride, bump
----stats. Guards, in order: only the trip's own driver; only a trip that actually started
----('in_progress' - which itself required rider acceptance and a shared vehicle), so an
----unaccepted offer or a no-show pickup can never be charged; and the driver must physically be
----within 250m of the drop-off (server-side coords). The trip is then claimed out of the live
----tables BEFORE any money or DB work - the store awaits below are yields a replayed complete
----could otherwise slip through, and a double-tap must never double-charge. Fares move
----bank -> bank; the driver payout only happens when the rider's balance covered the debit
----(paid = false records the ride as uncollected and pays nothing). The Wallet entries +
----notifications only mirror the movement - the money already moved above.
+---Driver completes an 'in_progress' trip within 250m of the drop-off: charges the rider bank ->
+---bank, pays the driver's cut, persists the ride and bumps stats; unpaid rides record paid = false.
 ---@param src integer player server id
 ---@param payload table { tripId: string }
 ---@return table result { rideId, fare, paid }
@@ -607,13 +546,8 @@ function actions.complete(src, payload)
     return ok({ rideId = trip.id, fare = trip.fare, paid = paid })
 end
 
----Either party cancels whatever they're currently in - which end is being cancelled is derived
----from the caller's own live state, never from a payload. Rider side first (keyed by citizenid,
----riders have no account): a still-pending request is pulled off the board and every outstanding
----bid bounced; an engaged trip is torn down with the driver notified. Driver side (by account
----username): withdrawing an un-accepted offer keeps the rider's request (and any other bids)
----alive - they only drop back to searching if it was the last one - while cancelling an engaged
----trip tears it down and notifies the rider.
+---Cancels whatever the caller is currently in, derived from their own live state: a pending
+---request, an un-accepted offer, or an engaged trip, with the counterpart notified.
 ---@param src integer player server id
 ---@return table result
 function actions.cancel(src)
@@ -647,15 +581,8 @@ function actions.cancel(src)
     return fail('Nothing to cancel.')
 end
 
----Rider rates a finished ride 1-5 stars, optionally with a tip. Ownership: the ride row must
----belong to the caller (rider_username = their citizenid) - a bare rideId is never trusted. The
----rating is single-shot at the DB level (UPDATE ... WHERE rating IS NULL plus an affected-rows
----check), so a replayed or racing call can neither re-rate nor re-tip. Stars go through the
----finite coercion first - NaN slips a plain 1..5 range check and would corrupt the driver's
----running average. The tip is real money, rider bank -> driver bank, debited only when the
----rider's balance covers it and the driver is reachable via the on-duty board (they almost
----always still are right after a drop-off) - never charge a tip that can't be paid through. The
----driver gets a live Trips-list update plus a notification for the stars (and tip, if any).
+---Rider rates their own finished ride 1-5 stars, optionally tipping rider bank -> driver bank;
+---the rating is single-shot at the DB level and the driver gets a live update + notification.
 ---@param src integer player server id
 ---@param payload table { rideId: string, stars: number, tip?: number }
 ---@return table result { rated, tipPaid }
@@ -720,9 +647,8 @@ local function tripDriverInfo(t)
     return { name = t.driverName, car = t.vehicle, plate = t.plate, color = t.color, rating = t.driverRating, number = t.driverNumber }
 end
 
----The rider's live ride right now: a pending request (with any open offers folded in) or an
----engaged trip. Self-contained so the client can rebuild its rider-side ride from scratch on app
----open - the pushes it missed while closed are irrelevant.
+---Returns the rider's live ride right now: a pending request with any open offers folded in, or
+---an engaged trip.
 ---@param cid string rider citizenid
 ---@return table|nil
 local function riderActivePayload(cid)
@@ -768,15 +694,8 @@ local function driverActivePayload(username)
     }
 end
 
----Re-sync the caller's live Ryde state on app open. The store's push listeners only exist while
----the app is mounted, so a phone that was closed missed every offer/trip update - this hands
----back the authoritative current state. When nothing is live rider-side, the most recent
----persisted ride rides along so the client can resolve a trip that finished while closed into a
----rating prompt; fare is a DECIMAL column that oxmysql returns as a string, coerced here because
----the UI does number math on it. On-duty drivers also get the full open board, since the
----requestAdded pushes only land while the app is mounted - without it a driver whose phone was
----closed when requests came in would reopen to an empty board even though the count is right.
----Read-only.
+---Re-syncs the caller's live Ryde state on app open: rider/driver live payloads, the most recent
+---persisted ride when nothing is live rider-side, and the open board for on-duty drivers. Read-only.
 ---@param src integer player server id
 ---@return table result { rider, driver, lastEnded, requests }
 function actions.sync(src)
@@ -798,11 +717,8 @@ function actions.sync(src)
     return ok({ rider = rider, driver = driver, lastEnded = lastEnded, requests = board })
 end
 
----Start/stop the live peer-location stream for the caller while they look at a trip map. Only
----the trip's own rider or driver may watch (validated here against src-derived identity, with
----the role fixed server-side), and the stream thread below only does work while someone is
----watching - positions go out on demand, never wastefully. The counterpart's coords are read
----server-side, so they can't be spoofed.
+---Starts/stops the live peer-location stream while the caller looks at a trip map; only the
+---trip's own rider or driver may watch, with the role fixed server-side.
 ---@param src integer player server id
 ---@param payload table { tripId: string, on: boolean }
 ---@return table result
@@ -820,11 +736,8 @@ function actions.watchTrip(src, payload)
     return ok({})
 end
 
--- Live peer-location push loop: for every src currently watching a trip map, read their
--- counterpart's live ped position server-side (unspoofable) and push it down - the rider sees
--- the driver's car move, the driver sees the rider. Only validated trip members ever register
--- (actions.watchTrip); a watcher whose trip ended or who disconnected is dropped, and the loop
--- does no work while nobody is watching. Coarse (500ms) - a map marker isn't frame-sensitive.
+-- Live peer-location push loop: every 500ms, pushes each watcher's counterpart position
+-- (server-side coords); watchers whose trip ended or who disconnected are dropped.
 CreateThread(function()
     while true do
         Wait(500)
@@ -855,11 +768,8 @@ CreateThread(function()
     end
 end)
 
----Every ride the caller took part in, split into rider/driver entries for the history tab.
----Riders are keyed by citizenid, drivers by account username (falling back to citizenid when not
----signed in, which then simply matches no driver rows). The paid flag is deserialised with the
----truthy set because oxmysql hands TINYINT(1) back as a Lua boolean, not 1/0. Read-only, scoped
----to the caller's own keys.
+---Returns every ride the caller took part in, split into rider/driver entries; riders keyed by
+---citizenid, drivers by account username. Read-only.
 ---@param src integer player server id
 ---@return table result { asRider, asDriver }
 function actions.history(src)
@@ -883,10 +793,8 @@ function actions.history(src)
     return ok({ asRider = asRider, asDriver = asDriver })
 end
 
----Top drivers server-wide (confidence-weighted rating; the maths lives in store.leaderboard and
----configs/ryde.lua). avg_rating comes out of a DECIMAL division, so oxmysql may hand it back as
----a string - coerced and rounded to two decimals here. Public by design: it only exposes what
----the leaderboard screen renders (name/username, rating, trip count, card colour). Read-only.
+---Returns the top drivers server-wide (confidence-weighted rating), with avg_rating coerced and
+---rounded to two decimals. Read-only.
 ---@return table result { leaders }
 function actions.leaderboard()
     local rows = store.leaderboard(50, config.LeaderboardPriorRating or 4.5, config.LeaderboardWeight or 10)
@@ -903,8 +811,8 @@ function actions.leaderboard()
     return ok({ leaders = out })
 end
 
----The caller's own Ryde profile: account identity, driver card + lifetime stats when they have
----one, current duty state, and whatever ride/trip they're active in. Read-only.
+---Returns the caller's own Ryde profile: account identity, driver card + lifetime stats,
+---current duty state, and whatever ride/trip they're active in. Read-only.
 ---@param src integer player server id
 ---@return table result
 function actions.me(src)
@@ -925,10 +833,8 @@ function actions.me(src)
     })
 end
 
----Permanently delete the caller's Ryde account: pull them off duty, withdraw an un-accepted
----offer or cancel an engaged trip (the rider counterpart is notified either way), then drop the
----driver record and the account itself. Only ever operates on the caller's own signed-in account
----- the account id comes from the session, never from a payload.
+---Permanently deletes the caller's own Ryde account: pulls them off duty, withdraws an
+---un-accepted offer or cancels an engaged trip, then drops the driver record and the account.
 ---@param src integer player server id
 ---@return table result
 function actions.deleteAccount(src)
@@ -952,8 +858,8 @@ function actions.deleteAccount(src)
     return ok({})
 end
 
----Client-facing slice of configs/ryde.lua: quick-pick destinations, the driver's cut for the
----earnings preview, and the leaderboard weighting so the UI can explain rankings. Read-only.
+---Client-facing slice of configs/ryde.lua: quick-pick destinations, the driver's cut, and the
+---leaderboard weighting. Read-only.
 ---@return table result
 function actions.config()
     return ok({
@@ -964,8 +870,7 @@ function actions.config()
     })
 end
 
--- DEV/TEST tooling for /rydeoffer: synthetic driver cards used to exercise the rider's
--- multi-offer switcher without a second real player.
+-- DEV/TEST synthetic driver cards for /rydeoffer.
 ---@type table[] Fake driver cards devOffer picks from at random.
 local DEV_DRIVERS = {
     { name = 'Test Driver', car = 'Bravado Buffalo',     color = '#10b981', plate = 'DEV 001' },
@@ -974,11 +879,8 @@ local DEV_DRIVERS = {
     { name = 'Jordan P.',   car = 'Vapid Peyote',        color = '#ef4444', plate = 'DEV 004' },
 }
 
----DEV/TEST: drop a synthetic fare offer onto the caller's own open ride request, so the rider's
----multi-offer switcher can be exercised without a second real driver. Self-scoped: it can only
----ever add an offer to the CALLER's request, and the synthetic driver has no real session - it
----never touches driverActive and its pushes/cid resolve to nothing (a no-op) - so the offer is
----safe to accept or decline. Returns a short status string for the chat ack.
+---DEV/TEST: drops a synthetic fare offer onto the caller's own open ride request. Returns a
+---short status string for the chat ack.
 ---@param src integer player server id
 ---@return string message
 function actions.devOffer(src)
@@ -1004,14 +906,8 @@ function actions.devOffer(src)
     return ('Sent a test offer: %s for $%d.'):format(d.name, fare)
 end
 
----Player left - drop them from the duty board and cancel anything they were in, releasing the
----counterpart. The citizenid comes from the live cache first because the framework may have
----already unloaded the player by the time playerDropped fires; the per-src caches (srcCid,
----tripViewers) are always cleared so recycled server ids can't inherit stale state. Their
----pending request (if any) is binned along with every bid on it. An offered trip is only an
----offer withdrawal - the rider keeps the request and is told to remove just that one card when
----its driver was the leaver - while an engaged trip is cancelled with by = 'disconnect' so the
----survivor is notified.
+---Handles a player leaving: clears the per-src caches, drops them from the duty board, bins
+---their pending request and its bids, withdraws an offered trip, and cancels an engaged trip.
 ---@param src number player server id
 function actions.onPlayerDropped(src)
     local cid = srcCid[src] or player.getIdentifier(src)

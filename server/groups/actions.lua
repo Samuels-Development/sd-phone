@@ -12,17 +12,14 @@ local groupsCfg = config.Groups
 local actions = {}
 
 ---@type string Sentinel returned to React in place of the requesting player's own citizenid.
----Mirrors the 'local' checks in web/src/apps/groups/ - the UI never learns its own real cid.
 local LOCAL_ID = 'local'
 
 local util = require 'server.util'
 local ok, fail = util.ok, util.fail
 
 
----Resolve a connected player's display name + citizenid in one go, from their server id ONLY -
----the single source of actor identity in this module, so a crafted payload can never
----impersonate another player. Returns nil for offline / unknown sources so callers can
----early-return.
+---Resolves a connected player's display name + citizenid from their server id. Returns nil for
+---offline / unknown sources.
 ---@param source number
 ---@return { cid: string, name: string }|nil
 local function whois(source)
@@ -31,19 +28,15 @@ local function whois(source)
     return { cid = cid, name = player.getName(source) }
 end
 
----Coerce a client-supplied callback payload to a table. A modded client can send any msgpack
----value (number, boolean, ...) where the UI sends a table, and indexing a non-table raises -
----so every payload-taking handler normalizes through here before its first field read.
+---Coerces a client-supplied callback payload to a table.
 ---@param payload any
 ---@return table
 local function asTable(payload)
     return type(payload) == 'table' and payload or {}
 end
 
----Reshape a hydrated store group into the React `Group` shape, with the requesting player's
----citizenid masked as 'local'. Fellow members' real citizenids ARE sent - the kick flow keys
----its target on them. `onlineCids` is an optional `{ [cid] = source }` map; when supplied each
----output member gets an `online` boolean and the group's `onlineCount` is populated.
+---Reshapes a hydrated store group into the React `Group` shape, masking the viewer's citizenid
+---as 'local'; with `onlineCids` each member gets an `online` flag and `onlineCount` is populated.
 ---@param group { id: string, name: string, leader_cid: string, color: string, members: table[] }
 ---@param viewerCid string
 ---@param onlineCids? table<string, number>
@@ -96,11 +89,8 @@ end
 
 actions.serializeInvite = serializeInvite
 
----Load the full Groups state for one player - groups, pending invites, and active-group id -
----as a single round-trip. The online-cid map is computed once and reused across every group's
----serialization. Also self-heals a stale active pointer: if the stored active group no longer
----lists the caller as a member (or was deleted), it's cleared instead of returned, so exports
----reading the active group can't be pointed at a group the player left.
+---Loads the full Groups state for one player - groups, pending invites, and active-group id -
+---clearing a stale active pointer when the caller is no longer a member.
 ---@param source number
 ---@return { success: true, data: { groups: any[], invites: any[], activeGroupId: string|nil } }|{ success: false, message: string }
 function actions.list(source)
@@ -138,10 +128,8 @@ end
 local colorFor = util.colorFor
 
 
----Normalize and validate a player-supplied group name: type-checked (it's an
----attacker-controlled payload field), trimmed, then length-gated by configs/groups.lua
----MinNameLength/MaxNameLength (the max also keeps it inside the name column's VARCHAR(64)).
----Returns the trimmed name on success or `nil, message` on failure.
+---Normalizes and validates a player-supplied group name: type-checked, trimmed, then
+---length-gated by configs/groups.lua. Returns the trimmed name or `nil, message`.
 ---@param raw any
 ---@return string|nil normalized, string? message
 local function validateName(raw)
@@ -156,9 +144,7 @@ local function validateName(raw)
     return trimmed, nil
 end
 
----Create a new group with the caller as leader. Name-only - invitees are added afterwards
----from the leader's detail-page invite flow. The MaxOwnedPerPlayer cap is enforced here (not
----just in the UI) so a scripted client can't spam group rows.
+---Creates a new group with the caller as leader, enforcing the MaxOwnedPerPlayer cap.
 ---@param source number
 ---@param payload { name?: string }
 ---@return table
@@ -183,10 +169,8 @@ function actions.create(source, payload)
     return ok(actions.serializeGroup(row, me.cid))
 end
 
----Send a pending invite to the (online) player identified by `targetSource`. Leadership of
----`groupId` is checked against the CALLER's resolved citizenid, so only the owner can grow
----the group - and the duplicate-member, duplicate-invite, member-cap and invite-cap gates all
----run server-side, where a modded client can't skip them.
+---Sends a pending invite to the online player identified by `targetSource`. Leader-only, with
+---duplicate-member, duplicate-invite, member-cap and invite-cap gates.
 ---@param source number
 ---@param payload { groupId?: string, targetSource?: number }
 ---@return table
@@ -249,11 +233,8 @@ function actions.invite(source, payload)
     })
 end
 
----Accept a pending invite. Only the invite's own target may consume it (target_cid against
----the caller's resolved cid), and the member cap is re-checked at accept time - a group that
----filled up since the invite was sent consumes the invite without joining. Returns the
----freshly-joined group plus the leader's raw citizenid so init.lua can push a memberJoined
----event to whichever source the leader is connected on.
+---Accepts a pending invite; only the invite's target may consume it, and the member cap is
+---re-checked at accept time. Returns the joined group plus the leader's raw citizenid.
 ---@param source number
 ---@param payload { inviteId?: string }
 ---@return table
@@ -282,9 +263,7 @@ function actions.accept(source, payload)
     })
 end
 
----Decline (drop) a pending invite. The target check applies while the invite still exists,
----so one player can't burn another's pending invite. Idempotent - silently succeeds if the
----invite has already been consumed/declined elsewhere.
+---Declines (drops) a pending invite; only the invite's target may decline it. Idempotent.
 ---@param source number
 ---@param payload { inviteId?: string }
 ---@return table
@@ -300,9 +279,7 @@ function actions.decline(source, payload)
     return ok()
 end
 
----Leave a group as a non-leader member. Leaders use `disband` - leadership transfer is a
----v0.2 feature. Membership is checked before the row mutation, and the caller's active-group
----pointer is cleared so exports can't keep reading a group they just left.
+---Leaves a group as a non-leader member and clears the caller's active-group pointer.
 ---@param source number
 ---@param payload { groupId?: string }
 ---@return table
@@ -324,10 +301,8 @@ function actions.leave(source, payload)
     return ok({ groupId = group.id })
 end
 
----Disband a group entirely (leader-only, checked against the caller's resolved cid). Returns
----the citizenids of the now-ex-members so init.lua can push a `disbanded` event to each one
----that's online; every player's active-group pointer to this group is cleared so nothing
----dangles at the deleted id.
+---Disbands a group entirely (leader-only). Returns the ex-members' citizenids and clears every
+---active-group pointer to this group.
 ---@param source number
 ---@param payload { groupId?: string }
 ---@return table
@@ -350,10 +325,8 @@ function actions.disband(source, payload)
     return ok({ groupId = group.id, memberCids = memberCids, name = group.name })
 end
 
----Leader kicks a member by citizenid. Uses citizenid (not source) so the kicked player can be
----offline at the time of the kick. Leader-only, self-kick and leader-kick are refused, and the
----target must be an existing member - so an arbitrary payload string matches nothing and
----mutates nothing. The kicked player's active-group pointer is cleared too.
+---Kicks a member by citizenid (leader-only); self-kick and leader-kick are refused, the target
+---must be an existing member, and the kicked player's active-group pointer is cleared.
 ---@param source number
 ---@param payload { groupId?: string, citizenid?: string }
 ---@return table
@@ -381,10 +354,8 @@ function actions.kick(source, payload)
     return ok({ groupId = group.id, citizenid = payload.citizenid })
 end
 
----Set a group's picture (leader-only). The URL normally comes from the Photos app picker (a
----Fivemanage upload owned by the player), but any string is accepted - so it's type-checked,
----trimmed and truncated to the avatar column's VARCHAR(512) before it reaches the store.
----Returns the member cids so init.lua can push a refresh to everyone else who's online.
+---Sets a group's picture (leader-only); the URL is type-checked, trimmed and truncated to 512
+---chars. Returns the member cids.
 ---@param source number
 ---@param payload { groupId?: string, avatar?: string }
 ---@return table
@@ -414,9 +385,8 @@ function actions.setAvatar(source, payload)
     return ok({ groupId = group.id, avatar = avatar, memberCids = memberCids })
 end
 
----Set (or clear) the caller's active group. Pass `groupId = nil` to clear. Setting requires
----the caller to actually be a member, so a crafted id can't point other resources (reading
----the getActiveGroup export) at a group the player isn't in.
+---Sets (or clears) the caller's active group; pass `groupId = nil` to clear. Setting requires
+---membership.
 ---@param source number
 ---@param payload { groupId?: string|nil }
 ---@return table
@@ -440,9 +410,8 @@ function actions.setActive(source, payload)
     return ok({ activeGroupId = groupId })
 end
 
----Build the export-ready view of a group: real citizenids (no 'local' rewrite) plus a live
----`source` field per member that's currently online. For trusted callers only - the
----server-side exports and the membership-gated exportView callback in init.lua.
+---Builds the export-ready view of a group: real citizenids plus a live `source` field per
+---online member.
 ---@param groupId string
 ---@return { id: string, name: string, color: string, leaderCitizenid: string, members: { citizenid: string, name: string, source: number|nil }[] }|nil
 function actions.getGroupForExport(groupId)
@@ -468,9 +437,8 @@ function actions.getGroupForExport(groupId)
     }
 end
 
----Convenience: export-view of a specific player's active group. Returns nil if the player
----isn't connected, has no active group set, or the active group has been disbanded since they
----set it - in which case the stale pointer is cleared on the way out.
+---Returns the export-view of a player's active group, or nil; a stale pointer to a disbanded
+---group is cleared on the way out.
 ---@param source number
 ---@return table|nil
 function actions.getActiveGroupForExport(source)
@@ -487,8 +455,7 @@ function actions.getActiveGroupForExport(source)
     return g
 end
 
----Just the active group's id for a given player. Cheap one-row read - useful as a precheck
----before deciding whether to call the full `getActiveGroupForExport`.
+---Returns just the active group's id for a given player.
 ---@param source number
 ---@return string|nil
 function actions.getActiveGroupIdFor(source)

@@ -14,8 +14,7 @@ local store         = require 'server.friends.store'
 ---@type table Actions module; the table returned at end of file.
 local actions = {}
 
----@type string[] Ring colours - mirrors FRIEND_COLORS in web/src/apps/findfriends/data.ts so a
----friend's ring colour is the same wherever they show up.
+---@type string[] Ring colours; mirrors FRIEND_COLORS in web/src/apps/findfriends/data.ts.
 local PALETTE = {
     '#0a84ff', '#34c759', '#ff9f0a', '#ff375f', '#bf5af2',
     '#64d2ff', '#ffd60a', '#ff6482', '#5e5ce6', '#30d158',
@@ -31,8 +30,7 @@ local digits, flag = util.digits, util.truthy
 local function cidOf(src) return player.getIdentifier(src) end
 
 
----Deterministic colour from the friend's citizenid, so it's stable across sessions and identical
----on both players' phones without storing anything.
+---Deterministic colour from the friend's citizenid.
 ---@param id string friend citizenid
 ---@return string hex colour from PALETTE
 local function colorFor(id)
@@ -41,9 +39,7 @@ local function colorFor(id)
     return PALETTE[(h % #PALETTE) + 1]
 end
 
----number -> saved contact { name, avatar } for the owner, so a friend shows with the same name
----AND photo as their contact card everywhere. Built from the OWNER's own address book only - one
----player's contacts never colour another player's roster.
+---number -> saved contact { name, avatar } map built from the owner's own address book.
 ---@param owner string owner citizenid
 ---@return table<string, table> map of digits-number -> { name, avatar }
 local function contactInfo(owner)
@@ -56,14 +52,7 @@ local function contactInfo(owner)
 end
 
 ---The full roster for a player: every added friend with display info, the two directional share
----flags, and live coords when they share with us and are online. Incoming share requests come
----first so they're seen without scrolling - they carry no share flags or coords, just enough to
----render an Accept row. Mutual simultaneous requests would otherwise render two rows for the same
----person, so the incoming entry wins (accepting resolves both edges). Coords are the privacy
----boundary: they attach ONLY when the friend's own reverse edge is accepted with share on
----(store.sharersOf excludes pending rows) and the friend is online, and they're read server-side
----from the friend's ped - nothing is streamed from clients, and a non-sharing friend leaks
----neither position nor online status. Read-only.
+---flags, and live coords for online sharing friends; incoming requests come first. Read-only.
 ---@param src number player server id
 ---@param onlineCids? table<string, number> shared citizenid->src map; the tick loop builds it once
 ---and passes it to every watcher, nil = build it here (for one-off callback use)
@@ -146,15 +135,8 @@ function actions.list(src)
     return { success = true, data = actions.snapshot(src) }
 end
 
----Adding someone is a REQUEST, not an instant share: the edge is stored as pending and the target
----gets a `locrequest` card in their Messages thread (like a money request) with Accept / Decline.
----Only accepting opens the two-way share - until then the roster row shows "Requested" and the
----pending edge is invisible to store.sharersOf, so no coords move in either direction. The number
----is resolved to a citizenid server-side (a fabricated payload can't invent a target), self-adds
----are rejected by both number and citizenid, a duplicate edge is refused, and the MaxFriends cap
----is enforced here so calling the callback directly can't skip it. The request rides as a
----Messages card; sendDirect also fires the target's banner, and an offline target finds the card
----waiting in their mailbox.
+---Adds someone as a pending share request: the edge is stored pending and the target gets a
+---`locrequest` Messages card. Rejects self-adds, duplicates and the MaxFriends cap server-side.
 ---@param src number player server id
 ---@param phone any client-supplied target number
 ---@return table result { success, data?, message? }
@@ -189,15 +171,8 @@ function actions.add(src, phone)
     return { success = true, data = actions.snapshot(src) }
 end
 
----Accept or decline a location-share request. Only the request's true target can answer: the
----proof is the pending edge FROM the requester TO the caller (resolved from src), so a crafted
----payload can't accept a request aimed at someone else or conjure edges that were never asked
----for, and a replayed answer finds the edge no longer pending and changes nothing. Accepting
----activates the requester's edge AND creates the reverse edge, so both appear on each other's
----maps immediately; declining deletes the request outright. Either way the request card's status
----is patched on every mailbox copy - answering from Maps carries no copy id, so it falls back to
----the newest pending card in the requester's thread, and messages.setRequestStatus verifies the
----copy belongs to the caller. The requester gets a notification with the outcome.
+---Accepts or declines a location-share request; only the pending edge's true target can answer.
+---Accepting activates both edges, declining deletes the request; the card is patched and the requester notified.
 ---@param src number the responder (the request's target)
 ---@param msgId string|nil the responder's copy of the locrequest card
 ---@param phone any the requester's number (the 1:1 thread key)
@@ -244,11 +219,7 @@ function actions.respond(src, msgId, phone, accept)
 end
 
 ---Share state between the caller and a number, for the Messages thread's location action sheet:
----whether an edge exists, whether it's still pending, and the two live share flags. Only edges
----touching the caller are consulted, so a player can't probe two strangers' relationship, and a
----number with no edge to or from the caller answers the same bare `exists = false` whether it's
----registered or not - the probe can't map numbers to citizenids or reveal which numbers are real.
----The peer's id and flags ride along only once a relationship exists in some direction. Read-only.
+---whether an edge exists, whether it's still pending, and the two live share flags. Read-only.
 ---@param src number player server id
 ---@param phone any client-supplied peer number
 ---@return table result { success, data = { exists, id?, pending?, youShare?, theyShare? } }
@@ -274,11 +245,8 @@ function actions.status(src, phone)
     } }
 end
 
----Drop a friend from the caller's roster. Deletes only the CALLER's directed edge, which both
----stops the caller broadcasting to `id` and removes the row from their roster - the friend's
----reverse edge is untouched (they still list the caller), but with the caller gone from their
----sharers no coords flow in either direction. The id is type-checked and the delete is scoped to
----the caller, so a crafted payload can't sever anyone else's edges.
+---Drops a friend from the caller's roster by deleting only the caller's directed edge; the
+---friend's reverse edge is untouched.
 ---@param src number player server id
 ---@param id any client-supplied friend citizenid
 ---@return table result { success, data? }
@@ -289,10 +257,8 @@ function actions.remove(src, id)
     return { success = true, data = actions.snapshot(src) }
 end
 
----Toggle whether the CALLER broadcasts their location to friend `id`. Writes only the caller's
----own directed edge (a no-op when it doesn't exist), so a player can only ever change what THEY
----share - never switch on someone else's broadcast. `enabled` is coerced to a strict boolean
----before it reaches the store.
+---Toggles whether the caller broadcasts their location to friend `id`. Writes only the caller's
+---own directed edge; `enabled` is coerced to a strict boolean.
 ---@param src number player server id
 ---@param id any client-supplied friend citizenid
 ---@param enabled any client-supplied flag

@@ -1,9 +1,6 @@
----@type table Identity resolution for the lb-phone import (server.migrate.identity). lb-phone keys
----its data on the phone number and ties a phone to a player through phone_phones.owner_id (a
----framework identifier); sd-phone keys everything on citizenid. This module bridges the two: it
----reads every lb-phone phone once, resolves each owner id to an sd-phone citizenid, and hands the
----porters two lookups - the list of resolved phones (to adopt numbers) and a number -> citizenid
----map (so calls / messages can find the mailbox owner for any number).
+---@type table Identity resolution for the lb-phone import (server.migrate.identity). Reads every
+---lb-phone phone once, resolves each owner id to an sd-phone citizenid, and hands the porters two
+---lookups: the list of resolved phones and a number -> citizenid map.
 local identity = {}
 
 local store = require 'server.migrate.store'
@@ -13,8 +10,7 @@ local store = require 'server.migrate.store'
 ---@return string
 local function digits(s) return (tostring(s or ''):gsub('%D', '')) end
 
----A 4-6 digit lock code, or nil. lb-phone pins are 4 digits; sd-phone accepts 4-6, so this both
----validates and drops anything that is not a usable code.
+---A 4-6 digit lock code, or nil.
 ---@param v any
 ---@return string|nil
 local function pinOf(v)
@@ -22,9 +18,8 @@ local function pinOf(v)
     return v:match('^%d%d%d%d%d?%d?$')
 end
 
----Resolve one lb-phone owner id to an sd-phone citizenid under the configured mode. Returns the
----citizenid, or nil plus a reason ('unresolved' when no character matches, 'ambiguous' when an
----owner license maps to several characters and we refuse to guess).
+---Resolves one lb-phone owner id to an sd-phone citizenid under the configured mode. Returns the
+---citizenid, or nil plus a reason ('unresolved' or 'ambiguous').
 ---@param ownerId string
 ---@param roster { cids: table<string, boolean>, licenseToCids: table<string, string[]> }
 ---@param mode 'auto'|'citizenid'|'license'
@@ -36,8 +31,7 @@ local function resolveOwner(ownerId, roster, mode)
         return roster.cids[ownerId] and ownerId or nil, 'unresolved'
     end
 
-    -- 'auto' tries a direct citizenid match first (the common, unambiguous case), then falls
-    -- through to the license path; 'license' skips straight to it.
+    -- 'auto' tries a direct citizenid match first, then the license path; 'license' skips straight to it.
     if mode == 'auto' and roster.cids[ownerId] then return ownerId, nil end
 
     local bucket = roster.licenseToCids[ownerId]
@@ -46,9 +40,8 @@ local function resolveOwner(ownerId, roster, mode)
     return bucket[1], nil
 end
 
----Build the identity context: read every lb-phone phone, resolve owners, and produce the lookups
----the porters use. Also tallies how many phones resolved / were unresolved / were ambiguous, for
----the boot log.
+---Builds the identity context: reads every lb-phone phone, resolves owners, and produces the
+---lookups the porters use. Also tallies resolved / unresolved / ambiguous counts.
 ---@param cfg table config.Migrate
 ---@param framework { name: 'qb'|'esx' }
 ---@return { resolvedPhones: { cid: string, number: string, pin: string|nil }[], numberToCid: table<string, string>, cids: string[], stats: { total: number, resolved: number, unresolved: number, ambiguous: number } }

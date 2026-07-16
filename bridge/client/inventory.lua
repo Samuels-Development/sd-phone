@@ -5,16 +5,11 @@ local inventoryId  = require 'bridge.shared.inventory_id'
 
 ---@type table Inventory module; the table returned at end of file. Client-side inventory bridge:
 ---item-count lookups, item label resolution, NUI image-path resolution, and ox_inventory's
----display-metadata feature. Each query family resolves its backend-specific closure ONCE at
----module load and caches results per item, because most callers ask for the same items
----repeatedly (target.canInteract loops, menu rebuilds).
+---display-metadata feature.
 local inventory = { system = inventoryId.name }
 
----Pick the right image-path resolver for the active inventory, once at module load - each
----backend stores its NUI images at a different path layout. tgiann serves from the standalone
----inventory_images resource when that's started (falling back to its own web/images) and honours
----an item's configured image, passing absolute nui:// or http(s) URLs through untouched; jaksam
----asks the inventory itself first. With no inventory detected, every lookup resolves to nil.
+---Picks the image-path resolver for the active inventory, once at module load. With no inventory
+---detected, every lookup resolves to nil.
 ---@return fun(item: string): string|nil
 local function chooseImageResolver()
     local active = inventoryId.name
@@ -65,8 +60,7 @@ local resolveImage = chooseImageResolver()
 ---@type table<string, string> Per-item resolved image paths (successful lookups only).
 local imageCache = {}
 
----The NUI image path for an item - used by menus that render their own item tiles. The result is
----cached per-item so the layout walk only happens once per unique key.
+---Returns the NUI image path for an item, cached per item.
 ---@param item string
 ---@return string|nil
 function inventory.image(item)
@@ -79,12 +73,11 @@ function inventory.image(item)
     return resolved
 end
 
----Drop the in-memory image cache. Useful if the inventory resource is swapped at runtime (rare,
----but possible during dev iteration).
+---Drops the in-memory image cache.
 function inventory.clearImageCache() imageCache = {} end
 
----Pre-warm the image cache. Accepts arrays of strings, of `{item=...}` rows, or of `{name=...}`
----/ `{id=...}` rows - covers every reward-config shape.
+---Pre-warms the image cache. Accepts arrays of strings, of `{item=...}` rows, or of `{name=...}`
+---/ `{id=...}` rows.
 ---@param items table
 function inventory.preCacheImages(items)
     if not items then return end
@@ -98,11 +91,8 @@ function inventory.preCacheImages(items)
     end
 end
 
----Pick the right item-label resolver for the active inventory, once at module load. Resolvers
----return nil for items the backend doesn't know about so the cache layer can store a definitive
----"we already looked and failed" sentinel, and every export call is pcall-wrapped so a renamed /
----removed export degrades to nil rather than erroring. Falls back to qb-core's Shared.Items table
----when no supported inventory export exists, then to a constant nil.
+---Picks the item-label resolver for the active inventory, once at module load. Falls back to
+---qb-core's Shared.Items table when no supported inventory export exists, then to a constant nil.
 ---@return fun(itemName: string): string|nil
 local function chooseLabelResolver()
     local active = inventoryId.name
@@ -139,8 +129,8 @@ local resolveLabel = chooseLabelResolver()
 ---@type table<string, string|false> Per-item labels; false = negative-cached "backend doesn't know it".
 local labelCache = {}
 
----Player-readable label for an item key (e.g. `lockpick` -> `Lockpick`). Missing-label results
----are negatively cached so repeat lookups don't re-query the inventory each time.
+---Returns the player-readable label for an item key (e.g. `lockpick` -> `Lockpick`).
+---Missing-label results are negatively cached.
 ---@param itemName string
 ---@return string|nil
 function inventory.label(itemName)
@@ -153,11 +143,8 @@ function inventory.label(itemName)
     return label
 end
 
----Pick the right item-count resolver for the active inventory, once at module load. Falls back
----to walking the framework's own player-data item list when the active inventory doesn't expose
----a tidy count export: qb sums every matching slot (its inventories split stacks), esx returns
----the first match's count (its inventory is one row per item). With neither, counts are a
----constant 0.
+---Picks the item-count resolver for the active inventory, once at module load. Falls back to
+---walking the framework's own player-data item list, then to a constant 0.
 ---@return fun(item: string): number
 local function chooseCountResolver()
     local active = inventoryId.name
@@ -210,8 +197,7 @@ end
 ---@type fun(item: string): number Backend-specific count resolver, chosen once at load.
 local resolveCount = chooseCountResolver()
 
----The COUNT of `item` in the player's inventory (0 if missing). Not cached: counts change with
----every pickup/drop, unlike labels and image paths.
+---Returns the count of `item` in the player's inventory (0 if missing). Not cached.
 ---@param item string
 ---@return number
 function inventory.count(item)

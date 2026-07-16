@@ -29,12 +29,8 @@ local VALID_DIRECTIONS = { incoming = true, outgoing = true, missed = true }
 
 
 
----Validate and normalise an add/update payload into stored fields. Guarded against non-table
----payloads (a crafted scalar would otherwise error on field access). Phone input is accepted in
----any format (bare digits or '(123) 456-7890') but stored as bare digits, so the saved value is
----always normalised regardless of how it was typed; a nameless contact falls back to showing
----exactly what was typed. Length caps mirror the React forms AND the DB columns, so nothing
----oversized reaches an insert.
+---Validates and normalises an add/update payload into stored fields: phone stored as bare
+---digits, a nameless contact falls back to the typed number, lengths capped.
 ---@param payload any client-supplied contact fields
 ---@return { name: string, phone: string, email: string|nil, address: string|nil, avatar: string|nil }|nil fields
 ---@return string? err refusal message when fields is nil
@@ -94,8 +90,8 @@ end
 
 actions.serializeContact = serializeContact
 
----Reshape a stored call row into the React call-log shape. The raw epoch is handed back as
----`calledAt` for the frontend to format.
+---Reshapes a stored call row into the React call-log shape; the raw epoch is handed back as
+---`calledAt`.
 ---@param row table
 ---@return table
 local function serializeCall(row)
@@ -109,9 +105,8 @@ local function serializeCall(row)
     }
 end
 
----Full phone state for one player in a single round-trip: every contact, the recent-calls log,
----their (created-on-demand) phone number, character name, and the editable My Card overrides.
----Read-only and scoped to the caller's own citizenid.
+---Returns full phone state for one player: every contact, the recent-calls log, their phone
+---number, character name, and the editable My Card overrides. Read-only.
 ---@param source number
 ---@return table
 function actions.list(source)
@@ -135,9 +130,8 @@ function actions.list(source)
     })
 end
 
----Persist the player's editable "My Card" (name / photo / email / address), scoped to their own
----citizenid. The phone number is server-assigned and never set here. Guarded against non-table
----payloads; per-field trimming and column-length clamping happen in settings.setCard.
+---Persists the player's editable "My Card" (name / photo / email / address), scoped to their
+---own citizenid. The phone number is never set here.
 ---@param source number
 ---@param payload { name?: string, avatar?: string, email?: string, address?: string }
 ---@return table
@@ -148,10 +142,8 @@ function actions.saveCard(source, payload)
     return ok(settings.getCard(cid))
 end
 
----Create a contact for the caller. The number must be real (assigned to a character) - no
----dummy contacts that aren't attached to anyone - and must be neither the caller's own number
----nor one they already have saved. Inserts stop at config.Contacts.MaxContactsPerPlayer so a
----client can't grow the table unbounded.
+---Creates a contact for the caller. The number must be in service, not the caller's own, and
+---not already saved; inserts stop at config.Contacts.MaxContactsPerPlayer.
 ---@param source number
 ---@param payload table
 ---@return table
@@ -205,10 +197,8 @@ function actions.add(source, payload)
     return ok(serializeContact(store.getContact(id, cid)))
 end
 
----Send an AirShare request to share this contact card with a nearby player. The card fields are
----validated NOW (same rules as add) so nothing malformed sits in the pending request; delivery
----happens only if the recipient accepts (see actions.deliverShare). Recipient reachability and
----range are enforced in share.request.
+---Sends an AirShare request to share this contact card with a nearby player. The card fields
+---are validated at request time; delivery happens only if the recipient accepts.
 ---@param source number
 ---@param target number recipient server id (client-supplied, coerced + range-checked in share.request)
 ---@param payload table contact fields { name, phone, email, address, avatar }
@@ -225,11 +215,8 @@ function actions.requestShare(source, target, payload)
     return ok()
 end
 
----Deliver an accepted contact share into the recipient's contacts (the AirShare 'contact'
----handler - registered in init.lua). `fields` were validated at request time and held in server
----memory, but AirShare bypasses actions.add, so add's guards are re-applied for the RECIPIENT:
----under the contact cap, number in service, not their own, and not one they already have.
----Returns a bare boolean (the share-core handler contract) instead of a message envelope.
+---Delivers an accepted contact share into the recipient's contacts, re-applying add's guards
+---for the recipient. Returns a bare boolean.
 ---@param targetSrc number
 ---@param fields table validated contact fields
 ---@return boolean delivered
@@ -267,9 +254,8 @@ function actions.deliverShare(targetSrc, fields)
     return true
 end
 
----Edit an existing contact. The id must be a string - anything else is rejected before it can
----reach the SQL layer as a bad parameter - and the row must belong to the caller (checked here,
----and again by the citizenid-scoped UPDATE). Fields re-run the same validation as add.
+---Edits an existing contact. The id must be a string and the row must belong to the caller;
+---fields re-run the same validation as add.
 ---@param source number
 ---@param payload { id?: string }
 ---@return table
@@ -292,9 +278,8 @@ function actions.update(source, payload)
     return ok(serializeContact(store.getContact(id, cid)))
 end
 
----Delete a contact. The citizenid-scoped DELETE is the ownership check: a crafted id belonging
----to someone else matches zero rows and reports not-found. The row is read first (same citizenid
----scope) so the removal hook can carry the contact's number.
+---Deletes a contact, scoped to its owner. The row is read first and the removal hook carries
+---the contact's number.
 ---@param source number
 ---@param payload { id?: string }
 ---@return table
@@ -314,11 +299,7 @@ function actions.delete(source, payload)
     return ok({ id = id })
 end
 
----Remove every contact matching a number from a player's list. Reached via the
----removeContactByNumber export (other server resources), so the number is re-validated here:
----normalised to bare digits the same way add stores it, and matched digits-vs-digits so any
----formatting on either side still hits. Each hit deletes through the citizenid-scoped store
----call; when anything was removed, the player's open phone is told to drop the rows live.
+---Removes every contact matching a number from a player's list, matched digits-vs-digits.
 ---A number that matches nothing still succeeds with removed = 0.
 ---@param source number acting player's server id
 ---@param number string|number phone number, any format
@@ -339,8 +320,7 @@ function actions.removeByNumber(source, number)
 
     if removed > 0 then
         TriggerClientEvent('sd-phone:client:contacts:removed', source, { phone = digits })
-        -- First-party hook: one server-local event per matched-number wipe (id is nil here); the
-        -- payload carries a citizenid.
+        -- First-party hook: one server-local event per matched-number wipe.
         TriggerEvent('sd-phone:server:contacts:removed', {
             source = source, citizenid = cid, phone = digits, removed = removed,
         })
@@ -349,8 +329,8 @@ function actions.removeByNumber(source, number)
     return ok({ removed = removed })
 end
 
----Set or clear a contact's favourite flag, scoped to its owner. The flag is compared strictly
----to `true` so any non-boolean payload value simply clears it.
+---Sets or clears a contact's favourite flag, scoped to its owner; non-boolean payload values
+---clear it.
 ---@param source number
 ---@param payload { id?: string, favorite?: boolean }
 ---@return table
@@ -367,13 +347,8 @@ function actions.favorite(source, payload)
     return ok({ id = id, favorite = fav })
 end
 
----Append a call to the caller's recents log and prune to the cap. Also reachable by other
----resources via the logCall export, so every field is re-validated here: the direction is
----whitelisted (anything else logs as outgoing), the number is required and length-capped to its
----column, the name is truncated to its column, and the duration is coerced to a finite
----non-negative integer clamped to the INT range - so no crafted value can blow up the insert.
----A missed call logged from elsewhere still lights the home-screen Phone badge. Contact
----resolution (number to saved contact) happens client-side.
+---Appends a call to the caller's recents log and prunes to the cap; every field is
+---re-validated here. A missed call lights the home-screen Phone badge.
 ---@param source number
 ---@param payload { number?: string, name?: string, direction?: string, duration?: number }
 ---@return table
@@ -418,8 +393,7 @@ function actions.logCall(source, payload)
     }))
 end
 
----Delete one recents entry. The citizenid-scoped DELETE is the ownership check: a crafted id
----belonging to someone else matches zero rows and reports not-found.
+---Deletes one recents entry, scoped to its owner.
 ---@param source number
 ---@param payload { id?: string }
 ---@return table
@@ -444,9 +418,8 @@ function actions.clearRecents(source)
     return ok()
 end
 
----Acknowledge missed calls - the player opened the Phone app, so clear the home-screen Phone
----badge. Persisted (the `seen` column), so it stays cleared across restarts; the badge repush
----updates the client immediately. Idempotent.
+---Marks missed calls acknowledged and clears the home-screen Phone badge. Persisted via the
+---`seen` column; idempotent.
 ---@param source number
 ---@return table
 function actions.markCallsSeen(source)
@@ -458,10 +431,8 @@ function actions.markCallsSeen(source)
     return ok()
 end
 
----Block a caller (by number) for the requesting player. A blocked number can't call them (the
----dial path refuses with the same wording as offline, so the blocker isn't revealed) or message
----them. The store normalises to bare digits and silently no-ops on garbage input; the handler
----still answers success, matching the UI's fire-and-forget toggle.
+---Blocks a caller (by number) for the requesting player. The store normalises to bare digits
+---and silently no-ops on garbage input.
 ---@param source number
 ---@param payload { number?: string }
 ---@return table

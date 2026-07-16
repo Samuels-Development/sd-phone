@@ -12,13 +12,8 @@ local util = require 'server.util'
 local registerLbExport, warnOnce = shim.registerLbExport, shim.warnOnce
 
 ---AddContact(phoneNumber, data { number, firstname, lastname?, avatar?, email?, address? }):
----plant a contact in the ONLINE owner of phoneNumber's list. Walks the exact actions.add
----validation the NUI path uses (number in service, not their own, not a duplicate, per-player
----cap) and pushes the new card live over the same client event an accepted AirShare uses,
----mirroring the first-party addContact export. sd-phone contacts are keyed by citizenid but
----mutated through a source-scoped action, so an OFFLINE owner cannot be reached; that case
----warns once and adds nothing. A validation rejection (duplicate, cap, number not in service)
----also warns once, with the reason, so a dropped integration contact is findable in console.
+---plants a contact in the ONLINE owner of phoneNumber's list via actions.add and pushes it live.
+---An offline owner or a validation rejection warns once and adds nothing.
 registerLbExport('AddContact', function(phoneNumber, data)
     if type(data) ~= 'table' then return false end
 

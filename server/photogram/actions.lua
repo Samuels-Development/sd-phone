@@ -20,13 +20,8 @@ local VALID_DMKIND = { text = true, image = true, gif = true, voice = true, post
 local util = require 'server.util'
 local ok, fail, trim, flag = util.ok, util.fail, util.trim, util.truthy
 
-
-
-
----The photogram account the calling player is signed into, resolved from `src` alone: citizenid
----via the player bridge, then the accounts engine's session row (the engine owns auth). Identity
----is NEVER read from the payload - everything keys off this account's username (the handle).
----nil when the character isn't signed in; every handler turns that into 'Not signed in'.
+---The photogram account the calling player is signed into, resolved from `src` alone. nil when
+---the character isn't signed in.
 ---@param src integer player server id
 ---@return table|nil account accounts-engine row (username, displayName, ...)
 local function viewerAccount(src)
@@ -35,9 +30,8 @@ local function viewerAccount(src)
     return acctStore.getSessionAccount('photogram', cid)
 end
 
----Load (or bootstrap) the viewer's profile row. A fresh account gets a starter profile seeded
----from its display name so it's immediately discoverable; an existing row is returned untouched
----(idempotent).
+---Loads (or bootstraps) the viewer's profile row. A fresh account gets a starter profile seeded
+---from its display name; an existing row is returned untouched.
 ---@param acc table accounts-engine account row
 ---@return table profile phone_photogram_profiles row
 local function ensureProfile(acc)
@@ -50,9 +44,7 @@ local function ensureProfile(acc)
     return store.getProfile(acc.username)
 end
 
----Online sources signed into `username`'s photogram account - the push targets for its
----notifications, DMs, and badge refreshes. An account can be signed in from several characters;
----offline ones simply resolve to no source.
+---Online sources signed into `username`'s photogram account.
 ---@param username string photogram handle
 ---@return integer[] sources
 local function sourcesFor(username)
@@ -66,19 +58,15 @@ local function sourcesFor(username)
     return out
 end
 
----Fan a content change out to every phone. The photogram app applies it live when open; phones
----without it open have no listener mounted, so it's a no-op for them. Keeps every viewer of a
----post / feed in sync (new comments, like & comment counts, new posts, deletions).
+---Fans a content change out to every phone.
 ---@param event string client event suffix
 ---@param data table event payload
 local function broadcast(event, data)
     TriggerClientEvent('sd-phone:client:photogram:' .. event, -1, data)
 end
 
----Fan a post-scoped change out with privacy intact. A public author's changes broadcast to every
----phone (any of them may have the post rendered in feed/explore); a PRIVATE author's go only to
----the author's + accepted followers' phones. Broadcast payloads are observable by any modded
----client, so a private account's post ids and comment content must never ride a -1 event.
+---Fans a post-scoped change out: a public author's changes broadcast to every phone; a private
+---author's go only to the author's + accepted followers' phones.
 ---@param author string post author's handle
 ---@param event string client event suffix
 ---@param data table event payload
@@ -94,9 +82,7 @@ local function broadcastPost(author, event, data)
     end
 end
 
----Push a follow-status change to just the FOLLOWER's phone(s) so their open profile view /
----follow lists update live when the owner accepts (-> Following) or declines (-> Follow) their
----request - no leaving and re-opening the page.
+---Pushes a follow-status change to the follower's phone(s).
 ---@param follower string requesting handle
 ---@param target string owner handle
 ---@param status string new follow status ('accepted'/'none')
@@ -156,8 +142,7 @@ local function serializeComment(row)
     }
 end
 
----The Activity-row suffix per kind (the React side prepends the actor's handle). Kinds are
----server-written, so the empty-string fallback is only a forward-compat guard.
+---The Activity-row suffix per kind (the React side prepends the actor's handle).
 ---@param kind string notification kind
 ---@param preview string|nil comment preview text
 ---@return string suffix
@@ -198,8 +183,7 @@ local function serializeNotif(row, thumbs)
 end
 
 ---A DM row's reactions JSON -> the React reaction chips: one entry per emoji with its count and
----whether the viewer reacted. nil (not an empty list) when there are none, so the client omits
----the chip row entirely.
+---whether the viewer reacted. nil when there are none.
 ---@param row table DM row
 ---@param viewer string viewer handle
 ---@return table|nil reactions
@@ -250,11 +234,8 @@ local function notifBanner(actorName, kind, preview)
     return ('%s %s'):format(actorName, notifSuffix(kind, preview))
 end
 
----Persist an Activity notification and, if the recipient is online, push a refresh ping, a
----banner (quiet while they're in the app), and a fresh badge. The banner's deeplink opens the
----app on the Notifications (Activity) tab, clearing any drill-in left over from last time
----(false = closed). Self-notifications and empty recipients are dropped, so acting on your own
----content stays silent.
+---Persists an Activity notification and, if the recipient is online, pushes a refresh ping, a
+---banner, and a fresh badge. Self-notifications and empty recipients are dropped.
 ---@param recipient string recipient handle
 ---@param kind string notification kind
 ---@param actor string acting handle
@@ -285,15 +266,13 @@ local function notify(recipient, kind, actor, postId, preview)
     end
 end
 
----Refresh just the badge for a user's online sources (DM read, Activity opened).
+---Refreshes the badge for a user's online sources.
 ---@param username string handle
 local function bumpBadge(username)
     for _, src in ipairs(sourcesFor(username)) do badges.push(src) end
 end
 
----Ping a recipient to refetch Activity (the requests list re-reads, the badge re-derives)
----WITHOUT adding a notification - used when a follow request is withdrawn so the pending entry
----disappears from their Follow Requests live.
+---Pings a recipient to refetch Activity without adding a notification.
 ---@param recipient string handle
 local function pingActivity(recipient)
     for _, src in ipairs(sourcesFor(recipient)) do
@@ -302,9 +281,8 @@ local function pingActivity(recipient)
     end
 end
 
----Clamp a client-supplied list of post image URLs: http(s) scheme only (so no javascript:/data:
----URI ever reaches another player's NUI), at most 10 images, each capped at the 512-char column
----width.
+---Clamps a client-supplied list of post image URLs: http(s) scheme only, at most 10 images,
+---each capped at 512 chars.
 ---@param list any raw payload value
 ---@return string[] images
 local function sanitizeImages(list)
@@ -320,10 +298,7 @@ local function sanitizeImages(list)
     return out
 end
 
----Whitelist + clamp DM metadata per kind, dropping anything the kind doesn't own. Media URLs
----must be http(s) and cap at 512 like every stored URL; voice durations clamp to 0..36000s and
----waveforms to <=64 bars of 0..100; a shared post card keeps only its id and capped display
----fields. The reply preview is display-only text capped to the composer's own limits.
+---Whitelists + clamps DM metadata per kind, dropping anything the kind doesn't own.
 ---@param kind string whitelisted DM kind
 ---@param payload table raw client payload
 ---@return table meta sanitized metadata (may be empty)
@@ -366,8 +341,7 @@ local function sanitizeDmMeta(kind, payload)
     return meta
 end
 
----Whether a sanitized DM actually carries content for its kind, so sends whose media failed
----sanitation (or an empty text) are rejected rather than stored as blank rows.
+---Whether a sanitized DM carries content for its kind.
 ---@param kind string whitelisted DM kind
 ---@param body string trimmed body
 ---@param meta table sanitized metadata
@@ -381,9 +355,7 @@ local function hasDmContent(kind, body, meta)
 end
 
 ---@-mentions in a caption / comment that resolve to real photogram accounts, deduplicated and
----excluding the author. Every unique candidate costs a profile lookup, so lookups cap at 50 per
----text - a caption stuffed with hundreds of handles can't turn one callback into hundreds of
----sequential DB queries - and unresolvable candidates are remembered so repeats don't re-query.
+---excluding the author. Lookups cap at 50 per text.
 ---@param text string caption or comment body (already length-capped)
 ---@param exclude string author's own handle
 ---@return string[] handles
@@ -402,7 +374,7 @@ local function mentionsIn(text, exclude)
 end
 
 ---Whether `viewer` may see `profileRow`'s content: always for themselves and public accounts,
----otherwise only with an accepted follow. The single privacy predicate every read gate uses.
+---otherwise only with an accepted follow.
 ---@param viewer string viewer handle
 ---@param profileRow table content owner's profile row
 ---@return boolean allowed
@@ -413,9 +385,7 @@ local function canView(viewer, profileRow)
 end
 
 ---Whether `viewer` may interact with content authored by `author` (like/save/comment/read a
----thread). Checked server-side in every interaction handler - not just by the UI hiding the
----buttons - so a leaked or guessed post id can't touch or read a private account's content.
----A missing author profile allows the action (the row is orphaned; there is nothing to protect).
+---thread). A missing author profile allows the action.
 ---@param viewer string viewer handle
 ---@param author string content author's handle
 ---@return boolean allowed
@@ -425,7 +395,7 @@ local function canInteract(viewer, author)
 end
 
 ---Home feed: the viewer's own posts + accepted-following, newest first (limit 60). Bootstraps
----the profile on first open so a fresh account is immediately discoverable. Read-only.
+---the profile on first open. Read-only.
 ---@param src integer player server id
 ---@return table result { posts }
 function actions.feed(src)
@@ -438,7 +408,7 @@ function actions.feed(src)
 end
 
 ---The discovery grid: recent posts from public accounts (or ones the viewer follows), never
----their own - privacy is enforced inside the store query. Read-only.
+---their own. Read-only.
 ---@param src integer player server id
 ---@return table result { posts }
 function actions.explore(src)
@@ -450,9 +420,7 @@ function actions.explore(src)
     return ok({ posts = out })
 end
 
----A single post + its comment thread. Gated on the author's privacy so a leaked or guessed post
----id can't read a private account's content - the UI hiding locked grids isn't enough, the
----callback itself must refuse. Read-only.
+---A single post + its comment thread, gated on the author's privacy. Read-only.
 ---@param src integer player server id
 ---@param payload table { id: string }
 ---@return table result { post, comments }
@@ -469,13 +437,8 @@ function actions.post(src, payload)
     return ok({ post = serializePost(row), comments = comments })
 end
 
----Create a post from sanitized images (http-only, <=10) with the caption/location capped at
----their column widths. Fan-out: @-mentions in the caption get a 'mention' notification only when
----they may view the post (a private author's post id and thumbnail must never reach a
----non-follower's Activity feed or banner), every accepted follower gets a 'post' one (a mentioned
----follower gets only the mention, not both), and every phone gets a content-free feedChanged
----ping - private post data never rides the -1 broadcast, open feeds simply refetch what they're
----allowed to see.
+---Creates a post from sanitized images with capped caption/location, notifies mentions and
+---followers, and pings every phone with a content-free feedChanged.
 ---@param src integer player server id
 ---@param payload table { images: string[], caption?: string, location?: string }
 ---@return table result { post }
@@ -505,8 +468,7 @@ function actions.create(src, payload)
         if not mentioned[f] then notify(f, 'post', acc.username, id, nil) end
     end
     broadcast('feedChanged', {})
-    -- First-party hook: one server-local event per created post. A private author's content is
-    -- follower-scoped, so this payload must never be forwarded to clients unfiltered.
+    -- First-party hook: one server-local event per created post.
     TriggerEvent('sd-phone:server:photogram:post', {
         id = id, source = src, citizenid = player.getIdentifier(src),
         username = acc.username, images = images, caption = caption,
@@ -515,9 +477,8 @@ function actions.create(src, payload)
     return ok({ post = serializePost(store.getPost(acc.username, id)) })
 end
 
----Delete one of the viewer's own posts - ownership-checked against the signed-in handle so a
----forged id can't delete someone else's. The store cascades comments/likes/saves/notifications.
----postRemoved broadcasts id-only (no content) so any stale feed/detail view drops it.
+---Deletes one of the viewer's own posts, ownership-checked against the signed-in handle.
+---The store cascades comments/likes/saves/notifications; postRemoved broadcasts id-only.
 ---@param src integer player server id
 ---@param payload table { id: string }
 ---@return table result
@@ -533,11 +494,8 @@ function actions.deletePost(src, payload)
     return ok()
 end
 
----Toggle the viewer's like on a post. Interaction-gated for private authors (post ids leak
----through live pushes, so the gate can't live client-side). The like row is keyed (post, user)
----with INSERT IGNORE, so a replayed toggle flips cleanly and never double-counts. Only liking
----(not unliking) notifies the author; the fresh count returns to the caller and fans out
----privacy-scoped.
+---Toggles the viewer's like on a post, interaction-gated for private authors. Only liking
+---notifies the author; the fresh count returns to the caller and fans out privacy-scoped.
 ---@param src integer player server id
 ---@param payload table { id: string }
 ---@return table result { liked, likes }
@@ -564,9 +522,7 @@ function actions.toggleLike(src, payload)
     return ok({ liked = nowLiked, likes = likes })
 end
 
----Toggle a private bookmark on a post. Interaction-gated like every other post action - without
----it, saving a leaked private post id would smuggle the full post into the viewer's Saved grid.
----Saves are the viewer's own state, so nothing is broadcast or notified.
+---Toggles a private bookmark on a post, interaction-gated. Nothing is broadcast or notified.
 ---@param src integer player server id
 ---@param payload table { id: string }
 ---@return table result { saved }
@@ -587,8 +543,7 @@ function actions.toggleSave(src, payload)
     return ok({ saved = nowSaved })
 end
 
----The viewer's saved posts, newest-saved first. Save rows were privacy-gated when created
----(toggleSave); visibility is not re-checked at read time. Read-only.
+---The viewer's saved posts, newest-saved first. Read-only.
 ---@param src integer player server id
 ---@return table result { posts }
 function actions.saved(src)
@@ -599,9 +554,7 @@ function actions.saved(src)
     return ok({ posts = out })
 end
 
----A post's comment thread on its own (the comment sheet refetch). Privacy-gated exactly like
----actions.post - the thread of a private author's post is only served to the owner and accepted
----followers, so a leaked post id reads nothing. Read-only.
+---A post's comment thread on its own, privacy-gated like actions.post. Read-only.
 ---@param src integer player server id
 ---@param payload table { postId: string }
 ---@return table result { comments }
@@ -617,12 +570,8 @@ function actions.comments(src, payload)
     return ok({ comments = out })
 end
 
----Add a comment (text and/or GIF, both capped) to a post the viewer may interact with. The
----author gets a notification with a 120-char preview; @-mentions in the text get their own,
----skipping the author (who already got the comment one) and anyone who may not view the post -
----a mention must not leak a private post's id and thumbnail into a non-follower's Activity feed
----or banner. The refreshed thread count + new comment fan out privacy-scoped so open post views
----append it live.
+---Adds a comment (text and/or GIF, both capped) to a post the viewer may interact with,
+---notifying the author and eligible mentions. The refreshed thread fans out privacy-scoped.
 ---@param src integer player server id
 ---@param payload table { postId: string, text?: string, gifUrl?: string }
 ---@return table result { comment, count }
@@ -655,9 +604,7 @@ function actions.addComment(src, payload)
     return ok({ comment = serialized, count = #fresh })
 end
 
----Toggle the viewer's like on a comment, gated on the parent post author's privacy (comment ids
----travel inside post-change pushes, so an ungated toggle would let non-followers poke private
----threads). Keyed (comment, user) with INSERT IGNORE so replays never double-count.
+---Toggles the viewer's like on a comment, gated on the parent post author's privacy.
 ---@param src integer player server id
 ---@param payload table { commentId: string }
 ---@return table result { liked, likes }
@@ -680,8 +627,7 @@ function actions.toggleCommentLike(src, payload)
 end
 
 ---Full profile header for the React side: card fields + live counts + the viewer's relationship
----(followStatus, followsMe) and whether the grid is locked to them (private and not accepted).
----Counts stay public even when locked, like the real app.
+---(followStatus, followsMe) and whether the grid is locked to them.
 ---@param acc table viewer's account row
 ---@param target string profile handle
 ---@return table|nil profile nil when no such profile exists
@@ -708,9 +654,8 @@ local function serializeProfile(acc, target)
     }
 end
 
----A profile page header. An empty handle means the viewer's own (bootstrapped if fresh);
----anything else lowercases to match stored handles. Private profiles are still returned - the
----card and counts are public - with `locked` telling the UI to hide the grid. Read-only.
+---A profile page header. An empty handle means the viewer's own; private profiles return with
+---`locked` set. Read-only.
 ---@param src integer player server id
 ---@param payload table { handle?: string }
 ---@return table result { profile }
@@ -726,8 +671,7 @@ function actions.profile(src, payload)
     return ok({ profile = profile })
 end
 
----A profile's post grid. A private author the viewer can't view yields an empty grid rather
----than an error, so the locked profile page still renders its header. Read-only.
+---A profile's post grid. A private author the viewer can't view yields an empty grid. Read-only.
 ---@param src integer player server id
 ---@param payload table { handle?: string }
 ---@return table result { posts }
@@ -745,10 +689,8 @@ function actions.profilePosts(src, payload)
     return ok({ posts = out })
 end
 
----Update the viewer's own profile - the target always comes from the session, never the payload.
----Fields cap at their column widths; a blank name keeps the current display name; the avatar
----must be http(s) (anything else clears it, which is how removal works). `verified` is copied
----from the existing row so a client can't self-verify, and created_at is preserved.
+---Updates the viewer's own profile; the target always comes from the session. Fields cap at
+---their column widths; `verified` and created_at are preserved from the existing row.
 ---@param src integer player server id
 ---@param payload table { name?: string, bio?: string, avatar?: string, private?: boolean }
 ---@return table result { profile }
@@ -774,11 +716,7 @@ function actions.updateProfile(src, payload)
     return ok({ profile = serializeProfile(acc, acc.username) })
 end
 
----Follow / unfollow (or request / cancel-request for private targets) in one toggle. An existing
----relation is removed: an accepted one notifies the target of the unfollow, while cancelling a
----still-pending request instead deletes the follow-request notification and pings the target's
----Activity so the pending entry disappears live (no new notification). Otherwise a private
----target gets a 'pending' row + follow_request notification, a public one 'accepted' + follow.
+---Follows / unfollows (or requests / cancels a request for private targets) in one toggle.
 ---Self-follow and unknown targets are rejected.
 ---@param src integer player server id
 ---@param payload table { handle: string }
@@ -815,10 +753,8 @@ function actions.toggleFollow(src, payload)
     return ok({ status = 'accepted' })
 end
 
----Owner accepts or declines a pending follow request. Only valid while the requester->owner row
----is still 'pending', so a replayed or forged respond is a no-op failure. Accept upgrades the
----row and notifies the requester; decline silently deletes it. Either way the requester's open
----profile view is pushed the new status so their Follow button updates live.
+---Owner accepts or declines a pending follow request. Accept upgrades the row and notifies the
+---requester; decline deletes it. Either way the requester is pushed the new status.
 ---@param src integer player server id
 ---@param payload table { handle: string, accept?: boolean }
 ---@return table result
@@ -853,8 +789,7 @@ function actions.followRequests(src)
 end
 
 ---Followers / following list for a profile, privacy-gated to an empty list for locked profiles.
----Each card carries the VIEWER's relationship to that user so the row's Follow button renders
----correctly ('self' for their own row). Read-only.
+---Each card carries the viewer's relationship to that user. Read-only.
 ---@param src integer player server id
 ---@param payload table { handle?: string, kind?: string }
 ---@return table result { users }
@@ -878,10 +813,8 @@ function actions.followList(src, payload)
     return ok({ users = out })
 end
 
----Search accounts by handle or display name (LIKE '%q%', 20 rows). The query caps at the 64-char
----handle column width before it reaches the DB - it drives a table scan, so an unbounded string
----is a cheap DoS lever. Empty queries skip the DB entirely; the viewer is filtered out of the
----results. Read-only.
+---Searches accounts by handle or display name (LIKE '%q%', 20 rows). Empty queries skip the DB;
+---the viewer is filtered out of the results. Read-only.
 ---@param src integer player server id
 ---@param payload table { query: string }
 ---@return table result { users }
@@ -898,18 +831,11 @@ function actions.search(src, payload)
     return ok({ users = out })
 end
 
----The stories tray: active (<24h) stories from the viewer + accounts they follow (the store
----query enforces the follow scope, so private authors are covered), grouped per author into
----@type integer os.time() of the last global story prune (0 = never). Expired stories are filtered
----out at READ time by activeStoriesFor's cutoff, so they never render regardless; the prune is pure
----DB housekeeping, so it's throttled to once a minute across ALL players instead of firing two
----DELETEs on every per-player stories() open (home refresh hits this constantly).
+---@type integer os.time() of the last global story prune (0 = never).
 local lastStoryPruneAt = 0
 
----frame stacks and ordered mine-first, then unseen, then seen - the iOS ordering. Live sessions
----the viewer may watch ride along. Expired stories never render (activeStoriesFor filters by
----cutoff); a throttled global prune sweeps them from the DB at most once a minute. Read-only apart
----from that prune.
+---The stories tray: active (<24h) stories from the viewer + accounts they follow, grouped per
+---author and ordered mine-first, then unseen, then seen. Live sessions the viewer may watch ride along.
 ---@param src integer player server id
 ---@return table result { stories, hasOwn, lives }
 function actions.stories(src)
@@ -967,9 +893,7 @@ function actions.addStory(src, payload)
     return ok()
 end
 
----Record that the viewer watched a story frame. Scoped to the viewer's own seen-set (it only
----affects their tray ordering) and only for ids that actually exist, so forged ids can't grow
----the table. Idempotent - the view row is keyed (story, user) with INSERT IGNORE.
+---Records that the viewer watched a story frame, only for ids that exist. Idempotent.
 ---@param src integer player server id
 ---@param payload table { storyId: string }
 ---@return table result
@@ -982,8 +906,7 @@ function actions.markStorySeen(src, payload)
     return ok()
 end
 
----The Activity feed (newest 60). Opening it marks everything seen and re-pushes the badge, so
----the unread count clears the moment the tab is read.
+---The Activity feed (newest 60). Opening it marks everything seen and re-pushes the badge.
 ---@param src integer player server id
 ---@return table result { notifications }
 function actions.activity(src)
@@ -1018,8 +941,7 @@ function actions.counts(src)
     })
 end
 
----Swipe-to-dismiss one Activity row. The delete is recipient-scoped in the store, so a forged id
----can't clear someone else's notification.
+---Swipe-to-dismiss one Activity row. The delete is recipient-scoped in the store.
 ---@param src integer player server id
 ---@param payload table { id: string }
 ---@return table result
@@ -1032,8 +954,7 @@ function actions.dismissNotification(src, payload)
     return ok()
 end
 
----Profile card for a DM peer, with a handle-only placeholder when the profile row is gone
----(deleted account) so old threads still render.
+---Profile card for a DM peer, with a handle-only placeholder when the profile row is gone.
 ---@param username string peer handle
 ---@return table card
 local function peerCard(username, row)
@@ -1046,8 +967,7 @@ local function peerCard(username, row)
 end
 
 ---The DM inbox: one row per conversation peer, most-recent first, with the last message and the
----per-peer unread count. Peers derive from the viewer's own message rows, so only their own
----threads are reachable. Read-only.
+---per-peer unread count. Read-only.
 ---@param src integer player server id
 ---@return table result { conversations }
 function actions.dmList(src)
@@ -1075,8 +995,7 @@ function actions.dmList(src)
 end
 
 ---One conversation, oldest-first (last 200). Opening it marks the peer's messages read and
----re-derives the badge. The thread query is keyed on the viewer's own handle, so whatever handle
----the payload names, only threads the viewer participates in are readable.
+---re-derives the badge.
 ---@param src integer player server id
 ---@param payload table { handle: string }
 ---@return table result { id, user, messages }
@@ -1095,11 +1014,8 @@ function actions.dmThread(src, payload)
     return ok({ id = peer, user = peerCard(peer), messages = messages })
 end
 
----Send a DM. The recipient must exist and differ from the sender; the kind is whitelisted
----(anything else coerces to 'text'), the body caps at 1000 chars, the metadata is sanitized per
----kind, and content-free sends are rejected. Each of the recipient's online phones gets the
----message push, a banner - titled with the sender's display name, deeplinking straight into this
----conversation and clearing any stale drill-in (false = closed) - and a badge refresh.
+---Sends a DM to an existing recipient: whitelisted kind, capped body, sanitized metadata,
+---content-free sends rejected. Each of the recipient's phones gets a push, banner, and badge.
 ---@param src integer player server id
 ---@param payload table { to: string, kind?: string, body?: string, ...per-kind meta }
 ---@return table result { message }
@@ -1140,10 +1056,8 @@ function actions.dmSend(src, payload)
     return ok({ message = serializeDm(row, acc.username) })
 end
 
----Toggle the viewer's emoji reaction on a DM they are part of - participant-checked, so a forged
----message id outside their threads is rejected. Reactions live as a JSON emoji->users map on the
----row; an emoji's user list is dropped when it empties. The updated chips return to the caller
----and push live to the peer, each serialized from their own perspective.
+---Toggles the viewer's emoji reaction on a DM they are part of. The updated chips return to the
+---caller and push live to the peer.
 ---@param src integer player server id
 ---@param payload table { id: string, emoji: string }
 ---@return table result { id, reactions }
@@ -1175,9 +1089,8 @@ function actions.dmReact(src, payload)
     return ok({ id = row.id, reactions = serializeReactions(fresh, acc.username) or {} })
 end
 
----Wipe every trace of the viewer's photogram content (posts, comments, likes, saves, stories,
----DMs, follows, notifications, profile). Keyed to the signed-in account only - there is no
----payload to forge. Deleting the credential row itself belongs to the accounts engine.
+---Wipes every trace of the viewer's photogram content (posts, comments, likes, saves, stories,
+---DMs, follows, notifications, profile), keyed to the signed-in account only.
 ---@param src integer player server id
 ---@return table result
 function actions.deleteAccount(src)

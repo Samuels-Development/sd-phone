@@ -5,8 +5,7 @@ local actions = require 'server.cherry.actions'
 -- Loaded for side effects: the /cherryseed + /cherryseedwipe admin commands self-register.
 require 'server.cherry.seed'
 
--- One-shot boot thread: create the cherry tables (idempotent) before players start hitting the
--- callbacks. A failed bootstrap logs loudly instead of taking the whole resource down.
+-- Boot thread: creates the cherry tables (idempotent).
 CreateThread(function()
     local ok, err = pcall(store.ensureSchema)
     if not ok then
@@ -16,9 +15,7 @@ CreateThread(function()
     print('^2[sd-phone:cherry]^0 schema ready')
 end)
 
--- Authoritative app callbacks: thin delegates into server.cherry.actions, which owns the
--- validation + world mutation (each handler is documented there). Auth itself lives in the
--- accounts engine - every handler resolves the caller's account from src, never the payload.
+-- App callbacks: thin delegates into server.cherry.actions.
 lib.callback.register('sd-phone:server:cherry:state', function(src) return actions.state(src) end)
 lib.callback.register('sd-phone:server:cherry:saveProfile', function(src, payload) return actions.saveProfile(src, payload) end)
 lib.callback.register('sd-phone:server:cherry:swipe', function(src, payload) return actions.swipe(src, payload) end)
@@ -32,9 +29,8 @@ lib.callback.register('sd-phone:server:cherry:block', function(src, payload) ret
 lib.callback.register('sd-phone:server:cherry:blockedList', function(src) return actions.blockedList(src) end)
 lib.callback.register('sd-phone:server:cherry:unblock', function(src, payload) return actions.unblock(src, payload) end)
 
----The app flips this on while it's on screen - watchers get in-app match overlays instead of
----banner notifications. The flag is coerced to a strict boolean here, and keyed by the trusted
----src in the actions layer, so a client can only ever toggle its own entry.
+---Toggles the caller's watch flag: on-screen watchers get in-app match overlays instead of
+---banner notifications. The flag is coerced to a strict boolean.
 ---@param payload table { on: boolean }
 lib.callback.register('sd-phone:server:cherry:watch', function(src, payload)
     payload = payload or {}

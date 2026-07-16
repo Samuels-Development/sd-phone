@@ -1,8 +1,7 @@
 ---@type fun(nuiAction: string, serverEvent: string) NUI->server pass-through registrar (client.nui).
 local proxy = require 'client.nui'
 
--- Thin delegates: each action proxies straight into its server callback, which owns the
--- validation + ride state (handlers are documented in server/ryde/actions.lua).
+-- Thin delegates: each action proxies straight into its server callback.
 proxy('sd-phone:ryde:config',        'sd-phone:server:ryde:config')
 proxy('sd-phone:ryde:me',            'sd-phone:server:ryde:me')
 proxy('sd-phone:ryde:sync',          'sd-phone:server:ryde:sync')
@@ -21,10 +20,8 @@ proxy('sd-phone:ryde:rate',          'sd-phone:server:ryde:rate')
 proxy('sd-phone:ryde:history',       'sd-phone:server:ryde:history')
 proxy('sd-phone:ryde:leaderboard',   'sd-phone:server:ryde:leaderboard')
 
----Is the player within `radius` metres (2D) of a world point? Gates the driver's "I've arrived
----at pickup" button to the actual pickup spot. Purely advisory UI state - trip milestones that
----matter (completion, payment) are validated server-side. Missing coords answer not-near with
----a -1 distance sentinel rather than erroring.
+---Answers whether the player is within `radius` metres (2D) of a world point; missing coords
+---answer not-near with a -1 distance sentinel.
 ---@param payload table { x: number, y: number, radius?: number (default 100.0) }
 RegisterNUICallback('sd-phone:ryde:nearPoint', function(payload, cb)
     payload = payload or {}
@@ -36,10 +33,8 @@ RegisterNUICallback('sd-phone:ryde:nearPoint', function(payload, cb)
     cb({ near = dist <= (tonumber(payload.radius) or 100.0), distance = math.floor(dist + 0.5) })
 end)
 
----Friendly area name for a world point, e.g. "Vinewood", "Del Perro". The zone *code*
----GetNameOfZone returns ("VINE") doubles as a GXT label key, so GetLabelText turns it into the
----display name (same trick garages.lua uses for vehicles). Falls back to the raw code, then a
----generic, if a zone has no label.
+---Returns a friendly area name for a world point, falling back to the raw zone code, then
+---'Unknown area'.
 ---@param x number world x
 ---@param y number world y
 ---@param z number|nil world z (0.0 when absent)
@@ -52,17 +47,13 @@ local function zoneName(x, y, z)
     return code
 end
 
----@type table<string, boolean> Generic, meaningless-to-the-driver dropoff placeholders that get
----swapped for the zone name. A destination the rider actually named (e.g. "Legion Square") is
----left alone.
+---@type table<string, boolean> Generic dropoff placeholders that get swapped for the zone name.
 local GENERIC_LABELS = {
     ['Current location'] = true, ['Dropped pin'] = true, ['Destination'] = true, [''] = true,
 }
 
----The rider only picks a destination in the UI; the pickup is wherever they're standing, so the
----live world position is stamped in before forwarding (never trusted from the NUI). Both ends
----get a zone name so the driver sees "Vinewood - Del Perro", not "Current location". Fares and
----matching are validated in server/ryde/actions.lua.
+---Stamps the live world position in as the pickup, swaps generic dropoff labels for zone names,
+---and forwards the ride request to the server.
 ---@param payload table ride request draft from the UI (dropoff label/coords)
 RegisterNUICallback('sd-phone:ryde:requestRide', function(payload, cb)
     payload = payload or {}
@@ -75,8 +66,7 @@ RegisterNUICallback('sd-phone:ryde:requestRide', function(payload, cb)
     cb(lib.callback.await('sd-phone:server:ryde:requestRide', false, payload) or { success = false })
 end)
 
----Friendly zone name for an arbitrary world point, so a map-dropped destination can be labelled
----"Vinewood" instead of "Dropped pin" (subtitle stays custom). Read-only.
+---Friendly zone name for an arbitrary world point. Read-only.
 ---@param payload table { x: number, y: number }
 RegisterNUICallback('sd-phone:ryde:zoneName', function(payload, cb)
     payload = payload or {}
@@ -85,8 +75,8 @@ RegisterNUICallback('sd-phone:ryde:zoneName', function(payload, cb)
     cb({ success = true, data = { name = zoneName(x, y, 0.0) } })
 end)
 
----Register a server-push relay: 'sd-phone:client:ryde:<event>' forwards unchanged into the NUI
----under 'sd-phone:ryde:<event>'. Server-originated (trusted); only an open Ryde app reacts.
+---Registers a server-push relay: 'sd-phone:client:ryde:<event>' forwards unchanged into the NUI
+---under 'sd-phone:ryde:<event>'.
 ---@param event string event suffix, e.g. 'offer'
 local function forward(event)
     RegisterNetEvent('sd-phone:client:ryde:' .. event, function(data)
@@ -103,9 +93,7 @@ forward('offerRemoved')
 forward('ratingReceived')
 forward('peerLocation')
 
----Trip updates also drop a GPS waypoint for the driver - to the pickup once the rider accepts,
----then to the destination once the rider's aboard. Riders (role ~= 'driver') only get the NUI
----relay; the server decides when a waypoint is attached.
+---Relays trip updates into the NUI and drops a GPS waypoint for the driver when one is attached.
 ---@param data table { role: string, waypoint?: { x: number, y: number } } plus trip fields
 RegisterNetEvent('sd-phone:client:ryde:tripUpdate', function(data)
     SendNUIMessage({ action = 'sd-phone:ryde:tripUpdate', data = data })

@@ -10,10 +10,8 @@ local stats   = require 'server.games.stats'
 local chips   = require 'server.games.chips'
 
 ---@type table Engine module; the table returned at end of file. Generalized online-game engine -
----lobbies, invites, session relay, wagers, and stats - shared by every online game. A game
----registers a tiny config (engine.register('chess', { sides = {'w','b'}, title = 'Chess' })) and
----the rest is generic: the server owns session lifecycle + turn order; each client runs its own
----game and applies relayed moves. Sessions are ephemeral, held in memory.
+---lobbies, invites, session relay, wagers, and stats - shared by every online game. The server
+---owns session lifecycle + turn order; sessions are ephemeral, held in memory.
 local engine = {}
 
 ---@type table<string, table> Registered game configs, game -> { sides = {sideA, sideB}, title, currency?, freeRelay? }.
@@ -30,8 +28,7 @@ local invites = {}
 ---@type table<integer, string> src -> gameId of the session they're playing.
 local inGame  = {}
 
----@type integer, integer Monotonic counters behind newId/newLobbyId. Ids are sequential and thus
----guessable, so every mutating handler gates on membership - never on knowledge of an id.
+---@type integer, integer Monotonic counters behind newId/newLobbyId.
 local nextId, nextLobby = 0, 0
 
 local util = require 'server.util'
@@ -64,11 +61,8 @@ local function wagerGet(src, game)
     return money.get(src, 'bank')
 end
 
----Debit a wager stake in the game's currency. The chips path is all-or-nothing (chips.remove
----returns nil when the wallet can't cover it) because chip reads/writes yield to MySQL - a
----concurrent cashout could drain the wallet between the affordability check and the take, letting
----a player enter a pot they never funded. The bank path runs synchronously between check and
----debit (no yields to race through), so it always reports success.
+---Debits a wager stake in the game's currency. The chips path is all-or-nothing; the bank path
+---always reports success.
 ---@param src integer player server id
 ---@param game string game id
 ---@param amount integer stake to take
@@ -104,7 +98,7 @@ end
 ---@return table|nil sides the registered side pair for a game
 local function sidesOf(game) return configs[game] and configs[game].sides end
 
----The opposing side label for a game, so turn order can flip generically.
+---The opposing side label for a game.
 ---@param game string game id
 ---@param side string one of the game's two sides
 ---@return string other side
@@ -114,8 +108,7 @@ local function otherSide(game, side)
     return side == s[1] and s[2] or s[1]
 end
 
----The side src is playing in a session - nil when they're not a participant, which is the
----membership check every session-mutating handler leans on.
+---The side src is playing in a session; nil when they're not a participant.
 ---@param g table session record
 ---@param src integer player server id
 ---@return string|nil side
@@ -150,8 +143,8 @@ end
 ---@param game string game id
 local function pushChips(src, game) pushClient(src, game, 'chips', { chips = chips.get(cidOf(src)) }) end
 
----Log a wager money movement to a player's Wallet (banking app), tagged with the game so the
----right app icon renders. Log-only - the actual credit/debit happened in wagerTake/wagerGive.
+---Logs a wager money movement to a player's Wallet (banking app), tagged with the game.
+---Log-only; moves no money.
 ---@param src integer player server id
 ---@param game string game id
 ---@param label string transaction label prefix
@@ -163,11 +156,8 @@ local function logBankTx(src, game, label, amount, oppName)
     banking.addExternal(cid, { label = ('%s vs %s'):format(label, oppName), amount = amount, category = game })
 end
 
----Per-viewer snapshot of a lobby for the room UI. When wagered, each member carries a canAfford
----flag - a boolean only, never the balance itself, so lobby state leaks no financials. The host
----implicitly consents to the wager (they set the terms) while the joiner must ready up, and
----canStart also requires every member to have returned to the lobby view (vs still sitting on a
----post-game result screen), so a rematch can't start under someone.
+---Per-viewer snapshot of a lobby for the room UI. Each member carries canAfford / ready /
+---returned flags; canStart requires a full lobby with everyone affording, readied and returned.
 ---@param lobby table lobby record
 ---@param viewer integer src the snapshot is for
 ---@return table state { id, host, public, wager, isHost, canStart, members }
@@ -201,9 +191,8 @@ local function pushLobby(lobby)
     for _, m in ipairs(lobby.members) do pushClient(m.src, lobby.game, 'lobby', lobbyState(lobby, m.src)) end
 end
 
----Settle a wagered session's pot. winnerSrc is paid the full pot; nil refunds both stakes.
----Idempotent - the settled flag flips first, so a session settles exactly once no matter how many
----paths (report, resign, disconnect, timeout) race to call this.
+---Settles a wagered session's pot exactly once. winnerSrc is paid the full pot; nil refunds both
+---stakes.
 ---@param g table session record
 ---@param winnerSrc integer|nil winner src, nil to refund both
 local function settlePot(g, winnerSrc)
@@ -229,9 +218,8 @@ local function settlePot(g, winnerSrc)
     end
 end
 
----Remove a player from whatever lobby they're in. Host leaving disbands the lobby, bounces the
----other members back to the hub, and voids any outstanding invites into it; a non-host leaving
----just frees the seat.
+---Removes a player from whatever lobby they're in. A host leaving disbands the lobby and voids
+---its invites; a non-host leaving frees the seat.
 ---@param src integer player server id
 local function leaveLobbyOf(src)
     local id = inLobby[src]
@@ -260,8 +248,7 @@ local function clearInvolving(src)
     leaveLobbyOf(src)
 end
 
----Free a session and both players' in-game markers. Returns the removed record so callers can
----still push to / settle for its players.
+---Frees a session and both players' in-game markers. Returns the removed record.
 ---@param gameId string session id
 ---@return table|nil g the removed session record (nil if already gone)
 local function endGame(gameId)
@@ -272,10 +259,8 @@ local function endGame(gameId)
     return g
 end
 
----Create a lobby (the host joins it). public = false makes it invite-only (private game). The
----host's side choice is whitelisted against the game's registered sides, anything else collapses
----to 'random'; the wager is sanitized to a non-negative integer so it can't smuggle NaN into the
----escrow math.
+---Creates a lobby (the host joins it). public = false makes it invite-only; the side choice is
+---whitelisted against the game's registered sides and the wager is sanitized.
 lib.callback.register('sd-phone:server:games:createLobby', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local game = payload.game
@@ -308,10 +293,8 @@ lib.callback.register('sd-phone:server:games:lobbies', function(_src, payload)
     return ok(list)
 end)
 
----Join a lobby (public, or one you were invited to). Refused while the lobby's session is live
----or mid-escrow (the starting latch) - a seat only ever opens mid-game through a forced leave,
----and letting someone fill it would let the host start a second session on top of the first,
----corrupting both.
+---Joins a lobby (public, or one you were invited to). Refused while the lobby's session is live
+---or mid-escrow, or when the lobby is full or private.
 lib.callback.register('sd-phone:server:games:joinLobby', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     if busy(src) then return fail("You're already in a lobby or game") end
@@ -328,8 +311,7 @@ lib.callback.register('sd-phone:server:games:joinLobby', function(src, payload)
     return ok(lobbyState(lobby, src))
 end)
 
----Re-surface a pending invite when the game app (re)mounts. Scoped to the asking game so a chess
----invite doesn't pop inside Connect Four. Read-only.
+---Re-surfaces a pending invite when the game app (re)mounts, scoped to the asking game. Read-only.
 lib.callback.register('sd-phone:server:games:pending', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local inv = invites[src]
@@ -340,9 +322,8 @@ lib.callback.register('sd-phone:server:games:pending', function(src, payload)
     return ok({})
 end)
 
----Invite a player (by server id) into the lobby you host. Only the host of a lobby with an open
----seat can invite; the target id is coerced to a positive integer (NaN/inf/floats rejected) so
----the invite key and the notify target can't diverge.
+---Invites a player (by server id) into the lobby you host. Host-only with an open seat; the
+---target id is coerced to a positive integer.
 lib.callback.register('sd-phone:server:games:inviteLobby', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local lobby = inLobby[src] and lobbies[inLobby[src]]
@@ -365,8 +346,7 @@ lib.callback.register('sd-phone:server:games:inviteLobby', function(src, payload
     return ok()
 end)
 
----Decline (clear) your own pending invite. Keyed purely on source, so it can't touch anyone
----else's invite.
+---Declines (clears) your own pending invite.
 lib.callback.register('sd-phone:server:games:declineInvite', function(src)
     invites[src] = nil
     return ok()
@@ -379,9 +359,7 @@ lib.callback.register('sd-phone:server:games:leaveLobby', function(src)
 end)
 
 ---Host removes the (single) non-host member; the seat reopens for a new invite. Host-only, and
----refused while the session is live or mid-escrow (the starting latch) - kicking a mid-game
----opponent would strip their lobby membership while their session continues, leaving half-torn
----state on both sides.
+---refused while the session is live or mid-escrow.
 lib.callback.register('sd-phone:server:games:kickMember', function(src)
     local lobby = inLobby[src] and lobbies[inLobby[src]]
     if not lobby or lobby.host ~= src then return fail("You're not hosting a lobby") end
@@ -401,9 +379,8 @@ lib.callback.register('sd-phone:server:games:kickMember', function(src)
     return ok(lobbyState(lobby, src))
 end)
 
----Host changes the wager while in-lobby. Locked once the opponent has readied (their consent was
----to the old amount); re-pushing recomputes affordability + canStart, so an opponent who can't
----cover the new amount blocks Start. The amount is sanitized like createLobby's.
+---Host changes the wager while in-lobby; locked once the opponent has readied. The amount is
+---sanitized like createLobby's.
 lib.callback.register('sd-phone:server:games:setWager', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local lobby = inLobby[src] and lobbies[inLobby[src]]
@@ -415,9 +392,8 @@ lib.callback.register('sd-phone:server:games:setWager', function(src, payload)
     return ok(lobbyState(lobby, src))
 end)
 
----The joiner readies up (consents to the current wager) or cancels. Only the non-host can ready;
----readiness locks the wager (see setWager) and is required before the host may start - so a
----wager can never change without consent.
+---The joiner readies up or cancels. Only the non-host can ready; readiness locks the wager and
+---is required before the host may start.
 lib.callback.register('sd-phone:server:games:setReady', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local lobby = inLobby[src] and lobbies[inLobby[src]]
@@ -430,10 +406,8 @@ lib.callback.register('sd-phone:server:games:setReady', function(src, payload)
     return ok(lobbyState(lobby, src))
 end)
 
----After a natural game end, a player returns to the lobby for a rematch. The first returner
----frees the finished session, resets the lobby to waiting and clears the opponent's ready so the
----wager must be re-consented. Refuses while a wager pot is still unsettled (a brief guard) so a
----rematch can never strand the pot.
+---Returns a player to the lobby for a rematch after a natural game end. The first returner frees
+---the finished session and clears the opponent's ready; refused while a pot is unsettled.
 lib.callback.register('sd-phone:server:games:returnToLobby', function(src)
     local lobby = inLobby[src] and lobbies[inLobby[src]]
     if not lobby then return fail('Lobby no longer exists') end
@@ -451,17 +425,8 @@ lib.callback.register('sd-phone:server:games:returnToLobby', function(src)
     return ok(lobbyState(lobby, src))
 end)
 
----Host starts the game with the joined, readied opponent. Refused while a session is already
----live on the lobby OR while another start is mid-escrow: the wager escrow yields to MySQL
----(chip ops, bank-tx logging) before gameId is assigned, so without the starting latch a host
----firing two concurrent starts would pass the gameId check twice, escrow both players twice and
----create two live sessions (a second start would orphan the first pot and clobber both players'
----in-game markers). The latch is set before the first yield and cleared on every exit path.
----The wager is escrowed from both wallets before the session exists: debit-before-credit, and if
----the opponent's chips debit fails (their wallet was drained through the await window by a
----concurrent cashout) the host's stake is refunded and the start aborts - a session can never
----begin with an unfunded pot. The lobby stays alive (marked in-game) so both players can return
----for a rematch, but each must re-enter it (returned = false) first.
+---Host starts the game with the joined, readied opponent. Escrows the wager from both wallets
+---before the session exists; refused while a session is live or another start is mid-escrow.
 lib.callback.register('sd-phone:server:games:startLobby', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local lobby = payload.id and lobbies[payload.id]
@@ -524,11 +489,8 @@ lib.callback.register('sd-phone:server:games:startLobby', function(src, payload)
     return ok()
 end)
 
----Relay a move to the opponent. Only a session participant may move (sideOf gate), and for
----turn-based games only on their own turn - the server flips the turn, so a client can't move
----twice. Free-relay games (freeRelay = true, e.g. the wordle race) run their own progression on
----each client, so the engine just forwards the opaque move without enforcing alternation. The
----move payload itself is opaque by design: each client validates it against its own game rules.
+---Relays an opaque move to the opponent. Only a session participant may move, and for turn-based
+---games only on their own turn; freeRelay games forward moves without enforcing alternation.
 lib.callback.register('sd-phone:server:games:move', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local g = games[payload.gameId]
@@ -548,9 +510,8 @@ lib.callback.register('sd-phone:server:games:move', function(src, payload)
     return ok()
 end)
 
----Resign: forfeit the pot to the opponent and end the session. Safe against spoofing because
----opponentOf returns nil unless the caller is a participant - a non-member resigning someone
----else's game changes nothing.
+---Resign: forfeits the pot to the opponent and ends the session; a non-participant call is a
+---no-op.
 lib.callback.register('sd-phone:server:games:resign', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local g = games[payload.gameId]
@@ -563,8 +524,8 @@ lib.callback.register('sd-phone:server:games:resign', function(src, payload)
     return ok()
 end)
 
----A player disconnected - settle their live game as a forfeit to the opponent, free the session,
----and drop their invite / lobby membership so recycled srcs can't inherit stale state.
+---A player disconnected: settles their live game as a forfeit to the opponent, frees the session,
+---and drops their invite / lobby membership.
 AddEventHandler('playerDropped', function()
     local src = source
     local gid = inGame[src]
@@ -578,10 +539,8 @@ AddEventHandler('playerDropped', function()
     clearInvolving(src)
 end)
 
----Free a finished game (natural end). Only a participant may free it - gameIds are sequential
----and guessable, so without the membership check any client could sweep other players' live
----sessions out from under them. A wagered game stays until its pot settles via report (we never
----drop a session that still holds an unsettled pot).
+---Frees a finished game (natural end). Only a participant may free it, and a wagered game stays
+---until its pot settles.
 lib.callback.register('sd-phone:server:games:finish', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local g = games[payload.gameId]
@@ -592,10 +551,8 @@ lib.callback.register('sd-phone:server:games:finish', function(src, payload)
     return ok()
 end)
 
----Wagered-game outcome reports. We act only on a loss concession (pay the opponent) and agreed
----draws (refund); anything else arms a one-shot refund timeout. A tampered client can therefore
----at most void the pot - never steal it - and a non-participant is rejected by opponentOf before
----anything is recorded.
+---Wagered-game outcome reports: a loss concession pays the opponent, agreed draws refund, and
+---anything else arms a one-shot refund timeout. Non-participants are rejected.
 lib.callback.register('sd-phone:server:games:report', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local g = games[payload.gameId]
@@ -625,9 +582,8 @@ lib.callback.register('sd-phone:server:games:stats', function(src, payload)
     return ok(stats.statsFor(cid, payload.game))
 end)
 
----Record a finished result on the caller's own row. Client-reported by design (solo games run
----entirely in NUI); stats.record whitelists mode/result, caps the game id to its column and
----clamps the chip amount, so a tampered client can at most inflate its own bragging numbers.
+---Records a client-reported finished result on the caller's own row (validated and clamped in
+---stats.record).
 lib.callback.register('sd-phone:server:games:record', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local cid = cidOf(src)
@@ -643,10 +599,8 @@ lib.callback.register('sd-phone:server:games:leaderboard', function(_src, payloa
     return ok(stats.leaderboard(payload.game))
 end)
 
----Submit a single-player high score on the caller's own row (identity from source only). Client-
----reported by design (solo games run entirely in NUI); stats.submitScore caps the game id, clamps
----the score and keeps only the best, so a tampered client can at most inflate its own board entry.
----Returns { best, isRecord }.
+---Submits a single-player high score on the caller's own row (validated and clamped in
+---stats.submitScore). Returns { best, isRecord }.
 lib.callback.register('sd-phone:server:games:submitScore', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local cid = cidOf(src)
@@ -662,18 +616,15 @@ lib.callback.register('sd-phone:server:games:scoreboard', function(_src, payload
     return ok(stats.scoreboard(payload.game))
 end)
 
----Register a game with the engine. cfg = { sides = {sideA, sideB}, title, currency?, freeRelay? }:
----sides[1] moves first; currency = 'chips' settles wagers in the shared casino chip wallet instead
----of bank cash; freeRelay = true skips turn enforcement for games whose clients own their own
----progression. Server-side registration only - not reachable by clients.
+---Registers a game with the engine. cfg = { sides = {sideA, sideB}, title, currency?, freeRelay? };
+---sides[1] moves first, currency = 'chips' settles wagers in chips, freeRelay skips turn enforcement.
 ---@param game string game id (matches the app id the web sends)
 ---@param cfg table game config
 function engine.register(game, cfg)
     configs[game] = cfg or {}
 end
 
--- One-shot boot thread: create the shared stats schema before any handler needs it. pcall'd so a
--- broken DB prints one tagged line instead of killing the resource load.
+-- One-shot boot thread: creates the shared stats schema.
 CreateThread(function()
     local good, err = pcall(stats.ensureSchema)
     if not good then print(('^1[sd-phone:games]^0 stats schema bootstrap failed: %s'):format(err)) end

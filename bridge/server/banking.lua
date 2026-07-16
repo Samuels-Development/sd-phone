@@ -5,24 +5,16 @@ local money     = require 'bridge.server.money'
 ---@type table Player bridge (bridge.server.player): citizenid/identifier lookups from src.
 local player    = require 'bridge.server.player'
 
----@type table Banking module; the table returned at end of file. Multi-banking adapter: reads +
----moves a player's PERSONAL bank balance across the popular banking resources. Research finding:
----for most of them the personal balance lives in the framework's own player bank account, so the
----base money bridge is authoritative and universal - only a handful keep balances in their OWN
----tables AND expose a player-level export, and those get a dedicated path. Everything else
----(esx_banking, qb-banking, Renewed-Banking, ps-banking, okokBanking, qs-banking, fd_banking,
----new_banking, or no banking resource at all) routes through the framework bank account. Every
----export call is wrapped so a missing/renamed export in a forked copy degrades to the framework
----path instead of erroring.
+---@type table Banking module; the table returned at end of file. Multi-banking adapter: reads and
+---moves a player's personal bank balance through a dedicated provider path where one exists, else
+---the framework bank account.
 local banking = {}
 
--- Banking resources, in detection priority: own-table resources first (they must win over the
--- framework path), then framework-native ones (informational only). Dedicated-path export shapes:
+-- Dedicated-path export shapes:
 --   wasabi_banking : AddMoney/RemoveMoney/GetAccountBalance(identifier, amount, reason)
 --   omes_banking   : AddBankMoney/RemoveBankMoney/GetBankBalance(source, amount, desc)
 --   prism_banking  : AddBankingTransaction(source, type, amount, spendType, tax, name, desc)
---   tgg-banking    : GetPersonalAccountByPlayerId(source).balance (read only - no personal
---                    add/remove exports, so money movement stays on the framework account)
+--   tgg-banking    : GetPersonalAccountByPlayerId(source).balance (read only)
 ---@type string[] Banking resources, in detection-priority order.
 local KNOWN = {
     'wasabi_banking', 'omes_banking', 'prism_banking', 'tgg-banking', 'okokBanking',
@@ -30,10 +22,7 @@ local KNOWN = {
     'new_banking', 'ps-banking',
 }
 
--- Resources that store the personal balance in their OWN tables - the framework bank account is
--- NOT authoritative for these, so offline DB credit (addOffline) is unsafe and the transfer path
--- refuses it via balanceIsFramework().
----@type table<string, boolean> Own-table banking resources.
+---@type table<string, boolean> Resources that store the personal balance in their own tables.
 local OWN_TABLE = {
     wasabi_banking = true, okokBanking = true, ['tgg-banking'] = true,
     prism_banking  = true, fd_banking  = true,
@@ -42,9 +31,8 @@ local OWN_TABLE = {
 ---@type boolean, string|nil Detection-ran flag + cached provider name (nil = framework account).
 local resolved, providerName = false, nil
 
----The active banking resource, resolved lazily (and cached) on first use rather than at load, so
----the banking resource is detected correctly even if it starts after sd-phone. Nil when none is
----started - every operation then uses the framework bank account directly.
+---The active banking resource, resolved lazily and cached on first use. Nil when none is
+---started; every operation then uses the framework bank account directly.
 ---@return string|nil
 local function provider()
     if not resolved then
@@ -57,23 +45,18 @@ local function provider()
     return providerName
 end
 
--- Back-compat: `banking.name` reads through the lazy resolver, so older call sites keep working
--- without forcing detection at load time.
+-- `banking.name` reads through the lazy resolver.
 setmetatable(banking, { __index = function(_, k) if k == 'name' then return provider() end end })
 
----True when the player's bank balance IS the framework account, so an offline DB credit
----(addOffline) is safe. False for the OWN_TABLE resources - crediting the framework account there
----would move money the banking resource never shows the player.
+---True when the player's bank balance is the framework account; false for OWN_TABLE resources.
 ---@return boolean
 function banking.balanceIsFramework()
     local name = provider()
     return not (name and OWN_TABLE[name])
 end
 
----Run a provider export call; true only if it didn't error. Used so a bad/renamed export falls
----through to the framework path rather than throwing. Unlike the society bridge's try(), the
----provider's return VALUE is ignored here - addMoney/removeMoney have no return channel to
----propagate a decline anyway, which is why every debit caller pre-checks getBalance first.
+---Runs a provider export call; true only if it didn't error. The provider's return value is
+---ignored.
 ---@param fn function
 ---@return boolean
 local function try(fn)
@@ -82,9 +65,7 @@ local function try(fn)
 end
 
 ---The player's current bank balance. Read-only. Own-table providers are read through their
----exports (prism returns a set of accounts - the first with a numeric balance wins); any miss,
----type surprise, or error falls through to the framework bank account, which is authoritative for
----every non-OWN_TABLE setup.
+---exports; any miss, type surprise, or error falls through to the framework bank account.
 ---@param src number
 ---@return number
 function banking.getBalance(src)
@@ -113,9 +94,7 @@ function banking.getBalance(src)
 end
 
 ---Credit the player's bank account. A dedicated provider path returns early only when its export
----call didn't error; on error the credit lands on the framework bank account instead, so the
----money is never dropped. tgg-banking has no personal credit export, so it intentionally routes
----to the framework account.
+---call didn't error; otherwise the credit lands on the framework bank account.
 ---@param src number
 ---@param amount number
 ---@param reason? string
@@ -132,10 +111,8 @@ function banking.addMoney(src, amount, reason)
     money.add(src, 'bank', amount, reason)
 end
 
----Debit the player's bank account. Returns nothing, so it CANNOT report a declined debit -
----callers MUST pre-check getBalance >= amount first, and every caller in server/ does (banking
----transfer, services deposit, stocks deposit). prism models a withdrawal as an
----AddBankingTransaction of type 'withdraw'.
+---Debit the player's bank account. Returns nothing and cannot report a declined debit; callers
+---must pre-check getBalance >= amount first.
 ---@param src number
 ---@param amount number
 ---@param reason? string
@@ -152,12 +129,8 @@ function banking.removeMoney(src, amount, reason)
     money.remove(src, 'bank', amount, reason)
 end
 
----Best-effort credit to an OFFLINE character's framework bank account via a direct, parameterized
----DB write against each framework's default schema. Only safe when the balance lives in the
----framework account (balanceIsFramework) - the transfer path enforces that before calling. True
----only when a row was actually updated: a query that succeeded while matching ZERO rows (unknown
----citizenid) must report false, because the caller refunds the sender's debit on false - reporting
----success there would vanish the sender's money with nobody credited.
+---Best-effort credit to an offline character's framework bank account via a parameterized DB
+---write against each framework's default schema. True only when a row was actually updated.
 ---@param citizenid string
 ---@param amount number
 ---@return boolean ok
@@ -180,11 +153,8 @@ function banking.addOffline(citizenid, amount)
     return false
 end
 
----Best-effort: mirror a phone transfer into the active banking resource's own transaction log so
----its UI stays roughly in sync. Failures are swallowed - a missing log line must never fail a
----transfer that already happened. wasabi_banking / prism_banking log implicitly via the reason
----passed to their add/remove calls; Renewed/ps/qs/fd/tgg/new expose no safe personal-log path, so
----they get nothing here.
+---Best-effort: mirrors a phone transfer into the active banking resource's own transaction log.
+---Failures are swallowed; providers without a personal-log export are skipped.
 ---@param src number
 ---@param label string
 ---@param amount number positive magnitude

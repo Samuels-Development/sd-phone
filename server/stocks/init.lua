@@ -10,8 +10,7 @@ local actions = require 'server.stocks.actions'
 ---@type table Stocks config (config.Stocks): tick + save cadence.
 local ST = config.Stocks
 
--- Authoritative NUI-facing callbacks: thin delegates into server.stocks.actions, which owns the
--- validation + money movement (each handler is documented there).
+-- NUI-facing callbacks: thin delegates into server.stocks.actions.
 lib.callback.register('sd-phone:server:stocks:market',   function(src)          return actions.market(src)             end)
 lib.callback.register('sd-phone:server:stocks:deposit',  function(src, payload) return actions.deposit(src, payload)   end)
 lib.callback.register('sd-phone:server:stocks:withdraw', function(src, payload) return actions.withdraw(src, payload)  end)
@@ -22,11 +21,7 @@ lib.callback.register('sd-phone:server:stocks:holders',  function(src, payload) 
 ---@type table<number, boolean> Players with the Stocks app open (live price-push targets), by src.
 local watchers = {}
 
----The app flips this on while it's open and off when it closes, so the per-tick price push reaches
----only players actually watching the market instead of every online phone every few seconds. Public
----market data, so nothing sensitive; self-scoped - the payload can only sub/unsub the CALLER. On
----open the app also fetches the current snapshot via :market, so a just-subscribed player isn't
----blank until the next tick.
+---Subscribes or unsubscribes the caller to the per-tick price push while the app is open.
 ---@param src number
 ---@param payload table { on: boolean }
 lib.callback.register('sd-phone:server:stocks:watch', function(src, payload)
@@ -35,18 +30,13 @@ lib.callback.register('sd-phone:server:stocks:watch', function(src, payload)
     return { success = true }
 end)
 
----A departing watcher's entry is dropped (srcs recycle across sessions, so a stale key would push
----the market to the wrong client).
+---Drops a departing watcher's entry.
 AddEventHandler('playerDropped', function()
     watchers[source] = nil
 end)
 
--- Boot then heartbeat: schema first (bail if it fails - trading against missing tables would
--- error every callback), then seed prices, then every ST.TickSeconds each asset takes its
--- random-walk step. The market ALWAYS advances (and is persisted) regardless of who's watching;
--- the light tick payload (price + % change, no history) is only PUSHED to players with Stocks open
--- (the watchers set), not broadcast to every phone. Public market data only, no player fields.
--- Coarse (seconds) - nothing here is frame-sensitive.
+-- Boot then heartbeat: creates the schema, seeds prices, then ticks the market every
+-- ST.TickSeconds, pushing the light tick payload to players with Stocks open.
 CreateThread(function()
     local ok, err = pcall(store.ensureSchema)
     if not ok then
@@ -72,8 +62,7 @@ CreateThread(function()
     end
 end)
 
--- Batched persistence (every ST.SaveSeconds) so the market survives a restart without writing
--- on every tick. The save is pcall-guarded so a transient DB error can't kill the loop.
+-- Batched persistence: saves the market every ST.SaveSeconds.
 CreateThread(function()
     while true do
         Wait((ST.SaveSeconds or 30) * 1000)
@@ -82,9 +71,7 @@ CreateThread(function()
     end
 end)
 
----Flush the live prices once on resource stop so an intentional restart keeps the latest
----market (the batched save can be up to ST.SaveSeconds stale). Guarded to this resource only;
----failures are swallowed since the server is going down anyway.
+---Flushes the live prices once on resource stop. Guarded to this resource only.
 ---@param resource string name of the resource that stopped
 AddEventHandler('onResourceStop', function(resource)
     if resource ~= GetCurrentResourceName() then return end

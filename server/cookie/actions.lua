@@ -9,9 +9,7 @@ local player = require 'bridge.server.player'
 local C = config.Cookie or {}
 ---@type integer Leaderboard row cap (config.Cookie.LeaderboardLimit).
 local LIMIT = C.LeaderboardLimit or 25
----@type number Ceiling for saved cookies/earned (config.Cookie.MaxValue). The save is
----client-authoritative - it's the player's own single-player progress - so this clamp is what
----keeps a forged save from making the leaderboard unreadable.
+---@type number Ceiling for saved cookies/earned (config.Cookie.MaxValue).
 local MAXV  = C.MaxValue or 1e15
 ---@type integer Alias length cap (config.Cookie.MaxNicknameLength), well inside the VARCHAR(40)
 ---column.
@@ -20,18 +18,15 @@ local MAXNICK = C.MaxNicknameLength or 20
 ---@type table Actions module; the table returned at end of file.
 local actions = {}
 
--- Write-behind cache. Clients autosave every couple of seconds; writing each of those straight
--- to MySQL would be one query per player every few seconds. Instead the latest save lives in
--- memory and only dirty entries flush, on a slow timer plus on disconnect / resource stop
--- (wired in init.lua).
+-- Write-behind cache: the latest save lives in memory; dirty entries flush on a timer, on
+-- disconnect and on resource stop.
 ---@type table<string, table> Latest save per citizenid: { name, cookies, earned, owned, ach, rainOn, dirty }.
 local cache    = {}
----@type table<integer, string> src -> citizenid, so a disconnect can evict the right slot
----without re-resolving an identifier for a player who is already gone.
+---@type table<integer, string> src -> citizenid.
 local srcToCid = {}
 
 ---Stable per-character key (framework citizenid) scoping every read/write. Resolved from src via
----the bridge - never from the payload - so a client can't act on another character's save.
+---the bridge.
 ---@param src integer player server id
 ---@return string|nil citizenid (nil when the player can't be resolved)
 local function cidOf(src) return player.getIdentifier(src) end
@@ -47,9 +42,7 @@ local function displayName(nickname, charName)
     return (type(nickname) == 'string' and nickname ~= '') and nickname or (charName or 'Baker')
 end
 
----Clamp a client-supplied cookie count to [0, MaxValue]. NaN is rejected explicitly - it fails
----both boundary comparisons and would otherwise sit in the cache as an unencodable parameter
----that errors every DB flush.
+---Clamps a client-supplied cookie count to [0, MaxValue]; NaN collapses to 0.
 ---@param v any raw client value
 ---@return number clamped
 local function clampNum(v)
@@ -61,8 +54,7 @@ local function clampNum(v)
 end
 
 
----Decode a stored JSON column defensively: nil, non-strings, and garbage (hand-edited rows,
----pre-migration data) collapse to {} instead of erroring the load.
+---Decodes a stored JSON column: nil, non-strings and garbage collapse to {}.
 ---@param raw any stored column value
 ---@return table decoded
 local function decode(raw)
@@ -71,9 +63,8 @@ local function decode(raw)
     return (ok and type(d) == 'table') and d or {}
 end
 
----The caller's save. The freshest copy is the in-memory cache entry (it may not have flushed
----yet), so the DB is only read when nothing is cached - the first open this session. A player
----with no row gets an empty save with rain on, matching the client default. Read-only.
+---The caller's save: the in-memory cache entry when present, else the DB row. A player with no
+---row gets an empty save with rain on. Read-only.
 ---@param src integer player server id
 ---@return table result { success, data = { cookies, earned, owned, achievements, rainOn } }
 function actions.load(src)
@@ -101,11 +92,8 @@ function actions.load(src)
     } }
 end
 
----Autosave into memory only - no DB write here; the periodic flush batches those (init.lua).
----The save is client-authoritative by design, so validation is clamp-and-accept: numbers
----clamped to [0, MaxValue], the table fields type-checked (their contents are opaque client
----progress), and the caller's name snapshotted so the leaderboard can label them offline. Also
----records src -> citizenid so the disconnect hook can flush + evict this exact slot.
+---Autosaves into memory only; the periodic flush batches DB writes. Numbers are clamped, table
+---fields type-checked, the caller's name snapshotted, and src -> citizenid recorded.
 ---@param src integer player server id
 ---@param payload table { cookies, earned, owned, achievements, rainOn }
 ---@return table result
@@ -126,8 +114,7 @@ function actions.save(src, payload)
     return { success = true }
 end
 
----Persist one cached entry if it has unsaved changes, clearing the dirty bit so the next timer
----pass skips it.
+---Persists one cached entry if it has unsaved changes, clearing the dirty bit.
 ---@param cid string citizenid
 local function flushCid(cid)
     local c = cache[cid]
@@ -138,18 +125,13 @@ local function flushCid(cid)
     c.dirty = false
 end
 
----Flush every dirty cached save to the DB (periodic timer + resource stop). Each entry flushes
----under pcall so one failing row (oversized JSON, DB hiccup) skips that player instead of
----erroring out of the loop - an uncaught error here would kill the periodic flush thread and
----stop persistence for EVERYONE until restart. A failed entry stays dirty and is retried on the
----next pass.
+---Flushes every dirty cached save to the DB (periodic timer + resource stop). Each entry flushes
+---under pcall; a failed entry stays dirty and is retried on the next pass.
 function actions.flushAll()
     for cid in pairs(cache) do pcall(flushCid, cid) end
 end
 
----A player disconnected: persist their final state now (their autosaves have stopped, so the
----timer alone would race the cache eviction) and free both slots so recycled srcs can't inherit
----stale state.
+---A player disconnected: persists their final state now and frees both cache slots.
 ---@param src integer player server id
 function actions.playerDropped(src)
     local cid = srcToCid[src]
@@ -159,12 +141,8 @@ function actions.playerDropped(src)
     cache[cid] = nil
 end
 
----The leaderboard: the top real players by lifetime earned, excluding the caller - the client
----splices itself in with its live, unsaved count so its own rank is always current - plus the
----caller's display label and stored alias so the UI can label the highlighted row and pre-fill
----the nickname editor. Reads the DB rather than the write-behind cache, so a rival's entry may
----lag one flush interval. Works with a nil cid (no exclusion, fallback label). Read-only; only
----display names + totals leave the server, never citizenids.
+---The leaderboard: the top real players by lifetime earned (excluding the caller), plus the
+---caller's display label and stored alias. Reads the DB, not the write-behind cache. Read-only.
 ---@param src integer player server id
 ---@return table result { success, data = { rivals, me } }
 function actions.leaderboard(src)
@@ -182,11 +160,8 @@ function actions.leaderboard(src)
     return { success = true, data = { rivals = rivals, me = me } }
 end
 
----Set (or clear, with an empty string) the caller's leaderboard alias. A non-string payload is
----normalised to '' rather than erroring the trim - the alias only ever belongs to the caller,
----so the worst a forged payload can do is clear their own. Trimmed + capped to
----MaxNicknameLength; empty clears the alias so the leaderboard falls back to the character
----name.
+---Sets (or clears, with an empty string) the caller's leaderboard alias, trimmed + capped to
+---MaxNicknameLength.
 ---@param src integer player server id
 ---@param nickname any raw client alias
 ---@return table result { success, data = { nickname } }

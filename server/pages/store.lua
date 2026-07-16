@@ -1,14 +1,9 @@
 ---@type table Store module; the table returned at end of file. One row per post; the feed is
----just the most recent rows across all players. `price` is always NULL (kept only for schema
----parity with marketplace_listings - Pages is the priceless yellow-pages board) and `image` is
----an optional remote URL (same model as the Marketplace / Photos apps). Validation and ownership
----checks live in the actions layer - this layer stays dumb and every value is a ? parameter.
+---just the most recent rows across all players. `price` is always NULL and `image` is an
+---optional remote URL. Every value is a ? parameter.
 local store = {}
 
----True if a column already exists on the given table (information_schema probe). ensureSchema
----uses this to backfill columns on servers whose tables predate them, since older MariaDB builds
----lack ADD COLUMN IF NOT EXISTS. Both names arrive as literals from this module and are passed
----as ? parameters regardless.
+---True if a column already exists on the given table (information_schema probe).
 ---@param tbl string table name
 ---@param name string column name
 ---@return boolean exists
@@ -20,10 +15,8 @@ local function columnExists(tbl, name)
     return row ~= nil and tonumber(row.n) > 0
 end
 
----Create the pages_posts table if it doesn't exist and back-fill newer columns, so the resource
----is drop-in: `email` (optional contact), then `images` (a JSON array of up to MaxImages URLs -
----`image` keeps the first one as the legacy column + card thumbnail so old rows still render).
----Run once at boot.
+---Creates the pages_posts table if it doesn't exist and back-fills the `email` and `images`
+---columns. Runs once at boot.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS `pages_posts` (
@@ -48,9 +41,8 @@ function store.ensureSchema()
     end
 end
 
----Persist a new post. `price`/`image`/`images`/`email` may be nil (stored as SQL NULL).
----`images` is a JSON-encoded array string - the caller encodes; we keep the data layer dumb.
----Field caps are the actions layer's job (parseFields), sized to fit these columns.
+---Persists a new post. `price`/`image`/`images`/`email` may be nil (stored as SQL NULL);
+---`images` is a JSON-encoded array string.
 ---@param citizenid string owner citizenid (resolved server-side, never from the payload)
 ---@param title string post title (pre-capped)
 ---@param body string post body (pre-capped)
@@ -67,8 +59,7 @@ function store.insert(citizenid, title, body, price, image, images, number, emai
         { citizenid, title, body, price, image, images, number, email, ts })
 end
 
----Update an existing post's editable fields in place. Ownership is checked by the caller
----(actions.update guards on ownerOf before mutating); owner and created_at never change.
+---Updates an existing post's editable fields in place; owner and created_at never change.
 ---@param id integer post row id
 ---@param title string post title (pre-capped)
 ---@param body string post body (pre-capped)
@@ -106,8 +97,7 @@ function store.countFor(citizenid)
     return MySQL.scalar.await('SELECT COUNT(*) FROM `pages_posts` WHERE citizenid = ?', { citizenid }) or 0
 end
 
----Owner citizenid of a post, or nil if it doesn't exist - the ownership gate every mutation
----passes through before touching the row.
+---Owner citizenid of a post, or nil if it doesn't exist.
 ---@param id integer post row id
 ---@return string|nil citizenid
 function store.ownerOf(id)

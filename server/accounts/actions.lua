@@ -23,18 +23,13 @@ local util = require 'server.util'
 local ok, fail, digits, trim = util.ok, util.fail, util.digits, util.trim
 
 
--- App whitelists. Every handler resolves its payload `app` against one of these BEFORE touching
--- the store, so a crafted payload can't reach an arbitrary app key. Birdy and Mail run their own
--- login/register modules and call into these actions from there, which is why only the reset,
--- password-change and vault callbacks serve them directly.
+-- App whitelists; every handler resolves its payload `app` against one of these.
 ---@type table<string, boolean> Apps served by the generic register/login/logout/me callbacks.
 local DIRECT_APPS    = { photogram = true, cherry = true, vibez = true, ryde = true }
 ---@type table<string, boolean> Every account app the engine knows (reset + vault callbacks).
 local ALL_APPS       = { photogram = true, cherry = true, vibez = true, birdy = true, mail = true, ryde = true }
 
----@type table<string, fun(password: string): string> Legacy per-app hashers, so hashes migrated
----from the Birdy/Mail tables keep verifying; verifyPassword upgrades a legacy match to the
----engine's own hash on first login.
+---@type table<string, fun(password: string): string> Legacy per-app password hashers for migrated rows.
 local LEGACY_HASHERS = {
     birdy = birdyStore.hashPassword,
     mail  = mailStore.hashPassword,
@@ -42,19 +37,11 @@ local LEGACY_HASHERS = {
 
 
 
----@type integer Longest password any creation path accepts: the engine's hardcoded 64
----(validPassword) or the Birdy/Mail config caps if an owner raised them - same derivation as
----mail's MAX_SIGNIN_PASSWORD_LEN, so nothing storable is ever rejected here.
+---@type integer Longest password any creation path accepts.
 local MAX_PASSWORD_LEN = math.max(64, config.Birdy.MaxPasswordLength or 0, config.Mail.MaxPasswordLength or 0)
 
----Check a plaintext password against an account's stored hash. Non-strings, empty strings and
----anything longer than MAX_PASSWORD_LEN are rejected before hashing - the digest walks the string
----byte-by-byte in Lua, so without the length bound a crafted megabyte password is free server CPU
----burn on every login/changePassword call (checked here, the shared choke-point, so birdy's
----sign-in can't skip it either). Accounts migrated from the Birdy/Mail tables still carry those
----modules' pepper, so on an engine-hash miss the app's legacy hasher gets one try - and a legacy
----match silently re-hashes with the engine pepper, so every account converges on one hash format
----over time.
+---Checks a plaintext password against an account's stored hash, trying the app's legacy hasher
+---on an engine-hash miss and re-hashing a legacy match with the engine hash.
 ---@param account table account row (store shape, passwordHash included)
 ---@param plain any client-supplied plaintext password
 ---@return boolean verified
@@ -69,10 +56,8 @@ function actions.verifyPassword(account, plain)
     return false
 end
 
----Validate + normalise a username. Mail accounts use the email address as the username, so they
----get the looser format check (and the full 64-char column width); every other app is plain
----handles capped at 30 with a strict character whitelist. Both caps sit inside the VARCHAR(64)
----column, so nothing validated here can fail the insert on length.
+---Validates and normalises a username: mail accounts use the email address capped at 64, every
+---other app is a plain handle capped at 30 with a character whitelist.
 ---@param app string account app key
 ---@param raw any client-supplied username
 ---@return string|nil username, string|nil err
@@ -90,8 +75,7 @@ local function validUsername(app, raw)
     return u, nil
 end
 
----Validate a password: 6-64 characters, must be an actual string (a crafted non-string payload
----fails here rather than reaching the hasher).
+---Validates a password: 6-64 characters, strings only.
 ---@param raw any client-supplied password
 ---@return string|nil password, string|nil err
 local function validPassword(raw)
@@ -100,10 +84,8 @@ local function validPassword(raw)
     return raw, nil
 end
 
----Validate an optional recovery email: nil when blank, otherwise it must resolve to a REAL
----Mail-app account (a bare username gets the mail domain appended, matching how mail registers).
----Requiring an existing mailbox is what makes email recovery meaningful - a reset code can only
----ever be delivered somewhere the player can actually read.
+---Validates an optional recovery email: nil when blank, otherwise it must resolve to an existing
+---Mail-app account (a bare username gets the mail domain appended).
 ---@param raw any client-supplied email
 ---@return string|nil email, string|nil err
 local function validEmail(raw)
@@ -116,8 +98,7 @@ local function validEmail(raw)
     return e, nil
 end
 
----Validate an optional recovery phone: nil when blank, otherwise 7-15 digits (inside the
----VARCHAR(20) column).
+---Validates an optional recovery phone: nil when blank, otherwise 7-15 digits.
 ---@param raw any client-supplied phone number
 ---@return string|nil phone, string|nil err
 local function validPhone(raw)
@@ -127,14 +108,8 @@ local function validPhone(raw)
     return p, nil
 end
 
----Shared registration core for the generic callbacks and the Birdy/Mail modules. `app` must
----already be whitelisted by the caller; everything else is validated here: username/password
----format and length, optional recovery contacts, and a display name defaulting to the username
----(capped to the 50-char column). At least one recovery contact is required so the reset flow can
----always reach the owner, and each email/number may back only one account per app - like real
----services - which also keeps recovery resolution unambiguous. Uniqueness is pre-checked for the
----friendly message; the store's UNIQUE (app, username) key still backstops a race, surfacing as
----the generic insert failure rather than a duplicate row.
+---Creates an account for an already-whitelisted app: validates username/password, optional
+---recovery contacts (at least one required, each unique per app), and display name.
 ---@param app string account app key (already validated)
 ---@param payload table|nil client-supplied { username, password, name?, email?, phone? }
 ---@return table envelope on success data = { account }
@@ -165,17 +140,16 @@ function actions.createAccount(app, payload)
     return ok({ account = store.getAccountById(id) })
 end
 
----The account shape handed back to a client: identity + recovery contacts, never the password
----hash. Only ever returned to the caller who just authenticated or holds the session.
+---Returns the account shape handed back to a client: identity + recovery contacts, never the
+---password hash.
 ---@param a table account row
 ---@return table public fields { username, name, email, phone }
 local function publicAccount(a)
     return { username = a.username, name = a.displayName, email = a.email, phone = a.phone }
 end
 
----Register a new account for one of the direct apps and sign the caller straight into it. The
----actor is `source` alone - the session is keyed to the citizenid the player bridge resolves, so
----no payload field can create or claim a session for someone else.
+---Registers a new account for one of the direct apps and signs the caller into it, with the
+---session keyed to the citizenid resolved from `source`.
 ---@param source number player server id
 ---@param payload table|nil client-supplied registration fields (see createAccount)
 ---@return table envelope on success data = { me }
@@ -191,11 +165,8 @@ function actions.register(source, payload)
     return ok({ me = publicAccount(res.data.account) })
 end
 
----Sign the caller into an existing account. The identity is tried as a username first, then as
----the linked recovery email (a bare mail username counts as its full address), so either logs in.
----Failure is a uniform 'Wrong username or password' whether the account exists or not, so this
----path can't be used to enumerate usernames. The session is keyed to the caller's own citizenid
----from `source`, never anything in the payload.
+---Signs the caller into an existing account, trying the identity as a username first, then as
+---the linked recovery email; failure returns a uniform 'Wrong username or password'.
 ---@param source number player server id
 ---@param payload table|nil client-supplied { app, username, password }
 ---@return table envelope on success data = { me }
@@ -222,8 +193,7 @@ function actions.login(source, payload)
     return ok({ me = publicAccount(acc) })
 end
 
----Sign the caller out of an app. Only ever clears the caller's OWN session (citizenid from
----`source`); idempotent, so a replayed logout is a no-op.
+---Signs the caller out of an app, clearing only their own session.
 ---@param source number player server id
 ---@param payload table|nil client-supplied { app }
 ---@return table envelope
@@ -235,8 +205,8 @@ function actions.logout(source, payload)
     return ok()
 end
 
----Who am I signed in as? Resolves the caller's session by their own citizenid and returns the
----public account shape - loggedIn = false covers both "no session" and "no identity". Read-only.
+---Returns the caller's current session account in public shape; loggedIn = false when there is
+---no session or no identity.
 ---@param source number player server id
 ---@param payload table|nil client-supplied { app }
 ---@return table envelope data = { loggedIn, me? }
@@ -250,19 +220,13 @@ function actions.me(source, payload)
     return ok({ loggedIn = true, me = publicAccount(acc) })
 end
 
--- Password-reset codes. All state is in-memory and keyed app:accountId, so a restart voids every
--- outstanding code (fail-safe) and nothing secret ever touches disk or logs. A code is 6 digits,
--- single-use, expires after CODE_TTL, tolerates MAX_ATTEMPTS wrong guesses, and issuing is
--- rate-limited to MAX_REQUESTS per account per REQUEST_WINDOW - together that keeps brute-forcing
--- a live code to negligible odds (at most 15 guesses against a fresh 1-in-a-million code per
--- window). The code itself only ever travels inside the targeted mail/SMS delivery, plus the
--- suggestCode autofill below, which re-proves receipt before handing it back.
+-- In-memory password-reset code state, keyed app:accountId.
 ---@type table<string, { code: string, expires: integer, attempts: integer, channel: string }> Live codes by app:accountId.
 local resetCodes     = {}
 ---@type table<string, { count: integer, windowStart: integer }> Issue-rate windows by app:accountId.
 local resetRequests  = {}
 
----@type integer Reset-code lifetime in seconds (the delivery texts say "10 minutes" - keep in step).
+---@type integer Reset-code lifetime in seconds.
 local CODE_TTL       = 600
 ---@type integer Wrong guesses allowed per code before it is voided.
 local MAX_ATTEMPTS   = 5
@@ -271,18 +235,14 @@ local MAX_REQUESTS   = 3
 ---@type integer Issue-rate window length in seconds.
 local REQUEST_WINDOW = 600
 
----Reset-state key. Keyed by the resolved account id rather than the raw identity string, so the
----same account reached via email and via phone shares one code and one rate limit.
+---Builds the reset-state key from app and resolved account id.
 ---@param app string account app key
 ---@param accountId number account row id
 ---@return string key
 local function resetKey(app, accountId) return app .. ':' .. accountId end
 
----Resolve a recovery identity (the email or phone number on file) to the single matching account.
----The identity's shape also decides the delivery channel: anything with letters or an '@' is an
----email (a bare mail username counts as its full address; mail itself must recover by phone,
----since its email IS the account being recovered), all-digits is a phone number. Ambiguity or no
----match returns an error instead of guessing.
+---Resolves a recovery identity (the email or phone number on file) to the single matching
+---account and its delivery channel; ambiguity or no match returns an error.
 ---@param app string account app key
 ---@param raw string trimmed client-supplied identity
 ---@return table|nil acc, string|nil channel ('email'|'sms'), string|nil err
@@ -309,13 +269,8 @@ local function resolveRecovery(app, raw)
     return matches[1], channel, nil
 end
 
----Issue a password-reset code. Unauthenticated by design - the caller has lost the password, and
----possession of the linked mailbox or phone number is the real credential, so the code is only
----ever delivered THERE; the response carries just the channel name, never the code. Issuing is
----rate-limited per account so an attacker can't flood a victim with texts or churn codes. A fresh
----code replaces any previous one (new random value, attempt counter reset - harmless, since each
----code is an independent draw), while a failed delivery leaves prior state untouched and consumes
----no request slot.
+---Issues a password-reset code, rate-limited per account and delivered only to the linked
+---mailbox or phone number; the response carries just the channel name.
 ---@param source number player server id
 ---@param payload { app: string, identity: string }|nil
 ---@return table envelope data = { channel }
@@ -353,11 +308,8 @@ function actions.requestReset(source, payload)
     return ok({ channel = channel })
 end
 
----iOS-style code autofill: hand the live code back, but ONLY when the caller's own phone provably
----received it - their registered number (resolved from `source` via settings, never the payload)
----is the number the text went to, or they are signed into the very mail account it was emailed
----to. That makes this a convenience for the legitimate recipient, not an oracle: every miss -
----unknown identity, expired code, wrong recipient - returns the same empty ok envelope.
+---Returns the live reset code when the caller's registered number or mail sign-in received it;
+---every miss returns the same empty ok envelope.
 ---@param source number player server id
 ---@param payload { app: string, identity: string }|nil
 ---@return table envelope data = { code?, source? }
@@ -392,13 +344,8 @@ function actions.suggestCode(source, payload)
     return ok({})
 end
 
----Redeem a reset code and set a new password. Possession of the code IS the authority here.
----Expiry is checked first, then the attempt counter - incremented BEFORE the compare, so a
----spammed callback can't guess for free, and the code is voided outright past MAX_ATTEMPTS. On
----success the code is deleted: single-use, so a replayed confirm changes nothing. An identity
----that doesn't resolve is masked as "expired", so this path can't enumerate contacts either.
----Mail accounts also sync the new hash into mail's own credential column so nothing legacy
----diverges, and saved Passwords-app copies of this login follow the new password.
+---Redeems a reset code and sets a new password, enforcing expiry and attempt limits, deleting
+---the code on success, and syncing mail's credential column and vault copies.
 ---@param source number player server id
 ---@param payload { app: string, identity: string, code: string, password: string }|nil
 ---@return table envelope
@@ -434,11 +381,8 @@ function actions.confirmReset(source, payload)
     return ok()
 end
 
----Change an account's password using the CURRENT password (signed-in self-service, no reset
----code). Knowing the current password is the authority - the same bar every real service sets -
----and the failure message is uniform whether the account exists or not, so the path can't confirm
----usernames. Sync duties match confirmReset: mail's own credential column and saved
----Passwords-app copies follow the new password.
+---Changes an account's password using the current password, syncing mail's credential column
+---and saved Passwords-app copies.
 ---@param source number player server id
 ---@param payload { app?: string, identity?: string, currentPassword?: string, newPassword?: string }
 ---@return table envelope
@@ -461,12 +405,8 @@ function actions.changePassword(source, payload)
     return ok()
 end
 
----Save one login into the caller's Passwords-app vault. Rows are keyed to the caller's own
----citizenid from `source`, so a payload can only ever write its own vault. The credentials are
----stored as given - the vault is deliberately a notebook, not an authenticator - with a bare
----email getting the mail domain appended to match how mail registers. Every field is capped to
----its phone_passwords column width, so an oversized crafted payload fails cleanly here instead of
----erroring the insert.
+---Saves one login into the caller's own Passwords-app vault, with fields capped to their column
+---widths and a bare email getting the mail domain appended.
 ---@param source number player server id
 ---@param payload { app: string, username: string, password: string, email?: string, phone?: string }|nil
 ---@return table envelope
@@ -495,8 +435,7 @@ function actions.savePassword(source, payload)
     return ok()
 end
 
----The caller's own vault entries (empty for an unresolvable identity rather than an error, so
----the app renders an empty list). Read-only, scoped to the caller's citizenid.
+---Returns the caller's own vault entries; empty for an unresolvable identity.
 ---@param source number player server id
 ---@return table envelope data = { entries }
 function actions.listPasswords(source)
@@ -505,9 +444,7 @@ function actions.listPasswords(source)
     return ok({ entries = store.listVaultEntries(cid) })
 end
 
----Delete one vault entry. The store's DELETE is scoped citizenid AND id, so a guessed row id can
----only remove the caller's own entry. The id must be a finite integer - lib.callback payloads are
----msgpack, which CAN carry NaN/inf floats, and those must never reach the query.
+---Deletes one vault entry, scoped to the caller's citizenid; the id must be a finite integer.
 ---@param source number player server id
 ---@param payload { id?: number }|nil
 ---@return table envelope
@@ -521,7 +458,7 @@ function actions.deletePassword(source, payload)
     return ok()
 end
 
----The caller's own phone number, for pre-filling registration forms. Read-only.
+---Returns the caller's own phone number.
 ---@param source number player server id
 ---@return table envelope data = { number }
 function actions.myNumber(source)
@@ -530,9 +467,7 @@ function actions.myNumber(source)
     return ok({ number = settings.getPhoneNumber(cid) })
 end
 
----The first mail account this character is signed into, for the email auto-fill chip on
----registration forms. nil when signed out of Mail. Read-only, and only ever the caller's own
----sign-ins.
+---Returns the first mail account this character is signed into; nil when signed out of Mail.
 ---@param source number player server id
 ---@return table envelope data = { email? }
 function actions.myEmail(source)
@@ -543,14 +478,11 @@ function actions.myEmail(source)
     return ok({ email = first and first.email or nil })
 end
 
----Resolve an export-supplied (app, username) pair to a full account row. Serves the public
----exports in init.lua, whose callers are other server resources - a bad shape is a caller bug,
----so an app outside ALL_APPS or a blank/non-string username resolves to nil instead of erroring.
----The username gets the same trim+lower normalisation every authenticated path applies before
----it reaches the store.
+---Resolves an export-supplied (app, username) pair to a full account row, nil for an unknown
+---app or blank/non-string username; the username is trimmed and lowercased.
 ---@param app any account app key (must be in ALL_APPS)
 ---@param username any account username
----@return table|nil account full store row, passwordHash included - strip before it leaves
+---@return table|nil account full store row, passwordHash included
 local function exportAccount(app, username)
     if type(app) ~= 'string' or not ALL_APPS[app] then return nil end
     if type(username) ~= 'string' then return nil end
@@ -559,9 +491,7 @@ local function exportAccount(app, username)
     return store.getAccount(app, u)
 end
 
----Does an account exist for `app`? Export-serving read: whitelist + normalisation via
----exportAccount, boolean out, so a caller can pre-check a handle without receiving any account
----data. Read-only.
+---Returns whether an account exists for `app`.
 ---@param app string account app key
 ---@param username string account username
 ---@return boolean exists
@@ -569,8 +499,8 @@ function actions.accountExists(app, username)
     return exportAccount(app, username) ~= nil
 end
 
----One account in its public shape - { username, name, email, phone }, never the password hash -
----or nil when the app is unknown or no such account exists. Read-only.
+---Returns one account in its public shape, or nil when the app is unknown or no such account
+---exists.
 ---@param app string account app key
 ---@param username string account username
 ---@return table|nil account public shape
@@ -579,9 +509,8 @@ function actions.getPublicAccount(app, username)
     return acc and publicAccount(acc) or nil
 end
 
----The account a citizen is currently signed into for `app`, in the same public shape. nil
----covers every miss - unknown app, bad citizenid, simply signed out - so callers treat "no
----session" as data, not an error. Read-only.
+---Returns the account a citizen is currently signed into for `app`, in public shape; nil on
+---any miss.
 ---@param app string account app key
 ---@param citizenid string framework per-character id
 ---@return table|nil account public shape

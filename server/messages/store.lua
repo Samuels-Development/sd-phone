@@ -7,9 +7,8 @@ local function newId() return util.newId(7) end
 
 store.newId = newId
 
----Decode a value into a Lua table. oxmysql auto-decodes JSON columns on recent builds; older
----ones hand back the raw string. Covers both so callers always see a table, and the pcall means
----garbage in the column degrades to {} instead of erroring the caller.
+---Decodes a value into a Lua table: tables pass through, strings are JSON-decoded, and
+---anything else (or a failed decode) becomes {}.
 ---@param value any
 ---@return table
 local function decodeJson(value)
@@ -24,8 +23,7 @@ end
 
 store.decodeJson = decodeJson
 
----Encode a meta table for storage; empty / nil tables become SQL NULL so the JSON column stays
----clean for rows that carry no metadata.
+---Encodes a meta table for storage; empty / nil tables become SQL NULL.
 ---@param tbl table|nil
 ---@return string|nil
 local function encodeJson(tbl)
@@ -33,18 +31,8 @@ local function encodeJson(tbl)
     return json.encode(tbl)
 end
 
----Create the message tables idempotently and back-fill columns older installs predate, so the
----resource is drop-in. `created_at` is a unix epoch (BIGINT) so the React side owns all
----relative-date formatting, the same contract the call log uses. Reactions live in their own
----table, keyed by the shared logical message id (`mid`, identical across every mailbox copy of
----one send); PRIMARY KEY (mid, citizenid, emoji) lets each player stack any number of distinct
----emoji. Three guarded migrations follow the CREATEs, each keyed off the live schema so it runs
----exactly once: the reactions PK gains `emoji` (upgrading the original one-per-person PK to
----multi-reaction stacking), phone_messages gains `withheld` (messages held back while the
----recipient has airplane mode on) and `mid` - existing rows get `mid = id`, so pre-migration
----messages react only within a single mailbox copy (no cross-sync), which is fine; everything
----sent afterwards shares a real `mid` across copies - and phone_message_groups gains `avatar`
----(custom group picture URL). Run once at boot.
+---Creates the message tables idempotently, back-fills missing columns, and upgrades the
+---reactions primary key. Run once at boot.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_messages (
@@ -144,9 +132,8 @@ function store.ensureSchema()
     end
 end
 
----List a player's conversation keys, most-recently-active first. Each row carries the newest
----message epoch so the caller can order the thread list without a second pass. Withheld
----(airplane-mode) rows are invisible until released. Read-only.
+---Lists a player's conversation keys, most-recently-active first, each with the newest message
+---epoch. Withheld rows are excluded. Read-only.
 ---@param citizenid string
 ---@return { conversation: string, last_at: number }[]
 function store.threadKeys(citizenid)
@@ -159,11 +146,8 @@ function store.threadKeys(citizenid)
     ]], { citizenid }) or {}
 end
 
----Read the newest `limit` messages in one thread, returned oldest-first (the DESC page is
----reversed in Lua) so the React timeline can render top-to-bottom without re-sorting. The cap is
----a validated integer interpolated into the query because MySQL rejects a bound parameter in
----LIMIT on prepared statements - never a raw client value. Scoped to the owner's mailbox.
----Read-only.
+---Reads the newest `limit` messages in one thread, returned oldest-first. The cap is a
+---validated integer interpolated into the query. Read-only.
 ---@param citizenid string
 ---@param conversation string
 ---@param limit number
@@ -184,8 +168,7 @@ function store.threadMessages(citizenid, conversation, limit)
     return out
 end
 
----Insert one mailbox copy of a message. Caller encodes nothing; meta is JSON-encoded here so
----the data layer owns the column format.
+---Inserts one mailbox copy of a message; meta is JSON-encoded here.
 ---@param id string unique id for this mailbox copy
 ---@param mid string shared logical message id (same across every copy of one send)
 ---@param citizenid string mailbox owner
@@ -211,10 +194,8 @@ function store.insertMessage(id, mid, citizenid, conversation, sender, direction
     return affected ~= nil
 end
 
----Prune a thread down to its newest `keep` rows so a conversation can't grow unbounded. The
----double-nested subquery is the standard workaround for MySQL's "can't LIMIT inside an IN
----subquery" restriction (mirrors the call-log prune), and the LIMIT is a validated integer for
----the same prepared-statement reason as threadMessages. Scoped to the owner's mailbox.
+---Prunes a thread down to its newest `keep` rows. The LIMIT is a validated integer
+---interpolated into the query. Scoped to the owner's mailbox.
 ---@param citizenid string
 ---@param conversation string
 ---@param keep number
@@ -235,8 +216,7 @@ function store.pruneThread(citizenid, conversation, keep)
     ]]):format(n), { citizenid, conversation, citizenid, conversation })
 end
 
----Mark every inbound message in a thread as read, scoped to its owner - a crafted conversation
----key can only ever touch the caller's own rows.
+---Marks every inbound message in a thread as read, scoped to its owner.
 ---@param citizenid string
 ---@param conversation string
 function store.markThreadRead(citizenid, conversation)
@@ -247,8 +227,8 @@ function store.markThreadRead(citizenid, conversation)
     ]], { citizenid, conversation })
 end
 
----Total unread inbound messages across every thread an owner has - the home-screen Messages
----badge count. Withheld (airplane-mode) messages don't count until they're released. Read-only.
+---Counts unread inbound messages across every thread an owner has, excluding withheld rows.
+---Read-only.
 ---@param citizenid string
 ---@return number
 function store.unreadCount(citizenid)
@@ -269,8 +249,7 @@ function store.withheldConversations(citizenid)
     ]], { citizenid }) or {}
 end
 
----Release every withheld message for an owner (airplane mode turned off). Idempotent: a second
----call finds nothing withheld and changes nothing.
+---Releases every withheld message for an owner. Idempotent.
 ---@param citizenid string
 function store.releaseWithheld(citizenid)
     MySQL.update.await(
@@ -279,8 +258,7 @@ function store.releaseWithheld(citizenid)
     )
 end
 
----Delete a player's copy of an entire thread. Only ever touches the caller's own mailbox - the
----other participants' copies are separate rows and stay put.
+---Deletes a player's copy of an entire thread; other participants' copies stay put.
 ---@param citizenid string
 ---@param conversation string
 function store.deleteThread(citizenid, conversation)
@@ -290,8 +268,7 @@ function store.deleteThread(citizenid, conversation)
     )
 end
 
----Insert a new group thread. Returns false on failure (e.g. a random-id collision trips the
----primary key) so the caller can surface it instead of half-creating a group.
+---Inserts a new group thread. Returns false on failure.
 ---@param id string
 ---@param name string
 ---@param ownerCid string
@@ -316,8 +293,7 @@ function store.getGroup(groupId)
     )
 end
 
----Update a group's name and picture. The creator-only permission check lives in the actions
----layer; the data layer stays dumb.
+---Updates a group's name and picture.
 ---@param groupId string
 ---@param name string
 ---@param avatar string|nil
@@ -352,8 +328,7 @@ function store.groupMembers(groupId)
     ) or {}
 end
 
----True iff the citizen is a member of the group - the membership gate every group action
----passes through. Read-only.
+---True iff the citizen is a member of the group. Read-only.
 ---@param groupId string
 ---@param citizenid string
 ---@return boolean
@@ -378,8 +353,7 @@ function store.groupsForMember(citizenid)
     ]], { citizenid }) or {}
 end
 
----Remove a member from a group (used by leave / delete-thread). No-op when they're not a
----member, so a crafted group id changes nothing.
+---Removes a member from a group. No-op when they're not a member.
 ---@param groupId string
 ---@param citizenid string
 function store.removeGroupMember(groupId, citizenid)
@@ -400,18 +374,15 @@ function store.groupMemberCount(groupId)
     return row and tonumber(row.n) or 0
 end
 
----Hard-delete an empty group and any stray rows tied to it. The caller guarantees emptiness
----(groupMemberCount == 0) before calling.
+---Hard-deletes an empty group and any stray rows tied to it.
 ---@param groupId string
 function store.deleteGroup(groupId)
     MySQL.update.await('DELETE FROM phone_message_group_members WHERE group_id = ?', { groupId })
     MySQL.update.await('DELETE FROM phone_message_groups WHERE id = ?', { groupId })
 end
 
----Resolve a caller's mailbox copy to its shared logical id, verifying the row is theirs. The
----single ownership gate the reaction / request-status paths ride on: checked here (not just in
----the UI) so calling react or setRequestStatus with someone else's copy id resolves to nil and
----dies. Returns nil if the message isn't in the caller's mailbox. Read-only.
+---Resolves a caller's mailbox copy to its shared logical id, verifying the row is theirs.
+---Returns nil if the message isn't in the caller's mailbox. Read-only.
 ---@param id string the caller's copy id
 ---@param citizenid string
 ---@return string|nil
@@ -422,10 +393,8 @@ function store.midForCopy(id, citizenid)
     )
 end
 
----Toggle a player's reaction for one emoji on a message: tapping an emoji they already have
----removes it, otherwise it's added - players can stack any number of distinct emoji. The INSERT
----IGNORE makes a replayed add idempotent against the (mid, citizenid, emoji) primary key.
----Returns true if it was added.
+---Toggles a player's reaction for one emoji on a message: an existing reaction is removed,
+---otherwise it's added. Returns true if it was added.
 ---@param mid string
 ---@param citizenid string
 ---@param emoji string
@@ -461,9 +430,7 @@ function store.reactionsFor(mid)
 end
 
 ---Reactions for many messages at once, as { [mid] = { {citizenid, emoji}, ... } } ordered
----oldest-first. Nil/empty mids are skipped. The IN clause is built purely from '?' placeholders
----(one per surviving mid, all values bound) so nothing client-shaped is ever interpolated.
----Read-only.
+---oldest-first. Nil/empty mids are skipped. Read-only.
 ---@param mids string[]
 ---@return table<string, { citizenid: string, emoji: string }[]>
 function store.reactionsForMids(mids)
@@ -487,18 +454,15 @@ function store.reactionsForMids(mids)
     return out
 end
 
----Read one message's raw meta column (JSON string or table, depending on the oxmysql version -
----pass through decodeJson). Caller decodes; we keep the data layer dumb. Read-only.
+---Reads one message's raw meta column (JSON string or table). Read-only.
 ---@param id string
 ---@return any
 function store.messageMeta(id)
     return MySQL.scalar.await('SELECT meta FROM phone_messages WHERE id = ? LIMIT 1', { id })
 end
 
----Newest still-pending request card of `kind` in one mailbox thread - used when a request is
----answered from OUTSIDE Messages (e.g. Maps > People), so the card can still be located and
----patched. Scoped to the owner's mailbox; scans only the newest five candidates because a newer
----request supersedes older ones in the same thread. Read-only.
+---Finds the newest still-pending request card of `kind` in one mailbox thread, scanning the
+---newest five candidates. Scoped to the owner's mailbox. Read-only.
 ---@param citizenid string
 ---@param conversation string
 ---@param kind string
@@ -517,16 +481,14 @@ function store.latestPendingRequest(citizenid, conversation, kind)
     return nil
 end
 
----Overwrite one message's meta blob. Ownership is the caller's job (actions.setRequestStatus
----resolves copies through midForCopy first); the data layer stays dumb.
+---Overwrites one message's meta blob.
 ---@param id string
 ---@param meta table|nil
 function store.updateMeta(id, meta)
     MySQL.update.await('UPDATE phone_messages SET meta = ? WHERE id = ?', { encodeJson(meta), id })
 end
 
----Every mailbox copy of a logical message - used to fan a reaction / request-status update out
----to each participant's own copy id + thread key. Read-only.
+---Every mailbox copy of a logical message. Read-only.
 ---@param mid string
 ---@return { id: string, citizenid: string, conversation: string }[]
 function store.siblingCopies(mid)

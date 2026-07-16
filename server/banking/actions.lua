@@ -30,8 +30,7 @@ local digits, initialsFor, formatNumber = util.digits, util.initialsFor, util.fo
 local function iso(ts)    return os.date('!%Y-%m-%dT%H:%M:%SZ', ts) end
 
 
----Format an amount as "$1,234" with thousands separators. The sign is dropped on purpose:
----callers state direction in the sentence ("sent you", "received"), so the figure stays plain.
+---Formats an amount as "$1,234" with thousands separators, sign dropped.
 ---@param amount number signed whole-currency amount
 ---@return string formatted
 local function formatMoney(amount)
@@ -41,10 +40,8 @@ local function formatMoney(amount)
     return '$' .. s
 end
 
----Fire a Bank/Wallet notification to an online player (by source). Mirrors the Ryde helper:
----quietInApp drops the banner only when the player is literally in the Bank app, where the new
----row is already on screen; otherwise it banners / peeks / lands on the lockscreen so a player
----whose phone is away still finds out.
+---Fires a Bank/Wallet notification to an online player; quietInApp drops the banner while the
+---player is in the Bank app.
 ---@param src integer|nil player server id (no-op when nil)
 ---@param body string notification body text
 local function notifyBank(src, body)
@@ -55,8 +52,7 @@ local function notifyBank(src, body)
 end
 
 
----Build a digits -> contact-row lookup from a player's saved contacts, so transaction rows
----resolve counterparty numbers to names/avatars in O(1) per row.
+---Builds a digits -> contact-row lookup from a player's saved contacts.
 ---@param cid string viewer's citizenid
 ---@return table<string, table> map keyed by bare-digit phone number
 local function contactMapFor(cid)
@@ -67,10 +63,8 @@ local function contactMapFor(cid)
     return map
 end
 
----DB row -> the shape the Wallet renders. A transaction with a counterparty number resolves to
----the VIEWER's saved contact (their name + avatar/initials), so a transfer reads as "John Doe"
----rather than a raw number; an unknown number is shown formatted the way the Contacts app
----formats it. peerNumber stays raw digits so the Wallet can offer "Transfer again".
+---Maps a DB row to the Wallet transaction shape, resolving a counterparty number to the
+---viewer's saved contact or a formatted number; peerNumber stays raw digits.
 ---@param row table phone_bank_transactions row (or an equivalent literal)
 ---@param contactMap table<string, table>|nil digits -> contact-row lookup for the viewer
 ---@return table out Wallet transaction shape
@@ -98,12 +92,8 @@ local function txOut(row, contactMap)
     return out
 end
 
----Balance + cash + recent transactions for the Wallet's main screen. Balance comes from the
----multi-banking adapter, cash from the framework, the list from the phone's own transaction log
----capped at Banking.TransactionLimit (most banking resources expose no portable history, so the
----phone's log is the source of truth for the list). The actor is resolved from src only - nothing
----here reads identity from a payload. Read-only apart from ensurePhoneNumber, which lazily
----allocates the caller's number on first access (idempotent).
+---Returns balance, cash, and recent transactions for the Wallet's main screen, with the list
+---capped at Banking.TransactionLimit; ensurePhoneNumber lazily allocates the caller's number.
 ---@param src integer player server id
 ---@return table result envelope { success, data? }
 function actions.overview(src)
@@ -128,22 +118,8 @@ function actions.overview(src)
     }
 end
 
----Transfer money from the caller's bank to the character who owns `number`. The one
----client-reachable path that moves money, so it is fully server-authoritative: the actor comes
----from src, and every payload field is re-validated here (not just in the app's UI, so calling
----the callback directly can't skip it). The amount must coerce to a FINITE number before it is
----floored and clamped to Banking.MinSend/MaxSend - NaN compares false against every bound, so
----without the finiteness check a crafted payload would sail through validation and poison both
----balances. Sending to your own number is refused: the money would round-trip but the log would
----fabricate an income row. Debit-before-credit: the sender is debited first and refunded if the
----recipient can't be credited. The balance pre-check, debit and credit run inside one scheduler
----slice (every DB await happens earlier), so two racing sends can't both pass the same balance
----check. An offline recipient is credited by direct framework DB write only when
----Banking.AllowOffline is on AND the active banking resource keeps balances in the framework
----account (own-table resources need the recipient online). Both sides land in the phone log with
----a shared timestamp, the banking resource's own log is mirrored best-effort, and an online
----recipient - who did nothing to trigger this - is always told, named the way their Wallet row
----resolves the sender: saved contact name, else character name, else the formatted number.
+---Transfers money from the caller's bank to the character who owns `number`: amount validated
+---and clamped, debit before credit with a refund on failure, both sides logged.
 ---@param src integer player server id
 ---@param payload table { number: string, amount: number, note?: string }
 ---@return table result envelope { success, message?, data? }
@@ -200,8 +176,7 @@ function actions.send(src, payload)
     store.insert(cid,  senderLabel,                          -amount, 'transfer', number,   ts)
     store.insert(rcid, ('Received from %s'):format(myNumber), amount, 'transfer', myNumber, ts)
 
-    ---First-party hook: fires once per settled player-to-player transfer, after both log rows.
-    ---Server-local and synchronous; toSource is nil when the recipient was credited offline.
+    ---First-party hook: fires once per settled transfer; toSource is nil for an offline credit.
     TriggerEvent('sd-phone:server:banking:transfer', {
         fromCitizenid = cid, fromNumber = myNumber, fromSource = src,
         toCitizenid = rcid, toNumber = number, toSource = rsrc,
@@ -230,16 +205,8 @@ function actions.send(src, payload)
     }
 end
 
----Append a transaction to a character's phone log. Powers the public addBankTransaction export
----and the sd-phone:bank:addTransaction server event, so external resources (paychecks, shops,
----fines) can show up in the Wallet. Log-only: it never moves money - the caller owns that. The
----callers are OTHER SERVER RESOURCES, not clients, but inputs are still normalised defensively:
----the amount must be a finite non-zero integer (a NaN would pass the ~= 0 check and poison the
----BIGINT insert), and every string is capped to its DB column width. `notify` is opt-in and
----meant only for money the player did not move themselves: true pops the default "You received
----$X" line (suppressed for outflows), a string pops that exact line; self-initiated moves (a
----cashout, a wager the player placed) omit it, so this never banners a player about their own
----transaction.
+---Appends a transaction to a character's phone log (log-only, never moves money); `notify` true
+---pops the default "You received $X" line (suppressed for outflows), a string pops that line.
 ---@param identifier string recipient citizenid
 ---@param data { label: string, amount: number, category?: string, counterparty?: string, notify?: boolean|string }
 ---@return boolean ok false when the identifier, data table, or amount is unusable
@@ -259,8 +226,7 @@ function actions.addExternal(identifier, data)
     store.insert(identifier, label, amount, category, counterparty, ts)
 
     local src = player.getSourceByIdentifier(identifier)
-    ---First-party hook: fires once per logged external transaction, with the row as inserted.
-    ---Server-local and synchronous; source is nil while the character is offline.
+    ---First-party hook: fires once per logged external transaction; source is nil while offline.
     TriggerEvent('sd-phone:server:banking:transaction', {
         citizenid = identifier, source = src, amount = amount, label = label,
         category = category, counterparty = counterparty, timestamp = ts,

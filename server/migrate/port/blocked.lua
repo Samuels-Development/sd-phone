@@ -1,6 +1,5 @@
 ---@type table Blocked-numbers porter (server.migrate.port.blocked). Copies each player's lb-phone
----block list into sd-phone. The composite primary key (citizenid, number) plus INSERT IGNORE make
----it naturally idempotent.
+---block list into sd-phone; idempotent via INSERT IGNORE.
 local M = {}
 
 local store = require 'server.migrate.store'

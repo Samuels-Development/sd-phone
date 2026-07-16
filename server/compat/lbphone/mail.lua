@@ -12,9 +12,7 @@ local util = require 'server.util'
 local registerLbExport, stubLbExport, warnOnce = shim.registerLbExport, shim.stubLbExport, shim.warnOnce
 
 ---GetEmailAddress(number): the first mail address registered to the number's owner, in account
----creation order, nil when the number is unassigned or the owner never made an account.
----sd-phone allows several accounts per character where lb-phone has one per phone, so "first"
----is the closest equivalent.
+---creation order; nil when the number is unassigned or the owner never made an account.
 registerLbExport('GetEmailAddress', function(number)
     local cid = settings.getCitizenByNumber(number)
     if not cid then return nil end
@@ -22,11 +20,8 @@ registerLbExport('GetEmailAddress', function(number)
     return accounts[1] and accounts[1].email or nil
 end)
 
----SendMail(data { to, sender?, subject?, message?, attachments?, actions? }): system mail
----through actions.systemSend, which owns recipient normalization, the caps and the delivery
----fan-out. Attachment URLs are appended to the body on their own lines (sd mail has no
----attachment field); lb action buttons have no equivalent and are dropped with a one-time
----warning. Returns the success boolean only - sd-phone mail exposes no message id to return.
+---SendMail(data { to, sender?, subject?, message?, attachments?, actions? }): system mail through
+---actions.systemSend; attachment URLs append to the body, action buttons warn once and drop. Returns a boolean.
 registerLbExport('SendMail', function(data)
     if type(data) ~= 'table' then return false end
     if data.actions ~= nil then
@@ -52,8 +47,5 @@ registerLbExport('SendMail', function(data)
     return result.success == true
 end)
 
--- The sd-phone accounts engine only creates mail accounts for a present, signed-in player
--- (passwords hash through the interactive flows), and raw mailbox rows are not deletable from
--- other resources.
 stubLbExport('CreateMailAccount', false)
 stubLbExport('DeleteMail', false)

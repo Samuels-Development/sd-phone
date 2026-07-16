@@ -2,8 +2,7 @@
 local proxyCallback = require 'client.nui'
 
 -- Thin delegates into server/birdy: account session, profiles, the feed, posting, likes,
--- follows, notifications and DMs - validation + persistence live in each server handler,
--- documented there.
+-- follows, notifications and DMs.
 proxyCallback('sd-phone:birdy:me',            'sd-phone:server:birdy:me')
 proxyCallback('sd-phone:birdy:register',      'sd-phone:server:birdy:register')
 proxyCallback('sd-phone:birdy:login',         'sd-phone:server:birdy:login')
@@ -26,22 +25,19 @@ proxyCallback('sd-phone:birdy:dmThread',      'sd-phone:server:birdy:dmThread')
 proxyCallback('sd-phone:birdy:dmSend',        'sd-phone:server:birdy:dmSend')
 proxyCallback('sd-phone:birdy:dmReact',       'sd-phone:server:birdy:dmReact')
 
----Server push: a DM arrived for our logged-in Birdy account - relay it so an open thread
----updates live. Server-originated, so the payload is trusted as-is.
+---Server push: relays a DM that arrived for our logged-in Birdy account.
 ---@param data table DM record from server/birdy/init.lua
 RegisterNetEvent('sd-phone:client:birdy:dmReceived', function(data)
     SendNUIMessage({ action = 'sd-phone:birdy:dmReceived', data = data })
 end)
 
----Server push: the other side reacted to one of our DMs - relay the updated reaction set so
----the bubble patches in place.
+---Server push: relays an updated DM reaction set.
 ---@param data table reaction patch from server/birdy/init.lua
 RegisterNetEvent('sd-phone:client:birdy:dmReaction', function(data)
     SendNUIMessage({ action = 'sd-phone:birdy:dmReaction', data = data })
 end)
 
----Server push: something notification-worthy happened to our account (like, reply, follow) -
----relay so the app refetches its notifications tab.
+---Server push: relays a notification nudge (like, reply, follow).
 ---@param data table notification nudge from server/birdy/init.lua (currently empty)
 RegisterNetEvent('sd-phone:client:birdy:notification', function(data)
     SendNUIMessage({ action = 'sd-phone:birdy:notification', data = data })

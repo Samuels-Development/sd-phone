@@ -1,8 +1,7 @@
 ---@type table Player bridge (bridge.server.player): citizenid/name/phone-number lookups.
 local player = require 'bridge.server.player'
 
----Run one DELETE/UPDATE, swallowing errors so a missing table or column on a given install never
----aborts the rest of the wipe (installs differ by which apps have ever been opened).
+---Runs one DELETE/UPDATE, swallowing errors.
 ---@param sql string parameterized statement
 ---@param params table statement parameters
 ---@return integer affected rows affected (0 on failure)
@@ -11,9 +10,7 @@ local function del(sql, params)
     return ok and (tonumber(res) or 0) or 0
 end
 
--- Everything a character owns under a single citizenid-shaped column, deleted with a straight
--- WHERE <col> = ?. Table and column names are literals from this file - never client input - so
--- the format() into SQL can't be steered; the citizenid itself is always a ? parameter.
+-- Everything a character owns under a single citizenid-shaped column, deleted with WHERE <col> = ?.
 ---@type table<integer, string[]> Per-character tables: { table, citizenid column }.
 local CID_SINGLE = {
     { 'phone_settings',              'citizenid' },
@@ -64,21 +61,8 @@ local CID_PAIR = {
     { 'phone_birdy_notifications',     'recipient_cid', 'actor_cid' },
 }
 
----Delete ONE character's entire phone footprint so their next open behaves like a brand-new
----player (fresh setup, no apps signed in, no content). Two identity schemes are in play: most
----per-character data is keyed by citizenid (CID_SINGLE / CID_PAIR), while the social apps
----(Photogram, Cherry, Ryde) key off a global account username - resolved up front from the
----caller's phone_app_sessions, before anything is deleted. Order matters in three places: photo
----album items are cleared before their albums (they hang off album_id), each social app's
----dependent rows (likes/comments/story views on MY content) go before the content rows they
----reference, and the phone number is read before phone_settings is wiped because the
----service-desk conversations are keyed by number, not citizenid. Mail inboxes are shared between
----characters, so the character is logged OUT of every inbox (pruned from the logged_in_citizens
----JSON array via a parameterized JSON_SEARCH) rather than the account being deleted. Finally the
----global app accounts this character was signed into are removed (id IN (...) with one ?
----placeholder per id) along with the session rows. Every statement runs through del(), so one
----missing table never aborts the rest; the returned count intentionally skips the dependent-row
----sweeps, counting only rows the character owned directly.
+---Deletes one character's entire phone footprint: citizenid-keyed rows, social-app rows keyed by
+---account username, mail logins, and the global app accounts + sessions the character used.
 ---@param src integer player server id
 ---@return string|nil cid wiped citizenid, nil when unresolvable
 ---@return integer|nil rows counted rows deleted (nil only alongside a nil cid)
@@ -174,13 +158,8 @@ local function wipePlayer(src)
     return cid, rows
 end
 
----/wipemyphone - wipe ALL of the CALLER'S phone data (admin-only). Strictly self-targeting: the
----wiped citizenid always resolves from the caller's own source (the command takes no arguments),
----so it can never destroy someone else's data. Unlike the account-wide TRUNCATE commands in
----accounts/init this touches only the caller's rows + the app accounts their character is signed
----into. Console is refused - there is no character to resolve. After the DB wipe the client is
----told to clear the phone UI's localStorage (setup flag, layout, signed-in gates) and close, so
----the next open runs the fresh first-boot setup.
+---/wipemyphone (admin-only): wipes ALL of the caller's own phone data, then tells the client to
+---clear the phone UI's localStorage and close. Console is refused.
 ---@param source integer player server id
 lib.addCommand('wipemyphone', {
     help = 'Wipe ALL of YOUR phone data (settings, apps, accounts, content) so your next open is a brand-new phone.',

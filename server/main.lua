@@ -5,9 +5,7 @@ local framework = require 'bridge.shared.framework'
 ---@type table Inventory bridge (bridge.server.inventory): backend-agnostic item ops.
 local inv       = require 'bridge.server.inventory'
 
--- Loaded for side effects: every server-side app module self-registers its lib.callback
--- handlers, net events, commands and exports on require, so they're all listening by the time
--- any client opens the phone.
+-- Loaded for side effects: each module self-registers its callbacks, events, commands and exports on require.
 require 'server.settings.init'
 require 'server.apps.init'
 require 'server.groups.init'
@@ -58,11 +56,8 @@ require 'server.migrate.init'
 -- lb-phone export compatibility shim (inert while the real lb-phone runs; sd_phone_lbcompat kill switch).
 require 'server.compat.lbphone.init'
 
----Register each configured phone item (config.Phone.Items) as a usable item on whichever
----inventory/framework is active. The inventory bridge handles the multi-inventory dispatch - we
----just hand it the item name + callback. Using an item is itself proof of possession, so the
----phone opens straight away, passing the variant's frame colour so the client opens in the
----matching colour + in-hand prop.
+---Registers each configured phone item (config.Phone.Items) as a usable item; using one opens
+---the phone with the variant's frame colour.
 local function RegisterPhoneItems()
     for _, entry in ipairs(config.Phone.Items or {}) do
         inv.registerUsable(entry.item, function(source)
@@ -71,13 +66,8 @@ local function RegisterPhoneItems()
     end
 end
 
----Server-authoritative ownership gate for the keybind. Using an item proves possession, but a
----keybind press can't, so the client asks whether the player owns a phone item and which colour
----to open with. `preferred` is the client's last-used colour hint - client-supplied, but only
----ever used as an equality probe against configured colours whose item the player provably
----holds, so a crafted value can at worst pick between variants they genuinely own. Falls back to
----the first owned variant in config order; nil when the player owns no phone item (the client
----then shows "You don't have a phone.").
+---Server-authoritative ownership gate for the keybind: returns the frame colour to open with,
+---preferring the client's last-used hint among owned variants, else the first owned variant.
 ---@param source integer player server id
 ---@param preferred string|nil last-used frame colour hint
 ---@return string|nil color frame colour to open with, nil when no phone item is owned
@@ -98,14 +88,12 @@ local function ResolveOwnedColor(source, preferred)
     return nil
 end
 
----Keybind open request: may this player open a phone, and in which colour? Checked server-side
----(inventory counts, not the payload) so a client can't open a phone it doesn't hold. Read-only.
+---Keybind open request: may this player open a phone, and in which colour? Read-only.
 lib.callback.register('sd-phone:server:phone:resolveOpen', function(source, preferred)
     return ResolveOwnedColor(source, preferred)
 end)
 
--- Boot: register the usable phone items once (the short wait lets the inventory bridge's
--- registration path settle on slow starts), then print the startup banner. One-shot.
+-- Boot: registers the usable phone items once, then prints the startup banner.
 CreateThread(function()
     Wait(50)
     RegisterPhoneItems()
@@ -122,11 +110,7 @@ CreateThread(function()
 end)
 
 ---Public export: does this player own a phone - exports['sd-phone']:hasPhone(source). Returns
----the frame colour of the first owned phone item, resolved by the same authoritative inventory
----check the keybind gate uses (ResolveOwnedColor, no colour preference), or nil when the player
----owns none. Exports are reachable only by other server resources - never by clients - so the
----checks here exist to fail cleanly on caller bugs rather than to distrust the value: a
----non-number source, or one that doesn't resolve to a connected player, returns nil.
+---the frame colour of the first owned phone item, or nil when the player owns none.
 ---@param source number player server id
 ---@return string|nil color owned frame colour, nil when no phone item is owned
 exports('hasPhone', function(source)

@@ -4,11 +4,8 @@
 ---(citizenid, game).
 local stats = {}
 
----Create the stats table if it doesn't exist, back-fill the chip-amount + high-score columns on
----tables created before they existed (ADD COLUMN IF NOT EXISTS is a no-op once applied, pcall'd for
----servers whose MariaDB predates it), and copy legacy chess records over once. The backfill is
----INSERT IGNORE keyed on (citizenid, game), so it's safe to run on every boot - live rows win - and
----the legacy `phone_chess_stats` table is left intact (copy, not move).
+---Creates the stats table if it doesn't exist, back-fills the chip-amount + high-score columns,
+---and copies legacy chess records over via INSERT IGNORE.
 function stats.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_game_stats (
@@ -51,10 +48,8 @@ function stats.ensureSchema()
     end
 end
 
----Read a player's stats for one game: { cpu = {wins,losses,draws}, online = {...}, won, lost, high }
----where won/lost are cumulative chips for the gambling games and high is the single-player high
----score. A non-string game id (the value is client-supplied) skips the query and returns the zero
----shape - a table parameter would error inside oxmysql. Read-only.
+---Reads a player's stats for one game: { cpu = {wins,losses,draws}, online = {...}, won, lost,
+---high, plays, last }. A non-string game id returns the zero shape. Read-only.
 ---@param cid string citizenid
 ---@param game any game id (client-supplied)
 ---@return table stats zero-filled when the row (or a valid game id) doesn't exist
@@ -73,8 +68,6 @@ function stats.statsFor(cid, game)
     }
 end
 
--- The column an increment lands in is interpolated into SQL, so it must only ever come from this
--- fixed whitelist - never from input. Unknown mode/result pairs fall out as nil and are rejected.
 ---@type table<string, table<string, string>> mode -> result -> column name.
 local STAT_COL = {
     cpu    = { win = 'cpu_wins',    loss = 'cpu_losses',    draw = 'cpu_draws' },
@@ -84,16 +77,11 @@ local STAT_COL = {
 ---@type integer Max absolute chip swing credited to the boards per recorded result.
 local AMOUNT_MAX = 1000000
 
----@type integer Max high score accepted per submission - a coarse ceiling that stops a tampered
----client poisoning the board with an absurd value, well above any real arcade run.
+---@type integer Max high score accepted per submission.
 local SCORE_MAX = 100000000
 
----Increment one result column and return the updated stats. Everything client-supplied is fenced:
----mode/result must hit the STAT_COL whitelist, the game id must be a string that fits its
----VARCHAR(32) column, the name is capped to VARCHAR(64), and `amount` (the net chips for this
----result: positive adds to chips_won, negative to chips_lost by magnitude) is clamped to
----AMOUNT_MAX with NaN/inf collapsing to 0 rather than resolving to the clamp boundary. Returns
----nil on a bad mode/result/game so the caller can reject the report.
+---Increments one result column, applies the net chip swing, and returns the updated stats.
+---Validates and clamps all client-supplied fields; returns nil on a bad mode/result/game.
 ---@param cid string citizenid
 ---@param game any game id (client-supplied)
 ---@param mode any 'cpu' | 'online' (client-supplied)
@@ -119,13 +107,8 @@ function stats.record(cid, game, mode, result, name, amount)
     return stats.statsFor(cid, game)
 end
 
----Submit a single-player run, tracking the best score, the play count and the most recent score.
----Everything client-supplied is fenced: the game id must be a string that fits its column, the name
----is capped, and `score` is coerced to a whole non-negative int clamped to SCORE_MAX (NaN/inf
----collapse to 0). The upsert keeps the GREATEST of the stored and submitted score (a lower run never
----lowers a record), increments plays, and stores the run as last_score. Returns { best, isRecord,
----plays, last } (best/plays after this submit, isRecord = it beat the previous best), or nil on a
----malformed game id so the caller can reject the report.
+---Submits a single-player run, tracking the best score, play count and most recent score.
+---Returns { best, isRecord, plays, last }, or nil on a malformed game id.
 ---@param cid string citizenid
 ---@param game any game id (client-supplied)
 ---@param score any score (client-supplied)
@@ -155,10 +138,8 @@ function stats.submitScore(cid, game, score, name)
     return { best = math.max(prevHigh, score), isRecord = score > prevHigh, plays = prevPlays + 1, last = score }
 end
 
----Global leaderboards for a game (all players): `cpu`/`online` ranked by wins, `winners`/`losers`
----ranking the gambling games by net chips (won - lost). The interpolated identifiers are literal
----arguments at the two inner call sites - never input; the game id itself rides as a `?` param,
----and a non-string one returns the empty shape without touching SQL. Read-only.
+---Global leaderboards for a game: `cpu`/`online` ranked by wins, `winners`/`losers` ranked by net
+---chips (won - lost). A non-string game id returns the empty shape. Read-only.
 ---@param game any game id (client-supplied)
 ---@return table boards { cpu, online, winners, losers }
 function stats.leaderboard(game)
@@ -184,9 +165,8 @@ function stats.leaderboard(game)
     }
 end
 
----Global high-score board for a game: top 20 players by high score (only those with a score).
----Non-string game id returns the empty board without touching SQL. Read-only; exposes only display
----names and scores.
+---Global high-score board for a game: top 20 players by high score. A non-string game id returns
+---the empty board. Read-only.
 ---@param game any game id (client-supplied)
 ---@return { name: string, score: integer }[]
 function stats.scoreboard(game)

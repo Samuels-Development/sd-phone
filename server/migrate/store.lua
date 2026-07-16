@@ -1,16 +1,13 @@
----@type table Data layer for the lb-phone import (server.migrate.store). Everything that touches
----the database lives here: probing whether lb-phone's tables exist, reading lb-phone rows, and the
----chunked INSERT IGNORE writers into sd-phone's own tables. The porters stay pure transform logic
----and never issue SQL directly. All lb-phone table names are built from a validated prefix (plain
----[a-z0-9_], never client input), so interpolating them into the query text cannot be steered into
----injection; every value is still bound as a ? parameter.
+---@type table Data layer for the lb-phone import (server.migrate.store): probes whether lb-phone's
+---tables exist, reads lb-phone rows, and runs the chunked INSERT IGNORE writers into sd-phone's own
+---tables. Table names are built from a validated prefix; every value is bound as a ? parameter.
 local store = {}
 
 local config   = require 'configs.config'
 local settings = require 'server.settings.store'
 
----@type string Validated lb-phone table prefix. Falls back to the default if the configured value
----is anything other than a plain identifier, so a mistyped config can never produce broken SQL.
+---@type string Validated lb-phone table prefix. Falls back to the default when the configured
+---value is not a plain identifier.
 local PREFIX = (config.Migrate and config.Migrate.sourcePrefix) or 'phone_'
 if type(PREFIX) ~= 'string' or not PREFIX:match('^[%w_]*$') then PREFIX = 'phone_' end
 
@@ -21,9 +18,7 @@ local function lbt(name) return PREFIX .. name end
 
 store.lbTable = lbt
 
----True if a base table with this exact name exists in the current schema. Used both to gate the
----whole migration (is lb-phone even installed?) and to let each porter skip a source table its
----lb-phone install never created. Read-only.
+---True if a base table with this exact name exists in the current schema. Read-only.
 ---@param name string table name
 ---@return boolean
 function store.tableExists(name)
@@ -34,10 +29,8 @@ function store.tableExists(name)
     return (tonumber(n) or 0) > 0
 end
 
----Block until every table in `names` exists, or give up after `tries` polls. sd-phone's own app
----modules create their tables in independent boot threads, so the migration (also a boot thread)
----waits for its write targets to appear rather than racing them. Returns false on timeout so the
----caller aborts instead of inserting into a missing table.
+---Blocks until every table in `names` exists, or gives up after `tries` polls. Returns false on
+---timeout.
 ---@param names string[] table names that must all exist
 ---@param tries integer max polls
 ---@param delayMs integer wait between polls
@@ -54,10 +47,7 @@ function store.waitForTables(names, tries, delayMs)
     return false
 end
 
--- Marker table -------------------------------------------------------------------------------
-
----Create the phone_migrations bookkeeping table if absent. One row per named migration that has
----completed, so a re-import is a no-op. Idempotent; run before reading or writing the marker.
+---Creates the phone_migrations bookkeeping table if absent; one row per completed migration.
 function store.ensureMarkerTable()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_migrations (
@@ -77,8 +67,7 @@ function store.migrationDone(name)
     return hit ~= nil
 end
 
----Record a migration as complete, stamping the per-domain stats as JSON. Idempotent (INSERT
----IGNORE), so a manual re-run that finishes again does not error on the primary key.
+---Records a migration as complete, stamping the per-domain stats as JSON. Idempotent (INSERT IGNORE).
 ---@param name string migration name
 ---@param stats table per-domain counts
 function store.recordMigration(name, stats)
@@ -88,13 +77,8 @@ function store.recordMigration(name, stats)
     )
 end
 
--- Framework player roster --------------------------------------------------------------------
-
----Load the framework's persistent character roster so lb-phone owner ids can be resolved to
----sd-phone citizenids. On qb / QBox that is the `players` table (citizenid + license); on ESX the
----`users` table (identifier, which already IS the citizenid sd-phone keys on). Wrapped so a
----non-standard schema degrades to empty maps (every owner then reads as unresolved) instead of
----aborting the migration.
+---Loads the framework's persistent character roster: qb/QBox reads `players` (citizenid + license),
+---ESX reads `users` (identifier). A non-standard schema degrades to empty maps.
 ---@param frameworkName 'qb'|'esx'
 ---@return { cids: table<string, boolean>, licenseToCids: table<string, string[]> }
 function store.loadRoster(frameworkName)
@@ -122,9 +106,7 @@ function store.loadRoster(frameworkName)
     return { cids = cids, licenseToCids = licenseToCids }
 end
 
--- lb-phone readers ---------------------------------------------------------------------------
-
----Every lb-phone phone: its owner id, number and lock pin. The identity backbone. Read-only.
+---Every lb-phone phone: its owner id, number and lock pin. Read-only.
 ---@return { id: any, owner_id: string, phone_number: string, pin: string|nil }[]
 function store.lbPhones()
     return MySQL.query.await(('SELECT id, owner_id, phone_number, pin FROM %s'):format(lbt('phones'))) or {}
@@ -183,8 +165,7 @@ function store.lbMessages()
     ]]):format(lbt('message_messages'))) or {}
 end
 
----Every lb-phone photo. `created_at` is kept as the raw datetime string, because sd-phone's
----phone_photos.created_at is a TIMESTAMP column (not an epoch). Read-only.
+---Every lb-phone photo; `created_at` is kept as the raw datetime string. Read-only.
 ---@return { id: any, phone_number: string, link: string, is_favourite: any, created_at: string }[]
 function store.lbPhotos()
     return MySQL.query.await(([[
@@ -207,8 +188,7 @@ function store.lbAlbumPhotos()
         ('SELECT album_id, photo_id FROM %s'):format(lbt('photo_album_photos'))) or {}
 end
 
----Every lb-phone note, timestamp pre-formatted as an ISO string (sd-phone stores note timestamps
----as ISO strings, which sort chronologically). Read-only.
+---Every lb-phone note, timestamp pre-formatted as an ISO string. Read-only.
 ---@return { id: any, phone_number: string, title: string|nil, content: string|nil, created_iso: string }[]
 function store.lbNotes()
     return MySQL.query.await(([[
@@ -218,14 +198,8 @@ function store.lbNotes()
     ]]):format(lbt('notes'))) or {}
 end
 
--- sd-phone writers ---------------------------------------------------------------------------
-
----Run a chunked multi-row INSERT IGNORE. `prefixSql` ends at the word VALUES; this appends one
----placeholder group per row, in chunks so a large import never builds one enormous statement. A
----nil column is emitted as a literal NULL in the SQL rather than a bound ?, so the bound parameter
----list stays dense (no array holes to survive the msgpack bridge) and a nil is always a genuine
----SQL NULL, never a shifted or dropped column. Emitting NULL as a keyword is safe: only real values
----are ever bound, never interpolated. A no-op on an empty batch. Shared by every content writer.
+---Runs a chunked multi-row INSERT IGNORE. `prefixSql` ends at the word VALUES; one placeholder
+---group is appended per row, nil columns emit a literal NULL, and an empty batch is a no-op.
 ---@param prefixSql string 'INSERT IGNORE INTO ... (cols) VALUES'
 ---@param cols integer columns per row
 ---@param rows any[][] one parameter array per row
@@ -254,11 +228,8 @@ local function insertMulti(prefixSql, cols, rows)
     end
 end
 
----Adopt a player's lb-phone number (and lock passcode) as their sd-phone number, but only when
----they do not already have one, and only when the number is not already owned by a different
----character. Returns 'set' when it wrote, 'skip' when the player was already onboarded, or
----'conflict' when the number belongs to someone else on sd-phone already. In dry-run it classifies
----without writing.
+---Adopts a player's lb-phone number (and lock passcode) as their sd-phone number. Returns 'set'
+---when it wrote, 'skip' when already onboarded, 'conflict' when the number belongs to someone else.
 ---@param cid string citizenid
 ---@param number string bare digits
 ---@param pin string|nil 4-6 digit lock code, or nil
@@ -284,8 +255,7 @@ function store.adoptNumber(cid, number, pin, dryRun)
     return 'set'
 end
 
----The set of `citizenid|phone` keys already present in phone_contacts, so the contacts porter
----never inserts a duplicate (a fresh install returns {}). Read-only.
+---The set of `citizenid|phone` keys already present in phone_contacts. Read-only.
 ---@return table<string, boolean>
 function store.existingContactKeys()
     local rows = MySQL.query.await('SELECT citizenid, phone FROM phone_contacts') or {}

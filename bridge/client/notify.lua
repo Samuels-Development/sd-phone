@@ -1,8 +1,7 @@
 ---@type table Framework bridge (bridge.shared.framework): detected core name ('qb'/'esx') + live core object.
 local framework = require 'bridge.shared.framework'
 
--- Toggles for the notification backend. ox_lib is preferred; lation_ui is an opt-in fallback for
--- servers that have standardised on it.
+-- Toggles for the notification backend.
 ---@type boolean Use ox_lib's lib.notify when ox_lib is loaded.
 local USE_OX_LIB    = true
 ---@type boolean Use lation_ui's notify export instead (only consulted when the ox_lib path is off/unavailable).
@@ -14,11 +13,8 @@ local USE_LATION_UI = false
 ---bridge/server/notify.lua fires.
 local notify = {}
 
----Pick the notify backend once at module load - frameworks/UIs don't change at runtime, so we
----only branch once and store the chosen function. Preference order: ox_lib (when loaded and
----enabled), lation_ui (opt-in), then the framework's native notify. With none of those, the
----fallback errors loudly on first use so a misconfigured server surfaces immediately instead of
----silently dropping every notification.
+---Picks the notify backend once at module load: ox_lib (when loaded and enabled), lation_ui
+---(opt-in), the framework's native notify, or a fallback that errors on first use.
 ---@return fun(data: { title?: string, description: string, type?: string, position?: string, duration?: number })
 local function chooseBackend()
     if lib ~= nil and USE_OX_LIB then
@@ -59,8 +55,7 @@ end
 ---@type fun(data: table) Chosen notify backend, resolved once at module load.
 local backend = chooseBackend()
 
----Show a notification. Accepts a fully-typed payload table or a (text, type) pair - both are
----common in the wild and we don't want to force callers to rebuild a table for the common case.
+---Shows a notification. Accepts a payload table or a (text, type) pair.
 ---@param data string|table
 ---@param notifyType? string
 function notify.show(data, notifyType)
@@ -71,10 +66,8 @@ function notify.show(data, notifyType)
     end
 end
 
----Server -> client notify trigger: server modules call bridge.server.notify.to(src, ...) which
----fires this event. Trusted direction (net events to a client can only come from the server),
----but the payload is still type-guarded defensively - a string or table shows, anything else is
----dropped instead of erroring inside the backend.
+---Server -> client notify trigger, fired by bridge.server.notify.to(src, ...). Shows string or
+---table payloads; drops anything else.
 ---@param data string|table Notification payload (passed straight through to `notify.show`).
 RegisterNetEvent('sd-phone:client:notify', function(data)
     if type(data) ~= 'string' and type(data) ~= 'table' then return end

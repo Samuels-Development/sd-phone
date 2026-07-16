@@ -1,7 +1,6 @@
 ---@type table Photos porter (server.migrate.port.photos). Copies gallery photos and albums (and
----their photo membership) into sd-phone. Photo and album ids are prefixed from the lb-phone ids so
----a re-run inserts nothing twice, and an album<->photo link is only kept when both ends were
----migrated (so no link dangles).
+---their photo membership) into sd-phone. Photo and album ids are prefixed from the lb-phone ids;
+---an album<->photo link is only kept when both ends were migrated.
 local M = {}
 
 local store = require 'server.migrate.store'

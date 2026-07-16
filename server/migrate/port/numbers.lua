@@ -1,7 +1,6 @@
 ---@type table Number + passcode porter (server.migrate.port.numbers). Adopts each resolved
 ---player's lb-phone number as their sd-phone number, and their lb-phone pin as the lock passcode,
----but only when they do not already have one. Runs first: preserving the number is what keeps
----every migrated contact, thread and call log addressed correctly.
+---but only when they do not already have one. Runs first.
 local M = {}
 
 local store = require 'server.migrate.store'

@@ -1,7 +1,5 @@
----@type table Version module; the table returned at end of file. Lightweight self-update checker:
----compares the resource's `version` manifest metadata against the latest GitHub release for an
----`owner/repo` and prints the verdict to the console. Best-effort - every failure path prints and
----returns rather than erroring out a live server, and nothing here touches player state.
+---@type table Version module; the table returned at end of file. Compares the resource's
+---`version` manifest metadata against the latest GitHub release and prints the verdict.
 local version = {}
 
 ---Parse a version string into its numeric components. Tolerant of stray characters (a 'v1.2.3'
@@ -31,10 +29,7 @@ local function compare(a, b)
 end
 
 ---Asynchronously check the resource's `version` metadata against the latest GitHub release on
----`repo` and print an up-to-date / update-available / ahead-of-release message. Deferred a second
----so it doesn't compete with boot output. The response body comes from GitHub over HTTPS (not
----from any client); json.decode's nil return on garbage is handled, prereleases are skipped, and
----multi-line release notes are collapsed to a pointer at the release page. Read-only, no retries.
+---`repo` and print the verdict. Prereleases are skipped; read-only, no retries.
 ---@param repo string GitHub repo in `owner/name` form.
 function version.check(repo)
     local resource = GetInvokingResource() or GetCurrentResourceName()
