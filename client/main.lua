@@ -447,6 +447,12 @@ local function TogglePhone()
     OpenPhone()
 end
 
+-- Dynamically create exports for each defined phone item to work with ox_inventory.
+local phoneItems = config.Phone.Items
+for i = 1, #phoneItems do
+    exports(('usePhone_%s'):format(phoneItems[i].color), TogglePhone)
+end
+
 -- Keybind wiring. RegisterKeyMapping lets players rebind via Settings > Key Bindings; the
 -- default comes from config.Phone.Keybind. There is no chat command - the phone opens by using a
 -- phone item, or via this keybind (itself server-gated on ownership inside TogglePhone). The `-`
