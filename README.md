@@ -79,10 +79,11 @@ end)
 
 Full guide: [docs.samueldev.shop/resources/phone/installation](https://docs.samueldev.shop/resources/phone/installation)
 
-1. Drop `sd-phone` into your resources folder and ensure it after `ox_lib` and `oxmysql`. Database tables create themselves on first boot.
-2. Ensure `sd-phone-props` (streams the in-hand phone models).
-3. Add the phone items to your inventory, one per frame colour (`phone`, `phone_blue`, `phone_green`, `phone_orange`, `phone_pink`, `phone_purple`, `phone_red`, `phone_yellow`), each pointing `server.export` at `sd-phone.use<ItemName>` with `consume = 0`. Players can also open with the keybind (default F1), gated on owning a phone item.
-4. Optionally set your API keys in `configs/server/apikeys.lua` (GIPHY for the GIF picker, Fivemanage for media uploads).
+**Dependencies:** [ox_lib](https://github.com/CommunityOx/ox_lib) · [oxmysql](https://github.com/CommunityOx/oxmysql) · [sd-phone-props](https://github.com/Samuels-Development/sd-phone-props) (streams the in-hand phone models)
+
+1. Drop `sd-phone` and [`sd-phone-props`](https://github.com/Samuels-Development/sd-phone-props) into your resources folder and ensure them after `ox_lib` and `oxmysql`. Database tables create themselves on first boot.
+2. Add the phone items to your inventory, one per frame colour (`phone`, `phone_blue`, `phone_green`, `phone_orange`, `phone_pink`, `phone_purple`, `phone_red`, `phone_yellow`). Ready-made ox_inventory definitions and item icons are in the [installation docs](https://docs.samueldev.shop/resources/phone/installation); the icons ship in this repo's `images/` folder. Players can also open with the keybind (default F1), gated on owning a phone item.
+3. Optionally set your API keys in `configs/server/apikeys.lua` (GIPHY for the GIF picker, Fivemanage for media uploads).
 
 The pre-built UI ships at `web/build/`, so a fresh clone runs without touching npm. To rebuild after UI changes: `cd web && npm install && npm run build`.
 
