@@ -16,8 +16,9 @@ local function chooseImageResolver()
     if not active then return function() return nil end end
 
     if active == 'ox_inventory' then
+        local root = GetConvar('inventory:imagepath', 'nui://ox_inventory/web/images')
         return function(item)
-            return ('nui://%s/web/images/%s.png'):format(active, item)
+            return ('%s/%s.png'):format(root, item)
         end
     end
 
