@@ -63,6 +63,7 @@ Everything player-facing is translatable, apps resume where you left them, and t
 - **Live game-view camera.** The Camera app renders the world into the phone screen in real time; video clips record your microphone and nearby players' voices.
 - **Photogram Live.** Stream real encoded video to other players' phones, with clean late-joins.
 - **Deep world integration.** Garages and Homes bridge across ten-plus garage and housing systems; Wallet reads your framework bank; Services maps jobs to callable, messageable companies; Weather mirrors the in-game sky.
+- **Custom apps.** Other resources can put their own apps on the phone: one export call turns any webpage into an installable app with icons, badges, notifications, popups and an App Store listing. Custom apps built for lb-phone run unmodified. Start from the [app templates](https://github.com/Samuels-Development/sd-phone-app-templates) (plain JS, React JS/TS, Vue 3) and the [custom app guide](https://docs.samueldev.shop/resources/phone/custom-apps).
 - **lb-phone drop-in compatibility.** Third-party scripts written against lb-phone's exports and events keep working unmodified, and a one-command migrator imports lb-phone player data. See the [compatibility docs](https://docs.samueldev.shop/resources/phone/lb-phone-compatibility).
 
 ## For developers
@@ -71,6 +72,7 @@ The phone ships a full integration surface, documented at [docs.samueldev.shop](
 
 - [Server exports](https://docs.samueldev.shop/resources/phone/exports-server) for sending mail, messages and notifications, starting calls, managing contacts, resolving numbers to players, logging transactions, posting news, and more.
 - [Client exports](https://docs.samueldev.shop/resources/phone/exports-client) for opening the phone, deep-linking into apps, and gating phone use.
+- [Custom apps](https://docs.samueldev.shop/resources/phone/custom-apps) for shipping your own apps on the phone, with ready-made [templates](https://github.com/Samuels-Development/sd-phone-app-templates) for plain JS, React and Vue. Apps written for lb-phone register and run unmodified.
 - [First-party events](https://docs.samueldev.shop/resources/phone/events-server) on every lifecycle moment: messages, mail, calls, transactions, posts, contacts.
 - [lb-phone compatibility](https://docs.samueldev.shop/resources/phone/lb-phone-compatibility) covering exports, events, and `dependency 'lb-phone'` lines.
 
