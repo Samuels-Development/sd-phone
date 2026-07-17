@@ -54,11 +54,13 @@ Everything player-facing is translatable, apps resume where you left them, and t
 
 ### sd-phone is partnered with Fivemanage for media hosting
 
-Every screenshot, camera video and voice recording the phone captures uploads to **[Fivemanage](https://refer.fivemanage.com/samuel)** and comes back as a fast CDN URL, so you never run your own media server. It is the CDN and logging platform trusted by thousands of FiveM servers, and it powers Photos, the Camera app and Voice Memos out of the box.
+The Camera, Photos and Voice Memos apps need somewhere to store what they capture. sd-phone uses **[Fivemanage](https://refer.fivemanage.com/samuel)** for that: every screenshot, camera video and voice recording uploads to Fivemanage and comes back as a fast CDN URL, so you never run your own media server. It is the CDN and logging platform trusted by thousands of FiveM servers.
+
+**A free Fivemanage Media API token is required for photo, video and voice-note uploads to work.** In the Fivemanage dashboard open the Tokens tab, create a token of type **Media**, and paste it into `configs/server/apikeys.lua` under `FivemanageMedia`. Without a key the camera and recorders still open, but nothing uploads or saves.
 
 <a href="https://refer.fivemanage.com/samuel"><img src="https://img.shields.io/badge/Get%20started%20with%20Fivemanage-%E2%86%92-0D0D0D?style=for-the-badge" alt="Get started with Fivemanage" /></a>
 
-<sub>Free tier included. Drop your API key into <code>configs/server/apikeys.lua</code> and uploads just work.</sub>
+<sub>The free tier is plenty for most servers.</sub>
 
 </div>
 
@@ -121,7 +123,7 @@ Full guide: [docs.samueldev.shop/resources/phone/installation](https://docs.samu
 
 1. Drop `sd-phone` and [`sd-phone-props`](https://github.com/Samuels-Development/sd-phone-props) into your resources folder and ensure them after `ox_lib` and `oxmysql`. Database tables create themselves on first boot.
 2. Add the phone items to your inventory, one per frame colour (`phone`, `phone_blue`, `phone_green`, `phone_orange`, `phone_pink`, `phone_purple`, `phone_red`, `phone_yellow`). Ready-made ox_inventory definitions and item icons are in the [installation docs](https://docs.samueldev.shop/resources/phone/installation); the icons ship in this repo's `images/` folder. Players can also open with the keybind (default F1), gated on owning a phone item.
-3. Optionally set your API keys in `configs/server/apikeys.lua` (GIPHY for the GIF picker, [Fivemanage](https://refer.fivemanage.com/samuel) for media uploads).
+3. Set your API keys in `configs/server/apikeys.lua`: a [Fivemanage](https://refer.fivemanage.com/samuel) token of type **Media** in `FivemanageMedia` (required for the Camera, Photos and Voice Memos apps to upload), and optionally a GIPHY key for the Messages GIF picker.
 
 The pre-built UI ships at `web/build/`, so a fresh clone runs without touching npm. To rebuild after UI changes: `cd web && npm install && npm run build`.
 

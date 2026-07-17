@@ -11,10 +11,13 @@
 --   3. Copy the API Key
 -- Left blank, the GIF picker shows a "set up GIPHY" hint.
 --
--- Fivemanage Media (photo, video + voice-note uploads). Your Media library token from
--- https://fivemanage.com. Left blank here, the uploader falls back to the legacy
--- `sd_fivemanage_key` server convar (set in server.cfg) so existing setups keep working;
--- new servers can just paste the token below instead.
+-- Fivemanage Media (photo, video + voice-note uploads) - REQUIRED for the Camera, Photos and
+-- Voice Memos apps. Without it those apps open but nothing uploads or saves. Get a token:
+--   1. https://fivemanage.com -> sign up / log in
+--   2. Open the "Tokens" tab -> Create Token
+--   3. Pick token type "Media", then paste it below
+-- Left blank here, the uploader falls back to the legacy `sd_fivemanage_key` server convar
+-- (set in server.cfg) so existing setups keep working; new servers can just paste it below.
 return {
     Giphy           = 'JI9bMQeLFlzXU1SREsKUkwBvRJV83Cpx',
     FivemanageMedia = '',
