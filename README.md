@@ -31,6 +31,15 @@ Any issues or PRs are highly appreciated.
 
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/93b8ede9-49ee-4704-9a05-741e0570b153" />
 
+<img width="1920" height="1080" alt="FiveM_b3258_GTAProcess_xL4YbCQbY3" src="https://github.com/user-attachments/assets/a49a1c82-bd90-4088-aaa5-e1a6bc38c4a5" />
+
+<img width="1920" height="1080" alt="FiveM_b3258_GTAProcess_3iEYIEm2CH" src="https://github.com/user-attachments/assets/0edad39f-94a2-41a6-a071-f74db2e4f8b5" />
+
+<img width="1920" height="1080" alt="FiveM_b3258_GTAProcess_fmpiMFw6TQ" src="https://github.com/user-attachments/assets/425596fa-cc6e-4cf4-92ea-43d313aeb01b" />
+
+
+
+
 ## Overview
 
 sd-phone is a complete smartphone experience: lockscreen with passcode and Face Unlock, customizable homescreen with a real app switcher, notification banners with persistent server-authoritative unread badges, and a full catalog of apps backed by their own server modules. The UI is a React app rendered inside a real iPhone bezel; the phone is held as an in-hand prop, tints to the colour of the phone item you used, and keeps working while you walk.
