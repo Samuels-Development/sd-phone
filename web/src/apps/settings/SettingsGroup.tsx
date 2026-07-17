@@ -20,7 +20,7 @@ export function SettingsGroup({ group, onRowPress }: { group: SettingsGroupDef; 
                 ))}
             </div>
             {group.footer && (
-                <div className="px-7 pb-1 pt-2 text-[13px] font-normal text-ios-gray">
+                <div className="px-7 pb-1 pt-2 text-[14px] font-normal text-ios-gray">
                     {group.footer}
                 </div>
             )}

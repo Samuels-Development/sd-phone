@@ -53,7 +53,7 @@ export function SettingsRow({ row, divider, onPress }: { row: SettingsRowDef; di
                     )}
                 </div>
                 {row.subtitle && (
-                    <span className="mt-0.5 text-[14px] font-normal leading-snug text-ios-gray">
+                    <span className="mt-0.5 text-[15px] font-normal leading-snug text-ios-gray">
                         {row.subtitle}
                     </span>
                 )}

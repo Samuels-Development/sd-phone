@@ -21,7 +21,7 @@ export function ProfileCard() {
             </div>
             <div className="min-w-0 flex-1">
                 <div className="truncate text-[20px] font-semibold text-black dark:text-white">{name}</div>
-                <div className="truncate text-[13px] font-normal text-ios-gray">{t('settings.thisIsYourPhone', 'This is your phone')}</div>
+                <div className="truncate text-[14px] font-normal text-ios-gray">{t('settings.thisIsYourPhone', 'This is your phone')}</div>
             </div>
         </div>
     );
