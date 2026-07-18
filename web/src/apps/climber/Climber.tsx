@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, ChevronLeft, Trophy } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { useGameLoop, type Phase } from '@/apps/_arcade/useGameLoop';
+import { useDeckActive } from '@/shell/deckActive';
 import { GameOverCard } from '@/apps/_arcade/GameOverCard';
 import { GameHeader } from '@/apps/_games/GameHeader';
 import { ScoreStartScreen } from '@/apps/_games/ScoreStartScreen';
@@ -210,7 +211,11 @@ export function Climber({ onClose: _onClose }: Props) {
         },
     });
 
+    // Only listen while foreground: a backgrounded but still-mounted game would keep
+    // preventDefault-ing arrows/Space and starve text fields in other apps.
+    const deckActive = useDeckActive();
     useEffect(() => {
+        if (!deckActive) return;
         function onDown(e: KeyboardEvent) {
             if (screenRef.current !== 'game') return;
             if (e.key === 'ArrowLeft' || e.code === 'KeyA') { e.preventDefault(); inputRef.current.left = true; begin(); }
@@ -227,7 +232,7 @@ export function Climber({ onClose: _onClose }: Props) {
             window.removeEventListener('keydown', onDown);
             window.removeEventListener('keyup', onUp);
         };
-    }, []);
+    }, [deckActive]);
 
     const play = () => { reset(); setScreen('game'); };
     const toMenu = () => { setPhase('ready'); phaseRef.current = 'ready'; setScreen('menu'); };

@@ -3,6 +3,7 @@ import { ChevronLeft, Trophy } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { useGameLoop, type Phase } from '@/apps/_arcade/useGameLoop';
+import { useDeckActive } from '@/shell/deckActive';
 import { GameOverCard } from '@/apps/_arcade/GameOverCard';
 import { GameHeader } from '@/apps/_games/GameHeader';
 import { ScoreStartScreen } from '@/apps/_games/ScoreStartScreen';
@@ -143,7 +144,11 @@ export function Flappy({ onClose: _onClose }: Props) {
         },
     });
 
+    // Only listen while foreground: a backgrounded but still-mounted game would keep
+    // preventDefault-ing Space/ArrowUp and starve text fields in other apps.
+    const deckActive = useDeckActive();
     useEffect(() => {
+        if (!deckActive) return;
         function onKey(e: KeyboardEvent) {
             if (e.key === ' ' || e.code === 'Space' || e.key === 'ArrowUp') {
                 e.preventDefault();
@@ -152,7 +157,7 @@ export function Flappy({ onClose: _onClose }: Props) {
         }
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, []);
+    }, [deckActive]);
 
     const play = () => { reset(); setScreen('game'); };
     const toMenu = () => { setPhase('ready'); phaseRef.current = 'ready'; setScreen('menu'); };
