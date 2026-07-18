@@ -5,6 +5,7 @@ import { COLS, RANK, ROWS, scoreGuess } from './engine';
 import type { Cell } from './engine';
 import { wordForGame } from './words';
 import { useCountdown } from '@/hooks/useCountdown';
+import { useKeyboardCapture } from '@/hooks/useKeyboardCapture';
 import { TIME_LIMIT } from './stats';
 import { emptyProgress, type CoopState, type Progress } from './coopTypes';
 import { moveApi } from '@/apps/_games/onlineApi';
@@ -84,12 +85,15 @@ export function OnlineMatch({ pal, dk, gameId, opponent, pot, oppLeft, onResult,
         if (/^[A-Z]$/.test(k)) setCurrent(c => (c.length < COLS ? c + k : c));
     }, [phase, submit]);
 
+    // See SoloGame: this view types without a text field, so it claims the keyboard.
+    useKeyboardCapture();
+
     const keyRef = useRef(onKey); keyRef.current = onKey;
     useEffect(() => {
         function onKeyDown(e: KeyboardEvent) {
-            if (e.key === 'Enter') keyRef.current('ENTER');
-            else if (e.key === 'Backspace') keyRef.current('BACK');
-            else { const c = e.key.toUpperCase(); if (/^[A-Z]$/.test(c)) keyRef.current(c); }
+            if (e.key === 'Enter') { e.preventDefault(); keyRef.current('ENTER'); }
+            else if (e.key === 'Backspace') { e.preventDefault(); keyRef.current('BACK'); }
+            else { const c = e.key.toUpperCase(); if (/^[A-Z]$/.test(c)) { e.preventDefault(); keyRef.current(c); } }
         }
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);

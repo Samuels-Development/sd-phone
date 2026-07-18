@@ -5,6 +5,7 @@ import { COLS, KEY_ROWS, RANK, ROWS, scoreGuess } from './engine';
 import type { Cell } from './engine';
 import { randomWord } from './words';
 import { useCountdown } from '@/hooks/useCountdown';
+import { useKeyboardCapture } from '@/hooks/useKeyboardCapture';
 import { TIME_LIMIT } from './stats';
 import { t } from '@/i18n';
 import { formatDuration } from '@/lib/time';
@@ -67,12 +68,16 @@ export function SoloGame({ pal, onFinish, onNew }: {
         if (/^[A-Z]$/.test(k)) setCurrent(c => (c.length < COLS ? c + k : c));
     }, [status, submit]);
 
+    // No text field to type into, so claim the keyboard explicitly - otherwise every
+    // letter also reaches the game and fires inventory / weapon wheel / other binds.
+    useKeyboardCapture();
+
     const pressRef = useRef(press); pressRef.current = press;
     useEffect(() => {
         function onKey(e: KeyboardEvent) {
-            if (e.key === 'Enter') pressRef.current('ENTER');
-            else if (e.key === 'Backspace') pressRef.current('BACK');
-            else { const c = e.key.toUpperCase(); if (/^[A-Z]$/.test(c)) pressRef.current(c); }
+            if (e.key === 'Enter') { e.preventDefault(); pressRef.current('ENTER'); }
+            else if (e.key === 'Backspace') { e.preventDefault(); pressRef.current('BACK'); }
+            else { const c = e.key.toUpperCase(); if (/^[A-Z]$/.test(c)) { e.preventDefault(); pressRef.current(c); } }
         }
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);

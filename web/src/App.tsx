@@ -21,6 +21,7 @@ import { useAutoContrast } from '@/shell/useAutoContrast';
 import { VolumeHUD }   from '@/shell/VolumeHUD';
 import { SetupFlow }   from '@/shell/SetupFlow';
 import type { SetupResult } from '@/shell/SetupFlow';
+import { isKeyboardCaptured } from '@/hooks/useKeyboardCapture';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { seedSessionState } from '@/hooks/useSessionState';
 import { onOpenMail, onOpenMaps, onOpenMessages } from '@/shell/deeplink';
@@ -768,11 +769,14 @@ function AppContent() {
     useEffect(() => {
         function onKey(e: KeyboardEvent) {
             const tgt = e.target as HTMLElement | null;
-            const typing = !!tgt && (
+            // isKeyboardCaptured() covers apps that type without a text field (the word
+            // games read keys off window), so the L hotkey does not lock the phone
+            // mid-guess.
+            const typing = isKeyboardCaptured() || (!!tgt && (
                 tgt.tagName === 'INPUT'
                 || tgt.tagName === 'TEXTAREA'
                 || tgt.isContentEditable
-            );
+            ));
 
             if (e.key === 'Escape') {
                 if (switcherOpen)            { handleSwitcherDismiss(); return; }
