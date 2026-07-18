@@ -79,6 +79,11 @@ export async function apiToggleLike(id: string): Promise<void> {
     await fetchNui('sd-phone:birdy:toggleLike', { id });
 }
 
+export async function apiNotificationCount(): Promise<number> {
+    if (!isFiveM) return SEED_NOTIFICATIONS.length;
+    return (await call<{ count: number }>('sd-phone:birdy:notificationCount'))?.count ?? 0;
+}
+
 export async function apiToggleRepost(id: string): Promise<void> {
     if (!isFiveM) return;
     await fetchNui('sd-phone:birdy:toggleRepost', { id });
@@ -98,6 +103,14 @@ export async function apiDmThread(id: string): Promise<BirdyConversation | null>
     if (!isFiveM) return DEV_DMS.find(c => c.id === id) ?? null;
     const data = await call<{ id: string; user: BirdyAuthor; messages: BirdyMessage[] }>('sd-phone:birdy:dmThread', { id });
     return data ? { id: data.id, user: data.user, updated: '', messages: data.messages } : null;
+}
+
+export async function apiDmResolve(handle: string): Promise<{ id: string; user: BirdyAuthor } | null> {
+    if (!isFiveM) {
+        const u = [MARCUS, TOMMY].find(a => a.handle === handle);
+        return u ? { id: `c-${u.handle}`, user: u } : null;
+    }
+    return (await call<{ id: string; user: BirdyAuthor }>('sd-phone:birdy:dmResolve', { handle })) ?? null;
 }
 
 export async function apiDmMarkRead(id: string): Promise<void> {
@@ -200,8 +213,8 @@ export async function apiFollowList(kind: 'followers' | 'following', handle?: st
 }
 
 // `joined` is derived from created_at server-side.
-export async function apiUpdateProfile(input: { name: string; bio: string; protected: boolean }): Promise<BirdyProfile | null> {
-    if (!isFiveM) return { ...DEV_PROFILE, name: input.name, bio: input.bio, protected: input.protected };
+export async function apiUpdateProfile(input: { name: string; bio: string; protected: boolean; avatar?: string; banner?: string }): Promise<BirdyProfile | null> {
+    if (!isFiveM) return { ...DEV_PROFILE, ...input };
     return (await call<{ profile: BirdyProfile }>('sd-phone:birdy:updateProfile', input))?.profile ?? null;
 }
 

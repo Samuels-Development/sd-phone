@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, CalendarDays, Feather, Heart, Image as ImageIcon, MessageCircle } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Feather, Heart, Image as ImageIcon, Lock, Mail, MessageCircle } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { useAsyncData } from '@/hooks/useAsyncData';
@@ -28,7 +28,7 @@ function tabEmptyStates(): Record<Tab, { icon: React.ReactNode; title: string; s
     };
 }
 
-export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onToggleLike, onToggleRepost, onToggleFollow, onOpenAuthor }: {
+export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onToggleLike, onToggleRepost, onToggleFollow, onOpenAuthor, onMessage }: {
     profile:         BirdyProfile | null;
     me:              BirdyAuthor;
     handle?:         string;
@@ -39,6 +39,7 @@ export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onTog
     onToggleRepost:  (id: string) => void;
     onToggleFollow?: (handle: string) => void;
     onOpenAuthor?:   (handle: string) => void;
+    onMessage?:      (handle: string) => void;
 }) {
     const isOther = !!handle;
     const label = tabLabels();
@@ -60,6 +61,7 @@ export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onTog
         onToggleFollow?.(handle);
     }
 
+    const locked        = !!profile?.protected && isOther && !following;
     const name          = profile?.name ?? me.name;
     const displayHandle = profile?.handle ?? handle ?? me.handle;
     const verified      = profile?.verified ?? me.verified;
@@ -81,19 +83,32 @@ export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onTog
                 <div className="px-4">
                     <div className="flex items-start justify-between">
                         <div className="relative z-10 -mt-[44px] w-fit rounded-full" style={{ background: BG, padding: 4 }}>
-                            <Avatar size={80} />
+                            <Avatar size={80} src={profile?.avatar} />
                         </div>
                         {isOther ? (
-                            <button
-                                type="button"
-                                onClick={toggleFollow}
-                                className="mt-2 rounded-full px-5 py-2 text-[15px] font-bold transition-colors active:opacity-80"
-                                style={following
-                                    ? { border: `1.5px solid ${BLUE}`, color: BLUE }
-                                    : { background: BLUE, color: '#fff' }}
-                            >
-                                {following ? t('birdy.following', 'Following') : t('birdy.follow', 'Follow')}
-                            </button>
+                            <div className="mt-2 flex items-center gap-2">
+                                {onMessage && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onMessage(displayHandle)}
+                                        aria-label={t('birdy.message', 'Message')}
+                                        className="flex h-[38px] w-[38px] items-center justify-center rounded-full active:opacity-80"
+                                        style={{ border: `1.5px solid ${BLUE}`, color: BLUE }}
+                                    >
+                                        <Mail className="h-[18px] w-[18px]" strokeWidth={2} />
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={toggleFollow}
+                                    className="rounded-full px-5 py-2 text-[15px] font-bold transition-colors active:opacity-80"
+                                    style={following
+                                        ? { border: `1.5px solid ${BLUE}`, color: BLUE }
+                                        : { background: BLUE, color: '#fff' }}
+                                >
+                                    {following ? t('birdy.following', 'Following') : t('birdy.follow', 'Follow')}
+                                </button>
+                            </div>
                         ) : (
                             <button
                                 type="button"
@@ -139,7 +154,15 @@ export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onTog
                     ))}
                 </div>
 
-                {posts.length === 0 ? (
+                {locked ? (
+                    <EmptyState
+                        icon={<Lock className="h-7 w-7" strokeWidth={1.8} />}
+                        circleClassName="bg-black/[0.06] text-black/35"
+                        title={t('birdy.protectedTitle', 'These posts are protected')}
+                        subtitle={t('birdy.protectedSubtitle', 'Only followers can see {name}’s posts.', { name })}
+                        subtitleClassName="text-[#536471]"
+                    />
+                ) : posts.length === 0 ? (
                     <EmptyState
                         icon={empty[tab].icon}
                         circleClassName="bg-black/[0.06] text-black/35"

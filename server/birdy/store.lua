@@ -118,12 +118,14 @@ function store.ensureSchema()
             kind          VARCHAR(16) NOT NULL,
             actor_cid     VARCHAR(64) NOT NULL,
             post_id       VARCHAR(16) NULL,
+            seen          TINYINT(1)  NOT NULL DEFAULT 0,
             created_at    TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             INDEX idx_birdy_notifs_recipient (recipient_cid, created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
 
+    ---@return boolean added true when the column was missing and has just been created
     local function ensureColumn(tbl, name, ddl)
         local present = MySQL.scalar.await([[
             SELECT COUNT(*) FROM information_schema.columns
@@ -131,7 +133,9 @@ function store.ensureSchema()
         ]], { tbl, name })
         if (tonumber(present) or 0) == 0 then
             MySQL.query.await(('ALTER TABLE %s ADD COLUMN %s'):format(tbl, ddl))
+            return true
         end
+        return false
     end
     ensureColumn('phone_birdy_profiles', 'password',   "password VARCHAR(64) NOT NULL DEFAULT ''")
     ensureColumn('phone_birdy_profiles', 'bio',        "bio VARCHAR(200) NOT NULL DEFAULT ''")
@@ -142,6 +146,14 @@ function store.ensureSchema()
     ensureColumn('phone_birdy_dms',      'kind',       "kind VARCHAR(16) NOT NULL DEFAULT 'text'")
     ensureColumn('phone_birdy_dms',      'meta',       'meta TEXT NULL')
     ensureColumn('phone_birdy_dms',      'reactions',  'reactions TEXT NULL')
+    ensureColumn('phone_birdy_profiles', 'avatar',     'avatar VARCHAR(512) NULL')
+    ensureColumn('phone_birdy_profiles', 'banner',     'banner VARCHAR(512) NULL')
+
+    -- Backfill history as already-seen, or every existing row would count as unread.
+    if ensureColumn('phone_birdy_notifications', 'seen', 'seen TINYINT(1) NOT NULL DEFAULT 0') then
+        MySQL.update.await('UPDATE phone_birdy_notifications SET seen = 1')
+    end
+    util.ensureIndex('phone_birdy_notifications', 'idx_birdy_notifs_unseen', '(recipient_cid, seen)')
 end
 
 ---Decodes a JSON column into a Lua table, tolerating nil / empty / corrupt values (always
@@ -172,6 +184,8 @@ local function hydrateProfile(row)
         verified    = isTruthy(row.verified),
         loggedIn    = isTruthy(row.logged_in),
         joinLabel   = row.join_label,
+        avatar      = row.avatar,
+        banner      = row.banner,
         -- Authoritative signup time; joinLabel is a legacy fallback.
         createdTs   = tonumber(row.created_ts),
         protected   = isTruthy(row.protected),
@@ -184,7 +198,7 @@ end
 function store.getProfile(citizenid)
     if not citizenid or citizenid == '' then return nil end
     local row = MySQL.single.await(
-        'SELECT citizenid, handle, display_name, password, bio, verified, logged_in, join_label, protected, UNIX_TIMESTAMP(created_at) AS created_ts FROM phone_birdy_profiles WHERE citizenid = ?',
+        'SELECT citizenid, handle, display_name, password, bio, verified, logged_in, join_label, protected, avatar, banner, UNIX_TIMESTAMP(created_at) AS created_ts FROM phone_birdy_profiles WHERE citizenid = ?',
         { citizenid }
     )
     return hydrateProfile(row)
@@ -195,7 +209,7 @@ end
 ---@return table|nil
 function store.getProfileByHandle(handle)
     return hydrateProfile(MySQL.single.await(
-        'SELECT citizenid, handle, display_name, password, bio, verified, logged_in, join_label, protected, UNIX_TIMESTAMP(created_at) AS created_ts FROM phone_birdy_profiles WHERE handle = ?',
+        'SELECT citizenid, handle, display_name, password, bio, verified, logged_in, join_label, protected, avatar, banner, UNIX_TIMESTAMP(created_at) AS created_ts FROM phone_birdy_profiles WHERE handle = ?',
         { handle }
     ))
 end
@@ -208,14 +222,14 @@ end
 function store.searchProfiles(query, viewerCid, limit)
     local like = '%' .. query .. '%'
     local rows = MySQL.query.await([[
-        SELECT citizenid, handle, display_name, verified FROM phone_birdy_profiles
+        SELECT citizenid, handle, display_name, verified, avatar FROM phone_birdy_profiles
         WHERE (handle LIKE ? OR display_name LIKE ?) AND citizenid <> ?
         ORDER BY created_at DESC LIMIT ?
     ]], { like, like, viewerCid or '', limit }) or {}
     local out = {}
     for i = 1, #rows do
         local r = rows[i]
-        out[i] = { citizenid = r.citizenid, handle = r.handle, displayName = r.display_name, verified = isTruthy(r.verified) }
+        out[i] = { citizenid = r.citizenid, handle = r.handle, displayName = r.display_name, verified = isTruthy(r.verified), avatar = r.avatar }
     end
     return out
 end
@@ -243,12 +257,12 @@ end
 ---@param bio string
 ---@param joinLabel string
 ---@param protected boolean
-function store.updateProfileFields(citizenid, displayName, bio, joinLabel, protected)
+function store.updateProfileFields(citizenid, displayName, bio, joinLabel, protected, avatar, banner)
     MySQL.update.await([[
         UPDATE phone_birdy_profiles
-        SET display_name = ?, bio = ?, join_label = ?, protected = ?
+        SET display_name = ?, bio = ?, join_label = ?, protected = ?, avatar = ?, banner = ?
         WHERE citizenid = ?
-    ]], { displayName, bio, joinLabel, protected and 1 or 0, citizenid })
+    ]], { displayName, bio, joinLabel, protected and 1 or 0, avatar, banner, citizenid })
 end
 
 ---Replace a citizenid's legacy profile-row password hash (kept in sync with the engine hash).
@@ -287,6 +301,7 @@ local function hydratePost(row)
         handle      = row.handle,
         displayName = row.display_name,
         verified    = isTruthy(row.verified),
+        avatar      = row.avatar,
         body        = row.body,
         parentId    = row.parent_id,
         images      = images,
@@ -307,7 +322,7 @@ local POST_SELECT = [[
     SELECT
         p.id, p.author_cid, p.body, p.parent_id, p.images, p.views,
         UNIX_TIMESTAMP(p.created_at) AS created_s,
-        pr.handle, pr.display_name, pr.verified,
+        pr.handle, pr.display_name, pr.verified, pr.avatar,
         (SELECT COUNT(*) FROM phone_birdy_likes l  WHERE l.post_id   = p.id) AS like_count,
         (SELECT COUNT(*) FROM phone_birdy_posts r  WHERE r.parent_id = p.id) AS reply_count,
         (SELECT COUNT(*) FROM phone_birdy_reposts rp WHERE rp.post_id = p.id) AS repost_count,
@@ -406,7 +421,7 @@ function store.getProfilesByCids(cids)
     local marks = {}
     for i = 1, #cids do marks[i] = '?' end
     local rows = MySQL.query.await(
-        ('SELECT citizenid, handle, display_name, verified FROM phone_birdy_profiles WHERE citizenid IN (%s)')
+        ('SELECT citizenid, handle, display_name, verified, avatar FROM phone_birdy_profiles WHERE citizenid IN (%s)')
             :format(table.concat(marks, ',')),
         cids
     ) or {}
@@ -468,9 +483,13 @@ function store.listFeed(viewerCid, limit, onlyFollowing)
             ORDER BY p.created_at DESC LIMIT ?
         ]], { viewerCid, viewerCid, viewerCid, limit }) or {}
     else
+        -- Protected authors are visible only to themselves and their followers.
         rows = MySQL.query.await(POST_SELECT .. [[
-            WHERE p.parent_id IS NULL ORDER BY p.created_at DESC LIMIT ?
-        ]], { viewerCid, viewerCid, limit }) or {}
+            WHERE p.parent_id IS NULL
+              AND (pr.protected = 0 OR p.author_cid = ?
+                   OR p.author_cid IN (SELECT target_cid FROM phone_birdy_follows WHERE follower_cid = ?))
+            ORDER BY p.created_at DESC LIMIT ?
+        ]], { viewerCid, viewerCid, viewerCid, viewerCid, limit }) or {}
     end
     for i = 1, #rows do rows[i] = hydratePost(rows[i]) end
     return rows
@@ -562,6 +581,16 @@ function store.isLiked(postId, cid)
     ) ~= nil
 end
 
+---Citizenids of everyone following `targetCid`, for notification fan-out. Read-only.
+---@param targetCid string
+---@return string[]
+function store.followerCids(targetCid)
+    local rows = MySQL.query.await('SELECT follower_cid FROM phone_birdy_follows WHERE target_cid = ?', { targetCid }) or {}
+    local out = {}
+    for i = 1, #rows do out[#out + 1] = rows[i].follower_cid end
+    return out
+end
+
 ---Add a follow edge. INSERT IGNORE onto the composite primary key makes replays a no-op.
 ---@param follower string
 ---@param target string
@@ -587,7 +616,7 @@ function store.followList(viewerCid, targetCid, kind)
     end
 
     return MySQL.query.await(([[
-        SELECT pr.citizenid, pr.handle, pr.display_name, pr.bio, pr.verified,
+        SELECT pr.citizenid, pr.handle, pr.display_name, pr.bio, pr.verified, pr.avatar,
                EXISTS(SELECT 1 FROM phone_birdy_follows x
                       WHERE x.follower_cid = pr.citizenid AND x.target_cid = ?)   AS follows_you,
                EXISTS(SELECT 1 FROM phone_birdy_follows y
@@ -704,6 +733,21 @@ function store.listNotifications(recipientCid, limit)
     ]], { recipientCid, limit }) or {}
     for i = 1, #rows do rows[i].created_ms = (tonumber(rows[i].created_s) or 0) * 1000 end
     return rows
+end
+
+---Marks every unseen notification seen.
+---@param recipientCid string
+function store.markNotificationsSeen(recipientCid)
+    MySQL.update.await('UPDATE phone_birdy_notifications SET seen = 1 WHERE recipient_cid = ? AND seen = 0', { recipientCid })
+end
+
+---Unseen-notification count, for the Bell tab and the springboard badge. Read-only.
+---@param recipientCid string
+---@return integer
+function store.unseenNotificationCount(recipientCid)
+    return tonumber(MySQL.scalar.await(
+        'SELECT COUNT(*) FROM phone_birdy_notifications WHERE recipient_cid = ? AND seen = 0', { recipientCid }
+    )) or 0
 end
 
 return store

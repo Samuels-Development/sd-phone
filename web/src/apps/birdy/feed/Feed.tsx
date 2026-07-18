@@ -21,7 +21,7 @@ export function Feed({ posts, me, feed, onFeedChange, onToggleLike, onToggleRepo
         <div className="flex h-full flex-col">
             <header className="shrink-0">
                 <div className="flex items-center px-4 py-2">
-                    <button type="button" onClick={onOpenProfile} aria-label={t('birdy.yourProfile', 'Your profile')}><Avatar size={44} /></button>
+                    <button type="button" onClick={onOpenProfile} aria-label={t('birdy.yourProfile', 'Your profile')}><Avatar size={44} src={me.avatar} /></button>
                     <div className="flex flex-1 justify-center">
                         <BirdMark className="h-11 w-11 text-[#1d9bf0]" />
                     </div>

@@ -64,7 +64,7 @@ function NotifRow({ icon, user, text, preview }: { icon: React.ReactNode; user: 
         <div className="flex gap-3.5 border-b border-black/10 px-4 py-4">
             <div className="flex w-8 shrink-0 justify-center pt-1">{icon}</div>
             <div className="min-w-0 flex-1">
-                <Avatar size={48} />
+                <Avatar size={48} src={user.avatar} />
                 <div className="mt-2 text-[18px] text-black">
                     <span className="font-bold">{user.name}</span> {text}
                 </div>

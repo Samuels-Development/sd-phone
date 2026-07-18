@@ -22,6 +22,8 @@ proxyCallback('sd-phone:birdy:toggleFollow',  'sd-phone:server:birdy:toggleFollo
 proxyCallback('sd-phone:birdy:toggleRepost', 'sd-phone:server:birdy:toggleRepost')
 proxyCallback('sd-phone:birdy:followList',    'sd-phone:server:birdy:followList')
 proxyCallback('sd-phone:birdy:notifications', 'sd-phone:server:birdy:notifications')
+proxyCallback('sd-phone:birdy:notificationCount', 'sd-phone:server:birdy:notificationCount')
+proxyCallback('sd-phone:birdy:dmResolve',     'sd-phone:server:birdy:dmResolve')
 proxyCallback('sd-phone:birdy:dmList',        'sd-phone:server:birdy:dmList')
 proxyCallback('sd-phone:birdy:dmThread',      'sd-phone:server:birdy:dmThread')
 proxyCallback('sd-phone:birdy:dmSend',        'sd-phone:server:birdy:dmSend')

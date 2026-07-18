@@ -32,7 +32,7 @@ export function PostCard({ post, isOwn, onToggleLike, onToggleRepost, onOpen, on
             className={`flex gap-3.5 border-b border-black/10 px-4 py-4 ${onOpen ? 'cursor-pointer transition-colors hover:bg-black/[0.04]' : ''}`}
         >
             <button type="button" onClick={openAuthor} className="h-fit shrink-0">
-                <Avatar size={56} />
+                <Avatar size={56} src={post.author.avatar} />
             </button>
 
             <div className="min-w-0 flex-1">

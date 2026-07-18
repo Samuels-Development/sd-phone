@@ -181,7 +181,7 @@ export function ChatView({ convo, onBack, onSend, onReact, onPayRequest, animate
                         <ChevronLeft className="h-[38px] w-[38px]" strokeWidth={2.4} />
                     </button>
                     <div className="flex min-w-0 items-center gap-2">
-                        <Avatar size={46} />
+                        <Avatar size={46} src={convo.user.avatar} />
                         <span className="ml-1 min-w-0 truncate text-[24px] font-semibold text-black">{name}</span>
                     </div>
                 </div>
@@ -191,7 +191,7 @@ export function ChatView({ convo, onBack, onSend, onReact, onPayRequest, animate
             <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto no-scrollbar px-4 py-2">
                 {messages.length === 0 ? (
                     <div className="flex h-full flex-col items-center justify-center px-8 pb-10 text-center">
-                        <Avatar size={104} />
+                        <Avatar size={104} src={convo.user.avatar} />
                         <p className="mt-4 text-[21px] font-semibold text-black/85">{name}</p>
                         <p className="mt-1.5 text-[16px] font-medium leading-snug text-black/65">{t('birdy.sayHello', 'Say hello to @{handle}', { handle: convo.user.handle })}</p>
                     </div>
