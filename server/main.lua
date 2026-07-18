@@ -80,10 +80,16 @@ local function simDescribe(source)
 end
 
 ---Registers each configured phone item (config.Phone.Items) as a usable item; using one opens
----the phone with the variant's frame colour (plus the SIM snapshot under unique phones).
+---the phone with the variant's frame colour (plus the SIM snapshot under unique phones). The
+---used slot marks that exact phone as the active one, so a player carrying several SIM'd
+---phones acts (and calls) as whichever phone they actually opened.
 local function RegisterPhoneItems()
     for _, entry in ipairs(config.Phone.Items or {}) do
-        inv.registerUsable(entry.item, function(source)
+        inv.registerUsable(entry.item, function(source, itemArg, _invArg, slotArg)
+            if simState.active then
+                local usedSlot = (type(itemArg) == 'table' and tonumber(itemArg.slot)) or tonumber(slotArg)
+                require('server.sim.session').setActive(source, { slot = usedSlot, color = entry.color })
+            end
             TriggerClientEvent('sd-phone:client:openFromItem', source, entry.color, simDescribe(source))
         end)
     end
@@ -116,6 +122,9 @@ end
 ---client can open into the "No SIM" state (the SIM's phone wins the colour pick).
 lib.callback.register('sd-phone:server:phone:resolveOpen', function(source, preferred)
     local color = ResolveOwnedColor(source, preferred)
+    if simState.active and type(preferred) == 'string' then
+        require('server.sim.session').setActive(source, { color = preferred })
+    end
     local sim = simDescribe(source)
     if not sim then return color end
     if not color then return nil end

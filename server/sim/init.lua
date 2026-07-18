@@ -33,6 +33,33 @@ function player.getIdentifier(source)
     return session.identity(source)
 end
 
+-- Reachability: a player is "online as" EVERY identity whose SIM they carry, not just the
+-- active phone's - calls and messages addressed to any of their numbers reach them. (The
+-- acting identity above stays the single active phone.)
+local baseGetSource = player.getSourceByIdentifier
+function player.getSourceByIdentifier(citizenid)
+    if not state.active then return baseGetSource(citizenid) end
+    if not citizenid or citizenid == '' then return nil end
+    for _, src in ipairs(GetPlayers()) do
+        local s = tonumber(src)
+        if s and session.hasIdentity(s, citizenid) then return s end
+    end
+    return nil
+end
+
+local baseCidMap = player.onlineCidMap
+function player.onlineCidMap()
+    if not state.active then return baseCidMap() end
+    local out = {}
+    for _, src in ipairs(GetPlayers()) do
+        local s = tonumber(src)
+        if s then
+            for identity in pairs(session.identities(s)) do out[identity] = s end
+        end
+    end
+    return out
+end
+
 ---ox_inventory only: watch SIM/phone item moves so a pulled SIM cuts service within a swap, not
 ---a cache TTL. Any matching move flushes the whole session cache (rare event, cheap rescan) and
 ---pushes fresh state to the player who moved it.
@@ -52,17 +79,15 @@ local function registerHooks()
 end
 
 -- Boot: wait for the backend (ox may start after sd-phone - prefer it for up to 10s before
--- settling on the qb fallback), then create the schema and activate.
+-- settling on a fallback), then create the schema and activate.
 CreateThread(function()
-    local backend = siminv.backend()
     for _ = 1, 100 do
-        if backend == 'ox' then break end
+        if siminv.isOx() then break end
         Wait(100)
-        backend = siminv.backend()
     end
-    if not backend then
+    if not siminv.supported() then
         print('^1[sd-phone:sim]^0 Sim.Enabled is on but the running inventory has no per-slot '
-            .. 'metadata support (needs ox_inventory or a QBCore PlayerData.items inventory). '
+            .. 'metadata support (see the bridge slot API in bridge/server/inventory.lua). '
             .. 'Unique phones stay OFF.')
         return
     end
@@ -73,11 +98,12 @@ CreateThread(function()
         return
     end
 
-    state.mode   = (config.Sim.UseContainers and backend == 'ox') and 'container' or 'metadata'
+    state.mode   = (config.Sim.UseContainers and siminv.isOx()) and 'container' or 'metadata'
     state.active = true
     if state.mode == 'container' then siminv.registerContainers() end
-    if backend == 'ox' then registerHooks() end
-    print(('^2[sd-phone:sim]^0 unique phones active (%s mode, %s backend)'):format(state.mode, backend))
+    if siminv.isOx() then registerHooks() end
+    print(('^2[sd-phone:sim]^0 unique phones active (%s mode, %s backend)')
+        :format(state.mode, siminv.backendName()))
 end)
 
 ---Extracts the used item's slot + SIM number for both usable-item callback shapes (ox passes a
@@ -94,9 +120,9 @@ local function usedSim(source, itemArg, slotArg)
         if type(md) == 'table' then number = md.number end
     end
     slot = slot or tonumber(slotArg)
-    if siminv.backend() == 'ox' and slot and not number then
-        local sd = exports.ox_inventory:GetSlot(source, slot)
-        if sd and sd.metadata then number = sd.metadata.number end
+    if slot and not number then
+        local row = inv.getSlot(source, slot)
+        if row then number = row.metadata.number end
     end
     local digits = util.digits(number)
     return slot, digits ~= '' and digits or nil
@@ -165,10 +191,22 @@ lib.callback.register('sd-phone:server:sim:get', function(source)
     session.invalidate(source)
     local s = session.resolve(source)
     local b = simStore.getBackup(realCid)
+    local sims = {}
+    if s then
+        for _, entry in ipairs(s.sims) do
+            sims[#sims + 1] = {
+                number = entry.number,
+                color  = entry.color,
+                active = s.active ~= nil and entry.slot == s.active.slot,
+            }
+        end
+    end
     return util.ok({
         mode          = state.mode,
         hasSim        = s ~= nil and s.hasSim or false,
         number        = s and s.number or nil,
+        color         = s and s.color or nil,
+        sims          = sims,
         ejectable     = state.mode == 'metadata' and config.Sim.AllowEject ~= false
                         and s ~= nil and s.hasSim or false,
         backupOn      = config.Sim.Backup and config.Sim.Backup.Enabled ~= false or false,
@@ -199,8 +237,9 @@ lib.callback.register('sd-phone:server:sim:eject', function(source)
     return util.ok()
 end)
 
----Toggles the caller's cloud backup. Enabling points the character's backup at the CURRENT SIM
----profile. Backups only ever copy data the caller can already read, never grant new access.
+---Toggles the caller's cloud backup. Enabling requires a backup password: it protects the
+---restore, and a copy is saved into the phone's Passwords app so the player can look it up.
+---Backups only ever copy data the caller can already read, never grant new access.
 lib.callback.register('sd-phone:server:sim:backup:set', function(source, payload)
     if not (config.Sim.Backup and config.Sim.Backup.Enabled ~= false) then
         return util.fail('Cloud backup is disabled.')
@@ -212,7 +251,13 @@ lib.callback.register('sd-phone:server:sim:backup:set', function(source, payload
     if payload.on == true then
         local s = session.resolve(source)
         if not s or not s.identity then return util.fail('Install a SIM card first.') end
-        simStore.setBackup(realCid, s.identity, true)
+        local password = type(payload.password) == 'string' and payload.password or ''
+        if #password < 4 or #password > 32 then
+            return util.fail('Backup password must be 4-32 characters.')
+        end
+        local accounts = require 'server.accounts.store'
+        simStore.setBackup(realCid, s.identity, true, accounts.hashPassword(password))
+        accounts.saveVaultEntry(s.identity, 'cloud', 'Cloud Backup', password, nil, s.number)
     else
         local b = simStore.getBackup(realCid)
         if b then simStore.setBackup(realCid, b.identity, false) end
@@ -220,9 +265,10 @@ lib.callback.register('sd-phone:server:sim:backup:set', function(source, payload
     return util.ok()
 end)
 
----Restores the caller's cloud backup onto the current SIM profile (data copy; the number stays
----the new SIM's). Afterwards the backup pointer follows the restored profile.
-lib.callback.register('sd-phone:server:sim:backup:restore', function(source)
+---Restores the caller's cloud backup onto the current SIM profile: the old phone's settings,
+---contacts, messages, photos and app data are copied over - the phone NUMBER never is (it lives
+---on the old SIM; a lost number is lost). Requires the backup password when one is set.
+lib.callback.register('sd-phone:server:sim:backup:restore', function(source, payload)
     if not (config.Sim.Backup and config.Sim.Backup.Enabled ~= false) then
         return util.fail('Cloud backup is disabled.')
     end
@@ -234,8 +280,17 @@ lib.callback.register('sd-phone:server:sim:backup:restore', function(source)
     if not s or not s.identity or not s.number then return util.fail('Install a SIM card first.') end
     if s.identity == b.identity then return util.fail('This phone already holds the backed-up data.') end
 
+    if b.password then
+        payload = type(payload) == 'table' and payload or {}
+        local given = type(payload.password) == 'string' and payload.password or ''
+        local accounts = require 'server.accounts.store'
+        if accounts.hashPassword(given) ~= b.password then
+            return util.fail('Wrong backup password.')
+        end
+    end
+
     local rows = backup.restore(b.identity, s.identity, s.number)
-    simStore.setBackup(realCid, s.identity, true)
+    simStore.setBackup(realCid, s.identity, true, nil)
     print(('^3[sd-phone:sim]^0 restored backup %s -> %s for %s (%d rows)')
         :format(b.identity, s.identity, realCid, rows))
     return util.ok({ rows = rows })
@@ -278,6 +333,42 @@ end)
 ---@return boolean
 exports('isSimModeActive', function()
     return state.active
+end)
+
+---Server export: true when a phone number is free to assign to a SIM (not on any SIM and not
+---held by a legacy character assignment).
+---@param number string phone number in any formatting
+---@return boolean
+exports('isNumberAvailable', function(number)
+    return simStore.numberAvailable(number)
+end)
+
+---Server export: assign a specific number to the SIM in a player's ACTIVE phone, keeping its
+---identity/data. This is the hook for server-owned "buy a custom number" implementations.
+---Returns false with 'invalid' | 'no_sim' | 'taken' on failure.
+---@param source number player server id
+---@param number string requested phone number (digits kept)
+---@return boolean ok
+---@return string|nil err
+exports('setSimNumber', function(source, number)
+    if not state.active then return false, 'invalid' end
+    if type(source) ~= 'number' or not GetPlayerName(source) then return false, 'invalid' end
+    local digits = util.digits(number)
+    if #digits < 3 or #digits > 15 then return false, 'invalid' end
+
+    session.invalidate(source)
+    local s = session.resolve(source)
+    if not s or not s.active then return false, 'no_sim' end
+
+    local ok, err = simStore.renameNumber(s.number, digits)
+    if not ok then return false, err end
+
+    local slotRow = inv.getSlot(source, s.slot)
+    if slotRow then
+        siminv.rewriteSimNumber(source, { slot = s.slot, metadata = slotRow.metadata }, digits)
+    end
+    session.push(source)
+    return true
 end)
 
 ---/givesim (admin): hand a player a SIM card. `bind` makes it a character-bound SIM carrying

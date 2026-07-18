@@ -29,11 +29,19 @@ function store.ensureSchema()
             citizenid  VARCHAR(64) NOT NULL,
             identity   VARCHAR(64) NOT NULL,
             enabled    TINYINT(1)  NOT NULL DEFAULT 1,
+            password   VARCHAR(64) NULL,
             updated_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
                 ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (citizenid)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
+    local hasPassword = MySQL.scalar.await([[
+        SELECT COUNT(*) FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'phone_cloud_backups' AND column_name = 'password'
+    ]])
+    if (tonumber(hasPassword) or 0) == 0 then
+        MySQL.query.await('ALTER TABLE phone_cloud_backups ADD COLUMN password VARCHAR(64) NULL')
+    end
 end
 
 ---True when a number is already claimed - by a registered SIM or by any legacy
@@ -45,6 +53,16 @@ local function numberTaken(digits)
     if sim then return true end
     local legacy = MySQL.scalar.await('SELECT 1 FROM phone_settings WHERE phone_number = ? LIMIT 1', { digits })
     return legacy ~= nil
+end
+
+---True when a number is free to assign to a SIM: on no SIM and held by no legacy
+---phone_settings assignment. Read-only.
+---@param number string phone number in any formatting
+---@return boolean available
+function store.numberAvailable(number)
+    local digits = util.digits(number)
+    if digits == '' then return false end
+    return not numberTaken(digits)
 end
 
 ---Generates a phone number that is free in both the SIM registry and phone_settings; tries 20
@@ -132,26 +150,55 @@ end
 
 ---Reads a character's cloud-backup pointer, or nil when never enabled. Read-only.
 ---@param citizenid string real (framework) citizenid
----@return { identity: string, enabled: boolean }|nil
+---@return { identity: string, enabled: boolean, password: string|nil }|nil
 function store.getBackup(citizenid)
     if not citizenid or citizenid == '' then return nil end
     local row = MySQL.single.await(
-        'SELECT identity, enabled FROM phone_cloud_backups WHERE citizenid = ?', { citizenid })
+        'SELECT identity, enabled, password FROM phone_cloud_backups WHERE citizenid = ?', { citizenid })
     if not row then return nil end
-    return { identity = row.identity, enabled = util.truthy(row.enabled) }
+    return { identity = row.identity, enabled = util.truthy(row.enabled), password = row.password }
 end
 
----Upserts a character's cloud-backup pointer: which phone profile is "in the cloud" and
----whether backup is currently on.
+---Upserts a character's cloud-backup pointer: which phone profile is "in the cloud", whether
+---backup is currently on, and the (hashed) backup password. A nil passwordHash keeps whatever
+---password is already stored.
 ---@param citizenid string real (framework) citizenid
 ---@param identity string phone profile the backup points at
 ---@param enabled boolean
-function store.setBackup(citizenid, identity, enabled)
+---@param passwordHash string|nil hashed backup password
+function store.setBackup(citizenid, identity, enabled, passwordHash)
     if not citizenid or citizenid == '' or not identity or identity == '' then return end
     MySQL.update.await([[
-        INSERT INTO phone_cloud_backups (citizenid, identity, enabled) VALUES (?, ?, ?)
-        ON DUPLICATE KEY UPDATE identity = VALUES(identity), enabled = VALUES(enabled)
-    ]], { citizenid, identity, enabled and 1 or 0 })
+        INSERT INTO phone_cloud_backups (citizenid, identity, enabled, password) VALUES (?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            identity = VALUES(identity),
+            enabled  = VALUES(enabled),
+            password = COALESCE(VALUES(password), password)
+    ]], { citizenid, identity, enabled and 1 or 0, passwordHash })
+end
+
+---Moves a registered SIM to a different number, keeping its identity, owner and backups intact.
+---Refuses when the target number is already claimed by a SIM or a legacy phone_settings row of
+---a DIFFERENT identity. Also re-points the identity's phone_settings mirror.
+---@param oldNumber string current bare-digit number
+---@param newNumber string requested bare-digit number
+---@return boolean ok
+---@return string|nil err 'not_found' | 'taken'
+function store.renameNumber(oldNumber, newNumber)
+    local oldDigits, newDigits = util.digits(oldNumber), util.digits(newNumber)
+    if oldDigits == '' or newDigits == '' then return false, 'not_found' end
+    if oldDigits == newDigits then return true end
+
+    local row = store.get(oldDigits)
+    if not row then return false, 'not_found' end
+    if store.get(newDigits) then return false, 'taken' end
+    local legacyCid = MySQL.scalar.await(
+        'SELECT citizenid FROM phone_settings WHERE phone_number = ? LIMIT 1', { newDigits })
+    if legacyCid and legacyCid ~= row.identity then return false, 'taken' end
+
+    MySQL.update.await('UPDATE phone_sim_cards SET number = ? WHERE number = ?', { newDigits, oldDigits })
+    MySQL.update.await('UPDATE phone_settings SET phone_number = ? WHERE citizenid = ?', { newDigits, row.identity })
+    return true
 end
 
 return store
