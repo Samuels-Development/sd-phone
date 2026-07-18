@@ -2,9 +2,11 @@ import { t } from '@/i18n';
 import { useSessionState } from '@/hooks/useSessionState';
 import { DisplayBrightnessPage } from './appearance/DisplayBrightnessPage';
 import { FaceUnlockPage } from './security/FaceUnlockPage';
+import { BatteryPage } from './general/BatteryPage';
 import { GeneralPage } from './general/GeneralPage';
 import { NotificationsPage } from './notifications/NotificationsPage';
 import { PhoneSettingsPage } from './security/PhoneSettingsPage';
+import { PrivacySecurityPage } from './security/PrivacySecurityPage';
 import { ProfileCard } from './account/ProfileCard';
 import { SoundHapticsPage } from './sound/SoundHapticsPage';
 import { SearchBar } from '@/ui/SearchBar';
@@ -14,7 +16,7 @@ import { SettingsGroup } from './SettingsGroup';
 import { PushLayer } from './SettingsSubPage';
 import { WallpaperPage } from './appearance/WallpaperPage';
 
-type SubPage = 'general' | 'display' | 'wallpaper' | 'notifications' | 'sound-haptics' | 'face-unlock' | 'phone' | null;
+type SubPage = 'general' | 'display' | 'wallpaper' | 'notifications' | 'sound-haptics' | 'face-unlock' | 'phone' | 'battery' | 'privacy' | null;
 
 export function Settings({ onClose }: { onClose: () => void }) {
     const [subPage, setSubPage] = useSessionState<SubPage>('settings:subPage', null);
@@ -40,6 +42,8 @@ export function Settings({ onClose }: { onClose: () => void }) {
         if (id === 'sound-haptics') setSubPage('sound-haptics');
         if (id === 'face-unlock')   setSubPage('face-unlock');
         if (id === 'phone')         setSubPage('phone');
+        if (id === 'battery')       setSubPage('battery');
+        if (id === 'privacy')       setSubPage('privacy');
     }
 
     const sub =
@@ -50,6 +54,8 @@ export function Settings({ onClose }: { onClose: () => void }) {
         : subPage === 'sound-haptics' ? <SoundHapticsPage      onBack={handleBack} />
         : subPage === 'face-unlock'   ? <FaceUnlockPage        onBack={handleBack} />
         : subPage === 'phone'         ? <PhoneSettingsPage     onBack={handleBack} />
+        : subPage === 'battery'       ? <BatteryPage           onBack={handleBack} />
+        : subPage === 'privacy'       ? <PrivacySecurityPage   onBack={handleBack} onOpenFaceUnlock={() => setSubPage('face-unlock')} />
         : null;
 
     return (

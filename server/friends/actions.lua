@@ -205,12 +205,17 @@ function actions.respond(src, msgId, phone, accept)
 
     local rsrc = player.getSourceByIdentifier(rcid)
     if rsrc then
+        -- Shown as the requester sees them: saved contact name, else the number - never
+        -- the responder's character name.
+        local myNumber = digits(settings.ensurePhoneNumber(owner))
+        local card = contactInfo(rcid)[myNumber]
+        local shown = card and card.name or (myNumber ~= '' and myNumber) or 'Someone'
         TriggerClientEvent('sd-phone:client:notify', rsrc, {
             app   = 'maps',
             appId = 'maps',
             title = 'Maps',
             body  = ('%s %s your location sharing request.'):format(
-                player.getName(src) or 'Someone', accept and 'accepted' or 'declined'),
+                shown, accept and 'accepted' or 'declined'),
             time  = 'now',
         })
     end

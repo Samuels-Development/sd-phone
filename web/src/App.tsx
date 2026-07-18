@@ -12,6 +12,7 @@ import { AppSwitcher } from '@/shell/AppSwitcher';
 import { AppDeck, FullscreenStage, type DeckAppCtx } from '@/shell/AppDeck';
 import { Homescreen }  from '@/shell/Homescreen';
 import { useBadgeStore } from '@/stores/badgeStore';
+import { useBatteryStore } from '@/stores/batteryStore';
 import { useDownloadStore, useDownloadingIds } from '@/stores/downloadStore';
 import { useLocaleStore } from '@/stores/localeStore';
 import { HomeIndicator } from '@/shell/HomeIndicator';
@@ -22,6 +23,7 @@ import { useAutoContrast } from '@/shell/useAutoContrast';
 import { VolumeHUD }   from '@/shell/VolumeHUD';
 import { SetupFlow }   from '@/shell/SetupFlow';
 import type { SetupResult } from '@/shell/SetupFlow';
+import { isKeyboardCaptured } from '@/hooks/useKeyboardCapture';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { seedSessionState } from '@/hooks/useSessionState';
 import { onOpenMail, onOpenMaps, onOpenMessages } from '@/shell/deeplink';
@@ -229,6 +231,7 @@ function AppContent() {
         setSavedLayout(data.homeLayout ? parseLayout(data.homeLayout) : loadHomeLayout());
         setLocked(data.locked);
         setBattery(data.battery);
+        useBatteryStore.getState().setLevel(data.battery);
         if (data.frameColor) setFrameColor(data.frameColor);
         setLeaving(false);
         setEntering(true);
@@ -488,7 +491,7 @@ function AppContent() {
     }, []);
 
     useNuiEvent('sd-phone:battery', useCallback((pct) => {
-        if (typeof pct === 'number') setBattery(pct);
+        if (typeof pct === 'number') { setBattery(pct); useBatteryStore.getState().setLevel(pct); }
     }, []));
 
     const [notifs, setNotifs] = useState<NotificationItem[]>([]);
@@ -770,11 +773,14 @@ function AppContent() {
     useEffect(() => {
         function onKey(e: KeyboardEvent) {
             const tgt = e.target as HTMLElement | null;
-            const typing = !!tgt && (
+            // isKeyboardCaptured() covers apps that type without a text field (the word
+            // games read keys off window), so the L hotkey does not lock the phone
+            // mid-guess.
+            const typing = isKeyboardCaptured() || (!!tgt && (
                 tgt.tagName === 'INPUT'
                 || tgt.tagName === 'TEXTAREA'
                 || tgt.isContentEditable
-            );
+            ));
 
             if (e.key === 'Escape') {
                 if (switcherOpen)            { handleSwitcherDismiss(); return; }

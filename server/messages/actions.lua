@@ -382,8 +382,10 @@ local function sendDirect(source, cid, myNumber, target, kind, body, meta, ts, m
 
         targetSrc = player.getSourceByIdentifier(targetCid)
         if targetSrc and not withheld then
+            -- No character-name fallback: an unsaved sender shows as their number, matching
+            -- the buildConversation reload path (and not leaking identities).
             local theirContacts = contactMapFor(targetCid)
-            local participant   = resolveParticipant(myNumber, theirContacts[myNumber], player.getName(source))
+            local participant   = resolveParticipant(myNumber, theirContacts[myNumber])
             local msg           = buildMessage(inId, myNumber, kind, body, meta, ts, false, digits(settings.getPhoneNumber(targetCid)))
 
             TriggerClientEvent('sd-phone:client:messages:incoming', targetSrc, {

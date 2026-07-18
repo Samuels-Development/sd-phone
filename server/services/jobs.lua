@@ -57,7 +57,8 @@ local function savedCount(map)
 end
 
 ---Returns a player's saved jobs + pending offers, or `multijob = false` when the framework has
----no multi-job model; the caller's current framework job is seeded/refreshed into the map first.
+---no multi-job model; every job the FRAMEWORK has assigned (all of them on QBox, not just the
+---active one) is seeded/refreshed into the map first.
 ---@param src number
 ---@return table
 function jobs.list(src)
@@ -68,17 +69,20 @@ function jobs.list(src)
     local cid = player.getIdentifier(src)
     if not cid then return fail('Player not found') end
 
-    local activeJob   = job.getName(src)
-    local activeGrade = job.getGrade(src)
+    local activeJob = job.getName(src)
 
-    local map = store.getSaved(cid)
-    if activeJob and not BLACKLIST[activeJob] then
-        local prev = map[activeJob]
-        if not prev or prev.grade ~= activeGrade then
-            map[activeJob] = { grade = activeGrade }
-            store.setSaved(cid, map)
+    local map    = store.getSaved(cid)
+    local synced = false
+    for jName, grade in pairs(job.getAll(src)) do
+        if not BLACKLIST[jName] then
+            local prev = map[jName]
+            if not prev or prev.grade ~= grade then
+                map[jName] = { grade = grade }
+                synced = true
+            end
         end
     end
+    if synced then store.setSaved(cid, map) end
 
     local list = {}
     for jName, info in pairs(map) do

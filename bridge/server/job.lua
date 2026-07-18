@@ -126,6 +126,34 @@ function job.supportsMultijob()
     return framework.name == 'qb'
 end
 
+---Every job the framework has assigned to this player, not just the active one. On QBox these
+---live in the `player_groups` table and are surfaced on the player object as PlayerData.jobs
+---(jobName -> grade level); plain QBCore and ESX have no multi-job model, so there it is just the
+---active job. The active job is always included and always wins, since it carries the live grade.
+---@param source number player server id
+---@return table<string, integer> jobs jobName -> grade level
+function job.getAll(source)
+    local out = {}
+    local p = player_mod.get(source)
+    if not p then return out end
+
+    if framework.name == 'qb' then
+        local jobs = p.PlayerData and p.PlayerData.jobs
+        if type(jobs) == 'table' then
+            for name, grade in pairs(jobs) do
+                if type(name) == 'string' then
+                    -- QBox stores a bare grade level; tolerate a { level = n } shape too.
+                    out[name] = type(grade) == 'table' and (tonumber(grade.level) or 0) or (tonumber(grade) or 0)
+                end
+            end
+        end
+    end
+
+    local active = job.getName(source)
+    if active then out[active] = job.getGrade(source) end
+    return out
+end
+
 ---Resolve a job's display label ('Police'): qb-core's Shared.Jobs first, then the pcall-guarded
 ---qbx_core GetJob export. Nil when unknown. Read-only.
 ---@param jobName string
