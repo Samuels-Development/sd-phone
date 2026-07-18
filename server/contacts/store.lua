@@ -51,12 +51,28 @@ function store.ensureSchema()
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
 
+    local directionCol = MySQL.single.await([[
+        SELECT COUNT(*) AS n FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'phone_calls' AND column_name = 'direction'
+    ]])
+    if not directionCol or tonumber(directionCol.n) == 0 then
+        MySQL.query.await('ALTER TABLE phone_calls ADD COLUMN direction VARCHAR(16) NOT NULL')
+    end
+
+    local durationCol = MySQL.single.await([[
+        SELECT COUNT(*) AS n FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'phone_calls' AND column_name = 'duration'
+    ]])
+    if not durationCol or tonumber(durationCol.n) == 0 then
+        MySQL.query.await('ALTER TABLE phone_calls ADD COLUMN duration INT NOT NULL DEFAULT 0')
+    end
+
     local seenCol = MySQL.single.await([[
         SELECT COUNT(*) AS n FROM information_schema.columns
         WHERE table_schema = DATABASE() AND table_name = 'phone_calls' AND column_name = 'seen'
     ]])
     if not seenCol or tonumber(seenCol.n) == 0 then
-        MySQL.query.await('ALTER TABLE phone_calls ADD COLUMN seen TINYINT(1) NOT NULL DEFAULT 1 AFTER duration')
+        MySQL.query.await('ALTER TABLE phone_calls ADD COLUMN seen TINYINT(1) NOT NULL DEFAULT 1')
         MySQL.query.await('ALTER TABLE phone_calls ALTER COLUMN seen SET DEFAULT 0')
     end
 
