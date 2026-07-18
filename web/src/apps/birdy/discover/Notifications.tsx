@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Bell, Heart } from 'lucide-react';
+import { Bell, Heart, Repeat2 } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { EmptyState } from '@/ui/EmptyState';
 import { apiNotifications } from '../birdyApi';
-import { BG, BLUE, LIKE, META, type BirdyAuthor, type BirdyNotification } from '../data';
+import { BG, BLUE, LIKE, META, REPOST, type BirdyAuthor, type BirdyNotification } from '../data';
 import { PostCard } from '../feed/PostCard';
 import { Avatar, PersonGlyph } from '../ui';
 
@@ -47,9 +47,11 @@ export function Notifications({ onOpenProfile }: { onOpenProfile: () => void }) 
                     }
                     const icon = n.kind === 'like'
                         ? <Heart className="h-7 w-7" fill={LIKE} color={LIKE} />
-                        : <PersonGlyph className="h-8 w-8" color={BLUE} />;
-                    const text = n.kind === 'like' ? n.text : t('birdy.followedYou', 'followed you');
-                    const preview = n.kind === 'like' ? n.post?.body : undefined;
+                        : n.kind === 'repost'
+                            ? <Repeat2 className="h-7 w-7" color={REPOST} />
+                            : <PersonGlyph className="h-8 w-8" color={BLUE} />;
+                    const text = n.kind === 'follow' ? t('birdy.followedYou', 'followed you') : n.text;
+                    const preview = n.kind === 'follow' ? undefined : n.post?.body;
                     return <NotifRow key={n.id} icon={icon} user={n.user} text={text} preview={preview} />;
                 })}
             </div>

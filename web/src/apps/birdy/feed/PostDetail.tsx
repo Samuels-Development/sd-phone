@@ -2,15 +2,16 @@ import { useRef, useState } from 'react';
 import { ArrowLeft, Heart, MessageCircle, Repeat2 } from 'lucide-react';
 
 import { t } from '@/i18n';
-import { absoluteTime, BG, BLUE, LIKE, META, PILL, type BirdyAuthor, type BirdyPost } from '../data';
+import { absoluteTime, BG, BLUE, LIKE, META, PILL, REPOST, type BirdyAuthor, type BirdyPost } from '../data';
 import { PostCard } from './PostCard';
 import { Avatar, PostImages, RichText, VerifiedBadge } from '../ui';
 
-export function PostDetail({ post, me, onBack, onToggleLike, onToggleReplyLike, onOpenAuthor, onReply }: {
+export function PostDetail({ post, me, onBack, onToggleLike, onToggleRepost, onToggleReplyLike, onOpenAuthor, onReply }: {
     post:              BirdyPost;
     me:                BirdyAuthor;
     onBack:            () => void;
     onToggleLike:      () => void;
+    onToggleRepost:    () => void;
     onToggleReplyLike: (replyId: string) => void;
     onOpenAuthor?:     (handle: string) => void;
     onReply?:          (body: string) => void;
@@ -69,7 +70,7 @@ export function PostDetail({ post, me, onBack, onToggleLike, onToggleReplyLike, 
 
                 <div className="mx-4 flex items-center justify-around border-y border-black/10 py-2.5" style={{ color: META }}>
                     <button type="button" aria-label={t('birdy.reply', 'Reply')} onClick={() => inputRef.current?.focus()}><MessageCircle className="h-[22px] w-[22px]" strokeWidth={1.8} /></button>
-                    <button type="button" aria-label={t('birdy.repost', 'Repost')}><Repeat2 className="h-[22px] w-[22px]" strokeWidth={1.8} /></button>
+                    <button type="button" aria-label={t('birdy.repost', 'Repost')} onClick={onToggleRepost} style={post.reposted ? { color: REPOST } : undefined}><Repeat2 className="h-[22px] w-[22px]" strokeWidth={1.8} /></button>
                     <button type="button" aria-label={t('birdy.like', 'Like')} onClick={onToggleLike} style={post.liked ? { color: LIKE } : undefined}>
                         <Heart className="h-[22px] w-[22px]" strokeWidth={1.8} fill={post.liked ? LIKE : 'none'} color={post.liked ? LIKE : 'currentColor'} />
                     </button>

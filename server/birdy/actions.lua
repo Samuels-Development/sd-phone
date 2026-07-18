@@ -126,8 +126,7 @@ local function serializeProfile(profile)
         handle    = profile.handle,
         verified  = profile.verified,
         bio       = profile.bio or '',
-        -- Derived from the row's created_at, NOT from the stored join_label - that was a
-        -- client-writable string, so anyone could set their join date to anything.
+        -- Derived from created_at; join_label was client-writable.
         joined    = profile.createdTs and os.date('%B %Y', profile.createdTs) or (profile.joinLabel or ''),
         protected = profile.protected == true,
         following = store.countFollowing(profile.citizenid),
@@ -147,7 +146,8 @@ local function serializePost(p)
         images    = p.images,
         createdAt = p.createdMs,
         replies   = p.replies,
-        reposts   = 0,
+        reposts   = p.reposts,
+        reposted  = p.reposted,
         likes     = p.likes,
         liked     = p.liked,
         views     = p.views,
@@ -359,9 +359,7 @@ function actions.updateProfile(source, payload)
     local bio = trimmed(payload.bio) or ''
     if #bio > birdyCfg.MaxBioLength then return fail('Bio is too long') end
 
-    -- payload.joinLabel is deliberately ignored: the join date is derived from created_at in
-    -- serializeProfile, so it is not the client's to set. The stored value is preserved as-is
-    -- for legacy rows.
+    -- joinLabel is ignored; the join date is derived from created_at.
     store.updateProfileFields(prof.citizenid, name, bio, prof.joinLabel or '', payload.protected == true)
     return ok({ profile = serializeProfile(store.getProfile(prof.citizenid)) })
 end
@@ -463,9 +461,7 @@ function actions.create(source, payload)
         body = body, images = images,
     })
 
-    -- Tell every open phone the feed moved. TriggerEvent above is server-LOCAL (a hook for
-    -- third-party scripts) and reaches no players, which is why a new post was invisible to
-    -- everyone else until they toggled tabs.
+    -- The TriggerEvent above is server-local; this is what reaches players.
     TriggerClientEvent('sd-phone:client:birdy:feedChanged', -1, {})
 
     return ok({ post = serializePost(store.getPost(id, prof.citizenid)) })
@@ -532,6 +528,38 @@ function actions.toggleLike(source, payload)
     return ok({ liked = nowLiked, notifyCid = notifyCid })
 end
 
+---Toggles a repost of a post. Mirrors toggleLike: idempotent per (post, citizen), and notifies
+---the post's author on a new repost (never on un-repost, never for self-reposts).
+---@param source number player server id
+---@param payload { id?: string }|nil
+---@return table envelope
+function actions.toggleRepost(source, payload)
+    local prof = viewer(source); if not prof then return fail('Player not found') end
+    payload = tbl(payload)
+    local id = payload and payload.id
+    if type(id) ~= 'string' or id == '' then return fail('Missing post') end
+
+    local author = store.getPostAuthor(id)
+    if not author then return fail('Post not found') end
+
+    local nowReposted
+    if store.isReposted(id, prof.citizenid) then
+        store.removeRepost(id, prof.citizenid)
+        nowReposted = false
+    else
+        store.addRepost(id, prof.citizenid)
+        nowReposted = true
+    end
+
+    local notifyCid = nil
+    if nowReposted and author ~= prof.citizenid then
+        store.insertNotification(store.newId(), author, 'repost', prof.citizenid, id)
+        notifyCid = author
+    end
+
+    return ok({ reposted = nowReposted, notifyCid = notifyCid })
+end
+
 ---Followers or following for a handle (defaulting to the viewer's own profile), shaped for the
 ---FollowList screen. Read-only.
 ---@param source number player server id
@@ -543,7 +571,7 @@ function actions.followList(source, payload)
 
     local kind = payload.kind == 'following' and 'following' or 'followers'
 
-    -- No handle means "my own list"; an unknown handle is an empty list, not an error.
+    -- No handle means own list; an unknown handle is empty, not an error.
     local targetCid = prof.citizenid
     local handle = payload.handle and normalizeHandle(payload.handle)
     if handle and handle ~= '' and handle ~= prof.handle then
@@ -629,6 +657,8 @@ function actions.notifications(source)
             local user = ap and serializeAuthor(ap) or { name = 'Someone', handle = 'someone', verified = false }
             if r.kind == 'like' then
                 items[#items + 1] = { id = r.id, kind = 'like', user = user, text = 'liked your post' }
+            elseif r.kind == 'repost' then
+                items[#items + 1] = { id = r.id, kind = 'repost', user = user, text = 'reposted your post' }
             elseif r.kind == 'follow' then
                 items[#items + 1] = { id = r.id, kind = 'follow', user = user }
             end

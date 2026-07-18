@@ -73,6 +73,17 @@ function store.ensureSchema()
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
 
+    -- Mirrors phone_birdy_likes; the composite PK makes reposts idempotent.
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS phone_birdy_reposts (
+            post_id    VARCHAR(16) NOT NULL,
+            citizenid  VARCHAR(64) NOT NULL,
+            created_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (post_id, citizenid),
+            INDEX idx_birdy_reposts_post (post_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ]])
+
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_birdy_follows (
             follower_cid VARCHAR(64) NOT NULL,
@@ -161,8 +172,7 @@ local function hydrateProfile(row)
         verified    = isTruthy(row.verified),
         loggedIn    = isTruthy(row.logged_in),
         joinLabel   = row.join_label,
-        -- The authoritative signup time. joinLabel above is a legacy client-writable string
-        -- kept only as a fallback for rows created before this was read back.
+        -- Authoritative signup time; joinLabel is a legacy fallback.
         createdTs   = tonumber(row.created_ts),
         protected   = isTruthy(row.protected),
     }
@@ -285,10 +295,14 @@ local function hydratePost(row)
         replies     = tonumber(row.reply_count) or 0,
         likes       = tonumber(row.like_count) or 0,
         liked       = (tonumber(row.liked) or 0) > 0,
+        reposts     = tonumber(row.repost_count) or 0,
+        reposted    = (tonumber(row.reposted) or 0) > 0,
     }
 end
 
----@type string SELECT prefix producing hydratePost-shaped rows (viewer cid is always param #1).
+---@type string SELECT prefix producing hydratePost-shaped rows. The viewer cid is params #1 AND
+---#2 (the `liked` and `reposted` flags), so every caller must pass it twice, ahead of its own
+---parameters.
 local POST_SELECT = [[
     SELECT
         p.id, p.author_cid, p.body, p.parent_id, p.images, p.views,
@@ -296,7 +310,9 @@ local POST_SELECT = [[
         pr.handle, pr.display_name, pr.verified,
         (SELECT COUNT(*) FROM phone_birdy_likes l  WHERE l.post_id   = p.id) AS like_count,
         (SELECT COUNT(*) FROM phone_birdy_posts r  WHERE r.parent_id = p.id) AS reply_count,
-        (SELECT COUNT(*) FROM phone_birdy_likes lv WHERE lv.post_id  = p.id AND lv.citizenid = ?) AS liked
+        (SELECT COUNT(*) FROM phone_birdy_reposts rp WHERE rp.post_id = p.id) AS repost_count,
+        (SELECT COUNT(*) FROM phone_birdy_likes lv WHERE lv.post_id  = p.id AND lv.citizenid = ?) AS liked,
+        (SELECT COUNT(*) FROM phone_birdy_reposts rv WHERE rv.post_id = p.id AND rv.citizenid = ?) AS reposted
     FROM phone_birdy_posts p
     JOIN phone_birdy_profiles pr ON pr.citizenid = p.author_cid
 ]]
@@ -319,7 +335,7 @@ function store.listPostsBy(authorCid, kind, viewerCid, limit)
     end
     local rows = MySQL.query.await(
         POST_SELECT .. (' WHERE p.author_cid = ? AND %s ORDER BY p.created_at DESC LIMIT ?'):format(clause),
-        { viewerCid, authorCid, limit }
+        { viewerCid, viewerCid, authorCid, limit }
     ) or {}
     for i = 1, #rows do rows[i] = hydratePost(rows[i]) end
     return rows
@@ -336,18 +352,20 @@ function store.listLikedBy(likerCid, viewerCid, limit)
             JOIN phone_birdy_likes lk ON lk.post_id = p.id AND lk.citizenid = ?
             ORDER BY lk.created_at DESC LIMIT ?
         ]],
-        { viewerCid, likerCid, limit }
+        { viewerCid, viewerCid, likerCid, limit }
     ) or {}
     for i = 1, #rows do rows[i] = hydratePost(rows[i]) end
     return rows
 end
 
----Deletes an account and every row it owns or references: likes, likes on its posts, posts,
----follows, DMs, notifications, then the profile row.
+---Deletes an account and every row it owns or references: likes and reposts (its own, and
+---others' on its posts), posts, follows, DMs, notifications, then the profile row.
 ---@param citizenid string
 function store.deleteAccount(citizenid)
     MySQL.update.await('DELETE FROM phone_birdy_likes WHERE citizenid = ?', { citizenid })
     MySQL.update.await('DELETE FROM phone_birdy_likes WHERE post_id IN (SELECT id FROM phone_birdy_posts WHERE author_cid = ?)', { citizenid })
+    MySQL.update.await('DELETE FROM phone_birdy_reposts WHERE citizenid = ?', { citizenid })
+    MySQL.update.await('DELETE FROM phone_birdy_reposts WHERE post_id IN (SELECT id FROM phone_birdy_posts WHERE author_cid = ?)', { citizenid })
     MySQL.update.await('DELETE FROM phone_birdy_posts WHERE author_cid = ?', { citizenid })
     MySQL.update.await('DELETE FROM phone_birdy_follows WHERE follower_cid = ? OR target_cid = ?', { citizenid, citizenid })
     MySQL.update.await('DELETE FROM phone_birdy_dms WHERE from_cid = ? OR to_cid = ?', { citizenid, citizenid })
@@ -405,7 +423,7 @@ end
 ---@return table|nil
 function store.getPost(id, viewerCid)
     return hydratePost(MySQL.single.await(
-        POST_SELECT .. ' WHERE p.id = ? LIMIT 1', { viewerCid, id }
+        POST_SELECT .. ' WHERE p.id = ? LIMIT 1', { viewerCid, viewerCid, id }
     ))
 end
 
@@ -425,7 +443,7 @@ function store.postsByIds(ids, viewerCid)
     if #list == 0 then return out end
     local marks = {}
     for i = 1, #list do marks[i] = '?' end
-    local params = { viewerCid }
+    local params = { viewerCid, viewerCid }
     for i = 1, #list do params[#params + 1] = list[i] end
     local rows = MySQL.query.await(
         POST_SELECT .. (' WHERE p.id IN (%s)'):format(table.concat(marks, ',')), params) or {}
@@ -448,11 +466,11 @@ function store.listFeed(viewerCid, limit, onlyFollowing)
             WHERE p.parent_id IS NULL
               AND p.author_cid IN (SELECT target_cid FROM phone_birdy_follows WHERE follower_cid = ?)
             ORDER BY p.created_at DESC LIMIT ?
-        ]], { viewerCid, viewerCid, limit }) or {}
+        ]], { viewerCid, viewerCid, viewerCid, limit }) or {}
     else
         rows = MySQL.query.await(POST_SELECT .. [[
             WHERE p.parent_id IS NULL ORDER BY p.created_at DESC LIMIT ?
-        ]], { viewerCid, limit }) or {}
+        ]], { viewerCid, viewerCid, limit }) or {}
     end
     for i = 1, #rows do rows[i] = hydratePost(rows[i]) end
     return rows
@@ -464,7 +482,7 @@ end
 function store.listReplies(parentId, viewerCid)
     local rows = MySQL.query.await(
         POST_SELECT .. ' WHERE p.parent_id = ? ORDER BY p.created_at ASC',
-        { viewerCid, parentId }
+        { viewerCid, viewerCid, parentId }
     ) or {}
     for i = 1, #rows do rows[i] = hydratePost(rows[i]) end
     return rows
@@ -513,6 +531,28 @@ function store.removeLike(postId, cid)
     MySQL.update.await('DELETE FROM phone_birdy_likes WHERE post_id = ? AND citizenid = ?', { postId, cid })
 end
 
+---Adds a repost. INSERT IGNORE makes replays a no-op.
+---@param postId string
+---@param cid string
+function store.addRepost(postId, cid)
+    MySQL.insert.await('INSERT IGNORE INTO phone_birdy_reposts (post_id, citizenid) VALUES (?, ?)', { postId, cid })
+end
+
+---@param postId string
+---@param cid string
+function store.removeRepost(postId, cid)
+    MySQL.update.await('DELETE FROM phone_birdy_reposts WHERE post_id = ? AND citizenid = ?', { postId, cid })
+end
+
+---@param postId string
+---@param cid string
+---@return boolean true when `cid` has reposted the post
+function store.isReposted(postId, cid)
+    return MySQL.scalar.await(
+        'SELECT 1 FROM phone_birdy_reposts WHERE post_id = ? AND citizenid = ? LIMIT 1', { postId, cid }
+    ) ~= nil
+end
+
 ---@param postId string
 ---@param cid string
 ---@return boolean true when `cid` has liked the post
@@ -535,16 +575,12 @@ function store.removeFollow(follower, target)
     MySQL.update.await('DELETE FROM phone_birdy_follows WHERE follower_cid = ? AND target_cid = ?', { follower, target })
 end
 
----One side of `targetCid`'s follow graph, newest edge first, as profile cards for the UI. The two
----reciprocal flags are resolved against `viewerCid` in SQL so the caller needs no extra round
----trips: `follows_you` is "this person follows the VIEWER", `is_following` is "the VIEWER follows
----this person" (what drives the Follow / Following button).
+---One side of `targetCid`'s follow graph, newest first, with both reciprocal flags resolved against `viewerCid`.
 ---@param viewerCid string the signed-in player, for the reciprocal flags
 ---@param targetCid string whose list is being read
 ---@param kind 'followers'|'following'
 ---@return table[] rows
 function store.followList(viewerCid, targetCid, kind)
-    -- Only the join column differs between the two directions.
     local joinOn, whereCol = 'pr.citizenid = f.follower_cid', 'f.target_cid'
     if kind == 'following' then
         joinOn, whereCol = 'pr.citizenid = f.target_cid', 'f.follower_cid'

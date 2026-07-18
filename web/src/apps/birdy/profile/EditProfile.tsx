@@ -96,8 +96,6 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onDeleted }
                         />
                     </div>
 
-                    {/* Read-only: the join date comes from the account's created_at, so it is
-                        shown rather than edited. */}
                     <Row label={t('birdy.joinDate', 'Join Date')}>
                         <span className="block w-full text-right text-[17px] text-black/45">{profile.joined}</span>
                     </Row>

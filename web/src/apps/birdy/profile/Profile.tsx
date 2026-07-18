@@ -28,7 +28,7 @@ function tabEmptyStates(): Record<Tab, { icon: React.ReactNode; title: string; s
     };
 }
 
-export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onToggleLike, onToggleFollow, onOpenAuthor }: {
+export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onToggleLike, onToggleRepost, onToggleFollow, onOpenAuthor }: {
     profile:         BirdyProfile | null;
     me:              BirdyAuthor;
     handle?:         string;
@@ -36,6 +36,7 @@ export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onTog
     onEdit:          () => void;
     onOpenPost:      (id: string) => void;
     onToggleLike:    (id: string) => void;
+    onToggleRepost:  (id: string) => void;
     onToggleFollow?: (handle: string) => void;
     onOpenAuthor?:   (handle: string) => void;
 }) {
@@ -153,6 +154,7 @@ export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onTog
                             post={post}
                             isOwn={post.author.handle === me.handle}
                             onToggleLike={() => onToggleLike(post.id)}
+                            onToggleRepost={() => onToggleRepost(post.id)}
                             onOpen={() => onOpenPost(post.id)}
                             onOpenAuthor={onOpenAuthor}
                         />

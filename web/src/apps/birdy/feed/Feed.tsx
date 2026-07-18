@@ -6,12 +6,13 @@ import { Avatar, BirdMark } from '../ui';
 
 type FeedKind = 'all' | 'following';
 
-export function Feed({ posts, me, feed, onFeedChange, onToggleLike, onOpenPost, onOpenProfile, onOpenAuthor }: {
+export function Feed({ posts, me, feed, onFeedChange, onToggleLike, onToggleRepost, onOpenPost, onOpenProfile, onOpenAuthor }: {
     posts:         BirdyPost[];
     me:            BirdyAuthor;
     feed:          FeedKind;
     onFeedChange:  (f: FeedKind) => void;
     onToggleLike:  (id: string) => void;
+    onToggleRepost: (id: string) => void;
     onOpenPost:    (id: string) => void;
     onOpenProfile: () => void;
     onOpenAuthor?: (handle: string) => void;
@@ -53,6 +54,7 @@ export function Feed({ posts, me, feed, onFeedChange, onToggleLike, onOpenPost, 
                             post={p}
                             isOwn={p.author.handle === me.handle}
                             onToggleLike={() => onToggleLike(p.id)}
+                            onToggleRepost={() => onToggleRepost(p.id)}
                             onOpen={() => onOpenPost(p.id)}
                             onOpenAuthor={onOpenAuthor}
                         />

@@ -14,7 +14,7 @@ import { MAIL_DOMAIN, accountsConfirmReset, accountsRequestReset, accountsSavePa
 import { toggleReactionLocal } from '@/shared/chat/messagesApi';
 import type { MessageDraft } from '@/shared/chat/ChatView';
 import {
-    apiCreate, apiDmList, apiDmMarkRead, apiDmReact, apiDmSend, apiDmThread, apiFeed, apiLogin, apiMe, apiPostDetail, apiProfile, apiRegister, apiReply, apiToggleFollow, apiToggleLike,
+    apiCreate, apiDmList, apiDmMarkRead, apiDmReact, apiDmSend, apiDmThread, apiFeed, apiLogin, apiMe, apiPostDetail, apiProfile, apiRegister, apiReply, apiToggleFollow, apiToggleLike, apiToggleRepost,
 } from './birdyApi';
 import { ChatView } from './dms/ChatView';
 import { Composer } from './feed/Composer';
@@ -48,16 +48,13 @@ export function Birdy({ onClose }: { onClose: () => void }) {
     const [profile,        setProfile]        = useState<BirdyProfile | null>(null);
     const [sendError,      setSendError]      = useState<string | null>(null);
 
-    // AppDeck retains this subtree, so closing and reopening Birdy does NOT remount it. Keying
-    // the fetch on [authed, feed] alone meant toggling the tab was the only way to ever see a
-    // new post. feedNonce is bumped by the server broadcast and by re-foregrounding the app.
+    // AppDeck retains this subtree, so refetching needs an explicit nonce.
     const [feedNonce, setFeedNonce] = useState(0);
     const refreshFeed = useCallback(() => setFeedNonce(n => n + 1), []);
 
     useNuiEvent('sd-phone:birdy:feedChanged', refreshFeed);
 
-    // Only on a background -> foreground transition. The initial mount is already covered by the
-    // fetch below, so refreshing here too would double-request on every open.
+    // Transition only; the mount fetch below already covers first open.
     const deckActive = useDeckActive();
     const wasActive = useRef(deckActive);
     useEffect(() => {
@@ -140,6 +137,14 @@ export function Birdy({ onClose }: { onClose: () => void }) {
         void apiToggleLike(id);
     }
 
+    function toggleRepost(id: string) {
+        const flip = (p: BirdyPost): BirdyPost =>
+            p.id === id ? { ...p, reposted: !p.reposted, reposts: p.reposts + (p.reposted ? -1 : 1) } : p;
+        setPosts(prev => prev.map(flip));
+        setOpenPost(prev => prev ? { ...flip(prev), thread: prev.thread?.map(flip) } : prev);
+        void apiToggleRepost(id);
+    }
+
     async function addPost(body: string, images: string[]) {
         const post = await apiCreate(body, images.length ? images : undefined);
         if (post) setPosts(prev => [post, ...prev]);
@@ -220,7 +225,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
 
     let content: React.ReactNode;
     if (tab === 'home') {
-        content = <Feed posts={posts} me={me} feed={feed} onFeedChange={setFeed} onToggleLike={toggleLike} onOpenPost={setOpenPostId} onOpenProfile={openProfile} onOpenAuthor={openProfile} />;
+        content = <Feed posts={posts} me={me} feed={feed} onFeedChange={setFeed} onToggleLike={toggleLike} onToggleRepost={toggleRepost} onOpenPost={setOpenPostId} onOpenProfile={openProfile} onOpenAuthor={openProfile} />;
     } else if (tab === 'search') {
         content = <Search onOpenProfile={openProfile} />;
     } else if (tab === 'notifications') {
@@ -238,6 +243,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                         me={me}
                         onBack={close}
                         onToggleLike={() => toggleLike(openPost.id)}
+                        onToggleRepost={() => toggleRepost(openPost.id)}
                         onToggleReplyLike={rid => toggleLike(rid)}
                         onOpenAuthor={openProfile}
                         onReply={b => addReply(openPost.id, b)}
@@ -349,10 +355,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                 )
             )}
 
-            {/* Deliberately NOT gated on !openPostId: tapping a commenter's avatar/name inside a
-                post always has a post open, so that gate suppressed the profile 100% of the time
-                from comments. The SlideOver is z-30 and the post overlay z-20, so it layers over
-                the post and closing it returns you to the comments. */}
+            {/* Not gated on !openPostId, or comment authors are unreachable. */}
             {profileOpen && !openConvoId && (
                 <SlideOver onClose={() => { setProfileOpen(false); setProfileTarget(null); }} animateIn={animateNav}>
                     {close => (
@@ -364,6 +367,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                             onEdit={() => setEditingProfile(true)}
                             onOpenPost={setOpenPostId}
                             onToggleLike={toggleLike}
+                            onToggleRepost={toggleRepost}
                             onToggleFollow={toggleFollow}
                             onOpenAuthor={openProfile}
                         />

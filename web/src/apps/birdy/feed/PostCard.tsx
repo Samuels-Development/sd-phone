@@ -6,10 +6,11 @@ import { AlertDialog } from '@/ui/AlertDialog';
 import { LIKE, META, REPOST, relativeTime, type BirdyPost } from '../data';
 import { Avatar, PostImages, RichText, VerifiedBadge } from '../ui';
 
-export function PostCard({ post, isOwn, onToggleLike, onOpen, onOpenAuthor }: {
+export function PostCard({ post, isOwn, onToggleLike, onToggleRepost, onOpen, onOpenAuthor }: {
     post:          BirdyPost;
     isOwn:         boolean;
     onToggleLike:  () => void;
+    onToggleRepost?: () => void;
     onOpen?:       () => void;
     onOpenAuthor?: (handle: string) => void;
 }) {
@@ -19,9 +20,10 @@ export function PostCard({ post, isOwn, onToggleLike, onOpen, onOpenAuthor }: {
         onOpenAuthor(post.author.handle);
     };
 
-    const [reposted, setReposted] = useState(false);
+    // Server truth; the parent applies the optimistic flip.
+    const reposted = post.reposted === true;
     const [confirmRepost, setConfirmRepost] = useState(false);
-    const repostCount = post.reposts + (reposted ? 1 : 0);
+    const repostCount = post.reposts;
 
     return (
         <>
@@ -102,7 +104,7 @@ export function PostCard({ post, isOwn, onToggleLike, onOpen, onOpenAuthor }: {
                     : t('birdy.retweetMessage', "Are you sure you want to retweet {name}'s post?", { name: post.author.name })}
                 confirmLabel={reposted ? t('birdy.undo', 'Undo') : t('birdy.retweet', 'Retweet')}
                 onCancel={() => setConfirmRepost(false)}
-                onConfirm={() => { setReposted(r => !r); setConfirmRepost(false); }}
+                onConfirm={() => { onToggleRepost?.(); setConfirmRepost(false); }}
             />
         )}
         </>
