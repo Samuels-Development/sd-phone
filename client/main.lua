@@ -307,6 +307,19 @@ local function OpenPhone()
     phoneState.open   = true
     phoneState.locked = true
 
+    CreateThread(function()
+        while phoneState.open do
+            DisableControlAction(0, 199, true) -- INPUT_FRONTEND_PAUSE
+            DisableControlAction(0, 200, true) -- INPUT_FRONTEND_PAUSE_ALTERNATE
+            Wait(0)
+        end
+        for i = 1, 15 do
+            DisableControlAction(0, 199, true)
+            DisableControlAction(0, 200, true)
+            Wait(0)
+        end
+    end)
+
     updatePose()
 
     TriggerEvent('sd-phone:client:openState', true)
@@ -505,18 +518,19 @@ CreateThread(function()
     end
 end)
 
--- Draws a spotlight from the hand bone toward the camera each frame while the torch is on;
--- idles at a 300ms poll while off.
+-- Draws a spotlight from the hand bone in the ped's facing direction each frame while the
+-- torch is on; idles at a 300ms poll while off. Direction is NOT camera-based so looking
+-- around does not move the beam.
 CreateThread(function()
     local fl = config.Phone.Flashlight
     while true do
         if flashlightOn then
             local ped = PlayerPedId()
             local pos = GetPedBoneCoords(ped, config.Phone.PropBone, 0.0, 0.0, 0.0)
-            local dir = rotToDir(GetGameplayCamRot(2))
+            local fwd = GetEntityForwardVector(ped)
             DrawSpotLight(
-                pos.x, pos.y, pos.z + 0.1,
-                dir.x, dir.y, dir.z,
+                pos.x, pos.y, pos.z,
+                fwd.x, fwd.y, fwd.z,
                 fl.Color[1], fl.Color[2], fl.Color[3],
                 fl.Distance, fl.Brightness, 0.0, fl.Radius, 1.0
             )
