@@ -62,6 +62,8 @@ html, body, #root {
                 fill             0.3s ease,
                 stroke           0.3s ease !important;
 }
+@keyframes admin-toast { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.animate-admin-toast { animation: admin-toast 0.22s ease; }
 @keyframes screenshot-flash { 0% { opacity: 0; } 12% { opacity: 0.95; } 100% { opacity: 0; } }
 .animate-screenshot-flash { animation: screenshot-flash 0.5s ease-out forwards; }
 @keyframes photo-in  { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }

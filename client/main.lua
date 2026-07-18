@@ -49,6 +49,7 @@ require 'client.apps.cookie'
 require 'client.apps.stocks'
 require 'client.apps.games'
 require 'client.apps.settings'
+require 'client.admin'
 
 ---@type table Phone visibility state: open/locked flags + cosmetic battery percentage.
 local phoneState = {

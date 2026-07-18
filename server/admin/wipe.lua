@@ -63,12 +63,11 @@ local CID_PAIR = {
 
 ---Deletes one character's entire phone footprint: citizenid-keyed rows, social-app rows keyed by
 ---account username, mail logins, and the global app accounts + sessions the character used.
----@param src integer player server id
+---@param cid string|nil citizenid whose footprint is wiped
 ---@return string|nil cid wiped citizenid, nil when unresolvable
 ---@return integer|nil rows counted rows deleted (nil only alongside a nil cid)
-local function wipePlayer(src)
-    local cid = player.getIdentifier(src)
-    if not cid then return nil end
+local function wipeCid(cid)
+    if not cid or cid == '' then return nil end
 
     local userFor, accountIds = {}, {}
     local sessions = MySQL.query.await([[
@@ -170,7 +169,7 @@ lib.addCommand('wipemyphone', {
         return
     end
 
-    local cid, rows = wipePlayer(source)
+    local cid, rows = wipeCid(player.getIdentifier(source))
     if not cid then
         TriggerClientEvent('ox_lib:notify', source, { title = 'Phone', description = 'Could not resolve your character.', type = 'error' })
         return
@@ -185,3 +184,5 @@ lib.addCommand('wipemyphone', {
         type = 'success',
     })
 end)
+
+return { wipeCid = wipeCid }

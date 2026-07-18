@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { AdminPanel } from '@/admin/AdminPanel';
 import { CallLayer } from '@/apps/phone/CallLayer';
 import { NotificationHost, type NotificationItem } from '@/shell/Notifications';
 import { AirShareCard, type AirShareRequest } from '@/shared/AirShare';
@@ -105,6 +106,7 @@ export function App() {
         <ThemeProvider>
             <MusicProvider>
                 <AppContent />
+                <AdminPanel />
             </MusicProvider>
         </ThemeProvider>
     );

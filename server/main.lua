@@ -51,6 +51,7 @@ require 'server.games.railrunner'
 require 'server.battleship.init'
 require 'server.wordle.init'
 require 'server.admin.wipe'
+require 'server.admin.init'
 -- lb-phone -> sd-phone one-time data import (no-op unless lb-phone's tables are present).
 require 'server.migrate.init'
 -- lb-phone export compatibility shim (inert while the real lb-phone runs; sd_phone_lbcompat kill switch).
