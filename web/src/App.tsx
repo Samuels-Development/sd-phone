@@ -369,10 +369,20 @@ function AppContent() {
         foreground(id, origin, fromSwitcher);
     }, [foreground, switcherOpen]);
 
+    // Single launch chokepoint for out-of-band opens (notifications, deeplinks, Control
+    // Center). The home screen only hides uninstalled icons, so the gate must live here:
+    // an uninstalled app's notification routes to the App Store instead of opening it.
     const openAppById = useCallback((id: string | null | undefined, origin: { x: number; y: number }) => {
         const app = asAppId(id);
-        if (app) handleOpenFromSwitcher(app, origin);
-    }, [handleOpenFromSwitcher]);
+        if (!app) return;
+        const def = view?.apps.find(a => a.id === app) ?? customDefs.find(c => c.id === app);
+        if (def && !def.base && !installedApps.has(app)) {
+            const store = asAppId('appstore');
+            if (store) handleOpenFromSwitcher(store, origin);
+            return;
+        }
+        handleOpenFromSwitcher(app, origin);
+    }, [handleOpenFromSwitcher, view, customDefs, installedApps]);
 
     const openAppCentered = useCallback((id: string) => openAppById(id, { x: 0.5, y: 0.5 }), [openAppById]);
 

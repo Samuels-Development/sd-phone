@@ -26,8 +26,80 @@ local function pushTo(src, eventName, payload)
     TriggerClientEvent(eventName, src, payload)
 end
 
+-- src -> citizenid, remembered on every groups interaction so playerDropped can still resolve
+-- who left after the framework has unloaded them.
+---@type table<number, string>
+local knownCids = {}
+
+---@param src number
+local function track(src)
+    local cid = player.getIdentifier(src)
+    if cid then knownCids[src] = cid end
+end
+
+---Nudges every online co-member of `cid`'s groups (except `cid` itself) to refetch their
+---roster; deduped so shared members get one push.
+---@param cid string
+---@param groups table[] hydrated rows from store.listForMember
+local function pushRosterToCoMembers(cid, groups)
+    local online = player.onlineCidMap()
+    local seen = {}
+    for _, g in ipairs(groups) do
+        for _, m in ipairs(g.members) do
+            if m.citizenid ~= cid then
+                local msrc = online[m.citizenid]
+                if msrc and not seen[msrc] then
+                    seen[msrc] = true
+                    pushTo(msrc, 'sd-phone:client:groups:updated', { groupId = g.id })
+                end
+            end
+        end
+    end
+end
+
+---A disconnect never fired any group event, so co-members kept seeing the player online
+---until they refreshed by hand. The short delay lets the drop finish so the refetched
+---roster no longer counts them.
+AddEventHandler('playerDropped', function()
+    local src = source
+    local cid = player.getIdentifier(src) or knownCids[src]
+    knownCids[src] = nil
+    if not cid then return end
+    local groups = store.listForMember(cid)
+    if #groups == 0 then return end
+    SetTimeout(500, function() pushRosterToCoMembers(cid, groups) end)
+end)
+
+---Uninstalling Groups leaves every membership behind: groups the player leads are disbanded,
+---plain memberships are removed, the active pointer and pending invites are cleared, and
+---affected online members are notified.
+AddEventHandler('sd-phone:server:apps:uninstalled', function(data)
+    if type(data) ~= 'table' or data.appId ~= 'groups' or type(data.citizenid) ~= 'string' then return end
+    local cid = data.citizenid
+    local online = player.onlineCidMap()
+    for _, g in ipairs(store.listForMember(cid)) do
+        if g.leader_cid == cid then
+            store.deleteGroup(g.id)
+            for _, m in ipairs(g.members) do
+                if m.citizenid ~= cid then
+                    pushTo(online[m.citizenid], 'sd-phone:client:groups:disbanded', { groupId = g.id, name = g.name })
+                end
+            end
+        else
+            store.removeMember(g.id, cid)
+            local leaderSrc = online[g.leader_cid]
+            if leaderSrc then pushTo(leaderSrc, 'sd-phone:client:groups:memberLeft', { groupId = g.id }) end
+        end
+    end
+    for _, hit in ipairs(store.listInvitesFor(cid)) do
+        store.removeInvite(hit.invite.id)
+    end
+    store.clearActiveGroupForPlayer(cid)
+end)
+
 -- Authoritative NUI-facing callbacks: validation + permission checks live in server.groups.actions.
 lib.callback.register('sd-phone:server:groups:list', function(src)
+    track(src)
     return actions.list(src)
 end)
 
@@ -59,6 +131,7 @@ end)
 ---Accepts an invite. On success the online leader gets a memberJoined push and the leader's
 ---raw citizenid is stripped from the response; the badge recount runs on success and failure.
 lib.callback.register('sd-phone:server:groups:accept', function(src, payload)
+    track(src)
     local result = actions.accept(src, payload)
     if result.success and result.data then
         local leaderSrc = player.getSourceByIdentifier(result.data.leader)
@@ -146,6 +219,7 @@ end)
 
 -- Thin delegates: active-group selection and the active-id read.
 lib.callback.register('sd-phone:server:groups:setActive', function(src, payload)
+    track(src)
     return actions.setActive(src, payload)
 end)
 

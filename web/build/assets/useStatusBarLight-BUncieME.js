@@ -1,1 +1,0 @@
-import{d5 as s,cj as u,dg as r}from"./index-Barlklik.js";function i(t){const e=s();u.useEffect(()=>{if(!(!e||t==null))return r.getState().setStatusLightOverride(t),()=>r.getState().setStatusLightOverride(null)},[e,t])}export{i as u};

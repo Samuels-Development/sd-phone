@@ -1,0 +1,1 @@
+import{bM as s,r as u,cK as r}from"./index-BvxLpDH1.js";function i(t){const e=s();u.useEffect(()=>{if(!(!e||t==null))return r.getState().setStatusLightOverride(t),()=>r.getState().setStatusLightOverride(null)},[e,t])}export{i as u};
