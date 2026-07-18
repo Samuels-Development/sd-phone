@@ -144,14 +144,23 @@ end
 actions.serializeMessage = serializeMessage
 
 ---Delivery fan-out: resolves each entry's citizenid to a live source and, when online, sends
----the message as a live UI event plus a badge repush. Offline citizens are skipped.
+---the message as a live UI event, a phone banner, and a badge repush. Offline citizens are
+---skipped.
 ---@param pushes { citizenid: string, message: table }[]
 function actions.deliver(pushes)
     if type(pushes) ~= 'table' then return end
     for i = 1, #pushes do
         local src = player.getSourceByIdentifier(pushes[i].citizenid)
         if src then
-            TriggerClientEvent('sd-phone:client:mail:received', src, pushes[i].message)
+            local msg  = pushes[i].message
+            local from = msg.from or {}
+            TriggerClientEvent('sd-phone:client:mail:received', src, msg)
+            TriggerClientEvent('sd-phone:client:notify', src, {
+                app = 'mail', appId = 'mail',
+                title = (from.name and from.name ~= '') and from.name or (from.email or 'Mail'),
+                body  = (msg.subject and msg.subject ~= '') and msg.subject or 'New email',
+                time  = 'now', quietInApp = true,
+            })
             badges.push(src)
         end
     end
@@ -593,10 +602,26 @@ function actions.move(source, payload)
         return { success = false, message = 'Bad folder' }
     end
     store.mutateMessage(payload.accountEmail, payload.messageId or '', function(m)
-        if m.folder == folder then return nil end
+        -- Returning nil would hard-delete; a same-folder move must be a no-op.
+        if m.folder == folder then return m end
         m.folder = folder
         if folder == 'bin' then m.flagged = false end
         return m
+    end)
+    return ok()
+end
+
+---Hard-deletes a draft (and only a draft): used when an edited draft is re-sent or re-saved so
+---the stale copy doesn't linger. Any other folder is left untouched. Ownership-gated.
+---@param source number
+---@param payload { accountEmail?: string, messageId?: string }
+---@return table
+function actions.discardDraft(source, payload)
+    payload = payload or {}
+    local _, err = requireOwnership(source, payload.accountEmail); if err then return err end
+    store.mutateMessage(payload.accountEmail, payload.messageId or '', function(m)
+        if m.folder ~= 'drafts' then return m end
+        return nil
     end)
     return ok()
 end

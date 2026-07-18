@@ -82,6 +82,13 @@ lib.callback.register('sd-phone:server:mail:moveToBin', function(src, payload)
     return result
 end)
 
+---Discarding a draft repushes the badge snapshot.
+lib.callback.register('sd-phone:server:mail:discardDraft', function(src, payload)
+    local result = actions.discardDraft(src, payload)
+    badges.push(src)
+    return result
+end)
+
 ---Move repushes the badge snapshot.
 lib.callback.register('sd-phone:server:mail:move', function(src, payload)
     local result = actions.move(src, payload)

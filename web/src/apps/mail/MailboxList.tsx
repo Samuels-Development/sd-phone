@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import {
-    AlertOctagon, AtSign, ChevronRight, FileText, Flag, GripVertical, Inbox, Send, SquarePen, Trash2,
+    AlertOctagon, ChevronRight, FileText, Flag, GripVertical, Inbox, Send, SquarePen, Trash2,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 
@@ -124,10 +124,7 @@ export function MailboxList({
                         <div className="truncate text-[34px] font-bold tracking-tight leading-tight">
                             {activeAccount.name}
                         </div>
-                        <div className="mt-0.5 flex items-center gap-1 text-[15px] text-ios-blue">
-                            <AtSign className="h-[15px] w-[15px] shrink-0" strokeWidth={2.5} />
-                            <span className="truncate">{activeAccount.email}</span>
-                        </div>
+                        <div className="mt-0.5 truncate text-[15px] text-ios-blue">{activeAccount.email}</div>
                     </>
                 ) : (
                     <>
