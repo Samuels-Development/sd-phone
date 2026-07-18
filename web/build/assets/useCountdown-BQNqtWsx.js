@@ -1,0 +1,1 @@
+import{r as e}from"./index-DknY2M3V.js";function s(t,r=!0){const[f,a]=e.useState(()=>Math.max(0,Math.floor(t)));return e.useEffect(()=>{a(Math.max(0,Math.floor(t)))},[t]),e.useEffect(()=>{if(!r)return;const u=window.setInterval(()=>a(o=>o>0?o-1:0),1e3);return()=>window.clearInterval(u)},[r]),f}export{s as u};

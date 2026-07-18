@@ -509,7 +509,7 @@ CONTENT.messages = {
         return MySQL.query.await([[
             SELECT id, created_at AS ts, citizenid AS author_cid, conversation, direction, kind, body
             FROM phone_messages
-            WHERE direction = 'out'
+            WHERE direction = 'outgoing'
               AND (? IS NULL OR body LIKE ? OR conversation LIKE ?)
               AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?))
             ORDER BY created_at DESC, id DESC

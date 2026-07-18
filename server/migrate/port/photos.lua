@@ -21,10 +21,11 @@ function M.run(ctx)
             if cid and p.link and p.link ~= '' then
                 local id = ('p%s'):format(p.id)
                 photoIds[tostring(p.id)] = id
+                local ts = tonumber(p.created_ts)
                 photoRows[#photoRows + 1] = {
                     id, cid, tostring(p.link):sub(1, 512),
                     util.truthy(p.is_favourite) and 1 or 0,
-                    p.created_at or os.date('!%Y-%m-%d %H:%M:%S'),
+                    (ts and ts > 0) and os.date('!%Y-%m-%d %H:%M:%S', ts) or os.date('!%Y-%m-%d %H:%M:%S'),
                 }
                 photos = photos + 1
             else

@@ -165,17 +165,22 @@ export function ContentPage({ app, searchPlaceholder, emptyLabel, deleteBody, gr
                     className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 rounded-2xl bg-black/80 p-8"
                     onMouseDown={() => setViewing(null)}
                 >
-                    <img src={viewing.imageUrl} className="max-h-[85%] max-w-full rounded-lg object-contain" onMouseDown={e => e.stopPropagation()} />
-                    <div className="flex items-center gap-3 text-[12.5px] text-zinc-300" onMouseDown={e => e.stopPropagation()}>
-                        <span className="font-semibold">{viewing.authorName ?? 'Unknown'}</span>
-                        <span className="font-mono text-[11px] text-zinc-500">{viewing.authorCid}</span>
+                    <img src={viewing.imageUrl} className="max-h-[82%] max-w-full rounded-lg object-contain shadow-2xl" onMouseDown={e => e.stopPropagation()} />
+                    <div
+                        className="flex items-center gap-3 rounded-xl bg-[#1a1b1f] px-4 py-2.5 text-[12.5px] shadow-xl ring-1 ring-white/10"
+                        onMouseDown={e => e.stopPropagation()}
+                    >
+                        <OnlineDot online={viewing.authorOnline} />
+                        <span className="font-bold text-zinc-100">{viewing.authorName ?? 'Unknown'}</span>
+                        <span className="font-mono text-[11px] text-zinc-400">{viewing.authorCid}</span>
                         <span className="text-zinc-500">{fmtTime(viewing.createdAt)}</span>
+                        <span className="h-4 w-px bg-white/10" />
                         {viewing.authorCid && (
-                            <Btn variant="ghost" onClick={() => { setViewing(null); onOpenPlayer(viewing.authorCid!); }}>
+                            <Btn variant="primary" onClick={() => { setViewing(null); onOpenPlayer(viewing.authorCid!); }}>
                                 <UserSearch size={13} /> Open player
                             </Btn>
                         )}
-                        <Btn variant="subtle" onClick={() => setViewing(null)}>Close</Btn>
+                        <Btn variant="ghost" onClick={() => setViewing(null)}>Close</Btn>
                     </div>
                 </div>
             )}

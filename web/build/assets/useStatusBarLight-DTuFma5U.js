@@ -1,0 +1,1 @@
+import{bL as s,r as u,cJ as r}from"./index-DknY2M3V.js";function i(t){const e=s();u.useEffect(()=>{if(!(!e||t==null))return r.getState().setStatusLightOverride(t),()=>r.getState().setStatusLightOverride(null)},[e,t])}export{i as u};

@@ -425,7 +425,7 @@ function MessagesTab({ cid }: { cid: string }) {
                                 {m.conversation.startsWith('g-') ? m.conversation : fmtPhone(m.conversation)}
                             </td>
                             <td className="px-4 py-2">
-                                <Badge tone={m.direction === 'out' ? 'blue' : 'neutral'}>{m.direction}</Badge>
+                                <Badge tone={m.direction === 'outgoing' ? 'blue' : 'neutral'}>{m.direction}</Badge>
                             </td>
                             <td className="px-4 py-2 text-zinc-500">{m.kind}</td>
                             <td className="max-w-[340px] truncate px-4 py-2 text-zinc-300" title={m.body ?? ''}>
@@ -472,7 +472,7 @@ function CallsTab({ cid }: { cid: string }) {
                             <td className="px-4 py-2 text-zinc-300">{fmtPhone(call.number)}</td>
                             <td className="px-4 py-2 text-zinc-400">{call.name ?? '—'}</td>
                             <td className="px-4 py-2">
-                                <Badge tone={call.direction === 'missed' ? 'red' : call.direction === 'out' ? 'blue' : 'neutral'}>
+                                <Badge tone={call.direction === 'missed' ? 'red' : call.direction === 'outgoing' ? 'blue' : 'neutral'}>
                                     {call.direction}
                                 </Badge>
                             </td>

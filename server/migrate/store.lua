@@ -199,8 +199,11 @@ end
 ---Every lb-phone photo; `created_at` is kept as the raw datetime string. Read-only.
 ---@return { id: any, phone_number: string, link: string, is_favourite: any, created_at: string }[]
 function store.lbPhotos()
+    -- The timestamp comes back as unix seconds: oxmysql hands TIMESTAMP columns to Lua as
+    -- millisecond numbers, which a TIMESTAMP insert then coerces to a zero date. The porter
+    -- formats these seconds back into a DATETIME literal.
     return MySQL.query.await(([[
-        SELECT id, phone_number, link, is_favourite, `timestamp` AS created_at
+        SELECT id, phone_number, link, is_favourite, UNIX_TIMESTAMP(`timestamp`) AS created_ts
         FROM %s
     ]]):format(lbt('photos'))) or {}
 end
