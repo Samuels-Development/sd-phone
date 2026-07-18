@@ -71,10 +71,6 @@ function jobs.list(src)
 
     local activeJob = job.getName(src)
 
-    -- Seed from the FRAMEWORK, not just the active job. On QBox a player can hold several
-    -- jobs (the `player_groups` table); previously only the active one was folded in, so a
-    -- job assigned outside the phone never appeared in the Jobs tab unless the player had
-    -- accepted a phone-issued offer for it. job.getAll() includes the active job too.
     local map    = store.getSaved(cid)
     local synced = false
     for jName, grade in pairs(job.getAll(src)) do
