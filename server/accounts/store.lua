@@ -35,7 +35,7 @@ function store.ensureSchema()
             created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             UNIQUE KEY uq_app_username (app, username)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ]])
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_app_sessions (
@@ -43,7 +43,7 @@ function store.ensureSchema()
             citizenid  VARCHAR(64) NOT NULL,
             account_id INT UNSIGNED NOT NULL,
             PRIMARY KEY (app, citizenid, account_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ]])
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_passwords (
@@ -57,7 +57,7 @@ function store.ensureSchema()
             created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             UNIQUE KEY uq_vault (citizenid, app, username)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ]])
 end
 
@@ -252,7 +252,7 @@ function store.migrateLegacy()
         INSERT IGNORE INTO phone_app_sessions (app, citizenid, account_id)
         SELECT 'birdy', p.citizenid, a.id
         FROM phone_birdy_profiles p
-        JOIN phone_app_accounts a ON a.app = 'birdy' AND a.username = p.handle
+        JOIN phone_app_accounts a ON a.app = 'birdy' AND a.username = p.handle COLLATE utf8mb4_unicode_ci
         WHERE p.logged_in = 1
     ]])
     MySQL.query.await([[
