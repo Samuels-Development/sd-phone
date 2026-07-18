@@ -13,7 +13,7 @@ body:
     attributes:
       label: Affected app
       description: Which app does this issue concern?
-      placeholder: e.g.: Mail, Maps, Services
+      placeholder: "e.g.: Mail, Maps, Services"
     validations:
       required: true
 
@@ -40,7 +40,7 @@ body:
     id: repro
     attributes:
       label: Steps to reproduce
-      description: Numbered steps — be specific enough that you could hand this to someone else
+      description: Numbered steps, be specific enough that you could hand this to someone else
       placeholder: |
         1. Receive a new text message from another player
         2. Attempt to open the text conversation
