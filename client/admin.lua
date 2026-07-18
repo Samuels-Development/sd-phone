@@ -1,5 +1,7 @@
 ---@type fun(nuiAction: string, serverEvent: string) NUI->server pass-through registrar (client.nui).
 local proxyCallback = require 'client.nui'
+---@type table sd-phone config root (configs/config.lua): AllowMovement for keep-input restore.
+local config = require 'configs.config'
 
 ---@type boolean True while the admin panel NUI is on screen.
 local adminOpen = false
@@ -9,25 +11,37 @@ local phoneOpen = false
 AddEventHandler('sd-phone:client:openState', function(open)
     phoneOpen = open and true or false
     -- The phone releases NUI focus when it closes; re-assert it while the panel is still up.
-    if not phoneOpen and adminOpen then SetNuiFocus(true, true) end
+    if not phoneOpen and adminOpen then
+        SetNuiFocus(true, true)
+        SetNuiFocusKeepInput(false)
+    end
 end)
 
 ---Opens the panel. Fired by the server-side /phoneadmin command (server/admin/init.lua), which
 ---is the permission gate - this event never opens anything the callbacks wouldn't refuse.
+---Keep-input is forced off so the game gets no movement/camera input while the panel is up
+---(the phone's AllowMovement mode leaves it on).
 ---@param adminName string acting admin's display name for the panel header
 RegisterNetEvent('sd-phone:client:admin:open', function(adminName)
     if adminOpen then return end
     adminOpen = true
     SetNuiFocus(true, true)
+    SetNuiFocusKeepInput(false)
     SendNUIMessage({ action = 'sd-phone:admin:open', data = { adminName = adminName } })
 end)
 
----React to Lua: the panel requests to close (X button / Escape).
+---React to Lua: the panel requests to close (X button / Escape). With the phone still open,
+---focus stays and its movement-mode keep-input is restored; otherwise focus is released.
 ---@param _ table|nil unused payload
 ---@param cb fun(result: table) NUI response
 RegisterNUICallback('sd-phone:admin:close', function(_, cb)
     adminOpen = false
-    if not phoneOpen then SetNuiFocus(false, false) end
+    if phoneOpen then
+        SetNuiFocus(true, true)
+        SetNuiFocusKeepInput(config.Phone.AllowMovement == true)
+    else
+        SetNuiFocus(false, false)
+    end
     cb({ ok = true })
 end)
 

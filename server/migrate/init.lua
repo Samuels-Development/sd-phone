@@ -52,7 +52,9 @@ local function run(opts)
         return
     end
 
-    if not store.waitForTables(TARGETS, 60, 500) then
+    -- Up to 2 minutes: on a large lb-phone database the schema bootstrap has to rename the
+    -- colliding lb tables and convert collations before the markers appear.
+    if not store.waitForTables(TARGETS, 240, 500) then
         log('^1sd-phone tables not ready in time, aborting import.^0')
         return
     end
