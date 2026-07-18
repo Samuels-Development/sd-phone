@@ -22,7 +22,7 @@ local actions = {}
 local ok, fail = util.ok, util.fail
 
 ---@type integer Fixed page size for every paginated admin read; the client can't raise it.
-local PAGE = 25
+local PAGE = 20
 
 -- Downloadable app ids/labels, mirrored from the App Store rules (base apps are fixed).
 ---@type table<string, boolean> Set of installable app ids.
@@ -73,16 +73,27 @@ local function resolveNames(cids)
     return names, online
 end
 
----Player search across names, citizenids, phone numbers, handles and account usernames.
+---Player listing, paginated 20 at a time. With a query (>= 2 chars): offset-paged search across
+---names, citizenids, phone numbers, handles and account usernames. Without one: the most
+---recently active phones, keyset-paged - the Players page's default view.
 ---@param source number admin player server id
----@param payload { q?: string }|nil
----@return table envelope { players }
+---@param payload { q?: string, cursor?: string|number }|nil
+---@return table envelope { players, nextCursor }
 function actions.search(source, payload)
     local q = util.trim(payload and payload.q)
-    if #q < 2 then return fail('Type at least 2 characters') end
     if #q > 64 then q = q:sub(1, 64) end
 
-    local hits = store.searchPlayers(q, PAGE)
+    local hits, nextCursor
+    if #q >= 2 then
+        local offset = math.max(0, math.floor(tonumber(payload and payload.cursor) or 0))
+        hits, nextCursor = store.searchPlayers(q, PAGE, offset)
+    elseif #q == 0 then
+        local cursor = payload and type(payload.cursor) == 'string' and payload.cursor or nil
+        hits, nextCursor = store.listRecentPlayers(cursor, PAGE)
+    else
+        return fail('Type at least 2 characters')
+    end
+
     local cids = {}
     for i, h in ipairs(hits) do cids[i] = h.citizenid end
     local names, online = resolveNames(cids)
@@ -95,10 +106,10 @@ function actions.search(source, payload)
             name        = names[h.citizenid],
             phoneNumber = numbers[h.citizenid],
             online      = online[h.citizenid] == true,
-            matchedOn   = h.matchedOn,
+            matchedOn   = h.matchedOn ~= 'recent' and h.matchedOn or nil,
         }
     end
-    return ok({ players = players })
+    return ok({ players = players, nextCursor = nextCursor })
 end
 
 ---One player's full phone overview for the detail page.

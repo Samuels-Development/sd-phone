@@ -15,8 +15,10 @@ function call<T>(event: string, payload?: unknown): Promise<Envelope<T>> {
 export const adminStats = () =>
     call<AdminStats>('sd-phone:admin:stats');
 
-export const adminSearch = (q: string) =>
-    call<{ players: AdminPlayerHit[] }>('sd-phone:admin:search', { q });
+// Empty q lists the most recently active phones (string keyset cursor); a real
+// query searches with a numeric offset cursor. Both return 20 per page.
+export const adminSearch = (q: string, cursor?: string | number | null) =>
+    call<{ players: AdminPlayerHit[]; nextCursor?: string | number | null }>('sd-phone:admin:search', { q, cursor });
 
 export const adminOverview = (cid: string) =>
     call<AdminOverview>('sd-phone:admin:overview', { cid });

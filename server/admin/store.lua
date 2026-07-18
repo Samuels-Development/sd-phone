@@ -122,13 +122,16 @@ end
 
 ---Searches phone-side data for players: citizenid prefix, phone number digits, contact-card
 ---name, Birdy handle/display name, app-account username, and the framework character name.
----Every branch is LIMIT-capped; the merged result is capped again at `limit`.
+---Merged results are offset-paginated: every branch is capped at `offset + limit + 1` rows,
+---so page depth stays bounded while the merge dedupes across sources.
 ---@param query string raw search text (>= 2 chars, enforced by the caller)
----@param limit integer maximum merged results
----@return table[] hits { citizenid, matchedOn }
-function store.searchPlayers(query, limit)
+---@param limit integer page size
+---@param offset integer merged rows to skip (previous pages)
+---@return table[] hits { citizenid, matchedOn }, integer|nil nextOffset
+function store.searchPlayers(query, limit, offset)
     local like   = '%' .. escapeLike(query) .. '%'
     local digits = util.digits(query)
+    local depth  = offset + limit + 1
     local hits, order = {}, {}
 
     local function add(cid, label)
@@ -143,8 +146,9 @@ function store.searchPlayers(query, limit)
         WHERE citizenid LIKE ?
            OR (? <> '' AND REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone_number,'-',''),' ',''),'(',''),')',''),'+',''),'.','') LIKE ?)
            OR card_name LIKE ?
+        ORDER BY updated_at DESC
         LIMIT ?
-    ]], { escapeLike(query) .. '%', digits, '%' .. digits .. '%', like, limit }) or {}
+    ]], { escapeLike(query) .. '%', digits, '%' .. digits .. '%', like, depth }) or {}
     for _, r in ipairs(settingsRows) do
         add(r.citizenid, r.card_name and r.card_name ~= '' and 'card' or 'phone')
     end
@@ -153,7 +157,7 @@ function store.searchPlayers(query, limit)
         SELECT citizenid, handle FROM phone_birdy_profiles
         WHERE handle LIKE ? OR display_name LIKE ?
         LIMIT ?
-    ]], { like, like, limit }) or {}
+    ]], { like, like, depth }) or {}
     for _, r in ipairs(birdyRows) do add(r.citizenid, '@' .. r.handle) end
 
     local accountRows = MySQL.query.await([[
@@ -162,16 +166,51 @@ function store.searchPlayers(query, limit)
         JOIN phone_app_sessions s ON s.account_id = a.id
         WHERE a.username LIKE ?
         LIMIT ?
-    ]], { like, limit }) or {}
+    ]], { like, depth }) or {}
     for _, r in ipairs(accountRows) do add(r.citizenid, ('%s:%s'):format(r.app, r.username)) end
 
-    for _, cid in ipairs(store.searchByName(like, limit)) do add(cid, 'name') end
+    for _, cid in ipairs(store.searchByName(like, depth)) do add(cid, 'name') end
 
     local out = {}
-    for i = 1, math.min(#order, limit) do
-        out[i] = { citizenid = order[i], matchedOn = hits[order[i]] }
+    for i = offset + 1, math.min(#order, offset + limit) do
+        out[#out + 1] = { citizenid = order[i], matchedOn = hits[order[i]] }
     end
-    return out
+    local nextOffset = #order > offset + limit and (offset + limit) or nil
+    return out, nextOffset
+end
+
+---Most recently active phones, newest first, keyset-paginated on (updated_at, citizenid) - the
+---Players page's default listing before any search. Read-only.
+---@param cursor string|nil opaque "ts:cid" cursor from the previous page
+---@param limit integer page size (already clamped)
+---@return table[] hits { citizenid, matchedOn }, string|nil nextCursor
+function store.listRecentPlayers(cursor, limit)
+    local ts, cid
+    if type(cursor) == 'string' and cursor ~= '' then
+        ts, cid = cursor:match('^(%d+):(.+)$')
+        ts = tonumber(ts)
+    end
+
+    local rows = MySQL.query.await([[
+        SELECT citizenid, UNIX_TIMESTAMP(updated_at) AS ts
+        FROM phone_settings
+        WHERE (? IS NULL OR updated_at < FROM_UNIXTIME(?)
+               OR (updated_at = FROM_UNIXTIME(?) AND citizenid < ?))
+        ORDER BY updated_at DESC, citizenid DESC
+        LIMIT ?
+    ]], { ts, ts, ts, cid, limit + 1 }) or {}
+
+    local nextCursor = nil
+    if #rows > limit then
+        rows[limit + 1] = nil
+        local last = rows[limit]
+        nextCursor = ('%d:%s'):format(last.ts, last.citizenid)
+    end
+    local out = {}
+    for i, r in ipairs(rows) do
+        out[i] = { citizenid = r.citizenid, matchedOn = 'recent' }
+    end
+    return out, nextCursor
 end
 
 ---One player's full phone overview: settings, per-app content counts, accounts + sessions, and

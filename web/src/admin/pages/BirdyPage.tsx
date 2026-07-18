@@ -3,7 +3,7 @@ import { BadgeCheck, Eye, Heart, ImageIcon, MessageCircle, Trash2, UserSearch } 
 
 import { adminBirdyDeletePost, adminBirdyPosts } from '../adminApi';
 import { fmtTime, type AdminBirdyPost } from '../types';
-import { Badge, Btn, Card, CenterNote, ConfirmModal, Input, LoadMore, OnlineDot, Spinner, useDebounced } from '../ui';
+import { Badge, Btn, Card, CenterNote, ConfirmModal, Input, LoadMore, OnlineDot, Spinner } from '../ui';
 import { usePaged } from '../usePaged';
 
 export function PostCard({ post, onOpenPlayer, onDelete, showAuthorIdentity = true }: {
@@ -63,9 +63,13 @@ export function BirdyPage({ onOpenPlayer, toast }: {
     toast: (text: string, error?: boolean) => void;
 }) {
     const [q, setQ] = useState('');
-    const debounced = useDebounced(q.trim(), 400);
-    const query = debounced.length >= 2 ? debounced : '';
+    // Only an Enter press hits the database; typing alone never queries.
+    const [query, setQuery] = useState('');
     const [doomed, setDoomed] = useState<string | null>(null);
+    const submit = () => {
+        const text = q.trim();
+        if (text.length === 0 || text.length >= 2) setQuery(text);
+    };
 
     const fetchPage = useCallback(async (cursor: string | null) => {
         const res = await adminBirdyPosts({ cursor, q: query });
@@ -87,7 +91,10 @@ export function BirdyPage({ onOpenPlayer, toast }: {
 
     return (
         <div className="space-y-4">
-            <Input value={q} onChange={setQ} placeholder="Filter posts by content or handle…" />
+            <div className="flex gap-2">
+                <Input value={q} onChange={setQ} onEnter={submit} placeholder="Filter posts by content or handle — press Enter" />
+                <Btn variant="primary" onClick={submit} disabled={q.trim().length === 1}>Search</Btn>
+            </div>
 
             <Card>
                 {items.map(p => (
