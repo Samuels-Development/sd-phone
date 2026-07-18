@@ -20,7 +20,6 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onDeleted }
 }) {
     const [name,       setName]       = useState(profile.name);
     const [bio,        setBio]        = useState(profile.bio);
-    const [joinLabel,  setJoinLabel]  = useState(profile.joined);
     const [protect,    setProtect]    = useState(profile.protected);
     const [busy,       setBusy]       = useState(false);
     const [confirmSignOut, setConfirmSignOut] = useState(false);
@@ -37,7 +36,7 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onDeleted }
     async function save() {
         if (busy || closing) return;
         setBusy(true);
-        const p = await apiUpdateProfile({ name, bio, joinLabel, protected: protect });
+        const p = await apiUpdateProfile({ name, bio, protected: protect });
         setBusy(false);
         if (p) dismiss(() => onSaved(p));
     }
@@ -97,8 +96,10 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onDeleted }
                         />
                     </div>
 
+                    {/* Read-only: the join date comes from the account's created_at, so it is
+                        shown rather than edited. */}
                     <Row label={t('birdy.joinDate', 'Join Date')}>
-                        <input value={joinLabel} onChange={e => setJoinLabel(e.target.value)} className="w-full bg-transparent text-right text-[17px] outline-none" style={{ color: BLUE }} />
+                        <span className="block w-full text-right text-[17px] text-black/45">{profile.joined}</span>
                     </Row>
 
                     <div className="flex items-center justify-between px-4 py-3.5">

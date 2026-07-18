@@ -7,6 +7,7 @@ import { useIosPush } from '@/hooks/useIosPush';
 import { useDidEnter } from '@/hooks/useDidEnter';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useSessionState } from '@/hooks/useSessionState';
+import { useDeckActive } from '@/shell/deckActive';
 import { AppAuth } from '@/shared/AppAuth';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { MAIL_DOMAIN, accountsConfirmReset, accountsRequestReset, accountsSavePassword, accountsSuggestCode } from '@/core/accountsApi';
@@ -47,12 +48,29 @@ export function Birdy({ onClose }: { onClose: () => void }) {
     const [profile,        setProfile]        = useState<BirdyProfile | null>(null);
     const [sendError,      setSendError]      = useState<string | null>(null);
 
+    // AppDeck retains this subtree, so closing and reopening Birdy does NOT remount it. Keying
+    // the fetch on [authed, feed] alone meant toggling the tab was the only way to ever see a
+    // new post. feedNonce is bumped by the server broadcast and by re-foregrounding the app.
+    const [feedNonce, setFeedNonce] = useState(0);
+    const refreshFeed = useCallback(() => setFeedNonce(n => n + 1), []);
+
+    useNuiEvent('sd-phone:birdy:feedChanged', refreshFeed);
+
+    // Only on a background -> foreground transition. The initial mount is already covered by the
+    // fetch below, so refreshing here too would double-request on every open.
+    const deckActive = useDeckActive();
+    const wasActive = useRef(deckActive);
+    useEffect(() => {
+        if (deckActive && !wasActive.current) refreshFeed();
+        wasActive.current = deckActive;
+    }, [deckActive, refreshFeed]);
+
     useEffect(() => {
         if (!authed) return;
         let alive = true;
         void apiFeed(feed === 'following').then(p => { if (alive) setPosts(p); });
         return () => { alive = false; };
-    }, [authed, feed]);
+    }, [authed, feed, feedNonce]);
 
     useEffect(() => {
         if (!authed) return;
@@ -331,7 +349,11 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                 )
             )}
 
-            {profileOpen && !openPostId && !openConvoId && (
+            {/* Deliberately NOT gated on !openPostId: tapping a commenter's avatar/name inside a
+                post always has a post open, so that gate suppressed the profile 100% of the time
+                from comments. The SlideOver is z-30 and the post overlay z-20, so it layers over
+                the post and closing it returns you to the comments. */}
+            {profileOpen && !openConvoId && (
                 <SlideOver onClose={() => { setProfileOpen(false); setProfileTarget(null); }} animateIn={animateNav}>
                     {close => (
                         <Profile

@@ -33,22 +33,17 @@ export function Feed({ posts, me, feed, onFeedChange, onToggleLike, onOpenPost, 
             </header>
 
             <div key={feed} className="min-h-0 flex-1 animate-swipe-in-left overflow-y-auto">
-                {feed === 'following' ? (
+                {posts.length === 0 ? (
                     <EmptyState
                         center
                         icon={<BirdMark className="h-8 w-8" />}
                         circleClassName="bg-black/[0.06] text-black/35"
-                        title={t('birdy.nothingHereYet', 'Nothing here yet')}
-                        subtitle={t('birdy.followingEmptySubtitle', 'When you follow people, their latest posts will show up here.')}
-                        subtitleClassName="text-[#536471]"
-                    />
-                ) : posts.length === 0 ? (
-                    <EmptyState
-                        center
-                        icon={<BirdMark className="h-8 w-8" />}
-                        circleClassName="bg-black/[0.06] text-black/35"
-                        title={t('birdy.noPostsYet', 'No posts yet')}
-                        subtitle={t('birdy.feedEmptySubtitle', 'Posts from you and people you follow will show up here.')}
+                        title={feed === 'following'
+                            ? t('birdy.nothingHereYet', 'Nothing here yet')
+                            : t('birdy.noPostsYet', 'No posts yet')}
+                        subtitle={feed === 'following'
+                            ? t('birdy.followingEmptySubtitle', 'When you follow people, their latest posts will show up here.')
+                            : t('birdy.feedEmptySubtitle', 'Posts from you and people you follow will show up here.')}
                         subtitleClassName="text-[#536471]"
                     />
                 ) : (

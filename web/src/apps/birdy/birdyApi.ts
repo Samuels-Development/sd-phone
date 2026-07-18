@@ -50,7 +50,9 @@ export async function apiLogout(): Promise<void> {
 }
 
 export async function apiFeed(following: boolean): Promise<BirdyPost[]> {
-    if (!isFiveM) return following ? [] : SEED_POSTS;
+    // Dev seed: pretend the first author is someone you follow, so the Following tab
+    // renders posts in the browser instead of looking permanently empty.
+    if (!isFiveM) return following ? SEED_POSTS.filter(p => p.author.handle !== 'you') : SEED_POSTS;
     return (await call<{ posts: BirdyPost[] }>('sd-phone:birdy:feed', { following }))?.posts ?? [];
 }
 
@@ -193,8 +195,9 @@ export async function apiFollowList(kind: 'followers' | 'following', handle?: st
     return (await call<{ users: BirdyFollowUser[] }>('sd-phone:birdy:followList', { kind, handle }))?.users ?? [];
 }
 
-export async function apiUpdateProfile(input: { name: string; bio: string; joinLabel: string; protected: boolean }): Promise<BirdyProfile | null> {
-    if (!isFiveM) return { ...DEV_PROFILE, name: input.name, bio: input.bio, joined: input.joinLabel, protected: input.protected };
+// `joined` is intentionally absent: it is derived from the account's created_at server-side.
+export async function apiUpdateProfile(input: { name: string; bio: string; protected: boolean }): Promise<BirdyProfile | null> {
+    if (!isFiveM) return { ...DEV_PROFILE, name: input.name, bio: input.bio, protected: input.protected };
     return (await call<{ profile: BirdyProfile }>('sd-phone:birdy:updateProfile', input))?.profile ?? null;
 }
 

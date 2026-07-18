@@ -126,7 +126,9 @@ local function serializeProfile(profile)
         handle    = profile.handle,
         verified  = profile.verified,
         bio       = profile.bio or '',
-        joined    = profile.joinLabel or '',
+        -- Derived from the row's created_at, NOT from the stored join_label - that was a
+        -- client-writable string, so anyone could set their join date to anything.
+        joined    = profile.createdTs and os.date('%B %Y', profile.createdTs) or (profile.joinLabel or ''),
         protected = profile.protected == true,
         following = store.countFollowing(profile.citizenid),
         followers = store.countFollowers(profile.citizenid),
@@ -344,7 +346,7 @@ end
 ---Updates the signed-in user's editable profile fields. Missing fields keep their current
 ---value; everything is trimmed and bounds-checked.
 ---@param source number player server id
----@param payload { name?: string, bio?: string, joinLabel?: string, protected?: boolean }|nil
+---@param payload { name?: string, bio?: string, protected?: boolean }|nil
 ---@return table envelope
 function actions.updateProfile(source, payload)
     local prof = viewer(source); if not prof then return fail('Not signed in') end
@@ -357,9 +359,10 @@ function actions.updateProfile(source, payload)
     local bio = trimmed(payload.bio) or ''
     if #bio > birdyCfg.MaxBioLength then return fail('Bio is too long') end
 
-    local joinLabel = (trimmed(payload.joinLabel) or prof.joinLabel or ''):sub(1, 32)
-
-    store.updateProfileFields(prof.citizenid, name, bio, joinLabel, payload.protected == true)
+    -- payload.joinLabel is deliberately ignored: the join date is derived from created_at in
+    -- serializeProfile, so it is not the client's to set. The stored value is preserved as-is
+    -- for legacy rows.
+    store.updateProfileFields(prof.citizenid, name, bio, prof.joinLabel or '', payload.protected == true)
     return ok({ profile = serializeProfile(store.getProfile(prof.citizenid)) })
 end
 
@@ -459,6 +462,12 @@ function actions.create(source, payload)
         username = prof.handle, displayName = prof.displayName,
         body = body, images = images,
     })
+
+    -- Tell every open phone the feed moved. TriggerEvent above is server-LOCAL (a hook for
+    -- third-party scripts) and reaches no players, which is why a new post was invisible to
+    -- everyone else until they toggled tabs.
+    TriggerClientEvent('sd-phone:client:birdy:feedChanged', -1, {})
+
     return ok({ post = serializePost(store.getPost(id, prof.citizenid)) })
 end
 
@@ -521,6 +530,40 @@ function actions.toggleLike(source, payload)
     end
 
     return ok({ liked = nowLiked, notifyCid = notifyCid })
+end
+
+---Followers or following for a handle (defaulting to the viewer's own profile), shaped for the
+---FollowList screen. Read-only.
+---@param source number player server id
+---@param payload { kind?: 'followers'|'following', handle?: string }|nil
+---@return table envelope
+function actions.followList(source, payload)
+    local prof = viewer(source); if not prof then return fail('Player not found') end
+    payload = tbl(payload)
+
+    local kind = payload.kind == 'following' and 'following' or 'followers'
+
+    -- No handle means "my own list"; an unknown handle is an empty list, not an error.
+    local targetCid = prof.citizenid
+    local handle = payload.handle and normalizeHandle(payload.handle)
+    if handle and handle ~= '' and handle ~= prof.handle then
+        local tp = store.getProfileByHandle(handle)
+        if not tp then return ok({ users = {} }) end
+        targetCid = tp.citizenid
+    end
+
+    local users = {}
+    for _, row in ipairs(store.followList(prof.citizenid, targetCid, kind)) do
+        users[#users + 1] = {
+            name        = row.display_name,
+            handle      = row.handle,
+            verified    = tonumber(row.verified) == 1,
+            bio         = row.bio or '',
+            followsYou  = tonumber(row.follows_you) == 1,
+            isFollowing = tonumber(row.is_following) == 1,
+        }
+    end
+    return ok({ users = users })
 end
 
 ---Toggles following another account, addressed by handle (preferred) or citizenid. Self-follows

@@ -67,6 +67,7 @@ export function PostCard({ post, isOwn, onToggleLike, onOpen, onOpenAuthor }: {
                         tone="comment"
                         icon={<MessageCircle className="h-[25px] w-[25px]" strokeWidth={1.9} />}
                         count={post.replies}
+                        onClick={onOpen}
                     />
                     <ActionButton
                         tone="repost"

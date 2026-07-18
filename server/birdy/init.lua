@@ -53,6 +53,7 @@ lib.callback.register('sd-phone:server:birdy:create',         function(src, payl
 lib.callback.register('sd-phone:server:birdy:reply',          function(src, payload) return withNotifyPush(actions.reply(src, payload)) end)
 lib.callback.register('sd-phone:server:birdy:toggleLike',     function(src, payload) return withNotifyPush(actions.toggleLike(src, payload)) end)
 lib.callback.register('sd-phone:server:birdy:toggleFollow',   function(src, payload) return withNotifyPush(actions.toggleFollow(src, payload)) end)
+lib.callback.register('sd-phone:server:birdy:followList',     function(src, payload) return actions.followList(src, payload) end)
 lib.callback.register('sd-phone:server:birdy:notifications',  function(src)          return actions.notifications(src) end)
 lib.callback.register('sd-phone:server:birdy:dmList',         function(src)          return actions.dmList(src) end)
 lib.callback.register('sd-phone:server:birdy:dmThread',       function(src, payload) return actions.dmThread(src, payload) end)

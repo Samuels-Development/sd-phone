@@ -161,6 +161,9 @@ local function hydrateProfile(row)
         verified    = isTruthy(row.verified),
         loggedIn    = isTruthy(row.logged_in),
         joinLabel   = row.join_label,
+        -- The authoritative signup time. joinLabel above is a legacy client-writable string
+        -- kept only as a fallback for rows created before this was read back.
+        createdTs   = tonumber(row.created_ts),
         protected   = isTruthy(row.protected),
     }
 end
@@ -171,7 +174,7 @@ end
 function store.getProfile(citizenid)
     if not citizenid or citizenid == '' then return nil end
     local row = MySQL.single.await(
-        'SELECT citizenid, handle, display_name, password, bio, verified, logged_in, join_label, protected FROM phone_birdy_profiles WHERE citizenid = ?',
+        'SELECT citizenid, handle, display_name, password, bio, verified, logged_in, join_label, protected, UNIX_TIMESTAMP(created_at) AS created_ts FROM phone_birdy_profiles WHERE citizenid = ?',
         { citizenid }
     )
     return hydrateProfile(row)
@@ -182,7 +185,7 @@ end
 ---@return table|nil
 function store.getProfileByHandle(handle)
     return hydrateProfile(MySQL.single.await(
-        'SELECT citizenid, handle, display_name, password, bio, verified, logged_in, join_label, protected FROM phone_birdy_profiles WHERE handle = ?',
+        'SELECT citizenid, handle, display_name, password, bio, verified, logged_in, join_label, protected, UNIX_TIMESTAMP(created_at) AS created_ts FROM phone_birdy_profiles WHERE handle = ?',
         { handle }
     ))
 end
@@ -530,6 +533,34 @@ end
 ---@param target string
 function store.removeFollow(follower, target)
     MySQL.update.await('DELETE FROM phone_birdy_follows WHERE follower_cid = ? AND target_cid = ?', { follower, target })
+end
+
+---One side of `targetCid`'s follow graph, newest edge first, as profile cards for the UI. The two
+---reciprocal flags are resolved against `viewerCid` in SQL so the caller needs no extra round
+---trips: `follows_you` is "this person follows the VIEWER", `is_following` is "the VIEWER follows
+---this person" (what drives the Follow / Following button).
+---@param viewerCid string the signed-in player, for the reciprocal flags
+---@param targetCid string whose list is being read
+---@param kind 'followers'|'following'
+---@return table[] rows
+function store.followList(viewerCid, targetCid, kind)
+    -- Only the join column differs between the two directions.
+    local joinOn, whereCol = 'pr.citizenid = f.follower_cid', 'f.target_cid'
+    if kind == 'following' then
+        joinOn, whereCol = 'pr.citizenid = f.target_cid', 'f.follower_cid'
+    end
+
+    return MySQL.query.await(([[
+        SELECT pr.citizenid, pr.handle, pr.display_name, pr.bio, pr.verified,
+               EXISTS(SELECT 1 FROM phone_birdy_follows x
+                      WHERE x.follower_cid = pr.citizenid AND x.target_cid = ?)   AS follows_you,
+               EXISTS(SELECT 1 FROM phone_birdy_follows y
+                      WHERE y.follower_cid = ? AND y.target_cid = pr.citizenid)   AS is_following
+        FROM phone_birdy_follows f
+        JOIN phone_birdy_profiles pr ON %s
+        WHERE %s = ?
+        ORDER BY f.created_at DESC
+    ]]):format(joinOn, whereCol), { viewerCid, viewerCid, targetCid }) or {}
 end
 
 ---@param follower string
