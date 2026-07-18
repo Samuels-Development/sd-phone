@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-    Bird, Camera, Flame, LayoutDashboard, MessageSquare, Newspaper, ScrollText,
-    Search, ShieldCheck, ShoppingBag, Skull, VolumeX, X,
+    Bird, Camera, Flame, Images, LayoutDashboard, MessageSquare, Newspaper,
+    ScrollText, Search, ShieldCheck, ShoppingBag, Skull, VolumeX, X,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -18,7 +18,7 @@ import { ToastHost, useToasts } from './ui';
 
 type PageId =
     | 'dashboard' | 'players' | 'birdy' | 'mutes' | 'audit'
-    | 'messages' | 'darkchat' | 'photogram' | 'cherry' | 'marketplace' | 'pages';
+    | 'messages' | 'darkchat' | 'photogram' | 'cherry' | 'marketplace' | 'pages' | 'gallery';
 
 interface NavItem { id: PageId; label: string; icon: React.ReactNode }
 
@@ -37,6 +37,7 @@ const NAV_APPS: NavItem[] = [
     { id: 'cherry',      label: 'Cherry',      icon: <Flame size={15} /> },
     { id: 'marketplace', label: 'Marketplace', icon: <ShoppingBag size={15} /> },
     { id: 'pages',       label: 'Pages',       icon: <Newspaper size={15} /> },
+    { id: 'gallery',     label: 'Gallery',     icon: <Images size={15} /> },
 ];
 
 const PAGE_TITLE: Record<PageId, string> = {
@@ -51,16 +52,18 @@ const PAGE_TITLE: Record<PageId, string> = {
     cherry:      'Cherry profiles',
     marketplace: 'Marketplace moderation',
     pages:       'Pages moderation',
+    gallery:     'Gallery — player photos',
 };
 
 // Per-app config for the generic content browser.
-const CONTENT_PAGES: Record<string, { search: string; empty: string; deleteBody: string }> = {
+const CONTENT_PAGES: Record<string, { search: string; empty: string; deleteBody: string; grid?: boolean }> = {
     messages:    { search: 'Filter sent texts by content or number',      empty: 'No messages yet.',            deleteBody: '' },
     darkchat:    { search: 'Filter messages by content, alias or room',   empty: 'No Dark Chat messages yet.',  deleteBody: 'The message and its reactions are permanently removed.' },
     photogram:   { search: 'Filter posts by caption or username',         empty: 'No Photogram posts yet.',     deleteBody: 'The post, its comments, likes and saves are permanently removed.' },
     cherry:      { search: 'Filter profiles by username, name or bio',    empty: 'No Cherry profiles yet.',     deleteBody: '' },
     marketplace: { search: 'Filter listings by title or description',     empty: 'No listings yet.',            deleteBody: 'The listing is permanently removed.' },
     pages:       { search: 'Filter posts by title or description',        empty: 'No posts yet.',               deleteBody: 'The post is permanently removed.' },
+    gallery:     { search: 'Filter photos by citizen ID',                 empty: 'No photos yet.',              deleteBody: 'The photo is removed from the player’s gallery and any albums.', grid: true },
 };
 
 export function AdminPanel() {
@@ -188,6 +191,7 @@ export function AdminPanel() {
                                 searchPlaceholder={contentCfg.search}
                                 emptyLabel={contentCfg.empty}
                                 deleteBody={contentCfg.deleteBody}
+                                grid={contentCfg.grid}
                                 onOpenPlayer={openPlayer}
                                 toast={push}
                             />

@@ -115,6 +115,7 @@ export interface AdminContentItem {
     body?:         string | null;
     kind?:         string | null;
     images?:       number | null;
+    imageUrl?:     string | null;
     price?:        number | null;
 }
 

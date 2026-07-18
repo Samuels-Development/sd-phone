@@ -574,6 +574,25 @@ CONTENT.cherry = {
     end,
 }
 
+CONTENT.gallery = {
+    deletable = true,
+    list = function(ts, id, like, limit)
+        return MySQL.query.await([[
+            SELECT id, UNIX_TIMESTAMP(created_at) AS ts, citizenid AS author_cid, url, favorite
+            FROM phone_photos
+            WHERE (? IS NULL OR citizenid LIKE ?)
+              AND (? IS NULL OR created_at < FROM_UNIXTIME(?)
+                   OR (created_at = FROM_UNIXTIME(?) AND id < ?))
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+        ]], { like, like, ts, ts, ts, id, limit }) or {}
+    end,
+    delete = function(id)
+        MySQL.update.await('DELETE FROM phone_photo_album_items WHERE photo_id = ?', { id })
+        return tonumber(MySQL.update.await('DELETE FROM phone_photos WHERE id = ?', { id })) or 0
+    end,
+}
+
 ---Shared adapter for the two classifieds-style tables (marketplace_listings / pages_posts).
 ---@param tbl string table name
 ---@return table adapter
@@ -642,6 +661,7 @@ function store.listContent(app, cursor, limit, query)
             title     = r.title,
             body      = r.body,
             images    = images,
+            imageUrl  = r.url,
             price     = r.price and tonumber(r.price) or nil,
             label     = r.room_id and ('#' .. r.room_id .. ' as ' .. tostring(r.author))
                 or (r.author and ('@' .. r.author))

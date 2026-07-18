@@ -23,6 +23,8 @@ local ok, fail = util.ok, util.fail
 
 ---@type integer Fixed page size for every paginated admin read; the client can't raise it.
 local PAGE = 20
+---@type integer Bigger page for the content feeds (app pages + Birdy), still server-capped.
+local PAGE_CONTENT = 50
 
 -- Downloadable app ids/labels, mirrored from the App Store rules (base apps are fixed).
 ---@type table<string, boolean> Set of installable app ids.
@@ -246,7 +248,7 @@ function actions.birdyPosts(source, payload)
     if q == '' then q = nil end
     local cid = payload and cleanCid(payload.cid) or nil
 
-    local posts, nextCursor = store.listBirdyPosts(payload and payload.cursor, PAGE, q, cid)
+    local posts, nextCursor = store.listBirdyPosts(payload and payload.cursor, PAGE_CONTENT, q, cid)
 
     local cids = {}
     for _, p in ipairs(posts) do cids[#cids + 1] = p.authorCid end
@@ -298,7 +300,7 @@ function actions.content(source, payload)
 
     local q = util.trim(payload and payload.q)
     if q == '' then q = nil end
-    local items, nextCursor = store.listContent(app, payload and payload.cursor, PAGE, q)
+    local items, nextCursor = store.listContent(app, payload and payload.cursor, PAGE_CONTENT, q)
 
     local cids = {}
     for _, item in ipairs(items) do

@@ -8,12 +8,14 @@ import { usePaged } from '../usePaged';
 
 // One generic moderation browser per app: newest-first content with author
 // identity, Enter-to-search filter, pagination, and delete where the server
-// allows it (darkchat / photogram / marketplace / pages).
-export function ContentPage({ app, searchPlaceholder, emptyLabel, deleteBody, onOpenPlayer, toast }: {
+// allows it (darkchat / photogram / gallery / marketplace / pages). `grid`
+// renders items as image tiles (Gallery) instead of text rows.
+export function ContentPage({ app, searchPlaceholder, emptyLabel, deleteBody, grid, onOpenPlayer, toast }: {
     app: string;
     searchPlaceholder: string;
     emptyLabel: string;
     deleteBody: string;
+    grid?: boolean;
     onOpenPlayer: (cid: string) => void;
     toast: (text: string, error?: boolean) => void;
 }) {
@@ -22,6 +24,7 @@ export function ContentPage({ app, searchPlaceholder, emptyLabel, deleteBody, on
     const [query, setQuery] = useState('');
     const [deletable, setDeletable] = useState(false);
     const [doomed, setDoomed] = useState<string | null>(null);
+    const [viewing, setViewing] = useState<AdminContentItem | null>(null);
 
     const submit = () => {
         const text = q.trim();
@@ -54,6 +57,53 @@ export function ContentPage({ app, searchPlaceholder, emptyLabel, deleteBody, on
                 <Btn variant="primary" onClick={submit} disabled={q.trim().length === 1}>Search</Btn>
             </div>
 
+            {grid ? (
+                <>
+                    <div className="grid grid-cols-4 gap-3">
+                        {items.map(item => (
+                            <div key={item.id} className="overflow-hidden rounded-xl bg-white/[0.035] ring-1 ring-white/[0.06]">
+                                <button
+                                    type="button"
+                                    onClick={() => setViewing(item)}
+                                    className="block aspect-square w-full overflow-hidden bg-black/40"
+                                    title="View full size"
+                                >
+                                    {item.imageUrl && (
+                                        <img src={item.imageUrl} loading="lazy" className="h-full w-full object-cover transition-transform hover:scale-105" />
+                                    )}
+                                </button>
+                                <div className="flex items-center justify-between gap-2 px-2.5 py-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => item.authorCid && onOpenPlayer(item.authorCid)}
+                                        disabled={!item.authorCid}
+                                        className="min-w-0 text-left disabled:cursor-default"
+                                        title={item.authorCid ? 'Open player' : undefined}
+                                    >
+                                        <div className="flex items-center gap-1.5">
+                                            <OnlineDot online={item.authorOnline} />
+                                            <span className="truncate text-[12px] font-semibold text-zinc-200 hover:underline">
+                                                {item.authorName ?? item.authorCid ?? 'Unknown'}
+                                            </span>
+                                        </div>
+                                        <div className="text-[10.5px] text-zinc-500">{fmtTime(item.createdAt)}</div>
+                                    </button>
+                                    {deletable && (
+                                        <Btn variant="danger" title="Delete photo" onClick={() => setDoomed(item.id)}>
+                                            <Trash2 size={13} />
+                                        </Btn>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    {loading && items.length === 0 && <CenterNote><Spinner /></CenterNote>}
+                    {!loading && items.length === 0 && (
+                        <CenterNote>{query ? `Nothing matched “${query}”.` : emptyLabel}</CenterNote>
+                    )}
+                    <LoadMore onClick={loadMore} loading={loading} hasMore={hasMore} />
+                </>
+            ) : (
             <Card>
                 {items.map(item => (
                     <div key={item.id} className="border-t border-white/[0.05] px-4 py-3 first:border-t-0">
@@ -108,6 +158,27 @@ export function ContentPage({ app, searchPlaceholder, emptyLabel, deleteBody, on
                 )}
                 <LoadMore onClick={loadMore} loading={loading} hasMore={hasMore} />
             </Card>
+            )}
+
+            {viewing?.imageUrl && (
+                <div
+                    className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-3 rounded-2xl bg-black/80 p-8"
+                    onMouseDown={() => setViewing(null)}
+                >
+                    <img src={viewing.imageUrl} className="max-h-[85%] max-w-full rounded-lg object-contain" onMouseDown={e => e.stopPropagation()} />
+                    <div className="flex items-center gap-3 text-[12.5px] text-zinc-300" onMouseDown={e => e.stopPropagation()}>
+                        <span className="font-semibold">{viewing.authorName ?? 'Unknown'}</span>
+                        <span className="font-mono text-[11px] text-zinc-500">{viewing.authorCid}</span>
+                        <span className="text-zinc-500">{fmtTime(viewing.createdAt)}</span>
+                        {viewing.authorCid && (
+                            <Btn variant="ghost" onClick={() => { setViewing(null); onOpenPlayer(viewing.authorCid!); }}>
+                                <UserSearch size={13} /> Open player
+                            </Btn>
+                        )}
+                        <Btn variant="subtle" onClick={() => setViewing(null)}>Close</Btn>
+                    </div>
+                </div>
+            )}
 
             {doomed && (
                 <ConfirmModal
