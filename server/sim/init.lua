@@ -21,41 +21,22 @@ local inv      = require 'bridge.server.inventory'
 ---@type table Shared server helpers (server.util): ok/fail envelopes + number formatting.
 local util     = require 'server.util'
 
-local backend = siminv.backend()
-if not backend then
-    print('^1[sd-phone:sim]^0 Sim.Enabled is on but the running inventory has no per-slot '
-        .. 'metadata support (needs ox_inventory or a QBCore PlayerData.items inventory). '
-        .. 'Unique phones stay OFF.')
-    return {}
-end
-
-state.active = true
-state.mode   = (config.Sim.UseContainers and backend == 'ox') and 'container' or 'metadata'
-
--- The one seam every app module resolves identity through: from here on, "who is calling" is
+-- The one seam every app module resolves identity through: once active, "who is calling" is
 -- the identity of the SIM in their phone. No SIM -> nil -> every callback fails closed (no
--- service). getRealIdentifier keeps the unwrapped resolver for character-scoped concerns
--- (SIM ownership, cloud backups).
+-- service). Until the boot thread below flips state.active (backend confirmed), the wrapper
+-- passes straight through so a slow-starting inventory never bricks the phone.
+-- getRealIdentifier keeps the unwrapped resolver for character-scoped concerns (SIM ownership,
+-- cloud backups).
 session.setRealResolver(player.getRealIdentifier)
 function player.getIdentifier(source)
+    if not state.active then return player.getRealIdentifier(source) end
     return session.identity(source)
 end
 
--- Schema bootstrap.
-CreateThread(function()
-    local ok, err = pcall(simStore.ensureSchema)
-    if not ok then
-        print(('^1[sd-phone:sim]^0 schema bootstrap failed: %s'):format(err))
-        return
-    end
-    if state.mode == 'container' then siminv.registerContainers() end
-    print(('^2[sd-phone:sim]^0 unique phones active (%s mode, %s backend)'):format(state.mode, backend))
-end)
-
--- ox_inventory: watch SIM/phone item moves so a pulled SIM cuts service within a swap, not a
--- cache TTL. Any matching move flushes the whole session cache (rare event, cheap rescan) and
--- pushes fresh state to the players involved.
-if backend == 'ox' then
+---ox_inventory only: watch SIM/phone item moves so a pulled SIM cuts service within a swap, not
+---a cache TTL. Any matching move flushes the whole session cache (rare event, cheap rescan) and
+---pushes fresh state to the player who moved it.
+local function registerHooks()
     local watched = { [config.Sim.SimItem] = true }
     for item in pairs(siminv.phoneColors) do watched[item] = true end
     pcall(function()
@@ -69,6 +50,35 @@ if backend == 'ox' then
         end, {})
     end)
 end
+
+-- Boot: wait for the backend (ox may start after sd-phone - prefer it for up to 10s before
+-- settling on the qb fallback), then create the schema and activate.
+CreateThread(function()
+    local backend = siminv.backend()
+    for _ = 1, 100 do
+        if backend == 'ox' then break end
+        Wait(100)
+        backend = siminv.backend()
+    end
+    if not backend then
+        print('^1[sd-phone:sim]^0 Sim.Enabled is on but the running inventory has no per-slot '
+            .. 'metadata support (needs ox_inventory or a QBCore PlayerData.items inventory). '
+            .. 'Unique phones stay OFF.')
+        return
+    end
+
+    local ok, err = pcall(simStore.ensureSchema)
+    if not ok then
+        print(('^1[sd-phone:sim]^0 schema bootstrap failed: %s'):format(err))
+        return
+    end
+
+    state.mode   = (config.Sim.UseContainers and backend == 'ox') and 'container' or 'metadata'
+    state.active = true
+    if state.mode == 'container' then siminv.registerContainers() end
+    if backend == 'ox' then registerHooks() end
+    print(('^2[sd-phone:sim]^0 unique phones active (%s mode, %s backend)'):format(state.mode, backend))
+end)
 
 ---Extracts the used item's slot + SIM number for both usable-item callback shapes (ox passes a
 ---slot argument and metadata lives on the slot; qb passes an item table with .slot/.info).
@@ -84,7 +94,7 @@ local function usedSim(source, itemArg, slotArg)
         if type(md) == 'table' then number = md.number end
     end
     slot = slot or tonumber(slotArg)
-    if backend == 'ox' and slot and not number then
+    if siminv.backend() == 'ox' and slot and not number then
         local sd = exports.ox_inventory:GetSlot(source, slot)
         if sd and sd.metadata then number = sd.metadata.number end
     end
@@ -147,10 +157,12 @@ inv.registerUsable(config.Sim.SimItem, function(source, itemArg, _invArg, slotAr
     toast(source, ('SIM installed - your number is %s.'):format(util.formatNumber(number)), 'success')
 end)
 
----The player's SIM panel snapshot for Settings -> SIM & Backup. Read-only.
+---The player's SIM panel snapshot for Settings -> SIM & Backup. Drops the session cache first
+---so the panel always reflects the live inventory. Read-only.
 lib.callback.register('sd-phone:server:sim:get', function(source)
     local realCid = player.getRealIdentifier(source)
     if not realCid then return util.fail('Player not found') end
+    session.invalidate(source)
     local s = session.resolve(source)
     local b = simStore.getBackup(realCid)
     return util.ok({

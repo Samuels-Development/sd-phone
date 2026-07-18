@@ -63,12 +63,15 @@ require 'server.compat.lbphone.init'
 ---@type table SIM feature flags (server.sim.state): active + mode.
 local simState = require 'server.sim.state'
 
----The player's SIM snapshot for the open flow, or nil while unique phones are off.
+---The player's SIM snapshot for the open flow, or nil while unique phones are off. Opening is
+---rare, so the session cache is dropped first - the open always reflects the live inventory.
 ---@param source integer player server id
 ---@return { hasSim: boolean, number: string|nil, color: string|nil }|nil
 local function simDescribe(source)
     if not simState.active then return nil end
-    local s = require('server.sim.session').resolve(source)
+    local session = require('server.sim.session')
+    session.invalidate(source)
+    local s = session.resolve(source)
     return {
         hasSim = s ~= nil and s.hasSim or false,
         number = s and s.number or nil,

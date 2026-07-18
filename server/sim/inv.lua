@@ -22,12 +22,21 @@ local OX = 'ox_inventory'
 local phoneColors = {}
 for _, entry in ipairs(config.Phone.Items or {}) do phoneColors[entry.item] = entry.color end
 
+---@type boolean Latched true the first time ox_inventory is seen running.
+local resolvedOx = inventoryId.name == OX
+
 ---Which slot-metadata backend is usable: 'ox' for ox_inventory, 'qb' for any inventory that
 ---keeps items in the QBCore PlayerData.items table (qb-inventory / ps-inventory / lj-inventory),
----nil when per-slot metadata can't be reached (feature must stay off).
+---nil when per-slot metadata can't be reached (feature must stay off). Resolved at CALL time,
+---and ox wins whenever it is running: load-order can hide ox from the boot-time detection, and
+---on QBox the PlayerData.items table is a stale mirror of ox that must never be trusted.
 ---@return 'ox'|'qb'|nil
 function inv.backend()
-    if inventoryId.name == OX then return 'ox' end
+    if resolvedOx then return 'ox' end
+    if GetResourceState(OX) == 'started' then
+        resolvedOx = true
+        return 'ox'
+    end
     if framework.name == 'qb' then return 'qb' end
     return nil
 end
