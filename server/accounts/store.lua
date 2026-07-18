@@ -210,13 +210,15 @@ function store.saveVaultEntry(citizenid, app, username, password, email, phone)
     ]], { citizenid, app, username, password, email, phone })
 end
 
----Returns all of one character's vault entries, ordered app then username, with the creation
----date pre-formatted. Read-only.
+---Returns all of one character's vault entries, ordered app then username. `created` is a unix
+---timestamp in SECONDS, deliberately NOT pre-formatted here - the UI formats it with the
+---player's chosen language so the vault matches dates everywhere else in the phone.
+---Read-only.
 ---@param citizenid string framework per-character id
 ---@return table[] entries
 function store.listVaultEntries(citizenid)
     return MySQL.query.await([[
-        SELECT id, app, username, password, email, phone, DATE_FORMAT(created_at, '%d/%m/%Y') AS created
+        SELECT id, app, username, password, email, phone, UNIX_TIMESTAMP(created_at) AS created
         FROM phone_passwords WHERE citizenid = ? ORDER BY app, username
     ]], { citizenid }) or {}
 end

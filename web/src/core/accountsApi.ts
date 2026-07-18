@@ -66,22 +66,26 @@ export interface VaultEntry {
     password: string;
     email?:   string | null;
     phone?:   string | null;
-    created?: string;
+    /** Unix timestamp in SECONDS. Formatted in the UI so it follows the app's language. */
+    created?: number;
 }
 
+const DEV_DAY = 86_400;
+const DEV_CREATED = Math.floor(Date.UTC(2026, 5, 1) / 1000);
+
 const DEV_VAULT: VaultEntry[] = [
-    { id: 1, app: 'photogram', username: 'dev', password: 'hunter22', email: `dev@${MAIL_DOMAIN}`, phone: '5551234567', created: '01/06/2026' },
-    { id: 2, app: 'birdy',     username: 'dev', password: 'hunter22', email: `dev@${MAIL_DOMAIN}`, created: '02/06/2026' },
-    { id: 3, app: 'mail', username: `you@${MAIL_DOMAIN}`,  password: 'hunter22', email: `you@${MAIL_DOMAIN}`,  created: '01/06/2026' },
-    { id: 4, app: 'mail', username: `work@${MAIL_DOMAIN}`, password: 'hunter22', email: `work@${MAIL_DOMAIN}`, created: '03/06/2026' },
-    { id: 5, app: 'cherry', username: 'dev', password: 'hunter22', email: `dev@${MAIL_DOMAIN}`, created: '04/06/2026' },
-    { id: 6, app: 'vibez',  username: 'dev', password: 'hunter22', email: `dev@${MAIL_DOMAIN}`, created: '05/06/2026' },
-    { id: 7, app: 'ryde',   username: 'dev', password: 'hunter22', email: `dev@${MAIL_DOMAIN}`, created: '06/06/2026' },
+    { id: 1, app: 'photogram', username: 'dev', password: 'hunter22', email: `dev@${MAIL_DOMAIN}`, phone: '5551234567', created: DEV_CREATED },
+    { id: 2, app: 'birdy',     username: 'dev', password: 'hunter22', email: `dev@${MAIL_DOMAIN}`, created: DEV_CREATED + DEV_DAY },
+    { id: 3, app: 'mail', username: `you@${MAIL_DOMAIN}`,  password: 'hunter22', email: `you@${MAIL_DOMAIN}`,  created: DEV_CREATED },
+    { id: 4, app: 'mail', username: `work@${MAIL_DOMAIN}`, password: 'hunter22', email: `work@${MAIL_DOMAIN}`, created: DEV_CREATED + DEV_DAY * 2 },
+    { id: 5, app: 'cherry', username: 'dev', password: 'hunter22', email: `dev@${MAIL_DOMAIN}`, created: DEV_CREATED + DEV_DAY * 3 },
+    { id: 6, app: 'vibez',  username: 'dev', password: 'hunter22', email: `dev@${MAIL_DOMAIN}`, created: DEV_CREATED + DEV_DAY * 4 },
+    { id: 7, app: 'ryde',   username: 'dev', password: 'hunter22', email: `dev@${MAIL_DOMAIN}`, created: DEV_CREATED + DEV_DAY * 5 },
 ];
 
 export async function accountsSavePassword(app: string, values: Record<string, string | undefined>): Promise<void> {
     if (!isFiveM) {
-        DEV_VAULT.push({ id: Date.now(), app, username: values.username ?? '', password: values.password ?? '', email: values.email, phone: values.phone });
+        DEV_VAULT.push({ id: Date.now(), app, username: values.username ?? '', password: values.password ?? '', email: values.email, phone: values.phone, created: Math.floor(Date.now() / 1000) });
         return;
     }
     await fetchNui('sd-phone:accounts:savePassword', {
