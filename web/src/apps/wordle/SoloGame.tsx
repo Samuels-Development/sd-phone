@@ -6,6 +6,7 @@ import type { Cell } from './engine';
 import { randomWord } from './words';
 import { useCountdown } from '@/hooks/useCountdown';
 import { useKeyboardCapture } from '@/hooks/useKeyboardCapture';
+import { useDeckActive } from '@/shell/deckActive';
 import { TIME_LIMIT } from './stats';
 import { t } from '@/i18n';
 import { formatDuration } from '@/lib/time';
@@ -72,8 +73,15 @@ export function SoloGame({ pal, onFinish, onNew }: {
     // letter also reaches the game and fires inventory / weapon wheel / other binds.
     useKeyboardCapture();
 
+    // Only listen while this is the foreground app. AppDeck keeps a played-then-home'd
+    // game mounted in the background, and a mount-scoped window listener would keep
+    // preventDefault()-ing every key, so text fields in other apps (Messages, DarkChat)
+    // receive nothing until the game is fully exited. Gate on deckActive so the listener
+    // detaches the instant the game is backgrounded and re-attaches when it returns.
+    const deckActive = useDeckActive();
     const pressRef = useRef(press); pressRef.current = press;
     useEffect(() => {
+        if (!deckActive) return;
         function onKey(e: KeyboardEvent) {
             if (e.key === 'Enter') { e.preventDefault(); pressRef.current('ENTER'); }
             else if (e.key === 'Backspace') { e.preventDefault(); pressRef.current('BACK'); }
@@ -81,7 +89,7 @@ export function SoloGame({ pal, onFinish, onNew }: {
         }
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, []);
+    }, [deckActive]);
 
     useEffect(() => {
         if (timeLeft === 0 && status === 'playing') { setStatus('lost'); done(false); }

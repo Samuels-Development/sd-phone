@@ -6,6 +6,7 @@ import type { Cell } from './engine';
 import { wordForGame } from './words';
 import { useCountdown } from '@/hooks/useCountdown';
 import { useKeyboardCapture } from '@/hooks/useKeyboardCapture';
+import { useDeckActive } from '@/shell/deckActive';
 import { TIME_LIMIT } from './stats';
 import { emptyProgress, type CoopState, type Progress } from './coopTypes';
 import { moveApi } from '@/apps/_games/onlineApi';
@@ -88,8 +89,12 @@ export function OnlineMatch({ pal, dk, gameId, opponent, pot, oppLeft, onResult,
     // See SoloGame: this view types without a text field, so it claims the keyboard.
     useKeyboardCapture();
 
+    // Only listen while foreground - see SoloGame. A backgrounded but still-mounted match
+    // would keep preventDefault()-ing every key and starve text fields in other apps.
+    const deckActive = useDeckActive();
     const keyRef = useRef(onKey); keyRef.current = onKey;
     useEffect(() => {
+        if (!deckActive) return;
         function onKeyDown(e: KeyboardEvent) {
             if (e.key === 'Enter') { e.preventDefault(); keyRef.current('ENTER'); }
             else if (e.key === 'Backspace') { e.preventDefault(); keyRef.current('BACK'); }
@@ -97,7 +102,7 @@ export function OnlineMatch({ pal, dk, gameId, opponent, pot, oppLeft, onResult,
         }
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, []);
+    }, [deckActive]);
 
     useEffect(() => {
         if (timeLeft !== 0) return;
