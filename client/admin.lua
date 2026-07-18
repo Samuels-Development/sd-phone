@@ -56,6 +56,8 @@ proxyCallback('sd-phone:admin:forceLogout',          'sd-phone:server:admin:forc
 proxyCallback('sd-phone:admin:birdyPosts',           'sd-phone:server:admin:birdyPosts')
 proxyCallback('sd-phone:admin:birdyDeletePost',      'sd-phone:server:admin:birdyDeletePost')
 proxyCallback('sd-phone:admin:birdySetVerified',     'sd-phone:server:admin:birdySetVerified')
+proxyCallback('sd-phone:admin:content',              'sd-phone:server:admin:content')
+proxyCallback('sd-phone:admin:contentDelete',        'sd-phone:server:admin:contentDelete')
 proxyCallback('sd-phone:admin:messages',             'sd-phone:server:admin:messages')
 proxyCallback('sd-phone:admin:calls',                'sd-phone:server:admin:calls')
 proxyCallback('sd-phone:admin:mute',                 'sd-phone:server:admin:mute')

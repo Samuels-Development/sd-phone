@@ -485,6 +485,183 @@ function store.listCallsFor(cid, cursor, limit)
 end
 
 -- ---------------------------------------------------------------------------
+-- Generic per-app content browser. Every adapter returns rows in one shape:
+-- { id, ts, authorCid?, label?, title?, body, kind?, images? } keyset-paged
+-- newest-first on (ts, id) with an opaque "ts:id" cursor.
+-- ---------------------------------------------------------------------------
+
+---Resolves a photogram/cherry account username to the citizenid signed into it (subquery
+---fragment used inside the adapters below).
+local SESSION_CID = [[(
+    SELECT s.citizenid FROM phone_app_sessions s
+    JOIN phone_app_accounts a ON a.id = s.account_id
+    WHERE a.app = '%s' AND a.username = %s
+    LIMIT 1
+)]]
+
+-- Adapter shape: { deletable: boolean, list: fun(ts, id, like, limit): rows, delete?: fun(id): removed }.
+---@type table<string, table>
+local CONTENT = {}
+
+CONTENT.messages = {
+    deletable = false,
+    list = function(ts, id, like, limit)
+        return MySQL.query.await([[
+            SELECT id, created_at AS ts, citizenid AS author_cid, conversation, direction, kind, body
+            FROM phone_messages
+            WHERE direction = 'out'
+              AND (? IS NULL OR body LIKE ? OR conversation LIKE ?)
+              AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?))
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+        ]], { like, like, like, ts, ts, ts, id, limit }) or {}
+    end,
+}
+
+CONTENT.darkchat = {
+    deletable = true,
+    list = function(ts, id, like, limit)
+        return MySQL.query.await([[
+            SELECT id, created_at AS ts, citizenid AS author_cid, room_id, author, kind, body
+            FROM darkchat_messages
+            WHERE (? IS NULL OR body LIKE ? OR author LIKE ? OR room_id LIKE ?)
+              AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?))
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+        ]], { like, like, like, like, ts, ts, ts, id, limit }) or {}
+    end,
+    delete = function(id)
+        MySQL.update.await('DELETE FROM darkchat_reactions WHERE message_id = ?', { id })
+        return tonumber(MySQL.update.await('DELETE FROM darkchat_messages WHERE id = ?', { id })) or 0
+    end,
+}
+
+CONTENT.photogram = {
+    deletable = true,
+    list = function(ts, id, like, limit)
+        return MySQL.query.await(([[
+            SELECT p.id, p.created_at AS ts, %s AS author_cid, p.author, p.caption AS body, p.images
+            FROM phone_photogram_posts p
+            WHERE (? IS NULL OR p.caption LIKE ? OR p.author LIKE ?)
+              AND (? IS NULL OR p.created_at < ? OR (p.created_at = ? AND p.id < ?))
+            ORDER BY p.created_at DESC, p.id DESC
+            LIMIT ?
+        ]]):format(SESSION_CID:format('photogram', 'p.author')),
+            { like, like, like, ts, ts, ts, id, limit }) or {}
+    end,
+    delete = function(id)
+        MySQL.update.await('DELETE FROM phone_photogram_comment_likes WHERE comment_id IN (SELECT id FROM phone_photogram_comments WHERE post_id = ?)', { id })
+        MySQL.update.await('DELETE FROM phone_photogram_comments WHERE post_id = ?', { id })
+        MySQL.update.await('DELETE FROM phone_photogram_likes WHERE post_id = ?', { id })
+        MySQL.update.await('DELETE FROM phone_photogram_saves WHERE post_id = ?', { id })
+        return tonumber(MySQL.update.await('DELETE FROM phone_photogram_posts WHERE id = ?', { id })) or 0
+    end,
+}
+
+CONTENT.cherry = {
+    deletable = false,
+    list = function(ts, id, like, limit)
+        return MySQL.query.await(([[
+            SELECT p.username AS id, p.updated_at AS ts, %s AS author_cid, p.username,
+                   p.name, p.age, p.gender, p.about AS body
+            FROM phone_cherry_profiles p
+            WHERE (? IS NULL OR p.username LIKE ? OR p.name LIKE ? OR p.about LIKE ?)
+              AND (? IS NULL OR p.updated_at < ? OR (p.updated_at = ? AND p.username < ?))
+            ORDER BY p.updated_at DESC, p.username DESC
+            LIMIT ?
+        ]]):format(SESSION_CID:format('cherry', 'p.username')),
+            { like, like, like, like, ts, ts, ts, id, limit }) or {}
+    end,
+}
+
+---Shared adapter for the two classifieds-style tables (marketplace_listings / pages_posts).
+---@param tbl string table name
+---@return table adapter
+local function classifieds(tbl)
+    return {
+        deletable = true,
+        list = function(ts, id, like, limit)
+            return MySQL.query.await(([[
+                SELECT id, created_at AS ts, citizenid AS author_cid, title, body, price, images, image
+                FROM %s
+                WHERE (? IS NULL OR title LIKE ? OR body LIKE ?)
+                  AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?))
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+            ]]):format(tbl), { like, like, like, ts, ts, ts, id, limit }) or {}
+        end,
+        delete = function(id)
+            return tonumber(MySQL.update.await(('DELETE FROM %s WHERE id = ?'):format(tbl), { id })) or 0
+        end,
+    }
+end
+CONTENT.marketplace = classifieds('marketplace_listings')
+CONTENT.pages       = classifieds('pages_posts')
+
+---Whether an app id has a content adapter, and whether its rows can be deleted.
+---@param app string
+---@return boolean known, boolean deletable
+function store.contentInfo(app)
+    local adapter = CONTENT[app]
+    if not adapter then return false, false end
+    return true, adapter.deletable
+end
+
+---One page of an app's content, normalized. Read-only.
+---@param app string adapter key (validated by the caller)
+---@param cursor string|nil opaque "ts:id" cursor
+---@param limit integer page size (already clamped)
+---@param query string|nil optional filter text
+---@return table[] items, string|nil nextCursor
+function store.listContent(app, cursor, limit, query)
+    local adapter = CONTENT[app]
+    local ts, id = splitCursor(cursor)
+    local like = (type(query) == 'string' and query ~= '') and ('%' .. escapeLike(query) .. '%') or nil
+
+    local rows = adapter.list(ts, id, like, limit + 1)
+    local nextCursor = nil
+    if #rows > limit then
+        rows[limit + 1] = nil
+        local last = rows[limit]
+        nextCursor = ('%d:%s'):format(tonumber(last.ts) or 0, last.id)
+    end
+
+    local items = {}
+    for i, r in ipairs(rows) do
+        local images = nil
+        if r.images then
+            local decoded = json.decode(r.images)
+            if type(decoded) == 'table' then images = #decoded end
+        end
+        if (not images or images == 0) and r.image then images = 1 end
+        items[i] = {
+            id        = tostring(r.id),
+            createdAt = tonumber(r.ts),
+            authorCid = r.author_cid,
+            kind      = r.kind,
+            title     = r.title,
+            body      = r.body,
+            images    = images,
+            price     = r.price and tonumber(r.price) or nil,
+            label     = r.room_id and ('#' .. r.room_id .. ' as ' .. tostring(r.author))
+                or (r.author and ('@' .. r.author))
+                or (r.username and ('@' .. r.username .. (r.name and (' · ' .. r.name .. ', ' .. tostring(r.age)) or '')))
+                or (r.conversation and ((r.conversation:sub(1, 2) == 'g-') and ('group ' .. r.conversation) or ('to ' .. util.formatNumber(r.conversation))))
+                or nil,
+        }
+    end
+    return items, nextCursor
+end
+
+---Deletes one content row (plus its per-app satellites).
+---@param app string adapter key (validated + deletable-checked by the caller)
+---@param id string row id
+---@return integer removed
+function store.deleteContent(app, id)
+    return CONTENT[app].delete(id)
+end
+
+-- ---------------------------------------------------------------------------
 -- Audit + dashboard reads
 -- ---------------------------------------------------------------------------
 

@@ -286,6 +286,52 @@ function actions.birdySetVerified(source, payload)
     return ok()
 end
 
+---One page of an app's content for the per-app moderation pages (messages, darkchat,
+---photogram, cherry, marketplace, pages). Author names resolve like everywhere else.
+---@param source number admin player server id
+---@param payload { app?: string, cursor?: string, q?: string }|nil
+---@return table envelope { items, nextCursor, deletable }
+function actions.content(source, payload)
+    local app = payload and payload.app
+    local known, deletable = store.contentInfo(type(app) == 'string' and app or '')
+    if not known then return fail('Unknown app') end
+
+    local q = util.trim(payload and payload.q)
+    if q == '' then q = nil end
+    local items, nextCursor = store.listContent(app, payload and payload.cursor, PAGE, q)
+
+    local cids = {}
+    for _, item in ipairs(items) do
+        if item.authorCid then cids[#cids + 1] = item.authorCid end
+    end
+    local names, online = resolveNames(cids)
+    for _, item in ipairs(items) do
+        if item.authorCid then
+            item.authorName   = names[item.authorCid]
+            item.authorOnline = online[item.authorCid] == true
+        end
+    end
+    return ok({ items = items, nextCursor = nextCursor, deletable = deletable })
+end
+
+---Deletes one content row from an app that allows it (darkchat message, photogram post,
+---marketplace listing, pages post).
+---@param source number admin player server id
+---@param payload { app?: string, id?: string }|nil
+---@return table envelope
+function actions.contentDelete(source, payload)
+    local app = payload and payload.app
+    local known, deletable = store.contentInfo(type(app) == 'string' and app or '')
+    if not known or not deletable then return fail('That content can\'t be deleted') end
+    local id = payload and payload.id
+    if (type(id) ~= 'string' and type(id) ~= 'number') or tostring(id) == '' then return fail('Missing id') end
+
+    if store.deleteContent(app, tostring(id)) == 0 then return fail('Not found') end
+    local aCid, aName = adminIdent(source)
+    store.audit(aCid, aName, 'delete-content', nil, ('%s %s'):format(app, tostring(id)))
+    return ok()
+end
+
 ---One player's messages, read-only, paginated.
 ---@param source number admin player server id
 ---@param payload { cid?: string, cursor?: string }|nil

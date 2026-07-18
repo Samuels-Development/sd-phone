@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { Loader2, X } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -135,7 +135,7 @@ export function Modal({ title, children, onClose, width = 'w-[420px]' }: {
     return (
         <div className="absolute inset-0 z-40 flex items-center justify-center rounded-2xl bg-black/50" onMouseDown={onClose}>
             <div
-                className={clsx('max-h-[80%] overflow-y-auto rounded-xl bg-[#1a1b1f] p-4 shadow-2xl ring-1 ring-white/10', width)}
+                className={clsx('admin-scroll max-h-[80%] overflow-y-auto rounded-xl bg-[#1a1b1f] p-4 shadow-2xl ring-1 ring-white/10', width)}
                 onMouseDown={e => e.stopPropagation()}
             >
                 <div className="mb-3 flex items-center justify-between">
@@ -255,14 +255,4 @@ export function useToasts() {
         window.setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3200);
     };
     return { toasts, push };
-}
-
-// Debounced value for live-search inputs.
-export function useDebounced<T>(value: T, ms: number): T {
-    const [debounced, setDebounced] = useState(value);
-    useEffect(() => {
-        const t = window.setTimeout(() => setDebounced(value), ms);
-        return () => window.clearTimeout(t);
-    }, [value, ms]);
-    return debounced;
 }

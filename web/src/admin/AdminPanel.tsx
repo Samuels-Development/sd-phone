@@ -1,33 +1,66 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Bird, LayoutDashboard, ScrollText, Search, ShieldCheck, VolumeX, X } from 'lucide-react';
+import {
+    Bird, Camera, Flame, LayoutDashboard, MessageSquare, Newspaper, ScrollText,
+    Search, ShieldCheck, ShoppingBag, Skull, VolumeX, X,
+} from 'lucide-react';
 import clsx from 'clsx';
 
-import { fetchNui, isFiveM } from '@/core/nui';
+import { fetchNui } from '@/core/nui';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { AuditPage } from './pages/AuditPage';
 import { BirdyPage } from './pages/BirdyPage';
+import { ContentPage } from './pages/ContentPage';
 import { Dashboard } from './pages/Dashboard';
 import { MutesPage } from './pages/MutesPage';
 import { PlayerDetail } from './pages/PlayerDetail';
 import { PlayersPage } from './pages/PlayersPage';
 import { ToastHost, useToasts } from './ui';
 
-type PageId = 'dashboard' | 'players' | 'birdy' | 'mutes' | 'audit';
+type PageId =
+    | 'dashboard' | 'players' | 'birdy' | 'mutes' | 'audit'
+    | 'messages' | 'darkchat' | 'photogram' | 'cherry' | 'marketplace' | 'pages';
 
-const NAV: { id: PageId; label: string; icon: React.ReactNode }[] = [
+interface NavItem { id: PageId; label: string; icon: React.ReactNode }
+
+const NAV_MAIN: NavItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={15} /> },
     { id: 'players',   label: 'Players',   icon: <Search size={15} /> },
-    { id: 'birdy',     label: 'Birdy',     icon: <Bird size={15} /> },
     { id: 'mutes',     label: 'Mutes',     icon: <VolumeX size={15} /> },
     { id: 'audit',     label: 'Audit log', icon: <ScrollText size={15} /> },
 ];
 
+const NAV_APPS: NavItem[] = [
+    { id: 'birdy',       label: 'Birdy',       icon: <Bird size={15} /> },
+    { id: 'messages',    label: 'Messages',    icon: <MessageSquare size={15} /> },
+    { id: 'darkchat',    label: 'Dark Chat',   icon: <Skull size={15} /> },
+    { id: 'photogram',   label: 'Photogram',   icon: <Camera size={15} /> },
+    { id: 'cherry',      label: 'Cherry',      icon: <Flame size={15} /> },
+    { id: 'marketplace', label: 'Marketplace', icon: <ShoppingBag size={15} /> },
+    { id: 'pages',       label: 'Pages',       icon: <Newspaper size={15} /> },
+];
+
 const PAGE_TITLE: Record<PageId, string> = {
-    dashboard: 'Dashboard',
-    players:   'Players',
-    birdy:     'Birdy moderation',
-    mutes:     'Active mutes',
-    audit:     'Audit log',
+    dashboard:   'Dashboard',
+    players:     'Players',
+    birdy:       'Birdy moderation',
+    mutes:       'Active mutes',
+    audit:       'Audit log',
+    messages:    'Messages (read-only)',
+    darkchat:    'Dark Chat moderation',
+    photogram:   'Photogram moderation',
+    cherry:      'Cherry profiles',
+    marketplace: 'Marketplace moderation',
+    pages:       'Pages moderation',
+};
+
+// Per-app config for the generic content browser.
+const CONTENT_PAGES: Record<string, { search: string; empty: string; deleteBody: string }> = {
+    messages:    { search: 'Filter sent texts by content or number',      empty: 'No messages yet.',            deleteBody: '' },
+    darkchat:    { search: 'Filter messages by content, alias or room',   empty: 'No Dark Chat messages yet.',  deleteBody: 'The message and its reactions are permanently removed.' },
+    photogram:   { search: 'Filter posts by caption or username',         empty: 'No Photogram posts yet.',     deleteBody: 'The post, its comments, likes and saves are permanently removed.' },
+    cherry:      { search: 'Filter profiles by username, name or bio',    empty: 'No Cherry profiles yet.',     deleteBody: '' },
+    marketplace: { search: 'Filter listings by title or description',     empty: 'No listings yet.',            deleteBody: 'The listing is permanently removed.' },
+    pages:       { search: 'Filter posts by title or description',        empty: 'No posts yet.',               deleteBody: 'The post is permanently removed.' },
 };
 
 export function AdminPanel() {
@@ -45,14 +78,6 @@ export function AdminPanel() {
         setSearchSeed('');
         setOpen(true);
     }, []));
-
-    // Browser preview: vite dev + ?admin=1 opens the panel against the mock backend.
-    useEffect(() => {
-        if (!isFiveM && new URLSearchParams(window.location.search).has('admin')) {
-            setAdminName('Admin Dev');
-            setOpen(true);
-        }
-    }, []);
 
     const close = useCallback(() => {
         setOpen(false);
@@ -79,6 +104,26 @@ export function AdminPanel() {
 
     if (!open) return null;
 
+    const renderNavItem = (item: NavItem) => {
+        const active = page === item.id;
+        return (
+            <button
+                key={item.id}
+                type="button"
+                onClick={() => { setPage(item.id); if (item.id !== 'players') setPlayerCid(null); }}
+                className={clsx(
+                    'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors',
+                    active ? 'bg-ios-blue/15 text-[#6db4ff]' : 'text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200',
+                )}
+            >
+                {item.icon}
+                {item.label}
+            </button>
+        );
+    };
+
+    const contentCfg = CONTENT_PAGES[page];
+
     return (
         <div className="fixed inset-0 z-[400] flex items-center justify-center p-6 font-sf" onMouseDown={close}>
             {/* No backdrop-filter here: FiveM's CEF can't sample the game feed behind a
@@ -98,24 +143,10 @@ export function AdminPanel() {
                             <div className="text-[11px] text-zinc-500">sd-phone</div>
                         </div>
                     </div>
-                    <nav className="flex-1 space-y-0.5 px-2.5">
-                        {NAV.map(item => {
-                            const active = page === item.id;
-                            return (
-                                <button
-                                    key={item.id}
-                                    type="button"
-                                    onClick={() => { setPage(item.id); if (item.id !== 'players') setPlayerCid(null); }}
-                                    className={clsx(
-                                        'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors',
-                                        active ? 'bg-ios-blue/15 text-[#6db4ff]' : 'text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200',
-                                    )}
-                                >
-                                    {item.icon}
-                                    {item.label}
-                                </button>
-                            );
-                        })}
+                    <nav className="admin-scroll flex-1 space-y-0.5 overflow-y-auto px-2.5">
+                        {NAV_MAIN.map(item => renderNavItem(item))}
+                        <div className="px-3 pb-1 pt-3 text-[10.5px] font-bold uppercase tracking-widest text-zinc-600">Apps</div>
+                        {NAV_APPS.map(item => renderNavItem(item))}
                     </nav>
                     <div className="border-t border-white/[0.06] px-4 py-3 text-[11.5px] text-zinc-500">
                         Signed in as<br /><span className="font-semibold text-zinc-300">{adminName ?? 'Admin'}</span>
@@ -137,7 +168,7 @@ export function AdminPanel() {
                             <X size={17} />
                         </button>
                     </div>
-                    <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                    <div className="admin-scroll min-h-0 flex-1 overflow-y-auto p-5">
                         {page === 'dashboard' && (
                             <Dashboard onSearch={q => { setSearchSeed(q); setPlayerCid(null); setPage('players'); }} />
                         )}
@@ -150,6 +181,17 @@ export function AdminPanel() {
                         {page === 'birdy' && <BirdyPage onOpenPlayer={openPlayer} toast={push} />}
                         {page === 'mutes' && <MutesPage onOpenPlayer={openPlayer} toast={push} />}
                         {page === 'audit' && <AuditPage onOpenPlayer={openPlayer} />}
+                        {contentCfg && (
+                            <ContentPage
+                                key={page}
+                                app={page}
+                                searchPlaceholder={contentCfg.search}
+                                emptyLabel={contentCfg.empty}
+                                deleteBody={contentCfg.deleteBody}
+                                onOpenPlayer={openPlayer}
+                                toast={push}
+                            />
+                        )}
                     </div>
                 </div>
 

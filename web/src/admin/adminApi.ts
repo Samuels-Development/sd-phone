@@ -1,15 +1,11 @@
 import { apiCall, type Envelope } from '@/core/api';
-import { isFiveM } from '@/core/nui';
-import { devAdminCall } from './devMock';
 import type {
-    AdminAccount, AdminAuditEntry, AdminBirdyPost, AdminCall, AdminMessage,
-    AdminMute, AdminOverview, AdminPlayerHit, AdminStats,
+    AdminAccount, AdminAuditEntry, AdminBirdyPost, AdminCall, AdminContentItem,
+    AdminMessage, AdminMute, AdminOverview, AdminPlayerHit, AdminStats,
 } from './types';
 
-// In the browser (vite dev) the in-memory mock backend answers instead of the
-// NUI, so the whole panel stays explorable outside FiveM.
 function call<T>(event: string, payload?: unknown): Promise<Envelope<T>> {
-    return isFiveM ? apiCall<T>(event, payload) : devAdminCall<T>(event, payload);
+    return apiCall<T>(event, payload);
 }
 
 export const adminStats = () =>
@@ -46,6 +42,12 @@ export const adminBirdyDeletePost = (id: string) =>
 
 export const adminBirdySetVerified = (cid: string, verified: boolean) =>
     call<void>('sd-phone:admin:birdySetVerified', { cid, verified });
+
+export const adminContent = (app: string, cursor?: string | null, q?: string) =>
+    call<{ items: AdminContentItem[]; nextCursor?: string | null; deletable: boolean }>('sd-phone:admin:content', { app, cursor, q });
+
+export const adminContentDelete = (app: string, id: string) =>
+    call<void>('sd-phone:admin:contentDelete', { app, id });
 
 export const adminMessages = (cid: string, cursor?: string | null) =>
     call<{ messages: AdminMessage[]; nextCursor?: string | null }>('sd-phone:admin:messages', { cid, cursor });

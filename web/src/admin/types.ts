@@ -104,6 +104,20 @@ export interface AdminCall {
     calledAt:  number;
 }
 
+export interface AdminContentItem {
+    id:            string;
+    createdAt:     number;
+    authorCid?:    string | null;
+    authorName?:   string | null;
+    authorOnline?: boolean;
+    label?:        string | null;
+    title?:        string | null;
+    body?:         string | null;
+    kind?:         string | null;
+    images?:       number | null;
+    price?:        number | null;
+}
+
 export interface AdminAuditEntry {
     id:         number;
     adminCid:   string;
