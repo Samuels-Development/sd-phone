@@ -1,7 +1,5 @@
 ---@type fun(nuiAction: string, serverEvent: string) NUI->server pass-through registrar (client.nui).
 local proxyCallback = require 'client.nui'
----@type table Notify bridge (bridge.client.notify): backend-agnostic on-screen toasts.
-local notify = require 'bridge.client.notify'
 
 ---@type boolean True while the admin panel NUI is on screen.
 local adminOpen = false
@@ -14,21 +12,15 @@ AddEventHandler('sd-phone:client:openState', function(open)
     if not phoneOpen and adminOpen then SetNuiFocus(true, true) end
 end)
 
----/phoneadmin - opens the phone admin panel. The server callback is the real gate; non-admins
----just get a toast.
-RegisterCommand('phoneadmin', function()
+---Opens the panel. Fired by the server-side /phoneadmin command (server/admin/init.lua), which
+---is the permission gate - this event never opens anything the callbacks wouldn't refuse.
+---@param adminName string acting admin's display name for the panel header
+RegisterNetEvent('sd-phone:client:admin:open', function(adminName)
     if adminOpen then return end
-    local res = lib.callback.await('sd-phone:server:admin:check', false)
-    if not res or not res.allowed then
-        notify.show({ description = 'You don\'t have access to the phone admin panel.', type = 'error' })
-        return
-    end
     adminOpen = true
     SetNuiFocus(true, true)
-    SendNUIMessage({ action = 'sd-phone:admin:open', data = { adminName = res.name } })
-end, false)
-
-TriggerEvent('chat:addSuggestion', '/phoneadmin', 'Open the sd-phone admin panel')
+    SendNUIMessage({ action = 'sd-phone:admin:open', data = { adminName = adminName } })
+end)
 
 ---React to Lua: the panel requests to close (X button / Escape).
 ---@param _ table|nil unused payload

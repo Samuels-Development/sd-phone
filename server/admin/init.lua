@@ -34,10 +34,25 @@ local function reg(name, fn)
     end)
 end
 
----Panel access probe for the /phoneadmin command: allowed flag + the admin's display name.
+---Panel access probe: allowed flag + the admin's display name.
 lib.callback.register('sd-phone:server:admin:check', function(src)
     if not permissions.isAllowed(src) then return { allowed = false } end
     return { allowed = true, name = player.getName(src) }
+end)
+
+---/phoneadmin - opens the admin panel. Registered server-side through ox_lib so the restricted
+---ace (`command.phoneadmin`) is granted to group.admin and inherited by its members - that same
+---ace is one of the ways permissions.isAllowed passes. Console is refused.
+lib.addCommand('phoneadmin', {
+    help = 'Open the sd-phone admin panel',
+    restricted = 'group.admin',
+}, function(source)
+    if not source or source <= 0 then
+        print('^1[sd-phone:admin]^0 /phoneadmin must be run by a player, not the console.')
+        return
+    end
+    if not permissions.isAllowed(source) then return end
+    TriggerClientEvent('sd-phone:client:admin:open', source, player.getName(source))
 end)
 
 reg('search',               actions.search)

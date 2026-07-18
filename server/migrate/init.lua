@@ -20,11 +20,15 @@ local PORTS = {
     { key = 'notes',    label = 'notes',    run = require('server.migrate.port.notes').run },
 }
 
----@type string[] sd-phone tables the porters write into; the migration waits for all of them.
+-- sd-phone tables the porters write into; the migration waits for all of them. Names lb-phone
+-- also uses carry a marker column so the wait only passes once the sd-phone shape is in place
+-- (the schema bootstrap moves the lb-phone original aside to `<name>_lb`).
+---@type (string|{ [1]: string, [2]: string })[]
 local TARGETS = {
     'phone_settings', 'phone_contacts', 'phone_calls', 'phone_blocked',
-    'phone_messages', 'phone_message_groups', 'phone_message_group_members',
-    'phone_photos', 'phone_photo_albums', 'phone_photo_album_items', 'phone_notes',
+    { 'phone_messages', 'citizenid' }, 'phone_message_groups', 'phone_message_group_members',
+    { 'phone_photos', 'citizenid' }, { 'phone_photo_albums', 'citizenid' },
+    'phone_photo_album_items', { 'phone_notes', 'citizenid' },
 }
 
 ---Print a namespaced migration log line.
