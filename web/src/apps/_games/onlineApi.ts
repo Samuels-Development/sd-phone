@@ -76,6 +76,15 @@ export function moveApi(gameId: string, move: unknown): void {
     void fetchNui('sd-phone:games:move', { gameId, move });
 }
 
+/**
+ * Reports that this player's pre-match setup is done (battleship: fleet placed). The server
+ * holds every move until BOTH sides report, then pushes `<game>:begin` with whose turn it is.
+ */
+export function setupReadyApi(gameId: string): void {
+    if (!isFiveM || !gameId) return;
+    void fetchNui('sd-phone:games:setupReady', { gameId });
+}
+
 export function resignApi(gameId: string): void {
     if (!isFiveM || !gameId) return;
     void fetchNui('sd-phone:games:resign', { gameId });

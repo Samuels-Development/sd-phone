@@ -478,6 +478,9 @@ lib.callback.register('sd-phone:server:games:startLobby', function(src, payload)
         game = game, turn = sides[1], wager = wager, pot = wager * 2,
         settled = wager == 0, reports = {},
         players = { [hostSide] = hostSrc, [oppSide] = oppSrc },
+        -- Games flagged `requiresSetup` (battleship places its fleet first) stay closed
+        -- to moves until BOTH sides report ready; see the games:ready callback below.
+        ready = {},
     }
     lobby.gameId = gameId
     lobby.starting = nil
@@ -486,6 +489,37 @@ lib.callback.register('sd-phone:server:games:startLobby', function(src, payload)
 
     pushClient(hostSrc, game, 'start', { gameId = gameId, color = hostSide, opponent = nameOf(oppSrc), pot = wager * 2 })
     pushClient(oppSrc,  game, 'start', { gameId = gameId, color = oppSide,  opponent = nameOf(hostSrc), pot = wager * 2 })
+    return ok()
+end)
+
+---Reports that this side has finished setup (battleship: fleet placed). Once BOTH sides are in,
+---the engine picks who moves first and pushes 'begin' to both clients - the ONLY point from which
+---moves are accepted in a `requiresSetup` game. Idempotent; a non-participant call is a no-op.
+lib.callback.register('sd-phone:server:games:setupReady', function(src, payload)
+    payload = type(payload) == 'table' and payload or {}
+    local g = games[payload.gameId]
+    if not g then return fail('Game over') end
+    local mySide = sideOf(g, src)
+    if not mySide then return fail('Not your game') end
+
+    local sides = sidesOf(g.game)
+    if not sides then return ok() end
+    if g.ready[mySide] then return ok() end
+    g.ready[mySide] = true
+
+    -- Tell the waiting side someone is now deployed, so it can show progress.
+    local opp = opponentOf(g, src)
+    if online(opp) then pushClient(opp, g.game, 'oppReady', { gameId = payload.gameId }) end
+
+    if not (g.ready[sides[1]] and g.ready[sides[2]]) then return ok() end
+
+    g.turn = sides[1]
+    for _, side in ipairs(sides) do
+        local p = g.players[side]
+        if online(p) then
+            pushClient(p, g.game, 'begin', { gameId = payload.gameId, turn = g.turn, you = side })
+        end
+    end
     return ok()
 end)
 
@@ -501,6 +535,15 @@ lib.callback.register('sd-phone:server:games:move', function(src, payload)
         local opp = opponentOf(g, src)
         if online(opp) then pushClient(opp, g.game, 'move', { gameId = payload.gameId, move = payload.move }) end
         return ok()
+    end
+    -- Setup gate: in battleship the client used to flip itself to 'firing' locally, so
+    -- whoever deployed first could fire while the opponent was still shuffling. The
+    -- server owns that now - no move lands until both fleets are placed.
+    if configs[g.game] and configs[g.game].requiresSetup then
+        local sides = sidesOf(g.game)
+        if not sides or not (g.ready[sides[1]] and g.ready[sides[2]]) then
+            return fail('Opponent is still deploying')
+        end
     end
     if g.turn ~= mySide then return fail('Not your turn') end
 

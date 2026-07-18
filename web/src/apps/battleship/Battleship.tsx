@@ -15,7 +15,7 @@ import { LobbyRoom } from '@/apps/_games/LobbyRoom';
 import { Leaderboard } from '@/apps/_games/Leaderboard';
 import { GameOverDialog } from '@/apps/_games/GameOverDialog';
 import { GameHeader } from '@/apps/_games/GameHeader';
-import { finishApi, moveApi, registerGameSides, reportResultApi, type Side } from '@/apps/_games/onlineApi';
+import { finishApi, moveApi, registerGameSides, reportResultApi, setupReadyApi, type Side } from '@/apps/_games/onlineApi';
 import { useOnlineLobby } from '@/apps/_games/useOnlineLobby';
 import { loadLeaderboard, loadStats, recordResultApi, type GameLeaderboard, type GameStats } from '@/apps/_games/statsApi';
 
@@ -25,7 +25,9 @@ const SB_H = 54;
 
 type Screen = 'home' | 'lobby' | 'game' | 'leaderboard';
 type Mode   = 'cpu' | 'online';
-type Phase  = 'placing' | 'firing';
+// 'waiting' is online-only: this player has deployed and the server is holding the
+// match until the opponent does too. No shot can be fired or received in it.
+type Phase  = 'placing' | 'waiting' | 'firing';
 
 const GAME   = 'battleship';
 const ACCENT = '#17A0B5';
@@ -62,6 +64,7 @@ export function Battleship({ onClose: _onClose }: Props) {
     const [humanSide,    setHumanSide]    = useState<'1' | '2'>('1');
     const [difficulty,   setDifficulty]   = useState<Difficulty>('medium');
     const [thinking,     setThinking]     = useState(false);
+    const [oppDeployed,  setOppDeployed]  = useState(false);
     const [flash,        setFlash]        = useState<string | null>(null);
 
     const [ended,       setEnded]       = useState<{ reason: string } | null>(null);
@@ -97,6 +100,22 @@ export function Battleship({ onClose: _onClose }: Props) {
             const m = mv as BSMove;
             if (m) handleIncoming(m);
         },
+        onBegin: d => {
+            // Both fleets are placed; the server says who shoots first.
+            phaseRef.current = 'firing';
+            setPhase('firing');
+            setOppDeployed(true);
+            const mine = d.turn === d.you;
+            if (pendingShot.current) {
+                const shot = pendingShot.current;
+                pendingShot.current = null;
+                if (resolveIncoming(shot)) { sendFinal(); return; }
+                setMyTurn(true);
+                return;
+            }
+            setMyTurn(mine);
+        },
+        onOppReady: () => setOppDeployed(true),
         onEnded: reason => setEnded({ reason }),
         onReset: () => {
             clearGame();
@@ -165,7 +184,9 @@ export function Battleship({ onClose: _onClose }: Props) {
             if (Object.values(next).filter(v => v === 'hit').length >= FLEET_CELLS) { setMyTurn(false); return; }
         }
         if (m.shot) {
-            if (phaseRef.current === 'placing') { pendingShot.current = m.shot; return; }
+            // The server holds shots until both sides are ready, so this should no longer
+            // be reachable online - kept as a safety net so a shot can never be dropped.
+            if (phaseRef.current !== 'firing') { pendingShot.current = m.shot; return; }
             if (resolveIncoming(m.shot)) { sendFinal(); return; }
         }
         setMyTurn(true);
@@ -182,6 +203,7 @@ export function Battleship({ onClose: _onClose }: Props) {
         setEnemyFleet(newMode === 'cpu' ? randomFleet() : null);
         setShotsAtEnemy({}); setShotsAtMe({});
         setPhase('placing'); setMyTurn(false); setThinking(false); setEnded(null); setFlash(null);
+        setOppDeployed(false);
     }, []);
 
     useEffect(() => {
@@ -228,17 +250,20 @@ export function Battleship({ onClose: _onClose }: Props) {
     }
     function shuffleFleet() { if (phase === 'placing') setMyFleet(randomFleet()); }
     function confirmPlacement() {
+        if (mode === 'online') {
+            // Do NOT start firing here. Tell the server the fleet is placed and wait for
+            // its 'begin' push - it arrives only once BOTH boards are deployed, and it
+            // decides who shoots first. Deciding that locally is what let whoever
+            // deployed first fire into a board that was still being shuffled.
+            phaseRef.current = 'waiting';
+            setPhase('waiting');
+            setMyTurn(false);
+            if (onlineRef.current) setupReadyApi(onlineRef.current.gameId);
+            return;
+        }
         phaseRef.current = 'firing';
         setPhase('firing');
-        const first = humanSide === '1';
-        if (mode === 'online' && pendingShot.current) {
-            const lost = resolveIncoming(pendingShot.current);
-            pendingShot.current = null;
-            if (lost) { sendFinal(); return; }
-            setMyTurn(true);
-        } else {
-            setMyTurn(first);
-        }
+        setMyTurn(humanSide === '1');
     }
     function fire(cell: number) {
         if (over || phase !== 'firing' || !myTurn || thinking) return;
@@ -269,6 +294,8 @@ export function Battleship({ onClose: _onClose }: Props) {
         enemyRef.current = {}; meRef.current = {};
         myLastTarget.current = null; lastResolved.current = null; pendingShot.current = null;
         setShotsAtEnemy({}); setShotsAtMe({}); setPhase('placing'); setMyTurn(false); setThinking(false); setEnded(null); setFlash(null);
+        setOppDeployed(false);
+        phaseRef.current = 'placing';
         recorded.current = false;
     }
     const banner = (() => {
@@ -278,6 +305,11 @@ export function Battleship({ onClose: _onClose }: Props) {
             return result === 'win' ? win : t('battleship.defeatFleetSunk', 'Defeat. Your fleet was sunk.');
         }
         if (phase === 'placing') return t('battleship.positionFleet', 'Position your fleet');
+        if (phase === 'waiting') {
+            return oppDeployed
+                ? t('battleship.startingMatch', 'Starting match…')
+                : t('battleship.waitingForOpponent', 'Waiting for {name} to deploy…', { name: oppName });
+        }
         if (flash) return flash;
         return myTurn ? t('battleship.yourShot', 'Your shot, fire!') : (thinking ? t('battleship.takingAim', '{name} is taking aim…', { name: oppName }) : t('battleship.oppTurn', "{name}'s turn", { name: oppName }));
     })();
