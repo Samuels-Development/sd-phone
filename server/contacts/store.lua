@@ -51,12 +51,44 @@ function store.ensureSchema()
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
 
+    local citizenidCol = MySQL.single.await([[
+        SELECT COUNT(*) AS n FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'phone_calls' AND column_name = 'citizenid'
+    ]])
+    if not citizenidCol or tonumber(citizenidCol.n) == 0 then
+        MySQL.query.await("ALTER TABLE phone_calls ADD COLUMN citizenid VARCHAR(64) NOT NULL DEFAULT ''")
+    end
+
+    local numberCol = MySQL.single.await([[
+        SELECT COUNT(*) AS n FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'phone_calls' AND column_name = 'number'
+    ]])
+    if not numberCol or tonumber(numberCol.n) == 0 then
+        MySQL.query.await("ALTER TABLE phone_calls ADD COLUMN `number` VARCHAR(32) NOT NULL DEFAULT ''")
+    end
+
+    local nameCol = MySQL.single.await([[
+        SELECT COUNT(*) AS n FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'phone_calls' AND column_name = 'name'
+    ]])
+    if not nameCol or tonumber(nameCol.n) == 0 then
+        MySQL.query.await('ALTER TABLE phone_calls ADD COLUMN name VARCHAR(64) NULL')
+    end
+
+    local calledAtCol = MySQL.single.await([[
+        SELECT COUNT(*) AS n FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'phone_calls' AND column_name = 'called_at'
+    ]])
+    if not calledAtCol or tonumber(calledAtCol.n) == 0 then
+        MySQL.query.await('ALTER TABLE phone_calls ADD COLUMN called_at BIGINT NOT NULL DEFAULT 0')
+    end
+
     local directionCol = MySQL.single.await([[
         SELECT COUNT(*) AS n FROM information_schema.columns
         WHERE table_schema = DATABASE() AND table_name = 'phone_calls' AND column_name = 'direction'
     ]])
     if not directionCol or tonumber(directionCol.n) == 0 then
-        MySQL.query.await('ALTER TABLE phone_calls ADD COLUMN direction VARCHAR(16) NOT NULL')
+        MySQL.query.await("ALTER TABLE phone_calls ADD COLUMN direction VARCHAR(16) NOT NULL DEFAULT ''")
     end
 
     local durationCol = MySQL.single.await([[
