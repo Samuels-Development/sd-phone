@@ -68,7 +68,14 @@ RegisterNetEvent('sd-phone:server:photos:upload', function(image, kind)
 end)
 
 ---Saves an already-hosted media URL for the caller and pushes photos:added with the new row.
+---Player-supplied, so the URL must pass config.Photos.AllowImport + the block/allow lists.
 lib.callback.register('sd-phone:server:photos:saveUrl', function(src, payload)
+    if not actions.importEnabled() then
+        return { success = false, message = 'URL import is disabled on this server' }
+    end
+    if not actions.isAllowedImportUrl(payload and payload.url) then
+        return { success = false, message = 'Images from that site aren\'t allowed' }
+    end
     local res = actions.saveFromUrl(src, payload and payload.url)
     if res and res.success and res.data and res.data.photo then
         TriggerClientEvent('sd-phone:client:photos:added', src, res.data.photo)
