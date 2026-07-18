@@ -40,11 +40,53 @@ function actions.list(source)
     for i = 1, #rows do
         out[i] = shapePhoto(rows[i])
     end
-    return ok({ photos = out })
+    return ok({ photos = out, canImport = actions.importEnabled() })
 end
 
 ---@type integer Longest accepted photo URL in bytes, matching the phone_photos.url VARCHAR(512) column.
 local MAX_URL_BYTES = 512
+
+---True when player URL import is enabled (config.Photos.AllowImport); drives the Import button.
+---@return boolean
+function actions.importEnabled()
+    return photosCfg.AllowImport == true
+end
+
+---True if `host` matches any entry in `list`: an exact hostname, or a '*.domain' subdomain
+---wildcard (which also matches the bare domain). A non-table `list` counts as empty.
+---@param host string lowercased hostname
+---@param list any
+---@return boolean
+local function hostMatchesList(host, list)
+    if type(list) ~= 'table' then return false end
+    for _, raw in ipairs(list) do
+        local entry = tostring(raw):lower()
+        if entry:sub(1, 2) == '*.' then
+            local suffix = entry:sub(2) -- '.domain.com'
+            if host:sub(-#suffix) == suffix or host == entry:sub(3) then return true end
+        elseif entry ~= '' and host == entry then
+            return true
+        end
+    end
+    return false
+end
+
+---Host check for PLAYER-supplied import URLs. Rejects unparseable/non-http URLs and any host
+---in config.Photos.ImportBlocklist; when ImportAllowlist is non-empty the host must also appear
+---there. Camera uploads never pass through here - their URL comes from the server-side uploader.
+---@param url any
+---@return boolean
+function actions.isAllowedImportUrl(url)
+    if type(url) ~= 'string' then return false end
+    local host = url:lower():match('^https?://([%w%.%-]+)[:/]') or url:lower():match('^https?://([%w%.%-]+)$')
+    if not host then return false end
+    if hostMatchesList(host, photosCfg.ImportBlocklist) then return false end
+    local allow = photosCfg.ImportAllowlist
+    if type(allow) == 'table' and #allow > 0 and not hostMatchesList(host, allow) then
+        return false
+    end
+    return true
+end
 
 ---Persists a photo URL against the caller: the URL must be a non-empty http(s) string within
 ---the column cap, and the gallery is pruned back under config.Photos.MaxPhotosPerPlayer.

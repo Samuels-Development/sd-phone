@@ -8,6 +8,8 @@ local badges    = require 'server.badges.init'
 local store     = require 'server.photogram.store'
 ---@type table Photogram Live module (server.photogram.live): in-memory livestream sessions merged into the stories tray.
 local live      = require 'server.photogram.live'
+---@type table Admin mute registry (server.admin.moderation): scope guards for posting/commenting/DMing.
+local moderation = require 'server.admin.moderation'
 
 ---@type table Actions module; the table returned at end of file.
 local actions = {}
@@ -446,6 +448,7 @@ function actions.create(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
     if not acc then return fail('Not signed in') end
+    local muted = moderation.guard(player.getIdentifier(src), 'photogram'); if muted then return muted end
     local me = ensureProfile(acc)
 
     local images = sanitizeImages(payload.images)
@@ -579,6 +582,7 @@ function actions.addComment(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
     if not acc then return fail('Not signed in') end
+    local muted = moderation.guard(player.getIdentifier(src), 'photogram'); if muted then return muted end
 
     local row = store.getPostRow(trim(payload.postId))
     if not row then return fail('Post not found') end
@@ -883,6 +887,7 @@ end
 ---@param payload table { image: string }
 ---@return table result
 function actions.addStory(src, payload)
+    local muted = moderation.guard(player.getIdentifier(src), 'photogram'); if muted then return muted end
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
     if not acc then return fail('Not signed in') end
@@ -1023,6 +1028,7 @@ function actions.dmSend(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
     if not acc then return fail('Not signed in') end
+    local muted = moderation.guard(player.getIdentifier(src), 'photogram'); if muted then return muted end
     local to = trim(payload.to):lower()
     if to == '' or to == acc.username then return fail('Bad recipient') end
     if not store.getProfile(to) then return fail('Account not found') end

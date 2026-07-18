@@ -14,6 +14,8 @@ local uploader      = require 'server.photos.uploader'
 local store         = require 'server.messages.store'
 ---@type table Badge engine (server.badges.init): server-authoritative home-screen unread counts.
 local badges        = require 'server.badges.init'
+---@type table Admin mute registry (server.admin.moderation): scope guards for sending texts.
+local moderation    = require 'server.admin.moderation'
 
 ---@type table Messages knobs (configs/messages.lua): body / thread / group caps.
 local cfg = config.Messages
@@ -628,6 +630,7 @@ function actions.send(source, payload)
     local cid = player.getIdentifier(source)
     if not cid then return fail('Player not found') end
     if settings.isAirplane(cid) then return fail('Airplane Mode is on') end
+    local muted = moderation.guard(cid, 'sms'); if muted then return muted end
 
     local conversation = tostring(payload.conversation or '')
     if conversation == '' then return fail('No conversation') end

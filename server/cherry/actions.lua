@@ -8,6 +8,8 @@ local banking   = require 'server.banking.actions'
 local acctStore = require 'server.accounts.store'
 ---@type table Cherry persistence layer (server.cherry.store): profile/swipe/match/message CRUD.
 local store     = require 'server.cherry.store'
+---@type table Admin mute registry (server.admin.moderation): scope guards for sending messages.
+local moderation = require 'server.admin.moderation'
 
 ---@type table Actions module; the table returned at end of file.
 local actions = {}
@@ -433,6 +435,7 @@ end
 ---@return table result the serialized message
 function actions.send(src, payload)
     payload = payload or {}
+    local muted = moderation.guard(player.getIdentifier(src), 'cherry'); if muted then return muted end
     local acc, m = memberOf(src, payload.matchId)
     if not acc then return fail('Match not found') end
 

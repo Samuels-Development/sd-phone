@@ -1,6 +1,9 @@
 ---@type table Store module; the table returned at end of file.
 local store = {}
 
+---@type table Shared server helpers (server.util): collation conversion.
+local util = require 'server.util'
+
 -- Server-side pepper folded into every password hash.
 ---@type string Engine password pepper.
 local PEPPER = 'sd-phone-v1::accounts::do-not-leak-this-string'
@@ -59,6 +62,11 @@ function store.ensureSchema()
             UNIQUE KEY uq_vault (citizenid, app, username)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ]])
+    -- Tables created before the explicit COLLATE above picked up the server default (newer
+    -- MariaDB: utf8mb4_uca1400_ai_ci), which breaks joins against the app tables.
+    util.ensureCollation('phone_app_accounts')
+    util.ensureCollation('phone_app_sessions')
+    util.ensureCollation('phone_passwords')
 end
 
 ---Maps a phone_app_accounts row to the camelCase account shape, passwordHash included.

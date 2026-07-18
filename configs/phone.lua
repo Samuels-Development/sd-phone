@@ -7,7 +7,7 @@ return {
     -- Order matters: the keybind opens the first owned variant when the
     -- last-used one isn't held. Set to {} to disable item-based opening.
     Items = {
-        { item = 'phone_black',  color = 'black'  },
+        { item = 'phone',  color = 'black'  },
         { item = 'phone_blue',   color = 'blue'   },
         { item = 'phone_green',  color = 'green'  },
         { item = 'phone_orange', color = 'orange' },

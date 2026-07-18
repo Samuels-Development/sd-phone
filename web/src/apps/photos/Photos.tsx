@@ -8,7 +8,7 @@ import { PromptDialog } from '@/ui/PromptDialog';
 import {
     apiAddPhotosToAlbum, apiCreateAlbum, apiDeleteAlbum, apiDeletePhoto,
     apiListAlbumPhotos, apiListAlbums, apiListPhotos, apiListSharedAlbums,
-    apiRemovePhotoFromAlbum, apiSetFavorite, mapPhoto,
+    apiRemovePhotoFromAlbum, apiSavePhotoFromUrl, apiSetFavorite, getCanImportPhotos, mapPhoto,
     type Album, type AlbumRef, type Photo,
 } from '@/core/photosApi';
 import { AlbumDetail } from './AlbumDetail';
@@ -33,6 +33,8 @@ export function Photos({ onClose }: { onClose: () => void }) {
     const [gallerySelected, setGallerySelected] = useState<Set<string>>(new Set());
 
     const [albumsEdit, setAlbumsEdit] = useState(false);
+    const [canImport,  setCanImport]  = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
 
     const [openAlbum, setOpenAlbum] = useSessionState<AlbumRef | null>('photos:openAlbum', null);
     const [customAlbumPhotos, setCustomAlbumPhotos] = useState<Photo[]>([]);
@@ -50,6 +52,7 @@ export function Photos({ onClose }: { onClose: () => void }) {
             setPhotos(ps);
             setAlbums(as);
             setSharedAlbums(shared);
+            setCanImport(getCanImportPhotos());
             setLoading(false);
         })();
         return () => { cancelled = true; };
@@ -194,6 +197,7 @@ export function Photos({ onClose }: { onClose: () => void }) {
                                 onCancelSelect={exitGallerySelect}
                                 onPhotoTap={openViewerFromGallery}
                                 onToggleSelect={toggleGallerySelect}
+                                onImport={canImport ? () => setImportOpen(true) : undefined}
                             />
                         ) : (
                             <AlbumsTab
@@ -268,6 +272,26 @@ export function Photos({ onClose }: { onClose: () => void }) {
                     existingIds={new Set(customAlbumPhotos.map(p => p.id))}
                     onClose={() => setPhotoPicker(false)}
                     onConfirm={(ids) => { if (openAlbum.kind === 'custom') void addToAlbum(openAlbum.id, ids); setPhotoPicker(false); }}
+                />
+            )}
+
+            {importOpen && (
+                <PromptDialog
+                    title={t('photos.importTitle', 'Import Photo')}
+                    message={t('photos.importMessage', 'Paste a direct link to an image.')}
+                    placeholder="https://"
+                    inputMode="url"
+                    maxLength={512}
+                    confirmLabel={t('photos.import', 'Import')}
+                    onCancel={() => setImportOpen(false)}
+                    onConfirm={async url => {
+                        const trimmed = url.trim();
+                        if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) return t('photos.importInvalidUrl', 'Enter a full image URL');
+                        const r = await apiSavePhotoFromUrl(trimmed);
+                        if (!r.ok) return r.message ?? t('photos.importFailed', 'Could not import that image');
+                        setImportOpen(false);
+                        return null;
+                    }}
                 />
             )}
 

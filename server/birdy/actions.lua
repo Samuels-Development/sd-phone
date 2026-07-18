@@ -12,6 +12,8 @@ local acctActions = require 'server.accounts.actions'
 local settings = require 'server.settings.store'
 ---@type table Banking actions (server.banking.actions): authoritative money transfer for money DMs.
 local banking = require 'server.banking.actions'
+---@type table Admin mute registry (server.admin.moderation): scope guards for posting/DMing.
+local moderation = require 'server.admin.moderation'
 
 ---@type table Birdy config (config.Birdy): field bounds + feed/notification limits.
 local birdyCfg = config.Birdy
@@ -444,6 +446,7 @@ end
 ---@return table envelope
 function actions.create(source, payload)
     local prof = viewer(source); if not prof then return fail('Player not found') end
+    local muted = moderation.guard(prof.citizenid, 'birdy'); if muted then return muted end
     payload = tbl(payload)
     local body = trimmed(payload and payload.body) or ''
     local images = sanitizeImages(payload and payload.images)
@@ -469,6 +472,7 @@ end
 ---@return table envelope
 function actions.reply(source, payload)
     local prof = viewer(source); if not prof then return fail('Player not found') end
+    local muted = moderation.guard(prof.citizenid, 'birdy'); if muted then return muted end
     payload = tbl(payload)
     local parentId = payload and payload.parentId
     local body = trimmed(payload and payload.body)
@@ -773,6 +777,7 @@ end
 ---@return table envelope
 function actions.dmSend(source, payload)
     local prof = viewer(source); if not prof then return fail('Player not found') end
+    local muted = moderation.guard(prof.citizenid, 'birdy'); if muted then return muted end
     payload = tbl(payload)
     local toCid = payload.toCid
     if type(toCid) ~= 'string' or toCid == '' or #toCid > 64 then return fail('Missing recipient') end

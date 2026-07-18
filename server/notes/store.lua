@@ -3,9 +3,15 @@
 ---stored inline as JSON arrays, timestamps as the client's ISO strings.
 local store = {}
 
+---@type table Shared server helpers (server.util): legacy-table rescue.
+local util = require 'server.util'
+
 ---Creates the phone_notes table if it doesn't exist, and back-fills the `images` column. Runs
----once at boot.
+---once at boot. lb-phone uses the same table name with a different shape; such a table is moved
+---aside first so the CREATE below builds the real sd-phone one.
 function store.ensureSchema()
+    util.rescueLegacyTable('phone_notes', 'citizenid')
+
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS `phone_notes` (
             `citizenid`  VARCHAR(60) NOT NULL,
@@ -17,7 +23,7 @@ function store.ensureSchema()
             `updated_at` VARCHAR(40) NOT NULL,
             PRIMARY KEY (`citizenid`, `id`),
             KEY `updated` (`citizenid`, `updated_at`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
 
     local hasImages = MySQL.scalar.await([[

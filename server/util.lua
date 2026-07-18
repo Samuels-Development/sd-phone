@@ -117,6 +117,55 @@ function util.ensureIndex(tableName, indexName, columnsDDL)
     end
 end
 
+---Rescues a same-named table left behind by another phone resource (lb-phone shares several
+---table names with sd-phone): when `tbl` exists but is missing the sd-phone marker column, it
+---is renamed to `<tbl>_lb` so the following CREATE TABLE builds the real sd-phone table. The
+---renamed original keeps the old data for the lb-phone importer. Call before CREATE TABLE.
+---@param tbl string table name
+---@param markerColumn string column only the sd-phone shape has (e.g. 'citizenid')
+---@return boolean renamed true when a foreign-shaped table was moved aside
+function util.rescueLegacyTable(tbl, markerColumn)
+    local exists = MySQL.scalar.await([[
+        SELECT COUNT(*) FROM information_schema.tables
+        WHERE table_schema = DATABASE() AND table_name = ? AND table_type = 'BASE TABLE'
+    ]], { tbl })
+    if (tonumber(exists) or 0) == 0 then return false end
+
+    local hasMarker = MySQL.scalar.await([[
+        SELECT COUNT(*) FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?
+    ]], { tbl, markerColumn })
+    if (tonumber(hasMarker) or 0) > 0 then return false end
+
+    local target = tbl .. '_lb'
+    local taken = MySQL.scalar.await([[
+        SELECT COUNT(*) FROM information_schema.tables
+        WHERE table_schema = DATABASE() AND table_name = ?
+    ]], { target })
+    if (tonumber(taken) or 0) > 0 then
+        print(('^1[sd-phone]^0 cannot rescue foreign table %s: %s already exists'):format(tbl, target))
+        return false
+    end
+
+    MySQL.query.await(('RENAME TABLE `%s` TO `%s`'):format(tbl, target))
+    print(('^3[sd-phone]^0 foreign-shaped table %s (no `%s` column) moved aside to %s'):format(tbl, markerColumn, target))
+    return true
+end
+
+---Converts a table to utf8mb4_unicode_ci when its collation differs. Newer MariaDB defaults to
+---utf8mb4_uca1400_ai_ci, and a CREATE without an explicit COLLATE then can't be joined against
+---the explicitly-collated tables. A no-op when the table is absent or already matches.
+---@param tbl string table name
+function util.ensureCollation(tbl)
+    local collation = MySQL.scalar.await([[
+        SELECT table_collation FROM information_schema.tables
+        WHERE table_schema = DATABASE() AND table_name = ?
+    ]], { tbl })
+    if not collation or collation == 'utf8mb4_unicode_ci' then return end
+    MySQL.query.await(('ALTER TABLE `%s` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'):format(tbl))
+    print(('^3[sd-phone]^0 converted %s from %s to utf8mb4_unicode_ci'):format(tbl, collation))
+end
+
 ---Coerces a client-supplied value to a whole, non-negative amount: non-numbers and NaN/inf
 ---collapse to 0, everything else floors and clamps at 0.
 ---@param v any
