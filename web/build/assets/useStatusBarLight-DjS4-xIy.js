@@ -1,0 +1,1 @@
+import{cK as s,bY as u,cV as r}from"./index-n96_uyU5.js";function i(t){const e=s();u.useEffect(()=>{if(!(!e||t==null))return r.getState().setStatusLightOverride(t),()=>r.getState().setStatusLightOverride(null)},[e,t])}export{i as u};
