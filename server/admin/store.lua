@@ -213,9 +213,34 @@ function store.listRecentPlayers(cursor, limit)
     return out, nextCursor
 end
 
----Every SIM registered to a character: activated by them (owner_cid) or living on their
----character-bound profile (identity = citizenid). Unique-phones only; the table exists whenever
----the feature is active. Read-only.
+---SIM registry page: newest first, filtered by number digits / identity / activator citizenid.
+---@param q string search text ('' lists everything)
+---@param limit integer page size
+---@param offset integer rows to skip
+---@return table[] rows { number, identity, ownerCid, createdAt }
+---@return number|nil nextCursor offset for the next page, nil on the last one
+function store.listSims(q, limit, offset)
+    local rows
+    if q == '' then
+        rows = MySQL.query.await([[
+            SELECT number, identity, owner_cid AS ownerCid, UNIX_TIMESTAMP(created_at) AS createdAt
+            FROM phone_sim_cards ORDER BY created_at DESC LIMIT ? OFFSET ?
+        ]], { limit, offset })
+    else
+        local digits = q:gsub('%D', '')
+        local like = '%' .. q .. '%'
+        rows = MySQL.query.await([[
+            SELECT number, identity, owner_cid AS ownerCid, UNIX_TIMESTAMP(created_at) AS createdAt
+            FROM phone_sim_cards
+            WHERE number LIKE ? OR identity LIKE ? OR owner_cid LIKE ?
+            ORDER BY created_at DESC LIMIT ? OFFSET ?
+        ]], { '%' .. (digits ~= '' and digits or q) .. '%', like, like, limit, offset })
+    end
+    rows = rows or {}
+    return rows, #rows == limit and (offset + limit) or nil
+end
+
+---SIMs registered to a character: activated by them or opening their bound profile.
 ---@param cid string target citizenid
 ---@return table[] sims { number, identity, owner_cid, created_at }
 function store.simsFor(cid)
@@ -592,15 +617,22 @@ CONTENT.cherry = {
 CONTENT.gallery = {
     deletable = true,
     list = function(ts, id, like, limit)
-        return MySQL.query.await([[
+        -- Under unique phones, also match photos taken on SIM profiles the searched character activated.
+        local simActive = require('server.sim.state').active
+        local identityFilter = simActive
+            and 'OR citizenid IN (SELECT identity FROM phone_sim_cards WHERE owner_cid LIKE ?)'
+            or ''
+        return MySQL.query.await(([[
             SELECT id, UNIX_TIMESTAMP(created_at) AS ts, citizenid AS author_cid, url, favorite
             FROM phone_photos
-            WHERE (? IS NULL OR citizenid LIKE ?)
+            WHERE (? IS NULL OR citizenid LIKE ? %s)
               AND (? IS NULL OR created_at < FROM_UNIXTIME(?)
                    OR (created_at = FROM_UNIXTIME(?) AND id < ?))
             ORDER BY created_at DESC, id DESC
             LIMIT ?
-        ]], { like, like, ts, ts, ts, id, limit }) or {}
+        ]]):format(identityFilter), simActive
+            and { like, like, like, ts, ts, ts, id, limit }
+            or  { like, like, ts, ts, ts, id, limit }) or {}
     end,
     delete = function(id)
         MySQL.update.await('DELETE FROM phone_photo_album_items WHERE photo_id = ?', { id })

@@ -110,6 +110,20 @@ function player.getSourceByIdentifier(citizenid)
     return nil
 end
 
+---`{ [citizenid] = source }` over framework-native identifiers, bypassing SIM indirection.
+---@return table<string, number>
+function player.onlineRealCidMap()
+    local out = {}
+    for _, src in ipairs(GetPlayers()) do
+        local s = tonumber(src)
+        if s then
+            local cid = player.getRealIdentifier(s)
+            if cid then out[cid] = s end
+        end
+    end
+    return out
+end
+
 ---Build a `{ [citizenid] = source }` lookup of every currently-connected player in a single pass.
 ---Read-only.
 ---@return table<string, number>

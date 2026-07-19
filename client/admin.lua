@@ -22,12 +22,13 @@ end)
 ---Keep-input is forced off so the game gets no movement/camera input while the panel is up
 ---(the phone's AllowMovement mode leaves it on).
 ---@param adminName string acting admin's display name for the panel header
-RegisterNetEvent('sd-phone:client:admin:open', function(adminName)
+---@param simActive boolean|nil unique-phones mode flag (shows the Numbers page)
+RegisterNetEvent('sd-phone:client:admin:open', function(adminName, simActive)
     if adminOpen then return end
     adminOpen = true
     SetNuiFocus(true, true)
     SetNuiFocusKeepInput(false)
-    SendNUIMessage({ action = 'sd-phone:admin:open', data = { adminName = adminName } })
+    SendNUIMessage({ action = 'sd-phone:admin:open', data = { adminName = adminName, sim = simActive == true } })
 end)
 
 ---React to Lua: the panel requests to close (X button / Escape). With the phone still open,
@@ -66,3 +67,6 @@ proxyCallback('sd-phone:admin:mutes',                'sd-phone:server:admin:mute
 proxyCallback('sd-phone:admin:wipePhone',            'sd-phone:server:admin:wipePhone')
 proxyCallback('sd-phone:admin:audit',                'sd-phone:server:admin:audit')
 proxyCallback('sd-phone:admin:stats',                'sd-phone:server:admin:stats')
+proxyCallback('sd-phone:admin:simLookup',            'sd-phone:server:admin:simLookup')
+proxyCallback('sd-phone:admin:giveSim',              'sd-phone:server:admin:giveSim')
+proxyCallback('sd-phone:admin:numbers',              'sd-phone:server:admin:numbers')

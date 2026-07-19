@@ -10,18 +10,19 @@ import { usePaged } from '../usePaged';
 // identity, Enter-to-search filter, pagination, and delete where the server
 // allows it (darkchat / photogram / gallery / marketplace / pages). `grid`
 // renders items as image tiles (Gallery) instead of text rows.
-export function ContentPage({ app, searchPlaceholder, emptyLabel, deleteBody, grid, onOpenPlayer, toast }: {
+export function ContentPage({ app, searchPlaceholder, emptyLabel, deleteBody, grid, initialQuery, onOpenPlayer, toast }: {
     app: string;
     searchPlaceholder: string;
     emptyLabel: string;
     deleteBody: string;
     grid?: boolean;
+    initialQuery?: string;
     onOpenPlayer: (cid: string) => void;
     toast: (text: string, error?: boolean) => void;
 }) {
-    const [q, setQ] = useState('');
+    const [q, setQ] = useState(initialQuery ?? '');
     // Only an Enter press hits the database; typing alone never queries.
-    const [query, setQuery] = useState('');
+    const [query, setQuery] = useState(initialQuery ?? '');
     const [deletable, setDeletable] = useState(false);
     const [doomed, setDoomed] = useState<string | null>(null);
     const [viewing, setViewing] = useState<AdminContentItem | null>(null);
