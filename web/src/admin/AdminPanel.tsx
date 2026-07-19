@@ -110,6 +110,13 @@ export function AdminPanel() {
         setPlayerCid(cid);
     }, []);
 
+    // Jump to the Gallery pre-filtered to one player's photos (uploads + camera shots).
+    const [gallerySeed, setGallerySeed] = useState('');
+    const openGallery = useCallback((cid: string) => {
+        setGallerySeed(cid);
+        setPage('gallery');
+    }, []);
+
     if (!open) return null;
 
     const renderNavItem = (item: NavItem) => {
@@ -118,7 +125,7 @@ export function AdminPanel() {
             <button
                 key={item.id}
                 type="button"
-                onClick={() => { setPage(item.id); if (item.id !== 'players') setPlayerCid(null); }}
+                onClick={() => { setPage(item.id); if (item.id !== 'players') setPlayerCid(null); if (item.id === 'gallery') setGallerySeed(''); }}
                 className={clsx(
                     'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors',
                     active ? 'bg-ios-blue/15 text-[#6db4ff]' : 'text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200',
@@ -184,7 +191,7 @@ export function AdminPanel() {
                             <PlayersPage initialQuery={searchSeed} onOpenPlayer={openPlayer} />
                         )}
                         {page === 'players' && playerCid && (
-                            <PlayerDetail cid={playerCid} onBack={() => setPlayerCid(null)} toast={push} />
+                            <PlayerDetail cid={playerCid} onBack={() => setPlayerCid(null)} toast={push} onOpenGallery={openGallery} />
                         )}
                         {page === 'numbers' && <NumbersPage onOpenPlayer={openPlayer} />}
                         {page === 'birdy' && <BirdyPage onOpenPlayer={openPlayer} toast={push} />}
@@ -192,8 +199,9 @@ export function AdminPanel() {
                         {page === 'audit' && <AuditPage onOpenPlayer={openPlayer} />}
                         {contentCfg && (
                             <ContentPage
-                                key={page}
+                                key={page === 'gallery' ? `gallery:${gallerySeed}` : page}
                                 app={page}
+                                initialQuery={page === 'gallery' ? gallerySeed : undefined}
                                 searchPlaceholder={contentCfg.search}
                                 emptyLabel={contentCfg.empty}
                                 deleteBody={contentCfg.deleteBody}

@@ -617,15 +617,22 @@ CONTENT.cherry = {
 CONTENT.gallery = {
     deletable = true,
     list = function(ts, id, like, limit)
-        return MySQL.query.await([[
+        -- Under unique phones, also match photos taken on SIM profiles the searched character activated.
+        local simActive = require('server.sim.state').active
+        local identityFilter = simActive
+            and 'OR citizenid IN (SELECT identity FROM phone_sim_cards WHERE owner_cid LIKE ?)'
+            or ''
+        return MySQL.query.await(([[
             SELECT id, UNIX_TIMESTAMP(created_at) AS ts, citizenid AS author_cid, url, favorite
             FROM phone_photos
-            WHERE (? IS NULL OR citizenid LIKE ?)
+            WHERE (? IS NULL OR citizenid LIKE ? %s)
               AND (? IS NULL OR created_at < FROM_UNIXTIME(?)
                    OR (created_at = FROM_UNIXTIME(?) AND id < ?))
             ORDER BY created_at DESC, id DESC
             LIMIT ?
-        ]], { like, like, ts, ts, ts, id, limit }) or {}
+        ]]):format(identityFilter), simActive
+            and { like, like, like, ts, ts, ts, id, limit }
+            or  { like, like, ts, ts, ts, id, limit }) or {}
     end,
     delete = function(id)
         MySQL.update.await('DELETE FROM phone_photo_album_items WHERE photo_id = ?', { id })

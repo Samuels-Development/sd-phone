@@ -40,10 +40,11 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
     );
 }
 
-export function PlayerDetail({ cid, onBack, toast }: {
+export function PlayerDetail({ cid, onBack, toast, onOpenGallery }: {
     cid: string;
     onBack: () => void;
     toast: (text: string, error?: boolean) => void;
+    onOpenGallery?: (cid: string) => void;
 }) {
     const [ov, setOv] = useState<AdminOverview | null>(null);
     const [loading, setLoading] = useState(true);
@@ -132,7 +133,7 @@ export function PlayerDetail({ cid, onBack, toast }: {
                 ))}
             </div>
 
-            {tab === 'overview' && <OverviewTab ov={ov} toast={toast} reload={reload} onOpenTab={setTab} />}
+            {tab === 'overview' && <OverviewTab ov={ov} toast={toast} reload={reload} onOpenTab={setTab} onOpenGallery={onOpenGallery} />}
             {tab === 'apps' && <AppsTab ov={ov} onChanged={reload} toast={toast} />}
             {tab === 'accounts' && (
                 <AccountsTab
@@ -219,11 +220,12 @@ function CountRow({ label, count, onOpen }: { label: string; count: number; onOp
     );
 }
 
-function OverviewTab({ ov, toast, reload, onOpenTab }: {
+function OverviewTab({ ov, toast, reload, onOpenTab, onOpenGallery }: {
     ov: AdminOverview;
     toast: (text: string, error?: boolean) => void;
     reload: () => void;
     onOpenTab: (tab: Tab) => void;
+    onOpenGallery?: (cid: string) => void;
 }) {
     const s = ov.settings;
     const c = ov.counts;
@@ -246,7 +248,8 @@ function OverviewTab({ ov, toast, reload, onOpenTab }: {
                     <CountRow label="Birdy posts"   count={c?.birdyPosts ?? 0} onOpen={() => onOpenTab('birdy')} />
                     <CountRow label="Text messages" count={c?.messages ?? 0}   onOpen={() => onOpenTab('messages')} />
                     <CountRow label="Calls"         count={c?.calls ?? 0}      onOpen={() => onOpenTab('calls')} />
-                    <CountRow label="Photos"        count={c?.photos ?? 0} />
+                    <CountRow label="Photos"        count={c?.photos ?? 0}
+                        onOpen={onOpenGallery ? () => onOpenGallery(ov.citizenid) : undefined} />
                     <CountRow label="Contacts"      count={c?.contacts ?? 0} />
                 </Card>
                 <Card title="Birdy profile">
