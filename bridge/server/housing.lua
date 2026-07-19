@@ -392,6 +392,37 @@ ADAPTERS['origen_housing'] = function(source, id)
     return out
 end
 
+---LNS_Housing: reads the in-memory Properties table via the GetProperties export and filters to
+---properties owned by the calling player. Entrance coords come from `metadata.entrance`; lock
+---state from `metadata.locked`; property type is inferred from `metadata.shell`.
+---@param _source number caller server id (unused - filtered by owner citizenid)
+---@param id string caller citizenid
+---@return table[] homes
+ADAPTERS['LNS_Housing'] = function(_source, id)
+    local ok, props = pcall(function() return exports.LNS_Housing:GetProperties() end)
+    if not ok or type(props) ~= 'table' then return {} end
+    local out = {}
+    for _, p in pairs(props) do
+        if p.owner == id then
+            local shell = p.metadata and p.metadata.shell
+            local propType = (shell == 'mlo') and 'House'
+                          or (type(shell) == 'string' and shell ~= '' and shell)
+                          or 'Property'
+            out[#out + 1] = home{
+                id      = p.id,
+                address = s(p.label),
+                type    = propType,
+                area    = '',
+                value   = p.price,
+                status  = (p.sale_type == 'rent') and 'rented' or 'owned',
+                coords  = p.metadata and asXY(p.metadata.entrance) or nil,
+                locked  = p.metadata and p.metadata.locked or nil,
+            }
+        end
+    end
+    return out
+end
+
 -- Capability map: which detail-view actions each system supports.
 ---@type table<string, { lock: boolean, keyList: boolean, keyManage: boolean }> Per-system action support.
 local CAPS = {
@@ -404,6 +435,7 @@ local CAPS = {
     ['qs-housing']     = { lock = false, keyList = true,  keyManage = false },
     ['vms_housing']    = { lock = false, keyList = false, keyManage = true  },
     ['loaf_housing']   = { lock = false, keyList = false, keyManage = false },
+    ['LNS_Housing']    = { lock = true,  keyList = true,  keyManage = true  },
 }
 
 ---Capability flags for the active system, all-false when none is detected.
@@ -506,6 +538,18 @@ function housing.lock(src, id, want)
     elseif ACTIVE == 'origen_housing' then
         local r = clientExec(src, 'lock', p, want)
         return r == nil and nil or (r and true or false)
+    elseif ACTIVE == 'LNS_Housing' then
+        local okPerm, allowed = pcall(function()
+            return exports.LNS_Housing:CheckPermission(src, 'house', p, 'manage')
+        end)
+        if not okPerm or not allowed then return nil end
+        local okProp, prop = pcall(function() return exports.LNS_Housing:GetProperty(p) end)
+        local cur = okProp and type(prop) == 'table' and prop.metadata and prop.metadata.locked
+        if cur ~= want then
+            local okT, newState = pcall(function() return exports.LNS_Housing:ToggleLock(p) end)
+            if okT and type(newState) == 'boolean' then return newState end
+        end
+        return want
     end
     return nil
 end
@@ -536,6 +580,15 @@ function housing.keyHolders(src, id)
     elseif ACTIVE == 'ps-housing' then
         local r = clientExec(src, 'keyHolders', p)
         return type(r) == 'table' and r or {}
+    elseif ACTIVE == 'LNS_Housing' then
+        local okPerm, allowed = pcall(function()
+            return exports.LNS_Housing:CheckPermission(src, 'house', p, 'manage')
+        end)
+        if not okPerm or not allowed then return {} end
+        local okProp, prop = pcall(function() return exports.LNS_Housing:GetProperty(p) end)
+        if not okProp or type(prop) ~= 'table' then return {} end
+        local entry = prop.permissions and prop.permissions.entry
+        return resolveCids(entry)
     end
     return {}
 end
@@ -560,6 +613,15 @@ function housing.giveKey(src, id, targetSrc)
         return ok and res ~= false
     elseif ACTIVE == 'ps-housing' or ACTIVE == 'origen_housing' or ACTIVE == 'vms_housing' then
         return clientExec(src, 'give', p, targetSrc) and true or false
+    elseif ACTIVE == 'LNS_Housing' then
+        local okPerm, allowed = pcall(function()
+            return exports.LNS_Housing:CheckPermission(src, 'house', p, 'manage')
+        end)
+        if not okPerm or not allowed then return false end
+        local cid = player.getIdentifier(targetSrc)
+        if not cid then return false end
+        local ok, res = pcall(function() return exports.LNS_Housing:GiveKey(p, cid) end)
+        return ok and res ~= false
     end
     return false
 end
@@ -580,6 +642,13 @@ function housing.removeKey(src, id, holderId)
         return pcall(function() exports['RxHousing']:RemoveKeyholder(p, holderId) end)
     elseif ACTIVE == 'ps-housing' or ACTIVE == 'origen_housing' or ACTIVE == 'vms_housing' then
         return clientExec(src, 'remove', p, holderId) and true or false
+    elseif ACTIVE == 'LNS_Housing' then
+        local okPerm, allowed = pcall(function()
+            return exports.LNS_Housing:CheckPermission(src, 'house', p, 'manage')
+        end)
+        if not okPerm or not allowed then return false end
+        local ok, res = pcall(function() return exports.LNS_Housing:RemoveKey(p, tostring(holderId)) end)
+        return ok and res ~= false
     end
     return false
 end
