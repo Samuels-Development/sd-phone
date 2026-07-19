@@ -255,6 +255,7 @@ export type NuiMessage =
     | { action: 'sd-phone:cherry:match';       data: unknown }
     | { action: 'sd-phone:cherry:reaction';    data: { matchId: string; id: string; reactions: { emoji: string; count: number; mine: boolean }[] } }
     | { action: 'sd-phone:cherry:unmatch';     data: { matchId: string } }
+    | { action: 'sd-phone:cherry:partner';     data: { username: string; partner: unknown } }
     | { action: 'sd-phone:photogram:notification' }
     | { action: 'sd-phone:photogram:dmReceived'; data: { peer: string; user: PhotogramUser; message: PhotogramDM } }
     | { action: 'sd-phone:photogram:dmReaction'; data: { peer: string; id: string; reactions: Reaction[] } }
