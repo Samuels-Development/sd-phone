@@ -20,7 +20,7 @@ export interface AdminMute {
     createdAt:  number;
 }
 
-export interface AdminAccount {
+interface AdminAccount {
     id:          number;
     app:         string;
     username:    string;
@@ -77,11 +77,21 @@ export interface AdminOverview {
     } | null;
 }
 
-export interface AdminSimRow {
+interface AdminSimRow {
     number:     string;
     identity:   string;
     ownerCid?:  string | null;
     createdAt?: number;
+}
+
+export interface AdminNumberRow {
+    number:       string;
+    identity:     string;
+    ownerCid?:    string | null;
+    ownerName?:   string | null;
+    createdAt?:   number;
+    boundProfile: boolean;
+    holder?: { cid?: string | null; name?: string | null } | null;
 }
 
 export interface AdminSimLookup {

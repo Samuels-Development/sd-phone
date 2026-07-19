@@ -70,12 +70,11 @@ local function cleanCid(v)
     return v
 end
 
----Resolves display names for a set of citizenids: live bridge name when online, framework DB
----otherwise. Returns name map + online map in one pass.
+---Resolves display names + online flags; real-identifier map (SIM wrap speaks profile ids).
 ---@param cids string[] citizenids
 ---@return table<string, string> names, table<string, boolean> online
 local function resolveNames(cids)
-    local onlineMap = player.onlineCidMap()
+    local onlineMap = player.onlineRealCidMap()
     local names, online, offline = {}, {}, {}
     for _, cid in ipairs(cids) do
         local src = onlineMap[cid]
@@ -112,6 +111,40 @@ function actions.search(source, payload)
         return fail('Type at least 2 characters')
     end
 
+    -- Fold `sim:<number>` profile rows onto the character who activated them (deduped).
+    if simState.active and #hits > 0 then
+        local simIdents, wanted = {}, {}
+        for _, h in ipairs(hits) do
+            if h.citizenid:find('^sim:') and not wanted[h.citizenid] then
+                wanted[h.citizenid] = true
+                simIdents[#simIdents + 1] = h.citizenid
+            end
+        end
+        if #simIdents > 0 then
+            local ph = ('?,'):rep(#simIdents):sub(1, -2)
+            local rows = MySQL.query.await(
+                ('SELECT number, identity, owner_cid FROM phone_sim_cards WHERE identity IN (%s)'):format(ph),
+                simIdents) or {}
+            local bySim = {}
+            for _, r in ipairs(rows) do bySim[r.identity] = r end
+
+            local folded, seen = {}, {}
+            for _, h in ipairs(hits) do
+                local sim = bySim[h.citizenid]
+                local displayCid = (sim and sim.owner_cid) or h.citizenid
+                if not seen[displayCid] then
+                    seen[displayCid] = true
+                    folded[#folded + 1] = {
+                        citizenid = displayCid,
+                        matchedOn = sim and 'sim' or h.matchedOn,
+                        simNumber = sim and sim.number or nil,
+                    }
+                end
+            end
+            hits = folded
+        end
+    end
+
     local cids = {}
     for i, h in ipairs(hits) do cids[i] = h.citizenid end
     local names, online = resolveNames(cids)
@@ -122,7 +155,7 @@ function actions.search(source, payload)
         players[i] = {
             citizenid   = h.citizenid,
             name        = names[h.citizenid],
-            phoneNumber = numbers[h.citizenid],
+            phoneNumber = h.simNumber or numbers[h.citizenid],
             online      = online[h.citizenid] == true,
             matchedOn   = h.matchedOn ~= 'recent' and h.matchedOn or nil,
         }
@@ -266,6 +299,46 @@ function actions.simLookup(source, payload)
     local aCid, aName = adminIdent(source)
     store.audit(aCid, aName, 'sim-lookup', out.ownerCid, 'number ' .. digits)
     return ok(out)
+end
+
+---SIM registry, paginated + searchable, with activator names and live holders. SIM mode only.
+---@param source number admin player server id
+---@param payload { q?: string, cursor?: number }|nil
+---@return table envelope { numbers, nextCursor }
+function actions.numbers(source, payload)
+    if not simState.active then return fail('Unique phones are not enabled') end
+    local q = util.trim(payload and payload.q)
+    if #q > 64 then q = q:sub(1, 64) end
+    local offset = math.max(0, math.floor(tonumber(payload and payload.cursor) or 0))
+
+    local rows, nextCursor = store.listSims(q, PAGE, offset)
+
+    local ownerCids = {}
+    for _, r in ipairs(rows) do
+        if r.ownerCid then ownerCids[#ownerCids + 1] = r.ownerCid end
+    end
+    local names = resolveNames(ownerCids)
+
+    -- Wrapped onlineCidMap maps SIM identities -> source: the live-holder index.
+    local identityMap = player.onlineCidMap()
+
+    local numbers = {}
+    for i, r in ipairs(rows) do
+        local holderSrc = identityMap[r.identity]
+        numbers[i] = {
+            number       = r.number,
+            identity     = r.identity,
+            ownerCid     = r.ownerCid,
+            ownerName    = r.ownerCid and names[r.ownerCid] or nil,
+            createdAt    = r.createdAt,
+            boundProfile = not r.identity:find('^sim:'),
+            holder       = holderSrc and {
+                cid  = player.getRealIdentifier(holderSrc),
+                name = player.getName(holderSrc),
+            } or nil,
+        }
+    end
+    return ok({ numbers = numbers, nextCursor = nextCursor })
 end
 
 ---Creates a SIM card in an online player's inventory: blank (fresh number) or character-bound

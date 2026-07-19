@@ -127,7 +127,9 @@ Full guide: [docs.samueldev.shop/resources/phone/installation](https://docs.samu
 2. Add the phone items to your inventory, one per frame colour (`phone_black`, `phone_blue`, `phone_green`, `phone_orange`, `phone_pink`, `phone_purple`, `phone_red`, `phone_yellow`). Ready-made ox_inventory definitions and item icons are in the [installation docs](https://docs.samueldev.shop/resources/phone/installation); the icons ship in this repo's `images/` folder. Players can also open with the keybind (default F1), gated on owning a phone item.
 3. Set your API keys in `configs/server/apikeys.lua`: a [Fivemanage](https://refer.fivemanage.com/samuel) token of type **Media** in `FivemanageMedia` (required for the Camera, Photos and Voice Memos apps to upload), and optionally a GIPHY key for the Messages GIF picker.
 
-The pre-built UI ships at `web/build/`, so a fresh clone runs without touching npm. To rebuild after UI changes: `cd web && npm install && npm run build`.
+**Download the [latest release](https://github.com/Samuels-Development/sd-phone/releases)** (the packaged `sd-phone-*.zip`), not the green *Code -> Download ZIP*. The release zip carries the compiled UI and runs as-is; the source zip is code only and has no `web/build/`, so the phone opens blank.
+
+Building from a git clone yourself: `cd web && npm ci && npm run build`. The output lands in the gitignored `web/build/`; the server logs a clear error on boot if it is missing.
 
 ## Unique Phones & SIM Cards (optional)
 

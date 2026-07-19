@@ -4,7 +4,7 @@ lua54 'yes'
 
 name 'sd-phone'
 author 'Samuel#0008'
-version '0.1.0'
+version '0.9.0'
 description 'iOS-themed in-game phone — lockscreen, homepage, NUI bridge'
 
 -- Both sides load ox_lib first (require / callback machinery), then the shared
