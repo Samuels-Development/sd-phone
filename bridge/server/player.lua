@@ -45,10 +45,20 @@ end
 local resolveIdentifier = chooseIdentifier()
 
 ---The player's persistent per-character identifier (citizenid on QBCore/QBox, identifier on ESX).
----Nil when offline.
+---Nil when offline. NOTE: when unique phones are enabled, server/sim/init.lua rewraps this to
+---return the acting SIM identity instead - use getRealIdentifier for character-scoped concerns.
 ---@param source number player server id
 ---@return string|nil
 function player.getIdentifier(source)
+    local p = resolveGet(source)
+    return p and resolveIdentifier(p) or nil
+end
+
+---Always the framework-native character identifier, bypassing any SIM indirection installed
+---over getIdentifier. Nil when offline.
+---@param source number player server id
+---@return string|nil
+function player.getRealIdentifier(source)
     local p = resolveGet(source)
     return p and resolveIdentifier(p) or nil
 end

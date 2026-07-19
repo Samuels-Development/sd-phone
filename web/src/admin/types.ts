@@ -66,6 +66,31 @@ export interface AdminOverview {
     };
     mutes:        AdminMute[];
     downloadable: { id: string; label: string }[];
+    /** Unique-phones footprint; absent while the SIM feature is off. */
+    sim?: {
+        mode: 'container' | 'metadata';
+        sims: AdminSimRow[];
+        backup?: { identity: string; enabled: boolean; hasPassword: boolean } | null;
+        /** Only while the player is online. */
+        activeNumber?: string | null;
+        carried?: { number: string; color: string; active: boolean }[];
+    } | null;
+}
+
+export interface AdminSimRow {
+    number:     string;
+    identity:   string;
+    ownerCid?:  string | null;
+    createdAt?: number;
+}
+
+export interface AdminSimLookup {
+    number:       string;
+    identity:     string;
+    ownerCid?:    string | null;
+    ownerName?:   string | null;
+    boundProfile: boolean;
+    holder?: { cid?: string | null; name?: string | null; active: boolean } | null;
 }
 
 export interface AdminBirdyPost {

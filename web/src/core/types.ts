@@ -22,6 +22,14 @@ export interface OpenPayload {
         lock: string;
         home: string;
     };
+    sim?: SimStatePush;
+}
+
+/** Unique-phones SIM snapshot: enabled=false means the feature is off (stock behaviour). */
+export interface SimStatePush {
+    enabled: boolean;
+    hasSim?: boolean;
+    number?: string;
 }
 
 export interface AppDef {
@@ -168,6 +176,7 @@ interface MusicSharePush {
 
 export type NuiMessage =
     | { action: 'sd-phone:open';    data: OpenPayload }
+    | { action: 'sd-phone:simState'; data: SimStatePush }
     | { action: 'sd-phone:frameColor'; data: { color: string } }
     | { action: 'sd-phone:music:receive'; data: MusicSharePush }
     | { action: 'sd-phone:pages:feed';       data: ClassifiedFeedPush }

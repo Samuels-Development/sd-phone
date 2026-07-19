@@ -213,6 +213,21 @@ function store.listRecentPlayers(cursor, limit)
     return out, nextCursor
 end
 
+---Every SIM registered to a character: activated by them (owner_cid) or living on their
+---character-bound profile (identity = citizenid). Unique-phones only; the table exists whenever
+---the feature is active. Read-only.
+---@param cid string target citizenid
+---@return table[] sims { number, identity, owner_cid, created_at }
+function store.simsFor(cid)
+    local rows = MySQL.query.await([[
+        SELECT number, identity, owner_cid AS ownerCid, UNIX_TIMESTAMP(created_at) AS createdAt
+        FROM phone_sim_cards
+        WHERE owner_cid = ? OR identity = ?
+        ORDER BY created_at ASC
+    ]], { cid, cid })
+    return rows or {}
+end
+
 ---One player's full phone overview: settings, per-app content counts, accounts + sessions, and
 ---the Birdy profile. Read-only.
 ---@param cid string target citizenid

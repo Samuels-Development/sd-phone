@@ -53,7 +53,9 @@ lib.callback.register('sd-phone:server:settings:get', function(source)
     data.locale                  = store.getLocale(cid)
     local sec = store.getSecurity(cid)
     data.passcode                = sec.passcode
-    data.faceId                  = sec.faceId
+    -- Face Unlock only works for the SIM's first activator - a stolen phone still asks the
+    -- thief for the passcode (a no-op outside unique-phones mode).
+    data.faceId                  = sec.faceId and require('server.sim.session').isOwner(source)
     return { success = true, data = data }
 end)
 
