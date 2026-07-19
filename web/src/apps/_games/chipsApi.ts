@@ -41,13 +41,3 @@ export async function sellChips(amount: number, game: string): Promise<{ ok: boo
     const r = await apiCall<ChipState>('sd-phone:games:chipsSell', { amount, game });
     return r.success && r.data ? { ok: true, state: r.data } : { ok: false, message: r.message };
 }
-
-export async function settleChips(delta: number, game: string): Promise<number | null> {
-    if (delta === 0) { const s = await loadChips(); return s.chips; }
-    if (!isFiveM) {
-        const s = devRead();
-        const ns = { ...s, chips: Math.max(0, s.chips + delta) }; devWrite(ns);
-        return ns.chips;
-    }
-    return (await apiData<{ chips: number }>('sd-phone:games:chipsSettle', { delta, game }))?.chips ?? null;
-}

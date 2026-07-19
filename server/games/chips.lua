@@ -197,14 +197,6 @@ lib.callback.register('sd-phone:server:games:chipsSell', function(src, payload)
     return { success = true, data = r }
 end)
 
----Apply a solo/co-op session's net result to the caller's own wallet (clamped in chips.settle).
-lib.callback.register('sd-phone:server:games:chipsSettle', function(src, payload)
-    payload = type(payload) == 'table' and payload or {}
-    local r = chips.settle(src, payload.delta)
-    if not r then return { success = false } end
-    return { success = true, data = r }
-end)
-
 -- One-shot boot thread: creates the wallet schema.
 CreateThread(function()
     local good, err = pcall(chips.ensureSchema)

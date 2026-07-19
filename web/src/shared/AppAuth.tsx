@@ -916,7 +916,9 @@ function Field({ label, value, onChange, type, last, suffix, onFocus, onBlur, re
     const isPassword = type === 'password';
     const [revealed, setRevealed] = useState(false);
 
-    const inputType = suffix ? 'text' : isPassword ? (revealed ? 'text' : 'password') : (type ?? 'text');
+    // 'number' renders as text+numeric so e/E/+/-/. can't be typed like in a native number input.
+    const isNumber = type === 'number';
+    const inputType = suffix || isNumber ? 'text' : isPassword ? (revealed ? 'text' : 'password') : (type ?? 'text');
     const bad = !!error;
 
     return (
@@ -937,7 +939,11 @@ function Field({ label, value, onChange, type, last, suffix, onFocus, onBlur, re
                     type={inputType}
                     inputMode={type === 'number' ? 'numeric' : type === 'tel' ? 'tel' : undefined}
                     value={value}
-                    onChange={e => onChange(suffix ? e.target.value.replace(/@.*$/, '') : e.target.value)}
+                    onChange={e => onChange(
+                        isNumber ? e.target.value.replace(/\D/g, '')
+                        : suffix ? e.target.value.replace(/@.*$/, '')
+                        : e.target.value,
+                    )}
                     onFocus={onFocus}
                     onBlur={onBlur}
                     aria-required={required || undefined}

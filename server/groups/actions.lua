@@ -166,7 +166,7 @@ function actions.create(source, payload)
     end
 
     local row = store.getGroup(id)
-    return ok(actions.serializeGroup(row, me.cid))
+    return ok(actions.serializeGroup(row, me.cid, player.onlineCidMap()))
 end
 
 ---Sends a pending invite to the online player identified by `targetSource`. Leader-only, with
@@ -258,7 +258,7 @@ function actions.accept(source, payload)
     if not row then return fail('Group was disbanded') end
 
     return ok({
-        group  = actions.serializeGroup(row, me.cid),
+        group  = actions.serializeGroup(row, me.cid, player.onlineCidMap()),
         leader = row.leader_cid,
     })
 end
