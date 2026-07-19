@@ -477,6 +477,11 @@ function AppContent() {
     }, [pumpDownloads]);
     const handleUninstallApp = useCallback((id: string) => {
         setInstalledApps(prev => { const n = new Set(prev); n.delete(id); return n; });
+        // Evict any live/retained instance and its switcher card, so a later reinstall + reopen
+        // mounts fresh and refetches instead of showing the stale state held at uninstall time.
+        setRetained(prev => prev.filter(x => x !== id));
+        setRecentApps(prev => prev.filter(x => x !== id));
+        setForegroundKeys(m => { const n = { ...m }; delete n[id]; return n; });
         if (isCustomApp(id)) { setCustomInstalled(id, false); void fetchNui('customApps/lifecycle', { id, action: 'uninstall' }); }
         else void uninstallApp(id).then(ids => setInstalledApps(new Set(ids)));
     }, []);

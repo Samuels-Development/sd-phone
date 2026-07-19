@@ -6,6 +6,8 @@ local actions = require 'server.groups.actions'
 local player  = require 'bridge.server.player'
 ---@type table Badge engine (server.badges.init): recomputes + pushes home-screen unread counts.
 local badges  = require 'server.badges.init'
+---@type table Framework bridge (bridge.shared.framework): active framework name for the loaded hook.
+local framework = require 'bridge.shared.framework'
 
 ---Schema bootstrap, run in a thread.
 CreateThread(function()
@@ -69,6 +71,31 @@ AddEventHandler('playerDropped', function()
     if #groups == 0 then return end
     SetTimeout(500, function() pushRosterToCoMembers(cid, groups) end)
 end)
+
+---The mirror of the drop: a player coming online never told their co-members either, so a live
+---roster kept showing them offline until a manual refresh. Once the character has loaded (cid
+---resolvable, and in onlineCidMap by the time co-members refetch), nudge every online co-member so
+---the newcomer flips to online. Also remembers the cid up front for a cleaner later drop.
+local function pushOnline(src)
+    if not src then return end
+    SetTimeout(1500, function()
+        local cid = player.getIdentifier(src)
+        if not cid then return end
+        knownCids[src] = cid
+        local groups = store.listForMember(cid)
+        if #groups > 0 then pushRosterToCoMembers(cid, groups) end
+    end)
+end
+
+if framework.name == 'qb' then
+    AddEventHandler('QBCore:Server:PlayerLoaded', function(pl)
+        pushOnline(pl and pl.PlayerData and pl.PlayerData.source)
+    end)
+elseif framework.name == 'esx' then
+    AddEventHandler('esx:playerLoaded', function(playerId)
+        pushOnline(playerId)
+    end)
+end
 
 ---Uninstalling Groups leaves every membership behind: groups the player leads are disbanded,
 ---plain memberships are removed, the active pointer and pending invites are cleared, and
