@@ -16,6 +16,18 @@ local CHIP_CEILING = 100000000
 local TX_MAX       = 1000000
 ---@type integer Max absolute chip swing one client-run solo/co-op session may report via settle.
 local SETTLE_MAX   = 1000000
+---@type integer Upper bound on a settle payout relative to the chips staked for it. Solo games are
+---dealt client-side, so the server can't verify a win - but it can require every credited chip to
+---be backed by chips the player actually staked first. Blackjack pays at most 2.5x a wager (a
+---natural); 3x leaves headroom for rounding and never rejects a legitimate payout.
+local SETTLE_PAYOUT_MULT = 3
+
+---@type table<string, integer> Per-character escrow: chips debited by settle stakes (negative
+---deltas) that a settle payout (positive delta) has not yet paid back out. A payout may credit at
+---most this escrow times SETTLE_PAYOUT_MULT, which makes minting chips from nothing impossible - a
+---credit with no prior stake caps to zero. In-memory only: a resource restart resets escrow to 0,
+---which can forfeit a payout for a hand in flight (fails safe, toward the house).
+local settleEscrow = {}
 
 ---@return string|nil citizenid for a server-trusted src (nil when offline)
 local function cidOf(src) return player.getIdentifier(src) end
@@ -118,8 +130,11 @@ function chips.sell(src, amount, game)
     return { chips = bal, bank = money.get(src, 'bank') or 0 }
 end
 
----Applies a client-asserted net chip change from a solo / co-op session. Deltas clamp to
----SETTLE_MAX either way, non-finite deltas collapse to 0, and losses floor the balance at 0.
+---Applies a client-asserted chip change from a solo / co-op session. Deltas clamp to SETTLE_MAX
+---either way and non-finite deltas collapse to 0. A negative delta stakes chips: it floors the
+---balance at 0 and banks whatever was actually removed as escrow. A positive delta is a payout,
+---credited only up to the outstanding escrow times SETTLE_PAYOUT_MULT and consuming that escrow,
+---so no chip can be credited that was not staked first - the infinite-money path is closed.
 ---@param src integer player server id
 ---@param delta any client-supplied signed chip change
 ---@return table|nil result { chips }, nil when the caller has no identity
@@ -130,12 +145,35 @@ function chips.settle(src, delta)
     delta = math.floor(delta)
     if delta >  SETTLE_MAX then delta =  SETTLE_MAX end
     if delta < -SETTLE_MAX then delta = -SETTLE_MAX end
-    if delta >= 0 then return { chips = chips.add(cid, delta) } end
-    MySQL.update.await(
-        'UPDATE phone_casino_chips SET chips = GREATEST(chips - ?, 0) WHERE citizenid = ?',
-        { -delta, cid })
-    return { chips = chips.get(cid) }
+
+    if delta < 0 then
+        local before  = chips.get(cid)
+        local removed = math.min(-delta, before)
+        if removed > 0 then
+            MySQL.update.await(
+                'UPDATE phone_casino_chips SET chips = GREATEST(chips - ?, 0) WHERE citizenid = ?',
+                { removed, cid })
+            settleEscrow[cid] = (settleEscrow[cid] or 0) + removed
+        end
+        return { chips = chips.get(cid) }
+    end
+
+    if delta == 0 then return { chips = chips.get(cid) } end
+
+    local cap    = (settleEscrow[cid] or 0) * SETTLE_PAYOUT_MULT
+    local credit = math.min(delta, cap)
+    -- The payout closes out the round: whatever wasn't (or couldn't be) paid resets to zero, so a
+    -- capped over-claim can't leave escrow behind to inflate the next payout.
+    settleEscrow[cid] = nil
+    if credit <= 0 then return { chips = chips.get(cid) } end
+    return { chips = chips.add(cid, credit) }
 end
+
+-- Drops a departing player's settle escrow so the table can't grow without bound.
+AddEventHandler('playerDropped', function()
+    local cid = cidOf(source)
+    if cid then settleEscrow[cid] = nil end
+end)
 
 ---Read the caller's chip + bank balances (identity from source only). Read-only.
 lib.callback.register('sd-phone:server:games:chipsGet', function(src)
