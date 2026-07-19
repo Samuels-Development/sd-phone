@@ -631,7 +631,6 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
 
 
 			if ( texture.isCfxTexture ) {
-				console.log('cfx texture');
 				_gl.texParameterf( _gl.TEXTURE_2D, _gl.TEXTURE_WRAP_T, _gl.CLAMP_TO_EDGE );
 				_gl.texParameterf( _gl.TEXTURE_2D, _gl.TEXTURE_WRAP_T, _gl.MIRRORED_REPEAT );
 				_gl.texParameterf( _gl.TEXTURE_2D, _gl.TEXTURE_WRAP_T, _gl.REPEAT );

@@ -14,8 +14,6 @@ local chips = {}
 local CHIP_CEILING = 100000000
 ---@type integer Max single buy / sell.
 local TX_MAX       = 1000000
----@type integer Max absolute chip swing one client-run solo/co-op session may report via settle.
-local SETTLE_MAX   = 1000000
 
 ---@return string|nil citizenid for a server-trusted src (nil when offline)
 local function cidOf(src) return player.getIdentifier(src) end
@@ -118,25 +116,6 @@ function chips.sell(src, amount, game)
     return { chips = bal, bank = money.get(src, 'bank') or 0 }
 end
 
----Applies a client-asserted net chip change from a solo / co-op session. Deltas clamp to
----SETTLE_MAX either way, non-finite deltas collapse to 0, and losses floor the balance at 0.
----@param src integer player server id
----@param delta any client-supplied signed chip change
----@return table|nil result { chips }, nil when the caller has no identity
-function chips.settle(src, delta)
-    local cid = cidOf(src); if not cid then return nil end
-    delta = tonumber(delta)
-    if not delta or delta ~= delta or delta == math.huge or delta == -math.huge then delta = 0 end
-    delta = math.floor(delta)
-    if delta >  SETTLE_MAX then delta =  SETTLE_MAX end
-    if delta < -SETTLE_MAX then delta = -SETTLE_MAX end
-    if delta >= 0 then return { chips = chips.add(cid, delta) } end
-    MySQL.update.await(
-        'UPDATE phone_casino_chips SET chips = GREATEST(chips - ?, 0) WHERE citizenid = ?',
-        { -delta, cid })
-    return { chips = chips.get(cid) }
-end
-
 ---Read the caller's chip + bank balances (identity from source only). Read-only.
 lib.callback.register('sd-phone:server:games:chipsGet', function(src)
     local cid = cidOf(src); if not cid then return { success = false } end
@@ -156,14 +135,6 @@ lib.callback.register('sd-phone:server:games:chipsSell', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local r, msg = chips.sell(src, payload.amount, payload.game)
     if not r then return { success = false, message = msg } end
-    return { success = true, data = r }
-end)
-
----Apply a solo/co-op session's net result to the caller's own wallet (clamped in chips.settle).
-lib.callback.register('sd-phone:server:games:chipsSettle', function(src, payload)
-    payload = type(payload) == 'table' and payload or {}
-    local r = chips.settle(src, payload.delta)
-    if not r then return { success = false } end
     return { success = true, data = r }
 end)
 

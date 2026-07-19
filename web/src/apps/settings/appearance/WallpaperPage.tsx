@@ -6,6 +6,7 @@ import { formatClockTime, formatLongDate, useClock } from '@/hooks/useClock';
 import { useIosPush } from '@/hooks/useIosPush';
 import { PushLayer } from '../SettingsSubPage';
 import { useTheme } from '@/stores/themeStore';
+import { resolveWallpaper } from '@/shell/wallpapers';
 import { AppIconSVG } from '@/shell/AppIconSVG';
 import { Toggle } from '@/ui/Toggle';
 import { WallpaperPickerPage } from './WallpaperPickerPage';
@@ -85,7 +86,7 @@ export function WallpaperPage({ onBack }: { onBack: () => void }) {
 function LockThumb({ wallpaper, time, date }: { wallpaper: string; time: string; date: string }) {
     return (
         <div className="relative flex-1 overflow-hidden rounded-[12px] shadow-md" style={{ aspectRatio: '390/844' }}>
-            <img src={wallpaper} className="absolute inset-0 h-full w-full object-cover" alt="" draggable={false} />
+            <img src={resolveWallpaper(wallpaper)} className="absolute inset-0 h-full w-full object-cover" alt="" draggable={false} />
             <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/20" />
 
             <div className="relative mt-4 flex justify-center">
@@ -107,7 +108,7 @@ function LockThumb({ wallpaper, time, date }: { wallpaper: string; time: string;
 function HomeThumb({ wallpaper }: { wallpaper: string }) {
     return (
         <div className="relative flex-1 overflow-hidden rounded-[12px] shadow-md" style={{ aspectRatio: '390/844' }}>
-            <img src={wallpaper} className="absolute inset-0 h-full w-full object-cover" alt="" draggable={false} />
+            <img src={resolveWallpaper(wallpaper)} className="absolute inset-0 h-full w-full object-cover" alt="" draggable={false} />
             <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-black/35" />
 
             <div className="relative mt-4 grid grid-cols-4 gap-[4px] px-2">

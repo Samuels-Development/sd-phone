@@ -4,6 +4,10 @@ local store    = require 'server.photos.store'
 local actions  = require 'server.photos.actions'
 ---@type table Fivemanage uploader (server.photos.uploader): server-side base64 media upload.
 local uploader = require 'server.photos.uploader'
+---@type table Player bridge (bridge.server.player): citizenid for the shared upload budget.
+local player   = require 'bridge.server.player'
+---@type table Shared media-upload budget (server.photos.mediaLimit): cooldown + rolling byte cap.
+local mediaLimit = require 'server.photos.mediaLimit'
 ---@type table Shared server helpers (server.util): finite-number guard for the export boundary.
 local util     = require 'server.util'
 
@@ -28,8 +32,13 @@ local MAX_PHOTO_BYTES <const> = 4  * 1024 * 1024
 ---@type integer Max accepted video data-URL size in bytes (~32 MB).
 local MAX_VIDEO_BYTES <const> = 32 * 1024 * 1024
 
+---@type table<number, boolean> Sources with a capture upload in flight. One upload per player at a
+---time, so a client can't fan out many concurrent multi-MB uploads at the Fivemanage backend.
+local uploading = {}
+
 ---Receives the Camera app's captured media as a base64 data-URL over a latent event: validates
 ---the data-URL shape and byte cap, uploads to Fivemanage, saves the row, and pushes photos:added.
+---One upload per source may be in flight; the flag clears once the upload settles.
 ---@param image string base64 data-URL (data:image/... or data:video/...)
 ---@param kind string 'video' for clips; anything else is treated as a photo
 RegisterNetEvent('sd-phone:server:photos:upload', function(image, kind)
@@ -45,6 +54,15 @@ RegisterNetEvent('sd-phone:server:photos:upload', function(image, kind)
         print(('^1[sd-phone:photos]^0 [UPLOAD] src=%s rejected — payload too large (%d bytes)'):format(tostring(src), #image))
         return
     end
+    if uploading[src] then
+        print(('^1[sd-phone:photos]^0 [UPLOAD] src=%s rejected — an upload is already in progress'):format(tostring(src)))
+        return
+    end
+    local okLimit, why = mediaLimit.check(player.getIdentifier(src), #image)
+    if not okLimit then
+        print(('^1[sd-phone:photos]^0 [UPLOAD] src=%s rejected — rate limit (%s)'):format(tostring(src), why))
+        return
+    end
 
     print(('^2[sd-phone:photos]^0 [UPLOAD] src=%s kind=%s bytes=%d'):format(tostring(src), isVideo and 'video' or 'photo', #image))
 
@@ -53,7 +71,9 @@ RegisterNetEvent('sd-phone:server:photos:upload', function(image, kind)
         ext = image:find('^data:video/mp4') and 'mp4' or 'webm'
     end
     local filename = ('sdphone-%d-%d.%s'):format(src, os.time(), ext)
+    uploading[src] = true
     uploader.uploadMedia(image, filename, function(url, err)
+        uploading[src] = nil
         if not url then
             print(('^1[sd-phone:photos]^0 [UPLOAD] failed: %s'):format(tostring(err)))
             return
@@ -67,8 +87,21 @@ RegisterNetEvent('sd-phone:server:photos:upload', function(image, kind)
     end)
 end)
 
+---Clears a departing player's in-flight upload flag so a disconnect mid-upload can't leave them
+---permanently unable to upload after reconnecting on the same source id.
+AddEventHandler('playerDropped', function()
+    uploading[source] = nil
+end)
+
 ---Saves an already-hosted media URL for the caller and pushes photos:added with the new row.
+---Player-supplied, so the URL must pass config.Photos.AllowImport + the block/allow lists.
 lib.callback.register('sd-phone:server:photos:saveUrl', function(src, payload)
+    if not actions.importEnabled() then
+        return { success = false, message = 'URL import is disabled on this server' }
+    end
+    if not actions.isAllowedImportUrl(payload and payload.url) then
+        return { success = false, message = 'Images from that site aren\'t allowed' }
+    end
     local res = actions.saveFromUrl(src, payload and payload.url)
     if res and res.success and res.data and res.data.photo then
         TriggerClientEvent('sd-phone:client:photos:added', src, res.data.photo)

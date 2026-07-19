@@ -4,7 +4,7 @@ lua54 'yes'
 
 name 'sd-phone'
 author 'Samuel#0008'
-version '0.1.0'
+version '0.9.0'
 description 'iOS-themed in-game phone — lockscreen, homepage, NUI bridge'
 
 -- Both sides load ox_lib first (require / callback machinery), then the shared
@@ -63,10 +63,8 @@ files {
     'web/build/assets/*.woff2',
     -- Ringtone + notification-tone audio (Settings -> Sound & Haptics).
     'web/build/assets/*.mp3',
-    -- The iPhone bezel asset is consumed by the React app as an <img>
-    -- behind the screen viewport. Bundled via the build pipeline rather
-    -- than served from the resource root so Vite can fingerprint it.
-    'iphone_regular.png',
+    -- The iPhone bezel asset ships inside the Vite bundle (fingerprinted
+    -- under web/build/assets), so no root-level image is listed here.
 
     -- The live game-view renderer for the Camera app (patched three.js +
     -- CfxTexture, vendored under web/src/render/three) is part of the Vite

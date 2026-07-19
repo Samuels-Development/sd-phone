@@ -283,20 +283,20 @@ function CameraIcon() {
     return (
         <svg viewBox={`0 0 ${S} ${S}`} width={S} height={S}>
             <defs>
-                <RadialGrad id="cbg"  inner="#52525A" outer="#18181A" cx="50%" cy="40%" />
-                <RadialGrad id="clns" inner="#3D4B5E" outer="#0B0F17" cx="38%" cy="32%" />
+                <RadialGrad id="cbg"  inner="#6E6E78" outer="#2C2C31" cx="50%" cy="40%" />
+                <RadialGrad id="clns" inner="#5E7188" outer="#141A26" cx="38%" cy="32%" />
             </defs>
             <rect width={S} height={S} fill="url(#cbg)" />
-            <rect x="8" y="10" width="12" height="8" rx="3" fill="#3A3A3C" />
-            <rect x="9.5" y="11.5" width="9" height="5" rx="2" fill="#2A2A2C" />
-            <circle cx="46" cy="14" r="3.5" fill="#3A3A3C" />
-            <circle cx="30" cy="32" r="18.5" fill="#252527" />
+            <rect x="8" y="10" width="12" height="8" rx="3" fill="#55555C" />
+            <rect x="9.5" y="11.5" width="9" height="5" rx="2" fill="#3A3A40" />
+            <circle cx="46" cy="14" r="3.5" fill="#55555C" />
+            <circle cx="30" cy="32" r="18.5" fill="#3A3A40" />
             <circle cx="30" cy="32" r="17.5" fill="url(#clns)" />
-            <circle cx="30" cy="32" r="13.5" fill="none" stroke="#404048" strokeWidth="1.2" />
-            <circle cx="30" cy="32" r="9.5"  fill="#0A0C10" />
-            <ellipse cx="25" cy="26" rx="3.5" ry="2" fill="rgba(180,210,255,0.12)"
+            <circle cx="30" cy="32" r="13.5" fill="none" stroke="#6A6A78" strokeWidth="1.2" />
+            <circle cx="30" cy="32" r="9.5"  fill="#10151F" />
+            <ellipse cx="25" cy="26" rx="3.5" ry="2" fill="rgba(215,232,255,0.55)"
                 transform="rotate(-25,25,26)" />
-            <circle cx="30" cy="32" r="8.5" fill="none" stroke="rgba(100,140,255,0.12)" strokeWidth="1" />
+            <circle cx="30" cy="32" r="8.5" fill="none" stroke="rgba(150,185,255,0.38)" strokeWidth="1" />
         </svg>
     );
 }

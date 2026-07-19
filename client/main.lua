@@ -49,6 +49,8 @@ require 'client.apps.cookie'
 require 'client.apps.stocks'
 require 'client.apps.games'
 require 'client.apps.settings'
+require 'client.apps.sim'
+require 'client.admin'
 
 ---@type table Phone visibility state: open/locked flags + cosmetic battery percentage.
 local phoneState = {
@@ -59,6 +61,10 @@ local phoneState = {
 
 ---@type boolean True while another resource has disabled the phone.
 local phoneDisabled = false
+
+---@type { hasSim: boolean, number: string|nil }|nil Last SIM snapshot from the server; nil
+---while unique phones are off (stock behaviour).
+local currentSimState = nil
 
 ---@type string Current frame colour; always one of FRAME_COLORS.
 local currentFrameColor = config.Phone.DefaultColor or 'black'
@@ -104,16 +110,6 @@ local cameraActive = false
 local typingInPhone = false
 ---@type boolean True while the hold-to-look keybind has released the cursor for camera control.
 local lookMode = false
-
----Turns a camera rotation into a forward unit vector.
----@param rot vector3 gameplay-cam rotation in degrees
----@return vector3 dir forward unit vector
-local function rotToDir(rot)
-    local z   = math.rad(rot.z)
-    local x   = math.rad(rot.x)
-    local num = math.abs(math.cos(x))
-    return vec3(-math.sin(z) * num, math.cos(z) * num, math.sin(x))
-end
 
 ---Returns whether the hold pose should apply: phone open or flashlight on, and the Camera app
 ---not live.
@@ -307,6 +303,19 @@ local function OpenPhone()
     phoneState.open   = true
     phoneState.locked = true
 
+    CreateThread(function()
+        while phoneState.open do
+            DisableControlAction(0, 199, true) -- INPUT_FRONTEND_PAUSE
+            DisableControlAction(0, 200, true) -- INPUT_FRONTEND_PAUSE_ALTERNATE
+            Wait(0)
+        end
+        for i = 1, 15 do
+            DisableControlAction(0, 199, true)
+            DisableControlAction(0, 200, true)
+            Wait(0)
+        end
+    end)
+
     updatePose()
 
     TriggerEvent('sd-phone:client:openState', true)
@@ -344,6 +353,11 @@ local function OpenPhone()
                 lock = config.Lockscreen.Wallpaper,
                 home = config.Homescreen.Wallpaper,
             },
+            sim = currentSimState and {
+                enabled = true,
+                hasSim  = currentSimState.hasSim == true,
+                number  = currentSimState.number,
+            } or { enabled = false },
         },
     })
 
@@ -376,14 +390,22 @@ function ClosePhone()
 end
 
 ---Keybind toggle: closes when open, otherwise resolves ownership and colour via the server
----callback and opens. The returned colour is whitelist-checked against FRAME_COLORS.
+---callback and opens. The returned colour is whitelist-checked against FRAME_COLORS. Under
+---unique phones the server answers with a table carrying the SIM snapshot instead.
 local function TogglePhone()
     if phoneState.open then ClosePhone() return end
 
-    local color = lib.callback.await('sd-phone:server:phone:resolveOpen', false, currentFrameColor)
-    if not color then
+    local res = lib.callback.await('sd-phone:server:phone:resolveOpen', false, currentFrameColor)
+    if not res then
         notify.show({ description = 'You don\'t have a phone.', type = 'error' })
         return
+    end
+    local color = res
+    if type(res) == 'table' then
+        color = res.color
+        currentSimState = { hasSim = res.hasSim == true, number = res.number }
+    else
+        currentSimState = nil
     end
     if FRAME_COLORS[color] then currentFrameColor = color end
     OpenPhone()
@@ -402,9 +424,29 @@ RegisterKeyMapping('+sdphone_look', 'Phone: Hold to look around', 'keyboard', co
 ---Opens the phone after a phone item is used, adopting the item variant's frame colour when it
 ---passes the FRAME_COLORS whitelist.
 ---@param color string|nil frame colour of the used item variant
-RegisterNetEvent('sd-phone:client:openFromItem', function(color)
+---@param sim { hasSim: boolean, number: string|nil }|nil SIM snapshot (unique phones only)
+RegisterNetEvent('sd-phone:client:openFromItem', function(color, sim)
     if color and FRAME_COLORS[color] then currentFrameColor = color end
+    currentSimState = sim and { hasSim = sim.hasSim == true, number = sim.number } or nil
     OpenPhone()
+end)
+
+---Live SIM state push (SIM inserted/ejected/moved). Keeps the local snapshot fresh and, while
+---the phone is open, swaps the NUI's "No SIM" screen in or out immediately.
+---@param state { enabled: boolean, hasSim: boolean, number: string|nil }
+RegisterNetEvent('sd-phone:client:simState', function(state)
+    if type(state) ~= 'table' then return end
+    currentSimState = state.enabled and { hasSim = state.hasSim == true, number = state.number } or nil
+    if phoneState.open then
+        SendNUIMessage({
+            action = 'sd-phone:simState',
+            data   = {
+                enabled = state.enabled == true,
+                hasSim  = state.hasSim == true,
+                number  = state.number,
+            },
+        })
+    end
 end)
 
 ---Admin wipe (server /wipemyphone): closes the phone and tells the React app to clear its local
@@ -505,18 +547,19 @@ CreateThread(function()
     end
 end)
 
--- Draws a spotlight from the hand bone toward the camera each frame while the torch is on;
--- idles at a 300ms poll while off.
+-- Draws a spotlight from the hand bone in the ped's facing direction each frame while the
+-- torch is on; idles at a 300ms poll while off. Direction is NOT camera-based so looking
+-- around does not move the beam.
 CreateThread(function()
     local fl = config.Phone.Flashlight
     while true do
         if flashlightOn then
             local ped = PlayerPedId()
             local pos = GetPedBoneCoords(ped, config.Phone.PropBone, 0.0, 0.0, 0.0)
-            local dir = rotToDir(GetGameplayCamRot(2))
+            local fwd = GetEntityForwardVector(ped)
             DrawSpotLight(
-                pos.x, pos.y, pos.z + 0.1,
-                dir.x, dir.y, dir.z,
+                pos.x, pos.y, pos.z,
+                fwd.x, fwd.y, fwd.z,
                 fl.Color[1], fl.Color[2], fl.Color[3],
                 fl.Distance, fl.Brightness, 0.0, fl.Radius, 1.0
             )

@@ -420,7 +420,7 @@ export function Maps({ onClose }: { onClose: () => void }) {
                             value: tab,
                             label: tab === 'pins' ? t('maps.tabPins', 'Pins') : tab === 'companies' ? t('maps.tabCompanies', 'Companies') : t('maps.tabPeople', 'People'),
                         }))}
-                        className={sheetTabs.length === 3 ? 'w-[260px]' : 'w-[200px]'}
+                        fit
                     />
                     {sheetTab === 'pins' ? (
                         <div className="flex items-center gap-3">
@@ -433,14 +433,17 @@ export function Maps({ onClose }: { onClose: () => void }) {
                         <span className="text-[15px] text-ios-gray">{companies.length}</span>
                     ) : (
                         <div className="flex items-center gap-3">
-                            <button
-                                onClick={toggleAvatars}
-                                aria-label={showAvatars ? t('maps.showInitials', 'Show initials instead of photos') : t('maps.showContactPhotos', 'Show contact photos')}
-                                title={showAvatars ? t('maps.showingPhotos', 'Showing photos') : t('maps.showingInitials', 'Showing initials')}
-                                className={(showAvatars ? 'text-ios-blue' : 'text-ios-gray') + ' active:opacity-60'}
-                            >
-                                <ImageIcon className="h-[20px] w-[20px]" strokeWidth={2.2} />
-                            </button>
+                            {/* Hidden when no friend has a photo - the toggle would visibly do nothing. */}
+                            {friends.some(f => f.avatar) && (
+                                <button
+                                    onClick={toggleAvatars}
+                                    aria-label={showAvatars ? t('maps.showInitials', 'Show initials instead of photos') : t('maps.showContactPhotos', 'Show contact photos')}
+                                    title={showAvatars ? t('maps.showingPhotos', 'Showing photos') : t('maps.showingInitials', 'Showing initials')}
+                                    className={(showAvatars ? 'text-ios-blue' : 'text-ios-gray') + ' active:opacity-60'}
+                                >
+                                    <ImageIcon className="h-[20px] w-[20px]" strokeWidth={2.2} />
+                                </button>
+                            )}
                             <span className="text-[15px] text-ios-gray">
                                 {t('maps.sharingCount', '{count} sharing', { count: visibleFriends.length })}
                             </span>
@@ -462,7 +465,7 @@ export function Maps({ onClose }: { onClose: () => void }) {
                     />
                 ) : sheetTab === 'companies' ? (
                     <>
-                    <SearchBar value={companyQuery} onChange={setCompanyQuery} placeholder={t('maps.searchCompanies', 'Search Companies')} className="mx-4 mb-2" />
+                    <SearchBar value={companyQuery} onChange={setCompanyQuery} placeholder={t('maps.searchCompanies', 'Search Companies')} className="mx-4 mt-1 mb-2" />
                     <div ref={compListRef} className="no-scrollbar relative overflow-y-auto px-4 pb-4" style={{ height: 240 }}>
                         {companyMatches.length === 0 ? (
                             <p className="py-6 text-center text-[15px] text-ios-gray">
@@ -505,7 +508,7 @@ export function Maps({ onClose }: { onClose: () => void }) {
                     </>
                 ) : (
                 <>
-                <SearchBar value={query} onChange={setQuery} placeholder={t('maps.searchPins', 'Search Pins')} className="mx-4 mb-2" />
+                <SearchBar value={query} onChange={setQuery} placeholder={t('maps.searchPins', 'Search Pins')} className="mx-4 mt-1 mb-2" />
 
                 <div ref={pinsListRef} className="no-scrollbar relative overflow-y-auto px-4 pb-4" style={{ height: 240 }}>
                     {shown.length === 0 ? (

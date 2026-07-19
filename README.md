@@ -127,7 +127,76 @@ Full guide: [docs.samueldev.shop/resources/phone/installation](https://docs.samu
 2. Add the phone items to your inventory, one per frame colour (`phone_black`, `phone_blue`, `phone_green`, `phone_orange`, `phone_pink`, `phone_purple`, `phone_red`, `phone_yellow`). Ready-made ox_inventory definitions and item icons are in the [installation docs](https://docs.samueldev.shop/resources/phone/installation); the icons ship in this repo's `images/` folder. Players can also open with the keybind (default F1), gated on owning a phone item.
 3. Set your API keys in `configs/server/apikeys.lua`: a [Fivemanage](https://refer.fivemanage.com/samuel) token of type **Media** in `FivemanageMedia` (required for the Camera, Photos and Voice Memos apps to upload), and optionally a GIPHY key for the Messages GIF picker.
 
-The pre-built UI ships at `web/build/`, so a fresh clone runs without touching npm. To rebuild after UI changes: `cd web && npm install && npm run build`.
+**Download the [latest release](https://github.com/Samuels-Development/sd-phone/releases)** (the packaged `sd-phone-*.zip`), not the green *Code -> Download ZIP*. The release zip carries the compiled UI and runs as-is; the source zip is code only and has no `web/build/`, so the phone opens blank.
+
+Building from a git clone yourself: `cd web && npm ci && npm run build`. The output lands in the gitignored `web/build/`; the server logs a clear error on boot if it is missing.
+
+## Unique Phones & SIM Cards (optional)
+
+Off by default. Flip `Enabled = true` in `configs/simcards.lua` and phone numbers stop belonging to characters — they live on **SIM card items**. Whichever SIM is in a phone decides whose data that phone shows: messages, call log, contacts, photos, app logins, settings — everything. Steal someone's phone with the SIM inside and you're reading *their* phone; without any SIM, a phone opens to a **No SIM** screen with no service and every server action refused.
+
+### Setup
+
+1. Enable the feature in `configs/simcards.lua` and add the SIM item to your inventory (ox_inventory example):
+
+   ```lua
+   ['sim_card'] = {
+       label = 'SIM Card',
+       weight = 5,
+       stack = false,
+       close = true,
+       consume = 0, -- required: sd-phone consumes the item itself on install
+       server = { export = 'sd-phone.useSim_card' },
+   },
+   ```
+
+2. Give players a phone item plus a SIM:
+   - `/givesim <playerId>` (admin) — a blank SIM with a fresh number.
+   - `/givesim <playerId> bind` — a **character-bound** SIM: it carries the player's existing number and their existing phone data, so servers switching the feature on lose nothing.
+   - Or from another resource: `exports['sd-phone']:giveSimCard(source, { citizenid = cid })`.
+3. Phones handed out **before** enabling the feature keep working as items, but in container mode they have no SIM tray until re-issued.
+
+### Two attach modes
+
+| | `UseContainers = false` (default, universal) | `UseContainers = true` (ox_inventory only) |
+|---|---|---|
+| Install SIM | **Use the sim_card item** — it's consumed and written onto your phone | Right-click/use the phone → SIM tray opens → drag the SIM in |
+| Eject SIM | Settings → **SIM & Backup** → *Eject SIM Card* (returns the item, number intact) | Drag the SIM out of the tray |
+| Using the phone item | Opens the phone UI | Opens the SIM tray (ox intercepts container items); the phone UI opens via the keybind (default F1) |
+| Backends | every supported backend below | ox_inventory |
+
+Supported backends (via the slot-level bridge API in `bridge/server/inventory.lua`): **ox_inventory**, **qb-inventory**, **ps-inventory**, **lj-inventory**, **qs-inventory(-pro)**, **tgiann-inventory**, **codem-inventory**, **origen_inventory**, **jaksam_inventory**, plus a framework-native fallback for QBCore setups without a dedicated inventory. Plain ESX inventory has no item metadata and cannot support unique phones.
+
+### Multiple phones & SIMs
+
+A player can carry **several phones, each with its own SIM**. Whichever phone they open (use the item, or the keybind's last-used colour) is the **active** one — outgoing calls and messages act as that phone's number. All carried SIM'd phones stay **reachable**: a call or text to any of their numbers reaches the player, even while another phone is active. Settings → SIM & Backup lists the other phones on you.
+
+### What players should know
+
+- **No SIM = no service.** The phone opens but shows the No SIM screen; nothing works until a SIM is installed.
+- **Your number lives on the SIM.** Move the SIM to another phone and the number (and the whole phone profile) moves with it. **A lost number is lost** — restores never bring numbers back.
+- **Passcodes still protect you.** A thief sees your lockscreen; if you set a passcode they must know it — Face Unlock never works for anyone but the SIM's original owner.
+- **Cloud Backup** (Settings → SIM & Backup) belongs to your **character** and is protected by a **backup password** you set when turning it on (a copy is saved into your Passwords app). After losing your phone, get a new phone + blank SIM, press *Restore from Backup* and enter the password: your contacts, messages, photos, notes, settings and app logins are copied to the new phone. The number is **not** restored — your new SIM keeps its own number, and the old number stays on the old SIM.
+
+### SIM exports
+
+```lua
+-- Create + give a SIM card. opts.citizenid makes it character-bound (carries that
+-- character's number/data); opts.number requests a specific number (nil if taken).
+local number = exports['sd-phone']:giveSimCard(source, { citizenid = nil, number = nil })
+
+exports['sd-phone']:getSimNumber(source)     -- bare-digit number in the player's ACTIVE phone, or nil
+exports['sd-phone']:hasSim(source)           -- true when their active phone has a SIM
+exports['sd-phone']:isSimModeActive()        -- true while unique phones are enabled + supported
+exports['sd-phone']:isNumberAvailable(number) -- true when a number is free to assign
+
+-- Assign a specific number to the SIM in the player's ACTIVE phone (identity/data kept).
+-- This is the hook for your own "buy a custom number" implementation.
+local ok, err = exports['sd-phone']:setSimNumber(source, '5550001234')
+-- err on failure: 'invalid' | 'no_sim' | 'taken'
+```
+
+Existing number exports (`getPhoneNumber`, `getSourceByNumber`, `getIdentifierByNumber`, `isNumberInService`, `hasPhone`) automatically follow the SIM when the feature is on.
 
 ---
 

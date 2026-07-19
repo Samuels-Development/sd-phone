@@ -10,10 +10,14 @@ local contactsStore = require 'server.contacts.store'
 local banking       = require 'server.banking.actions'
 ---@type table Fivemanage uploader (server.photos.uploader): server-side media upload.
 local uploader      = require 'server.photos.uploader'
+---@type table Shared media-upload budget (server.photos.mediaLimit): cooldown + rolling byte cap.
+local mediaLimit    = require 'server.photos.mediaLimit'
 ---@type table Messages persistence layer (server.messages.store): mailbox rows, groups, reactions.
 local store         = require 'server.messages.store'
 ---@type table Badge engine (server.badges.init): server-authoritative home-screen unread counts.
 local badges        = require 'server.badges.init'
+---@type table Admin mute registry (server.admin.moderation): scope guards for sending texts.
+local moderation    = require 'server.admin.moderation'
 
 ---@type table Messages knobs (configs/messages.lua): body / thread / group caps.
 local cfg = config.Messages
@@ -380,8 +384,10 @@ local function sendDirect(source, cid, myNumber, target, kind, body, meta, ts, m
 
         targetSrc = player.getSourceByIdentifier(targetCid)
         if targetSrc and not withheld then
+            -- No character-name fallback: an unsaved sender shows as their number, matching
+            -- the buildConversation reload path (and not leaking identities).
             local theirContacts = contactMapFor(targetCid)
-            local participant   = resolveParticipant(myNumber, theirContacts[myNumber], player.getName(source))
+            local participant   = resolveParticipant(myNumber, theirContacts[myNumber])
             local msg           = buildMessage(inId, myNumber, kind, body, meta, ts, false, digits(settings.getPhoneNumber(targetCid)))
 
             TriggerClientEvent('sd-phone:client:messages:incoming', targetSrc, {
@@ -626,6 +632,7 @@ function actions.send(source, payload)
     local cid = player.getIdentifier(source)
     if not cid then return fail('Player not found') end
     if settings.isAirplane(cid) then return fail('Airplane Mode is on') end
+    local muted = moderation.guard(cid, 'sms'); if muted then return muted end
 
     local conversation = tostring(payload.conversation or '')
     if conversation == '' then return fail('No conversation') end
@@ -1014,6 +1021,8 @@ function actions.uploadVoice(source, payload)
 
     local maxBytes = (config.VoiceMemos and config.VoiceMemos.MaxAudioBytes) or (8 * 1024 * 1024)
     if #audio > maxBytes then return fail('Recording is too long') end
+    local okLimit, why = mediaLimit.check(player.getIdentifier(source), #audio)
+    if not okLimit then return fail(why == 'cooldown' and 'Slow down a moment' or 'Upload limit reached') end
 
     local ext = audio:find('^data:audio/mpeg') and 'mp3'
         or audio:find('^data:audio/ogg') and 'ogg'

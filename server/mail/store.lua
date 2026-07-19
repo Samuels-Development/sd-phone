@@ -62,8 +62,11 @@ local function hydrateRow(row)
     }
 end
 
----Creates the single Mail table idempotently. Run once at boot.
+---Creates the single Mail table idempotently. Run once at boot. lb-phone's mail app uses the
+---same table name with a different shape; such a table is moved aside first.
 function store.ensureSchema()
+    util.rescueLegacyTable('phone_mail_accounts', 'password_hash')
+
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_mail_accounts (
             email              VARCHAR(64)  NOT NULL,

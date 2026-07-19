@@ -8,6 +8,10 @@ local actions  = require 'server.voicememos.actions'
 ---@type table Fivemanage uploader (server.photos.uploader): server-side media push, shared
 ---with Photos; the API key never leaves the server.
 local uploader = require 'server.photos.uploader'
+---@type table Player bridge (bridge.server.player): citizenid for the shared upload budget.
+local player   = require 'bridge.server.player'
+---@type table Shared media-upload budget (server.photos.mediaLimit): cooldown + rolling byte cap.
+local mediaLimit = require 'server.photos.mediaLimit'
 ---@type table AirShare core (server.share.core): per-kind delivery handler registry.
 local share    = require 'server.share.core'
 
@@ -58,6 +62,11 @@ RegisterNetEvent('sd-phone:server:voice:upload', function(payload)
     end
     if uploading[src] then
         TriggerClientEvent('sd-phone:client:voice:uploadFailed', src, 'Upload already in progress')
+        return
+    end
+    local okLimit, why = mediaLimit.check(player.getIdentifier(src), #audio)
+    if not okLimit then
+        TriggerClientEvent('sd-phone:client:voice:uploadFailed', src, why == 'cooldown' and 'Slow down a moment' or 'Upload limit reached, try again later')
         return
     end
 

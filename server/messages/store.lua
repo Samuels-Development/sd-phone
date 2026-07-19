@@ -34,6 +34,9 @@ end
 ---Creates the message tables idempotently, back-fills missing columns, and upgrades the
 ---reactions primary key. Run once at boot.
 function store.ensureSchema()
+    util.rescueLegacyTable('phone_messages', 'citizenid')
+    util.rescueLegacyTable('phone_message_reactions', 'mid')
+
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_messages (
             id            VARCHAR(16)  NOT NULL,
@@ -71,8 +74,12 @@ function store.ensureSchema()
           AND CONSTRAINT_NAME = 'PRIMARY'
     ]]) or {}
     local hasEmojiInPk = false
-    for _, r in ipairs(pk) do if r.col == 'emoji' then hasEmojiInPk = true break end end
-    if #pk > 0 and not hasEmojiInPk then
+    local hasMidInPk = false
+    for _, r in ipairs(pk) do
+        if r.col == 'emoji' then hasEmojiInPk = true end
+        if r.col == 'mid' then hasMidInPk = true end
+    end
+    if #pk > 0 and hasMidInPk and not hasEmojiInPk then
         MySQL.query.await('ALTER TABLE phone_message_reactions DROP PRIMARY KEY, ADD PRIMARY KEY (mid, citizenid, emoji)')
     end
 

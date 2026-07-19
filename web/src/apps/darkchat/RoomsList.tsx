@@ -89,7 +89,7 @@ function RoomRow({ room, onOpen }: { room: Room; onOpen: () => void }) {
                 <div className="flex items-center gap-2">
                     <span className="truncate text-[19px] font-semibold text-white">{room.name}</span>
                     {room.isPrivate && room.code && (
-                        <span className="shrink-0 rounded-md bg-white/10 px-1.5 py-[1px] text-[11px] font-semibold tracking-wider text-white/55">{room.code}</span>
+                        <span className="shrink-0 rounded-md bg-white/10 px-1.5 py-[4px] text-[11px] font-semibold leading-none tracking-wider text-white/55">{room.code}</span>
                     )}
                 </div>
                 <p className="truncate text-[15px] text-white/45">{room.topic}</p>

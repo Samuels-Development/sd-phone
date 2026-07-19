@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronRight, House, KeyRound, Lock, MapPin, Navigation, Unlock, X } from 'lucide-react';
 
 import { fetchNui, isFiveM } from '@/core/nui';
@@ -6,6 +6,7 @@ import { apiCall, type Envelope } from '@/core/api';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { useIosPush } from '@/hooks/useIosPush';
 import { useSessionState } from '@/hooks/useSessionState';
+import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { PromptDialog } from '@/ui/PromptDialog';
 import { EmptyState } from '@/ui/EmptyState';
@@ -20,7 +21,7 @@ export function Homes({ onClose: _onClose }: { onClose: () => void }) {
     const [caps, setCaps] = useState<HomesCaps>(DEV_CAPS);
     const [openId, setOpenId] = useSessionState<string | null>('homes:openHome', null);
 
-    const { data: list, loading } = useAsyncData<{ homes: Home[]; caps?: HomesCaps }>(
+    const { data: list, loading, refetch } = useAsyncData<{ homes: Home[]; caps?: HomesCaps }>(
         async () => {
             const r = await fetchNui<Envelope<Home[]> & { caps?: HomesCaps }>('sd-phone:homes:list');
             if (!r?.success || !Array.isArray(r.data)) return null;
@@ -35,6 +36,10 @@ export function Homes({ onClose: _onClose }: { onClose: () => void }) {
             onData: d => { if (d.caps) setCaps(d.caps); },
         },
     );
+
+    useNuiEvent('sd-phone:homes:refresh', useCallback(() => {
+        refetch();
+    }, [refetch]));
     const homes = list?.homes ?? (isFiveM ? [] : HOMES);
 
     const open = homes.find(h => h.id === openId) ?? null;

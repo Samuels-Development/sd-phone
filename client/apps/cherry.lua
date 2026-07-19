@@ -36,6 +36,12 @@ RegisterNetEvent('sd-phone:client:cherry:reaction', function(payload)
     SendNUIMessage({ action = 'sd-phone:cherry:reaction', data = payload })
 end)
 
+---Server push: relays a matched partner's fresh profile card.
+---@param payload table { username, partner } from server/cherry/actions.lua
+RegisterNetEvent('sd-phone:client:cherry:partner', function(payload)
+    SendNUIMessage({ action = 'sd-phone:cherry:partner', data = payload })
+end)
+
 ---Server push: relays an unmatch/block notice.
 ---@param payload table { matchId } from server/cherry/actions.lua
 RegisterNetEvent('sd-phone:client:cherry:unmatch', function(payload)

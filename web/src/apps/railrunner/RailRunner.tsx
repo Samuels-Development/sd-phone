@@ -3,6 +3,7 @@ import { BarChart3, Check, ChevronDown, ChevronLeft, ChevronUp, Coins, Crown, Mo
 
 import { useIosPush } from '@/hooks/useIosPush';
 import { useGameLoop, type Phase } from '@/apps/_arcade/useGameLoop';
+import { useDeckActive } from '@/shell/deckActive';
 import { useGameToasts, GameToasts } from '@/apps/_arcade/GameToasts';
 import { GameOverCard } from '@/apps/_arcade/GameOverCard';
 import { AchievementsList } from '@/apps/_arcade/AchievementsList';
@@ -221,7 +222,11 @@ export function RailRunner({ onClose: _onClose }: Props) {
         },
     });
 
+    // Only listen while foreground: a backgrounded but still-mounted game would keep
+    // preventDefault-ing arrows/WASD/Space and starve text fields in other apps.
+    const deckActive = useDeckActive();
     useEffect(() => {
+        if (!deckActive) return;
         function onKey(e: KeyboardEvent) {
             switch (e.key) {
                 case 'ArrowLeft':  case 'a': case 'A': e.preventDefault(); moveLane(-1); break;
@@ -232,7 +237,7 @@ export function RailRunner({ onClose: _onClose }: Props) {
         }
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, []);
+    }, [deckActive]);
 
     const ptr = useRef<{ x: number; y: number; t: number } | null>(null);
     function onPointerDown(e: React.PointerEvent) {

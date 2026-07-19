@@ -8,12 +8,13 @@ import { BlackjackIcon } from '@/shell/AppIconSVG';
 import {
     type Card, type Outcome,
     SUIT_GLYPH,
-    dealerShouldHit, freshDeck, fmtChips, handValue, isBlackjack, isBust, isRed,
-    outcomeVsDealer, payoutFor, statResultFor,
+    fmtChips, handValue, isBlackjack, isBust, isRed, statResultFor,
 } from './logic';
+import { type BjResult, bjDeal, bjDouble, bjHit, bjStand } from './blackjackApi';
+import { isFiveM } from '@/core/nui';
 import { Leaderboard } from '@/apps/_games/Leaderboard';
 import { Cashier } from '@/apps/_games/Cashier';
-import { loadChips, settleChips } from '@/apps/_games/chipsApi';
+import { loadChips } from '@/apps/_games/chipsApi';
 import { loadLeaderboard, loadStats, recordResultApi, type GameLeaderboard, type GameStats } from '@/apps/_games/statsApi';
 import { readJson, writeJson } from '@/lib/storage';
 
@@ -22,6 +23,9 @@ interface Props { onClose: () => void; }
 const SB_H = 54;
 const GAME = 'blackjack';
 const ACCENT = '#1C8A4E';
+
+// Face-down placeholder for the dealer hole while the player acts; the real hole arrives on resolve.
+const HOLE_CARD: Card = { rank: 'A', suit: 'S' };
 
 const BET_KEY = 'sd-phone:blackjack:lastbet';
 const initialBet = () => { const n = readJson<number>(BET_KEY) ?? 25; return Number.isFinite(n) && n > 0 ? Math.floor(n) : 25; };
@@ -54,7 +58,6 @@ export function Blackjack({ onClose: _onClose }: Props) {
     useEffect(() => { writeJson(BET_KEY, lastBet); }, [lastBet]);
 
     const syncChips = useCallback(() => { void loadChips().then(s => { setChips(s.chips); setBank(s.bank); }); }, []);
-    const adjustChips = useCallback((delta: number) => { if (!delta) return; setChips(c => Math.max(0, c + delta)); void settleChips(delta, GAME); }, []);
 
     const [stats, setStats] = useState<GameStats>(() => ({ cpu: { wins: 0, losses: 0, draws: 0 }, online: { wins: 0, losses: 0, draws: 0 }, won: 0, lost: 0 }));
     const [leaderboard, setLeaderboard] = useState<GameLeaderboard | null>(null);
@@ -64,7 +67,6 @@ export function Blackjack({ onClose: _onClose }: Props) {
 
     const [phase,   setPhase]   = useState<Phase>('betting');
     const [bet,     setBet]     = useState<number>(() => initialBet());
-    const [deck,    setDeck]    = useState<Card[]>([]);
     const [player,  setPlayer]  = useState<Card[]>([]);
     const [dealer,  setDealer]  = useState<Card[]>([]);
     const [holeUp,  setHoleUp]  = useState(false);
@@ -73,8 +75,7 @@ export function Blackjack({ onClose: _onClose }: Props) {
     const [payout,  setPayout]  = useState(0);
     const [confirmLeave, setConfirmLeave] = useState(false);
 
-    const deckRefSolo = useRef<Card[]>(deck);   deckRefSolo.current = deck;
-    const dealerRefSolo = useRef<Card[]>(dealer); dealerRefSolo.current = dealer;
+    const acting = useRef(false);
     const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
     const after = useCallback((ms: number, fn: () => void) => { timers.current.push(setTimeout(fn, ms)); }, []);
     useEffect(() => () => { timers.current.forEach(clearTimeout); }, []);
@@ -90,53 +91,78 @@ export function Blackjack({ onClose: _onClose }: Props) {
         setScreen('solo');
     }
 
-    function deal() {
-        const wager = Math.min(bet, chipsRef.current); if (wager <= 0) return;
-        const d = freshDeck();
-        const pHand = [d.pop()!, d.pop()!];
-        const dHand = [d.pop()!, d.pop()!];
-        adjustChips(-wager); setLastBet(wager); setBet(wager);
-        setDeck(d); setPlayer(pHand); setDealer(dHand);
-        setHoleUp(false); setDoubled(false); setOutcome(null); setPayout(0); setPhase('playing');
-        if (isBlackjack(pHand) || isBlackjack(dHand)) {
-            after(620, () => { setHoleUp(true); after(420, () => settle(pHand, dHand, wager)); });
+    // Shows a resolved hand: the server records stats in-game, so we just refresh; dev records locally.
+    function finishResult(res: BjResult) {
+        setOutcome(res.outcome ?? null);
+        setPayout(res.net ?? 0);
+        if (res.chips !== undefined) setChips(res.chips);
+        setPhase('result');
+        if (!isFiveM && res.outcome) void recordResultApi(GAME, 'cpu', statResultFor(res.outcome), res.net ?? 0).then(st => { if (st) setStats(st); });
+        else void loadStats(GAME).then(setStats);
+    }
+
+    // Animates the server-resolved dealer hand: flip the hole, step any dealer draws, then the result.
+    function revealResolution(res: BjResult) {
+        setPlayer(res.player);
+        const full = res.dealer;
+        const busted = isBust(res.player);
+        if (!busted) setPhase('dealer');   // a player bust keeps the (dead) play controls, as before
+        setDealer(full.slice(0, 2));
+        if (busted || full.length <= 2) {
+            after(busted ? 460 : 520, () => { setHoleUp(true); after(busted ? 420 : 460, () => finishResult(res)); });
+            return;
         }
-    }
-    function hit() {
-        if (phase !== 'playing') return;
-        const d = deckRefSolo.current.slice(); const card = d.pop()!; const next = [...player, card];
-        setDeck(d); setPlayer(next);
-        if (isBust(next)) after(420, () => { setHoleUp(true); after(380, () => settle(next, dealerRefSolo.current, bet)); });
-    }
-    function stand() { if (phase !== 'playing') return; beginDealer(player, bet); }
-    function doubleDown() {
-        if (!(phase === 'playing' && player.length === 2 && !doubled && chipsRef.current >= bet)) return;
-        const newBet = bet * 2;
-        const d = deckRefSolo.current.slice(); const card = d.pop()!; const next = [...player, card];
-        adjustChips(-bet); setDoubled(true); setBet(newBet); setDeck(d); setPlayer(next);
-        after(440, () => {
-            if (isBust(next)) { setHoleUp(true); after(380, () => settle(next, dealerRefSolo.current, newBet)); }
-            else beginDealer(next, newBet);
+        after(520, () => {
+            setHoleUp(true);
+            const revealFrom = (i: number) => {
+                if (i >= full.length) { after(300, () => finishResult(res)); return; }
+                after(560, () => { setDealer(full.slice(0, i + 1)); revealFrom(i + 1); });
+            };
+            revealFrom(2);
         });
     }
-    function beginDealer(pHand: Card[], wager: number) {
-        setPhase('dealer'); setHoleUp(true);
-        after(520, () => dealerStep(deckRefSolo.current.slice(), dealerRefSolo.current.slice(), pHand, wager));
+
+    async function deal() {
+        if (acting.current) return;
+        const wager = Math.min(bet, chipsRef.current); if (wager <= 0) return;
+        acting.current = true;
+        const res = await bjDeal(wager);
+        acting.current = false;
+        if (!res) return;
+        setLastBet(wager); setBet(res.bet ?? wager);
+        if (res.chips !== undefined) setChips(res.chips);
+        setPlayer(res.player); setHoleUp(false); setDoubled(false); setOutcome(null); setPayout(0);
+        setDealer([res.dealer[0], HOLE_CARD]); setPhase('playing');
+        if (res.phase === 'result') after(320, () => revealResolution(res));
     }
-    function dealerStep(d: Card[], dHand: Card[], pHand: Card[], wager: number) {
-        if (dealerShouldHit(dHand)) {
-            const card = d.pop()!; const next = [...dHand, card]; setDealer(next); setDeck(d);
-            after(560, () => dealerStep(d, next, pHand, wager));
-        } else {
-            after(260, () => settle(pHand, dHand, wager));
-        }
+    async function hit() {
+        if (acting.current || phase !== 'playing') return;
+        acting.current = true;
+        const res = await bjHit();
+        acting.current = false;
+        if (!res) return;
+        setPlayer(res.player);
+        if (res.chips !== undefined) setChips(res.chips);
+        if (res.phase === 'result') after(320, () => revealResolution(res));
     }
-    function settle(pHand: Card[], dHand: Card[], wager: number) {
-        const result = outcomeVsDealer(pHand, dHand);
-        const { credit, net } = payoutFor(wager, result);
-        adjustChips(credit);
-        setOutcome(result); setPayout(net); setPhase('result');
-        void recordResultApi(GAME, 'cpu', statResultFor(result), net).then(st => { if (st) setStats(st); });
+    async function stand() {
+        if (acting.current || phase !== 'playing') return;
+        acting.current = true;
+        const res = await bjStand();
+        acting.current = false;
+        if (res) revealResolution(res);
+    }
+    async function doubleDown() {
+        if (acting.current || !(phase === 'playing' && player.length === 2 && !doubled && chipsRef.current >= bet)) return;
+        acting.current = true;
+        const res = await bjDouble();
+        acting.current = false;
+        if (!res) return;
+        setDoubled(true);
+        if (res.bet !== undefined) setBet(res.bet);
+        if (res.chips !== undefined) setChips(res.chips);
+        setPlayer(res.player);
+        after(440, () => revealResolution(res));
     }
     function soloNewHand() {
         setPhase('betting'); setPlayer([]); setDealer([]); setHoleUp(false); setDoubled(false); setOutcome(null);

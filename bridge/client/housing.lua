@@ -5,6 +5,18 @@
 ---@param id any property identifier in the active system's own terms
 ---@param arg any action argument (desired lock state, target server id, or key-holder identifier)
 lib.callback.register('sd-phone:client:housing:exec', function(system, action, id, arg)
+    if action == 'zone' then
+        local coords = id
+        if type(coords) ~= 'table' or not coords.x or not coords.y then return nil end
+        local ok, label = pcall(function()
+            return GetLabelText(GetNameOfZone(coords.x, coords.y, coords.z or 0.0))
+        end)
+        if ok and type(label) == 'string' and label ~= '' and label ~= 'NULL' then
+            return label
+        end
+        return nil
+    end
+
     if system == 'origen_housing' then
         if action == 'lock' then
             local want = arg and true or false

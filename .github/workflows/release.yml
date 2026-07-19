@@ -1,0 +1,51 @@
+name: Release
+
+# Fires when a GitHub Release is published (Releases > Draft a new release > Publish).
+# Builds the NUI fresh and attaches a lean, drop-in resource zip to that release.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: build + package
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build NUI
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      # Explicit allowlist of runtime files -> dist/sd-phone/ so the zip extracts
+      # to a correctly named resource folder. web/src, node_modules, dev configs
+      # and the root screenshot PNGs are intentionally left out.
+      - name: Stage resource
+        run: |
+          mkdir -p dist/sd-phone/web
+          cp fxmanifest.lua README.md dist/sd-phone/
+          cp -r bridge client server configs locales images dist/sd-phone/
+          cp -r web/build dist/sd-phone/web/build
+
+      - name: Zip
+        run: |
+          cd dist
+          zip -qr "../sd-phone-${TAG}.zip" sd-phone
+
+      - name: Attach to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${TAG}" "sd-phone-${TAG}.zip" --clobber

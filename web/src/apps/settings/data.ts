@@ -63,6 +63,7 @@ export function getSettingsGroups(): SettingsGroup[] {
             id: 'phone-section',
             rows: [
                 { id: 'phone', icon: 'Phone', iconBg: '#34c759', label: t('settings.phone', 'Phone'), subtitle: t('settings.phoneSub', 'Toggle caller id, block numbers etc.') },
+                { id: 'sim',   icon: 'Antenna', iconBg: '#0a84ff', label: t('settings.simBackup', 'SIM & Backup'), subtitle: t('settings.simBackupSub', 'SIM card, number and cloud backup') },
             ],
         },
     ];

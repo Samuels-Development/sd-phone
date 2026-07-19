@@ -11,10 +11,22 @@ local settings = require 'server.settings.store'
 local PREFIX = (config.Migrate and config.Migrate.sourcePrefix) or 'phone_'
 if type(PREFIX) ~= 'string' or not PREFIX:match('^[%w_]*$') then PREFIX = 'phone_' end
 
----An lb-phone table name for `name`, prefixed. Callers pass literal suffixes only.
+---An lb-phone table name for `name`, prefixed. Callers pass literal suffixes only. When the
+---name collides with an sd-phone table (notes, photos, photo_albums, mail_accounts, ...), the
+---schema bootstrap renames the lb-phone original to `<name>_lb` (util.rescueLegacyTable);
+---prefer that rescued copy whenever it exists so the importer still reads the lb-phone data.
 ---@param name string suffix, e.g. 'phones'
 ---@return string full table name
-local function lbt(name) return PREFIX .. name end
+local function lbt(name)
+    local full = PREFIX .. name
+    local rescued = full .. '_lb'
+    local n = MySQL.scalar.await([[
+        SELECT COUNT(*) FROM information_schema.tables
+        WHERE table_schema = DATABASE() AND table_name = ? AND table_type = 'BASE TABLE'
+    ]], { rescued })
+    if (tonumber(n) or 0) > 0 then return rescued end
+    return full
+end
 
 store.lbTable = lbt
 
@@ -29,17 +41,36 @@ function store.tableExists(name)
     return (tonumber(n) or 0) > 0
 end
 
----Blocks until every table in `names` exists, or gives up after `tries` polls. Returns false on
----timeout.
----@param names string[] table names that must all exist
+---True if the table has the given column. Read-only.
+---@param name string table name
+---@param column string column name
+---@return boolean
+function store.tableHasColumn(name, column)
+    local n = MySQL.scalar.await([[
+        SELECT COUNT(*) FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?
+    ]], { name, column })
+    return (tonumber(n) or 0) > 0
+end
+
+---Blocks until every target exists, or gives up after `tries` polls. A target is either a plain
+---table name or `{ name, marker }`; with a marker the table must also carry that column — the
+---names lb-phone shares with sd-phone exist from the start in the foreign shape, and only grow
+---the marker once the schema bootstrap has moved the foreign table aside and rebuilt sd-phone's.
+---@param targets (string|{ [1]: string, [2]: string })[] table names, optionally with a marker column
 ---@param tries integer max polls
 ---@param delayMs integer wait between polls
 ---@return boolean ready
-function store.waitForTables(names, tries, delayMs)
+function store.waitForTables(targets, tries, delayMs)
     for _ = 1, tries do
         local allThere = true
-        for _, n in ipairs(names) do
-            if not store.tableExists(n) then allThere = false break end
+        for _, t in ipairs(targets) do
+            local name   = type(t) == 'table' and t[1] or t
+            local marker = type(t) == 'table' and t[2] or nil
+            if not store.tableExists(name) or (marker and not store.tableHasColumn(name, marker)) then
+                allThere = false
+                break
+            end
         end
         if allThere then return true end
         Wait(delayMs)
@@ -168,8 +199,11 @@ end
 ---Every lb-phone photo; `created_at` is kept as the raw datetime string. Read-only.
 ---@return { id: any, phone_number: string, link: string, is_favourite: any, created_at: string }[]
 function store.lbPhotos()
+    -- The timestamp comes back as unix seconds: oxmysql hands TIMESTAMP columns to Lua as
+    -- millisecond numbers, which a TIMESTAMP insert then coerces to a zero date. The porter
+    -- formats these seconds back into a DATETIME literal.
     return MySQL.query.await(([[
-        SELECT id, phone_number, link, is_favourite, `timestamp` AS created_at
+        SELECT id, phone_number, link, is_favourite, UNIX_TIMESTAMP(`timestamp`) AS created_ts
         FROM %s
     ]]):format(lbt('photos'))) or {}
 end
