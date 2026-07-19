@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-    ArrowLeft, AtSign, BadgeCheck, Bird, Bomb, Grid3x3, KeyRound, LockOpen,
+    ArrowLeft, AtSign, BadgeCheck, Bird, Bomb, ChevronRight, Grid3x3, KeyRound, LockOpen,
     LogOut, MessageSquare, Phone, PhoneCall, ShieldAlert, User,
 } from 'lucide-react';
 import clsx from 'clsx';
 
 import {
-    adminBirdyPosts, adminBirdySetVerified, adminCalls, adminForceLogout,
+    adminBirdyPosts, adminBirdySetVerified, adminCalls, adminForceLogout, adminGiveSim,
     adminMessages, adminBirdyDeletePost, adminOverview, adminResetAccountPassword,
     adminResetPasscode, adminSetApp, adminSetNumber, adminUnmute, adminWipePhone,
 } from '../adminApi';
@@ -40,10 +40,11 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
     );
 }
 
-export function PlayerDetail({ cid, onBack, toast }: {
+export function PlayerDetail({ cid, onBack, toast, onOpenGallery }: {
     cid: string;
     onBack: () => void;
     toast: (text: string, error?: boolean) => void;
+    onOpenGallery?: (cid: string) => void;
 }) {
     const [ov, setOv] = useState<AdminOverview | null>(null);
     const [loading, setLoading] = useState(true);
@@ -93,7 +94,7 @@ export function PlayerDetail({ cid, onBack, toast }: {
                         </div>
                         <div className="mt-0.5 flex items-center gap-3 text-[12px] text-zinc-500">
                             <span className="font-mono">{ov.citizenid}</span>
-                            <span className="inline-flex items-center gap-1"><Phone size={11} /> {fmtPhone(s?.phoneNumber)}</span>
+                            <span className="inline-flex items-center gap-1"><Phone size={11} /> {fmtPhone(ov.sim?.activeNumber ?? s?.phoneNumber)}</span>
                         </div>
                     </div>
                 </div>
@@ -132,7 +133,7 @@ export function PlayerDetail({ cid, onBack, toast }: {
                 ))}
             </div>
 
-            {tab === 'overview' && <OverviewTab ov={ov} />}
+            {tab === 'overview' && <OverviewTab ov={ov} toast={toast} reload={reload} onOpenTab={setTab} onOpenGallery={onOpenGallery} />}
             {tab === 'apps' && <AppsTab ov={ov} onChanged={reload} toast={toast} />}
             {tab === 'accounts' && (
                 <AccountsTab
@@ -150,7 +151,10 @@ export function PlayerDetail({ cid, onBack, toast }: {
             {modal === 'number' && (
                 <PromptModal
                     title="Change phone number"
-                    body={<>New 10-digit number for <b>{ov.name}</b>. The old number stops working immediately.</>}
+                    body={ov.sim
+                        ? <>New 10-digit number for the SIM in <b>{ov.name}</b>&apos;s active phone. They must be online
+                            and carrying the phone; the SIM keeps its profile/data, only the number changes.</>
+                        : <>New 10-digit number for <b>{ov.name}</b>. The old number stops working immediately.</>}
                     placeholder="e.g. 2085551234"
                     mono
                     submitLabel="Assign number"
@@ -199,11 +203,35 @@ export function PlayerDetail({ cid, onBack, toast }: {
     );
 }
 
-function OverviewTab({ ov }: { ov: AdminOverview }) {
+function CountRow({ label, count, onOpen }: { label: string; count: number; onOpen?: () => void }) {
+    return (
+        <InfoRow label={label}>
+            {onOpen ? (
+                <button
+                    type="button"
+                    onClick={onOpen}
+                    title={`Open ${label.toLowerCase()}`}
+                    className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-semibold text-[#6db4ff] transition-colors hover:bg-ios-blue/15"
+                >
+                    {count}<ChevronRight size={13} className="opacity-60" />
+                </button>
+            ) : count}
+        </InfoRow>
+    );
+}
+
+function OverviewTab({ ov, toast, reload, onOpenTab, onOpenGallery }: {
+    ov: AdminOverview;
+    toast: (text: string, error?: boolean) => void;
+    reload: () => void;
+    onOpenTab: (tab: Tab) => void;
+    onOpenGallery?: (cid: string) => void;
+}) {
     const s = ov.settings;
     const c = ov.counts;
     return (
         <div className="grid grid-cols-2 gap-4">
+            {ov.sim && <SimCard ov={ov} toast={toast} reload={reload} />}
             <Card title="Phone settings">
                 <InfoRow label="Phone number">{fmtPhone(s?.phoneNumber)}</InfoRow>
                 <InfoRow label="Passcode">{s?.hasPasscode ? <Badge tone="amber">Set</Badge> : <Badge tone="green">None</Badge>}</InfoRow>
@@ -217,11 +245,12 @@ function OverviewTab({ ov }: { ov: AdminOverview }) {
             </Card>
             <div className="space-y-4">
                 <Card title="Content">
-                    <InfoRow label="Birdy posts">{c?.birdyPosts ?? 0}</InfoRow>
-                    <InfoRow label="Text messages">{c?.messages ?? 0}</InfoRow>
-                    <InfoRow label="Calls">{c?.calls ?? 0}</InfoRow>
-                    <InfoRow label="Photos">{c?.photos ?? 0}</InfoRow>
-                    <InfoRow label="Contacts">{c?.contacts ?? 0}</InfoRow>
+                    <CountRow label="Birdy posts"   count={c?.birdyPosts ?? 0} onOpen={() => onOpenTab('birdy')} />
+                    <CountRow label="Text messages" count={c?.messages ?? 0}   onOpen={() => onOpenTab('messages')} />
+                    <CountRow label="Calls"         count={c?.calls ?? 0}      onOpen={() => onOpenTab('calls')} />
+                    <CountRow label="Photos"        count={c?.photos ?? 0}
+                        onOpen={onOpenGallery ? () => onOpenGallery(ov.citizenid) : undefined} />
+                    <CountRow label="Contacts"      count={c?.contacts ?? 0} />
                 </Card>
                 <Card title="Birdy profile">
                     {ov.birdy ? (
@@ -242,6 +271,119 @@ function OverviewTab({ ov }: { ov: AdminOverview }) {
                 </Card>
             </div>
         </div>
+    );
+}
+
+function SimCard({ ov, toast, reload }: {
+    ov: AdminOverview;
+    toast: (text: string, error?: boolean) => void;
+    reload: () => void;
+}) {
+    const sim = ov.sim!;
+    const [confirmBind, setConfirmBind] = useState<boolean | null>(null);
+    const [busy, setBusy] = useState(false);
+
+    const give = async (bind: boolean) => {
+        setConfirmBind(null);
+        if (busy) return;
+        setBusy(true);
+        const res = await adminGiveSim(ov.citizenid, bind);
+        setBusy(false);
+        if (res.success) { toast(`SIM ${fmtPhone(res.data?.number)} given`); reload(); }
+        else toast(res.message ?? 'Failed', true);
+    };
+
+    return (
+        <Card
+            className="col-span-2"
+            title="SIM cards & numbers"
+            actions={
+                <div className="flex gap-1.5">
+                    <Btn variant="ghost" disabled={!ov.online || busy} onClick={() => setConfirmBind(false)}
+                        title={ov.online ? 'Give a blank SIM with a fresh number' : 'Player must be online'}>
+                        Give blank SIM
+                    </Btn>
+                    <Btn variant="ghost" disabled={!ov.online || busy} onClick={() => setConfirmBind(true)}
+                        title={ov.online ? "Give a SIM bound to this character's original profile" : 'Player must be online'}>
+                        Give bound SIM
+                    </Btn>
+                </div>
+            }
+        >
+            <InfoRow label="Mode">{sim.mode === 'container' ? 'SIM tray (containers)' : 'Item metadata'}</InfoRow>
+            <InfoRow label="Active number">
+                {ov.online
+                    ? (sim.activeNumber ? fmtPhone(sim.activeNumber) : <Badge tone="amber">No SIM / no phone</Badge>)
+                    : <span className="text-zinc-500">offline</span>}
+            </InfoRow>
+            {ov.online && (sim.carried?.length ?? 0) > 0 && (
+                <InfoRow label="Carrying">
+                    <span className="flex flex-wrap justify-end gap-1.5">
+                        {sim.carried!.map(cs => (
+                            <span key={cs.number} className="inline-flex items-center gap-1 rounded-md bg-white/[0.06] px-2 py-0.5 text-[12px]">
+                                <span className="capitalize text-zinc-400">{cs.color}</span>
+                                <span className="font-mono">{fmtPhone(cs.number)}</span>
+                                {cs.active && <Badge tone="green">active</Badge>}
+                            </span>
+                        ))}
+                    </span>
+                </InfoRow>
+            )}
+            <InfoRow label="Cloud backup">
+                {sim.backup
+                    ? <span className="inline-flex items-center gap-1.5">
+                        {sim.backup.enabled ? <Badge tone="green">On</Badge> : <Badge>Off</Badge>}
+                        <span className="font-mono text-[12px] text-zinc-500">{sim.backup.identity}</span>
+                        {sim.backup.hasPassword && <Badge>password set</Badge>}
+                    </span>
+                    : 'Never enabled'}
+            </InfoRow>
+
+            {sim.sims.length > 0 ? (
+                <table className="w-full text-left text-[12.5px]">
+                    <thead>
+                        <tr className="border-t border-white/[0.05] text-[10.5px] uppercase tracking-wide text-zinc-500">
+                            <th className="px-4 py-2 font-semibold">Number</th>
+                            <th className="px-4 py-2 font-semibold">Profile</th>
+                            <th className="px-4 py-2 font-semibold">First activated by</th>
+                            <th className="px-4 py-2 font-semibold">Registered</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {sim.sims.map(row => (
+                            <tr key={row.number} className="border-t border-white/[0.05]">
+                                <td className="px-4 py-2 font-mono text-zinc-200">{fmtPhone(row.number)}</td>
+                                <td className="px-4 py-2">
+                                    {row.identity === ov.citizenid
+                                        ? <Badge tone="green">original profile</Badge>
+                                        : <span className="font-mono text-[11.5px] text-zinc-400">{row.identity}</span>}
+                                </td>
+                                <td className="px-4 py-2 font-mono text-[11.5px] text-zinc-400">
+                                    {row.ownerCid === ov.citizenid ? 'this character' : (row.ownerCid ?? '—')}
+                                </td>
+                                <td className="px-4 py-2 text-zinc-400">{fmtTime(row.createdAt)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            ) : (
+                <div className="px-4 py-3 text-[13px] text-zinc-500">No SIMs registered to this character yet.</div>
+            )}
+
+            {confirmBind !== null && (
+                <ConfirmModal
+                    title={confirmBind ? 'Give bound SIM' : 'Give blank SIM'}
+                    confirmLabel="Give SIM"
+                    body={confirmBind
+                        ? <>Creates a SIM bound to <b>{ov.name}</b>&apos;s original profile: it carries their existing
+                            number when it&apos;s still free, and installing it opens their original data. Use this to give a
+                            player their phone identity back.</>
+                        : <>Creates a blank SIM with a fresh number for <b>{ov.name}</b> - a brand-new empty phone profile.</>}
+                    onConfirm={() => give(confirmBind)}
+                    onClose={() => setConfirmBind(null)}
+                />
+            )}
+        </Card>
     );
 }
 

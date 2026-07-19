@@ -353,7 +353,9 @@ function store.setPhoneNumber(citizenid, number)
 end
 
 ---Returns a player's number, generating and saving a unique one on first access; tries 20
----random candidates against numberExists, then accepts an unchecked one.
+---random candidates against numberExists, then accepts an unchecked one. Under unique-phones
+---mode numbers live on SIM cards (server/sim), so first-access generation is disabled and only
+---an already-synced number is returned.
 ---@param citizenid string framework per-character id
 ---@return string|nil number raw-digit phone number, nil only when citizenid is unusable
 function store.ensurePhoneNumber(citizenid)
@@ -361,6 +363,8 @@ function store.ensurePhoneNumber(citizenid)
 
     local existing = store.getPhoneNumber(citizenid)
     if existing then return existing end
+
+    if require('server.sim.state').active then return nil end
 
     local number
     for _ = 1, 20 do

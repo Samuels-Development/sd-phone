@@ -126,7 +126,7 @@ export function LoadMore({ onClick, loading, hasMore }: { onClick: () => void; l
 
 // Modal rendered inside the panel window (absolute, not portal) so it stays
 // within the admin surface and inherits its stacking context.
-export function Modal({ title, children, onClose, width = 'w-[420px]' }: {
+function Modal({ title, children, onClose, width = 'w-[420px]' }: {
     title: string;
     children: ReactNode;
     onClose: () => void;

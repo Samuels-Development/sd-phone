@@ -331,6 +331,15 @@ function actions.saveProfile(src, payload)
         visible    = payload.visible == true,
         photos     = photos,
     })
+
+    -- Push the fresh card to matched partners so their app doesn't keep the old photo.
+    local card = partnerCard(acc.username, store.getProfile(acc.username))
+    for _, m in ipairs(store.matchesFor(acc.username)) do
+        for _, tsrc in ipairs(sourcesFor(partnerOf(m, acc.username))) do
+            TriggerClientEvent('sd-phone:client:cherry:partner', tsrc, { username = acc.username, partner = card })
+        end
+    end
+
     return ok(serializeProfile(store.getProfile(acc.username)))
 end
 

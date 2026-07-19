@@ -38,11 +38,27 @@ for _, app in ipairs(config.Homescreen.Apps or {}) do
     end
 end
 
----The acting admin's identity for audit rows.
+---@type table SIM feature flags (server.sim.state): active + mode.
+local simState = require 'server.sim.state'
+
+---The acting admin's identity for audit rows. Always the REAL character id - under unique
+---phones getIdentifier follows the SIM in the admin's pocket, which must never sign audits.
 ---@param source number admin player server id
 ---@return string cid, string name
 local function adminIdent(source)
-    return player.getIdentifier(source) or ('src:' .. tostring(source)), player.getName(source)
+    return player.getRealIdentifier(source) or ('src:' .. tostring(source)), player.getName(source)
+end
+
+---The connected source playing a character, by REAL citizenid (the player bridge's
+---getSourceByIdentifier resolves SIM identities while unique phones are on).
+---@param cid string real citizenid
+---@return number|nil source
+local function sourceByRealCid(cid)
+    for _, src in ipairs(GetPlayers()) do
+        local s = tonumber(src)
+        if s and player.getRealIdentifier(s) == cid then return s end
+    end
+    return nil
 end
 
 ---Trims and validates a client-supplied citizenid-shaped string.
@@ -54,12 +70,11 @@ local function cleanCid(v)
     return v
 end
 
----Resolves display names for a set of citizenids: live bridge name when online, framework DB
----otherwise. Returns name map + online map in one pass.
+---Resolves display names + online flags; real-identifier map (SIM wrap speaks profile ids).
 ---@param cids string[] citizenids
 ---@return table<string, string> names, table<string, boolean> online
 local function resolveNames(cids)
-    local onlineMap = player.onlineCidMap()
+    local onlineMap = player.onlineRealCidMap()
     local names, online, offline = {}, {}, {}
     for _, cid in ipairs(cids) do
         local src = onlineMap[cid]
@@ -96,6 +111,40 @@ function actions.search(source, payload)
         return fail('Type at least 2 characters')
     end
 
+    -- Fold `sim:<number>` profile rows onto the character who activated them (deduped).
+    if simState.active and #hits > 0 then
+        local simIdents, wanted = {}, {}
+        for _, h in ipairs(hits) do
+            if h.citizenid:find('^sim:') and not wanted[h.citizenid] then
+                wanted[h.citizenid] = true
+                simIdents[#simIdents + 1] = h.citizenid
+            end
+        end
+        if #simIdents > 0 then
+            local ph = ('?,'):rep(#simIdents):sub(1, -2)
+            local rows = MySQL.query.await(
+                ('SELECT number, identity, owner_cid FROM phone_sim_cards WHERE identity IN (%s)'):format(ph),
+                simIdents) or {}
+            local bySim = {}
+            for _, r in ipairs(rows) do bySim[r.identity] = r end
+
+            local folded, seen = {}, {}
+            for _, h in ipairs(hits) do
+                local sim = bySim[h.citizenid]
+                local displayCid = (sim and sim.owner_cid) or h.citizenid
+                if not seen[displayCid] then
+                    seen[displayCid] = true
+                    folded[#folded + 1] = {
+                        citizenid = displayCid,
+                        matchedOn = sim and 'sim' or h.matchedOn,
+                        simNumber = sim and sim.number or nil,
+                    }
+                end
+            end
+            hits = folded
+        end
+    end
+
     local cids = {}
     for i, h in ipairs(hits) do cids[i] = h.citizenid end
     local names, online = resolveNames(cids)
@@ -106,7 +155,7 @@ function actions.search(source, payload)
         players[i] = {
             citizenid   = h.citizenid,
             name        = names[h.citizenid],
-            phoneNumber = numbers[h.citizenid],
+            phoneNumber = h.simNumber or numbers[h.citizenid],
             online      = online[h.citizenid] == true,
             matchedOn   = h.matchedOn ~= 'recent' and h.matchedOn or nil,
         }
@@ -129,10 +178,46 @@ function actions.overview(source, payload)
     data.online    = online[cid] == true
     data.mutes     = moderation.activeMutes(cid)
     data.downloadable = DOWNLOADABLE_LIST
+
+    -- Unique phones: the character's SIM footprint - every number registered to them (activated
+    -- by them or living on their character-bound profile), what they carry right now, and their
+    -- cloud-backup pointer.
+    if simState.active then
+        local simStore = require 'server.sim.store'
+        local sim = { mode = simState.mode, sims = store.simsFor(cid) }
+        local b = simStore.getBackup(cid)
+        sim.backup = b and {
+            identity    = b.identity,
+            enabled     = b.enabled,
+            hasPassword = b.password ~= nil,
+        } or nil
+        local liveSrc = sourceByRealCid(cid)
+        if liveSrc then
+            local session = require 'server.sim.session'
+            session.invalidate(liveSrc)
+            local s = session.resolve(liveSrc)
+            sim.activeNumber = s and s.number or nil
+            local carried = {}
+            if s then
+                for _, entry in ipairs(s.sims) do
+                    carried[#carried + 1] = {
+                        number = entry.number,
+                        color  = entry.color,
+                        active = s.active ~= nil and entry.slot == s.active.slot,
+                    }
+                end
+            end
+            sim.carried = carried
+        end
+        data.sim = sim
+    end
     return ok(data)
 end
 
----Reassigns a player's phone number. The number must be 10 digits and not owned by anyone else.
+---Reassigns a player's phone number. The number must be 10 digits and not owned by anyone
+---else. Under unique phones the number lives on a SIM, so this renames the SIM in the
+---player's ACTIVE phone (they must be online carrying it) - the classic tool for giving a
+---player their lost number back.
 ---@param source number admin player server id
 ---@param payload { cid?: string, number?: string }|nil
 ---@return table envelope { number }
@@ -142,13 +227,139 @@ function actions.setNumber(source, payload)
     local digits = util.digits(payload and payload.number)
     if #digits ~= 10 then return fail('Phone numbers are exactly 10 digits') end
 
-    local owner = settings.getCitizenByNumber(digits)
-    if owner and owner ~= cid then return fail('That number is already taken') end
+    if simState.active then
+        local target = sourceByRealCid(cid)
+        if not target then return fail('Player must be online with the phone + SIM on them') end
+        local okSet, err = exports['sd-phone']:setSimNumber(target, digits)
+        if not okSet then
+            if err == 'taken' then return fail('That number is already taken') end
+            if err == 'no_sim' then return fail('Player has no SIM in their phone') end
+            return fail('Could not change the SIM number')
+        end
+    else
+        local owner = settings.getCitizenByNumber(digits)
+        if owner and owner ~= cid then return fail('That number is already taken') end
+        settings.setPhoneNumber(cid, digits)
+    end
 
-    settings.setPhoneNumber(cid, digits)
     local aCid, aName = adminIdent(source)
     store.audit(aCid, aName, 'set-number', cid, 'new number ' .. digits)
     return ok({ number = digits })
+end
+
+---Traces a phone number through the SIM registry: which profile it belongs to, which character
+---originally activated it, and who is carrying it right now. Unique-phones only.
+---@param source number admin player server id
+---@param payload { number?: string }|nil
+---@return table envelope { number, identity, ownerCid, ownerName, createdAt, boundProfile, holder }
+function actions.simLookup(source, payload)
+    if not simState.active then return fail('Unique phones are not enabled') end
+    local digits = util.digits(payload and payload.number)
+    if digits == '' then return fail('Enter a number') end
+
+    local simStore = require 'server.sim.store'
+    local row = simStore.get(digits)
+    if not row then return fail('No SIM is registered with that number') end
+
+    local out = {
+        number       = row.number,
+        identity     = row.identity,
+        ownerCid     = row.owner_cid,
+        -- A non-blank profile means the SIM carries a character's original data.
+        boundProfile = not row.identity:find('^sim:'),
+    }
+    if row.owner_cid then
+        local names = resolveNames({ row.owner_cid })
+        out.ownerName = names[row.owner_cid]
+    end
+
+    -- Who physically carries this SIM right now (any of their phones).
+    local session = require 'server.sim.session'
+    for _, src in ipairs(GetPlayers()) do
+        local s = tonumber(src)
+        if s then
+            local sess = session.resolve(s)
+            if sess then
+                for _, entry in ipairs(sess.sims) do
+                    if entry.number == digits then
+                        local holderCid = player.getRealIdentifier(s)
+                        out.holder = {
+                            cid    = holderCid,
+                            name   = player.getName(s),
+                            active = sess.active ~= nil and sess.active.number == digits,
+                        }
+                        break
+                    end
+                end
+            end
+        end
+        if out.holder then break end
+    end
+
+    local aCid, aName = adminIdent(source)
+    store.audit(aCid, aName, 'sim-lookup', out.ownerCid, 'number ' .. digits)
+    return ok(out)
+end
+
+---SIM registry, paginated + searchable, with activator names and live holders. SIM mode only.
+---@param source number admin player server id
+---@param payload { q?: string, cursor?: number }|nil
+---@return table envelope { numbers, nextCursor }
+function actions.numbers(source, payload)
+    if not simState.active then return fail('Unique phones are not enabled') end
+    local q = util.trim(payload and payload.q)
+    if #q > 64 then q = q:sub(1, 64) end
+    local offset = math.max(0, math.floor(tonumber(payload and payload.cursor) or 0))
+
+    local rows, nextCursor = store.listSims(q, PAGE, offset)
+
+    local ownerCids = {}
+    for _, r in ipairs(rows) do
+        if r.ownerCid then ownerCids[#ownerCids + 1] = r.ownerCid end
+    end
+    local names = resolveNames(ownerCids)
+
+    -- Wrapped onlineCidMap maps SIM identities -> source: the live-holder index.
+    local identityMap = player.onlineCidMap()
+
+    local numbers = {}
+    for i, r in ipairs(rows) do
+        local holderSrc = identityMap[r.identity]
+        numbers[i] = {
+            number       = r.number,
+            identity     = r.identity,
+            ownerCid     = r.ownerCid,
+            ownerName    = r.ownerCid and names[r.ownerCid] or nil,
+            createdAt    = r.createdAt,
+            boundProfile = not r.identity:find('^sim:'),
+            holder       = holderSrc and {
+                cid  = player.getRealIdentifier(holderSrc),
+                name = player.getName(holderSrc),
+            } or nil,
+        }
+    end
+    return ok({ numbers = numbers, nextCursor = nextCursor })
+end
+
+---Creates a SIM card in an online player's inventory: blank (fresh number) or character-bound
+---(carries the target's original number/data - the recovery tool). Unique-phones only.
+---@param source number admin player server id
+---@param payload { cid?: string, bind?: boolean }|nil
+---@return table envelope { number }
+function actions.giveSim(source, payload)
+    if not simState.active then return fail('Unique phones are not enabled') end
+    local cid = cleanCid(payload and payload.cid)
+    if not cid then return fail('Missing player') end
+    local target = sourceByRealCid(cid)
+    if not target then return fail('Player must be online to receive a SIM') end
+
+    local bind = payload and payload.bind == true
+    local number = exports['sd-phone']:giveSimCard(target, bind and { citizenid = cid } or nil)
+    if not number then return fail('Could not create the SIM card') end
+
+    local aCid, aName = adminIdent(source)
+    store.audit(aCid, aName, 'give-sim', cid, (bind and 'bound sim ' or 'blank sim ') .. number)
+    return ok({ number = number })
 end
 
 ---Clears a player's passcode + Face ID so they can unlock their phone again.

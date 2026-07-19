@@ -22,6 +22,14 @@ export interface OpenPayload {
         lock: string;
         home: string;
     };
+    sim?: SimStatePush;
+}
+
+/** Unique-phones SIM snapshot: enabled=false means the feature is off (stock behaviour). */
+export interface SimStatePush {
+    enabled: boolean;
+    hasSim?: boolean;
+    number?: string;
 }
 
 export interface AppDef {
@@ -168,6 +176,7 @@ interface MusicSharePush {
 
 export type NuiMessage =
     | { action: 'sd-phone:open';    data: OpenPayload }
+    | { action: 'sd-phone:simState'; data: SimStatePush }
     | { action: 'sd-phone:frameColor'; data: { color: string } }
     | { action: 'sd-phone:music:receive'; data: MusicSharePush }
     | { action: 'sd-phone:pages:feed';       data: ClassifiedFeedPush }
@@ -246,6 +255,7 @@ export type NuiMessage =
     | { action: 'sd-phone:cherry:match';       data: unknown }
     | { action: 'sd-phone:cherry:reaction';    data: { matchId: string; id: string; reactions: { emoji: string; count: number; mine: boolean }[] } }
     | { action: 'sd-phone:cherry:unmatch';     data: { matchId: string } }
+    | { action: 'sd-phone:cherry:partner';     data: { username: string; partner: unknown } }
     | { action: 'sd-phone:photogram:notification' }
     | { action: 'sd-phone:photogram:dmReceived'; data: { peer: string; user: PhotogramUser; message: PhotogramDM } }
     | { action: 'sd-phone:photogram:dmReaction'; data: { peer: string; id: string; reactions: Reaction[] } }
@@ -266,7 +276,7 @@ export type NuiMessage =
     | { action: 'sd-phone:streaks:postChanged'; data: { postId: number; likeCount: number } }
     | { action: 'sd-phone:streaks:refresh' }
     | { action: 'sd-phone:wipe' }
-    | { action: 'sd-phone:admin:open'; data: { adminName?: string } }
+    | { action: 'sd-phone:admin:open'; data: { adminName?: string; sim?: boolean } }
     | { action: 'chess:invited';  data: { fromSrc: string; fromName: string; lobbyId: string } }
     | { action: 'chess:lobby';    data: { id: string; host: string; public: boolean; wager: number; isHost: boolean; canStart: boolean; members: { name: string; you: boolean; host: boolean; color: 'w' | 'b' | 'random'; canAfford: boolean; ready: boolean; returned: boolean }[] } }
     | { action: 'chess:lobbyClosed'; data: Record<string, never> }
@@ -301,5 +311,6 @@ export type NuiMessage =
     | { action: 'sd-phone:services:inbox' }
     | { action: 'sd-phone:services:jobsChanged' }
     | { action: 'sd-phone:services:rosterChanged' }
+    | { action: 'sd-phone:homes:refresh' }
     | { action: 'customApps:set';     data: CustomAppDef[] }
     | { action: 'customApps:message'; data: { id: string; message: unknown } };

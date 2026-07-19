@@ -39,6 +39,8 @@ import type { AppDef } from '@/core/types';
 import { listInstalledApps, installApp, uninstallApp, loadHomeLayout, saveHomeLayout, parseLayout, type SavedLayout } from '@/apps/appstore/appsApi';
 import { customToAppDef, installedCustomIds, isCustomApp, setCustomInstalled, useCustomApps, useCustomAppsStore } from '@/stores/customAppsStore';
 import { resolveWallpaper } from '@/shell/wallpapers';
+import { NoSimScreen } from '@/shell/NoSimScreen';
+import { useNoSim, useSimStore } from '@/stores/simStore';
 import { playOnce } from '@/apps/settings/tonePlayer';
 import { resolveTone, toneUrl } from '@/apps/settings/tones';
 import { AlarmRinging, AlarmPeekBanner } from '@/apps/clock/AlarmRinging';
@@ -48,7 +50,18 @@ import { isRepeating } from '@/apps/clock/data';
 import type { AlarmDef } from '@/apps/clock/data';
 
 
-const SETUP_KEY = 'sd-phone:setup:v1';
+const SETUP_KEY_BASE = 'sd-phone:setup:v1';
+
+// Unique-phones mode: setup completion is a per-PROFILE fact, keyed by the active SIM number,
+// so a new SIM shows the new-phone setup while switching back to a known phone doesn't. Legacy
+// mode (no SIM feature) keeps the bare key.
+let setupProfile = '';
+function setSetupProfile(number: string | null | undefined): void {
+    setupProfile = number ?? '';
+}
+function SETUP_KEY(): string {
+    return setupProfile ? `${SETUP_KEY_BASE}:${setupProfile}` : SETUP_KEY_BASE;
+}
 
 interface SetupSaved {
     completed:  boolean;
@@ -61,7 +74,7 @@ interface SetupSaved {
 
 function loadSetup(): SetupSaved {
     try {
-        const raw = window.localStorage.getItem(SETUP_KEY);
+        const raw = window.localStorage.getItem(SETUP_KEY());
         if (raw) {
             const parsed = JSON.parse(raw) as SetupSaved;
             if (parsed && typeof parsed.completed === 'boolean') return parsed;
@@ -71,7 +84,7 @@ function loadSetup(): SetupSaved {
 }
 
 function saveSetup(s: SetupSaved): void {
-    try { window.localStorage.setItem(SETUP_KEY, JSON.stringify(s)); } catch { /* ignore */ }
+    try { window.localStorage.setItem(SETUP_KEY(), JSON.stringify(s)); } catch { /* ignore */ }
 }
 
 interface ViewState {
@@ -143,6 +156,9 @@ function AppContent() {
     const [launchTrigger,   setLaunchTrigger]   = useState(0);
     const pendingCcApp                          = useRef<string | null>(null);
     const pendingLaunchLink                     = useRef<Record<string, unknown> | undefined>(undefined);
+    // Active SIM number of the previous phone-open; a different number on the next open means
+    // the player switched phones and the UI must shed the old profile's state.
+    const lastSimNumberRef                      = useRef<string | null>(null);
     const [battery,         setBattery]         = useState<number>(100);
     const [currentApp,      setCurrentApp]      = useState<AppId | null>(null);
     const [launchOrigin,    setLaunchOrigin]    = useState<{ x: number; y: number } | null>(null);
@@ -164,6 +180,19 @@ function AppContent() {
     const downloadingIds = useDownloadingIds();
     const downloadQueue = useRef<string[]>([]);
     const downloadTimer = useRef<number>();
+
+    const noSim = useNoSim();
+    // A pulled SIM drops the phone straight back to the (blocked) lock state: no app stays
+    // foregrounded and the switcher/control-center close.
+    useEffect(() => {
+        if (noSim) {
+            setLocked(true);
+            setCurrentApp(null);
+            setSwitcherOpen(false);
+            setSwitcherClosing(false);
+            setCcOpen(false);
+        }
+    }, [noSim]);
 
     const [setup, setSetup] = useState<SetupSaved>(() => loadSetup());
     // Theme and wallpaper are NOT re-applied from the saved setup on launch. Both
@@ -198,10 +227,44 @@ function AppContent() {
         }
     }, [recentApps, switcherOpen]);
 
+    // Unique phones: a phone whose SIM differs from the last seen one is a DIFFERENT phone -
+    // drop every trace of the previous profile from the UI (kept-alive apps, cached app
+    // logins, hydrated settings). The server never leaks across identities; this stops the
+    // client's own memory from doing it. Runs on every open AND on live SIM swaps.
+    const applySimProfile = useCallback((enabled?: boolean, hasSim?: boolean, num?: string) => {
+        const simNumber = (enabled && hasSim && num) || null;
+        let switched = false;
+        if (simNumber) {
+            setSetupProfile(simNumber);
+            if (lastSimNumberRef.current && lastSimNumberRef.current !== simNumber) switched = true;
+            lastSimNumberRef.current = simNumber;
+        }
+        if (enabled) setSetup(loadSetup());
+        if (switched) {
+            try {
+                window.localStorage.removeItem('sd-phone:mail:folderOrder');
+                window.localStorage.removeItem('sd-phone:mail:activeAccount');
+            } catch { /* ignore */ }
+            resetAuth();
+            useMusicLibrary.getState().reset();
+            useThemeStore.getState().hydrate();
+            useLocaleStore.getState().hydrate();
+            setLocked(true);
+            setCurrentApp(null);
+            setRecentApps([]);
+            setRetained([]);
+            setForegroundKeys({});
+            setSwitcherOpen(false);
+            setSwitcherClosing(false);
+        }
+    }, []);
+
     useNuiEvent('sd-phone:open', useCallback((data) => {
         if (!data) return;
         if (data.locale) useLocaleStore.getState().applyServerDefault(data.locale);   // server default, unless the player already picked their own
         if (data.mailDomain) setMailDomain(data.mailDomain);
+        useSimStore.getState().apply(data.sim);
+        applySimProfile(data.sim?.enabled, data.sim?.hasSim, data.sim?.number);
         const nextView: ViewState = {
             apps:          data.apps,
             dock:          data.dock,
@@ -228,7 +291,8 @@ function AppContent() {
         setNotifs([]);
         if (data.installedApps) setInstalledApps(new Set([...data.installedApps, ...installedCustomIds()]));
         else void listInstalledApps().then(ids => setInstalledApps(new Set([...ids, ...installedCustomIds()])));
-        setSavedLayout(data.homeLayout ? parseLayout(data.homeLayout) : loadHomeLayout());
+        // Under unique phones the localStorage layout fallback is another profile's - server only.
+        setSavedLayout(data.homeLayout ? parseLayout(data.homeLayout) : (data.sim?.enabled ? null : loadHomeLayout()));
         setLocked(data.locked);
         setBattery(data.battery);
         useBatteryStore.getState().setLevel(data.battery);
@@ -239,6 +303,11 @@ function AppContent() {
         if (isFiveM) void fetchNui<{ on: boolean }>('sd-phone:flashlight:state').then(r => setFlashlightOn(!!r?.on));
         useCustomAppsStore.getState().hydrate();
     }, []));
+
+    useNuiEvent('sd-phone:simState', useCallback((data) => {
+        useSimStore.getState().apply(data);
+        applySimProfile(data?.enabled, data?.hasSim, data?.number);
+    }, [applySimProfile]));
 
     useNuiEvent('sd-phone:close', useCallback(() => {
         setLeaving(true);
@@ -907,10 +976,11 @@ function AppContent() {
                         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/30 via-black/5 to-transparent" />
                         <StatusBar
                             use24h={hour24}
-                            signal={airplaneMode ? 0 : (lv?.signal ?? 4)}
-                            showWifi={airplaneMode ? false : ((lv?.showWifi ?? true) && ccWifi)}
+                            signal={(airplaneMode || noSim) ? 0 : (lv?.signal ?? 4)}
+                            showWifi={(airplaneMode || noSim) ? false : ((lv?.showWifi ?? true) && ccWifi)}
                             battery={battery}
                             airplane={airplaneMode}
+                            noSim={noSim}
                             light
                         />
                         {ringingAlarm ? (
@@ -977,21 +1047,24 @@ function AppContent() {
                 </button>
             )}
             <PhoneShell cameraActive={cameraMode} landscape={cameraMode && landscape} entering={entering} leaving={leaving} onClose={closePhone} frameColor={frameColor} radioIsland={radioIsland} alarmIsland={{ ringing: !!ringingAlarm, since: ringingSince }}>
-                {!(showSetup && setupHello) && (
+                {!(showSetup && setupHello && !noSim) && (
                     <StatusBar
                         use24h={hour24}
-                        signal={airplaneMode ? 0 : view.signal}
-                        showWifi={airplaneMode ? false : (view.showWifi && ccWifi)}
+                        signal={(airplaneMode || noSim) ? 0 : view.signal}
+                        showWifi={(airplaneMode || noSim) ? false : (view.showWifi && ccWifi)}
                         battery={battery}
                         airplane={airplaneMode}
-                        light={showSetup ? false : (cameraMode ? true : (statusLightOverride ?? statusBarAutoLight ?? statusLight))}
-                        controlHint={!showSetup && !cameraMode && !ccOpen && !homeEditing}
+                        noSim={noSim}
+                        light={noSim ? true : (showSetup ? false : (cameraMode ? true : (statusLightOverride ?? statusBarAutoLight ?? statusLight)))}
+                        controlHint={!showSetup && !cameraMode && !ccOpen && !homeEditing && !noSim}
                         editing={homeEditing && onHomescreen}
                     />
                 )}
                 <VolumeHUD suppressed={ccOpen} />
 
-                {showSetup ? (
+                {noSim ? (
+                    <NoSimScreen />
+                ) : showSetup ? (
                     <SetupFlow onDone={handleSetupDone} onHelloChange={setSetupHello} />
                 ) : locked ? (
                     <Lockscreen

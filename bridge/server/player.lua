@@ -45,10 +45,20 @@ end
 local resolveIdentifier = chooseIdentifier()
 
 ---The player's persistent per-character identifier (citizenid on QBCore/QBox, identifier on ESX).
----Nil when offline.
+---Nil when offline. NOTE: when unique phones are enabled, server/sim/init.lua rewraps this to
+---return the acting SIM identity instead - use getRealIdentifier for character-scoped concerns.
 ---@param source number player server id
 ---@return string|nil
 function player.getIdentifier(source)
+    local p = resolveGet(source)
+    return p and resolveIdentifier(p) or nil
+end
+
+---Always the framework-native character identifier, bypassing any SIM indirection installed
+---over getIdentifier. Nil when offline.
+---@param source number player server id
+---@return string|nil
+function player.getRealIdentifier(source)
     local p = resolveGet(source)
     return p and resolveIdentifier(p) or nil
 end
@@ -98,6 +108,20 @@ function player.getSourceByIdentifier(citizenid)
         if s and player.getIdentifier(s) == citizenid then return s end
     end
     return nil
+end
+
+---`{ [citizenid] = source }` over framework-native identifiers, bypassing SIM indirection.
+---@return table<string, number>
+function player.onlineRealCidMap()
+    local out = {}
+    for _, src in ipairs(GetPlayers()) do
+        local s = tonumber(src)
+        if s then
+            local cid = player.getRealIdentifier(s)
+            if cid then out[cid] = s end
+        end
+    end
+    return out
 end
 
 ---Build a `{ [citizenid] = source }` lookup of every currently-connected player in a single pass.
