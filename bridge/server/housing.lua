@@ -128,6 +128,21 @@ local function home(o)
     }
 end
 
+---Run an owner-gated action on the caller's client via the 'sd-phone:client:housing:exec'
+---callback; nil when the client callback errors. Client twin: bridge/client/housing.lua.
+---@param src number caller server id (the property owner using the app)
+---@param action string 'lock' | 'give' | 'remove' | 'keyHolders'
+---@param ... any action arguments, forwarded verbatim
+---@return any result client-side result, nil on error
+local function clientExec(src, action, ...)
+    local args = { ... }
+    local ok, res = pcall(function()
+        return lib.callback.await('sd-phone:client:housing:exec', src, ACTIVE, action, table.unpack(args))
+    end)
+    if ok then return res end
+    return nil
+end
+
 -- Per-system adapters, keyed by resource name: (source, id) -> Home[]. Sources per system:
 --   ps-housing   DB `properties` (owner_citizenid, street, region, apartment, price, door_data) - open source
 --   qs-housing   DB `player_houses` joined to `houselocations` (owner, rented, label, price, coords, keyholders)
@@ -398,7 +413,7 @@ end
 ---@param _source number caller server id (unused - filtered by owner citizenid)
 ---@param id string caller citizenid
 ---@return table[] homes
-ADAPTERS['LNS_Housing'] = function(_source, id)
+ADAPTERS['LNS_Housing'] = function(source, id)
     local ok, props = pcall(function() return exports.LNS_Housing:GetProperties() end)
     if not ok or type(props) ~= 'table' then return {} end
     local out = {}
@@ -411,18 +426,20 @@ ADAPTERS['LNS_Housing'] = function(_source, id)
             end
         end
         if isOwner or isKeyholder then
-            local shell = p.metadata and p.metadata.shell
-            local propType = (shell == 'mlo') and 'House'
-                          or (type(shell) == 'string' and shell ~= '' and shell)
-                          or 'Property'
+            local coords = p.metadata and asXY(p.metadata.entrance) or nil
+            local area = ''
+            if coords then
+                local zone = clientExec(source, 'zone', coords)
+                if type(zone) == 'string' then area = zone end
+            end
             out[#out + 1] = home{
                 id      = p.id,
                 address = s(p.label),
-                type    = propType,
-                area    = '',
+                type    = 'House', -- Really the only type. Apartments aren't meant to be purchased.
+                area    = area,
                 value   = p.price,
                 status  = isOwner and ((p.sale_type == 'rent') and 'rented' or 'owned') or 'rented',
-                coords  = p.metadata and asXY(p.metadata.entrance) or nil,
+                coords  = coords,
                 locked  = p.metadata and p.metadata.locked or nil,
             }
         end
@@ -449,21 +466,6 @@ local CAPS = {
 ---@return { lock: boolean, keyList: boolean, keyManage: boolean }
 local function caps() return CAPS[ACTIVE or ''] or { lock = false, keyList = false, keyManage = false } end
 
----Run an owner-gated action on the caller's client via the 'sd-phone:client:housing:exec'
----callback; nil when the client callback errors. Client twin: bridge/client/housing.lua.
----@param src number caller server id (the property owner using the app)
----@param action string 'lock' | 'give' | 'remove' | 'keyHolders'
----@param ... any action arguments, forwarded verbatim
----@return any result client-side result, nil on error
-local function clientExec(src, action, ...)
-    local args = { ... }
-    local ok, res = pcall(function()
-        return lib.callback.await('sd-phone:client:housing:exec', src, ACTIVE, action, table.unpack(args))
-    end)
-    if ok then return res end
-    return nil
-end
-
 ---The first defined key name for a bcs home, defaulting to 'Resident' when none can be read.
 ---@param id any property id
 ---@return string keyName
@@ -476,6 +478,21 @@ local function bcsDefaultKey(id)
         end
     end
     return 'Resident'
+end
+
+---Fire the app refresh event at the owner and, when resolvable, at the affected key holder.
+---@param src number owner server id
+---@param holderId any holder identifier (citizenid) or server id; nil to skip the second target
+local function refreshHomes(src, holderId)
+    TriggerClientEvent('sd-phone:client:homes:refresh', src)
+    if holderId == nil then return end
+    local targetSrc = tonumber(holderId)
+    if not targetSrc or targetSrc < 1 or targetSrc % 1 ~= 0 then
+        targetSrc = player.getSourceByIdentifier(tostring(holderId))
+    end
+    if targetSrc then
+        TriggerClientEvent('sd-phone:client:homes:refresh', targetSrc)
+    end
 end
 
 ---Resource name of the detected housing system, or nil. Read-only.
@@ -535,16 +552,20 @@ function housing.lock(src, id, want)
     local p = pid(id)
     if ACTIVE == 'rtx_housing' then
         pcall(function() exports['rtx_housing']:SetPropertyLockStatus(p, want) end)
+        refreshHomes(src)
         return want
     elseif ACTIVE == 'bcs_housing' then
         local ok, cur = pcall(function() return exports.bcs_housing:isLocked(p) end)
         if (ok and type(cur) == 'boolean' and cur ~= want) or not ok then
             pcall(function() exports.bcs_housing:LockHome(p) end)
         end
+        refreshHomes(src)
         return want
     elseif ACTIVE == 'origen_housing' then
         local r = clientExec(src, 'lock', p, want)
-        return r == nil and nil or (r and true or false)
+        if r == nil then return nil end
+        refreshHomes(src)
+        return r and true or false
     elseif ACTIVE == 'LNS_Housing' then
         local okPerm, allowed = pcall(function()
             return exports.LNS_Housing:CheckPermission(src, 'house', p, 'manage')
@@ -554,8 +575,12 @@ function housing.lock(src, id, want)
         local cur = okProp and type(prop) == 'table' and prop.metadata and prop.metadata.locked
         if cur ~= want then
             local okT, newState = pcall(function() return exports.LNS_Housing:ToggleLock(p) end)
-            if okT and type(newState) == 'boolean' then return newState end
+            if okT and type(newState) == 'boolean' then
+                refreshHomes(src)
+                return newState
+            end
         end
+        refreshHomes(src)
         return want
     end
     return nil
@@ -612,22 +637,18 @@ function housing.giveKey(src, id, targetSrc)
     if not targetSrc or targetSrc < 1 or targetSrc % 1 ~= 0 then return false end
     local p = pid(id)
     if ACTIVE == 'bcs_housing' then
-        return pcall(function() exports.bcs_housing:AddKeyHolder(p, targetSrc, bcsDefaultKey(p)) end)
+        local ok = pcall(function() exports.bcs_housing:AddKeyHolder(p, targetSrc, bcsDefaultKey(p)) end)
+        if ok then refreshHomes(src, targetSrc) end
+        return ok
     elseif ACTIVE == 'rx_housing' then
         local cid = player.getIdentifier(targetSrc)
         if not cid then return false end
         local ok, res = pcall(function() return exports['RxHousing']:AddKeyholder(p, cid) end)
-        if ok and res ~= false then
-            TriggerClientEvent('sd-phone:client:homes:refresh', src)
-            TriggerClientEvent('sd-phone:client:homes:refresh', targetSrc)
-        end
+        if ok and res ~= false then refreshHomes(src, targetSrc) end
         return ok and res ~= false
     elseif ACTIVE == 'ps-housing' or ACTIVE == 'origen_housing' or ACTIVE == 'vms_housing' then
         local res = clientExec(src, 'give', p, targetSrc)
-        if res then
-            TriggerClientEvent('sd-phone:client:homes:refresh', src)
-            TriggerClientEvent('sd-phone:client:homes:refresh', targetSrc)
-        end
+        if res then refreshHomes(src, targetSrc) end
         return res and true or false
     elseif ACTIVE == 'LNS_Housing' then
         local okPerm, allowed = pcall(function()
@@ -638,8 +659,7 @@ function housing.giveKey(src, id, targetSrc)
         if not cid then return false end
         local ok, res = pcall(function() return exports.LNS_Housing:GiveKey(p, cid) end)
         if ok and res ~= false then
-            TriggerClientEvent('sd-phone:client:homes:refresh', src)
-            TriggerClientEvent('sd-phone:client:homes:refresh', targetSrc)
+            refreshHomes(src, targetSrc)
             return true
         end
     end
@@ -657,11 +677,17 @@ function housing.removeKey(src, id, holderId)
     if (type(holderId) ~= 'string' and type(holderId) ~= 'number') or holderId == '' then return false end
     local p = pid(id)
     if ACTIVE == 'bcs_housing' then
-        return pcall(function() exports.bcs_housing:RemoveKeyHolder(p, holderId) end)
+        local ok = pcall(function() exports.bcs_housing:RemoveKeyHolder(p, holderId) end)
+        if ok then refreshHomes(src, holderId) end
+        return ok
     elseif ACTIVE == 'rx_housing' then
-        return pcall(function() exports['RxHousing']:RemoveKeyholder(p, holderId) end)
+        local ok = pcall(function() exports['RxHousing']:RemoveKeyholder(p, holderId) end)
+        if ok then refreshHomes(src, holderId) end
+        return ok
     elseif ACTIVE == 'ps-housing' or ACTIVE == 'origen_housing' or ACTIVE == 'vms_housing' then
-        return clientExec(src, 'remove', p, holderId) and true or false
+        local res = clientExec(src, 'remove', p, holderId) and true or false
+        if res then refreshHomes(src, holderId) end
+        return res
     elseif ACTIVE == 'LNS_Housing' then
         local okPerm, allowed = pcall(function()
             return exports.LNS_Housing:CheckPermission(src, 'house', p, 'manage')
@@ -669,11 +695,7 @@ function housing.removeKey(src, id, holderId)
         if not okPerm or not allowed then return false end
         local ok, res = pcall(function() return exports.LNS_Housing:RemoveKey(p, tostring(holderId)) end)
         if ok and res ~= false then
-            local targetSrc = player.getSourceByIdentifier(tostring(holderId))
-            if targetSrc then
-                TriggerClientEvent('sd-phone:client:homes:refresh', targetSrc)
-            end
-            TriggerClientEvent('sd-phone:client:homes:refresh', src)
+            refreshHomes(src, holderId)
             return true
         end
     end
