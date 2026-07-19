@@ -275,7 +275,7 @@ export type NuiMessage =
     | { action: 'sd-phone:streaks:postChanged'; data: { postId: number; likeCount: number } }
     | { action: 'sd-phone:streaks:refresh' }
     | { action: 'sd-phone:wipe' }
-    | { action: 'sd-phone:admin:open'; data: { adminName?: string } }
+    | { action: 'sd-phone:admin:open'; data: { adminName?: string; sim?: boolean } }
     | { action: 'chess:invited';  data: { fromSrc: string; fromName: string; lobbyId: string } }
     | { action: 'chess:lobby';    data: { id: string; host: string; public: boolean; wager: number; isHost: boolean; canStart: boolean; members: { name: string; you: boolean; host: boolean; color: 'w' | 'b' | 'random'; canAfford: boolean; ready: boolean; returned: boolean }[] } }
     | { action: 'chess:lobbyClosed'; data: Record<string, never> }

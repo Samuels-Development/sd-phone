@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-    ArrowLeft, AtSign, BadgeCheck, Bird, Bomb, Grid3x3, KeyRound, LockOpen,
+    ArrowLeft, AtSign, BadgeCheck, Bird, Bomb, ChevronRight, Grid3x3, KeyRound, LockOpen,
     LogOut, MessageSquare, Phone, PhoneCall, ShieldAlert, User,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -93,7 +93,7 @@ export function PlayerDetail({ cid, onBack, toast }: {
                         </div>
                         <div className="mt-0.5 flex items-center gap-3 text-[12px] text-zinc-500">
                             <span className="font-mono">{ov.citizenid}</span>
-                            <span className="inline-flex items-center gap-1"><Phone size={11} /> {fmtPhone(s?.phoneNumber)}</span>
+                            <span className="inline-flex items-center gap-1"><Phone size={11} /> {fmtPhone(ov.sim?.activeNumber ?? s?.phoneNumber)}</span>
                         </div>
                     </div>
                 </div>
@@ -132,7 +132,7 @@ export function PlayerDetail({ cid, onBack, toast }: {
                 ))}
             </div>
 
-            {tab === 'overview' && <OverviewTab ov={ov} toast={toast} reload={reload} />}
+            {tab === 'overview' && <OverviewTab ov={ov} toast={toast} reload={reload} onOpenTab={setTab} />}
             {tab === 'apps' && <AppsTab ov={ov} onChanged={reload} toast={toast} />}
             {tab === 'accounts' && (
                 <AccountsTab
@@ -202,10 +202,28 @@ export function PlayerDetail({ cid, onBack, toast }: {
     );
 }
 
-function OverviewTab({ ov, toast, reload }: {
+function CountRow({ label, count, onOpen }: { label: string; count: number; onOpen?: () => void }) {
+    return (
+        <InfoRow label={label}>
+            {onOpen ? (
+                <button
+                    type="button"
+                    onClick={onOpen}
+                    title={`Open ${label.toLowerCase()}`}
+                    className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-semibold text-[#6db4ff] transition-colors hover:bg-ios-blue/15"
+                >
+                    {count}<ChevronRight size={13} className="opacity-60" />
+                </button>
+            ) : count}
+        </InfoRow>
+    );
+}
+
+function OverviewTab({ ov, toast, reload, onOpenTab }: {
     ov: AdminOverview;
     toast: (text: string, error?: boolean) => void;
     reload: () => void;
+    onOpenTab: (tab: Tab) => void;
 }) {
     const s = ov.settings;
     const c = ov.counts;
@@ -225,11 +243,11 @@ function OverviewTab({ ov, toast, reload }: {
             </Card>
             <div className="space-y-4">
                 <Card title="Content">
-                    <InfoRow label="Birdy posts">{c?.birdyPosts ?? 0}</InfoRow>
-                    <InfoRow label="Text messages">{c?.messages ?? 0}</InfoRow>
-                    <InfoRow label="Calls">{c?.calls ?? 0}</InfoRow>
-                    <InfoRow label="Photos">{c?.photos ?? 0}</InfoRow>
-                    <InfoRow label="Contacts">{c?.contacts ?? 0}</InfoRow>
+                    <CountRow label="Birdy posts"   count={c?.birdyPosts ?? 0} onOpen={() => onOpenTab('birdy')} />
+                    <CountRow label="Text messages" count={c?.messages ?? 0}   onOpen={() => onOpenTab('messages')} />
+                    <CountRow label="Calls"         count={c?.calls ?? 0}      onOpen={() => onOpenTab('calls')} />
+                    <CountRow label="Photos"        count={c?.photos ?? 0} />
+                    <CountRow label="Contacts"      count={c?.contacts ?? 0} />
                 </Card>
                 <Card title="Birdy profile">
                     {ov.birdy ? (

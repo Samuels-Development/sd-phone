@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-    Bird, Camera, Flame, Images, LayoutDashboard, MessageSquare, Newspaper,
+    Bird, Camera, Flame, Hash, Images, LayoutDashboard, MessageSquare, Newspaper,
     ScrollText, Search, ShieldCheck, ShoppingBag, Skull, VolumeX, X,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -12,12 +12,13 @@ import { BirdyPage } from './pages/BirdyPage';
 import { ContentPage } from './pages/ContentPage';
 import { Dashboard } from './pages/Dashboard';
 import { MutesPage } from './pages/MutesPage';
+import { NumbersPage } from './pages/NumbersPage';
 import { PlayerDetail } from './pages/PlayerDetail';
 import { PlayersPage } from './pages/PlayersPage';
 import { ToastHost, useToasts } from './ui';
 
 type PageId =
-    | 'dashboard' | 'players' | 'birdy' | 'mutes' | 'audit'
+    | 'dashboard' | 'players' | 'numbers' | 'birdy' | 'mutes' | 'audit'
     | 'messages' | 'darkchat' | 'photogram' | 'cherry' | 'marketplace' | 'pages' | 'gallery';
 
 interface NavItem { id: PageId; label: string; icon: React.ReactNode }
@@ -25,6 +26,7 @@ interface NavItem { id: PageId; label: string; icon: React.ReactNode }
 const NAV_MAIN: NavItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={15} /> },
     { id: 'players',   label: 'Players',   icon: <Search size={15} /> },
+    { id: 'numbers',   label: 'Numbers',   icon: <Hash size={15} /> },
     { id: 'mutes',     label: 'Mutes',     icon: <VolumeX size={15} /> },
     { id: 'audit',     label: 'Audit log', icon: <ScrollText size={15} /> },
 ];
@@ -43,6 +45,7 @@ const NAV_APPS: NavItem[] = [
 const PAGE_TITLE: Record<PageId, string> = {
     dashboard:   'Dashboard',
     players:     'Players',
+    numbers:     'Numbers — SIM registry',
     birdy:       'Birdy moderation',
     mutes:       'Active mutes',
     audit:       'Audit log',
@@ -69,6 +72,7 @@ const CONTENT_PAGES: Record<string, { search: string; empty: string; deleteBody:
 export function AdminPanel() {
     const [open, setOpen] = useState(false);
     const [adminName, setAdminName] = useState<string | undefined>();
+    const [simEnabled, setSimEnabled] = useState(false);
     const [page, setPage] = useState<PageId>('dashboard');
     const [playerCid, setPlayerCid] = useState<string | null>(null);
     const [searchSeed, setSearchSeed] = useState('');
@@ -76,6 +80,7 @@ export function AdminPanel() {
 
     useNuiEvent('sd-phone:admin:open', useCallback((data) => {
         setAdminName(data?.adminName);
+        setSimEnabled(data?.sim === true);
         setPage('dashboard');
         setPlayerCid(null);
         setSearchSeed('');
@@ -147,7 +152,7 @@ export function AdminPanel() {
                         </div>
                     </div>
                     <nav className="admin-scroll flex-1 space-y-0.5 overflow-y-auto px-2.5">
-                        {NAV_MAIN.map(item => renderNavItem(item))}
+                        {NAV_MAIN.filter(item => item.id !== 'numbers' || simEnabled).map(item => renderNavItem(item))}
                         <div className="px-3 pb-1 pt-3 text-[10.5px] font-bold uppercase tracking-widest text-zinc-600">Apps</div>
                         {NAV_APPS.map(item => renderNavItem(item))}
                     </nav>
@@ -181,6 +186,7 @@ export function AdminPanel() {
                         {page === 'players' && playerCid && (
                             <PlayerDetail cid={playerCid} onBack={() => setPlayerCid(null)} toast={push} />
                         )}
+                        {page === 'numbers' && <NumbersPage onOpenPlayer={openPlayer} />}
                         {page === 'birdy' && <BirdyPage onOpenPlayer={openPlayer} toast={push} />}
                         {page === 'mutes' && <MutesPage onOpenPlayer={openPlayer} toast={push} />}
                         {page === 'audit' && <AuditPage onOpenPlayer={openPlayer} />}

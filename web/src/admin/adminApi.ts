@@ -1,7 +1,7 @@
 import { apiCall, type Envelope } from '@/core/api';
 import type {
     AdminAccount, AdminAuditEntry, AdminBirdyPost, AdminCall, AdminContentItem,
-    AdminMessage, AdminMute, AdminOverview, AdminPlayerHit, AdminSimLookup, AdminStats,
+    AdminMessage, AdminMute, AdminNumberRow, AdminOverview, AdminPlayerHit, AdminSimLookup, AdminStats,
 } from './types';
 
 function call<T>(event: string, payload?: unknown): Promise<Envelope<T>> {
@@ -24,6 +24,9 @@ export const adminSetNumber = (cid: string, number: string) =>
 
 export const adminSimLookup = (number: string) =>
     call<AdminSimLookup>('sd-phone:admin:simLookup', { number });
+
+export const adminNumbers = (q: string, cursor?: number | null) =>
+    call<{ numbers: AdminNumberRow[]; nextCursor?: number | null }>('sd-phone:admin:numbers', { q, cursor });
 
 export const adminGiveSim = (cid: string, bind: boolean) =>
     call<{ number: string }>('sd-phone:admin:giveSim', { cid, bind });

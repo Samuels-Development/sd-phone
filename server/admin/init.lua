@@ -52,7 +52,9 @@ lib.addCommand('phoneadmin', {
         return
     end
     if not permissions.isAllowed(source) then return end
-    TriggerClientEvent('sd-phone:client:admin:open', source, player.getName(source))
+    -- The sim flag drives the panel's Numbers nav visibility.
+    TriggerClientEvent('sd-phone:client:admin:open', source, player.getName(source),
+        require('server.sim.state').active)
 end)
 
 reg('search',               actions.search)
@@ -60,6 +62,7 @@ reg('overview',             actions.overview)
 reg('setNumber',            actions.setNumber)
 reg('simLookup',            actions.simLookup)
 reg('giveSim',              actions.giveSim)
+reg('numbers',              actions.numbers)
 reg('resetPasscode',        actions.resetPasscode)
 reg('setApp',               actions.setApp)
 reg('resetAccountPassword', actions.resetAccountPassword)
