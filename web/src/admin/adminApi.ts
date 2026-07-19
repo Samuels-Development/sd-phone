@@ -1,6 +1,6 @@
 import { apiCall, type Envelope } from '@/core/api';
 import type {
-    AdminAccount, AdminAuditEntry, AdminBirdyPost, AdminCall, AdminContentItem,
+    AdminAuditEntry, AdminBirdyPost, AdminCall, AdminContentItem,
     AdminMessage, AdminMute, AdminNumberRow, AdminOverview, AdminPlayerHit, AdminSimLookup, AdminStats,
 } from './types';
 
@@ -78,5 +78,3 @@ export const adminWipePhone = (cid: string, confirm: string) =>
 
 export const adminAudit = (cursor?: number | null) =>
     call<{ entries: AdminAuditEntry[]; nextCursor?: number | null }>('sd-phone:admin:audit', { cursor });
-
-export type { AdminAccount };

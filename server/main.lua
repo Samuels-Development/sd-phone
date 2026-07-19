@@ -1,3 +1,10 @@
+-- Build-presence guard: a source checkout without a compiled NUI (web/build is
+-- gitignored and shipped via GitHub Releases) would open to a blank phone.
+if not LoadResourceFile(GetCurrentResourceName(), 'web/build/index.html') then
+    print('^1[sd-phone] NUI build not found at web/build/index.html.^0')
+    print('^3[sd-phone] Download the packaged release from GitHub Releases, or build it: cd web && npm ci && npm run build^0')
+end
+
 ---@type table sd-phone config root (configs/config.lua).
 local config    = require 'configs.config'
 ---@type table Framework bridge (bridge.shared.framework): active framework detection + name.
