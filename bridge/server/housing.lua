@@ -403,7 +403,14 @@ ADAPTERS['LNS_Housing'] = function(_source, id)
     if not ok or type(props) ~= 'table' then return {} end
     local out = {}
     for _, p in pairs(props) do
-        if p.owner == id then
+        local isOwner = (p.owner == id)
+        local isKeyholder = false
+        if not isOwner and p.permissions and type(p.permissions.entry) == 'table' then
+            for _, cid in ipairs(p.permissions.entry) do
+                if cid == id then isKeyholder = true; break end
+            end
+        end
+        if isOwner or isKeyholder then
             local shell = p.metadata and p.metadata.shell
             local propType = (shell == 'mlo') and 'House'
                           or (type(shell) == 'string' and shell ~= '' and shell)
@@ -414,7 +421,7 @@ ADAPTERS['LNS_Housing'] = function(_source, id)
                 type    = propType,
                 area    = '',
                 value   = p.price,
-                status  = (p.sale_type == 'rent') and 'rented' or 'owned',
+                status  = isOwner and ((p.sale_type == 'rent') and 'rented' or 'owned') or 'rented',
                 coords  = p.metadata and asXY(p.metadata.entrance) or nil,
                 locked  = p.metadata and p.metadata.locked or nil,
             }
@@ -610,9 +617,18 @@ function housing.giveKey(src, id, targetSrc)
         local cid = player.getIdentifier(targetSrc)
         if not cid then return false end
         local ok, res = pcall(function() return exports['RxHousing']:AddKeyholder(p, cid) end)
+        if ok and res ~= false then
+            TriggerClientEvent('sd-phone:client:homes:refresh', src)
+            TriggerClientEvent('sd-phone:client:homes:refresh', targetSrc)
+        end
         return ok and res ~= false
     elseif ACTIVE == 'ps-housing' or ACTIVE == 'origen_housing' or ACTIVE == 'vms_housing' then
-        return clientExec(src, 'give', p, targetSrc) and true or false
+        local res = clientExec(src, 'give', p, targetSrc)
+        if res then
+            TriggerClientEvent('sd-phone:client:homes:refresh', src)
+            TriggerClientEvent('sd-phone:client:homes:refresh', targetSrc)
+        end
+        return res and true or false
     elseif ACTIVE == 'LNS_Housing' then
         local okPerm, allowed = pcall(function()
             return exports.LNS_Housing:CheckPermission(src, 'house', p, 'manage')
@@ -621,7 +637,11 @@ function housing.giveKey(src, id, targetSrc)
         local cid = player.getIdentifier(targetSrc)
         if not cid then return false end
         local ok, res = pcall(function() return exports.LNS_Housing:GiveKey(p, cid) end)
-        return ok and res ~= false
+        if ok and res ~= false then
+            TriggerClientEvent('sd-phone:client:homes:refresh', src)
+            TriggerClientEvent('sd-phone:client:homes:refresh', targetSrc)
+            return true
+        end
     end
     return false
 end
@@ -648,7 +668,14 @@ function housing.removeKey(src, id, holderId)
         end)
         if not okPerm or not allowed then return false end
         local ok, res = pcall(function() return exports.LNS_Housing:RemoveKey(p, tostring(holderId)) end)
-        return ok and res ~= false
+        if ok and res ~= false then
+            local targetSrc = player.getSourceByIdentifier(tostring(holderId))
+            if targetSrc then
+                TriggerClientEvent('sd-phone:client:homes:refresh', targetSrc)
+            end
+            TriggerClientEvent('sd-phone:client:homes:refresh', src)
+            return true
+        end
     end
     return false
 end
