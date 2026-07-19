@@ -1,1 +1,0 @@
-function r(h){return()=>{h|=0,h=h+1831565813|0;let t=Math.imul(h^h>>>15,1|h);return t=t+Math.imul(t^t>>>7,61|t)^t,((t^t>>>14)>>>0)/4294967296}}function a(h){let t=2166136261;for(let n=0;n<h.length;n++)t^=h.charCodeAt(n),t=Math.imul(t,16777619);return t>>>0}export{a as h,r as s};

@@ -36,3 +36,7 @@ end)
 RegisterNUICallback('sd-phone:homes:removeKey', function(payload, cb)
     cb(lib.callback.await('sd-phone:server:homes:removeKey', false, payload) or { success = false })
 end)
+
+RegisterNetEvent('sd-phone:client:homes:refresh', function()
+    SendNUIMessage({ action = 'sd-phone:homes:refresh' })
+end)

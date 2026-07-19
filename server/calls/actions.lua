@@ -8,6 +8,8 @@ local contacts = require 'server.contacts.store'
 local config   = require 'configs.config'
 ---@type table Badge engine (server.badges.init): server-authoritative unread badge pushes.
 local badges   = require 'server.badges.init'
+---@type table Admin mute registry (server.admin.moderation): scope guard for dialing out.
+local moderation = require 'server.admin.moderation'
 
 ---@type table Actions module; the table returned at end of file.
 local actions = {}
@@ -176,6 +178,7 @@ function actions.dial(source, payload)
     if dialed == '' then return fail('No number dialed') end
     if sessionForSource(source) or ringForSource(source) then return fail('You are already on a call') end
     if settings.isAirplane(cid) then return fail('Airplane Mode is on') end
+    local muted = moderation.guard(cid, 'calls'); if muted then return muted end
 
     local myNumber = settings.ensurePhoneNumber(cid)
     if myNumber and digits(myNumber) == dialed then return fail('You can\'t call yourself') end

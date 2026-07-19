@@ -5,7 +5,7 @@ import { groupByDay, type Photo } from '@/core/photosApi';
 import { PhotoTile } from './PhotoTile';
 
 export function GalleryTab({
-    photos, selectionMode, selectedIds, onEnterSelect, onCancelSelect, onPhotoTap, onToggleSelect,
+    photos, selectionMode, selectedIds, onEnterSelect, onCancelSelect, onPhotoTap, onToggleSelect, onImport,
 }: {
     photos:         Photo[];
     selectionMode:  boolean;
@@ -14,12 +14,22 @@ export function GalleryTab({
     onCancelSelect: () => void;
     onPhotoTap:     (photo: Photo) => void;
     onToggleSelect: (photo: Photo) => void;
+    onImport?:      () => void;
 }) {
     const groups = useMemo(() => groupByDay(photos), [photos]);
 
     return (
         <div className="flex h-full flex-col">
-            <div className="flex h-12 shrink-0 items-center justify-end px-4">
+            <div className="flex h-12 shrink-0 items-center justify-end gap-2 px-4">
+                {onImport && !selectionMode && (
+                    <button
+                        type="button"
+                        onClick={onImport}
+                        className="rounded-full bg-black/[0.07] px-4 py-1.5 text-[15px] font-medium text-black/80 dark:bg-white/15 dark:text-white/85"
+                    >
+                        {t('photos.import', 'Import')}
+                    </button>
+                )}
                 <button
                     type="button"
                     onClick={selectionMode ? onCancelSelect : onEnterSelect}

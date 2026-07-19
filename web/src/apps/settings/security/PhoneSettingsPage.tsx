@@ -1,21 +1,24 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Copy, Plus, Trash2 } from 'lucide-react';
 
 import { t } from '@/i18n';
+import { formatPhone } from '@/lib/phone';
+import { useContacts } from '@/stores/contactsStore';
 import { useIosPush } from '@/hooks/useIosPush';
 import { ListGroup, ToggleRow } from '@/ui/ListGroup';
 import { SubPage } from '../SettingsSubPage';
 
-const MY_NUMBER = '(123) 456-7890';
-
 
 export function PhoneSettingsPage({ onBack }: { onBack: () => void }) {
+    const { myNumber, load } = useContacts('myNumber', 'load');
+    useEffect(() => { void load(); }, [load]);
+    const number = myNumber ? formatPhone(myNumber) : '—';
     const [showCallerId] = useState(true);
     const [copied,       setCopied]       = useState(false);
     const [showBlocked,  setShowBlocked]  = useState(false);
 
     function copyNumber() {
-        navigator.clipboard?.writeText(MY_NUMBER).catch(() => {});
+        navigator.clipboard?.writeText(number).catch(() => {});
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
     }
@@ -33,7 +36,7 @@ export function PhoneSettingsPage({ onBack }: { onBack: () => void }) {
                     <span className="flex-1 text-[17px] font-normal text-black dark:text-white">
                         {t('settings.myNumber', 'My Number')}
                     </span>
-                    <span className="mr-2 text-[15px] text-ios-gray">{MY_NUMBER}</span>
+                    <span className="mr-2 text-[15px] text-ios-gray">{number}</span>
                     <button
                         type="button"
                         onClick={copyNumber}

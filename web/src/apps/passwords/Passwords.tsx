@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, KeyRound } from 'lucide-react';
 
 import { copyToClipboard } from '@/lib/clipboard';
+import { formatMediumDate } from '@/lib/time';
 import { useSessionState } from '@/hooks/useSessionState';
 import { useDidEnter } from '@/hooks/useDidEnter';
 import { AlertDialog } from '@/ui/AlertDialog';
@@ -133,7 +134,7 @@ function Detail({ entry, onBack, onDelete }: { entry: VaultEntry; onBack: () => 
                     </div>
                     {entry.email && <Row label={t('passwords.emailLabel', 'Email')} value={entry.email} />}
                     {entry.phone && <Row label={t('passwords.phoneLabel', 'Phone')} value={entry.phone} />}
-                    {entry.created && <Row label={t('passwords.savedLabel', 'Saved')} value={entry.created} last copyable={false} />}
+                    {entry.created && <Row label={t('passwords.savedLabel', 'Saved')} value={formatMediumDate(entry.created)} last copyable={false} />}
                 </div>
 
                 <button

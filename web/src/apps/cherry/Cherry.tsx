@@ -7,6 +7,7 @@ import { readJson, writeJson } from '@/lib/storage';
 import { useStatusBarLight } from '@/shell/useStatusBarLight';
 import { useSessionState } from '@/hooks/useSessionState';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
+import { useDeckActive } from '@/shell/deckActive';
 import { useAppAuth } from '@/hooks/useAppAuth';
 import { AppAuth } from '@/shared/AppAuth';
 import { AlertDialog } from '@/ui/AlertDialog';
@@ -55,6 +56,15 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
         return () => cherryWatch(false);
     }, [authed]);
 
+    // AppDeck retains this subtree, so a reopen needs an explicit refetch nonce.
+    const [stateNonce, setStateNonce] = useState(0);
+    const deckActive = useDeckActive();
+    const wasActive = useRef(deckActive);
+    useEffect(() => {
+        if (deckActive && !wasActive.current) setStateNonce(n => n + 1);
+        wasActive.current = deckActive;
+    }, [deckActive]);
+
     useEffect(() => {
         if (!authed) return;
         let alive = true;
@@ -67,7 +77,7 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
             setMatches(s.matches);
         });
         return () => { alive = false; };
-    }, [authed]);
+    }, [authed, stateNonce]);
 
     const saveTimer = useRef<number | null>(null);
     const loadedOnce = useRef(false);
@@ -210,6 +220,12 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
         const next = Array.isArray(data.reactions) ? data.reactions.filter(r => r.count > 0) : [];
         patchMessage(data.matchId, data.id, m => ({ ...m, reactions: next.length ? next : undefined }));
     }, [patchMessage]));
+
+    useNuiEvent('sd-phone:cherry:partner', useCallback((data: { username: string; partner: unknown }) => {
+        if (!data?.username || !data.partner) return;
+        const partner = data.partner as Match['partner'];
+        setMatches(prev => prev.map(m => m.partner.username === data.username ? { ...m, partner } : m));
+    }, []));
 
     useNuiEvent('sd-phone:cherry:unmatch', useCallback((data: { matchId: string }) => {
         if (!data?.matchId) return;

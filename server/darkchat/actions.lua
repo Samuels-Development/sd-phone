@@ -4,6 +4,8 @@ local config = require 'configs.config'
 local store  = require 'server.darkchat.store'
 ---@type table Player bridge (bridge.server.player): citizenid lookups from a server id.
 local player = require 'bridge.server.player'
+---@type table Admin mute registry (server.admin.moderation): scope guards for sending messages.
+local moderation = require 'server.admin.moderation'
 
 ---@type table Dark Chat config (config.DarkChat): public rooms, length caps, history limit, code length.
 local DC = config.DarkChat
@@ -157,6 +159,7 @@ end
 function actions.send(src, roomId, payload)
     local cid = cidOf(src)
     if not cid then return { success = false } end
+    local muted = moderation.guard(cid, 'darkchat'); if muted then return muted end
     if type(roomId) ~= 'string' then return { success = false, message = 'Bad room' } end
     if not canAccess(roomId, cid) then return { success = false, message = 'No access to that room' } end
 

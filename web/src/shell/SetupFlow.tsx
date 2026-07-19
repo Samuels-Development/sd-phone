@@ -127,12 +127,14 @@ export function SetupFlow({ onDone, onHelloChange }: Props) {
                 {stage === 'pin' && (
                     <PinStage
                         onSet={(value) => { setPin(value); next(); }}
-                        onSkip={() => { setPin(null); next(); }}
+                        onSkip={() => { setPin(null); setFaceUnlock(false); next(); }}
                     />
                 )}
                 {stage === 'face' && (
                     <FaceStage
+                        hasPin={pin !== null}
                         onEnable={() => { setFaceUnlock(true); next(); }}
+                        onNeedPin={() => go('pin', 'backward')}
                         onSkip={() => { setFaceUnlock(false); next(); }}
                     />
                 )}
@@ -554,10 +556,12 @@ function PinStage({
 
 
 function FaceStage({
-    onEnable, onSkip,
+    hasPin, onEnable, onNeedPin, onSkip,
 }: {
-    onEnable: () => void;
-    onSkip:   () => void;
+    hasPin:    boolean;
+    onEnable:  () => void;
+    onNeedPin: () => void;
+    onSkip:    () => void;
 }) {
     return (
         <div className="flex flex-1 flex-col px-6">
@@ -572,6 +576,11 @@ function FaceStage({
                 <p className="mt-3 max-w-[300px] text-center text-[18px] leading-snug text-ios-gray">
                     {t('setup.faceUnlockObstructed', 'Face Unlock only works when your face is not obstructed.')}
                 </p>
+                {!hasPin && (
+                    <p className="mt-3 max-w-[300px] text-center text-[15px] leading-snug text-ios-orange">
+                        {t('setup.faceUnlockNeedsPin', 'Face Unlock requires a passcode as a backup. You’ll be asked to set one first.')}
+                    </p>
+                )}
             </div>
 
             <div className="flex-1" />
@@ -579,10 +588,10 @@ function FaceStage({
             <div className="flex flex-col items-center gap-3 pb-16">
                 <button
                     type="button"
-                    onClick={onEnable}
+                    onClick={hasPin ? onEnable : onNeedPin}
                     className="w-full rounded-[18px] bg-ios-blue py-[17px] text-[19px] font-semibold text-white shadow-[0_6px_18px_rgba(10,132,255,0.3)] transition-transform active:scale-[0.98] active:opacity-90"
                 >
-                    {t('setup.enableFaceUnlock', 'Enable Face Unlock')}
+                    {hasPin ? t('setup.enableFaceUnlock', 'Enable Face Unlock') : t('setup.setPasscodeFirst', 'Set Passcode First')}
                 </button>
                 <button
                     type="button"

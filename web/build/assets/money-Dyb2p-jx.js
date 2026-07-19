@@ -1,1 +1,0 @@
-function r(n,i={}){const t=i.decimals??(i.whole?0:2),a=Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:t,maximumFractionDigits:t});return n<0?`-$${a}`:i.alwaysSign?`+$${a}`:i.showSign&&n>0?`+$${a}`:`$${a}`}export{r as f};

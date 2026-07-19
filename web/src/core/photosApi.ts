@@ -71,9 +71,16 @@ export function mapPhoto(sp: ServerPhoto): Photo {
     return { id: sp.id, url: sp.url, favorite: !!sp.favorite, date: toIsoDate(sp.createdAt), video: isVideoUrl(sp.url) };
 }
 
+let canImportPhotos = !isFiveM;
+
+/** Whether the server allows URL import; valid after the first apiListPhotos() resolves. */
+export function getCanImportPhotos(): boolean { return canImportPhotos; }
+
 export async function apiListPhotos(): Promise<Photo[]> {
     if (!isFiveM) return DEV_PHOTOS;
-    return (await apiData<{ photos: ServerPhoto[] }>('sd-phone:photos:list'))?.photos.map(mapPhoto) ?? [];
+    const data = await apiData<{ photos: ServerPhoto[]; canImport?: boolean }>('sd-phone:photos:list');
+    canImportPhotos = data?.canImport === true;
+    return data?.photos.map(mapPhoto) ?? [];
 }
 
 export function warmPhotos(): void {
@@ -90,10 +97,10 @@ export function warmPhotos(): void {
     });
 }
 
-export async function apiSavePhotoFromUrl(url: string): Promise<boolean> {
-    if (!isFiveM) return true;
+export async function apiSavePhotoFromUrl(url: string): Promise<{ ok: boolean; message?: string }> {
+    if (!isFiveM) return { ok: true };
     const r = await apiCall<unknown>('sd-phone:photos:saveUrl', { url });
-    return r.success;
+    return r.success ? { ok: true } : { ok: false, message: r.message };
 }
 
 export async function apiSetFavorite(photoId: string, value: boolean): Promise<boolean> {

@@ -1,0 +1,12 @@
+name: Feature Request
+description: A new system, mechanic, or capability to add
+title: "feat: "
+labels: ["feature"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What is it
+      description: Describe the feature itself
+    validations:
+      required: true

@@ -83,6 +83,16 @@ function store.ensureSchema()
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
 
+    -- Older installs created sent_at as DATETIME, but the code stamps it with os.time() (a Unix
+    -- integer), so a mismatched column rejects every invite. Bring an existing column up to BIGINT.
+    local sentAt = MySQL.single.await([[
+        SELECT DATA_TYPE AS t FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'phone_group_invites' AND column_name = 'sent_at'
+    ]])
+    if sentAt and sentAt.t and sentAt.t ~= 'bigint' then
+        MySQL.query.await('ALTER TABLE phone_group_invites MODIFY COLUMN sent_at BIGINT NOT NULL')
+    end
+
     -- One-time migration of pending invites from the legacy invites JSON column into phone_group_invites.
     local legacy = MySQL.query.await("SELECT id, invites FROM phone_groups WHERE JSON_LENGTH(invites) > 0") or {}
     for _, row in ipairs(legacy) do

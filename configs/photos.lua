@@ -25,4 +25,23 @@ return {
     -- client and server agree.
     MinAlbumNameLength = 1,
     MaxAlbumNameLength = 40,
+
+    -- Player URL import (the Import button in Photos). Imported URLs are stored and
+    -- rendered as-is, NOT re-hosted, so each viewer's client loads the image from its
+    -- source host. The check is server-side; camera uploads bypass it (their URL comes
+    -- from the server uploader, not the player).
+    AllowImport = true, -- master switch; false disables URL import and hides the button.
+
+    -- Hosts to always reject. Exact hostnames, or '*.domain.com' for every subdomain.
+    -- IP loggers and URL shorteners belong here: a shortener can redirect an otherwise
+    -- fine-looking link to anywhere, and the viewer's client would follow it.
+    ImportBlocklist = {
+        'grabify.link', '*.grabify.link',
+        'iplogger.org', '*.iplogger.org',
+        'bit.ly', 'tinyurl.com', 't.co',
+    },
+
+    -- If non-empty, ONLY these hosts are allowed (the blocklist still applies on top).
+    -- Empty means allow any host that isn't blocked. Same '*.domain.com' wildcard syntax.
+    ImportAllowlist = {},
 }
