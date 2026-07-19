@@ -19,7 +19,7 @@ function Avatar({ match, size, dot }: { match: Match; size: number; dot?: boolea
             {dot && (
                 <span
                     className="absolute rounded-full"
-                    style={{ width: 18, height: 18, right: -7, top: '50%', transform: 'translateY(-50%)', background: CHERRY.pink }}
+                    style={{ width: 18, height: 18, right: -7, top: '50%', transform: 'translateY(-50%)', background: CHERRY.pink, border: '3px solid #fff', boxSizing: 'content-box' }}
                 />
             )}
         </span>
