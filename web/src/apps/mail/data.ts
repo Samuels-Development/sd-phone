@@ -14,6 +14,11 @@ export interface MailAccount {
     email: string;
 }
 
+export type MailAttachment =
+    | { kind: 'photo'; url: string }
+    | { kind: 'audio'; url: string; name: string; duration: number }
+    | { kind: 'note';  title: string; body: string };
+
 export interface MailMessage {
     id:        string;
     accountId: string;
@@ -25,6 +30,7 @@ export interface MailMessage {
     sentAt:    string;
     read:      boolean;
     flagged:   boolean;
+    attachments?: MailAttachment[];
 }
 
 const FOLDER_IDS: Folder[] = ['inbox', 'flagged', 'drafts', 'sent', 'spam', 'bin'];
@@ -265,6 +271,7 @@ export async function sendMail(input: {
     to:        string[];
     subject:   string;
     body:      string;
+    attachments?: MailAttachment[];
 }): Promise<MailMessage | string> {
     if (!isFiveM) {
         const msg: MailMessage = {
@@ -277,6 +284,7 @@ export async function sendMail(input: {
             body: input.body,
             sentAt: new Date().toISOString(),
             read: true, flagged: false,
+            attachments: input.attachments?.length ? input.attachments : undefined,
         };
         MOCK.messages.push(msg);
         return msg;
@@ -291,6 +299,7 @@ export async function saveDraft(input: {
     to:        string[];
     subject:   string;
     body:      string;
+    attachments?: MailAttachment[];
 }): Promise<MailMessage | string> {
     if (!isFiveM) {
         const msg: MailMessage = {
@@ -303,6 +312,7 @@ export async function saveDraft(input: {
             body: input.body,
             sentAt: new Date().toISOString(),
             read: true, flagged: false,
+            attachments: input.attachments?.length ? input.attachments : undefined,
         };
         MOCK.messages.push(msg);
         return msg;

@@ -14,7 +14,7 @@ import {
     moveToBin, moveTo, saveActiveAccountId, saveDraft, saveFolderOrder, sendMail, signIn as mailSignIn,
     signOut, signUp as mailSignUp, toggleFlag,
 } from './data';
-import type { Folder, MailAccount, MailMessage } from './data';
+import type { Folder, MailAccount, MailAttachment, MailMessage } from './data';
 import { MailDetail } from './MailDetail';
 import { MailList } from './MailList';
 import { MailboxList } from './MailboxList';
@@ -35,7 +35,7 @@ export function Mail({ onClose }: { onClose: () => void }) {
     const [folderOrder,     setFolderOrder]     = useState<Folder[]>(() => loadFolderOrder());
     const [activeAccountId, setActiveAccountId] = useState<string | null>(() => loadActiveAccountId());
     const [nav,             setNav]             = useSessionState<Navigation>('mail:nav', { stage: 'mailboxes' });
-    const [composeFor,      setComposeFor]      = useSessionState<{ accountId?: string; to?: string; subject?: string; body?: string; draftId?: string } | null>('mail:composeFor', null);
+    const [composeFor,      setComposeFor]      = useSessionState<{ accountId?: string; to?: string; subject?: string; body?: string; draftId?: string; attachments?: MailAttachment[] } | null>('mail:composeFor', null);
 
     const refresh = useCallback(async () => {
         const next = await listMail();
@@ -137,14 +137,15 @@ export function Mail({ onClose }: { onClose: () => void }) {
         await moveTo(target.accountId, id, folder);
     }
 
-    async function handleSendMessage(draft: { accountId: string; to: string[]; subject: string; body: string }) {
+    async function handleSendMessage(draft: { accountId: string; to: string[]; subject: string; body: string; attachments: MailAttachment[] }) {
         const account = accounts.find(a => a.id === draft.accountId) ?? accounts[0];
         if (!account) return;
         const result = await sendMail({
-            fromEmail: account.email,
-            to:        draft.to,
-            subject:   draft.subject,
-            body:      draft.body,
+            fromEmail:   account.email,
+            to:          draft.to,
+            subject:     draft.subject,
+            body:        draft.body,
+            attachments: draft.attachments,
         });
         if (typeof result === 'string') {
             console.warn('[sd-phone:mail] send failed:', result);
@@ -160,16 +161,17 @@ export function Mail({ onClose }: { onClose: () => void }) {
         setComposeFor(null);
     }
 
-    function handleSaveDraft(draft: { accountId: string; to: string[]; subject: string; body: string }) {
+    function handleSaveDraft(draft: { accountId: string; to: string[]; subject: string; body: string; attachments: MailAttachment[] }) {
         const account = accounts.find(a => a.id === draft.accountId) ?? accounts[0];
         const draftId = composeFor?.draftId;
         setComposeFor(null);
         if (!account) return;
         void saveDraft({
-            fromEmail: account.email,
-            to:        draft.to,
-            subject:   draft.subject,
-            body:      draft.body,
+            fromEmail:   account.email,
+            to:          draft.to,
+            subject:     draft.subject,
+            body:        draft.body,
+            attachments: draft.attachments,
         }).then(result => {
             if (typeof result === 'string') return;
             // Re-saving an edited draft replaces the stale copy.
@@ -297,7 +299,7 @@ export function Mail({ onClose }: { onClose: () => void }) {
                         if (target) void handleMarkRead(target);
                         // Drafts reopen in the composer for editing instead of the read-only viewer.
                         if (target?.folder === 'drafts') {
-                            setComposeFor({ accountId: target.accountId, to: target.to.join(', '), subject: target.subject, body: target.body, draftId: target.id });
+                            setComposeFor({ accountId: target.accountId, to: target.to.join(', '), subject: target.subject, body: target.body, draftId: target.id, attachments: target.attachments });
                             return;
                         }
                         setNav({ stage: 'detail', folder: nav.folder, msgId: id, accountId: nav.accountId, accountName: nav.accountName });
@@ -343,6 +345,7 @@ export function Mail({ onClose }: { onClose: () => void }) {
                     initialTo={composeFor.to}
                     initialSubject={composeFor.subject}
                     initialBody={composeFor.body}
+                    initialAttachments={composeFor.attachments}
                     onSend={(draft) => void handleSendMessage(draft)}
                     onSaveDraft={handleSaveDraft}
                     onCancel={() => setComposeFor(null)}

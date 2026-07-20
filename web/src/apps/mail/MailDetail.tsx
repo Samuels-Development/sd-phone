@@ -4,6 +4,7 @@ import { AlertOctagon, ChevronDown, ChevronLeft, ChevronUp, Flag, Reply, Trash2 
 import { AlertDialog } from '@/ui/AlertDialog';
 import { t } from '@/i18n';
 import { useIosPush } from '@/hooks/useIosPush';
+import { AttachmentsView } from './Attachments';
 import { avatarColor, formatFullDate, formatMailTime, initials } from './data';
 import type { Folder, MailMessage } from './data';
 
@@ -96,9 +97,20 @@ export function MailDetail({ msg, backLabel, onBack, onToggleFlag, onDelete, onM
 
                 <div className="bg-black/[0.10] dark:bg-white/[0.12]" style={{ height: '0.5px' }} />
 
-                <div className="whitespace-pre-wrap px-5 pb-36 pt-4 text-[16px] leading-[1.55]">
+                <div className={`whitespace-pre-wrap px-5 pt-4 text-[16px] leading-[1.55] ${msg.attachments?.length ? 'pb-4' : 'pb-36'}`}>
                     {msg.body}
                 </div>
+
+                {(msg.attachments?.length ?? 0) > 0 && (
+                    <div className="px-5 pb-36">
+                        <div className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ios-gray">
+                            {msg.attachments!.length === 1
+                                ? t('mail.attachmentOne', '1 Attachment')
+                                : t('mail.attachmentCount', '{count} Attachments', { count: msg.attachments!.length })}
+                        </div>
+                        <AttachmentsView attachments={msg.attachments!} />
+                    </div>
+                )}
             </div>
 
             <div className="absolute inset-x-0 bottom-7 flex items-center justify-around border-t border-black/10 bg-white/80 px-4 py-[18px] backdrop-blur-xl dark:border-white/10 dark:bg-surface/80">

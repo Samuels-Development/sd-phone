@@ -5,6 +5,10 @@ local store   = require 'server.mail.store'
 ---@type table Authoritative mail handlers (server.mail.actions): systemSend routes seeds through
 ---the real persistence + banner + badge path.
 local actions = require 'server.mail.actions'
+---@type table Photos persistence layer (server.photos.store): the caller's real photo URLs.
+local photoStore = require 'server.photos.store'
+---@type table Voice memo persistence layer (server.voicememos.store): the caller's real recordings.
+local memoStore = require 'server.voicememos.store'
 
 ---@type { name: string, email: string }[] Rotating sender identities for seeded mail.
 local SENDERS = {
@@ -43,8 +47,48 @@ local BODIES = {
     'This weekend only: bring a friend and split a family bucket for the price of a solo meal.\n\nNo coupon needed, just walk in hungry.',
 }
 
+---@type string[] Stand-in photo URLs (docs.fivem.net vehicle renders) when the caller has none.
+local FALLBACK_PHOTOS = {
+    'https://docs.fivem.net/vehicles/adder.webp',
+    'https://docs.fivem.net/vehicles/sultan.webp',
+    'https://docs.fivem.net/vehicles/banshee.webp',
+    'https://docs.fivem.net/vehicles/dominator.webp',
+}
+
+---@type { title: string, body: string }[] Fabricated note snapshots for note attachments.
+local NOTE_SNAPSHOTS = {
+    { title = 'Shopping list', body = 'Shopping list\n- Eggs\n- Coffee\n- Engine oil\n- Duct tape (a lot)' },
+    { title = 'Meeting notes', body = 'Meeting notes\nTalked to S about the warehouse lease. He wants 15k up front, non-negotiable.\nCounter with 12k and the promise of repeat business.\nFollow up Thursday.' },
+    { title = 'Ideas', body = 'Ideas\n1. Food truck by the pier\n2. Detailing service, mobile\n3. That thing R mentioned, look into permits first' },
+}
+
+---Rolls the attachment set for one seeded mail: nil most of the time, otherwise 1-3 entries
+---mixed from the caller's real photos/memos and fabricated note snapshots.
+---@param photos string[] photo URLs available to attach
+---@param memos table[] memo rows { name, url, duration } available to attach
+---@return table[]|nil
+local function rollAttachments(photos, memos)
+    if math.random() > 0.4 then return nil end
+    local out = {}
+    for _ = 1, math.random(1, 3) do
+        local roll = math.random(3)
+        if roll == 1 and #photos > 0 then
+            out[#out + 1] = { kind = 'photo', url = photos[math.random(#photos)] }
+        elseif roll == 2 and #memos > 0 then
+            local m = memos[math.random(#memos)]
+            out[#out + 1] = { kind = 'audio', url = m.url, name = m.name, duration = tonumber(m.duration) or 0 }
+        else
+            local n = NOTE_SNAPSHOTS[math.random(#NOTE_SNAPSHOTS)]
+            out[#out + 1] = { kind = 'note', title = n.title, body = n.body }
+        end
+    end
+    return out
+end
+
 ---/mailseed [count] (admin-only, in-game): sends count test emails to every mail account the
 ---caller is signed into, through the real send path (persistence, banner, badge, live insert).
+---Roughly 40% of seeds carry 1-3 attachments mixed from the caller's real photos and voice
+---memos (fallback stock photos when the library is empty) plus fabricated note snapshots.
 lib.addCommand('mailseed', {
     help = 'Mail: send yourself a batch of test emails (needs a signed-in mail account)',
     restricted = 'group.admin',
@@ -67,23 +111,34 @@ lib.addCommand('mailseed', {
         return
     end
 
+    local photos = {}
+    local photoRows = photoStore.listForCitizen(cid)
+    for i = 1, math.min(#photoRows, 6) do photos[#photos + 1] = photoRows[i].url end
+    if #photos == 0 then photos = FALLBACK_PHOTOS end
+    local memos = memoStore.recent(cid, 10)
+
     local n = math.min(50, math.max(1, math.floor(tonumber(args and args.count) or 10)))
-    local sent = 0
+    local sent, withAtt = 0, 0
     for i = 1, n do
         local acc     = accounts[((i - 1) % #accounts) + 1]
         local sender  = SENDERS[math.random(#SENDERS)]
         local subject = SUBJECTS[math.random(#SUBJECTS)]
         if subject:find('%%04d') then subject = subject:format(math.random(0, 9999)) end
+        local attachments = rollAttachments(photos, memos)
         local result = actions.systemSend({
-            to      = { acc.email },
-            from    = sender,
-            subject = subject,
-            body    = BODIES[math.random(#BODIES)],
+            to          = { acc.email },
+            from        = sender,
+            subject     = subject,
+            body        = BODIES[math.random(#BODIES)],
+            attachments = attachments,
         })
-        if result.success then sent = sent + 1 end
+        if result.success then
+            sent = sent + 1
+            if attachments then withAtt = withAtt + 1 end
+        end
         Wait(150)
     end
 
-    print(('^2[sd-phone:mail]^0 seeded %d test email%s across %d account%s')
-        :format(sent, sent == 1 and '' or 's', #accounts, #accounts == 1 and '' or 's'))
+    print(('^2[sd-phone:mail]^0 seeded %d test email%s (%d with attachments) across %d account%s')
+        :format(sent, sent == 1 and '' or 's', withAtt, #accounts, #accounts == 1 and '' or 's'))
 end)

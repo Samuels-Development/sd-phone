@@ -27,6 +27,14 @@ local MAX_SUBJECT_LEN = 200
 local MAX_BODY_LEN = 10000
 ---@type integer Sign-in password length bound: the larger of mailCfg.MaxPasswordLength and 64.
 local MAX_SIGNIN_PASSWORD_LEN = math.max(mailCfg.MaxPasswordLength, 64)
+---@type integer Max attachments accepted per send/draft; extras are dropped.
+local MAX_ATTACHMENTS = 5
+---@type integer Attachment URL cap (chars).
+local MAX_ATTACHMENT_URL_LEN = 512
+---@type integer Attachment display-name / note-title cap (chars).
+local MAX_ATTACHMENT_NAME_LEN = 80
+---@type integer Attached note body cap (chars).
+local MAX_ATTACHMENT_NOTE_LEN = 5000
 
 local util = require 'server.util'
 local ok, fail, trim = util.ok, util.fail, util.trim
@@ -120,6 +128,37 @@ local function serializeAccount(acc)
     return { id = acc.email, name = acc.display_name, email = acc.email }
 end
 
+---Whitelists a client-supplied attachments list down to well-formed photo/audio/note entries;
+---malformed entries are dropped and the result is capped at MAX_ATTACHMENTS.
+---@param raw any
+---@return table[]|nil attachments nil when nothing valid remains
+local function sanitizeAttachments(raw)
+    if type(raw) ~= 'table' then return nil end
+    local out = {}
+    for i = 1, #raw do
+        if #out >= MAX_ATTACHMENTS then break end
+        local a = raw[i]
+        if type(a) == 'table' then
+            if a.kind == 'photo' and type(a.url) == 'string' and a.url ~= '' and #a.url <= MAX_ATTACHMENT_URL_LEN then
+                out[#out + 1] = { kind = 'photo', url = a.url }
+            elseif a.kind == 'audio' and type(a.url) == 'string' and a.url ~= '' and #a.url <= MAX_ATTACHMENT_URL_LEN then
+                local name = type(a.name) == 'string' and a.name or ''
+                if #name > MAX_ATTACHMENT_NAME_LEN then name = name:sub(1, MAX_ATTACHMENT_NAME_LEN) end
+                out[#out + 1] = { kind = 'audio', url = a.url, name = name, duration = tonumber(a.duration) or 0 }
+            elseif a.kind == 'note' then
+                local title = type(a.title) == 'string' and a.title or ''
+                local body  = type(a.body)  == 'string' and a.body  or ''
+                if #title > MAX_ATTACHMENT_NAME_LEN then title = title:sub(1, MAX_ATTACHMENT_NAME_LEN) end
+                if #body  > MAX_ATTACHMENT_NOTE_LEN then body  = body:sub(1, MAX_ATTACHMENT_NOTE_LEN) end
+                if title ~= '' or body ~= '' then
+                    out[#out + 1] = { kind = 'note', title = title, body = body }
+                end
+            end
+        end
+    end
+    return #out > 0 and out or nil
+end
+
 ---Reshapes a hydrated message into the React `MailMessage` shape, injecting `accountId` and
 ---filling fallbacks for rows written by older builds.
 ---@param accountEmail string
@@ -137,6 +176,7 @@ local function serializeMessage(accountEmail, msg)
         sentAt    = msg.sentAt    or '',
         read      = msg.read      == true,
         flagged   = msg.flagged   == true,
+        attachments = msg.attachments,
     }
 end
 
@@ -330,7 +370,8 @@ function actions.send(source, payload)
     if #subject > MAX_SUBJECT_LEN then subject = subject:sub(1, MAX_SUBJECT_LEN) end
     local body    = type(payload.body) == 'string' and payload.body or ''
     if #body > MAX_BODY_LEN then body = body:sub(1, MAX_BODY_LEN) end
-    local sentAt  = os.date('!%Y-%m-%dT%H:%M:%S')
+    local sentAt      = os.date('!%Y-%m-%dT%H:%M:%S')
+    local attachments = sanitizeAttachments(payload.attachments)
 
     local sentMessage = {
         id      = store.newId(),
@@ -342,6 +383,7 @@ function actions.send(source, payload)
         sentAt  = sentAt,
         read    = true,
         flagged = false,
+        attachments = attachments,
     }
     store.appendMessage(sender.email, sentMessage, mailCfg.MaxMessagesPerAccount)
 
@@ -360,6 +402,7 @@ function actions.send(source, payload)
                 sentAt  = sentAt,
                 read    = false,
                 flagged = false,
+                attachments = attachments,
             }
             store.appendMessage(addr, inboxMessage, mailCfg.MaxMessagesPerAccount)
 
@@ -426,6 +469,20 @@ function actions.systemSend(mail)
     if #body > MAX_BODY_LEN then body = body:sub(1, MAX_BODY_LEN) end
     local sentAt = os.date('!%Y-%m-%dT%H:%M:%S')
 
+    -- Export ergonomics: a plain URL string is shorthand for a photo attachment (lb-phone's
+    -- SendMail shape); tagged tables pass through to the same whitelist as player sends.
+    local attachments = mail.attachments
+    if type(attachments) == 'table' then
+        local coerced = {}
+        for i = 1, #attachments do
+            local a = attachments[i]
+            coerced[i] = type(a) == 'string' and { kind = 'photo', url = a } or a
+        end
+        attachments = sanitizeAttachments(coerced)
+    else
+        attachments = nil
+    end
+
     local delivered = 0
     local sentId
     local pushes = {}
@@ -443,6 +500,7 @@ function actions.systemSend(mail)
                 sentAt  = sentAt,
                 read    = false,
                 flagged = false,
+                attachments = attachments,
             }
             store.appendMessage(addr, inboxMessage, mailCfg.MaxMessagesPerAccount)
             delivered = delivered + 1
@@ -459,14 +517,15 @@ function actions.systemSend(mail)
 
     ---First-party send announcement (system shape), fired once before the fan-out.
     TriggerEvent('sd-phone:server:mail:sent', {
-        system    = true,
-        id        = sentId,
-        from      = { name = fromName, email = fromEmail },
-        to        = recipients,
-        subject   = subject,
-        body      = body,
-        sentAt    = sentAt,
-        delivered = delivered,
+        system      = true,
+        id          = sentId,
+        from        = { name = fromName, email = fromEmail },
+        to          = recipients,
+        subject     = subject,
+        body        = body,
+        sentAt      = sentAt,
+        delivered   = delivered,
+        attachments = attachments,
     })
 
     actions.deliver(pushes)
@@ -523,6 +582,7 @@ function actions.saveDraft(source, payload)
         sentAt  = os.date('!%Y-%m-%dT%H:%M:%S'),
         read    = true,
         flagged = false,
+        attachments = sanitizeAttachments(payload.attachments),
     }
     store.appendMessage(sender.email, draft, mailCfg.MaxMessagesPerAccount)
 
