@@ -17,6 +17,13 @@ AddEventHandler('sd-phone:client:openState', function(open)
     end
 end)
 
+-- A wipe reloads the NUI, destroying the admin-panel React tree. Clear our open flag so the
+-- openState handler above won't re-assert focus over a panel that no longer exists; main.lua
+-- drops the actual focus.
+AddEventHandler('sd-phone:client:wipeFocus', function()
+    adminOpen = false
+end)
+
 ---Opens the panel. Fired by the server-side /phoneadmin command (server/admin/init.lua), which
 ---is the permission gate - this event never opens anything the callbacks wouldn't refuse.
 ---Keep-input is forced off so the game gets no movement/camera input while the panel is up

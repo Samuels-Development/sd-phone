@@ -38,6 +38,12 @@ AddEventHandler('sd-phone:client:openState', function(open)
     end
 end)
 
+-- A wipe reloads the NUI; clear our session flag so the openState handler above won't re-assert
+-- focus over a payphone UI that no longer exists (main.lua drops the actual focus).
+AddEventHandler('sd-phone:client:wipeFocus', function()
+    activeLocation = nil
+end)
+
 ---Rounded-coords key for a booth, matching what the server distance-checks against.
 ---@param coords vector3
 ---@return string
