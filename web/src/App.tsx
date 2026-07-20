@@ -259,13 +259,6 @@ function AppContent() {
         }
     }, []);
 
-    // The framework loaded a character (first join or a switch): per-player settings become
-    // resolvable only now, so restart both hydration pulls with a fresh retry budget.
-    useNuiEvent('sd-phone:client:characterLoaded', useCallback(() => {
-        useThemeStore.getState().hydrate();
-        useLocaleStore.getState().hydrate();
-    }, []));
-
     useNuiEvent('sd-phone:open', useCallback((data) => {
         if (!data) return;
         if (data.locale) useLocaleStore.getState().applyServerDefault(data.locale);   // server default, unless the player already picked their own

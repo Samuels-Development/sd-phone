@@ -40,6 +40,7 @@ require 'client.apps.compass'
 require 'client.apps.findfriends'
 require 'client.apps.cherry'
 require 'client.apps.photogram'
+require 'client.apps.vibez'
 require 'client.apps.voice'
 require 'client.apps.streaks'
 require 'client.apps.ryde'
@@ -703,15 +704,6 @@ end)
 ---Returns the disable switch - exports['sd-phone']:isDisabled().
 ---@return boolean disabled
 exports('isDisabled', function() return phoneDisabled end)
-
----Character-loaded signal for the NUI: settings can only resolve once the citizenid exists, so
----the UI re-pulls its per-player state (wallpaper, tones, locale...) the moment the framework
----reports the player in - covering slow multichar picks and live character switches alike.
-local function pushCharacterLoaded()
-    SendNUIMessage({ action = 'sd-phone:client:characterLoaded' })
-end
-RegisterNetEvent('QBCore:Client:OnPlayerLoaded', pushCharacterLoaded)
-RegisterNetEvent('esx:playerLoaded', pushCharacterLoaded)
 
 ---Resource-stop cleanup: releases NUI focus, deletes props, clears the statebag, and stops the
 ---hold anim.

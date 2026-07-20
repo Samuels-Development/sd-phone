@@ -12,6 +12,8 @@ local groupStore     = require 'server.groups.store'
 local acctStore      = require 'server.accounts.store'
 ---@type table Photogram persistence layer (server.photogram.store): notification/DM counts.
 local photogramStore = require 'server.photogram.store'
+---@type table Vibez persistence layer (server.vibez.store): notification counts.
+local vibezStore     = require 'server.vibez.store'
 
 ---@type table Badges module; the table returned at end of file.
 local badges = {}
@@ -26,10 +28,20 @@ local function photogramCount(cid)
     return photogramStore.unseenNotificationCount(acc.username) + photogramStore.dmUnreadTotal(acc.username)
 end
 
+---Vibez unread = unseen Inbox notifications, keyed by the vibez account signed in on this
+---character; 0 if not signed in.
+---@param cid string framework per-character id
+---@return number unread
+local function vibezCount(cid)
+    local acc = acctStore.getSessionAccount('vibez', cid)
+    if not acc then return 0 end
+    return vibezStore.unseenNotificationCount(acc.username)
+end
+
 ---Per-app unread counts for one character, keyed by home-screen app id, computed straight from
 ---the database on every call.
 ---@param cid string framework per-character id
----@return { messages: number, phone: number, mail: number, groups: number, photogram: number }
+---@return { messages: number, phone: number, mail: number, groups: number, photogram: number, vibez: number }
 function badges.snapshot(cid)
     return {
         messages  = messageStore.unreadCount(cid),
@@ -37,6 +49,7 @@ function badges.snapshot(cid)
         mail      = mailStore.unreadCount(cid),
         groups    = groupStore.pendingInviteCount(cid),
         photogram = photogramCount(cid),
+        vibez     = vibezCount(cid),
     }
 end
 
@@ -54,7 +67,7 @@ end
 ---Read-only.
 lib.callback.register('sd-phone:server:badges:get', function(src)
     local cid = player.getIdentifier(src)
-    if not cid then return { messages = 0, phone = 0, mail = 0, groups = 0, photogram = 0 } end
+    if not cid then return { messages = 0, phone = 0, mail = 0, groups = 0, photogram = 0, vibez = 0 } end
     return badges.snapshot(cid)
 end)
 

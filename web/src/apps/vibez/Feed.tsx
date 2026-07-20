@@ -1,26 +1,58 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-    BadgeCheck, Bookmark, Heart, MessageCircle, MoreHorizontal, Music2, Plus, Share2,
+    BadgeCheck, Bookmark, Heart, MessageCircle, Music2, Plus, Radio, Trash2,
 } from 'lucide-react';
 
-import { useSessionState } from '@/hooks/useSessionState';
 import { t } from '@/i18n';
-import { ACCENT, fmt, type VPost } from './data';
+import { isVideoUrl } from '@/core/photosApi';
+import { GRAD_FROM, GRAD_TO, HEART, fmt, type VLive, type VPost } from './data';
+import type { FeedTab } from './vibezApi';
 
 const SB_H = 54;
 
-type FeedTab = 'following' | 'foryou';
-
 interface Pop { id: number; x: number; y: number }
 
-export function Feed({ posts, onToggleLike, onLikeOn, onToggleSave }: {
-    posts:        VPost[];
-    onToggleLike: (id: string) => void;
-    onLikeOn:     (id: string) => void;
-    onToggleSave: (id: string) => void;
+export interface FeedHandlers {
+    onToggleLike:   (id: string) => void;
+    onLikeOn:       (id: string) => void;
+    onToggleSave:   (id: string) => void;
+    onOpenComments: (post: VPost) => void;
+    onOpenProfile:  (handle: string) => void;
+    onToggleFollow: (handle: string) => void;
+    onView:         (id: string) => void;
+    onDelete?:      (id: string) => void;
+}
+
+export function Feed({ posts, tab, onTab, lives, onOpenLive, myHandle, loading, handlers, initialIndex }: {
+    posts:         VPost[];
+    tab?:          FeedTab;
+    onTab?:        (tab: FeedTab) => void;
+    lives?:        VLive[];
+    onOpenLive?:   (live: VLive) => void;
+    myHandle?:     string;
+    loading?:      boolean;
+    handlers:      FeedHandlers;
+    initialIndex?: number;
 }) {
-    const [feedTab, setFeedTab] = useSessionState<FeedTab>('vibez:feedTab', 'foryou');
-    const [active, setActive] = useState(0);
+    const [active, setActive] = useState(initialIndex ?? 0);
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    // Jump to the requested post before first paint (post viewer opened mid-list).
+    useEffect(() => {
+        const el = scrollRef.current;
+        if (el && initialIndex) el.scrollTop = initialIndex * el.clientHeight;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // One view ping per post per mount.
+    const viewed = useRef(new Set<string>());
+    useEffect(() => {
+        const post = posts[active];
+        if (!post || viewed.current.has(post.id)) return;
+        viewed.current.add(post.id);
+        handlers.onView(post.id);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [active, posts]);
 
     function handleScroll(e: React.UIEvent<HTMLDivElement>) {
         const el = e.currentTarget;
@@ -42,6 +74,7 @@ export function Feed({ posts, onToggleLike, onLikeOn, onToggleSave }: {
             `}</style>
 
             <div
+                ref={scrollRef}
                 className="h-full w-full overflow-y-auto no-scrollbar"
                 style={{ scrollSnapType: 'y mandatory' }}
                 onScroll={handleScroll}
@@ -52,9 +85,9 @@ export function Feed({ posts, onToggleLike, onLikeOn, onToggleSave }: {
                             <PostFrame
                                 key={p.id}
                                 post={p}
-                                onToggleLike={() => onToggleLike(p.id)}
-                                onLikeOn={() => onLikeOn(p.id)}
-                                onToggleSave={() => onToggleSave(p.id)}
+                                isActive={i === active}
+                                isMine={!!myHandle && p.user.handle === myHandle}
+                                handlers={handlers}
                             />
                         )
                         : (
@@ -65,16 +98,43 @@ export function Feed({ posts, onToggleLike, onLikeOn, onToggleSave }: {
                             />
                         )
                 ))}
+                {posts.length === 0 && (
+                    <section className="flex h-full w-full flex-col items-center justify-center gap-2 px-10 text-center">
+                        {loading
+                            ? <p className="text-[14px] text-white/50">{t('vibez.loading', 'Loading…')}</p>
+                            : <>
+                                <p className="text-[16px] font-semibold text-white/85">
+                                    {tab === 'following' ? t('vibez.noFollowing', 'Nothing here yet') : t('vibez.noVibes', 'No vibes yet')}
+                                </p>
+                                <p className="text-[13px] leading-relaxed text-white/50">
+                                    {tab === 'following'
+                                        ? t('vibez.noFollowingHint', 'Follow creators to fill this feed.')
+                                        : t('vibez.noVibesHint', 'Be the first — record a vibe and post it.')}
+                                </p>
+                            </>}
+                    </section>
+                )}
             </div>
 
-            <div
-                className="pointer-events-none absolute inset-x-0 flex items-center justify-center gap-5"
-                style={{ top: SB_H - 4 }}
-            >
-                <TopTab active={feedTab === 'following'} onClick={() => setFeedTab('following')}>{t('vibez.following', 'Following')}</TopTab>
-                <span className="h-3.5 w-px bg-white/30" aria-hidden />
-                <TopTab active={feedTab === 'foryou'} onClick={() => setFeedTab('foryou')}>{t('vibez.forYou', 'For You')}</TopTab>
-            </div>
+            {tab && onTab && (
+                <div className="pointer-events-none absolute inset-x-0" style={{ top: SB_H - 4 }}>
+                    <div className="flex items-center justify-center gap-5">
+                        <TopTab active={tab === 'following'} onClick={() => onTab('following')}>{t('vibez.following', 'Following')}</TopTab>
+                        <span className="h-3.5 w-px bg-white/30" aria-hidden />
+                        <TopTab active={tab === 'foryou'} onClick={() => onTab('foryou')}>{t('vibez.forYou', 'For You')}</TopTab>
+                    </div>
+                    {!!lives?.length && onOpenLive && (
+                        <button
+                            type="button"
+                            onClick={() => onOpenLive(lives[0])}
+                            className="pointer-events-auto absolute left-3 top-0 flex items-center gap-1 rounded-full bg-black/35 px-2.5 py-[5px] backdrop-blur-sm active:opacity-70"
+                        >
+                            <Radio className="h-[15px] w-[15px]" style={{ color: GRAD_TO }} strokeWidth={2.4} />
+                            <span className="text-[12px] font-bold text-white">{t('vibez.live', 'LIVE')}</span>
+                        </button>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
@@ -97,11 +157,47 @@ function TopTab({ active, onClick, children }: { active: boolean; onClick: () =>
     );
 }
 
-function PostFrame({ post, onToggleLike, onLikeOn, onToggleSave }: {
-    post:         VPost;
-    onToggleLike: () => void;
-    onLikeOn:     () => void;
-    onToggleSave: () => void;
+function Media({ post, isActive }: { post: VPost; isActive: boolean }) {
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const isVideo = isVideoUrl(post.video);
+
+    useEffect(() => {
+        const v = videoRef.current;
+        if (!v) return;
+        if (isActive) {
+            v.muted = false;
+            void v.play().catch(() => {
+                // Autoplay with sound blocked (browser dev) — retry muted.
+                v.muted = true;
+                void v.play().catch(() => {});
+            });
+        } else {
+            v.pause();
+            v.currentTime = 0;
+        }
+    }, [isActive, post.video]);
+
+    if (!isVideo) {
+        return <img src={post.video} alt="" draggable={false} className="h-full w-full object-cover" />;
+    }
+    return (
+        <video
+            ref={videoRef}
+            src={post.video}
+            poster={post.thumb}
+            loop
+            playsInline
+            preload="metadata"
+            className="h-full w-full object-cover"
+        />
+    );
+}
+
+function PostFrame({ post, isActive, isMine, handlers }: {
+    post:     VPost;
+    isActive: boolean;
+    isMine:   boolean;
+    handlers: FeedHandlers;
 }) {
     const [pops, setPops] = useState<Pop[]>([]);
     const lastTap = useRef(0);
@@ -116,7 +212,7 @@ function PostFrame({ post, onToggleLike, onLikeOn, onToggleSave }: {
             const id = ++popId.current;
             setPops(prev => [...prev, { id, x, y }]);
             window.setTimeout(() => setPops(prev => prev.filter(p => p.id !== id)), 750);
-            onLikeOn();
+            handlers.onLikeOn(post.id);
             lastTap.current = 0;
         } else {
             lastTap.current = now;
@@ -129,12 +225,7 @@ function PostFrame({ post, onToggleLike, onLikeOn, onToggleSave }: {
             style={{ scrollSnapStop: 'always', scrollSnapAlign: 'start' }}
         >
             <div className="absolute inset-0" onClick={handleTap}>
-                <img
-                    src={post.video}
-                    alt=""
-                    draggable={false}
-                    className="h-full w-full object-cover"
-                />
+                <Media post={post} isActive={isActive} />
                 <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/45 to-transparent" />
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-72 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
 
@@ -144,7 +235,7 @@ function PostFrame({ post, onToggleLike, onLikeOn, onToggleSave }: {
                         className="pointer-events-none absolute h-24 w-24 drop-shadow-lg"
                         style={{
                             left: p.x, top: p.y,
-                            color: ACCENT, fill: ACCENT,
+                            color: HEART, fill: HEART,
                             animation: 'vibez-heart-pop 0.75s ease-out forwards',
                         }}
                     />
@@ -153,37 +244,46 @@ function PostFrame({ post, onToggleLike, onLikeOn, onToggleSave }: {
 
             <div className="absolute bottom-[150px] right-2.5 flex flex-col items-center gap-[18px]">
                 <div className="relative mb-1">
-                    <div
-                        className="flex h-12 w-12 items-center justify-center rounded-full text-[15px] font-bold text-white ring-2 ring-white"
-                        style={{ background: post.creator.color }}
-                    >
-                        {post.creator.initials}
-                    </div>
-                    <span
-                        className="absolute -bottom-2 left-1/2 flex h-5 w-5 -translate-x-1/2 items-center justify-center rounded-full text-white ring-2 ring-black/0"
-                        style={{ background: ACCENT }}
-                    >
-                        <Plus className="h-3.5 w-3.5" strokeWidth={3} />
-                    </span>
+                    <button type="button" onClick={() => handlers.onOpenProfile(post.user.handle)} className="block active:opacity-80">
+                        <img
+                            src={post.user.avatar}
+                            alt=""
+                            draggable={false}
+                            className="h-12 w-12 rounded-full object-cover ring-2 ring-white"
+                        />
+                    </button>
+                    {!isMine && !post.following && (
+                        <button
+                            type="button"
+                            aria-label={t('vibez.follow', 'Follow')}
+                            onClick={() => handlers.onToggleFollow(post.user.handle)}
+                            className="absolute -bottom-2 left-1/2 flex h-5 w-5 -translate-x-1/2 items-center justify-center rounded-full text-white active:scale-90"
+                            style={{ background: `linear-gradient(135deg, ${GRAD_FROM}, ${GRAD_TO})` }}
+                        >
+                            <Plus className="h-3.5 w-3.5" strokeWidth={3} />
+                        </button>
+                    )}
                 </div>
 
-                <RailAction
-                    label={t('vibez.like', 'Like')}
-                    count={fmt(post.likes)}
-                    onClick={onToggleLike}
-                >
+                <RailAction label={t('vibez.like', 'Like')} count={fmt(post.likes)} onClick={() => handlers.onToggleLike(post.id)}>
                     <Heart
                         className="h-[34px] w-[34px] drop-shadow"
-                        style={post.liked ? { color: ACCENT, fill: ACCENT } : { color: '#fff' }}
+                        style={post.liked ? { color: HEART, fill: HEART } : { color: '#fff' }}
                         strokeWidth={post.liked ? 0 : 1.8}
                     />
                 </RailAction>
 
-                <RailAction label={t('vibez.comments', 'Comments')} count={fmt(post.comments)} onClick={() => { /* demo */ }}>
+                <RailAction label={t('vibez.comments', 'Comments')} count={fmt(post.comments)} onClick={() => handlers.onOpenComments(post)}>
                     <MessageCircle className="h-[33px] w-[33px] text-white drop-shadow" fill="#fff" strokeWidth={0} />
                 </RailAction>
 
-                <RailAction label={t('vibez.save', 'Save')} count={fmt(post.saves)} onClick={onToggleSave}>
+                {isMine && handlers.onDelete && (
+                    <RailAction label={t('vibez.delete', 'Delete')} onClick={() => handlers.onDelete?.(post.id)}>
+                        <Trash2 className="h-[29px] w-[29px] text-white drop-shadow" strokeWidth={1.9} />
+                    </RailAction>
+                )}
+
+                <RailAction label={t('vibez.save', 'Save')} count={fmt(post.saves)} onClick={() => handlers.onToggleSave(post.id)}>
                     <Bookmark
                         className="h-[31px] w-[31px] drop-shadow"
                         style={post.saved ? { color: '#FACC15', fill: '#FACC15' } : { color: '#fff' }}
@@ -191,36 +291,34 @@ function PostFrame({ post, onToggleLike, onLikeOn, onToggleSave }: {
                     />
                 </RailAction>
 
-                <RailAction label={t('vibez.share', 'Share')} onClick={() => { /* demo */ }}>
-                    <Share2 className="h-[30px] w-[30px] text-white drop-shadow" strokeWidth={1.9} />
-                </RailAction>
-
-                <button type="button" aria-label={t('vibez.more', 'More')} className="active:opacity-60">
-                    <MoreHorizontal className="h-7 w-7 text-white drop-shadow" strokeWidth={2.2} />
-                </button>
-
                 <div
                     className="mt-1 flex h-12 w-12 items-center justify-center rounded-full ring-[5px] ring-black/30"
                     style={{
-                        background: `radial-gradient(circle at 50% 50%, ${post.creator.color} 0 30%, #1a1a1a 31% 100%)`,
-                        animation: 'vibez-disc-spin 4s linear infinite',
+                        background: `conic-gradient(${GRAD_FROM}, ${GRAD_TO}, ${GRAD_FROM})`,
+                        animation: isActive ? 'vibez-disc-spin 4s linear infinite' : undefined,
                     }}
                 >
-                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-black/70">
-                        <Music2 className="h-3 w-3 text-white" strokeWidth={2.4} />
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-black/80">
+                        <Music2 className="h-3.5 w-3.5 text-white" strokeWidth={2.4} />
                     </div>
                 </div>
             </div>
 
             <div className="absolute bottom-[120px] left-3.5 right-20">
-                <div className="flex items-center gap-1.5">
-                    <span className="text-[16px] font-bold text-white drop-shadow">@{post.creator.handle}</span>
-                    {post.creator.verified && (
-                        <BadgeCheck className="h-[15px] w-[15px]" style={{ color: '#1D9BF0', fill: '#1D9BF0' }} strokeWidth={0} />
+                <button
+                    type="button"
+                    onClick={() => handlers.onOpenProfile(post.user.handle)}
+                    className="flex items-center gap-1.5 active:opacity-80"
+                >
+                    <span className="text-[16px] font-bold text-white drop-shadow">@{post.user.handle}</span>
+                    {post.user.verified && (
+                        <BadgeCheck className="h-[15px] w-[15px]" style={{ color: GRAD_FROM, fill: GRAD_FROM }} stroke="#fff" strokeWidth={1.6} />
                     )}
                     <span className="text-[13px] text-white/70">· {post.time}</span>
-                </div>
-                <div className="mt-1.5 text-[14px] leading-snug text-white drop-shadow">{post.caption}</div>
+                </button>
+                {post.caption !== '' && (
+                    <div className="mt-1.5 text-[14px] leading-snug text-white drop-shadow">{post.caption}</div>
+                )}
                 <div className="mt-2 flex items-center gap-1.5 text-[13px] text-white/90">
                     <Music2 className="h-3.5 w-3.5 shrink-0" strokeWidth={2.2} />
                     <span className="truncate">{post.sound}</span>

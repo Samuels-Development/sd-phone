@@ -1005,19 +1005,25 @@ export function ChessIcon() {
 }
 
 function VibezIcon() {
-    const tri = 'M24,16 L24,44 L46,30 Z';
+    // Neon pulse wave on a twilight tile — the Vibez brand mark.
+    const wave = 'M11,32 L19,32 L24,17 L31,45 L37,25 L41,32 L49,32';
     return (
         <svg viewBox={`0 0 ${S} ${S}`} width={S} height={S}>
             <defs>
-                <radialGradient id="vbz" cx="50%" cy="34%" r="80%">
-                    <stop offset="0%" stopColor="#262626" />
-                    <stop offset="100%" stopColor="#000000" />
+                <radialGradient id="vbzBg" cx="28%" cy="18%" r="115%">
+                    <stop offset="0%" stopColor="#2c1560" />
+                    <stop offset="55%" stopColor="#180b36" />
+                    <stop offset="100%" stopColor="#0a0518" />
                 </radialGradient>
+                <linearGradient id="vbzWave" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="#8B5CF6" />
+                    <stop offset="55%" stopColor="#C084FC" />
+                    <stop offset="100%" stopColor="#F472B6" />
+                </linearGradient>
             </defs>
-            <rect width={S} height={S} fill="url(#vbz)" />
-            <path d={tri} fill="#25F4EE" transform="translate(-2.6,-1.4)" />
-            <path d={tri} fill="#FE2C55" transform="translate(2.6,1.4)" />
-            <path d={tri} fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="2" strokeLinejoin="round" />
+            <rect width={S} height={S} fill="url(#vbzBg)" />
+            <path d={wave} fill="none" stroke="url(#vbzWave)" strokeWidth="9.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.3" />
+            <path d={wave} fill="none" stroke="url(#vbzWave)" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
     );
 }

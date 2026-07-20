@@ -7,7 +7,7 @@ import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useDeckActive } from '@/shell/deckActive';
 import { useStatusBarLight } from '@/shell/useStatusBarLight';
 import { apiLiveJoin, apiLiveLeave, apiLiveComment, apiLiveHeart, type LiveComment } from '../photogramApi';
-import { LiveVideoPlayer, base64ToBytes, liveVideoPlaybackSupported } from './liveMedia';
+import { LiveVideoPlayer, base64ToBytes, liveVideoPlaybackSupported } from '@/shared/liveMedia';
 import { type User } from '../data';
 import { VerifiedCheck } from '../ui';
 

@@ -1,6 +1,7 @@
 
 import type { BirdyMessage } from '@/apps/birdy/data';
 import type { DMsg as PhotogramDM, User as PhotogramUser } from '@/apps/photogram/data';
+import type { VUser as VibezUser } from '@/apps/vibez/data';
 import type { Reaction } from '@/shared/chat/data';
 
 export interface OpenPayload {
@@ -190,7 +191,6 @@ export type NuiMessage =
     | { action: 'sd-phone:ryde:ratingReceived'; data: { id: string; stars: number; tip?: number } }
     | { action: 'sd-phone:ryde:peerLocation';   data: { tripId: string; role: 'rider' | 'driver'; x: number; y: number; h: number } }
     | { action: 'sd-phone:close' }
-    | { action: 'sd-phone:client:characterLoaded' }
     | { action: 'sd-phone:launchApp'; data: { id: string; link?: Record<string, unknown> } }
     | { action: 'sd-phone:battery'; data: number }
     | { action: 'sd-phone:weather'; data: WeatherPayload }
@@ -271,6 +271,18 @@ export type NuiMessage =
     | { action: 'sd-phone:photogram:liveViewers'; data: { liveId: string; viewers: number } }
     | { action: 'sd-phone:photogram:liveEnded';   data: { liveId: string } }
     | { action: 'sd-phone:photogram:liveChanged' }
+    | { action: 'sd-phone:vibez:notification' }
+    | { action: 'sd-phone:vibez:feedChanged' }
+    | { action: 'sd-phone:vibez:postChanged';   data: { postId: string; likes?: number; comments?: number } }
+    | { action: 'sd-phone:vibez:postRemoved';   data: { postId: string } }
+    | { action: 'sd-phone:vibez:followChanged'; data: { target: string; following: boolean } }
+    | { action: 'sd-phone:vibez:liveFrame';     data: { liveId: string; frame: string } }
+    | { action: 'sd-phone:vibez:liveChunk';     data: { liveId: string; chunk: string; init?: boolean; mime?: string } }
+    | { action: 'sd-phone:vibez:liveComment';   data: { liveId: string; comment: { id: string; user: VibezUser; text: string } } }
+    | { action: 'sd-phone:vibez:liveHeart';     data: { liveId: string } }
+    | { action: 'sd-phone:vibez:liveViewers';   data: { liveId: string; viewers: number } }
+    | { action: 'sd-phone:vibez:liveEnded';     data: { liveId: string } }
+    | { action: 'sd-phone:vibez:liveChanged' }
     | { action: 'sd-phone:voice:signalIn';        data: { from?: number; sid: string; kind: 'offer' | 'answer' | 'ice'; data: unknown } }
     | { action: 'sd-phone:voice:talkingState';    data: { on: boolean } }
     | { action: 'sd-phone:streaks:newPost';     data: { id: number; author: string; imageUrl: string; caption?: string; dayStreak: number; postDate: string; createdAt: number; likeCount: number; citizenid: string } }
