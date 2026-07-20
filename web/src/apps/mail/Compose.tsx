@@ -14,9 +14,10 @@ interface Props {
     onSend:      (draft: { accountId: string; to: string[]; subject: string; body: string }) => void;
     onSaveDraft: (draft: { accountId: string; to: string[]; subject: string; body: string }) => void;
     onCancel:    () => void;
+    resumingDraft?: boolean;
 }
 
-export function Compose({ accounts, defaultAccountId, initialTo = '', initialSubject = '', initialBody = '', onSend, onSaveDraft, onCancel }: Props) {
+export function Compose({ accounts, defaultAccountId, initialTo = '', initialSubject = '', initialBody = '', onSend, onSaveDraft, onCancel, resumingDraft = false }: Props) {
     const [accountId, setAccountId] = useState(() => {
         return accounts.some(a => a.id === defaultAccountId) ? defaultAccountId : accounts[0]?.id;
     });
@@ -29,7 +30,9 @@ export function Compose({ accounts, defaultAccountId, initialTo = '', initialSub
 
     const account = accounts.find(a => a.id === accountId) ?? accounts[0];
     const canSend = to.trim().length > 0 && subject.trim().length > 0 && !!account;
-    const hasContent = to.trim() !== '' || subject.trim() !== '' || body.trim() !== '';
+    // Prefilled content (a resumed draft, a reply quote) doesn't count: only the user's own
+    // edits are worth guarding, so an untouched compose cancels straight out.
+    const dirty = to !== initialTo || subject !== initialSubject || body !== initialBody;
 
     function slideOut(after: () => void) {
         if (exiting) return;
@@ -39,7 +42,7 @@ export function Compose({ accounts, defaultAccountId, initialTo = '', initialSub
 
     function requestCancel() {
         if (exiting || confirmCancel) return;
-        if (hasContent) setConfirmCancel(true);
+        if (dirty) setConfirmCancel(true);
         else slideOut(onCancel);
     }
 
@@ -172,7 +175,10 @@ export function Compose({ accounts, defaultAccountId, initialTo = '', initialSub
 
             {confirmCancel && (
                 <ActionSheet
-                    actions={[
+                    actions={resumingDraft ? [
+                        { label: t('mail.discardChanges', 'Discard Changes'), destructive: true, onClick: () => slideOut(onCancel) },
+                        { label: t('mail.saveChanges', 'Save Changes'), onClick: saveDraftAndClose },
+                    ] : [
                         { label: t('mail.deleteDraft', 'Delete Draft'), destructive: true, onClick: () => slideOut(onCancel) },
                         { label: t('mail.saveDraft', 'Save Draft'), onClick: saveDraftAndClose },
                     ]}

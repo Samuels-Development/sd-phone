@@ -10,6 +10,8 @@ local badges  = require 'server.badges.init'
 local util    = require 'server.util'
 local fail, trim = util.fail, util.trim
 
+require 'server.mail.seed'
+
 ---Boots the mail schema; a failure is printed and non-fatal.
 CreateThread(function()
     local ok, err = pcall(store.ensureSchema)

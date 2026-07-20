@@ -108,6 +108,23 @@ export function Mail({ onClose }: { onClose: () => void }) {
         await moveToBin(target.accountId, id);
     }
 
+    function handleMarkReadMany(ids: string[]) {
+        const targets = messages.filter(m => ids.includes(m.id) && !m.read);
+        if (targets.length === 0) return;
+        setMessages(prev => prev.map(m => ids.includes(m.id) ? { ...m, read: true } : m));
+        for (const m of targets) void markRead(m.accountId, m.id);
+    }
+
+    // Batch delete from the list pages: bin messages are erased for good (the server
+    // hard-deletes an already-binned message), everything else moves to the bin.
+    function handleDeleteMany(ids: string[]) {
+        const targets = messages.filter(m => ids.includes(m.id));
+        setMessages(prev => prev
+            .filter(m => !(ids.includes(m.id) && m.folder === 'bin'))
+            .map(m => ids.includes(m.id) ? { ...m, folder: 'bin' as const, flagged: false } : m));
+        for (const m of targets) void moveToBin(m.accountId, m.id);
+    }
+
     async function handleMove(id: string, folder: Folder) {
         const target = messages.find(m => m.id === id);
         if (!target || target.folder === folder) return;
@@ -286,6 +303,8 @@ export function Mail({ onClose }: { onClose: () => void }) {
                         setNav({ stage: 'detail', folder: nav.folder, msgId: id, accountId: nav.accountId, accountName: nav.accountName });
                     }}
                     onCompose={() => setComposeFor({ accountId: nav.accountId })}
+                    onDeleteMany={handleDeleteMany}
+                    onMarkReadMany={handleMarkReadMany}
                 />
             )}
 
@@ -327,6 +346,7 @@ export function Mail({ onClose }: { onClose: () => void }) {
                     onSend={(draft) => void handleSendMessage(draft)}
                     onSaveDraft={handleSaveDraft}
                     onCancel={() => setComposeFor(null)}
+                    resumingDraft={!!composeFor.draftId}
                 />
             )}
 
