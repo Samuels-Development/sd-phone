@@ -106,6 +106,22 @@ const SERVER_BADGE_APPS = new Set<AppId>(['messages', 'phone', 'mail', 'groups',
 // same value is what stops the extra cards from falling back to a grey icon card.
 const RECENTS_CAP = 10;
 
+// Fullscreen app slot with a reveal animation. This wrapper mounts exactly when phone content
+// is revealed (open without a lock, or the unlock swipe finishing), so capturing hasApp at
+// mount animates only a restored app (Reopen Last App): a gentle zoom-in instead of a hard
+// pop. Later in-session launches keep their icon-zoom and never replay this.
+function AppResumeStage({ hasApp }: { hasApp: boolean }) {
+    const fxRef = useRef(hasApp);
+    return (
+        <div
+            className="absolute inset-0 z-10"
+            style={{ pointerEvents: 'none', animation: fxRef.current ? 'app-resume-in 0.34s cubic-bezier(0.3,0.9,0.4,1) both' : undefined }}
+        >
+            <FullscreenStage />
+        </div>
+    );
+}
+
 // How many preview-eligible apps are kept alive (live switcher cards) at once. The
 // active app is always live on top of this; anything past the cap downgrades to an
 // icon card. Matched to RECENTS_CAP so every card the switcher can show is a live
@@ -1107,13 +1123,14 @@ function AppContent() {
                             savedLayout={savedLayout}
                             onLayoutChange={handleSaveLayout}
                             onEditingChange={setHomeEditing}
+                            bloomOnMount={currentApp === null}
                         />
                     )
                 )}
 
                 {/* The active app renders here: this only registers the fullscreen slot;
                     the actual live instance is re-parented in from the top-level deck. */}
-                {!showSetup && !locked && <FullscreenStage />}
+                {!showSetup && !locked && <AppResumeStage hasApp={currentApp !== null} />}
 
                 {!showSetup && switcherOpen && !locked && (
                     <AppSwitcher

@@ -39,7 +39,7 @@ export function GeneralPage({ onBack }: { onBack: () => void }) {
                 <ListRow label={t('settings.languageRegion', 'Language & Region')} onPress={() => setSub('language-region')} />
             </ListGroup>
 
-            <ListGroup footer={t('settings.reopenLastAppFooter', 'Taking the phone back out returns to the app you were using instead of the Home Screen.')}>
+            <ListGroup>
                 <ToggleRow label={t('settings.reopenLastApp', 'Reopen Last App')} on={reopenLastApp} onToggle={() => setReopenLastApp(!reopenLastApp)} />
             </ListGroup>
 

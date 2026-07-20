@@ -131,7 +131,9 @@ export function ToggleRow({ label, defaultOn = false, divider, on: controlledOn,
             className="relative flex w-full items-center px-4 py-3 text-left active:bg-black/5 dark:active:bg-white/5"
         >
             <span className="flex-1 text-[17px] font-normal text-black dark:text-white">{label}</span>
-            <div className="pointer-events-none">
+            {/* The 31px switch exceeds the text line; the negative margin keeps it from
+                stretching the row, so toggle rows match plain ListRow height. */}
+            <div className="pointer-events-none -my-1">
                 <Toggle on={on} />
             </div>
             {divider && (

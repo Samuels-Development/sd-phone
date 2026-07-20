@@ -80,11 +80,24 @@ export interface HomescreenProps {
     savedLayout?: SavedLayout | null;
     onLayoutChange?: (layout: SavedLayout) => void;
     onEditingChange?: (editing: boolean) => void;
+    /** Play the icon bloom on mount; false when the phone is revealed with an app on top. */
+    bloomOnMount?: boolean;
 }
 
-export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, savedLayout, onLayoutChange, onEditingChange }: HomescreenProps) {
+export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, savedLayout, onLayoutChange, onEditingChange, bloomOnMount = true }: HomescreenProps) {
     const { blurHomescreen } = useTheme('blurHomescreen');
     const badges = useBadges();
+    // The homescreen mounts exactly when the phone content is revealed (open without a lock,
+    // or the unlock swipe finishing), so a mount-triggered bloom staggers the icons in like
+    // iOS. Skipped when an app is revealed on top (the icons would flash through its resume
+    // zoom); cleared after the longest delay + duration so the animations drop off the tiles.
+    const [bloom, setBloom] = useState(bloomOnMount);
+    useEffect(() => {
+        if (!bloomOnMount) return;
+        const t = window.setTimeout(() => setBloom(false), 950);
+        return () => window.clearTimeout(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     const appMap   = useMemo(() => new Map(apps.map(a => [a.id, a])), [apps]);
     const dockApps = useMemo(
         () => dock.map(id => apps.find(a => a.id === id)).filter((a): a is AppDef => !!a),
@@ -469,9 +482,12 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
                                 if (!editing) {
                                     return (
                                         <div key={id} style={{ position: 'absolute', left: 0, top: 0, width: ICON, transform: `translate(${s.x}px, ${s.y}px)` }}>
-                                            {folder
-                                                ? <FolderTile label={def!.name} apps={folderApps(fkey)} badge={folderBadge(fkey)} onOpen={() => setOpenFolder(fkey)} />
-                                                : <AppIcon app={app!} onOpen={launch} badge={badges?.[app!.id]} />}
+                                            {/* Scale/opacity live on this inner div so the positioned parent's translate is untouched. */}
+                                            <div style={bloom ? { animation: 'home-icon-in 0.38s cubic-bezier(0.34,1.3,0.64,1) both', animationDelay: `${li * 20}ms` } : undefined}>
+                                                {folder
+                                                    ? <FolderTile label={def!.name} apps={folderApps(fkey)} badge={folderBadge(fkey)} onOpen={() => setOpenFolder(fkey)} />
+                                                    : <AppIcon app={app!} onOpen={launch} badge={badges?.[app!.id]} />}
+                                            </div>
                                         </div>
                                     );
                                 }
@@ -541,8 +557,14 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
 
             <div className="absolute bottom-5 left-4 right-4 z-10">
                 <div className="flex items-center justify-around rounded-[28px] border border-white/20 bg-white/15 px-4 py-3.5 backdrop-blur-2xl">
-                    {dockApps.map(app => (
-                        <div key={app.id} className={editing ? 'animate-app-jiggle' : ''} style={editing ? { animationDelay: `${jiggleDelay(app.id)}ms` } : undefined}>
+                    {dockApps.map((app, di) => (
+                        <div
+                            key={app.id}
+                            className={editing ? 'animate-app-jiggle' : ''}
+                            style={editing
+                                ? { animationDelay: `${jiggleDelay(app.id)}ms` }
+                                : (bloom ? { animation: 'home-icon-in 0.38s cubic-bezier(0.34,1.3,0.64,1) both', animationDelay: `${140 + di * 25}ms` } : undefined)}
+                        >
                             <AppIcon app={app} label={false} onOpen={launch} badge={badges?.[app.id]} />
                         </div>
                     ))}
