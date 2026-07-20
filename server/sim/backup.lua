@@ -109,7 +109,7 @@ local COPY = {
 local SETTINGS_COLS = {
     'active_group_id', 'ringtone', 'notification_tone', 'card_name', 'card_avatar',
     'card_email', 'card_address', 'installed_apps', 'home_layout', 'lock_clock',
-    'wallpaper', 'passcode', 'face_id', 'chat_text_scale', 'hour24',
+    'wallpaper', 'custom_wallpapers', 'passcode', 'face_id', 'chat_text_scale', 'hour24',
     'ringtone_volume', 'call_volume', 'locale', 'dark_theme', 'theme',
 }
 

@@ -32,6 +32,21 @@ local function columnExists(tbl, name)
     return row ~= nil and tonumber(row.n) > 0
 end
 
+---Returns a varchar column's declared character cap, or nil when the column is missing or not
+---length-bounded (information_schema probe).
+---@param tbl string table name
+---@param name string column name
+---@return number|nil length
+local function columnLength(tbl, name)
+    local row = MySQL.single.await([[
+        SELECT CHARACTER_MAXIMUM_LENGTH AS n FROM information_schema.columns
+        WHERE table_schema = DATABASE()
+          AND table_name = ?
+          AND column_name = ?
+    ]], { tbl, name })
+    return row and tonumber(row.n) or nil
+end
+
 ---Clamps a tone id to a lowercase slug capped at 64 chars; nil for empty/invalid input.
 ---@param id any client-supplied tone id
 ---@return string|nil clean lowercase [a-z0-9_-] slug, nil if unusable
@@ -60,7 +75,8 @@ function store.ensureSchema()
             installed_apps     TEXT         NULL,
             home_layout        TEXT         NULL,
             lock_clock         TEXT         NULL,
-            wallpaper          VARCHAR(255) NULL,
+            wallpaper          VARCHAR(512) NULL,
+            custom_wallpapers  TEXT         NULL,
             passcode           VARCHAR(8)   NULL,
             face_id            TINYINT(1)   NOT NULL DEFAULT 0,
             chat_text_scale    DECIMAL(3,2) NULL,
@@ -109,7 +125,13 @@ function store.ensureSchema()
         MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN lock_clock TEXT NULL')
     end
     if not columnExists('phone_settings', 'wallpaper') then
-        MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN wallpaper VARCHAR(255) NULL')
+        MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN wallpaper VARCHAR(512) NULL')
+    elseif (columnLength('phone_settings', 'wallpaper') or 0) < 512 then
+        -- Older installs created the column at 255; photo URLs are capped at 512 (phone_photos.url).
+        MySQL.query.await('ALTER TABLE phone_settings MODIFY wallpaper VARCHAR(512) NULL')
+    end
+    if not columnExists('phone_settings', 'custom_wallpapers') then
+        MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN custom_wallpapers TEXT NULL')
     end
     if not columnExists('phone_settings', 'passcode') then
         MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN passcode VARCHAR(8) NULL')
@@ -462,11 +484,24 @@ function store.setLockClock(citizenid, cfg)
     ]], { citizenid, json.encode(clean) })
 end
 
----Clamps a wallpaper key to [%w._-/:] capped at 255 chars; nil for empty/invalid input.
----@param v any client-supplied wallpaper key
----@return string|nil clean key stripped to [%w._-/:], nil if unusable
+---Validates a wallpaper image URL: http(s) scheme, no whitespace or control chars, within the
+---512-char column cap; nil for anything else (never truncated, a cut URL is a broken URL).
+---@param v any client-supplied URL
+---@return string|nil url verbatim URL, nil if unusable
+local function sanitizeWallpaperUrl(v)
+    if type(v) ~= 'string' or #v > 512 then return nil end
+    if v:find('[%c%s]') then return nil end
+    if not v:match('^https?://.') then return nil end
+    return v
+end
+
+---Sanitizes a wallpaper value: a full http(s) URL passes sanitizeWallpaperUrl, anything else is
+---treated as a bundled-asset key and stripped to [%w._-/:] capped at 255 chars; nil if unusable.
+---@param v any client-supplied wallpaper key or URL
+---@return string|nil clean wallpaper value, nil if unusable
 local function sanitizeWallpaper(v)
     if type(v) ~= 'string' then return nil end
+    if v:match('^https?://') then return sanitizeWallpaperUrl(v) end
     local clean = (v:gsub('[^%w%._%-/:]', ''))
     if clean == '' then return nil end
     return clean:sub(1, 255)
@@ -494,6 +529,66 @@ function store.setWallpaper(citizenid, value)
         INSERT INTO phone_settings (citizenid, wallpaper) VALUES (?, ?)
         ON DUPLICATE KEY UPDATE wallpaper = VALUES(wallpaper)
     ]], { citizenid, clean })
+end
+
+---@type integer Cap on saved custom wallpapers per character.
+local MAX_CUSTOM_WALLPAPERS = 24
+
+---Writes a player's custom wallpaper list (JSON array column), leaving other settings intact.
+---@param citizenid string framework per-character id
+---@param list string[] wallpaper URLs
+local function writeCustomWallpapers(citizenid, list)
+    MySQL.update.await([[
+        INSERT INTO phone_settings (citizenid, custom_wallpapers) VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE custom_wallpapers = VALUES(custom_wallpapers)
+    ]], { citizenid, json.encode(list) })
+end
+
+---Reads a player's custom wallpaper URLs (JSON array column); an unparseable column yields {}.
+---Read-only.
+---@param citizenid string framework per-character id
+---@return string[] urls custom wallpaper URLs ({} when unset or unparseable)
+function store.getCustomWallpapers(citizenid)
+    if not citizenid or citizenid == '' then return {} end
+    local row = MySQL.single.await(
+        'SELECT custom_wallpapers FROM phone_settings WHERE citizenid = ?', { citizenid })
+    if not row or not row.custom_wallpapers or row.custom_wallpapers == '' then return {} end
+    local ok, decoded = pcall(json.decode, row.custom_wallpapers)
+    if not ok or type(decoded) ~= 'table' then return {} end
+    return decoded
+end
+
+---Appends a custom wallpaper URL to a player's list; a duplicate is a silent success, and the
+---list is capped at MAX_CUSTOM_WALLPAPERS.
+---@param citizenid string framework per-character id
+---@param url any client-supplied image URL
+---@return boolean ok false when the URL is unusable or the cap is hit
+function store.addCustomWallpaper(citizenid, url)
+    if not citizenid or citizenid == '' then return false end
+    local clean = sanitizeWallpaperUrl(url)
+    if not clean then return false end
+    local list = store.getCustomWallpapers(citizenid)
+    for i = 1, #list do
+        if list[i] == clean then return true end
+    end
+    if #list >= MAX_CUSTOM_WALLPAPERS then return false end
+    list[#list + 1] = clean
+    writeCustomWallpapers(citizenid, list)
+    return true
+end
+
+---Removes a custom wallpaper URL from a player's list; an absent URL is a no-op.
+---@param citizenid string framework per-character id
+---@param url any URL to remove
+function store.removeCustomWallpaper(citizenid, url)
+    if not citizenid or citizenid == '' or type(url) ~= 'string' or url == '' then return end
+    local list = store.getCustomWallpapers(citizenid)
+    local kept, removed = {}, false
+    for i = 1, #list do
+        if list[i] == url then removed = true else kept[#kept + 1] = list[i] end
+    end
+    if not removed then return end
+    writeCustomWallpapers(citizenid, kept)
 end
 
 ---Clamps the chat-bubble text multiplier to 0.8-1.5; nil for non-numbers and NaN, infinities

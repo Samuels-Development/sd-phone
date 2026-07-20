@@ -83,6 +83,7 @@ html, body, #root {
 .animate-screenshot-flash { animation: screenshot-flash 0.5s ease-out forwards; }
 @keyframes photo-in  { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
 @keyframes photo-out { from { opacity: 1; transform: scale(1); }    to { opacity: 0; transform: scale(0.94); } }
+@keyframes wallpaper-hud { 0% { opacity: 0; transform: scale(0.92); } 12% { opacity: 1; transform: scale(1); } 78% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes phone-in-bottom { from { transform: translateY(130%);  } to { transform: translateY(0); } }
 @keyframes phone-in-top    { from { transform: translateY(-130%); } to { transform: translateY(0); } }
 @keyframes phone-in-left   { from { transform: translateX(-130%); } to { transform: translateX(0); } }

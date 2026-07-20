@@ -14,6 +14,8 @@ proxyCallback('sd-phone:settings:setDarkTheme', 'sd-phone:server:settings:setDar
 proxyCallback('sd-phone:settings:setLockClock', 'sd-phone:server:settings:setLockClock')
 proxyCallback('sd-phone:settings:setSecurity',  'sd-phone:server:settings:setSecurity')
 proxyCallback('sd-phone:settings:setWallpaper', 'sd-phone:server:settings:setWallpaper')
+proxyCallback('sd-phone:settings:wallpapers:add',    'sd-phone:server:settings:wallpapers:add')
+proxyCallback('sd-phone:settings:wallpapers:remove', 'sd-phone:server:settings:wallpapers:remove')
 proxyCallback('sd-phone:settings:setChatTextScale', 'sd-phone:server:settings:setChatTextScale')
 proxyCallback('sd-phone:settings:setVolumes',       'sd-phone:server:settings:setVolumes')
 proxyCallback('sd-phone:settings:setLocale',        'sd-phone:server:settings:setLocale')

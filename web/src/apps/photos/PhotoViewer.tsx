@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, FolderPlus, Heart, MoreHorizontal, Trash2 } from 'lucide-react';
+import { ChevronLeft, FolderPlus, Heart, MoreHorizontal, Trash2, Wallpaper } from 'lucide-react';
 
 import { t } from '@/i18n';
 import type { Photo } from '@/core/photosApi';
+import { useThemeStore } from '@/stores/themeStore';
 import { VideoView } from './VideoView';
 
 function fmtDate(iso: string): string {
@@ -46,6 +47,7 @@ export function PhotoViewer({
     const [dragging, setDragging] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const [leaving, setLeaving] = useState(false);
+    const [wallpaperHud, setWallpaperHud] = useState(0);
     const startX = useRef(0);
     const activeThumb = useRef<HTMLButtonElement | null>(null);
 
@@ -181,6 +183,23 @@ export function PhotoViewer({
                             {t('photos.addToAlbum', 'Add to Album')}
                             <FolderPlus className="h-5 w-5" strokeWidth={2} />
                         </button>
+                        {!current.video && (
+                            <>
+                                <div className="h-px bg-black/10 dark:bg-white/10" />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setMenuOpen(false);
+                                        useThemeStore.getState().setWallpaper(current.url);
+                                        setWallpaperHud(v => v + 1);
+                                    }}
+                                    className="flex w-full items-center justify-between px-4 py-3 text-[16px] active:bg-black/5 dark:active:bg-white/10"
+                                >
+                                    {t('photos.useAsWallpaper', 'Use as Wallpaper')}
+                                    <Wallpaper className="h-5 w-5" strokeWidth={2} />
+                                </button>
+                            </>
+                        )}
                         <div className="h-px bg-black/10 dark:bg-white/10" />
                         <button
                             type="button"
@@ -192,6 +211,19 @@ export function PhotoViewer({
                         </button>
                     </div>
                 </>
+            )}
+
+            {wallpaperHud > 0 && (
+                <div key={wallpaperHud} className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center">
+                    <div
+                        className="flex flex-col items-center gap-2 rounded-[18px] bg-black/75 px-7 py-5 text-white"
+                        style={{ animation: 'wallpaper-hud 1.5s ease forwards' }}
+                        onAnimationEnd={() => setWallpaperHud(0)}
+                    >
+                        <Wallpaper className="h-8 w-8" strokeWidth={1.8} />
+                        <span className="text-[14px] font-medium">{t('photos.wallpaperSet', 'Wallpaper Set')}</span>
+                    </div>
+                </div>
             )}
         </div>
     );
