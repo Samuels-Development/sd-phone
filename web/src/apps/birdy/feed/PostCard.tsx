@@ -6,10 +6,11 @@ import { AlertDialog } from '@/ui/AlertDialog';
 import { LIKE, META, REPOST, relativeTime, type BirdyPost } from '../data';
 import { Avatar, PostImages, RichText, VerifiedBadge } from '../ui';
 
-export function PostCard({ post, isOwn, onToggleLike, onOpen, onOpenAuthor }: {
+export function PostCard({ post, isOwn, onToggleLike, onToggleRepost, onOpen, onOpenAuthor }: {
     post:          BirdyPost;
     isOwn:         boolean;
     onToggleLike:  () => void;
+    onToggleRepost?: () => void;
     onOpen?:       () => void;
     onOpenAuthor?: (handle: string) => void;
 }) {
@@ -19,9 +20,10 @@ export function PostCard({ post, isOwn, onToggleLike, onOpen, onOpenAuthor }: {
         onOpenAuthor(post.author.handle);
     };
 
-    const [reposted, setReposted] = useState(false);
+    // Server truth; the parent applies the optimistic flip.
+    const reposted = post.reposted === true;
     const [confirmRepost, setConfirmRepost] = useState(false);
-    const repostCount = post.reposts + (reposted ? 1 : 0);
+    const repostCount = post.reposts;
 
     return (
         <>
@@ -30,7 +32,7 @@ export function PostCard({ post, isOwn, onToggleLike, onOpen, onOpenAuthor }: {
             className={`flex gap-3.5 border-b border-black/10 px-4 py-4 ${onOpen ? 'cursor-pointer transition-colors hover:bg-black/[0.04]' : ''}`}
         >
             <button type="button" onClick={openAuthor} className="h-fit shrink-0">
-                <Avatar size={56} />
+                <Avatar size={56} src={post.author.avatar} />
             </button>
 
             <div className="min-w-0 flex-1">
@@ -67,6 +69,7 @@ export function PostCard({ post, isOwn, onToggleLike, onOpen, onOpenAuthor }: {
                         tone="comment"
                         icon={<MessageCircle className="h-[25px] w-[25px]" strokeWidth={1.9} />}
                         count={post.replies}
+                        onClick={onOpen}
                     />
                     <ActionButton
                         tone="repost"
@@ -101,7 +104,7 @@ export function PostCard({ post, isOwn, onToggleLike, onOpen, onOpenAuthor }: {
                     : t('birdy.retweetMessage', "Are you sure you want to retweet {name}'s post?", { name: post.author.name })}
                 confirmLabel={reposted ? t('birdy.undo', 'Undo') : t('birdy.retweet', 'Retweet')}
                 onCancel={() => setConfirmRepost(false)}
-                onConfirm={() => { setReposted(r => !r); setConfirmRepost(false); }}
+                onConfirm={() => { onToggleRepost?.(); setConfirmRepost(false); }}
             />
         )}
         </>

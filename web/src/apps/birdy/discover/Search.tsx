@@ -56,7 +56,7 @@ export function Search({ onOpenProfile }: { onOpenProfile: (handle?: string) => 
                                 onClick={() => onOpenProfile(u.handle)}
                                 className="flex w-full items-center gap-3 px-4 py-2.5 text-left active:bg-black/[0.04]"
                             >
-                                <Avatar size={42} />
+                                <Avatar size={42} src={u.avatar} />
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-1">
                                         <span className="truncate text-[15px] font-bold text-black">{u.name}</span>

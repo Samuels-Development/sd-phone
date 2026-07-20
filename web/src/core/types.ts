@@ -220,6 +220,7 @@ export type NuiMessage =
         reactions: Reaction[];
       } }
     | { action: 'sd-phone:birdy:notification' }
+    | { action: 'sd-phone:birdy:feedChanged' }
     | { action: 'sd-phone:darkchat:message'; data: {
         roomId:  string;
         message: {

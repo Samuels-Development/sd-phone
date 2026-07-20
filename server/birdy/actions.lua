@@ -12,6 +12,8 @@ local acctActions = require 'server.accounts.actions'
 local settings = require 'server.settings.store'
 ---@type table Banking actions (server.banking.actions): authoritative money transfer for money DMs.
 local banking = require 'server.banking.actions'
+---@type table Badges module (server.badges.init): server-authoritative unread-badge pushes.
+local badges = require 'server.badges.init'
 ---@type table Admin mute registry (server.admin.moderation): scope guards for posting/DMing.
 local moderation = require 'server.admin.moderation'
 
@@ -114,9 +116,9 @@ end
 
 ---Public author shape embedded in posts, notifications and conversation heads.
 ---@param profile table
----@return { name: string, handle: string, verified: boolean }
+---@return { name: string, handle: string, verified: boolean, avatar?: string }
 local function serializeAuthor(profile)
-    return { name = profile.displayName, handle = profile.handle, verified = profile.verified }
+    return { name = profile.displayName, handle = profile.handle, verified = profile.verified, avatar = profile.avatar }
 end
 
 ---Shapes a full profile (with live follow counts) for the profile page.
@@ -128,26 +130,30 @@ local function serializeProfile(profile)
         handle    = profile.handle,
         verified  = profile.verified,
         bio       = profile.bio or '',
-        joined    = profile.joinLabel or '',
+        -- Derived from created_at; join_label was client-writable.
+        joined    = profile.createdTs and os.date('%B %Y', profile.createdTs) or (profile.joinLabel or ''),
         protected = profile.protected == true,
+        avatar    = profile.avatar,
+        banner    = profile.banner,
         following = store.countFollowing(profile.citizenid),
         followers = store.countFollowers(profile.citizenid),
     }
 end
 
 ---Shapes a hydrated post row into the React `BirdyPost` form. `images` is nil or the
----store-decoded array of up to 3 URLs; the repost count is pinned at 0.
+---store-decoded array of up to 3 URLs.
 ---@param p table
 ---@return table
 local function serializePost(p)
     return {
         id        = p.id,
-        author    = { name = p.displayName, handle = p.handle, verified = p.verified },
+        author    = { name = p.displayName, handle = p.handle, verified = p.verified, avatar = p.avatar },
         body      = p.body,
         images    = p.images,
         createdAt = p.createdMs,
         replies   = p.replies,
-        reposts   = 0,
+        reposts   = p.reposts,
+        reposted  = p.reposted,
         likes     = p.likes,
         liked     = p.liked,
         views     = p.views,
@@ -313,6 +319,14 @@ function actions.profilePosts(source, payload)
     if not targetCid then return fail('Profile not found') end
     local kind = (payload and payload.kind) or 'posts'
 
+    -- Protected profiles expose posts only to themselves and their followers.
+    if targetCid ~= viewerCid then
+        local tp = store.getProfile(targetCid)
+        if tp and tp.protected and not (viewerCid ~= '' and store.isFollowing(viewerCid, targetCid)) then
+            return ok({ posts = {}, protected = true })
+        end
+    end
+
     local rows
     if kind == 'likes' then
         rows = store.listLikedBy(targetCid, viewerCid, birdyCfg.FeedLimit)
@@ -346,7 +360,7 @@ end
 ---Updates the signed-in user's editable profile fields. Missing fields keep their current
 ---value; everything is trimmed and bounds-checked.
 ---@param source number player server id
----@param payload { name?: string, bio?: string, joinLabel?: string, protected?: boolean }|nil
+---@param payload { name?: string, bio?: string, protected?: boolean, avatar?: string|false, banner?: string|false }|nil
 ---@return table envelope
 function actions.updateProfile(source, payload)
     local prof = viewer(source); if not prof then return fail('Not signed in') end
@@ -359,9 +373,17 @@ function actions.updateProfile(source, payload)
     local bio = trimmed(payload.bio) or ''
     if #bio > birdyCfg.MaxBioLength then return fail('Bio is too long') end
 
-    local joinLabel = (trimmed(payload.joinLabel) or prof.joinLabel or ''):sub(1, 32)
+    local function imageUrl(v, fallback)
+        local u = trimmed(v)
+        if u and u:sub(1, 4) == 'http' then return u:sub(1, 512) end
+        if v == false then return nil end
+        return fallback
+    end
+    local avatar = imageUrl(payload.avatar, prof.avatar)
+    local banner = imageUrl(payload.banner, prof.banner)
 
-    store.updateProfileFields(prof.citizenid, name, bio, joinLabel, payload.protected == true)
+    -- joinLabel is ignored; the join date is derived from created_at.
+    store.updateProfileFields(prof.citizenid, name, bio, prof.joinLabel or '', payload.protected == true, avatar, banner)
     return ok({ profile = serializeProfile(store.getProfile(prof.citizenid)) })
 end
 
@@ -462,6 +484,25 @@ function actions.create(source, payload)
         username = prof.handle, displayName = prof.displayName,
         body = body, images = images,
     })
+
+    -- The TriggerEvent above is server-local; this is what reaches players.
+    TriggerClientEvent('sd-phone:client:birdy:feedChanged', -1, {})
+
+    local preview = body ~= '' and body:sub(1, 80) or 'shared a photo'
+    for _, cid in ipairs(store.followerCids(prof.citizenid)) do
+        store.insertNotification(store.newId(), cid, 'post', prof.citizenid, id)
+        local src = player.getSourceByIdentifier(cid)
+        if src then
+            TriggerClientEvent('sd-phone:client:birdy:notification', src, {})
+            TriggerClientEvent('sd-phone:client:notify', src, {
+                app = 'birdy', appId = 'birdy', title = 'Birdy',
+                body = ('%s posted: %s'):format(prof.displayName, preview),
+                time = 'now', quietInApp = true,
+            })
+            badges.push(src)
+        end
+    end
+
     return ok({ post = serializePost(store.getPost(id, prof.citizenid)) })
 end
 
@@ -527,6 +568,77 @@ function actions.toggleLike(source, payload)
     return ok({ liked = nowLiked, notifyCid = notifyCid })
 end
 
+---Toggles a repost of a post. Mirrors toggleLike: idempotent per (post, citizen), and notifies
+---the post's author on a new repost (never on un-repost, never for self-reposts).
+---@param source number player server id
+---@param payload { id?: string }|nil
+---@return table envelope
+function actions.toggleRepost(source, payload)
+    local prof = viewer(source); if not prof then return fail('Player not found') end
+    payload = tbl(payload)
+    local id = payload and payload.id
+    if type(id) ~= 'string' or id == '' then return fail('Missing post') end
+
+    local author = store.getPostAuthor(id)
+    if not author then return fail('Post not found') end
+
+    local nowReposted
+    if store.isReposted(id, prof.citizenid) then
+        store.removeRepost(id, prof.citizenid)
+        nowReposted = false
+    else
+        store.addRepost(id, prof.citizenid)
+        nowReposted = true
+    end
+
+    local notifyCid = nil
+    if nowReposted and author ~= prof.citizenid then
+        store.insertNotification(store.newId(), author, 'repost', prof.citizenid, id)
+        notifyCid = author
+    end
+
+    return ok({ reposted = nowReposted, notifyCid = notifyCid })
+end
+
+---Followers or following for a handle (defaulting to the viewer's own profile), shaped for the
+---FollowList screen. Read-only.
+---@param source number player server id
+---@param payload { kind?: 'followers'|'following', handle?: string }|nil
+---@return table envelope
+function actions.followList(source, payload)
+    local prof = viewer(source); if not prof then return fail('Player not found') end
+    payload = tbl(payload)
+
+    local kind = payload.kind == 'following' and 'following' or 'followers'
+
+    -- No handle means own list; an unknown handle is empty, not an error.
+    local targetCid = prof.citizenid
+    local handle = payload.handle and normalizeHandle(payload.handle)
+    if handle and handle ~= '' and handle ~= prof.handle then
+        local tp = store.getProfileByHandle(handle)
+        if not tp then return ok({ users = {} }) end
+        -- Protected profiles hide their follow graph from non-followers.
+        if tp.protected and not store.isFollowing(prof.citizenid, tp.citizenid) then
+            return ok({ users = {} })
+        end
+        targetCid = tp.citizenid
+    end
+
+    local users = {}
+    for _, row in ipairs(store.followList(prof.citizenid, targetCid, kind)) do
+        users[#users + 1] = {
+            name        = row.display_name,
+            handle      = row.handle,
+            verified    = tonumber(row.verified) == 1,
+            bio         = row.bio or '',
+            avatar      = row.avatar,
+            followsYou  = tonumber(row.follows_you) == 1,
+            isFollowing = tonumber(row.is_following) == 1,
+        }
+    end
+    return ok({ users = users })
+end
+
 ---Toggles following another account, addressed by handle (preferred) or citizenid. Self-follows
 ---are rejected. Returns the target to notify on a new follow (not on unfollow).
 ---@param source number player server id
@@ -590,13 +702,29 @@ function actions.notifications(source)
             local user = ap and serializeAuthor(ap) or { name = 'Someone', handle = 'someone', verified = false }
             if r.kind == 'like' then
                 items[#items + 1] = { id = r.id, kind = 'like', user = user, text = 'liked your post' }
+            elseif r.kind == 'repost' then
+                items[#items + 1] = { id = r.id, kind = 'repost', user = user, text = 'reposted your post' }
+            elseif r.kind == 'post' then
+                items[#items + 1] = { id = r.id, kind = 'post', user = user, text = 'shared a new post' }
             elseif r.kind == 'follow' then
                 items[#items + 1] = { id = r.id, kind = 'follow', user = user }
             end
         end
     end
 
+    store.markNotificationsSeen(prof.citizenid)
+    badges.push(source)
+
     return ok({ notifications = items })
+end
+
+---Unseen-notification count for the in-app Bell badge. Read-only.
+---@param source number player server id
+---@return table envelope
+function actions.notificationCount(source)
+    local prof = viewer(source)
+    if not prof then return ok({ count = 0 }) end
+    return ok({ count = store.unseenNotificationCount(prof.citizenid) })
 end
 
 -- Rich DM messages (text / image / gif / money / location / voice).
@@ -770,6 +898,20 @@ function actions.markRead(source, payload)
     return ok()
 end
 
+---Resolves a handle to its DM conversation id (the other party's cid) plus their author card,
+---so the UI can open a thread with someone it has never messaged. Read-only.
+---@param source number player server id
+---@param payload { handle?: string }|nil
+---@return table envelope
+function actions.dmResolve(source, payload)
+    local prof = viewer(source); if not prof then return fail('Player not found') end
+    payload = tbl(payload)
+    local tp = store.getProfileByHandle(normalizeHandle(payload.handle or '') or '')
+    if not tp then return fail('Account not found') end
+    if tp.citizenid == prof.citizenid then return fail('You cannot message yourself') end
+    return ok({ id = tp.citizenid, user = serializeAuthor(tp) })
+end
+
 ---Sends a DM of any kind. Returns the sender's own message + the recipient's copy + the routing
 ---data init needs. Money clears through banking.send before the row is stored.
 ---@param source number player server id
@@ -780,7 +922,13 @@ function actions.dmSend(source, payload)
     local muted = moderation.guard(prof.citizenid, 'birdy'); if muted then return muted end
     payload = tbl(payload)
     local toCid = payload.toCid
+    -- Discovery surfaces only expose handles, so accept one and resolve it here.
+    if (type(toCid) ~= 'string' or toCid == '') and payload.toHandle then
+        local tp = store.getProfileByHandle(normalizeHandle(payload.toHandle) or '')
+        toCid = tp and tp.citizenid
+    end
     if type(toCid) ~= 'string' or toCid == '' or #toCid > 64 then return fail('Missing recipient') end
+    if toCid == prof.citizenid then return fail('You cannot message yourself') end
 
     local kind = VALID_DM_KINDS[payload.kind] and payload.kind or 'text'
     local body = (trimmed(payload.body) or ''):sub(1, birdyCfg.MaxDmLength)

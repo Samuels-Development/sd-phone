@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Camera } from 'lucide-react';
 
 import { t } from '@/i18n';
+import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { Toggle } from '@/ui/Toggle';
 import { apiDeleteAccount, apiLogout, apiUpdateProfile } from '../birdyApi';
@@ -20,8 +21,10 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onDeleted }
 }) {
     const [name,       setName]       = useState(profile.name);
     const [bio,        setBio]        = useState(profile.bio);
-    const [joinLabel,  setJoinLabel]  = useState(profile.joined);
     const [protect,    setProtect]    = useState(profile.protected);
+    const [avatar,     setAvatar]     = useState(profile.avatar);
+    const [banner,     setBanner]     = useState(profile.banner);
+    const [picking,    setPicking]    = useState<'avatar' | 'banner' | null>(null);
     const [busy,       setBusy]       = useState(false);
     const [confirmSignOut, setConfirmSignOut] = useState(false);
     const [confirmDel,     setConfirmDel]     = useState(false);
@@ -37,7 +40,7 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onDeleted }
     async function save() {
         if (busy || closing) return;
         setBusy(true);
-        const p = await apiUpdateProfile({ name, bio, joinLabel, protected: protect });
+        const p = await apiUpdateProfile({ name, bio, protected: protect, avatar, banner });
         setBusy(false);
         if (p) dismiss(() => onSaved(p));
     }
@@ -72,11 +75,14 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onDeleted }
 
             <div className="min-h-0 flex-1 overflow-y-auto">
                 <div className="relative h-28 bg-black/10">
-                    <button type="button" aria-label={t('birdy.changeCover', 'Change cover')} className="absolute left-1/2 top-1/2 flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white" style={{ background: 'rgba(0,0,0,0.4)' }}>
+                    {banner && <img src={banner} alt="" draggable={false} className="h-full w-full object-cover" />}
+                    <button type="button" onClick={() => setPicking('banner')} aria-label={t('birdy.changeCover', 'Change cover')} className="absolute left-1/2 top-1/2 flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white" style={{ background: 'rgba(0,0,0,0.4)' }}>
                         <Camera className="h-5 w-5" />
                     </button>
-                    <button type="button" aria-label={t('birdy.changeAvatar', 'Change avatar')} className="absolute -bottom-7 left-4 flex h-16 w-16 items-center justify-center rounded-full border-4 text-white" style={{ borderColor: '#f2f3f5', background: '#5b6671' }}>
-                        <Camera className="h-6 w-6" />
+                    <button type="button" onClick={() => setPicking('avatar')} aria-label={t('birdy.changeAvatar', 'Change avatar')} className="absolute -bottom-7 left-4 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-4 text-white" style={{ borderColor: '#f2f3f5', background: '#5b6671' }}>
+                        {avatar
+                            ? <img src={avatar} alt="" draggable={false} className="h-full w-full object-cover" />
+                            : <Camera className="h-6 w-6" />}
                     </button>
                 </div>
                 <div className="h-9" aria-hidden />
@@ -98,7 +104,7 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onDeleted }
                     </div>
 
                     <Row label={t('birdy.joinDate', 'Join Date')}>
-                        <input value={joinLabel} onChange={e => setJoinLabel(e.target.value)} className="w-full bg-transparent text-right text-[17px] outline-none" style={{ color: BLUE }} />
+                        <span className="block w-full text-right text-[17px] text-black/45">{profile.joined}</span>
                     </Row>
 
                     <div className="flex items-center justify-between px-4 py-3.5">
@@ -141,6 +147,14 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onDeleted }
                     icon="birdy"
                     theme={{ accent: BLUE, welcomeBg: '#f2f3f5', welcomeText: 'dark' }}
                     onClose={() => setPwOpen(false)}
+                />
+            )}
+
+            {picking && (
+                <MediaPickerSheet
+                    filter={p => !p.video}
+                    onSelect={p => { (picking === 'avatar' ? setAvatar : setBanner)(p.url); setPicking(null); }}
+                    onClose={() => setPicking(null)}
                 />
             )}
         </div>

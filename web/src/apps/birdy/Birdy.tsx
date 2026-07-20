@@ -7,13 +7,14 @@ import { useIosPush } from '@/hooks/useIosPush';
 import { useDidEnter } from '@/hooks/useDidEnter';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useSessionState } from '@/hooks/useSessionState';
+import { useDeckActive } from '@/shell/deckActive';
 import { AppAuth } from '@/shared/AppAuth';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { MAIL_DOMAIN, accountsConfirmReset, accountsRequestReset, accountsSavePassword, accountsSuggestCode } from '@/core/accountsApi';
 import { toggleReactionLocal } from '@/shared/chat/messagesApi';
 import type { MessageDraft } from '@/shared/chat/ChatView';
 import {
-    apiCreate, apiDmList, apiDmMarkRead, apiDmReact, apiDmSend, apiDmThread, apiFeed, apiLogin, apiMe, apiPostDetail, apiProfile, apiRegister, apiReply, apiToggleFollow, apiToggleLike,
+    apiCreate, apiDmList, apiDmMarkRead, apiDmReact, apiDmResolve, apiDmSend, apiDmThread, apiFeed, apiLogin, apiMe, apiPostDetail, apiProfile, apiRegister, apiNotificationCount, apiReply, apiToggleFollow, apiToggleLike, apiToggleRepost,
 } from './birdyApi';
 import { ChatView } from './dms/ChatView';
 import { Composer } from './feed/Composer';
@@ -47,12 +48,26 @@ export function Birdy({ onClose }: { onClose: () => void }) {
     const [profile,        setProfile]        = useState<BirdyProfile | null>(null);
     const [sendError,      setSendError]      = useState<string | null>(null);
 
+    // AppDeck retains this subtree, so refetching needs an explicit nonce.
+    const [feedNonce, setFeedNonce] = useState(0);
+    const refreshFeed = useCallback(() => setFeedNonce(n => n + 1), []);
+
+    useNuiEvent('sd-phone:birdy:feedChanged', refreshFeed);
+
+    // Transition only; the mount fetch below already covers first open.
+    const deckActive = useDeckActive();
+    const wasActive = useRef(deckActive);
+    useEffect(() => {
+        if (deckActive && !wasActive.current) refreshFeed();
+        wasActive.current = deckActive;
+    }, [deckActive, refreshFeed]);
+
     useEffect(() => {
         if (!authed) return;
         let alive = true;
         void apiFeed(feed === 'following').then(p => { if (alive) setPosts(p); });
         return () => { alive = false; };
-    }, [authed, feed]);
+    }, [authed, feed, feedNonce]);
 
     useEffect(() => {
         if (!authed) return;
@@ -60,6 +75,20 @@ export function Birdy({ onClose }: { onClose: () => void }) {
         void apiDmList().then(c => { if (alive) setConvos(c); });
         return () => { alive = false; };
     }, [authed, tab]);
+
+    const [notifCount, setNotifCount] = useState(0);
+    useEffect(() => {
+        if (!authed) return;
+        // The Bell tab's own fetch marks everything seen server-side, so zero locally.
+        if (tab === 'notifications') { setNotifCount(0); return; }
+        let alive = true;
+        void apiNotificationCount().then(n => { if (alive) setNotifCount(n); });
+        return () => { alive = false; };
+    }, [authed, tab, feedNonce]);
+
+    useNuiEvent('sd-phone:birdy:notification', useCallback(() => {
+        setNotifCount(n => n + 1);
+    }, []));
 
     useEffect(() => {
         if (!openPostId) { setOpenPost(null); return; }
@@ -114,12 +143,28 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                 : prev);
     }, []));
 
+    async function openDmWith(targetHandle: string) {
+        const r = await apiDmResolve(targetHandle);
+        if (!r) return;
+        setProfileOpen(false); setProfileTarget(null);
+        setTab('messages');
+        setOpenConvoId(r.id);
+    }
+
     function toggleLike(id: string) {
         const flip = (p: BirdyPost): BirdyPost =>
             p.id === id ? { ...p, liked: !p.liked, likes: p.likes + (p.liked ? -1 : 1) } : p;
         setPosts(prev => prev.map(flip));
         setOpenPost(prev => prev ? { ...flip(prev), thread: prev.thread?.map(flip) } : prev);
         void apiToggleLike(id);
+    }
+
+    function toggleRepost(id: string) {
+        const flip = (p: BirdyPost): BirdyPost =>
+            p.id === id ? { ...p, reposted: !p.reposted, reposts: p.reposts + (p.reposted ? -1 : 1) } : p;
+        setPosts(prev => prev.map(flip));
+        setOpenPost(prev => prev ? { ...flip(prev), thread: prev.thread?.map(flip) } : prev);
+        void apiToggleRepost(id);
     }
 
     async function addPost(body: string, images: string[]) {
@@ -202,13 +247,13 @@ export function Birdy({ onClose }: { onClose: () => void }) {
 
     let content: React.ReactNode;
     if (tab === 'home') {
-        content = <Feed posts={posts} me={me} feed={feed} onFeedChange={setFeed} onToggleLike={toggleLike} onOpenPost={setOpenPostId} onOpenProfile={openProfile} onOpenAuthor={openProfile} />;
+        content = <Feed posts={posts} me={me} feed={feed} onFeedChange={setFeed} onToggleLike={toggleLike} onToggleRepost={toggleRepost} onOpenPost={setOpenPostId} onOpenProfile={openProfile} onOpenAuthor={openProfile} />;
     } else if (tab === 'search') {
         content = <Search onOpenProfile={openProfile} />;
     } else if (tab === 'notifications') {
         content = <Notifications onOpenProfile={openProfile} />;
     } else {
-        content = <MessagesList conversations={convos} onOpen={setOpenConvoId} onOpenProfile={openProfile} />;
+        content = <MessagesList conversations={convos} onOpen={setOpenConvoId} onOpenProfile={openProfile} onCompose={openDmWith} />;
     }
 
     const postOverlay = openPostId ? (
@@ -220,6 +265,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                         me={me}
                         onBack={close}
                         onToggleLike={() => toggleLike(openPost.id)}
+                        onToggleRepost={() => toggleRepost(openPost.id)}
                         onToggleReplyLike={rid => toggleLike(rid)}
                         onOpenAuthor={openProfile}
                         onReply={b => addReply(openPost.id, b)}
@@ -295,7 +341,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                     <NavButton active={tab === 'search'} onClick={() => selectTab('search')}>
                         <SearchIcon className="h-[34px] w-[34px]" strokeWidth={tab === 'search' ? 2.7 : 2} />
                     </NavButton>
-                    <NavButton active={tab === 'notifications'} onClick={() => selectTab('notifications')}>
+                    <NavButton active={tab === 'notifications'} onClick={() => selectTab('notifications')} badge={notifCount}>
                         <Bell className="h-[34px] w-[34px]" strokeWidth={2} fill={tab === 'notifications' ? 'currentColor' : 'none'} />
                     </NavButton>
                     <NavButton
@@ -331,7 +377,8 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                 )
             )}
 
-            {profileOpen && !openPostId && !openConvoId && (
+            {/* Not gated on !openPostId, or comment authors are unreachable. */}
+            {profileOpen && !openConvoId && (
                 <SlideOver onClose={() => { setProfileOpen(false); setProfileTarget(null); }} animateIn={animateNav}>
                     {close => (
                         <Profile
@@ -342,7 +389,9 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                             onEdit={() => setEditingProfile(true)}
                             onOpenPost={setOpenPostId}
                             onToggleLike={toggleLike}
+                            onToggleRepost={toggleRepost}
                             onToggleFollow={toggleFollow}
+                            onMessage={openDmWith}
                             onOpenAuthor={openProfile}
                         />
                     )}
