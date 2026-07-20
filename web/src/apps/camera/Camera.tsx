@@ -11,6 +11,7 @@ import { NearbyVoiceCapture, registerGatedMic, unregisterGatedMic, gateAcquire, 
 import { isVideoUrl } from '@/core/photosApi';
 import { getGameRender, type GameRender } from '@/render';
 import { useDeckActive } from '@/shell/deckActive';
+import { useLaunchIntent } from '@/shell/launchIntent';
 import { t } from '@/i18n';
 import { formatDuration } from '@/lib/time';
 import shutterSfx from '@/assets/camera/shutter.mp3';
@@ -100,6 +101,16 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
         setHideHomeIndicator(true);
         return () => setHideHomeIndicator(false);
     }, [photoOnly, setHideHomeIndicator]);
+
+    // Control Center has separate Photo and Record buttons that both open this app, so
+    // the mode has to come from the launch itself. photoOnly callers stay pinned to
+    // PHOTO. Switching out of VIDEO already stops any in-flight recording below.
+    useLaunchIntent<{ mode?: string }>('camera', ({ mode: wanted }) => {
+        if (photoOnly || !wanted) return;
+        if ((MODE_OPTIONS as readonly string[]).includes(wanted)) {
+            setMode(wanted as typeof MODE_OPTIONS[number]);
+        }
+    });
 
     const canvasRef    = useRef<HTMLCanvasElement>(null);
     const viewportRef  = useRef<HTMLDivElement>(null);

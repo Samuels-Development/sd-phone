@@ -27,6 +27,14 @@ local MAX_SUBJECT_LEN = 200
 local MAX_BODY_LEN = 10000
 ---@type integer Sign-in password length bound: the larger of mailCfg.MaxPasswordLength and 64.
 local MAX_SIGNIN_PASSWORD_LEN = math.max(mailCfg.MaxPasswordLength, 64)
+---@type integer Max attachments accepted per send/draft; extras are dropped.
+local MAX_ATTACHMENTS = 5
+---@type integer Attachment URL cap (chars).
+local MAX_ATTACHMENT_URL_LEN = 512
+---@type integer Attachment display-name / note-title cap (chars).
+local MAX_ATTACHMENT_NAME_LEN = 80
+---@type integer Attached note body cap (chars).
+local MAX_ATTACHMENT_NOTE_LEN = 5000
 
 local util = require 'server.util'
 local ok, fail, trim = util.ok, util.fail, util.trim
@@ -120,6 +128,37 @@ local function serializeAccount(acc)
     return { id = acc.email, name = acc.display_name, email = acc.email }
 end
 
+---Whitelists a client-supplied attachments list down to well-formed photo/audio/note entries;
+---malformed entries are dropped and the result is capped at MAX_ATTACHMENTS.
+---@param raw any
+---@return table[]|nil attachments nil when nothing valid remains
+local function sanitizeAttachments(raw)
+    if type(raw) ~= 'table' then return nil end
+    local out = {}
+    for i = 1, #raw do
+        if #out >= MAX_ATTACHMENTS then break end
+        local a = raw[i]
+        if type(a) == 'table' then
+            if a.kind == 'photo' and type(a.url) == 'string' and a.url ~= '' and #a.url <= MAX_ATTACHMENT_URL_LEN then
+                out[#out + 1] = { kind = 'photo', url = a.url }
+            elseif a.kind == 'audio' and type(a.url) == 'string' and a.url ~= '' and #a.url <= MAX_ATTACHMENT_URL_LEN then
+                local name = type(a.name) == 'string' and a.name or ''
+                if #name > MAX_ATTACHMENT_NAME_LEN then name = name:sub(1, MAX_ATTACHMENT_NAME_LEN) end
+                out[#out + 1] = { kind = 'audio', url = a.url, name = name, duration = tonumber(a.duration) or 0 }
+            elseif a.kind == 'note' then
+                local title = type(a.title) == 'string' and a.title or ''
+                local body  = type(a.body)  == 'string' and a.body  or ''
+                if #title > MAX_ATTACHMENT_NAME_LEN then title = title:sub(1, MAX_ATTACHMENT_NAME_LEN) end
+                if #body  > MAX_ATTACHMENT_NOTE_LEN then body  = body:sub(1, MAX_ATTACHMENT_NOTE_LEN) end
+                if title ~= '' or body ~= '' then
+                    out[#out + 1] = { kind = 'note', title = title, body = body }
+                end
+            end
+        end
+    end
+    return #out > 0 and out or nil
+end
+
 ---Reshapes a hydrated message into the React `MailMessage` shape, injecting `accountId` and
 ---filling fallbacks for rows written by older builds.
 ---@param accountEmail string
@@ -137,6 +176,7 @@ local function serializeMessage(accountEmail, msg)
         sentAt    = msg.sentAt    or '',
         read      = msg.read      == true,
         flagged   = msg.flagged   == true,
+        attachments = msg.attachments,
     }
 end
 
@@ -144,14 +184,23 @@ end
 actions.serializeMessage = serializeMessage
 
 ---Delivery fan-out: resolves each entry's citizenid to a live source and, when online, sends
----the message as a live UI event plus a badge repush. Offline citizens are skipped.
+---the message as a live UI event, a phone banner, and a badge repush. Offline citizens are
+---skipped.
 ---@param pushes { citizenid: string, message: table }[]
 function actions.deliver(pushes)
     if type(pushes) ~= 'table' then return end
     for i = 1, #pushes do
         local src = player.getSourceByIdentifier(pushes[i].citizenid)
         if src then
-            TriggerClientEvent('sd-phone:client:mail:received', src, pushes[i].message)
+            local msg  = pushes[i].message
+            local from = msg.from or {}
+            TriggerClientEvent('sd-phone:client:mail:received', src, msg)
+            TriggerClientEvent('sd-phone:client:notify', src, {
+                app = 'mail', appId = 'mail',
+                title = (from.name and from.name ~= '') and from.name or (from.email or 'Mail'),
+                body  = (msg.subject and msg.subject ~= '') and msg.subject or 'New email',
+                time  = 'now', quietInApp = true,
+            })
             badges.push(src)
         end
     end
@@ -321,7 +370,8 @@ function actions.send(source, payload)
     if #subject > MAX_SUBJECT_LEN then subject = subject:sub(1, MAX_SUBJECT_LEN) end
     local body    = type(payload.body) == 'string' and payload.body or ''
     if #body > MAX_BODY_LEN then body = body:sub(1, MAX_BODY_LEN) end
-    local sentAt  = os.date('!%Y-%m-%dT%H:%M:%S')
+    local sentAt      = os.date('!%Y-%m-%dT%H:%M:%S')
+    local attachments = sanitizeAttachments(payload.attachments)
 
     local sentMessage = {
         id      = store.newId(),
@@ -333,6 +383,7 @@ function actions.send(source, payload)
         sentAt  = sentAt,
         read    = true,
         flagged = false,
+        attachments = attachments,
     }
     store.appendMessage(sender.email, sentMessage, mailCfg.MaxMessagesPerAccount)
 
@@ -351,6 +402,7 @@ function actions.send(source, payload)
                 sentAt  = sentAt,
                 read    = false,
                 flagged = false,
+                attachments = attachments,
             }
             store.appendMessage(addr, inboxMessage, mailCfg.MaxMessagesPerAccount)
 
@@ -417,6 +469,20 @@ function actions.systemSend(mail)
     if #body > MAX_BODY_LEN then body = body:sub(1, MAX_BODY_LEN) end
     local sentAt = os.date('!%Y-%m-%dT%H:%M:%S')
 
+    -- Export ergonomics: a plain URL string is shorthand for a photo attachment (lb-phone's
+    -- SendMail shape); tagged tables pass through to the same whitelist as player sends.
+    local attachments = mail.attachments
+    if type(attachments) == 'table' then
+        local coerced = {}
+        for i = 1, #attachments do
+            local a = attachments[i]
+            coerced[i] = type(a) == 'string' and { kind = 'photo', url = a } or a
+        end
+        attachments = sanitizeAttachments(coerced)
+    else
+        attachments = nil
+    end
+
     local delivered = 0
     local sentId
     local pushes = {}
@@ -434,6 +500,7 @@ function actions.systemSend(mail)
                 sentAt  = sentAt,
                 read    = false,
                 flagged = false,
+                attachments = attachments,
             }
             store.appendMessage(addr, inboxMessage, mailCfg.MaxMessagesPerAccount)
             delivered = delivered + 1
@@ -450,14 +517,15 @@ function actions.systemSend(mail)
 
     ---First-party send announcement (system shape), fired once before the fan-out.
     TriggerEvent('sd-phone:server:mail:sent', {
-        system    = true,
-        id        = sentId,
-        from      = { name = fromName, email = fromEmail },
-        to        = recipients,
-        subject   = subject,
-        body      = body,
-        sentAt    = sentAt,
-        delivered = delivered,
+        system      = true,
+        id          = sentId,
+        from        = { name = fromName, email = fromEmail },
+        to          = recipients,
+        subject     = subject,
+        body        = body,
+        sentAt      = sentAt,
+        delivered   = delivered,
+        attachments = attachments,
     })
 
     actions.deliver(pushes)
@@ -514,6 +582,7 @@ function actions.saveDraft(source, payload)
         sentAt  = os.date('!%Y-%m-%dT%H:%M:%S'),
         read    = true,
         flagged = false,
+        attachments = sanitizeAttachments(payload.attachments),
     }
     store.appendMessage(sender.email, draft, mailCfg.MaxMessagesPerAccount)
 
@@ -593,12 +662,124 @@ function actions.move(source, payload)
         return { success = false, message = 'Bad folder' }
     end
     store.mutateMessage(payload.accountEmail, payload.messageId or '', function(m)
-        if m.folder == folder then return nil end
+        -- Returning nil would hard-delete; a same-folder move must be a no-op.
+        if m.folder == folder then return m end
         m.folder = folder
         if folder == 'bin' then m.flagged = false end
         return m
     end)
     return ok()
+end
+
+---Hard-deletes a draft (and only a draft): used when an edited draft is re-sent or re-saved so
+---the stale copy doesn't linger. Any other folder is left untouched. Ownership-gated.
+---@param source number
+---@param payload { accountEmail?: string, messageId?: string }
+---@return table
+function actions.discardDraft(source, payload)
+    payload = payload or {}
+    local _, err = requireOwnership(source, payload.accountEmail); if err then return err end
+    store.mutateMessage(payload.accountEmail, payload.messageId or '', function(m)
+        if m.folder ~= 'drafts' then return m end
+        return nil
+    end)
+    return ok()
+end
+
+---Copies one attachment of a stored mail into the caller's own app: audio into Voice Memos,
+---note into Notes, via each app's cap-checked deliverShare (which also live-pushes the added
+---item). The attachment is read from the persisted row, never from the client, so only content
+---that actually sits in the mailbox can be saved. Ownership-gated.
+---@param source number
+---@param payload { accountEmail?: string, messageId?: string, index?: number }
+---@return table
+function actions.saveAttachment(source, payload)
+    payload = payload or {}
+    local cid, err = requireOwnership(source, payload.accountEmail); if err then return err end
+
+    local acc = store.getAccount(payload.accountEmail)
+    if not acc then return fail('Account not found') end
+    local msg
+    for i = 1, #acc.messages do
+        if acc.messages[i].id == payload.messageId then msg = acc.messages[i]; break end
+    end
+    if not msg then return fail('Message not found') end
+
+    -- Client indices are zero-based over the message's attachments array.
+    local att = type(msg.attachments) == 'table' and msg.attachments[(tonumber(payload.index) or -1) + 1] or nil
+    if type(att) ~= 'table' then return fail('Attachment not found') end
+
+    -- Each branch is idempotent: an identical item already in the target app short-circuits to
+    -- success, so re-saving after an app reopen cannot pile up duplicates.
+    if att.kind == 'photo' then
+        local photoStore = require 'server.photos.store'
+        if photoStore.hasUrl(cid, att.url) then return ok() end
+        -- The URL comes from the stored row (not the player), so the URL-import config gate
+        -- that guards photos:saveUrl does not apply here.
+        local photosActions = require 'server.photos.actions'
+        local res = photosActions.saveFromUrl(source, att.url)
+        if not (res and res.success) then return fail('Could not save to Photos') end
+        if res.data and res.data.photo then
+            TriggerClientEvent('sd-phone:client:photos:added', source, res.data.photo)
+        end
+        return ok()
+    end
+    if att.kind == 'audio' then
+        local voiceStore = require 'server.voicememos.store'
+        if voiceStore.hasUrl(cid, att.url) then return ok() end
+        local voiceActions = require 'server.voicememos.actions'
+        if not voiceActions.deliverShare(source, { name = att.name, url = att.url, duration = att.duration }) then
+            return fail('Could not save to Voice Memos')
+        end
+        return ok()
+    end
+    if att.kind == 'note' then
+        local body = (type(att.body) == 'string' and att.body ~= '') and att.body or (att.title or '')
+        local notesStore = require 'server.notes.store'
+        if notesStore.hasBody(cid, body) then return ok() end
+        local notesActions = require 'server.notes.actions'
+        if not notesActions.deliverShare(source, { body = body, sketches = {}, images = {} }) then
+            return fail('Could not save to Notes')
+        end
+        return ok()
+    end
+    return fail('This attachment cannot be saved')
+end
+
+---Per-attachment saved flags for a stored mail, checked against the caller's own Photos /
+---Voice Memos / Notes (photo+audio by URL, note by body). Ownership-gated; drives which save
+---buttons the reader shows.
+---@param source number
+---@param payload { accountEmail?: string, messageId?: string }
+---@return table
+function actions.attachmentSaveStates(source, payload)
+    payload = payload or {}
+    local cid, err = requireOwnership(source, payload.accountEmail); if err then return err end
+
+    local acc = store.getAccount(payload.accountEmail)
+    if not acc then return fail('Account not found') end
+    local msg
+    for i = 1, #acc.messages do
+        if acc.messages[i].id == payload.messageId then msg = acc.messages[i]; break end
+    end
+    if not msg then return fail('Message not found') end
+
+    local atts = type(msg.attachments) == 'table' and msg.attachments or {}
+    local saved = {}
+    for i = 1, #atts do
+        local a = atts[i]
+        if a.kind == 'photo' then
+            saved[i] = require('server.photos.store').hasUrl(cid, a.url)
+        elseif a.kind == 'audio' then
+            saved[i] = require('server.voicememos.store').hasUrl(cid, a.url)
+        elseif a.kind == 'note' then
+            local body = (type(a.body) == 'string' and a.body ~= '') and a.body or (a.title or '')
+            saved[i] = require('server.notes.store').hasBody(cid, body)
+        else
+            saved[i] = false
+        end
+    end
+    return ok({ saved = saved })
 end
 
 ---Permanently deletes an account the caller is signed into, along with all its mail and

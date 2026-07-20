@@ -19,11 +19,11 @@ const APPS = [
 export function PhoneStoragePage({ onBack }: { onBack: () => void }) {
     return (
         <SubPage title={t('settings.phoneStorage', 'Phone Storage')} onBack={onBack}>
-            <div className="mx-4 overflow-hidden rounded-[10px] bg-white px-4 py-4">
+            <div className="mx-4 overflow-hidden rounded-[10px] bg-white px-4 py-4 dark:bg-surface">
                 <div className="mb-1 text-[13px] font-normal text-ios-gray">
                     {t('settings.storageCapacity', '{gb} GB Capacity', { gb: TOTAL_GB })}
                 </div>
-                <div className="my-2 h-[18px] w-full overflow-hidden rounded-full bg-ios-gray5">
+                <div className="my-2 h-[18px] w-full overflow-hidden rounded-full bg-ios-gray5 dark:bg-control">
                     <div
                         className="h-full rounded-full bg-ios-blue"
                         style={{ width: `${PCT}%` }}

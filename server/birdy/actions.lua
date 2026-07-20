@@ -14,6 +14,8 @@ local settings = require 'server.settings.store'
 local banking = require 'server.banking.actions'
 ---@type table Badges module (server.badges.init): server-authoritative unread-badge pushes.
 local badges = require 'server.badges.init'
+---@type table Admin mute registry (server.admin.moderation): scope guards for posting/DMing.
+local moderation = require 'server.admin.moderation'
 
 ---@type table Birdy config (config.Birdy): field bounds + feed/notification limits.
 local birdyCfg = config.Birdy
@@ -466,6 +468,7 @@ end
 ---@return table envelope
 function actions.create(source, payload)
     local prof = viewer(source); if not prof then return fail('Player not found') end
+    local muted = moderation.guard(prof.citizenid, 'birdy'); if muted then return muted end
     payload = tbl(payload)
     local body = trimmed(payload and payload.body) or ''
     local images = sanitizeImages(payload and payload.images)
@@ -510,6 +513,7 @@ end
 ---@return table envelope
 function actions.reply(source, payload)
     local prof = viewer(source); if not prof then return fail('Player not found') end
+    local muted = moderation.guard(prof.citizenid, 'birdy'); if muted then return muted end
     payload = tbl(payload)
     local parentId = payload and payload.parentId
     local body = trimmed(payload and payload.body)
@@ -915,6 +919,7 @@ end
 ---@return table envelope
 function actions.dmSend(source, payload)
     local prof = viewer(source); if not prof then return fail('Player not found') end
+    local muted = moderation.guard(prof.citizenid, 'birdy'); if muted then return muted end
     payload = tbl(payload)
     local toCid = payload.toCid
     -- Discovery surfaces only expose handles, so accept one and resolve it here.

@@ -62,10 +62,28 @@ html, body, #root {
                 fill             0.3s ease,
                 stroke           0.3s ease !important;
 }
+@keyframes admin-toast { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.animate-admin-toast { animation: admin-toast 0.22s ease; }
+/* Admin panel scroll areas: slim rounded thumb on a transparent track, matching the dark theme. */
+.admin-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.admin-scroll::-webkit-scrollbar-track { background: transparent; }
+.admin-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+}
+.admin-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.26);
+    border: 3px solid transparent;
+    background-clip: padding-box;
+}
+.admin-scroll::-webkit-scrollbar-corner { background: transparent; }
 @keyframes screenshot-flash { 0% { opacity: 0; } 12% { opacity: 0.95; } 100% { opacity: 0; } }
 .animate-screenshot-flash { animation: screenshot-flash 0.5s ease-out forwards; }
 @keyframes photo-in  { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
 @keyframes photo-out { from { opacity: 1; transform: scale(1); }    to { opacity: 0; transform: scale(0.94); } }
+@keyframes wallpaper-hud { 0% { opacity: 0; transform: scale(0.92); } 12% { opacity: 1; transform: scale(1); } 78% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes phone-in-bottom { from { transform: translateY(130%);  } to { transform: translateY(0); } }
 @keyframes phone-in-top    { from { transform: translateY(-130%); } to { transform: translateY(0); } }
 @keyframes phone-in-left   { from { transform: translateX(-130%); } to { transform: translateX(0); } }
@@ -331,6 +349,26 @@ input[type='number'] {
 @keyframes ios-sheet-backdrop-out {
     from { opacity: 1; }
     to   { opacity: 0; }
+}
+
+@keyframes lightbox-zoom-in {
+    from { opacity: 0; transform: scale(0.55); }
+    to   { opacity: 1; transform: scale(1);    }
+}
+
+@keyframes mail-nav-from-bottom {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes mail-nav-from-top {
+    from { opacity: 0; transform: translateY(-16px); }
+    to   { opacity: 1; transform: translateY(0);     }
+}
+
+@keyframes lightbox-zoom-out {
+    from { opacity: 1; transform: scale(1);    }
+    to   { opacity: 0; transform: scale(0.7);  }
 }
 @keyframes ios-alert-in {
     from { opacity: 0; transform: scale(1.18); }

@@ -88,6 +88,10 @@ function actions.uninstall(source, payload)
         if existing ~= id then remaining[#remaining + 1] = existing end
     end
     settings.setInstalledApps(cid, remaining)
+
+    -- First-party hook: lets stateful apps (groups, etc.) tear down their per-player data.
+    TriggerEvent('sd-phone:server:apps:uninstalled', { source = source, citizenid = cid, appId = id })
+
     return ok({ installed = remaining })
 end
 

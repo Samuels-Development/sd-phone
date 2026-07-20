@@ -1,6 +1,9 @@
 ---@type table Store module; the table returned at end of file.
 local store = {}
 
+---@type table Shared server helpers (server.util): collation conversion.
+local util = require 'server.util'
+
 -- Server-side pepper folded into every password hash.
 ---@type string Engine password pepper.
 local PEPPER = 'sd-phone-v1::accounts::do-not-leak-this-string'
@@ -35,7 +38,7 @@ function store.ensureSchema()
             created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             UNIQUE KEY uq_app_username (app, username)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ]])
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_app_sessions (
@@ -43,7 +46,7 @@ function store.ensureSchema()
             citizenid  VARCHAR(64) NOT NULL,
             account_id INT UNSIGNED NOT NULL,
             PRIMARY KEY (app, citizenid, account_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ]])
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_passwords (
@@ -57,8 +60,13 @@ function store.ensureSchema()
             created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             UNIQUE KEY uq_vault (citizenid, app, username)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ]])
+    -- Tables created before the explicit COLLATE above picked up the server default (newer
+    -- MariaDB: utf8mb4_uca1400_ai_ci), which breaks joins against the app tables.
+    util.ensureCollation('phone_app_accounts')
+    util.ensureCollation('phone_app_sessions')
+    util.ensureCollation('phone_passwords')
 end
 
 ---Maps a phone_app_accounts row to the camelCase account shape, passwordHash included.
@@ -210,13 +218,15 @@ function store.saveVaultEntry(citizenid, app, username, password, email, phone)
     ]], { citizenid, app, username, password, email, phone })
 end
 
----Returns all of one character's vault entries, ordered app then username, with the creation
----date pre-formatted. Read-only.
+---Returns all of one character's vault entries, ordered app then username. `created` is a unix
+---timestamp in SECONDS, deliberately NOT pre-formatted here - the UI formats it with the
+---player's chosen language so the vault matches dates everywhere else in the phone.
+---Read-only.
 ---@param citizenid string framework per-character id
 ---@return table[] entries
 function store.listVaultEntries(citizenid)
     return MySQL.query.await([[
-        SELECT id, app, username, password, email, phone, DATE_FORMAT(created_at, '%d/%m/%Y') AS created
+        SELECT id, app, username, password, email, phone, UNIX_TIMESTAMP(created_at) AS created
         FROM phone_passwords WHERE citizenid = ? ORDER BY app, username
     ]], { citizenid }) or {}
 end
@@ -252,7 +262,7 @@ function store.migrateLegacy()
         INSERT IGNORE INTO phone_app_sessions (app, citizenid, account_id)
         SELECT 'birdy', p.citizenid, a.id
         FROM phone_birdy_profiles p
-        JOIN phone_app_accounts a ON a.app = 'birdy' AND a.username = p.handle
+        JOIN phone_app_accounts a ON a.app = 'birdy' AND a.username = p.handle COLLATE utf8mb4_unicode_ci
         WHERE p.logged_in = 1
     ]])
     MySQL.query.await([[

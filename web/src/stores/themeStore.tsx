@@ -55,9 +55,9 @@ function saveSecurityLocal(s: Security) {
 
 // hydrate() reads every persisted setting in one settings:get. On first join the phone NUI mounts
 // before the framework finishes loading the character, so that call can't resolve the citizenid and
-// comes back empty; without a retry the phone would keep its defaults (wallpaper, lock clock, tones,
-// passcode...) until the resource is restarted. Retry a bounded number of times, spaced out, so the
-// real settings land on their own within seconds of joining.
+// comes back empty. Primary recovery is the client's sd-phone:client:characterLoaded push (App.tsx
+// re-runs hydrate the moment the framework reports the player in - multichar picks can outlast any
+// polling window). This bounded retry remains as the fallback for setups with no loaded event.
 const HYDRATE_RETRY_MS = 1500;
 const HYDRATE_MAX_RETRIES = 20;
 
@@ -67,6 +67,18 @@ function loadWallpaperLocal(): string | null {
 }
 function saveWallpaperLocal(v: string) {
     try { window.localStorage.setItem(WALLPAPER_KEY, v); } catch { /* ignore */ }
+}
+
+const CUSTOM_WALLPAPERS_KEY = 'sd-phone:customWallpapers';
+export const MAX_CUSTOM_WALLPAPERS = 24;
+function loadCustomWallpapersLocal(): string[] {
+    try {
+        const parsed: unknown = JSON.parse(window.localStorage.getItem(CUSTOM_WALLPAPERS_KEY) ?? '[]');
+        return Array.isArray(parsed) ? parsed.filter((u): u is string => typeof u === 'string') : [];
+    } catch { return []; }
+}
+function saveCustomWallpapersLocal(v: string[]) {
+    try { window.localStorage.setItem(CUSTOM_WALLPAPERS_KEY, JSON.stringify(v)); } catch { /* ignore */ }
 }
 
 const clampVol = (n: number) => Math.min(100, Math.max(0, Math.round(n)));
@@ -95,6 +107,9 @@ interface ThemeState {
     setDarkTheme:      (t: DarkTheme) => void;
     wallpaper:         string;
     setWallpaper:      (url: string) => void;
+    customWallpapers:      string[];
+    addCustomWallpaper:    (url: string) => Promise<string | null>;
+    removeCustomWallpaper: (url: string) => void;
     blurHomescreen:    boolean;
     setBlurHomescreen: (v: boolean) => void;
     brightness:        number;
@@ -149,6 +164,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     theme: isFiveM ? 'light' : loadThemeLocal(),
     darkTheme: isFiveM ? 'graphite' : loadDarkThemeLocal(),
     wallpaper: isFiveM ? lockscreenAsset : (loadWallpaperLocal() ?? devDefaultAsset),
+    customWallpapers: isFiveM ? [] : loadCustomWallpapersLocal(),
     blurHomescreen: false,
     brightness: 100,
     phoneScale: 50,
@@ -188,6 +204,29 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         const key = wallpaperKey(value);
         if (isFiveM) void fetchNui('sd-phone:settings:setWallpaper', { wallpaper: key }).catch(() => {});
         else saveWallpaperLocal(key);
+    },
+
+    // Resolves to null on success, or an error message ('' = caller supplies a generic one).
+    // A network failure rejects, which PromptDialog surfaces with its own localized message.
+    addCustomWallpaper: async (url) => {
+        const list = get().customWallpapers;
+        if (list.includes(url)) return null;
+        if (list.length >= MAX_CUSTOM_WALLPAPERS) return '';
+        if (isFiveM) {
+            const r = await fetchNui<{ success?: boolean; message?: string }>('sd-phone:settings:wallpapers:add', { url });
+            if (!r?.success) return r?.message ?? '';
+        } else {
+            saveCustomWallpapersLocal([...list, url]);
+        }
+        set(s => ({ customWallpapers: [...s.customWallpapers, url] }));
+        return null;
+    },
+
+    removeCustomWallpaper: (url) => {
+        const next = get().customWallpapers.filter(u => u !== url);
+        set({ customWallpapers: next });
+        if (isFiveM) void fetchNui('sd-phone:settings:wallpapers:remove', { url }).catch(() => {});
+        else saveCustomWallpapersLocal(next);
     },
 
     setDarkTheme: (next) => {
@@ -295,12 +334,15 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
                 window.setTimeout(() => get().hydrate(attempt + 1), HYDRATE_RETRY_MS);
             }
         };
-        void fetchNui<{ data?: { ringtone?: string; notificationTone?: string; customRingtones?: CustomTone[]; customNotificationTones?: CustomTone[]; airplaneMode?: boolean; hour24?: boolean; lockClock?: Partial<LockClock>; passcode?: string | null; faceId?: boolean; wallpaper?: string; chatTextScale?: number; ringtoneVol?: number; callVol?: number; theme?: string; darkTheme?: string } }>('sd-phone:settings:get')
+        void fetchNui<{ data?: { ringtone?: string; notificationTone?: string; customRingtones?: CustomTone[]; customNotificationTones?: CustomTone[]; airplaneMode?: boolean; hour24?: boolean; lockClock?: Partial<LockClock>; passcode?: string | null; faceId?: boolean; wallpaper?: string; customWallpapers?: string[]; chatTextScale?: number; ringtoneVol?: number; callVol?: number; theme?: string; darkTheme?: string } }>('sd-phone:settings:get')
             .then(res => {
                 if (!res?.data) { retry(); return; }
                 const d = res.data;
                 const patch: Partial<ThemeState> = {};
                 if (typeof d.wallpaper === 'string' && d.wallpaper) patch.wallpaper = wallpaperKey(d.wallpaper);
+                if (Array.isArray(d.customWallpapers)) {
+                    patch.customWallpapers = d.customWallpapers.filter((u): u is string => typeof u === 'string');
+                }
                 if (d.ringtone)         patch.ringtone = d.ringtone;
                 if (d.notificationTone) patch.notificationTone = d.notificationTone;
                 if (typeof d.airplaneMode === 'boolean') patch.airplaneMode = d.airplaneMode;

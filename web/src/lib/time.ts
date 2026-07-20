@@ -76,6 +76,17 @@ export function formatLongDate(date: Date): string {
     });
 }
 
+/** Calendar date with the year, e.g. "May 21, 2026" - for stored dates far from today. */
+export function formatMediumDate(ts: number | string | Date): string {
+    const d = ts instanceof Date ? ts : new Date(typeof ts === 'number' ? ts * 1000 : ts);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleDateString(getLocaleTag(), {
+        year:  'numeric',
+        month: 'long',
+        day:   'numeric',
+    });
+}
+
 function pad2(n: number): string {
     return n < 10 ? `0${n}` : String(n);
 }

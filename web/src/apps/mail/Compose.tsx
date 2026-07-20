@@ -1,9 +1,14 @@
 import { useState } from 'react';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Paperclip } from 'lucide-react';
 
 import { ActionSheet } from '@/ui/ActionSheet';
 import { t } from '@/i18n';
-import type { MailAccount } from './data';
+import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
+import { noteTitle } from '@/apps/notes/data';
+import { AttachmentStrip, MemoPickerSheet, NotePickerSheet } from './Attachments';
+import type { MailAccount, MailAttachment } from './data';
+
+const MAX_ATTACHMENTS = 5;
 
 interface Props {
     accounts:         MailAccount[];
@@ -11,12 +16,14 @@ interface Props {
     initialTo?:       string;
     initialSubject?:  string;
     initialBody?:     string;
-    onSend:      (draft: { accountId: string; to: string[]; subject: string; body: string }) => void;
-    onSaveDraft: (draft: { accountId: string; to: string[]; subject: string; body: string }) => void;
+    initialAttachments?: MailAttachment[];
+    onSend:      (draft: { accountId: string; to: string[]; subject: string; body: string; attachments: MailAttachment[] }) => void;
+    onSaveDraft: (draft: { accountId: string; to: string[]; subject: string; body: string; attachments: MailAttachment[] }) => void;
     onCancel:    () => void;
+    resumingDraft?: boolean;
 }
 
-export function Compose({ accounts, defaultAccountId, initialTo = '', initialSubject = '', initialBody = '', onSend, onSaveDraft, onCancel }: Props) {
+export function Compose({ accounts, defaultAccountId, initialTo = '', initialSubject = '', initialBody = '', initialAttachments, onSend, onSaveDraft, onCancel, resumingDraft = false }: Props) {
     const [accountId, setAccountId] = useState(() => {
         return accounts.some(a => a.id === defaultAccountId) ? defaultAccountId : accounts[0]?.id;
     });
@@ -24,12 +31,22 @@ export function Compose({ accounts, defaultAccountId, initialTo = '', initialSub
     const [to,      setTo]      = useState(initialTo);
     const [subject, setSubject] = useState(initialSubject);
     const [body,    setBody]    = useState(initialBody);
+    const [attachments,   setAttachments]   = useState<MailAttachment[]>(() => initialAttachments ?? []);
+    const [attachSheet,   setAttachSheet]   = useState(false);
+    const [attachPicker,  setAttachPicker]  = useState<'photo' | 'audio' | 'note' | null>(null);
     const [exiting,       setExiting]       = useState(false);
     const [confirmCancel, setConfirmCancel] = useState(false);
 
     const account = accounts.find(a => a.id === accountId) ?? accounts[0];
     const canSend = to.trim().length > 0 && subject.trim().length > 0 && !!account;
-    const hasContent = to.trim() !== '' || subject.trim() !== '' || body.trim() !== '';
+    // Prefilled content (a resumed draft, a reply quote) doesn't count: only the user's own
+    // edits are worth guarding, so an untouched compose cancels straight out.
+    const dirty = to !== initialTo || subject !== initialSubject || body !== initialBody
+        || JSON.stringify(attachments) !== JSON.stringify(initialAttachments ?? []);
+
+    function addAttachments(added: MailAttachment[]) {
+        setAttachments(prev => [...prev, ...added].slice(0, MAX_ATTACHMENTS));
+    }
 
     function slideOut(after: () => void) {
         if (exiting) return;
@@ -39,20 +56,20 @@ export function Compose({ accounts, defaultAccountId, initialTo = '', initialSub
 
     function requestCancel() {
         if (exiting || confirmCancel) return;
-        if (hasContent) setConfirmCancel(true);
+        if (dirty) setConfirmCancel(true);
         else slideOut(onCancel);
     }
 
     function saveDraftAndClose() {
         if (!account) { slideOut(onCancel); return; }
         const recipients = to.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean);
-        slideOut(() => onSaveDraft({ accountId: account.id, to: recipients, subject: subject.trim(), body }));
+        slideOut(() => onSaveDraft({ accountId: account.id, to: recipients, subject: subject.trim(), body, attachments }));
     }
 
     function commit() {
         if (!canSend || !account || exiting) return;
         const recipients = to.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean);
-        onSend({ accountId: account.id, to: recipients, subject: subject.trim(), body });
+        onSend({ accountId: account.id, to: recipients, subject: subject.trim(), body, attachments });
     }
 
     return (
@@ -92,9 +109,18 @@ export function Compose({ accounts, defaultAccountId, initialTo = '', initialSub
                     </div>
                     <button
                         type="button"
+                        onClick={() => setAttachSheet(true)}
+                        disabled={attachments.length >= MAX_ATTACHMENTS}
+                        aria-label={t('mail.addAttachment', 'Add attachment')}
+                        className="ml-auto mr-3 text-ios-blue active:opacity-60 disabled:opacity-30"
+                    >
+                        <Paperclip className="h-[21px] w-[21px]" strokeWidth={2.1} />
+                    </button>
+                    <button
+                        type="button"
                         onClick={commit}
                         disabled={!canSend}
-                        className="ml-auto rounded-full bg-ios-blue px-[18px] py-[7px] text-[16px] font-semibold text-white active:opacity-60 disabled:opacity-30"
+                        className="rounded-full bg-ios-blue px-[18px] py-[7px] text-[16px] font-semibold text-white active:opacity-60 disabled:opacity-30"
                     >
                         {t('mail.send', 'Send')}
                     </button>
@@ -160,6 +186,12 @@ export function Compose({ accounts, defaultAccountId, initialTo = '', initialSub
                         </div>
                     )}
 
+                    <AttachmentStrip
+                        attachments={attachments}
+                        max={MAX_ATTACHMENTS}
+                        onRemove={i => setAttachments(prev => prev.filter((_, j) => j !== i))}
+                    />
+
                     <div className="mt-3 flex min-h-0 flex-1 overflow-hidden rounded-[12px] bg-[#e5e5e5] dark:bg-surface">
                         <textarea
                             value={body}
@@ -170,9 +202,60 @@ export function Compose({ accounts, defaultAccountId, initialTo = '', initialSub
                 </div>
             </div>
 
-            {confirmCancel && (
+            {attachSheet && (
                 <ActionSheet
                     actions={[
+                        { label: t('mail.attachPhoto', 'Photo'), onClick: () => setAttachPicker('photo') },
+                        { label: t('mail.attachMemo', 'Voice Memo'), onClick: () => setAttachPicker('audio') },
+                        { label: t('mail.attachNote', 'Note'), onClick: () => setAttachPicker('note') },
+                    ]}
+                    cancelLabel={t('mail.cancel', 'Cancel')}
+                    onClose={() => setAttachSheet(false)}
+                />
+            )}
+
+            {attachPicker === 'photo' && (
+                <MediaPickerSheet
+                    multiple
+                    max={MAX_ATTACHMENTS - attachments.length}
+                    filter={p => !p.video && !attachments.some(a => a.kind === 'photo' && a.url === p.url)}
+                    onSelectMany={photos => {
+                        addAttachments(photos.map(p => ({ kind: 'photo' as const, url: p.url })));
+                        setAttachPicker(null);
+                    }}
+                    onClose={() => setAttachPicker(null)}
+                />
+            )}
+
+            {attachPicker === 'audio' && (
+                <MemoPickerSheet
+                    max={MAX_ATTACHMENTS - attachments.length}
+                    excludeUrls={new Set(attachments.filter(a => a.kind === 'audio').map(a => a.url))}
+                    onPickMany={memos => {
+                        addAttachments(memos.map(m => ({ kind: 'audio' as const, url: m.url, name: m.name, duration: m.duration })));
+                        setAttachPicker(null);
+                    }}
+                    onClose={() => setAttachPicker(null)}
+                />
+            )}
+
+            {attachPicker === 'note' && (
+                <NotePickerSheet
+                    max={MAX_ATTACHMENTS - attachments.length}
+                    onPickMany={notes => {
+                        addAttachments(notes.map(n => ({ kind: 'note' as const, title: noteTitle(n), body: n.body })));
+                        setAttachPicker(null);
+                    }}
+                    onClose={() => setAttachPicker(null)}
+                />
+            )}
+
+            {confirmCancel && (
+                <ActionSheet
+                    actions={resumingDraft ? [
+                        { label: t('mail.discardChanges', 'Discard Changes'), destructive: true, onClick: () => slideOut(onCancel) },
+                        { label: t('mail.saveChanges', 'Save Changes'), onClick: saveDraftAndClose },
+                    ] : [
                         { label: t('mail.deleteDraft', 'Delete Draft'), destructive: true, onClick: () => slideOut(onCancel) },
                         { label: t('mail.saveDraft', 'Save Draft'), onClick: saveDraftAndClose },
                     ]}
@@ -192,6 +275,6 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
     );
 }
 
-function Divider({ inset = 16 }: { inset?: number }) {
+function Divider({ inset = 0 }: { inset?: number }) {
     return <div className="pointer-events-none bg-black/[0.12] dark:bg-white/10" style={{ marginLeft: inset, height: '0.5px' }} />;
 }

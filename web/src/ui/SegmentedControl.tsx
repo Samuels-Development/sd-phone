@@ -1,10 +1,12 @@
 import { t } from '@/i18n';
 
-export function SegmentedControl<T extends string>({ value, onChange, options, className }: {
+export function SegmentedControl<T extends string>({ value, onChange, options, className, fit = false }: {
     value:      T;
     onChange:   (value: T) => void;
     options:    readonly { value: T; label: string; dot?: boolean; badge?: number }[];
     className?: string;
+    /** Size segments to their label + side padding instead of an equal split of a fixed width. */
+    fit?:       boolean;
 }) {
     return (
         <div className={`flex rounded-[9px] bg-black/[0.06] p-[2px] dark:bg-white/[0.12] ${className ?? ''}`}>
@@ -13,7 +15,7 @@ export function SegmentedControl<T extends string>({ value, onChange, options, c
                     key={opt.value}
                     type="button"
                     onClick={() => onChange(opt.value)}
-                    className={`flex-1 rounded-[8px] py-1.5 text-[15px] font-medium transition-colors ${
+                    className={`${fit ? 'px-3.5' : 'flex-1'} rounded-[8px] py-1.5 text-[15px] font-medium transition-colors ${
                         value === opt.value
                             ? 'bg-white text-black shadow-sm dark:bg-control dark:text-white'
                             : 'text-black/80 dark:text-white/80'

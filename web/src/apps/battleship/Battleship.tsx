@@ -15,7 +15,7 @@ import { LobbyRoom } from '@/apps/_games/LobbyRoom';
 import { Leaderboard } from '@/apps/_games/Leaderboard';
 import { GameOverDialog } from '@/apps/_games/GameOverDialog';
 import { GameHeader } from '@/apps/_games/GameHeader';
-import { finishApi, moveApi, registerGameSides, reportResultApi, type Side } from '@/apps/_games/onlineApi';
+import { finishApi, moveApi, registerGameSides, relayApi, reportResultApi, setupReadyApi, type Side } from '@/apps/_games/onlineApi';
 import { useOnlineLobby } from '@/apps/_games/useOnlineLobby';
 import { loadLeaderboard, loadStats, recordResultApi, type GameLeaderboard, type GameStats } from '@/apps/_games/statsApi';
 
@@ -25,7 +25,9 @@ const SB_H = 54;
 
 type Screen = 'home' | 'lobby' | 'game' | 'leaderboard';
 type Mode   = 'cpu' | 'online';
-type Phase  = 'placing' | 'firing';
+// 'waiting' is online-only: this player has deployed and the server is holding the
+// match until the opponent does too. No shot can be fired or received in it.
+type Phase  = 'placing' | 'waiting' | 'firing';
 
 const GAME   = 'battleship';
 const ACCENT = '#17A0B5';
@@ -62,6 +64,7 @@ export function Battleship({ onClose: _onClose }: Props) {
     const [humanSide,    setHumanSide]    = useState<'1' | '2'>('1');
     const [difficulty,   setDifficulty]   = useState<Difficulty>('medium');
     const [thinking,     setThinking]     = useState(false);
+    const [oppDeployed,  setOppDeployed]  = useState(false);
     const [flash,        setFlash]        = useState<string | null>(null);
 
     const [ended,       setEnded]       = useState<{ reason: string } | null>(null);
@@ -97,6 +100,24 @@ export function Battleship({ onClose: _onClose }: Props) {
             const m = mv as BSMove;
             if (m) handleIncoming(m);
         },
+        onRelay: data => handleRelay(data),
+        onBegin: d => {
+            // Both fleets are placed; the server says who shoots first.
+            phaseRef.current = 'firing';
+            setPhase('firing');
+            setOppDeployed(true);
+            const mine = d.turn === d.you;
+            if (pendingShot.current) {
+                const shot = pendingShot.current;
+                pendingShot.current = null;
+                const lost = resolveIncoming(shot);
+                relayResult();
+                setMyTurn(!lost);
+                return;
+            }
+            setMyTurn(mine);
+        },
+        onOppReady: () => setOppDeployed(true),
         onEnded: reason => setEnded({ reason }),
         onReset: () => {
             clearGame();
@@ -149,27 +170,37 @@ export function Battleship({ onClose: _onClose }: Props) {
         return Object.values(next).filter(v => v === 'hit').length >= FLEET_CELLS;
     }, []);
 
-    const sendFinal = () => {   // loser tells the winner the result of their finishing shot
-        if (onlineRef.current) moveApi(onlineRef.current.gameId, { shot: null, prevResult: lastResolved.current });
+    // Echo a just-resolved shot's result back to the shooter over the turn-neutral relay, so their
+    // hit/miss shows immediately instead of riding in on our next move. Does not change turn state.
+    const relayResult = () => {
+        if (onlineRef.current) relayApi(onlineRef.current.gameId, { prevResult: lastResolved.current });
         lastResolved.current = null;
-        setMyTurn(false);
     };
 
+    // A move now carries only the opponent's shot (results travel over the relay). Resolve it, echo
+    // the result straight back, then take my turn - unless it sank my last ship.
     const handleIncoming = useCallback((m: BSMove) => {
-        if (m.prevResult && myLastTarget.current != null) {
-            const tcell = myLastTarget.current;
-            const next: Shots = { ...enemyRef.current, [tcell]: m.prevResult.hit ? 'hit' : 'miss' };
-            writeEnemy(next);
-            myLastTarget.current = null;
-            setFlash(m.prevResult.hit ? (m.prevResult.sunk ? t('battleship.youSankTheir', 'You sank their {name}!', { name: m.prevResult.sunk }) : t('battleship.directHit', 'Direct hit!')) : t('battleship.miss', 'Miss.'));
-            if (Object.values(next).filter(v => v === 'hit').length >= FLEET_CELLS) { setMyTurn(false); return; }
-        }
-        if (m.shot) {
-            if (phaseRef.current === 'placing') { pendingShot.current = m.shot; return; }
-            if (resolveIncoming(m.shot)) { sendFinal(); return; }
-        }
-        setMyTurn(true);
+        if (!m.shot) return;
+        // The server holds shots until both sides are ready, so this should no longer be reachable
+        // online - kept as a safety net so a shot can never be dropped.
+        if (phaseRef.current !== 'firing') { pendingShot.current = m.shot; return; }
+        const lost = resolveIncoming(m.shot);
+        relayResult();
+        setMyTurn(!lost);
     }, [resolveIncoming]);
+
+    // The relay carries the result of the shot I just fired: reveal my hit/miss immediately. A relay
+    // never hands me the turn (the opponent shoots next).
+    const handleRelay = useCallback((data: unknown) => {
+        const res = (data as { prevResult?: ShotResult | null } | null)?.prevResult;
+        if (!res || myLastTarget.current == null) return;
+        const tcell = myLastTarget.current;
+        const next: Shots = { ...enemyRef.current, [tcell]: res.hit ? 'hit' : 'miss' };
+        writeEnemy(next);
+        myLastTarget.current = null;
+        setFlash(res.hit ? (res.sunk ? t('battleship.youSankTheir', 'You sank their {name}!', { name: res.sunk }) : t('battleship.directHit', 'Direct hit!')) : t('battleship.miss', 'Miss.'));
+        if (Object.values(next).filter(v => v === 'hit').length >= FLEET_CELLS) setMyTurn(false);
+    }, []);
 
     const resetMatch = useCallback((newMode: Mode, side: '1' | '2', diff: Difficulty) => {
         clearTimeout(aiTimer.current);
@@ -182,6 +213,7 @@ export function Battleship({ onClose: _onClose }: Props) {
         setEnemyFleet(newMode === 'cpu' ? randomFleet() : null);
         setShotsAtEnemy({}); setShotsAtMe({});
         setPhase('placing'); setMyTurn(false); setThinking(false); setEnded(null); setFlash(null);
+        setOppDeployed(false);
     }, []);
 
     useEffect(() => {
@@ -228,17 +260,20 @@ export function Battleship({ onClose: _onClose }: Props) {
     }
     function shuffleFleet() { if (phase === 'placing') setMyFleet(randomFleet()); }
     function confirmPlacement() {
+        if (mode === 'online') {
+            // Do NOT start firing here. Tell the server the fleet is placed and wait for
+            // its 'begin' push - it arrives only once BOTH boards are deployed, and it
+            // decides who shoots first. Deciding that locally is what let whoever
+            // deployed first fire into a board that was still being shuffled.
+            phaseRef.current = 'waiting';
+            setPhase('waiting');
+            setMyTurn(false);
+            if (onlineRef.current) setupReadyApi(onlineRef.current.gameId);
+            return;
+        }
         phaseRef.current = 'firing';
         setPhase('firing');
-        const first = humanSide === '1';
-        if (mode === 'online' && pendingShot.current) {
-            const lost = resolveIncoming(pendingShot.current);
-            pendingShot.current = null;
-            if (lost) { sendFinal(); return; }
-            setMyTurn(true);
-        } else {
-            setMyTurn(first);
-        }
+        setMyTurn(humanSide === '1');
     }
     function fire(cell: number) {
         if (over || phase !== 'firing' || !myTurn || thinking) return;
@@ -254,8 +289,7 @@ export function Battleship({ onClose: _onClose }: Props) {
             setMyTurn(false);
         } else {
             myLastTarget.current = cell;
-            moveApi(onlineRef.current!.gameId, { shot: { r: rowOf(cell), c: colOf(cell) }, prevResult: lastResolved.current });
-            lastResolved.current = null;
+            moveApi(onlineRef.current!.gameId, { shot: { r: rowOf(cell), c: colOf(cell) }, prevResult: null });
             setMyTurn(false);
         }
     }
@@ -269,6 +303,8 @@ export function Battleship({ onClose: _onClose }: Props) {
         enemyRef.current = {}; meRef.current = {};
         myLastTarget.current = null; lastResolved.current = null; pendingShot.current = null;
         setShotsAtEnemy({}); setShotsAtMe({}); setPhase('placing'); setMyTurn(false); setThinking(false); setEnded(null); setFlash(null);
+        setOppDeployed(false);
+        phaseRef.current = 'placing';
         recorded.current = false;
     }
     const banner = (() => {
@@ -278,6 +314,11 @@ export function Battleship({ onClose: _onClose }: Props) {
             return result === 'win' ? win : t('battleship.defeatFleetSunk', 'Defeat. Your fleet was sunk.');
         }
         if (phase === 'placing') return t('battleship.positionFleet', 'Position your fleet');
+        if (phase === 'waiting') {
+            return oppDeployed
+                ? t('battleship.startingMatch', 'Starting match…')
+                : t('battleship.waitingForOpponent', 'Waiting for {name} to deploy…', { name: oppName });
+        }
         if (flash) return flash;
         return myTurn ? t('battleship.yourShot', 'Your shot, fire!') : (thinking ? t('battleship.takingAim', '{name} is taking aim…', { name: oppName }) : t('battleship.oppTurn', "{name}'s turn", { name: oppName }));
     })();

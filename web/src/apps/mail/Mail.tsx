@@ -10,11 +10,11 @@ import { MAIL_DOMAIN, accountsConfirmReset, accountsMyNumber, accountsRequestRes
 import { isAuthed, signIn as unlockMail, signOut as lockMail } from '@/stores/authStore';
 import { Compose } from './Compose';
 import {
-    getFolderLabels, deleteAccount, listMail, loadActiveAccountId, loadFolderOrder, markRead,
+    getFolderLabels, deleteAccount, discardDraft, inFolder, listMail, loadActiveAccountId, loadFolderOrder, markRead,
     moveToBin, moveTo, saveActiveAccountId, saveDraft, saveFolderOrder, sendMail, signIn as mailSignIn,
     signOut, signUp as mailSignUp, toggleFlag,
 } from './data';
-import type { Folder, MailAccount, MailMessage } from './data';
+import type { Folder, MailAccount, MailAttachment, MailMessage } from './data';
 import { MailDetail } from './MailDetail';
 import { MailList } from './MailList';
 import { MailboxList } from './MailboxList';
@@ -35,7 +35,7 @@ export function Mail({ onClose }: { onClose: () => void }) {
     const [folderOrder,     setFolderOrder]     = useState<Folder[]>(() => loadFolderOrder());
     const [activeAccountId, setActiveAccountId] = useState<string | null>(() => loadActiveAccountId());
     const [nav,             setNav]             = useSessionState<Navigation>('mail:nav', { stage: 'mailboxes' });
-    const [composeFor,      setComposeFor]      = useSessionState<{ accountId?: string; to?: string; subject?: string; body?: string } | null>('mail:composeFor', null);
+    const [composeFor,      setComposeFor]      = useSessionState<{ accountId?: string; to?: string; subject?: string; body?: string; draftId?: string; attachments?: MailAttachment[] } | null>('mail:composeFor', null);
 
     const refresh = useCallback(async () => {
         const next = await listMail();
@@ -108,6 +108,23 @@ export function Mail({ onClose }: { onClose: () => void }) {
         await moveToBin(target.accountId, id);
     }
 
+    function handleMarkReadMany(ids: string[]) {
+        const targets = messages.filter(m => ids.includes(m.id) && !m.read);
+        if (targets.length === 0) return;
+        setMessages(prev => prev.map(m => ids.includes(m.id) ? { ...m, read: true } : m));
+        for (const m of targets) void markRead(m.accountId, m.id);
+    }
+
+    // Batch delete from the list pages: bin messages are erased for good (the server
+    // hard-deletes an already-binned message), everything else moves to the bin.
+    function handleDeleteMany(ids: string[]) {
+        const targets = messages.filter(m => ids.includes(m.id));
+        setMessages(prev => prev
+            .filter(m => !(ids.includes(m.id) && m.folder === 'bin'))
+            .map(m => ids.includes(m.id) ? { ...m, folder: 'bin' as const, flagged: false } : m));
+        for (const m of targets) void moveToBin(m.accountId, m.id);
+    }
+
     async function handleMove(id: string, folder: Folder) {
         const target = messages.find(m => m.id === id);
         if (!target || target.folder === folder) return;
@@ -120,34 +137,50 @@ export function Mail({ onClose }: { onClose: () => void }) {
         await moveTo(target.accountId, id, folder);
     }
 
-    async function handleSendMessage(draft: { accountId: string; to: string[]; subject: string; body: string }) {
+    async function handleSendMessage(draft: { accountId: string; to: string[]; subject: string; body: string; attachments: MailAttachment[] }) {
         const account = accounts.find(a => a.id === draft.accountId) ?? accounts[0];
         if (!account) return;
         const result = await sendMail({
-            fromEmail: account.email,
-            to:        draft.to,
-            subject:   draft.subject,
-            body:      draft.body,
+            fromEmail:   account.email,
+            to:          draft.to,
+            subject:     draft.subject,
+            body:        draft.body,
+            attachments: draft.attachments,
         });
         if (typeof result === 'string') {
             console.warn('[sd-phone:mail] send failed:', result);
             return;
         }
-        setMessages(prev => [result, ...prev]);
+        const draftId = composeFor?.draftId;
+        if (draftId) {
+            setMessages(prev => [result, ...prev.filter(m => m.id !== draftId)]);
+            void discardDraft(account.email, draftId);
+        } else {
+            setMessages(prev => [result, ...prev]);
+        }
         setComposeFor(null);
     }
 
-    function handleSaveDraft(draft: { accountId: string; to: string[]; subject: string; body: string }) {
+    function handleSaveDraft(draft: { accountId: string; to: string[]; subject: string; body: string; attachments: MailAttachment[] }) {
         const account = accounts.find(a => a.id === draft.accountId) ?? accounts[0];
+        const draftId = composeFor?.draftId;
         setComposeFor(null);
         if (!account) return;
         void saveDraft({
-            fromEmail: account.email,
-            to:        draft.to,
-            subject:   draft.subject,
-            body:      draft.body,
+            fromEmail:   account.email,
+            to:          draft.to,
+            subject:     draft.subject,
+            body:        draft.body,
+            attachments: draft.attachments,
         }).then(result => {
-            if (typeof result !== 'string') setMessages(prev => [result, ...prev]);
+            if (typeof result === 'string') return;
+            // Re-saving an edited draft replaces the stale copy.
+            if (draftId) {
+                setMessages(prev => [result, ...prev.filter(m => m.id !== draftId)]);
+                void discardDraft(account.email, draftId);
+            } else {
+                setMessages(prev => [result, ...prev]);
+            }
         });
     }
 
@@ -189,6 +222,18 @@ export function Mail({ onClose }: { onClose: () => void }) {
     }
 
     const currentMsg = nav.stage === 'detail' ? messages.find(m => m.id === nav.msgId) : null;
+
+    // Prev/next within the open folder, same newest-first order the list shows.
+    const detailSiblings = nav.stage === 'detail'
+        ? [...inFolder(messages, nav.folder, nav.accountId)].sort((a, b) => b.sentAt.localeCompare(a.sentAt))
+        : [];
+    const detailIdx = nav.stage === 'detail' ? detailSiblings.findIndex(m => m.id === nav.msgId) : -1;
+
+    function openSibling(id: string) {
+        const target = messages.find(m => m.id === id);
+        if (target) void handleMarkRead(target);
+        if (nav.stage === 'detail') setNav({ ...nav, msgId: id });
+    }
 
     const defaultComposeAccount = composeFor?.accountId
         ?? (nav.stage === 'list' || nav.stage === 'detail' ? nav.accountId : undefined)
@@ -264,9 +309,16 @@ export function Mail({ onClose }: { onClose: () => void }) {
                     onOpen={id => {
                         const target = messages.find(m => m.id === id);
                         if (target) void handleMarkRead(target);
+                        // Drafts reopen in the composer for editing instead of the read-only viewer.
+                        if (target?.folder === 'drafts') {
+                            setComposeFor({ accountId: target.accountId, to: target.to.join(', '), subject: target.subject, body: target.body, draftId: target.id, attachments: target.attachments });
+                            return;
+                        }
                         setNav({ stage: 'detail', folder: nav.folder, msgId: id, accountId: nav.accountId, accountName: nav.accountName });
                     }}
                     onCompose={() => setComposeFor({ accountId: nav.accountId })}
+                    onDeleteMany={handleDeleteMany}
+                    onMarkReadMany={handleMarkReadMany}
                 />
             )}
 
@@ -274,6 +326,9 @@ export function Mail({ onClose }: { onClose: () => void }) {
                 <MailDetail
                     msg={currentMsg}
                     backLabel={nav.accountName ?? getFolderLabels()[nav.folder] ?? t('mail.back', 'Back')}
+                    prevId={detailIdx > 0 ? detailSiblings[detailIdx - 1].id : null}
+                    nextId={detailIdx >= 0 && detailIdx < detailSiblings.length - 1 ? detailSiblings[detailIdx + 1].id : null}
+                    onOpenSibling={openSibling}
                     onBack={() => setNav({ stage: 'list', folder: nav.folder, accountId: nav.accountId, accountName: nav.accountName })}
                     onToggleFlag={(id) => void handleToggleFlag(id)}
                     onDelete={(id) => void handleMoveToBin(id)}
@@ -305,9 +360,11 @@ export function Mail({ onClose }: { onClose: () => void }) {
                     initialTo={composeFor.to}
                     initialSubject={composeFor.subject}
                     initialBody={composeFor.body}
+                    initialAttachments={composeFor.attachments}
                     onSend={(draft) => void handleSendMessage(draft)}
                     onSaveDraft={handleSaveDraft}
                     onCancel={() => setComposeFor(null)}
+                    resumingDraft={!!composeFor.draftId}
                 />
             )}
 

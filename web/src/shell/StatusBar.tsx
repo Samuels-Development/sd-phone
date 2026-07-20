@@ -6,12 +6,13 @@ export interface StatusBarProps {
     showWifi: boolean;
     battery: number;
     airplane?: boolean;
+    noSim?: boolean;
     light?: boolean;
     controlHint?: boolean;
     editing?: boolean;
 }
 
-export function StatusBar({ use24h, signal, showWifi, battery, airplane = false, light = true, controlHint = false, editing = false }: StatusBarProps) {
+export function StatusBar({ use24h, signal, showWifi, battery, airplane = false, noSim = false, light = true, controlHint = false, editing = false }: StatusBarProps) {
     const time  = formatClockTime(useClock(), use24h);
     const color = light ? '#ffffff' : '#000000';
 
@@ -29,6 +30,8 @@ export function StatusBar({ use24h, signal, showWifi, battery, airplane = false,
             <div className="relative flex items-center gap-[6px]" style={{ marginRight: 5, visibility: editing ? 'hidden' : undefined }}>
                 {airplane ? (
                     <Airplane size={23} />
+                ) : noSim ? (
+                    <span className="font-sf text-[13px] font-semibold leading-none opacity-80">No SIM</span>
                 ) : (
                     <>
                         {signal > 0 && <Cellular size={21} />}

@@ -202,7 +202,11 @@ export function Blocks({ onClose: _onClose }: Props) {
         return () => { cancelled = true; };
     }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // Gate on deckActive too, not just phase: backgrounding pauses the drop timer but
+    // leaves phase 'playing', so without this a backgrounded game keeps preventDefault-ing
+    // arrows/Space and starves text fields in other apps.
     useEffect(() => {
+        if (!active) return;
         function onKey(e: KeyboardEvent) {
             if (phaseRef.current !== 'playing') return;
             switch (e.key) {
@@ -216,7 +220,7 @@ export function Blocks({ onClose: _onClose }: Props) {
         }
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [move, softDrop, rotateCw, hardDrop]);
+    }, [active, move, softDrop, rotateCw, hardDrop]);
 
     // Pause on background (clear the pending drop) and, on resume, re-arm the gravity
     // chain if a game is in progress so the piece continues from exactly where it froze.

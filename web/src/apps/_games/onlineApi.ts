@@ -76,6 +76,22 @@ export function moveApi(gameId: string, move: unknown): void {
     void fetchNui('sd-phone:games:move', { gameId, move });
 }
 
+// Turn-neutral side channel: unlike moveApi it does not consume/flip the turn, so a game can push
+// an out-of-band update to the opponent (battleship uses it to echo a shot's hit/miss immediately).
+export function relayApi(gameId: string, data: unknown): void {
+    if (!isFiveM) return;
+    void fetchNui('sd-phone:games:relay', { gameId, data });
+}
+
+/**
+ * Reports that this player's pre-match setup is done (battleship: fleet placed). The server
+ * holds every move until BOTH sides report, then pushes `<game>:begin` with whose turn it is.
+ */
+export function setupReadyApi(gameId: string): void {
+    if (!isFiveM || !gameId) return;
+    void fetchNui('sd-phone:games:setupReady', { gameId });
+}
+
 export function resignApi(gameId: string): void {
     if (!isFiveM || !gameId) return;
     void fetchNui('sd-phone:games:resign', { gameId });

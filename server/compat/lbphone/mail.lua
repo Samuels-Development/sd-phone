@@ -21,28 +21,20 @@ registerLbExport('GetEmailAddress', function(number)
 end)
 
 ---SendMail(data { to, sender?, subject?, message?, attachments?, actions? }): system mail through
----actions.systemSend; attachment URLs append to the body, action buttons warn once and drop. Returns a boolean.
+---actions.systemSend; attachment URLs become real photo attachments, action buttons warn once
+---and drop. Returns a boolean.
 registerLbExport('SendMail', function(data)
     if type(data) ~= 'table' then return false end
     if data.actions ~= nil then
         warnOnce('SendMail.actions', ('SendMail action buttons are not supported (called by %s); the mail was sent without them'):format(GetInvokingResource() or 'unknown'))
     end
 
-    local body = util.trim(type(data.message) == 'number' and tostring(data.message) or data.message)
-    if type(data.attachments) == 'table' then
-        for i = 1, #data.attachments do
-            local url = data.attachments[i]
-            if type(url) == 'string' and url ~= '' then
-                body = body == '' and url or (body .. '\n' .. url)
-            end
-        end
-    end
-
     local result = actions.systemSend({
-        to      = data.to,
-        subject = data.subject,
-        body    = body,
-        from    = { name = data.sender },
+        to          = data.to,
+        subject     = data.subject,
+        body        = util.trim(type(data.message) == 'number' and tostring(data.message) or data.message),
+        from        = { name = data.sender },
+        attachments = data.attachments,
     })
     return result.success == true
 end)

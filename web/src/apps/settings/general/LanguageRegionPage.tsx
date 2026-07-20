@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Check } from 'lucide-react';
 
 import { t } from '@/i18n';
+import { formatMediumDate } from '@/lib/time';
 import { useIosPush } from '@/hooks/useIosPush';
 import { SUPPORTED_LOCALES, useLocaleStore } from '@/stores/localeStore';
 import { ListGroup, ListRow } from '@/ui/ListGroup';
@@ -39,7 +40,7 @@ export function LanguageRegionPage({ onBack }: { onBack: () => void }) {
             <ListGroup header={t('settings.numberFormats', 'Number formats')}>
                 <ListRow label={t('settings.number', 'Number')}   value="1,234.56"          chevron={false} divider />
                 <ListRow label={t('settings.currency', 'Currency')} value="USD ($)"           chevron={false} divider />
-                <ListRow label={t('settings.date', 'Date')}     value="May 21, 2026"      chevron={false} divider />
+                <ListRow label={t('settings.date', 'Date')}     value={formatMediumDate(new Date())} chevron={false} divider />
                 <ListRow label={t('settings.time', 'Time')}     value="8:22 PM"           chevron={false} />
             </ListGroup>
         </SubPage>

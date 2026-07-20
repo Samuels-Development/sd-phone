@@ -1,3 +1,10 @@
+-- Build-presence guard: a source checkout without a compiled NUI (web/build is
+-- gitignored and shipped via GitHub Releases) would open to a blank phone.
+if not LoadResourceFile(GetCurrentResourceName(), 'web/build/index.html') then
+    print('^1[sd-phone] NUI build not found at web/build/index.html.^0')
+    print('^3[sd-phone] Download the packaged release from GitHub Releases, or build it: cd web && npm ci && npm run build^0')
+end
+
 ---@type table sd-phone config root (configs/config.lua).
 local config    = require 'configs.config'
 ---@type table Framework bridge (bridge.shared.framework): active framework detection + name.
@@ -6,6 +13,10 @@ local framework = require 'bridge.shared.framework'
 local inv       = require 'bridge.server.inventory'
 
 -- Loaded for side effects: each module self-registers its callbacks, events, commands and exports on require.
+-- SIM first: when unique phones are enabled it wraps player.getIdentifier before any app module
+-- captures a callback against it (they all resolve identity at call time, but keep it first for
+-- clarity - the wrapper must also be live before the boot-time registrations below).
+require 'server.sim.init'
 require 'server.settings.init'
 require 'server.apps.init'
 require 'server.groups.init'
@@ -48,20 +59,47 @@ require 'server.chess.init'
 require 'server.connectfour.init'
 require 'server.games.chips'
 require 'server.games.railrunner'
+require 'server.games.blackjack'
 require 'server.battleship.init'
 require 'server.wordle.init'
 require 'server.admin.wipe'
+require 'server.admin.init'
 -- lb-phone -> sd-phone one-time data import (no-op unless lb-phone's tables are present).
 require 'server.migrate.init'
 -- lb-phone export compatibility shim (inert while the real lb-phone runs; sd_phone_lbcompat kill switch).
 require 'server.compat.lbphone.init'
 
+---@type table SIM feature flags (server.sim.state): active + mode.
+local simState = require 'server.sim.state'
+
+---The player's SIM snapshot for the open flow, or nil while unique phones are off. Opening is
+---rare, so the session cache is dropped first - the open always reflects the live inventory.
+---@param source integer player server id
+---@return { hasSim: boolean, number: string|nil, color: string|nil }|nil
+local function simDescribe(source)
+    if not simState.active then return nil end
+    local session = require('server.sim.session')
+    session.invalidate(source)
+    local s = session.resolve(source)
+    return {
+        hasSim = s ~= nil and s.hasSim or false,
+        number = s and s.number or nil,
+        color  = s and s.color or nil,
+    }
+end
+
 ---Registers each configured phone item (config.Phone.Items) as a usable item; using one opens
----the phone with the variant's frame colour.
+---the phone with the variant's frame colour (plus the SIM snapshot under unique phones). The
+---used slot marks that exact phone as the active one, so a player carrying several SIM'd
+---phones acts (and calls) as whichever phone they actually opened.
 local function RegisterPhoneItems()
     for _, entry in ipairs(config.Phone.Items or {}) do
-        inv.registerUsable(entry.item, function(source)
-            TriggerClientEvent('sd-phone:client:openFromItem', source, entry.color)
+        inv.registerUsable(entry.item, function(source, itemArg, _invArg, slotArg)
+            if simState.active then
+                local usedSlot = (type(itemArg) == 'table' and tonumber(itemArg.slot)) or tonumber(slotArg)
+                require('server.sim.session').setActive(source, { slot = usedSlot, color = entry.color })
+            end
+            TriggerClientEvent('sd-phone:client:openFromItem', source, entry.color, simDescribe(source))
         end)
     end
 end
@@ -88,9 +126,22 @@ local function ResolveOwnedColor(source, preferred)
     return nil
 end
 
----Keybind open request: may this player open a phone, and in which colour? Read-only.
+---Keybind open request: may this player open a phone, and in which colour? Read-only. Returns
+---the bare colour string normally; under unique phones a table { color, hasSim, number } so the
+---client can open into the "No SIM" state (the SIM's phone wins the colour pick).
 lib.callback.register('sd-phone:server:phone:resolveOpen', function(source, preferred)
-    return ResolveOwnedColor(source, preferred)
+    local color = ResolveOwnedColor(source, preferred)
+    if simState.active and type(preferred) == 'string' then
+        require('server.sim.session').setActive(source, { color = preferred })
+    end
+    local sim = simDescribe(source)
+    if not sim then return color end
+    if not color then return nil end
+    return {
+        color  = sim.color or color,
+        hasSim = sim.hasSim,
+        number = sim.number,
+    }
 end)
 
 -- Boot: registers the usable phone items once, then prints the startup banner.

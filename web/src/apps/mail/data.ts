@@ -14,6 +14,11 @@ export interface MailAccount {
     email: string;
 }
 
+export type MailAttachment =
+    | { kind: 'photo'; url: string }
+    | { kind: 'audio'; url: string; name: string; duration: number }
+    | { kind: 'note';  title: string; body: string };
+
 export interface MailMessage {
     id:        string;
     accountId: string;
@@ -25,6 +30,7 @@ export interface MailMessage {
     sentAt:    string;
     read:      boolean;
     flagged:   boolean;
+    attachments?: MailAttachment[];
 }
 
 const FOLDER_IDS: Folder[] = ['inbox', 'flagged', 'drafts', 'sent', 'spam', 'bin'];
@@ -265,6 +271,7 @@ export async function sendMail(input: {
     to:        string[];
     subject:   string;
     body:      string;
+    attachments?: MailAttachment[];
 }): Promise<MailMessage | string> {
     if (!isFiveM) {
         const msg: MailMessage = {
@@ -277,6 +284,7 @@ export async function sendMail(input: {
             body: input.body,
             sentAt: new Date().toISOString(),
             read: true, flagged: false,
+            attachments: input.attachments?.length ? input.attachments : undefined,
         };
         MOCK.messages.push(msg);
         return msg;
@@ -291,6 +299,7 @@ export async function saveDraft(input: {
     to:        string[];
     subject:   string;
     body:      string;
+    attachments?: MailAttachment[];
 }): Promise<MailMessage | string> {
     if (!isFiveM) {
         const msg: MailMessage = {
@@ -303,6 +312,7 @@ export async function saveDraft(input: {
             body: input.body,
             sentAt: new Date().toISOString(),
             read: true, flagged: false,
+            attachments: input.attachments?.length ? input.attachments : undefined,
         };
         MOCK.messages.push(msg);
         return msg;
@@ -325,6 +335,27 @@ export async function toggleFlag(accountEmail: string, messageId: string): Promi
 export async function moveToBin(accountEmail: string, messageId: string): Promise<void> {
     if (!isFiveM) return;
     await fetchNui<Envelope<unknown>>('sd-phone:mail:moveToBin', { accountEmail, messageId });
+}
+
+export async function attachmentSaveStates(accountEmail: string, messageId: string): Promise<boolean[]> {
+    if (!isFiveM) return [];
+    const res = await apiCall<{ saved?: boolean[] }>('sd-phone:mail:attachmentSaveStates', { accountEmail, messageId });
+    return res.success && Array.isArray(res.data?.saved) ? res.data.saved : [];
+}
+
+export async function saveAttachment(accountEmail: string, messageId: string, index: number): Promise<{ ok: boolean; message?: string }> {
+    if (!isFiveM) return { ok: true };
+    const r = await apiCall<unknown>('sd-phone:mail:saveAttachment', { accountEmail, messageId, index });
+    return r.success ? { ok: true } : { ok: false, message: r.message };
+}
+
+export async function discardDraft(accountEmail: string, messageId: string): Promise<void> {
+    if (!isFiveM) {
+        const i = MOCK.messages.findIndex(m => m.id === messageId && m.folder === 'drafts');
+        if (i >= 0) MOCK.messages.splice(i, 1);
+        return;
+    }
+    await fetchNui<Envelope<unknown>>('sd-phone:mail:discardDraft', { accountEmail, messageId });
 }
 
 export async function moveTo(accountEmail: string, messageId: string, folder: Folder): Promise<void> {

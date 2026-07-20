@@ -9,6 +9,9 @@ local accounts = require 'server.accounts.store'
 local mail = require 'server.mail.store'
 ---@type table Badge recompute-and-push (server.badges.init).
 local badges = require 'server.badges.init'
+---@type table Photos actions (server.photos.actions): the URL-import gate + host allow/blocklist
+---policy, shared verbatim by wallpaper link imports.
+local photos = require 'server.photos.actions'
 
 -- Schema bootstrap.
 CreateThread(function()
@@ -46,6 +49,7 @@ lib.callback.register('sd-phone:server:settings:get', function(source)
     data.darkTheme               = store.getDarkTheme(cid)
     data.lockClock               = store.getLockClock(cid)
     data.wallpaper               = store.getWallpaper(cid)
+    data.customWallpapers        = store.getCustomWallpapers(cid)
     data.chatTextScale           = store.getChatTextScale(cid)
     local vols = store.getVolumes(cid)
     data.ringtoneVol             = vols.ringtone
@@ -53,7 +57,9 @@ lib.callback.register('sd-phone:server:settings:get', function(source)
     data.locale                  = store.getLocale(cid)
     local sec = store.getSecurity(cid)
     data.passcode                = sec.passcode
-    data.faceId                  = sec.faceId
+    -- Face Unlock only works for the SIM's first activator - a stolen phone still asks the
+    -- thief for the passcode (a no-op outside unique-phones mode).
+    data.faceId                  = sec.faceId and require('server.sim.session').isOwner(source)
     return { success = true, data = data }
 end)
 
@@ -63,6 +69,33 @@ lib.callback.register('sd-phone:server:settings:setWallpaper', function(source, 
     if not cid then return { success = false, message = 'Player not found' } end
     payload = type(payload) == 'table' and payload or {}
     store.setWallpaper(cid, payload.wallpaper)
+    return { success = true }
+end)
+
+---Saves a custom wallpaper URL for the caller; the photo URL-import gate and host policy apply
+---(config.Photos.AllowImport + block/allow lists).
+lib.callback.register('sd-phone:server:settings:wallpapers:add', function(source, payload)
+    local cid = player.getIdentifier(source)
+    if not cid then return { success = false, message = 'Player not found' } end
+    if not photos.importEnabled() then
+        return { success = false, message = 'URL import is disabled on this server' }
+    end
+    payload = type(payload) == 'table' and payload or {}
+    if not photos.isAllowedImportUrl(payload.url) then
+        return { success = false, message = 'Images from that site aren\'t allowed' }
+    end
+    if not store.addCustomWallpaper(cid, payload.url) then
+        return { success = false, message = 'Could not save that wallpaper' }
+    end
+    return { success = true }
+end)
+
+---Removes one of the caller's custom wallpapers.
+lib.callback.register('sd-phone:server:settings:wallpapers:remove', function(source, payload)
+    local cid = player.getIdentifier(source)
+    if not cid then return { success = false, message = 'Player not found' } end
+    payload = type(payload) == 'table' and payload or {}
+    store.removeCustomWallpaper(cid, payload.url)
     return { success = true }
 end)
 

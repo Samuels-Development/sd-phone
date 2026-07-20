@@ -1,6 +1,9 @@
 ---@type table Store module; the table returned at end of file.
 local store = {}
 
+---@type table Shared server helpers (server.util): legacy-table rescue.
+local util = require 'server.util'
+
 ---@type string Alphabet for generated row ids (base-36, lowercase).
 local ID_CHARS = '0123456789abcdefghijklmnopqrstuvwxyz'
 ---@type integer Generated id length.
@@ -20,6 +23,9 @@ end
 ---Creates the Photos tables if they don't exist and back-fills newer columns: phone_photos,
 ---phone_photo_albums, and the phone_photo_album_items join table.
 function store.ensureSchema()
+    util.rescueLegacyTable('phone_photos', 'citizenid')
+    util.rescueLegacyTable('phone_photo_albums', 'citizenid')
+
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_photos (
             id         VARCHAR(16)  NOT NULL,
@@ -75,6 +81,15 @@ function store.insertPhoto(id, citizenid, url)
         { id, citizenid, url }
     )
     return affected ~= nil
+end
+
+---Whether the player already has a photo with this exact URL (idempotent saves). Read-only.
+---@param citizenid string owner's framework per-character id
+---@param url string hosted media URL
+---@return boolean
+function store.hasUrl(citizenid, url)
+    return MySQL.scalar.await(
+        'SELECT 1 FROM phone_photos WHERE citizenid = ? AND url = ? LIMIT 1', { citizenid, url }) ~= nil
 end
 
 ---One player's photos, newest first. Read-only.

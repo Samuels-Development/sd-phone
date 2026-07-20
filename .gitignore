@@ -9,3 +9,6 @@ web/.realmap-src/
 
 .playwright-mcp/
 
+# Local brainstorming/design specs, not shipped in source
+docs/superpowers/
+

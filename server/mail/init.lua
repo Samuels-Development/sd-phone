@@ -82,6 +82,23 @@ lib.callback.register('sd-phone:server:mail:moveToBin', function(src, payload)
     return result
 end)
 
+---Copies a stored attachment into the caller's Voice Memos / Notes.
+lib.callback.register('sd-phone:server:mail:saveAttachment', function(src, payload)
+    return actions.saveAttachment(src, payload)
+end)
+
+---Which of a mail's attachments the caller has already saved to their own apps.
+lib.callback.register('sd-phone:server:mail:attachmentSaveStates', function(src, payload)
+    return actions.attachmentSaveStates(src, payload)
+end)
+
+---Discarding a draft repushes the badge snapshot.
+lib.callback.register('sd-phone:server:mail:discardDraft', function(src, payload)
+    local result = actions.discardDraft(src, payload)
+    badges.push(src)
+    return result
+end)
+
 ---Move repushes the badge snapshot.
 lib.callback.register('sd-phone:server:mail:move', function(src, payload)
     local result = actions.move(src, payload)
@@ -103,8 +120,9 @@ local FOLDERS = { inbox = true, drafts = true, sent = true, spam = true, bin = t
 -- Public Mail exports, reachable only by other server resources.
 
 ---Sends mail as the system - exports['sd-phone']:sendMail(mail). Unknown recipient addresses
----are silently skipped; `delivered` counts recipient accounts that existed.
----@param mail { to: string|string[], subject?: string, body?: string, from?: { name?: string, email?: string } }
+---are silently skipped; `delivered` counts recipient accounts that existed. Attachments accept
+---plain URL strings (photo shorthand) or tagged tables ({ kind = 'photo'|'audio'|'note', ... }).
+---@param mail { to: string|string[], subject?: string, body?: string, from?: { name?: string, email?: string }, attachments?: (string|table)[] }
 ---@return { success: boolean, delivered: number }
 exports('sendMail', function(mail)
     local result = actions.systemSend(mail)

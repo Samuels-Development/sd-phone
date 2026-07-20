@@ -5,6 +5,8 @@ import { COLS, KEY_ROWS, RANK, ROWS, scoreGuess } from './engine';
 import type { Cell } from './engine';
 import { randomWord } from './words';
 import { useCountdown } from '@/hooks/useCountdown';
+import { useKeyboardCapture } from '@/hooks/useKeyboardCapture';
+import { useDeckActive } from '@/shell/deckActive';
 import { TIME_LIMIT } from './stats';
 import { t } from '@/i18n';
 import { formatDuration } from '@/lib/time';
@@ -67,16 +69,27 @@ export function SoloGame({ pal, onFinish, onNew }: {
         if (/^[A-Z]$/.test(k)) setCurrent(c => (c.length < COLS ? c + k : c));
     }, [status, submit]);
 
+    // No text field to type into, so claim the keyboard explicitly - otherwise every
+    // letter also reaches the game and fires inventory / weapon wheel / other binds.
+    useKeyboardCapture();
+
+    // Only listen while this is the foreground app. AppDeck keeps a played-then-home'd
+    // game mounted in the background, and a mount-scoped window listener would keep
+    // preventDefault()-ing every key, so text fields in other apps (Messages, DarkChat)
+    // receive nothing until the game is fully exited. Gate on deckActive so the listener
+    // detaches the instant the game is backgrounded and re-attaches when it returns.
+    const deckActive = useDeckActive();
     const pressRef = useRef(press); pressRef.current = press;
     useEffect(() => {
+        if (!deckActive) return;
         function onKey(e: KeyboardEvent) {
-            if (e.key === 'Enter') pressRef.current('ENTER');
-            else if (e.key === 'Backspace') pressRef.current('BACK');
-            else { const c = e.key.toUpperCase(); if (/^[A-Z]$/.test(c)) pressRef.current(c); }
+            if (e.key === 'Enter') { e.preventDefault(); pressRef.current('ENTER'); }
+            else if (e.key === 'Backspace') { e.preventDefault(); pressRef.current('BACK'); }
+            else { const c = e.key.toUpperCase(); if (/^[A-Z]$/.test(c)) { e.preventDefault(); pressRef.current(c); } }
         }
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, []);
+    }, [deckActive]);
 
     useEffect(() => {
         if (timeLeft === 0 && status === 'playing') { setStatus('lost'); done(false); }

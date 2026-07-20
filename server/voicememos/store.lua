@@ -48,6 +48,15 @@ function store.countFor(citizenid)
     return MySQL.scalar.await('SELECT COUNT(*) FROM `phone_voice_memos` WHERE citizenid = ?', { citizenid }) or 0
 end
 
+---Whether the player already has a memo with this exact URL (idempotent saves). Read-only.
+---@param citizenid string owner's framework per-character id
+---@param url string hosted audio URL
+---@return boolean
+function store.hasUrl(citizenid, url)
+    return MySQL.scalar.await(
+        'SELECT 1 FROM `phone_voice_memos` WHERE citizenid = ? AND url = ? LIMIT 1', { citizenid, url }) ~= nil
+end
+
 ---The citizenid that owns a memo (nil when the row doesn't exist). Read-only.
 ---@param id integer memo id
 ---@return string|nil citizenid

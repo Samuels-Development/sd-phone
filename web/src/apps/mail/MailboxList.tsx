@@ -1,10 +1,11 @@
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import {
-    AlertOctagon, AtSign, ChevronRight, FileText, Flag, GripVertical, Inbox, Send, SquarePen, Trash2,
+    AlertOctagon, ChevronRight, FileText, Flag, GripVertical, Inbox, Send, SquarePen, Trash2,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 
 import { AlertDialog } from '@/ui/AlertDialog';
+import { ancestorZoom, trackFractionY } from '@/lib/zoom';
 import { t } from '@/i18n';
 import { getFolderLabels, unreadCount } from './data';
 import type { Folder, MailAccount, MailMessage } from './data';
@@ -43,49 +44,67 @@ export function MailboxList({
 
     const [draggingId, setDraggingId] = useState<Folder | null>(null);
     const [dragOffset, setDragOffset] = useState(0);
-    const rowsRef    = useRef<Map<Folder, HTMLDivElement>>(new Map());
     const dragStartY = useRef(0);
+    const dragZoom   = useRef(1);
+    const rowsRef    = useRef<Map<Folder, HTMLDivElement>>(new Map());
+    const prevTops   = useRef<Map<Folder, number>>(new Map());
 
-    function rowMidpoint(id: Folder): number | null {
-        const el = rowsRef.current.get(id);
-        if (!el) return null;
-        const r = el.getBoundingClientRect();
-        return r.top + r.height / 2;
-    }
+    // FLIP the rows a reorder displaces: start each moved row at its old offsetTop via an
+    // inverse translate, then let the CSS transition carry it to rest. The reflow read
+    // replaces the usual double-rAF trigger, which CEF starves in-game.
+    useLayoutEffect(() => {
+        const tops = new Map<Folder, number>();
+        for (const [id, el] of rowsRef.current) tops.set(id, el.offsetTop);
+        for (const [id, el] of rowsRef.current) {
+            if (id === draggingId) continue;
+            const prev = prevTops.current.get(id);
+            const now  = tops.get(id);
+            if (prev == null || now == null || prev === now) continue;
+            el.style.transition = 'none';
+            el.style.transform  = `translateY(${prev - now}px)`;
+            void el.offsetHeight;
+            el.style.transition = 'transform 0.18s ease';
+            el.style.transform  = '';
+        }
+        prevTops.current = tops;
+    });
 
     function onHandlePointerDown(e: React.PointerEvent, id: Folder) {
         if (!editing) return;
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        dragZoom.current = ancestorZoom(e.currentTarget as HTMLElement);
         setDraggingId(id);
         setDragOffset(0);
         dragStartY.current = e.clientY;
     }
 
+    // clientY deltas are screen px; divide by the phone's CSS zoom so the row tracks the
+    // pointer 1:1. Row targeting goes through elementFromPoint (zoom-correct hit-testing);
+    // the dragged row is pointer-events:none while lifted so the hit lands on the row under it.
     function onHandlePointerMove(e: React.PointerEvent) {
         if (!draggingId) return;
-        const y = e.clientY;
-        setDragOffset(y - dragStartY.current);
+        setDragOffset((e.clientY - dragStartY.current) / dragZoom.current);
 
-        for (const id of folderOrder) {
-            if (id === draggingId) continue;
-            const mid = rowMidpoint(id);
-            if (mid == null) continue;
-            const draggingMid = rowMidpoint(draggingId);
-            if (draggingMid == null) continue;
-            const movingDown = y > draggingMid && mid > draggingMid && y >= mid;
-            const movingUp   = y < draggingMid && mid < draggingMid && y <= mid;
-            if (movingDown || movingUp) {
-                const next = [...folderOrder];
-                const from = next.indexOf(draggingId);
-                const to   = next.indexOf(id);
-                next.splice(from, 1);
-                next.splice(to, 0, draggingId);
-                onReorderFolders(next);
-                dragStartY.current = y;
-                setDragOffset(0);
-                break;
-            }
-        }
+        const row  = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-folder]') as HTMLElement | null;
+        const over = row?.getAttribute('data-folder') as Folder | null;
+        if (!row || !over || over === draggingId) return;
+        const from = folderOrder.indexOf(draggingId);
+        const to   = folderOrder.indexOf(over);
+        if (from < 0 || to < 0) return;
+
+        // Commit only past the hovered row's midpoint: that is the moment the lifted row
+        // fully overlaps its new slot, so the reorder lands without a visible snap.
+        const frac = trackFractionY(row, e.clientY);
+        if (frac == null || (to > from ? frac < 0.5 : frac > 0.5)) return;
+
+        const next = [...folderOrder];
+        next.splice(from, 1);
+        next.splice(to, 0, draggingId);
+        onReorderFolders(next);
+        // Shift the drag origin by the slots traversed (layout px -> screen px) instead of
+        // resetting it, keeping the row glued to the finger through the swap.
+        dragStartY.current += (to - from) * row.offsetHeight * dragZoom.current;
+        setDragOffset((e.clientY - dragStartY.current) / dragZoom.current);
     }
 
     function onHandlePointerUp() {
@@ -124,10 +143,7 @@ export function MailboxList({
                         <div className="truncate text-[34px] font-bold tracking-tight leading-tight">
                             {activeAccount.name}
                         </div>
-                        <div className="mt-0.5 flex items-center gap-1 text-[15px] text-ios-blue">
-                            <AtSign className="h-[15px] w-[15px] shrink-0" strokeWidth={2.5} />
-                            <span className="truncate">{activeAccount.email}</span>
-                        </div>
+                        <div className="mt-0.5 truncate text-[15px] text-ios-blue">{activeAccount.email}</div>
                     </>
                 ) : (
                     <>
@@ -155,6 +171,7 @@ export function MailboxList({
                             return (
                                 <div
                                     key={id}
+                                    data-folder={id}
                                     ref={el => {
                                         if (el) rowsRef.current.set(id, el);
                                         else    rowsRef.current.delete(id);
@@ -165,6 +182,7 @@ export function MailboxList({
                                         position:  isDragging ? 'relative' : undefined,
                                         boxShadow: isDragging ? '0 8px 20px rgba(0,0,0,0.25)' : undefined,
                                         transition: isDragging ? 'none' : 'transform 0.18s ease',
+                                        pointerEvents: isDragging ? 'none' : undefined,
                                     }}
                                 >
                                     <div className="relative flex w-full items-center gap-4 px-4 py-[15px]">

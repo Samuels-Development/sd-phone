@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Camera as CameraIcon, FolderPlus, Trash2 } from 'lucide-react';
+import { Camera as CameraIcon, FolderPlus, Heart, Trash2 } from 'lucide-react';
 
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useSessionState } from '@/hooks/useSessionState';
@@ -8,7 +8,7 @@ import { PromptDialog } from '@/ui/PromptDialog';
 import {
     apiAddPhotosToAlbum, apiCreateAlbum, apiDeleteAlbum, apiDeletePhoto,
     apiListAlbumPhotos, apiListAlbums, apiListPhotos, apiListSharedAlbums,
-    apiRemovePhotoFromAlbum, apiSetFavorite, mapPhoto,
+    apiRemovePhotoFromAlbum, apiSavePhotoFromUrl, apiSetFavorite, getCanImportPhotos, mapPhoto,
     type Album, type AlbumRef, type Photo,
 } from '@/core/photosApi';
 import { AlbumDetail } from './AlbumDetail';
@@ -33,6 +33,8 @@ export function Photos({ onClose }: { onClose: () => void }) {
     const [gallerySelected, setGallerySelected] = useState<Set<string>>(new Set());
 
     const [albumsEdit, setAlbumsEdit] = useState(false);
+    const [canImport,  setCanImport]  = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
 
     const [openAlbum, setOpenAlbum] = useSessionState<AlbumRef | null>('photos:openAlbum', null);
     const [customAlbumPhotos, setCustomAlbumPhotos] = useState<Photo[]>([]);
@@ -50,6 +52,7 @@ export function Photos({ onClose }: { onClose: () => void }) {
             setPhotos(ps);
             setAlbums(as);
             setSharedAlbums(shared);
+            setCanImport(getCanImportPhotos());
             setLoading(false);
         })();
         return () => { cancelled = true; };
@@ -102,6 +105,20 @@ export function Photos({ onClose }: { onClose: () => void }) {
             setPhotos(revert);
             setCustomAlbumPhotos(revert);
         }
+    }
+
+    async function favoritePhotos(ids: string[]) {
+        if (ids.length === 0) return;
+        const set = new Set(ids);
+        const chosen = photos.filter(p => set.has(p.id));
+        // Batch toggle: if everything selected is already a favourite, unfavourite all; else
+        // favourite all. Optimistic, with the Favourites album count refreshed after.
+        const next = !(chosen.length > 0 && chosen.every(p => p.favorite));
+        const apply = (arr: Photo[]) => arr.map(p => (set.has(p.id) ? { ...p, favorite: next } : p));
+        setPhotos(apply);
+        setCustomAlbumPhotos(apply);
+        for (const id of ids) await apiSetFavorite(id, next);
+        void refreshAlbums();
     }
 
     async function deletePhotos(ids: string[]) {
@@ -194,6 +211,7 @@ export function Photos({ onClose }: { onClose: () => void }) {
                                 onCancelSelect={exitGallerySelect}
                                 onPhotoTap={openViewerFromGallery}
                                 onToggleSelect={toggleGallerySelect}
+                                onImport={canImport ? () => setImportOpen(true) : undefined}
                             />
                         ) : (
                             <AlbumsTab
@@ -221,6 +239,15 @@ export function Photos({ onClose }: { onClose: () => void }) {
                     >
                         <FolderPlus className="h-[33px] w-[33px]" strokeWidth={1.9} />
                         <span className="text-[15px] font-bold tracking-tight">{t('photos.addToAlbum','Add to Album')}</span>
+                    </button>
+                    <button
+                        type="button"
+                        disabled={gallerySelected.size === 0}
+                        onClick={() => favoritePhotos(Array.from(gallerySelected)).then(exitGallerySelect)}
+                        className="flex flex-1 flex-col items-center gap-1.5 py-1 text-ios-blue disabled:opacity-40"
+                    >
+                        <Heart className="h-[31px] w-[31px]" strokeWidth={1.9} />
+                        <span className="text-[15px] font-bold tracking-tight">{t('photos.favourite','Favourite')}</span>
                     </button>
                     <button
                         type="button"
@@ -268,6 +295,26 @@ export function Photos({ onClose }: { onClose: () => void }) {
                     existingIds={new Set(customAlbumPhotos.map(p => p.id))}
                     onClose={() => setPhotoPicker(false)}
                     onConfirm={(ids) => { if (openAlbum.kind === 'custom') void addToAlbum(openAlbum.id, ids); setPhotoPicker(false); }}
+                />
+            )}
+
+            {importOpen && (
+                <PromptDialog
+                    title={t('photos.importTitle', 'Import Photo')}
+                    message={t('photos.importMessage', 'Paste a direct link to an image.')}
+                    placeholder="https://"
+                    inputMode="url"
+                    maxLength={512}
+                    confirmLabel={t('photos.import', 'Import')}
+                    onCancel={() => setImportOpen(false)}
+                    onConfirm={async url => {
+                        const trimmed = url.trim();
+                        if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) return t('photos.importInvalidUrl', 'Enter a full image URL');
+                        const r = await apiSavePhotoFromUrl(trimmed);
+                        if (!r.ok) return r.message ?? t('photos.importFailed', 'Could not import that image');
+                        setImportOpen(false);
+                        return null;
+                    }}
                 />
             )}
 
