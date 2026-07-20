@@ -10,6 +10,8 @@ local config   = require 'configs.config'
 local badges   = require 'server.badges.init'
 ---@type table Admin mute registry (server.admin.moderation): scope guard for dialing out.
 local moderation = require 'server.admin.moderation'
+---@type table Payphone persistence (server.payphone.store): booth number -> location lookups.
+local payphones = require 'server.payphone.store'
 
 ---@type table Actions module; the table returned at end of file.
 local actions = {}
@@ -25,6 +27,11 @@ local nextChannel = 1000
 -- a normal 1:1 `sessions` entry and the rest are cancelled.
 ---@type table<number, table> Pending group rings keyed by channel: { channel, caller, targets = { [src] = callee }, display }.
 local groupRings = {}
+
+-- Pending inbound payphone rings keyed by channel; whoever answers at the booth is promoted
+-- into a normal 1:1 'sessions' entry.
+---@type table<number, table> { channel, location, boothNumber, caller }
+local boothRings = {}
 
 local util = require 'server.util'
 local ok, fail, digits = util.ok, util.fail, util.digits
@@ -51,6 +58,27 @@ local function ringForSource(src)
         if ring.caller.src == src or ring.targets[src] then return channel, ring end
     end
     return nil
+end
+
+---Find the booth ring a source started, if any.
+---@param src number
+---@return number|nil channel, table|nil ring
+local function boothRingForSource(src)
+    for channel, ring in pairs(boothRings) do
+        if ring.caller.src == src then return channel, ring end
+    end
+    return nil
+end
+
+---Stops an unanswered booth ring: silences every client's booth, tells the caller, forgets it.
+---@param channel number
+---@param reason string
+local function cancelBoothRing(channel, reason)
+    local ring = boothRings[channel]
+    if not ring then return end
+    boothRings[channel] = nil
+    TriggerClientEvent('sd-phone:client:payphone:ringStop', -1, { channel = channel })
+    TriggerClientEvent('sd-phone:client:call:ended', ring.caller.src, { channel = channel, reason = reason })
 end
 
 ---Resolves a number to a saved-contact name for a given owner, or nil.
@@ -146,8 +174,13 @@ local function endCall(channel, reason, endedBy)
     local answered = s.state == 'active'
     local duration = (answered and s.startedAt) and (os.time() - s.startedAt) or 0
 
-    logCall(s.caller.cid, s.callee.number, s.callee.name, 'outgoing', duration)
-    logCall(s.callee.cid, s.caller.number, s.caller.name, answered and 'incoming' or 'missed', duration)
+    -- The booth side of a payphone call logs nothing; withheld numbers leave no trace anywhere.
+    if s.payphoneSide ~= 'caller' then
+        logCall(s.caller.cid, s.callee.number, s.callee.name, 'outgoing', duration)
+    end
+    if s.payphoneSide ~= 'callee' and s.caller.number ~= '' then
+        logCall(s.callee.cid, s.caller.number, s.caller.name, answered and 'incoming' or 'missed', duration)
+    end
 
     if not answered then badges.push(s.callee.src) end
 
@@ -176,7 +209,7 @@ function actions.dial(source, payload)
 
     local dialed = digits(payload.number)
     if dialed == '' then return fail('No number dialed') end
-    if sessionForSource(source) or ringForSource(source) then return fail('You are already on a call') end
+    if sessionForSource(source) or ringForSource(source) or boothRingForSource(source) then return fail('You are already on a call') end
     if settings.isAirplane(cid) then return fail('Airplane Mode is on') end
     local muted = moderation.guard(cid, 'calls'); if muted then return muted end
 
@@ -184,7 +217,35 @@ function actions.dial(source, payload)
     if myNumber and digits(myNumber) == dialed then return fail('You can\'t call yourself') end
 
     local targetCid = settings.getCitizenByNumber(dialed)
-    if not targetCid then return fail('Number not in service') end
+    if not targetCid then
+        -- Not a player number: a payphone booth rings physically instead.
+        local pcfg = config.Payphone
+        if pcfg and pcfg.Enabled and pcfg.Inbound and pcfg.Inbound.Enabled ~= false then
+            local location = payphones.locationForNumber(dialed)
+            if location then
+                local channel = nextChannel
+                nextChannel = nextChannel + 1
+                boothRings[channel] = {
+                    channel     = channel,
+                    location    = location,
+                    boothNumber = dialed,
+                    caller      = { src = source, cid = cid, name = player.getName(source), number = digits(myNumber) },
+                }
+                TriggerClientEvent('sd-phone:client:call:outgoing', source, {
+                    channel = channel,
+                    name    = contactNameFor(cid, dialed),
+                    number  = dialed,
+                })
+                TriggerClientEvent('sd-phone:client:payphone:ringStart', -1, { channel = channel, location = location })
+                local ringChannel = channel
+                SetTimeout(tonumber(pcfg.Inbound.RingTimeout) or 30000, function()
+                    cancelBoothRing(ringChannel, 'no-answer')
+                end)
+                return ok({ channel = channel })
+            end
+        end
+        return fail('Number not in service')
+    end
 
     local targetSrc = player.getSourceByIdentifier(targetCid)
     if not targetSrc then return fail('This number is currently unavailable') end
@@ -218,6 +279,94 @@ function actions.dial(source, payload)
     TriggerEvent('sd-phone:server:call:started', eventCall(sessions[channel]))
 
     return ok({ channel = channel })
+end
+
+---Places a 1:1 call with a caller identity that isn't the player's phone (a street payphone).
+---The caller needs no phone number; the callee sees callerName/callerNumber. An empty
+---callerNumber rings as withheld and leaves no recents row.
+---@param source number caller server id
+---@param payload { number?: string, callerName?: string, callerNumber?: string }
+---@return table result { success, data = { channel } }
+function actions.dialPayphone(source, payload)
+    if type(payload) ~= 'table' then payload = {} end
+    local cid = player.getIdentifier(source)
+    if not cid then return fail('Player not found') end
+
+    local dialed = digits(payload.number)
+    if dialed == '' then return fail('No number dialed') end
+    if sessionForSource(source) or ringForSource(source) then return fail('You are already on a call') end
+    local muted = moderation.guard(cid, 'calls'); if muted then return muted end
+
+    local callerNumber = digits(payload.callerNumber)
+    local callerName   = tostring(payload.callerName or 'Payphone'):sub(1, 32)
+    if callerNumber ~= '' and callerNumber == dialed then return fail("You can't call this payphone") end
+
+    local targetCid = settings.getCitizenByNumber(dialed)
+    if not targetCid then return fail('Number not in service') end
+
+    local targetSrc = player.getSourceByIdentifier(targetCid)
+    if not targetSrc then return fail('This number is currently unavailable') end
+    if settings.isAirplane(targetCid) then return fail('This number is currently unavailable') end
+    if callerNumber ~= '' and contacts.isBlocked(targetCid, callerNumber) then return fail('This number is currently unavailable') end
+    if sessionForSource(targetSrc) or ringForSource(targetSrc) then return fail('Line busy') end
+
+    local channel = nextChannel
+    nextChannel = nextChannel + 1
+
+    sessions[channel] = {
+        channel   = channel,
+        state     = 'ringing',
+        startedAt = nil,
+        payphoneSide = 'caller',
+        caller    = { src = source,    cid = cid,       name = callerName,                number = callerNumber },
+        callee    = { src = targetSrc, cid = targetCid, name = player.getName(targetSrc), number = dialed },
+    }
+
+    TriggerClientEvent('sd-phone:client:payphone:outgoing', source, { channel = channel, number = dialed })
+    TriggerClientEvent('sd-phone:client:call:incoming', targetSrc, {
+        channel = channel,
+        name    = (callerNumber ~= '' and contactNameFor(targetCid, callerNumber)) or callerName,
+        number  = callerNumber,
+    })
+
+    TriggerEvent('sd-phone:server:call:started', eventCall(sessions[channel]))
+
+    return ok({ channel = channel })
+end
+
+---Promotes a ringing booth into a live 1:1 call: the answering player becomes the callee with
+---the booth's identity, both sides join voice, and the ring stops everywhere.
+---@param source number answering player server id
+---@param channel number ringing booth channel
+---@return table result { success, data = { channel, number, callerName } }
+function actions.answerBoothRing(source, channel)
+    local ring = boothRings[tonumber(channel) or -1]
+    if not ring then return fail('This phone has stopped ringing') end
+    if ring.caller.src == source then return fail("You can't answer your own call") end
+    if sessionForSource(source) or ringForSource(source) then return fail('You are already on a call') end
+
+    local cid = player.getIdentifier(source)
+    if not cid then return fail('Player not found') end
+
+    boothRings[ring.channel] = nil
+    TriggerClientEvent('sd-phone:client:payphone:ringStop', -1, { channel = ring.channel })
+
+    sessions[ring.channel] = {
+        channel      = ring.channel,
+        state        = 'active',
+        startedAt    = os.time(),
+        payphoneSide = 'callee',
+        caller       = ring.caller,
+        callee       = { src = source, cid = cid, name = (config.Payphone and config.Payphone.CallerLabel) or 'Payphone', number = ring.boothNumber },
+    }
+
+    setVoice(ring.caller.src, ring.channel)
+    setVoice(source, ring.channel)
+    TriggerClientEvent('sd-phone:client:call:connected', ring.caller.src, { channel = ring.channel })
+
+    TriggerEvent('sd-phone:server:call:started', eventCall(sessions[ring.channel]))
+
+    return ok({ channel = ring.channel, number = ring.boothNumber, callerName = ring.caller.name })
 end
 
 ---Rings a set of recipients at once (server-side callers only). Unavailable recipients are
@@ -412,6 +561,12 @@ function actions.hangup(source, payload)
         return ok()
     end
 
+    local bring = channel and boothRings[channel]
+    if bring and bring.caller.src == source then
+        cancelBoothRing(channel, 'hangup')
+        return ok()
+    end
+
     local s = channel and sessions[channel]
     if not s then return ok() end
     if s.caller.src ~= source and s.callee.src ~= source then return fail('Not your call') end
@@ -521,6 +676,9 @@ end
 function actions.onDrop(src)
     local channel = sessionForSource(src)
     if channel then endCall(channel, 'disconnected'); return end
+
+    local bchannel = boothRingForSource(src)
+    if bchannel then cancelBoothRing(bchannel, 'disconnected'); return end
 
     local rchannel, ring = ringForSource(src)
     if not ring then return end

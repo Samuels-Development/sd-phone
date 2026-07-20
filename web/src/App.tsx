@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { AdminPanel } from '@/admin/AdminPanel';
+import { PayphoneUI } from '@/payphone/PayphoneUI';
 import { CallLayer } from '@/apps/phone/CallLayer';
 import { NotificationHost, type NotificationItem } from '@/shell/Notifications';
 import { AirShareCard, type AirShareRequest } from '@/shared/AirShare';
@@ -122,6 +123,7 @@ export function App() {
             <MusicProvider>
                 <AppContent />
                 <AdminPanel />
+                <PayphoneUI />
             </MusicProvider>
         </ThemeProvider>
     );

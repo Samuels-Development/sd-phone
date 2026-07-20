@@ -200,8 +200,40 @@ Existing number exports (`getPhoneNumber`, `getSourceByNumber`, `getIdentifierBy
 
 ---
 
+## Payphones (optional)
+
+Street payphones let players call any number from the phone boxes around the map - no phone item needed. Walk up to a booth, target **Use Payphone**, punch the number in on the keypad and hit call. The booth plays the scripted payphone animation while you talk.
+
+### Setup
+
+Everything lives in `configs/payphone.lua`:
+
+- `Enabled` - master switch; `false` removes the targets and disables every payphone callback.
+- `Models` - the phone-box props that get the target interaction (works with ox_target, qb-target and qtarget through the built-in bridge).
+- `Anonymous` - when `true`, the person you call sees a withheld caller instead of the booth's number.
+- `CallerLabel` - the name shown on the callee's incoming-call screen (their saved contacts still take priority).
+- `ShowFavorites` - shows the player's favourite contacts (and their own number) on the booth's notepad for quick dialing.
+- `NumberPrefix` - the area code minted payphone numbers start with.
+- `Scene` - the on-the-phone animation clips; disable or reclip per game build.
+- `Inbound` - calling a booth's number back rings the physical booth; anyone nearby can pick up via **Answer Phone**. Configure the ring timeout and bell sound here.
+
+### Static numbers
+
+Each booth mints a persistent number the first time it's used (stored in `phone_payphones`). The same street corner always calls out from the same number, so players can save it, recognise it - and call it back.
+
+### Payphone exports
+
+```lua
+-- Opens the payphone dial UI at the player's position, for any script (client-side):
+exports['sd-phone']:openPayphone()
+
+-- True while the payphone UI is on screen (client-side):
+exports['sd-phone']:isPayphoneOpen()
+```
+
 <div align="center">
 
 **[Documentation](https://docs.samueldev.shop/resources/phone/)** · **[Store](https://fivem.samueldev.shop)** · **[Discord](https://discord.gg/FzPehMQaBQ)**
 
 </div>
+
