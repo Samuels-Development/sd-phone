@@ -210,6 +210,7 @@ Everything lives in `configs/payphone.lua`:
 
 - `Enabled` - master switch; `false` removes the targets and disables every payphone callback.
 - `Models` - the phone-box props that get the target interaction (works with ox_target, qb-target and qtarget through the built-in bridge).
+- `UseOxLibMenu` - swap the payphone UI page for ox_lib context menus and an input dialog.
 - `Anonymous` - when `true`, the person you call sees a withheld caller instead of the booth's number.
 - `CallerLabel` - the name shown on the callee's incoming-call screen (their saved contacts still take priority).
 - `ShowFavorites` - shows the player's favourite contacts (and their own number) on the booth's notepad for quick dialing.

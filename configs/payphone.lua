@@ -26,6 +26,9 @@ return {
     -- ox_target interaction distance.
     TargetDistance = 1.5,
 
+    -- Use ox_lib context menus + input dialog instead of the payphone UI page.
+    UseOxLibMenu = false,
+
     -- Show the player's favourite contacts on the payphone's notepad (needs their phone's
     -- contact list, so it's empty for players without a phone).
     ShowFavorites = true,
