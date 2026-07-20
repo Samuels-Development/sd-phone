@@ -10,7 +10,7 @@ import { MAIL_DOMAIN, accountsConfirmReset, accountsMyNumber, accountsRequestRes
 import { isAuthed, signIn as unlockMail, signOut as lockMail } from '@/stores/authStore';
 import { Compose } from './Compose';
 import {
-    getFolderLabels, deleteAccount, listMail, loadActiveAccountId, loadFolderOrder, markRead,
+    getFolderLabels, deleteAccount, discardDraft, listMail, loadActiveAccountId, loadFolderOrder, markRead,
     moveToBin, moveTo, saveActiveAccountId, saveDraft, saveFolderOrder, sendMail, signIn as mailSignIn,
     signOut, signUp as mailSignUp, toggleFlag,
 } from './data';
@@ -35,7 +35,7 @@ export function Mail({ onClose }: { onClose: () => void }) {
     const [folderOrder,     setFolderOrder]     = useState<Folder[]>(() => loadFolderOrder());
     const [activeAccountId, setActiveAccountId] = useState<string | null>(() => loadActiveAccountId());
     const [nav,             setNav]             = useSessionState<Navigation>('mail:nav', { stage: 'mailboxes' });
-    const [composeFor,      setComposeFor]      = useSessionState<{ accountId?: string; to?: string; subject?: string; body?: string } | null>('mail:composeFor', null);
+    const [composeFor,      setComposeFor]      = useSessionState<{ accountId?: string; to?: string; subject?: string; body?: string; draftId?: string } | null>('mail:composeFor', null);
 
     const refresh = useCallback(async () => {
         const next = await listMail();
@@ -133,12 +133,19 @@ export function Mail({ onClose }: { onClose: () => void }) {
             console.warn('[sd-phone:mail] send failed:', result);
             return;
         }
-        setMessages(prev => [result, ...prev]);
+        const draftId = composeFor?.draftId;
+        if (draftId) {
+            setMessages(prev => [result, ...prev.filter(m => m.id !== draftId)]);
+            void discardDraft(account.email, draftId);
+        } else {
+            setMessages(prev => [result, ...prev]);
+        }
         setComposeFor(null);
     }
 
     function handleSaveDraft(draft: { accountId: string; to: string[]; subject: string; body: string }) {
         const account = accounts.find(a => a.id === draft.accountId) ?? accounts[0];
+        const draftId = composeFor?.draftId;
         setComposeFor(null);
         if (!account) return;
         void saveDraft({
@@ -147,7 +154,14 @@ export function Mail({ onClose }: { onClose: () => void }) {
             subject:   draft.subject,
             body:      draft.body,
         }).then(result => {
-            if (typeof result !== 'string') setMessages(prev => [result, ...prev]);
+            if (typeof result === 'string') return;
+            // Re-saving an edited draft replaces the stale copy.
+            if (draftId) {
+                setMessages(prev => [result, ...prev.filter(m => m.id !== draftId)]);
+                void discardDraft(account.email, draftId);
+            } else {
+                setMessages(prev => [result, ...prev]);
+            }
         });
     }
 
@@ -264,6 +278,11 @@ export function Mail({ onClose }: { onClose: () => void }) {
                     onOpen={id => {
                         const target = messages.find(m => m.id === id);
                         if (target) void handleMarkRead(target);
+                        // Drafts reopen in the composer for editing instead of the read-only viewer.
+                        if (target?.folder === 'drafts') {
+                            setComposeFor({ accountId: target.accountId, to: target.to.join(', '), subject: target.subject, body: target.body, draftId: target.id });
+                            return;
+                        }
                         setNav({ stage: 'detail', folder: nav.folder, msgId: id, accountId: nav.accountId, accountName: nav.accountName });
                     }}
                     onCompose={() => setComposeFor({ accountId: nav.accountId })}

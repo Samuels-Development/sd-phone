@@ -327,6 +327,15 @@ export async function moveToBin(accountEmail: string, messageId: string): Promis
     await fetchNui<Envelope<unknown>>('sd-phone:mail:moveToBin', { accountEmail, messageId });
 }
 
+export async function discardDraft(accountEmail: string, messageId: string): Promise<void> {
+    if (!isFiveM) {
+        const i = MOCK.messages.findIndex(m => m.id === messageId && m.folder === 'drafts');
+        if (i >= 0) MOCK.messages.splice(i, 1);
+        return;
+    }
+    await fetchNui<Envelope<unknown>>('sd-phone:mail:discardDraft', { accountEmail, messageId });
+}
+
 export async function moveTo(accountEmail: string, messageId: string, folder: Folder): Promise<void> {
     if (!isFiveM) {
         const m = MOCK.messages.find(x => x.id === messageId);

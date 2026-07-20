@@ -12,6 +12,7 @@ proxyCallback('sd-phone:mail:saveDraft',  'sd-phone:server:mail:saveDraft')
 proxyCallback('sd-phone:mail:markRead',   'sd-phone:server:mail:markRead')
 proxyCallback('sd-phone:mail:toggleFlag', 'sd-phone:server:mail:toggleFlag')
 proxyCallback('sd-phone:mail:moveToBin',  'sd-phone:server:mail:moveToBin')
+proxyCallback('sd-phone:mail:discardDraft', 'sd-phone:server:mail:discardDraft')
 proxyCallback('sd-phone:mail:move',       'sd-phone:server:mail:move')
 proxyCallback('sd-phone:mail:deleteAccount', 'sd-phone:server:mail:deleteAccount')
 
