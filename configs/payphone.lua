@@ -44,9 +44,13 @@ return {
         Enter = 'fxfr_phl_1_intro_male',
         Idle  = 'fxfr_ptj_1_male',
         Exit  = 'exit_left_male',
-        -- Animatable booth spawned over the (hidden) world prop so the handset really lifts.
-        AnimProp  = 'sf_prop_sf_phonebox_01b_s',
         EnterProp = 'fxfr_pcn_1_intro_phone',
+        AnimProps = {
+            prop_phonebox_01a = 'sf_prop_sf_phonebox_01b_s',
+            prop_phonebox_01b = 'sf_prop_sf_phonebox_01b_s',
+            prop_phonebox_01c = 'sf_prop_sf_phonebox_01b_s',
+            p_phonebox_01b_s  = 'sf_prop_sf_phonebox_01b_s',
+        },
     },
 
     -- Inbound calls: dialing a booth's number rings the physical booth. Anyone nearby can pick

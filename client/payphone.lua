@@ -55,14 +55,21 @@ end
 ---@type number|nil Our animatable booth prop, spawned over the hidden world prop for the scene.
 local animProp = nil
 
+---@type table<number, string> Booth model hash -> its animatable variant, built from config.
+local animVariants = {}
+for model, variant in pairs((cfg.Scene and cfg.Scene.AnimProps) or {}) do
+    animVariants[joaat(model)] = variant
+end
+
+---@param variant string|nil animatable model to load alongside the dict, when swapping
 ---@return boolean loaded
-local function loadSceneAssets()
+local function loadSceneAssets(variant)
     local scene = cfg.Scene
     RequestAnimDict(scene.Dict)
-    RequestModel(joaat(scene.AnimProp))
+    if variant then RequestModel(joaat(variant)) end
     local deadline = GetGameTimer() + 3000
-    while (not HasAnimDictLoaded(scene.Dict) or not HasModelLoaded(joaat(scene.AnimProp))) and GetGameTimer() < deadline do Wait(10) end
-    return HasAnimDictLoaded(scene.Dict) and HasModelLoaded(joaat(scene.AnimProp))
+    while (not HasAnimDictLoaded(scene.Dict) or (variant and not HasModelLoaded(joaat(variant)))) and GetGameTimer() < deadline do Wait(10) end
+    return HasAnimDictLoaded(scene.Dict) and (not variant or HasModelLoaded(joaat(variant)))
 end
 
 ---Grabs the booth: hides the world prop, spawns our animatable copy over it, and plays the
@@ -71,22 +78,27 @@ end
 local function beginBoothAnim(entity)
     local scene = cfg.Scene
     if not scene or scene.Enabled == false or not entity or entity == 0 then return end
-    if not loadSceneAssets() then return end
+    local variant = animVariants[GetEntityModel(entity)]
+    if not loadSceneAssets(variant) then return end
 
     local ped    = PlayerPedId()
     local booth  = GetEntityCoords(entity)
     local pos    = GetOffsetFromEntityInWorldCoords(entity, -0.10, -0.85, 0.0)
 
-    SetEntityVisible(entity, false, false)
-    animProp = CreateObjectNoOffset(joaat(scene.AnimProp), booth.x, booth.y, booth.z, true, true, true)
-    SetEntityHeading(animProp, GetEntityHeading(entity))
-    SetEntityCompletelyDisableCollision(animProp, false, false)
-    SetModelAsNoLongerNeeded(joaat(scene.AnimProp))
+    if variant then
+        SetEntityVisible(entity, false, false)
+        animProp = CreateObjectNoOffset(joaat(variant), booth.x, booth.y, booth.z, true, true, true)
+        SetEntityHeading(animProp, GetEntityHeading(entity))
+        SetEntityCompletelyDisableCollision(animProp, false, false)
+        SetModelAsNoLongerNeeded(joaat(variant))
+    end
 
     SetEntityCoords(ped, pos.x, pos.y, pos.z - 1.0, false, false, false, false)
     SetEntityHeading(ped, GetHeadingFromVector_2d(booth.x - pos.x, booth.y - pos.y))
 
-    PlayEntityAnim(animProp, scene.EnterProp, scene.Dict, 10.0, true, true, true, 0.0, false)
+    if animProp then
+        PlayEntityAnim(animProp, scene.EnterProp, scene.Dict, 10.0, true, true, true, 0.0, false)
+    end
     TaskPlayAnim(ped, scene.Dict, scene.Enter, 8.0, 8.0, -1, 14, 0, false, false, false)
     animEntity = entity
 end
