@@ -52,45 +52,77 @@ local function boothAt(coords)
     return nil
 end
 
----Plays one clip of the booth animation, positioning the ped against the handset first.
----@param entity number|nil booth entity
----@param clip string
----@param loop boolean
----@param reposition boolean move the ped to the booth before playing
-local function playAnim(entity, clip, loop, reposition)
+---@type number|nil Our animatable booth prop, spawned over the hidden world prop for the scene.
+local animProp = nil
+
+---@return boolean loaded
+local function loadSceneAssets()
+    local scene = cfg.Scene
+    RequestAnimDict(scene.Dict)
+    RequestModel(joaat(scene.AnimProp))
+    local deadline = GetGameTimer() + 3000
+    while (not HasAnimDictLoaded(scene.Dict) or not HasModelLoaded(joaat(scene.AnimProp))) and GetGameTimer() < deadline do Wait(10) end
+    return HasAnimDictLoaded(scene.Dict) and HasModelLoaded(joaat(scene.AnimProp))
+end
+
+---Grabs the booth: hides the world prop, spawns our animatable copy over it, and plays the
+---handset-grab pair (prop clip + ped clip) in sync.
+---@param entity number world booth entity
+local function beginBoothAnim(entity)
     local scene = cfg.Scene
     if not scene or scene.Enabled == false or not entity or entity == 0 then return end
-    local dict = scene.Dict
-    RequestAnimDict(dict)
-    local deadline = GetGameTimer() + 3000
-    while not HasAnimDictLoaded(dict) and GetGameTimer() < deadline do Wait(10) end
-    if not HasAnimDictLoaded(dict) then return end
+    if not loadSceneAssets() then return end
 
-    local ped = PlayerPedId()
-    if reposition then
-        local pos = GetOffsetFromEntityInWorldCoords(entity, -0.10, -0.85, 0.0)
-        local booth = GetEntityCoords(entity)
-        SetEntityCoords(ped, pos.x, pos.y, pos.z - 1.0, false, false, false, false)
-        SetEntityHeading(ped, GetHeadingFromVector_2d(booth.x - pos.x, booth.y - pos.y))
-    end
-    TaskPlayAnim(ped, dict, clip, 3.0, 3.0, -1, loop and 1 or 2, 0.0, false, false, false)
+    local ped    = PlayerPedId()
+    local booth  = GetEntityCoords(entity)
+    local pos    = GetOffsetFromEntityInWorldCoords(entity, -0.10, -0.85, 0.0)
+
+    SetEntityVisible(entity, false, false)
+    animProp = CreateObjectNoOffset(joaat(scene.AnimProp), booth.x, booth.y, booth.z, true, true, true)
+    SetEntityHeading(animProp, GetEntityHeading(entity))
+    SetEntityCompletelyDisableCollision(animProp, false, false)
+    SetModelAsNoLongerNeeded(joaat(scene.AnimProp))
+
+    SetEntityCoords(ped, pos.x, pos.y, pos.z - 1.0, false, false, false, false)
+    SetEntityHeading(ped, GetHeadingFromVector_2d(booth.x - pos.x, booth.y - pos.y))
+
+    PlayEntityAnim(animProp, scene.EnterProp, scene.Dict, 10.0, true, true, true, 0.0, false)
+    TaskPlayAnim(ped, scene.Dict, scene.Enter, 8.0, 8.0, -1, 14, 0, false, false, false)
     animEntity = entity
 end
 
----Plays the hang-up clip once and lets the ped return to idle.
-local function stopAnim()
+---Swaps the ped onto the talk loop; the prop holds the handset-off-hook frame.
+local function loopBoothAnim()
     local scene = cfg.Scene
-    if animEntity and scene and scene.Enabled ~= false and DoesEntityExist(animEntity) then
-        local ped = PlayerPedId()
-        if HasAnimDictLoaded(scene.Dict) then
-            TaskPlayAnim(ped, scene.Dict, scene.Exit or 'exit_left_male', 3.0, 3.0, -1, 0, 0.0, false, false, false)
-        else
-            ClearPedTasks(ped)
+    if not animEntity or not scene or scene.Enabled == false then return end
+    if not HasAnimDictLoaded(scene.Dict) then return end
+    TaskPlayAnim(PlayerPedId(), scene.Dict, scene.Idle, 8.0, 8.0, -1, 1, 0, false, false, false)
+end
+
+---Hangs the handset back up: exit clip on the ped, prop anim stopped, then our copy is
+---released and the world prop restored.
+local function endBoothAnim()
+    local scene = cfg.Scene
+    local worldEntity = animEntity
+    animEntity = nil
+
+    local ped = PlayerPedId()
+    if scene and scene.Enabled ~= false and HasAnimDictLoaded(scene.Dict) and worldEntity then
+        TaskPlayAnim(ped, scene.Dict, scene.Exit, 8.0, 8.0, -1, 1, 0, false, false, false)
+        if animProp and DoesEntityExist(animProp) then
+            StopEntityAnim(animProp, scene.EnterProp, scene.Dict, 1000.0)
         end
     else
-        ClearPedTasks(PlayerPedId())
+        ClearPedTasks(ped)
     end
-    animEntity = nil
+
+    local prop = animProp
+    animProp = nil
+    SetTimeout(2000, function()
+        if prop and DoesEntityExist(prop) then DeleteEntity(prop) end
+        if worldEntity and DoesEntityExist(worldEntity) then SetEntityVisible(worldEntity, true, false) end
+        ClearPedTasks(PlayerPedId())
+    end)
 end
 
 ---Dials out from the active booth; shared by the NUI keypad and the ox_lib menu.
@@ -104,7 +136,7 @@ local function doDial(number)
     })
     if result and result.success and result.data then
         activeChannel = result.data.channel
-        if animEntity then playAnim(animEntity, cfg.Scene and cfg.Scene.Idle or 'fxfr_ptj_1_male', true, false) end
+        loopBoothAnim()
     end
     return result or { success = false, message = 'No response from server' }
 end
@@ -120,7 +152,7 @@ end
 local function endMenuSession()
     if activeChannel then doHangup() end
     activeLocation = nil
-    stopAnim()
+    endBoothAnim()
 end
 
 ---ox_lib flow: context menu with dial prompt + notepad numbers, replacing the NUI.
@@ -209,10 +241,10 @@ local function openPayphone(entity, coords, connected)
         state.data.callerName = connected.callerName
     end
     if entity then
-        playAnim(entity, cfg.Scene and cfg.Scene.Enter or 'fxfr_phl_1_intro_male', false, true)
+        beginBoothAnim(entity)
         if connected then
             SetTimeout(1800, function()
-                if activeChannel then playAnim(entity, cfg.Scene and cfg.Scene.Idle or 'fxfr_ptj_1_male', true, false) end
+                if activeChannel then loopBoothAnim() end
             end)
         end
     end
@@ -260,7 +292,7 @@ RegisterNUICallback('sd-phone:payphone:close', function(_, cb)
     doHangup()
     activeLocation = nil
     releaseFocus()
-    stopAnim()
+    endBoothAnim()
     cb({ ok = true })
 end)
 
@@ -372,4 +404,11 @@ end)
 ---Public export: true while the payphone UI is up - exports['sd-phone']:isPayphoneOpen().
 exports('isPayphoneOpen', function()
     return activeLocation ~= nil
+end)
+
+---Restores the world booth and removes our animated copy if the resource stops mid-call.
+AddEventHandler('onResourceStop', function(res)
+    if res ~= GetCurrentResourceName() then return end
+    if animProp and DoesEntityExist(animProp) then DeleteEntity(animProp) end
+    if animEntity and DoesEntityExist(animEntity) then SetEntityVisible(animEntity, true, false) end
 end)
