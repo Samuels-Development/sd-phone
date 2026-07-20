@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, Copy, Eye, EyeOff, KeyRound } from 'lucide-react';
 
 import { copyToClipboard } from '@/lib/clipboard';
 import { formatMediumDate } from '@/lib/time';
 import { useSessionState } from '@/hooks/useSessionState';
 import { useDidEnter } from '@/hooks/useDidEnter';
+import { useDeckActive } from '@/shell/deckActive';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { AppIconSVG } from '@/shell/AppIconSVG';
 import { EmptyState } from '@/ui/EmptyState';
@@ -24,7 +25,16 @@ export function Passwords({ onClose }: { onClose: () => void }) {
     const [openId,  setOpenId]  = useSessionState<number | null>('passwords:openId', null);
     const [query,   setQuery]   = useSessionState('passwords:query', '');
 
-    useEffect(() => { void accountsListPasswords().then(e => { setEntries(e); setLoaded(true); }); }, []);
+    // AppDeck retains this subtree, so reopening must refetch: vault rows change while
+    // backgrounded (e.g. a password change in another app syncs its entry server-side).
+    const deckActive = useDeckActive();
+    const wasActive = useRef(false);
+    useEffect(() => {
+        if (deckActive && !wasActive.current) {
+            void accountsListPasswords().then(e => { setEntries(e); setLoaded(true); });
+        }
+        wasActive.current = deckActive;
+    }, [deckActive]);
 
     const open = openId != null ? entries.find(e => e.id === openId) ?? null : null;
     const animateNav = useDidEnter(loaded);
