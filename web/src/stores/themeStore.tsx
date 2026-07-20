@@ -55,9 +55,9 @@ function saveSecurityLocal(s: Security) {
 
 // hydrate() reads every persisted setting in one settings:get. On first join the phone NUI mounts
 // before the framework finishes loading the character, so that call can't resolve the citizenid and
-// comes back empty; without a retry the phone would keep its defaults (wallpaper, lock clock, tones,
-// passcode...) until the resource is restarted. Retry a bounded number of times, spaced out, so the
-// real settings land on their own within seconds of joining.
+// comes back empty. Primary recovery is the client's sd-phone:client:characterLoaded push (App.tsx
+// re-runs hydrate the moment the framework reports the player in - multichar picks can outlast any
+// polling window). This bounded retry remains as the fallback for setups with no loaded event.
 const HYDRATE_RETRY_MS = 1500;
 const HYDRATE_MAX_RETRIES = 20;
 

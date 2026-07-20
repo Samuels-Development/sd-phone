@@ -704,6 +704,15 @@ end)
 ---@return boolean disabled
 exports('isDisabled', function() return phoneDisabled end)
 
+---Character-loaded signal for the NUI: settings can only resolve once the citizenid exists, so
+---the UI re-pulls its per-player state (wallpaper, tones, locale...) the moment the framework
+---reports the player in - covering slow multichar picks and live character switches alike.
+local function pushCharacterLoaded()
+    SendNUIMessage({ action = 'sd-phone:client:characterLoaded' })
+end
+RegisterNetEvent('QBCore:Client:OnPlayerLoaded', pushCharacterLoaded)
+RegisterNetEvent('esx:playerLoaded', pushCharacterLoaded)
+
 ---Resource-stop cleanup: releases NUI focus, deletes props, clears the statebag, and stops the
 ---hold anim.
 ---@param resource string name of the resource that stopped

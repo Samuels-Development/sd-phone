@@ -190,6 +190,7 @@ export type NuiMessage =
     | { action: 'sd-phone:ryde:ratingReceived'; data: { id: string; stars: number; tip?: number } }
     | { action: 'sd-phone:ryde:peerLocation';   data: { tripId: string; role: 'rider' | 'driver'; x: number; y: number; h: number } }
     | { action: 'sd-phone:close' }
+    | { action: 'sd-phone:client:characterLoaded' }
     | { action: 'sd-phone:launchApp'; data: { id: string; link?: Record<string, unknown> } }
     | { action: 'sd-phone:battery'; data: number }
     | { action: 'sd-phone:weather'; data: WeatherPayload }
