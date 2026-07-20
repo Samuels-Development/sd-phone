@@ -59,8 +59,9 @@ return {
         Enabled = true,
         -- How long the booth rings before the caller hears "no answer" (ms).
         RingTimeout = 30000,
-        -- Sound played from the booth object while it rings.
-        SoundName = 'Remote_Ring',
+        -- Sound played from the booth object while it rings. Remote_Ring is the
+        -- dial-side ringback tone - use a Ringtone_* sound for an incoming ring.
+        SoundName = 'Ringtone_Michael',
         SoundSet  = 'Phone_SoundSet_Michael',
     },
 }

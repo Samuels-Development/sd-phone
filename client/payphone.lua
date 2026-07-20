@@ -14,8 +14,20 @@ local activeChannel = nil
 local phoneOpen = false
 ---@type number|nil The booth entity the current animation plays against.
 local animEntity = nil
----@type table<string, { channel: number, soundId: number|nil }> Booths ringing right now, by location key.
+---@type table<number, { coords: vector3, location: string, soundId: number|nil }> Booths ringing right now, by channel.
 local ringing = {}
+
+---The ring nearest to a booth entity, matched by distance so coordinate formatting can never
+---diverge between the minting client and the answering one.
+---@param entity number
+---@return number|nil channel, table|nil entry
+local function ringAt(entity)
+    local pos = GetEntityCoords(entity)
+    for channel, entry in pairs(ringing) do
+        if #(pos - entry.coords) < 3.0 then return channel, entry end
+    end
+    return nil
+end
 
 AddEventHandler('sd-phone:client:openState', function(open)
     phoneOpen = open and true or false
@@ -243,8 +255,14 @@ local function openPayphone(entity, coords, connected)
     if not cfg.Enabled or activeLocation then return end
     local location = locationKey(coords)
 
-    local state = lib.callback.await('sd-phone:server:payphone:state', false, { location = location })
-    if not state or not state.success then return end
+    local state
+    if connected then
+        -- Answering: everything needed rides on the answer result, no second round trip.
+        state = { data = { number = connected.number or '', anonymous = false, favorites = {} } }
+    else
+        state = lib.callback.await('sd-phone:server:payphone:state', false, { location = location })
+        if not state or not state.success then return end
+    end
 
     activeLocation = location
     if connected then
@@ -337,32 +355,29 @@ end)
 
 ---Server push: a booth somewhere started ringing; play its bell if it's near us.
 RegisterNetEvent('sd-phone:client:payphone:ringStart', function(data)
-    if not cfg.Enabled or not data or not data.location then return end
+    if not cfg.Enabled or not data or not data.location or not data.channel then return end
     local coords = coordsFromKey(data.location)
     if not coords or #(GetEntityCoords(PlayerPedId()) - coords) > 50.0 then return end
 
-    local entry = { channel = data.channel, soundId = nil }
+    local entry = { coords = coords, location = data.location, soundId = nil }
     local booth = boothAt(coords)
     if booth then
         local inbound = cfg.Inbound or {}
         entry.soundId = GetSoundId()
-        PlaySoundFromEntity(entry.soundId, inbound.SoundName or 'Remote_Ring', booth, inbound.SoundSet or 'Phone_SoundSet_Michael', false, 0)
+        PlaySoundFromEntity(entry.soundId, inbound.SoundName or 'Ringtone_Michael', booth, inbound.SoundSet or 'Phone_SoundSet_Michael', false, 0)
     end
-    ringing[data.location] = entry
+    ringing[data.channel] = entry
 end)
 
 ---Server push: the ring was answered, cancelled or timed out.
 RegisterNetEvent('sd-phone:client:payphone:ringStop', function(data)
-    if not data then return end
-    for location, entry in pairs(ringing) do
-        if entry.channel == data.channel then
-            if entry.soundId then
-                StopSound(entry.soundId)
-                ReleaseSoundId(entry.soundId)
-            end
-            ringing[location] = nil
-        end
+    local entry = data and ringing[data.channel]
+    if not entry then return end
+    if entry.soundId then
+        StopSound(entry.soundId)
+        ReleaseSoundId(entry.soundId)
     end
+    ringing[data.channel] = nil
 end)
 
 if cfg.Enabled then
@@ -373,7 +388,7 @@ if cfg.Enabled then
             label    = 'Use Payphone',
             distance = cfg.TargetDistance or 1.5,
             canInteract = function(entity)
-                return ringing[locationKey(GetEntityCoords(entity))] == nil
+                return ringAt(entity) == nil
             end,
             onSelect = function(tdata)
                 local entity = tdata and tdata.entity
@@ -387,21 +402,23 @@ if cfg.Enabled then
             label    = 'Answer Phone',
             distance = cfg.TargetDistance or 1.5,
             canInteract = function(entity)
-                return ringing[locationKey(GetEntityCoords(entity))] ~= nil
+                return ringAt(entity) ~= nil
             end,
             onSelect = function(tdata)
                 local entity = tdata and tdata.entity
                 if not entity or entity == 0 then return end
                 local coords = GetEntityCoords(entity)
-                local entry = ringing[locationKey(coords)]
-                if not entry then return end
+                local channel, entry = ringAt(entity)
+                if not channel then return end
                 local result = lib.callback.await('sd-phone:server:payphone:answer', false, {
-                    location = locationKey(coords),
-                    channel  = entry.channel,
+                    location = entry.location,
+                    channel  = channel,
                 })
-                if result and result.success and result.data then
-                    openPayphone(entity, coords, result.data)
+                if not result or not result.success then
+                    lib.notify({ title = 'Payphone', description = (result and result.message) or 'Could not answer', type = 'error' })
+                    return
                 end
+                openPayphone(entity, coords, result.data)
             end,
         },
     })
