@@ -159,6 +159,8 @@ function AppContent() {
     // Active SIM number of the previous phone-open; a different number on the next open means
     // the player switched phones and the UI must shed the old profile's state.
     const lastSimNumberRef                      = useRef<string | null>(null);
+    // App the phone was holstered on; sd-phone:open restores it when config allows.
+    const lastOpenAppRef                        = useRef<AppId | null>(null);
     const [battery,         setBattery]         = useState<number>(100);
     const [currentApp,      setCurrentApp]      = useState<AppId | null>(null);
     const [launchOrigin,    setLaunchOrigin]    = useState<{ x: number; y: number } | null>(null);
@@ -245,6 +247,7 @@ function AppContent() {
                 window.localStorage.removeItem('sd-phone:mail:folderOrder');
                 window.localStorage.removeItem('sd-phone:mail:activeAccount');
             } catch { /* ignore */ }
+            lastOpenAppRef.current = null;
             resetAuth();
             useMusicLibrary.getState().reset();
             useThemeStore.getState().hydrate();
@@ -289,7 +292,9 @@ function AppContent() {
         // session's retained apps are still alive - we deliberately do NOT clear them,
         // which is what brings the switcher previews back exactly where you left them.
         // "Close All" is the only thing that wipes them (iOS: apps stay open otherwise).
-        setCurrentApp(null);
+        // Config-gated: reopen straight into the app the phone was holstered on. The deck
+        // kept it alive, so this is a resume, not a launch; a SIM switch clears the memo.
+        setCurrentApp(data.reopenApp !== false ? lastOpenAppRef.current : null);
         setIsClosing(false);
         setLaunchOrigin(null);
         setSwitcherOpen(false);
@@ -805,6 +810,7 @@ function AppContent() {
     useEffect(() => {
         if (!leaving) return;
         const t = window.setTimeout(() => {
+            lastOpenAppRef.current = currentAppRef.current;
             setView(null);
             setLeaving(false);
             setEntering(false);

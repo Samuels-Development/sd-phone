@@ -40,6 +40,12 @@ return {
     -- player while the phone is out (the classic behaviour).
     AllowMovement = true,
 
+    -- Reopen the phone straight into the app you were using when you put it
+    -- away, instead of the home screen. The app was kept alive the whole time,
+    -- so this is a resume, not a relaunch. Set false to always reopen on the
+    -- home screen (the classic behaviour).
+    ReopenLastApp = true,
+
     -- Hold this key/button (while the phone is open) to free the mouse for
     -- camera rotation without closing the phone. Releasing it returns to the
     -- on-screen cursor. Combat stays suppressed, so you can look around but not
