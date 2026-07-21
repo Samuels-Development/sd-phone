@@ -78,7 +78,7 @@ export function ReceivedInvoices({ invoices, loading, onRefetch, onPaid, contact
                                         ? inv.note
                                         : inv.from
                                             ? t('banking.invoiceFrom', 'From {name}', { name: inv.from })
-                                            : t('banking.invoiceDue', 'Invoice due')}
+                                            : inv.code ? `#${inv.code}` : t('banking.invoiceDue', 'Invoice due')}
                                 </div>
                             </div>
                             <div className="flex shrink-0 flex-col items-end gap-1.5">

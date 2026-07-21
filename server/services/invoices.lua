@@ -111,6 +111,7 @@ end
 local function shapeSent(r)
     return {
         id       = r.id,
+        code     = codeOf(r.id),
         amount   = tonumber(r.amount) or 0,
         note     = r.note or '',
         status   = r.status or 'pending',
@@ -128,6 +129,14 @@ end
 ---@return string
 local function personalLabel(r)
     return util.formatNumber(r.sender_number or '')
+end
+
+---Short human reference for an invoice (the id's tail, upper-cased); printed on both parties'
+---wallet entries so a payment can be matched to its invoice.
+---@param id string invoice id
+---@return string
+local function codeOf(id)
+    return (tostring(id):gsub('^bill_', '')):sub(1, 6):upper()
 end
 
 ---Resolves a number to a saved-contact name in an owner's book, or nil.
@@ -151,6 +160,7 @@ local function shapeReceived(r)
     if r.job == nil then
         return {
             id         = r.id,
+            code       = codeOf(r.id),
             personal   = true,
             label      = personalLabel(r),
             fromNumber = digits(r.sender_number or ''),
@@ -166,6 +176,7 @@ local function shapeReceived(r)
     local e = byJob[r.job]
     return {
         id     = r.id,
+        code   = codeOf(r.id),
         job    = r.job,
         label  = (r.label and r.label ~= '') and r.label or labelOf(r.job),
         color  = (e and e.color) or '#0A84FF',
@@ -463,11 +474,12 @@ function invoices.pay(src, payload)
     -- before any money moves.
     if not store.markPaid(id, os.time()) then return fail('That invoice is no longer pending') end
 
-    bank.removeMoney(src, amount, ('Invoice · %s'):format(label))
+    local code = codeOf(id)
+    bank.removeMoney(src, amount, ('Invoice %s'):format(code))
 
     local credited, viaSociety = false, false
     if not personal and society.available() then
-        credited   = society.addMoney(inv.job, amount, ('Invoice from %s'):format(inv.sender_number or ''))
+        credited   = society.addMoney(inv.job, amount, ('Invoice %s from %s'):format(code, inv.sender_number or ''))
         viaSociety = credited
     end
     if not credited then
@@ -487,17 +499,17 @@ function invoices.pay(src, payload)
         return fail('Could not complete the payment')
     end
 
-    -- Phone Wallet log for both sides (log-only; the money already moved above).
+    -- Phone Wallet log for both sides (log-only; the money already moved above). Both entries
+    -- carry the invoice's reference code so the payment can be matched from either wallet.
     bankActions.addExternal(inv.target_cid, {
-        label = ('Invoice · %s'):format(label), amount = -amount,
-        category = 'services', counterparty = inv.sender_number,
+        label = ('Invoice Paid · %s'):format(code), amount = -amount,
+        category = 'invoice', counterparty = inv.sender_number,
     })
     if not viaSociety then
         bankActions.addExternal(inv.sender_cid, {
-            label    = ('Invoice paid · %s'):format(personal and util.formatNumber(inv.target_number or '')
-                or (inv.target_name or util.formatNumber(inv.target_number or ''))),
+            label    = ('Invoice Paid · %s'):format(code),
             amount   = amount,
-            category = 'income',
+            category = 'invoice',
         })
     end
 

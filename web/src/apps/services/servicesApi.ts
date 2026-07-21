@@ -206,6 +206,7 @@ export type InvoiceStatus = 'pending' | 'paid' | 'cancelled';
 
 export interface SentInvoice {
     id:       string;
+    code?:    string;
     amount:   number;
     note:     string;
     status:   InvoiceStatus;
@@ -218,6 +219,7 @@ export interface SentInvoice {
 
 export interface ReceivedInvoice {
     id:         string;
+    code?:      string;
     job?:       string;
     personal?:  boolean;
     fromNumber?: string;

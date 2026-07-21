@@ -103,9 +103,9 @@ export function InvoicesTab({ received, receivedLoading, onRefetchReceived, onPa
                                     {card ? <ContactAvatar contact={card} size={46} /> : <PlaceholderAvatar size={46} />}
                                     <div className="min-w-0 flex-1">
                                         <div className="truncate text-[18px] font-semibold text-black dark:text-white">{card ? card.name : formatPhone(inv.toNumber)}</div>
-                                        {(inv.note || card) && (
+                                        {(inv.note || card || inv.code) && (
                                             <div className="truncate text-[16px] font-medium text-ios-gray">
-                                                {inv.note || formatPhone(inv.toNumber)}
+                                                {inv.note || (card ? formatPhone(inv.toNumber) : `#${inv.code}`)}
                                             </div>
                                         )}
                                     </div>
