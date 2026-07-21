@@ -74,22 +74,6 @@ require 'server.compat.lbphone.init'
 ---@type table SIM feature flags (server.sim.state): active + mode.
 local simState = require 'server.sim.state'
 
----The player's SIM snapshot for the open flow, or nil while unique phones are off. Opening is
----rare, so the session cache is dropped first - the open always reflects the live inventory.
----@param source integer player server id
----@return { hasSim: boolean, number: string|nil, color: string|nil }|nil
-local function simDescribe(source)
-    if not simState.active then return nil end
-    local session = require('server.sim.session')
-    session.invalidate(source)
-    local s = session.resolve(source)
-    return {
-        hasSim = s ~= nil and s.hasSim or false,
-        number = s and s.number or nil,
-        color  = s and s.color or nil,
-    }
-end
-
 ---Registers each configured phone item (config.Phone.Items) as a usable item; using one opens
 ---the phone with the variant's frame colour (plus the SIM snapshot under unique phones). The
 ---used slot marks that exact phone as the active one, so a player carrying several SIM'd
@@ -101,7 +85,12 @@ local function RegisterPhoneItems()
                 local usedSlot = (type(itemArg) == 'table' and tonumber(itemArg.slot)) or tonumber(slotArg)
                 require('server.sim.session').setActive(source, { slot = usedSlot, color = entry.color })
             end
-            TriggerClientEvent('sd-phone:client:openFromItem', source, entry.color, simDescribe(source))
+            -- Open immediately: the SIM resolve does inventory scans + awaited DB writes, so it
+            -- runs AFTER the reveal and reconciles through the live simState push.
+            TriggerClientEvent('sd-phone:client:openFromItem', source, entry.color, nil, simState.active)
+            if simState.active then
+                CreateThread(function() require('server.sim.session').push(source) end)
+            end
         end)
     end
 end
@@ -128,22 +117,19 @@ local function ResolveOwnedColor(source, preferred)
     return nil
 end
 
----Keybind open request: may this player open a phone, and in which colour? Read-only. Returns
----the bare colour string normally; under unique phones a table { color, hasSim, number } so the
----client can open into the "No SIM" state (the SIM's phone wins the colour pick).
+---Keybind open request: may this player open a phone, and in which colour? Returns the bare
+---colour string normally; under unique phones { color, pending = true } and the deferred
+---simState push corrects hasSim/number - and the colour, since the SIM'd phone's wins.
 lib.callback.register('sd-phone:server:phone:resolveOpen', function(source, preferred)
     local color = ResolveOwnedColor(source, preferred)
-    if simState.active and type(preferred) == 'string' then
+    if not simState.active then return color end
+    if not color then return nil end
+    if type(preferred) == 'string' then
         require('server.sim.session').setActive(source, { color = preferred })
     end
-    local sim = simDescribe(source)
-    if not sim then return color end
-    if not color then return nil end
-    return {
-        color  = sim.color or color,
-        hasSim = sim.hasSim,
-        number = sim.number,
-    }
+    -- Same deferral as the item path: answer with the colour now, resolve the SIM after.
+    CreateThread(function() require('server.sim.session').push(source) end)
+    return { color = color, pending = true }
 end)
 
 -- Boot: registers the usable phone items once, then prints the startup banner.
