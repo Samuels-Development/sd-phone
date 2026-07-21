@@ -202,7 +202,7 @@ export const removeJob     = (job: string) => jobsMutate('sd-phone:services:remo
 export const acceptInvite  = (id: string)  => jobsMutate('sd-phone:services:acceptInvite', { id });
 export const declineInvite = (id: string)  => jobsMutate('sd-phone:services:declineInvite', { id });
 
-export type InvoiceStatus = 'pending' | 'paid' | 'cancelled';
+type InvoiceStatus = 'pending' | 'paid' | 'cancelled';
 
 export interface SentInvoice {
     id:       string;
