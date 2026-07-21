@@ -6,6 +6,8 @@ local simStore      = require 'server.sim.store'
 local siminv        = require 'server.sim.inv'
 ---@type table Settings persistence (server.settings.store): phone_settings number sync.
 local settingsStore = require 'server.settings.store'
+---@type table Shared server helpers (server.util): newId for minting device identities.
+local util          = require 'server.util'
 
 ---@type table Session module; the table returned at end of file. Resolves every SIM each
 ---connected player is carrying (a player can hold several phones with different numbers), which
@@ -25,11 +27,13 @@ function session.setRealResolver(fn) realIdentifier = fn end
 local TTL = 5000
 
 ---@class SimEntry
----@field slot number inventory slot of the phone holding this SIM
+---@field slot number inventory slot of the phone
 ---@field name string phone item name
 ---@field color string phone frame colour
----@field number string bare-digit SIM number
----@field identity string data identity the SIM maps to
+---@field number string|nil bare-digit SIM number (device mode: nil when the phone has no SIM)
+---@field identity string data identity (SIM identity in legacy, device identity in device mode)
+---@field hasSim boolean|nil device mode: whether this phone has a SIM installed
+---@field owner string|nil device mode: the phone's first-activator cid (Face Unlock gate)
 
 ---@class SimSession
 ---@field hasPhone boolean player carries at least one configured phone item
@@ -71,16 +75,40 @@ function session.setActive(source, pref)
     session.invalidate(source)
 end
 
----Scans the player's inventory and binds every SIM found: unknown numbers are registered, the
+---Picks the active entry among `entries` from the player's last-opened hint (slot > number >
+---colour), falling back to the first entry.
+---@param source number player server id
+---@param entries SimEntry[]
+---@return SimEntry|nil
+local function pickActive(source, entries)
+    local active
+    local pref = prefs[source]
+    if pref then
+        for _, entry in ipairs(entries) do
+            if pref.slot and entry.slot == pref.slot then active = entry break end
+        end
+        if not active and pref.number then
+            for _, entry in ipairs(entries) do
+                if entry.number == pref.number then active = entry break end
+            end
+        end
+        if not active and pref.color then
+            for _, entry in ipairs(entries) do
+                if entry.color == pref.color then active = entry break end
+            end
+        end
+    end
+    return active or entries[1]
+end
+
+---LEGACY (SIM-is-identity) resolver. Binds every SIM found: unknown numbers are registered, the
 ---first activator stamped, and each SIM identity's phone_settings row mirrors its number so
 ---every existing "my number" read keeps working. The active phone is the last-opened one
 ---(prefs), else the first SIM'd phone in config order, else the first phone.
 ---@param source number player server id
----@return SimSession|nil s nil when the player carries no phone item
-local function compute(source)
-    local phones = siminv.findPhones(source)
-    if #phones == 0 then return nil end
-
+---@param phones { slot: number, name: string, color: string, metadata: table }[]
+---@return SimSession
+local function computeLegacy(source, phones)
     local sims = {}
     for _, phone in ipairs(phones) do
         local number = siminv.getSimNumber(source, phone)
@@ -101,34 +129,7 @@ local function compute(source)
         end
     end
 
-    local active
-    local pref = prefs[source]
-    if pref then
-        for _, entry in ipairs(sims) do
-            if pref.slot and entry.slot == pref.slot then
-                active = entry
-                break
-            end
-        end
-        if not active and pref.number then
-            for _, entry in ipairs(sims) do
-                if entry.number == pref.number then
-                    active = entry
-                    break
-                end
-            end
-        end
-        if not active and pref.color then
-            for _, entry in ipairs(sims) do
-                if entry.color == pref.color then
-                    active = entry
-                    break
-                end
-            end
-        end
-    end
-    active = active or sims[1]
-
+    local active = pickActive(source, sims)
     return {
         hasPhone = true,
         hasSim   = active ~= nil,
@@ -139,6 +140,92 @@ local function compute(source)
         color    = active and active.color or phones[1].color,
         slot     = active and active.slot or phones[1].slot,
     }
+end
+
+---Resolves a phone's persistent DEVICE identity, minting one into the item metadata on first
+---use. ADOPTS an installed SIM's existing profile (its `sim:<number>` or bound citizenid
+---identity) when that profile already has data, so a legacy server flipping DeviceIdentity on
+---grandfathers every phone in place; a fresh phone gets a `device:<id>` of its own. Also stamps
+---the first-activator cid as the Face Unlock owner.
+---@param source number player server id
+---@param phone { slot: number, metadata: table }
+---@param number string|nil the SIM number currently installed
+---@return string identity, string|nil owner
+local function resolveDevice(source, phone, number)
+    local identity, owner = siminv.getDevice(phone)
+    local realCid = realIdentifier(source)
+    local dirty = false
+
+    if not identity then
+        if number then
+            local simIdentity = simStore.ensureRegistered(number, realCid)
+            if simIdentity and settingsStore.hasData(simIdentity) then identity = simIdentity end
+        end
+        identity = identity or ('device:' .. util.newId(16))
+        dirty = true
+    end
+    if not owner and realCid then
+        owner = realCid
+        dirty = true
+    end
+    if dirty then siminv.setPhoneDevice(source, phone.slot, identity, owner) end
+    return identity, owner
+end
+
+---DEVICE (phone-owns-data) resolver. Every carried phone maps to its own persistent device
+---identity regardless of SIM; a SIM only supplies the number + service. Each SIM'd phone mirrors
+---its number onto its device row (so number lookups resolve to the DEVICE), and a phone whose
+---SIM was pulled has its number mirror cleared (no SIM = no number, but the phone still works).
+---@param source number player server id
+---@param phones { slot: number, name: string, color: string, metadata: table }[]
+---@return SimSession
+local function computeDevice(source, phones)
+    local realCid = realIdentifier(source)
+    local devices = {}
+    for _, phone in ipairs(phones) do
+        local number = siminv.getSimNumber(source, phone)
+        local identity, owner = resolveDevice(source, phone, number)
+        if number then
+            simStore.ensureRegistered(number, realCid)
+            if settingsStore.getPhoneNumber(identity) ~= number then
+                settingsStore.setPhoneNumber(identity, number)
+            end
+        else
+            local existing = settingsStore.getPhoneNumber(identity)
+            if existing and existing ~= '' then settingsStore.clearPhoneNumber(identity) end
+        end
+        devices[#devices + 1] = {
+            slot     = phone.slot,
+            name     = phone.name,
+            color    = phone.color,
+            number   = number,
+            identity = identity,
+            hasSim   = number ~= nil,
+            owner    = owner,
+        }
+    end
+
+    local active = pickActive(source, devices)
+    return {
+        hasPhone = true,
+        hasSim   = active ~= nil and active.hasSim == true,
+        sims     = devices,
+        active   = active,
+        identity = active and active.identity or nil,
+        number   = active and active.number or nil,
+        color    = active and active.color or phones[1].color,
+        slot     = active and active.slot or phones[1].slot,
+    }
+end
+
+---Scans the player's inventory and resolves their SIM/device session for the active mode.
+---@param source number player server id
+---@return SimSession|nil s nil when the player carries no phone item
+local function compute(source)
+    local phones = siminv.findPhones(source)
+    if #phones == 0 then return nil end
+    if state.device then return computeDevice(source, phones) end
+    return computeLegacy(source, phones)
 end
 
 ---The player's current SIM session, cached for TTL ms. Nil when the player carries no phone.
@@ -184,14 +271,20 @@ function session.hasIdentity(source, identity)
     return session.identities(source)[identity] == true
 end
 
----True when the ACTIVE phone "belongs" to the player: its SIM's first activator matches their
----real character. Gates Face Unlock so a stolen phone never face-unlocks for the thief.
+---True when the ACTIVE phone "belongs" to the player: its first activator matches their real
+---character. Gates Face Unlock so a stolen phone never face-unlocks for the thief. Device mode
+---gates on the DEVICE owner (stamped on the phone item, so it holds even with the SIM out);
+---legacy gates on the installed SIM's owner.
 ---@param source number player server id
 ---@return boolean owner
 function session.isOwner(source)
     if not state.active then return true end
     local s = session.resolve(source)
-    if not s or not s.number then return false end
+    if not s then return false end
+    if state.device then
+        return s.active ~= nil and s.active.owner ~= nil and s.active.owner == realIdentifier(source)
+    end
+    if not s.number then return false end
     local row = simStore.get(s.number)
     if not row or not row.owner_cid then return false end
     return row.owner_cid == realIdentifier(source)
@@ -206,9 +299,13 @@ function session.push(source)
     local s = session.resolve(source)
     TriggerClientEvent('sd-phone:client:simState', source, {
         enabled = true,
+        device  = state.device,
         hasSim  = s ~= nil and s.hasSim or false,
         number  = s and s.number or nil,
         color   = s and s.color or nil,
+        -- Device mode: the setup/profile localStorage namespace keys off the DEVICE identity (so
+        -- swapping SIMs on one phone never resets it); legacy keys off the number, client-side.
+        profile = state.device and s and s.identity or nil,
     })
 end
 

@@ -200,11 +200,14 @@ function actions.overview(source, payload)
             local carried = {}
             if s then
                 for _, entry in ipairs(s.sims) do
-                    carried[#carried + 1] = {
-                        number = entry.number,
-                        color  = entry.color,
-                        active = s.active ~= nil and entry.slot == s.active.slot,
-                    }
+                    -- Device mode lists SIM-less phones too; the carried-numbers view skips them.
+                    if entry.number then
+                        carried[#carried + 1] = {
+                            number = entry.number,
+                            color  = entry.color,
+                            active = s.active ~= nil and entry.slot == s.active.slot,
+                        }
+                    end
                 end
             end
             sim.carried = carried

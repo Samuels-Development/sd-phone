@@ -99,11 +99,12 @@ CreateThread(function()
     end
 
     state.mode   = (config.Sim.UseContainers and siminv.isOx()) and 'container' or 'metadata'
+    state.device = config.Sim.DeviceIdentity ~= false
     state.active = true
     if state.mode == 'container' then siminv.registerContainers() end
     if siminv.isOx() then registerHooks() end
-    print(('^2[sd-phone:sim]^0 unique phones active (%s mode, %s backend)')
-        :format(state.mode, siminv.backendName()))
+    print(('^2[sd-phone:sim]^0 unique phones active (%s mode, %s identity, %s backend)')
+        :format(state.mode, state.device and 'device' or 'sim', siminv.backendName()))
 end)
 
 ---Extracts the used item's slot + SIM number for both usable-item callback shapes (ox passes a
@@ -217,15 +218,19 @@ lib.callback.register('sd-phone:server:sim:get', function(source)
     local sims = {}
     if s then
         for _, entry in ipairs(s.sims) do
-            sims[#sims + 1] = {
-                number = entry.number,
-                color  = entry.color,
-                active = s.active ~= nil and entry.slot == s.active.slot,
-            }
+            -- Device mode carries SIM-less phones too; the SIM list only shows numbered ones.
+            if entry.number then
+                sims[#sims + 1] = {
+                    number = entry.number,
+                    color  = entry.color,
+                    active = s.active ~= nil and entry.slot == s.active.slot,
+                }
+            end
         end
     end
     return util.ok({
         mode          = state.mode,
+        device        = state.device,
         hasSim        = s ~= nil and s.hasSim or false,
         number        = s and s.number or nil,
         color         = s and s.color or nil,
@@ -234,8 +239,10 @@ lib.callback.register('sd-phone:server:sim:get', function(source)
                         and s ~= nil and s.hasSim or false,
         backupOn      = config.Sim.Backup and config.Sim.Backup.Enabled ~= false or false,
         backupEnabled = b ~= nil and b.enabled or false,
-        canRestore    = b ~= nil and b.enabled and s ~= nil and s.hasSim
-                        and s.identity ~= b.identity or false,
+        -- Device mode restores onto the DEVICE identity (no SIM required); legacy needs the SIM.
+        canRestore    = b ~= nil and b.enabled and s ~= nil and s.identity ~= nil
+                        and s.identity ~= b.identity
+                        and (state.device or s.hasSim) or false,
     })
 end)
 
@@ -300,7 +307,10 @@ lib.callback.register('sd-phone:server:sim:backup:restore', function(source, pay
     local b = simStore.getBackup(realCid)
     if not b or not b.enabled then return util.fail('No cloud backup found for this character.') end
     local s = session.resolve(source)
-    if not s or not s.identity or not s.number then return util.fail('Install a SIM card first.') end
+    -- Device mode restores onto the phone's own identity, no SIM/number required; legacy needs
+    -- the installed SIM (its identity + number ARE the phone).
+    if not s or not s.identity then return util.fail('Install a SIM card first.') end
+    if not state.device and not s.number then return util.fail('Install a SIM card first.') end
     if s.identity == b.identity then return util.fail('This phone already holds the backed-up data.') end
 
     if b.password then
@@ -312,7 +322,7 @@ lib.callback.register('sd-phone:server:sim:backup:restore', function(source, pay
         end
     end
 
-    local rows = backup.restore(b.identity, s.identity, s.number)
+    local rows = backup.restore(b.identity, s.identity, s.number or '')
     simStore.setBackup(realCid, s.identity, true, nil)
     print(('^3[sd-phone:sim]^0 restored backup %s -> %s for %s (%d rows)')
         :format(b.identity, s.identity, realCid, rows))
