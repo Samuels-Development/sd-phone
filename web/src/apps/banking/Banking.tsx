@@ -49,7 +49,7 @@ export function Banking({ onClose: _onClose }: { onClose: () => void }) {
 
     const tabs: TabBarItem<BankingTab>[] = [
         { id: 'home',     label: t('banking.tabHome', 'Home'),     icon: a => <House       className="h-[33px] w-[33px]" strokeWidth={a ? 2.2 : 1.9} /> },
-        { id: 'invoices', label: t('banking.invoices', 'Invoices'), icon: a => <ReceiptText className="h-[33px] w-[33px]" strokeWidth={a ? 2.2 : 1.9} />, badge: (receivedInv ?? []).length },
+        { id: 'invoices', label: t('banking.invoices', 'Invoices'), icon: a => <ReceiptText className="h-[33px] w-[33px]" strokeWidth={a ? 2.2 : 1.9} />, badge: (receivedInv ?? []).filter(i => i.status === 'pending').length },
     ];
 
     return (

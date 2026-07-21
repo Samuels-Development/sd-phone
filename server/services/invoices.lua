@@ -285,7 +285,7 @@ function invoices.received(src)
     if not cid then return fail('Player not found') end
 
     local out = {}
-    for _, r in ipairs(store.listReceivedPending(cid, LIST_CAP)) do
+    for _, r in ipairs(store.listReceived(cid, LIST_CAP)) do
         local personal = r.job == nil
         if (personal and PENABLED) or (not personal and ENABLED) then
             out[#out + 1] = shapeReceived(r)

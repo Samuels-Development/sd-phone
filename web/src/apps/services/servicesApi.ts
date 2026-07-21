@@ -239,6 +239,8 @@ const DEV_SENT_INVOICES: SentInvoice[] = [
 const DEV_RECEIVED_INVOICES: ReceivedInvoice[] = [
     { id: 'r1', job: 'mechanic', label: 'Mechanic', color: '#3A3A3C', emoji: '⚙️', amount: 1200, note: 'Repair · engine rebuild', status: 'pending', from: 'Tommy V', ts: Date.now() - 240_000 },
     { id: 'r2', personal: true, label: 'Maya Lopez', color: '#0A84FF', emoji: '🧾', amount: 250, note: 'Dinner split', status: 'pending', from: 'Maya Lopez', ts: Date.now() - 900_000 },
+    { id: 'r3', personal: true, label: 'Ryan Carter', color: '#0A84FF', emoji: '🧾', amount: 90, note: 'Fuel', status: 'paid', from: 'Ryan Carter', ts: Date.now() - 7_200_000 },
+    { id: 'r4', job: 'police', label: 'Police', color: '#0A5BD3', emoji: '🚓', amount: 500, note: 'Speeding fine', status: 'cancelled', from: 'Officer Reed', ts: Date.now() - 10_800_000 },
 ];
 
 export async function fetchSentInvoices(): Promise<SentInvoice[]> {
@@ -268,7 +270,11 @@ export async function cancelInvoice(id: string): Promise<SentInvoicesResult> {
 export type PayInvoiceResult = Envelope<{ balance: number; invoices: ReceivedInvoice[] }>;
 
 export async function payInvoice(id: string): Promise<PayInvoiceResult> {
-    if (!isFiveM) return { success: true, data: { balance: 0, invoices: DEV_RECEIVED_INVOICES.filter(i => i.id !== id) } };
+    if (!isFiveM) {
+        const inv = DEV_RECEIVED_INVOICES.find(i => i.id === id);
+        if (inv) inv.status = 'paid';
+        return { success: true, data: { balance: 0, invoices: [...DEV_RECEIVED_INVOICES] } };
+    }
     return (await fetchNui<PayInvoiceResult>('sd-phone:services:invoices:pay', { id }))
         ?? { success: false, message: t('services.noResponse', 'No response from server') };
 }

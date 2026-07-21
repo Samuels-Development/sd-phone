@@ -102,14 +102,14 @@ function store.countPendingPersonal(senderCid)
         { senderCid })) or 0
 end
 
----Pending invoices addressed to a player, newest first. Read-only.
+---Invoices addressed to a player: pending first (newest first), then settled history. Read-only.
 ---@param targetCid string
 ---@param limit? number row cap (default 50)
 ---@return table[]
-function store.listReceivedPending(targetCid, limit)
+function store.listReceived(targetCid, limit)
     if not targetCid or targetCid == '' then return {} end
     return MySQL.query.await(
-        "SELECT * FROM phone_service_invoices WHERE target_cid = ? AND status = 'pending' ORDER BY created_at DESC LIMIT ?",
+        "SELECT * FROM phone_service_invoices WHERE target_cid = ? ORDER BY (status = 'pending') DESC, created_at DESC LIMIT ?",
         { targetCid, limit or 50 }) or {}
 end
 

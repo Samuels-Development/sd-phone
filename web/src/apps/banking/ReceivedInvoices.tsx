@@ -70,14 +70,20 @@ export function ReceivedInvoices({ invoices, loading, onRefetch, onPaid }: {
                             </div>
                             <div className="flex shrink-0 flex-col items-end gap-1.5">
                                 <span className="text-[17px] font-bold tabular-nums text-black dark:text-white">{formatMoney(inv.amount, { whole: true })}</span>
-                                <button
-                                    type="button"
-                                    disabled={busy}
-                                    onClick={() => setPaying(inv)}
-                                    className="rounded-full bg-ios-blue px-4 py-1 text-[14px] font-semibold text-white active:opacity-70 disabled:opacity-40"
-                                >
-                                    {t('banking.pay', 'Pay')}
-                                </button>
+                                {inv.status === 'pending' ? (
+                                    <button
+                                        type="button"
+                                        disabled={busy}
+                                        onClick={() => setPaying(inv)}
+                                        className="rounded-full bg-ios-blue px-4 py-1 text-[14px] font-semibold text-white active:opacity-70 disabled:opacity-40"
+                                    >
+                                        {t('banking.pay', 'Pay')}
+                                    </button>
+                                ) : inv.status === 'paid' ? (
+                                    <span className="text-[14px] font-semibold text-[#30d158]">{t('banking.statusPaid', 'Paid')}</span>
+                                ) : (
+                                    <span className="text-[14px] font-semibold text-ios-gray">{t('banking.statusCancelled', 'Cancelled')}</span>
+                                )}
                             </div>
                         </div>
                     </div>
