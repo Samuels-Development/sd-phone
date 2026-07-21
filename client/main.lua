@@ -146,21 +146,6 @@ end
 local function attachPhoneProp(ped)
     if phoneProp and DoesEntityExist(phoneProp) then return end
     phoneProp = createHandProp(ped, currentFrameColor)
-    if not phoneProp then return end
-
-    CreateThread(function()
-        Wait(0)
-        print(('[sd-phone][prop] exists=%s attached=%s networked=%s'):format(
-            tostring(DoesEntityExist(phoneProp)),
-            tostring(phoneProp and IsEntityAttachedToEntity(phoneProp, ped)),
-            tostring(phoneProp and NetworkGetEntityIsNetworked(phoneProp))))
-        Wait(1500)
-        if phoneProp and DoesEntityExist(phoneProp) then
-            local pp = GetEntityCoords(phoneProp)
-            local hb = GetPedBoneCoords(ped, config.Phone.PropBone, 0.0, 0.0, 0.0)
-            print(('[sd-phone][prop] gap prop<->hand = %.3f m (small & steady = welded)'):format(#(pp - hb)))
-        end
-    end)
 end
 
 ---Delete the attached phone prop, if any. Idempotent.
@@ -349,8 +334,6 @@ local function OpenPhone()
             showDate  = config.Lockscreen.ShowDate,
             dock      = config.Homescreen.Dock,
             apps      = config.Homescreen.Apps,
-            installedApps = installedApps,
-            homeLayout = homeLayout,
             mailDomain = config.Mail.Domain,
             wallpaper = {
                 lock = config.Lockscreen.Wallpaper,

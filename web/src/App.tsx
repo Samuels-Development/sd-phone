@@ -326,12 +326,17 @@ function AppContent() {
         setSwitcherClosing(false);
         setSwitcherReady(false);
         setNotifs([]);
-        // In FiveM the installed list + saved layout arrive via the sd-phone:apps follow-up (kept
-        // off the open round-trip so the phone reveals instantly); only the dev harness fetches
-        // them inline here.
-        if (data.installedApps) setInstalledApps(new Set([...data.installedApps, ...installedCustomIds()]));
-        else if (!isFiveM) void listInstalledApps().then(ids => setInstalledApps(new Set([...ids, ...installedCustomIds()])));
-        setAppsReady(!isFiveM);
+        // In FiveM the installed list + saved layout normally arrive via the sd-phone:apps
+        // follow-up (kept off the open round-trip so the phone reveals instantly). An inline
+        // payload still counts as ready - the Homescreen must never wait on a follow-up that
+        // isn't coming. The dev harness fetches from its local mock instead.
+        if (data.installedApps) {
+            setInstalledApps(new Set([...data.installedApps, ...installedCustomIds()]));
+            setAppsReady(true);
+        } else {
+            if (!isFiveM) void listInstalledApps().then(ids => setInstalledApps(new Set([...ids, ...installedCustomIds()])));
+            setAppsReady(!isFiveM);
+        }
         // Under unique phones the localStorage layout fallback is another profile's - server only.
         setSavedLayout(data.homeLayout ? parseLayout(data.homeLayout) : (data.sim?.enabled ? null : loadHomeLayout()));
         setLocked(data.locked);

@@ -40,12 +40,6 @@ AddEventHandler('sd-phone:client:openState', function(open)
     end
 end)
 
--- A wipe reloads the NUI; clear our session flag so the openState handler above won't re-assert
--- focus over a payphone UI that no longer exists (main.lua drops the actual focus).
-AddEventHandler('sd-phone:client:wipeFocus', function()
-    activeLocation = nil
-end)
-
 ---Config-gated console print for the interaction/prop-swap path.
 local function dbg(fmt, ...)
     if cfg.Debug then print(('[sd-phone:payphone] ' .. fmt):format(...)) end
@@ -217,6 +211,14 @@ local function endMenuSession()
     activeLocation = nil
     endBoothAnim()
 end
+
+---Admin wipe: the NUI reloads without the payphone close callback ever firing, so any live
+---session must be torn down here (hangup, flags, booth anim/prop); main.lua drops the focus.
+AddEventHandler('sd-phone:client:wipeFocus', function()
+    if not (activeLocation or activeChannel or animEntity) then return end
+    if cfg.UseOxLibMenu then lib.hideContext(true) end
+    endMenuSession()
+end)
 
 ---ox_lib flow: context menu with dial prompt + notepad numbers, replacing the NUI.
 ---@param state table payload from payphone:state
