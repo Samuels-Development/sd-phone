@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
-import { ReceiptText } from 'lucide-react';
+import { Briefcase, ReceiptText } from 'lucide-react';
+
+import { PlaceholderAvatar } from '@/shared/ContactAvatar';
 
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
@@ -43,15 +45,19 @@ export function ReceivedInvoices({ onPaid }: { onPaid: () => void }) {
             <div className="overflow-hidden rounded-[16px] bg-[#e5e5e5] dark:bg-surface">
                 {invoices.map((inv, i) => (
                     <div key={inv.id}>
-                        {i > 0 && <div className="pointer-events-none ml-16 bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />}
+                        {i > 0 && <div className="pointer-events-none bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />}
                         <div className="flex items-center gap-3 px-4 py-3.5">
-                            <div
-                                className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[11px] text-[20px] shadow-sm"
-                                style={{ background: inv.color }}
-                                aria-hidden
-                            >
-                                {inv.emoji}
-                            </div>
+                            {inv.personal ? (
+                                <PlaceholderAvatar size={42} />
+                            ) : (
+                                <div
+                                    className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[11px] shadow-sm"
+                                    style={{ background: inv.color }}
+                                    aria-hidden
+                                >
+                                    <Briefcase className="h-[21px] w-[21px] text-white" strokeWidth={2.2} />
+                                </div>
+                            )}
                             <div className="min-w-0 flex-1">
                                 <div className="truncate text-[17px] font-semibold text-black dark:text-white">{inv.label}</div>
                                 <div className="truncate text-[15px] font-medium text-ios-gray">

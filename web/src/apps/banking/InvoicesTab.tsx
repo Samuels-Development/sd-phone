@@ -72,7 +72,7 @@ export function InvoicesTab({ onPaid }: { onPaid: () => void }) {
                     <div className="overflow-hidden rounded-[16px] bg-[#e5e5e5] dark:bg-surface">
                         {sentList.map((inv, i) => (
                             <div key={inv.id}>
-                                {i > 0 && <div className="pointer-events-none ml-4 bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />}
+                                {i > 0 && <div className="pointer-events-none bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />}
                                 <div className="flex items-center gap-3 px-4 py-3.5">
                                     <div className="min-w-0 flex-1">
                                         <div className="truncate text-[17px] font-semibold text-black dark:text-white">{inv.toName}</div>
