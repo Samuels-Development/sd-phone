@@ -12,6 +12,8 @@ local job         = require 'bridge.server.job'
 local player      = require 'bridge.server.player'
 ---@type table Settings store (server.settings.store): phone-number ownership lookups.
 local settings    = require 'server.settings.store'
+---@type table Contacts store (server.contacts.store): saved-name resolution for banners.
+local contacts    = require 'server.contacts.store'
 ---@type table Banking actions (server.banking.actions): log-only Wallet entries for both sides.
 local bankActions = require 'server.banking.actions'
 ---@type table Shared server helpers (server.util): envelope constructors + string/number guards.
@@ -120,12 +122,25 @@ local function shapeSent(r)
     }
 end
 
----A personal invoice's display label: the sender's character name, then their formatted number.
+---A personal invoice's target-facing label: the sender's formatted number. Names are the
+---viewer's own contact book's business, resolved client-side against it.
 ---@param r table phone_service_invoices row
 ---@return string
 local function personalLabel(r)
-    if r.sender_name and r.sender_name ~= '' then return r.sender_name end
     return util.formatNumber(r.sender_number or '')
+end
+
+---Resolves a number to a saved-contact name in an owner's book, or nil.
+---@param citizenid string|nil
+---@param numberDigits string
+---@return string|nil
+local function contactNameFor(citizenid, numberDigits)
+    if not citizenid or numberDigits == '' then return nil end
+    local rows = contacts.listContacts(citizenid)
+    for i = 1, #rows do
+        if digits(rows[i].phone) == numberDigits then return rows[i].name end
+    end
+    return nil
 end
 
 ---Shapes one pending invoice row for the target's received list (Banking). A NULL job marks a
@@ -135,16 +150,17 @@ end
 local function shapeReceived(r)
     if r.job == nil then
         return {
-            id       = r.id,
-            personal = true,
-            label    = personalLabel(r),
-            color    = '#0A84FF',
-            emoji    = '🧾',
-            amount   = tonumber(r.amount) or 0,
-            note     = r.note or '',
-            status   = r.status or 'pending',
-            from     = (r.sender_name and r.sender_name ~= '') and r.sender_name or '',
-            ts       = (tonumber(r.created_at) or 0) * 1000,
+            id         = r.id,
+            personal   = true,
+            label      = personalLabel(r),
+            fromNumber = digits(r.sender_number or ''),
+            color      = '#0A84FF',
+            emoji      = '🧾',
+            amount     = tonumber(r.amount) or 0,
+            note       = r.note or '',
+            status     = r.status or 'pending',
+            from       = '',
+            ts         = (tonumber(r.created_at) or 0) * 1000,
         }
     end
     local e = byJob[r.job]
@@ -369,9 +385,11 @@ function invoices.personalCreate(src, payload)
     })
 
     if tsrc then
+        -- Banner identity follows the target's own contact book: saved name, else the number.
+        local senderShown = contactNameFor(targetCid, myNumber) or util.formatNumber(myNumber)
         TriggerClientEvent('sd-phone:client:notify', tsrc, {
             app = 'bank', appId = 'bank', title = 'Wallet',
-            body = ('%s sent you an invoice for %s.'):format(senderName or 'Someone', formatMoney(amount)),
+            body = ('%s sent you an invoice for %s.'):format(senderShown, formatMoney(amount)),
             time = 'now',
         })
         TriggerClientEvent('sd-phone:client:services:invoices', tsrc, {})
@@ -476,7 +494,8 @@ function invoices.pay(src, payload)
     })
     if not viaSociety then
         bankActions.addExternal(inv.sender_cid, {
-            label    = ('Invoice paid · %s'):format(inv.target_name or util.formatNumber(inv.target_number or '')),
+            label    = ('Invoice paid · %s'):format(personal and util.formatNumber(inv.target_number or '')
+                or (inv.target_name or util.formatNumber(inv.target_number or ''))),
             amount   = amount,
             category = 'income',
         })
@@ -484,11 +503,15 @@ function invoices.pay(src, payload)
 
     local ssrc = player.getSourceByIdentifier(inv.sender_cid)
     if ssrc then
+        -- Personal payer identity follows the sender's own contact book: saved name, else number.
+        local payerShown = personal
+            and (contactNameFor(inv.sender_cid, digits(inv.target_number or '')) or util.formatNumber(inv.target_number or ''))
+            or (inv.target_name or 'A customer')
         TriggerClientEvent('sd-phone:client:notify', ssrc, {
             app   = personal and 'bank' or 'services',
             appId = personal and 'bank' or 'services',
             title = personal and 'Wallet' or label,
-            body  = ('%s paid your invoice for %s.'):format(inv.target_name or (personal and 'Someone' or 'A customer'), formatMoney(amount)),
+            body  = ('%s paid your invoice for %s.'):format(payerShown, formatMoney(amount)),
             time  = 'now',
         })
         if personal then TriggerClientEvent('sd-phone:client:services:invoices', ssrc, {}) end

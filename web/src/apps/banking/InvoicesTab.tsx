@@ -83,7 +83,7 @@ export function InvoicesTab({ received, receivedLoading, onRefetchReceived, onPa
             <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-10 pt-2">
                 <div key={segment} className="animate-swipe-in-left">
                 {segment === 'received' ? (
-                    <ReceivedInvoices invoices={received} loading={receivedLoading} onRefetch={onRefetchReceived} onPaid={onPaid} />
+                    <ReceivedInvoices invoices={received} loading={receivedLoading} onRefetch={onRefetchReceived} onPaid={onPaid} contactByNumber={contactByNumber} />
                 ) : sentList.length === 0 ? (
                     sentLoading ? null : (
                     <EmptyState
@@ -102,10 +102,12 @@ export function InvoicesTab({ received, receivedLoading, onRefetchReceived, onPa
                                 <div className="flex items-center gap-3 px-4 py-3.5">
                                     {card ? <ContactAvatar contact={card} size={42} /> : <PlaceholderAvatar size={42} />}
                                     <div className="min-w-0 flex-1">
-                                        <div className="truncate text-[17px] font-semibold text-black dark:text-white">{inv.toName}</div>
-                                        <div className="truncate text-[15px] font-medium text-ios-gray">
-                                            {inv.note || formatPhone(inv.toNumber)}
-                                        </div>
+                                        <div className="truncate text-[17px] font-semibold text-black dark:text-white">{card ? card.name : formatPhone(inv.toNumber)}</div>
+                                        {(inv.note || card) && (
+                                            <div className="truncate text-[15px] font-medium text-ios-gray">
+                                                {inv.note || formatPhone(inv.toNumber)}
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="flex shrink-0 flex-col items-end gap-1.5">
                                         <span className="text-[17px] font-bold tabular-nums text-black dark:text-white">{formatMoney(inv.amount, { whole: true })}</span>
@@ -135,7 +137,7 @@ export function InvoicesTab({ received, receivedLoading, onRefetchReceived, onPa
             {cancelling && (
                 <AlertDialog
                     title={t('banking.cancelInvoiceTitle', 'Cancel this invoice?')}
-                    message={t('banking.cancelInvoiceMsg', '{name} will no longer be able to pay it.', { name: cancelling.toName })}
+                    message={t('banking.cancelInvoiceMsg', '{name} will no longer be able to pay it.', { name: contactByNumber.get(digits(cancelling.toNumber))?.name ?? formatPhone(cancelling.toNumber) })}
                     confirmLabel={t('banking.cancelInvoice', 'Cancel Invoice')}
                     cancelLabel={t('banking.keep', 'Keep')}
                     onCancel={() => setCancelling(null)}

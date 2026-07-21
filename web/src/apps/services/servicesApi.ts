@@ -217,10 +217,11 @@ export interface SentInvoice {
 }
 
 export interface ReceivedInvoice {
-    id:        string;
-    job?:      string;
-    personal?: boolean;
-    label:     string;
+    id:         string;
+    job?:       string;
+    personal?:  boolean;
+    fromNumber?: string;
+    label:      string;
     color:     string;
     emoji:     string;
     amount:    number;
@@ -238,8 +239,8 @@ const DEV_SENT_INVOICES: SentInvoice[] = [
 
 const DEV_RECEIVED_INVOICES: ReceivedInvoice[] = [
     { id: 'r1', job: 'mechanic', label: 'Mechanic', color: '#3A3A3C', emoji: '⚙️', amount: 1200, note: 'Repair · engine rebuild', status: 'pending', from: 'Tommy V', ts: Date.now() - 240_000 },
-    { id: 'r2', personal: true, label: 'Maya Lopez', color: '#0A84FF', emoji: '🧾', amount: 250, note: 'Dinner split', status: 'pending', from: 'Maya Lopez', ts: Date.now() - 900_000 },
-    { id: 'r3', personal: true, label: 'Ryan Carter', color: '#0A84FF', emoji: '🧾', amount: 90, note: 'Fuel', status: 'paid', from: 'Ryan Carter', ts: Date.now() - 7_200_000 },
+    { id: 'r2', personal: true, label: '(310) 555-0199', fromNumber: '3105550199', color: '#0A84FF', emoji: '🧾', amount: 250, note: 'Dinner split', status: 'pending', from: '', ts: Date.now() - 900_000 },
+    { id: 'r3', personal: true, label: '(310) 555-0148', fromNumber: '3105550148', color: '#0A84FF', emoji: '🧾', amount: 90, note: 'Fuel', status: 'paid', from: '', ts: Date.now() - 7_200_000 },
     { id: 'r4', job: 'police', label: 'Police', color: '#0A5BD3', emoji: '🚓', amount: 500, note: 'Speeding fine', status: 'cancelled', from: 'Officer Reed', ts: Date.now() - 10_800_000 },
 ];
 

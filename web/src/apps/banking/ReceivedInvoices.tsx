@@ -1,24 +1,35 @@
 import { useState } from 'react';
 import { Briefcase, ReceiptText } from 'lucide-react';
 
-import { PlaceholderAvatar } from '@/shared/ContactAvatar';
+import { ContactAvatar, PlaceholderAvatar } from '@/shared/ContactAvatar';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { EmptyState } from '@/ui/EmptyState';
 import { t } from '@/i18n';
 import { payInvoice, type ReceivedInvoice } from '@/apps/services/servicesApi';
+import type { Contact as PhoneContact } from '@/apps/phone/data';
 import { formatMoney } from './data';
 
 // Presentational: the fetch lives in Banking (above the animated tab subtree) so segment
 // switches re-render instantly from props instead of refetching through a loading flash.
-export function ReceivedInvoices({ invoices, loading, onRefetch, onPaid }: {
+// Personal sender identity resolves live against the viewer's contact book: saved card wins,
+// otherwise the server-provided formatted number stands.
+export function ReceivedInvoices({ invoices, loading, onRefetch, onPaid, contactByNumber }: {
     invoices:  ReceivedInvoice[];
     loading:   boolean;
     onRefetch: () => void;
     onPaid:    () => void;
+    contactByNumber: Map<string, PhoneContact>;
 }) {
     const [paying, setPaying] = useState<ReceivedInvoice | null>(null);
     const [busy,   setBusy]   = useState(false);
     const [error,  setError]  = useState<string | null>(null);
+
+    function cardOf(inv: ReceivedInvoice): PhoneContact | undefined {
+        return inv.personal && inv.fromNumber ? contactByNumber.get(inv.fromNumber) : undefined;
+    }
+    function labelOf(inv: ReceivedInvoice): string {
+        return cardOf(inv)?.name ?? inv.label;
+    }
 
     async function doPay(inv: ReceivedInvoice) {
         if (busy) return;
@@ -48,7 +59,9 @@ export function ReceivedInvoices({ invoices, loading, onRefetch, onPaid }: {
                         {i > 0 && <div className="pointer-events-none bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />}
                         <div className="flex items-center gap-3 px-4 py-3.5">
                             {inv.personal ? (
-                                <PlaceholderAvatar size={42} />
+                                cardOf(inv)
+                                    ? <ContactAvatar contact={cardOf(inv) as PhoneContact} size={42} />
+                                    : <PlaceholderAvatar size={42} />
                             ) : (
                                 <div
                                     className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[11px] shadow-sm"
@@ -59,7 +72,7 @@ export function ReceivedInvoices({ invoices, loading, onRefetch, onPaid }: {
                                 </div>
                             )}
                             <div className="min-w-0 flex-1">
-                                <div className="truncate text-[17px] font-semibold text-black dark:text-white">{inv.label}</div>
+                                <div className="truncate text-[17px] font-semibold text-black dark:text-white">{labelOf(inv)}</div>
                                 <div className="truncate text-[15px] font-medium text-ios-gray">
                                     {inv.note
                                         ? inv.note
@@ -92,8 +105,8 @@ export function ReceivedInvoices({ invoices, loading, onRefetch, onPaid }: {
 
             {paying && (
                 <AlertDialog
-                    title={t('banking.payInvoiceTitle', 'Pay {label}?', { label: paying.label })}
-                    message={t('banking.payInvoiceMsg', "Pay {amount} to {label}? This can't be undone.", { amount: formatMoney(paying.amount, { whole: true }), label: paying.label })}
+                    title={t('banking.payInvoiceTitle', 'Pay {label}?', { label: labelOf(paying) })}
+                    message={t('banking.payInvoiceMsg', "Pay {amount} to {label}? This can't be undone.", { amount: formatMoney(paying.amount, { whole: true }), label: labelOf(paying) })}
                     confirmLabel={t('banking.pay', 'Pay')}
                     cancelLabel={t('banking.cancel', 'Cancel')}
                     onCancel={() => setPaying(null)}
