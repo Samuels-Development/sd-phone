@@ -258,9 +258,15 @@ export async function fetchReceivedInvoices(): Promise<ReceivedInvoice[]> {
 
 export type SentInvoicesResult = Envelope<{ invoices: SentInvoice[] }>;
 
-export async function createInvoice(number: string, amount: number, note: string): Promise<SentInvoicesResult> {
-    if (!isFiveM) return { success: true, data: { invoices: DEV_SENT_INVOICES } };
-    return (await fetchNui<SentInvoicesResult>('sd-phone:services:invoices:create', { number, amount, note }))
+export async function createInvoice(target: { number?: string; serverId?: number }, amount: number, note: string): Promise<SentInvoicesResult> {
+    if (!isFiveM) {
+        DEV_SENT_INVOICES.unshift({
+            id: 's-' + Date.now(), amount, note, status: 'pending',
+            toName: target.number ?? `ID ${target.serverId ?? 0}`, toNumber: target.number ?? '', from: 'Sam Nicol', ts: Date.now(),
+        });
+        return { success: true, data: { invoices: [...DEV_SENT_INVOICES] } };
+    }
+    return (await fetchNui<SentInvoicesResult>('sd-phone:services:invoices:create', { number: target.number, serverId: target.serverId, amount, note }))
         ?? { success: false, message: t('services.noResponse', 'No response from server') };
 }
 
