@@ -30,6 +30,8 @@ import { warmPhotos, apiSavePhotoFromUrl } from '@/core/photosApi';
 import { VoicePanel }    from './VoicePanel';
 import { AddMemberSheet } from './AddMemberSheet';
 import { EditGroupSheet } from './EditGroupSheet';
+import { AddContact } from '@/apps/phone/contacts/AddContact';
+import type { Contact as PhoneContact } from '@/apps/phone/data';
 
 type Panel = 'emoji' | 'photos' | 'gif' | 'money' | 'location' | 'voice' | null;
 
@@ -60,6 +62,7 @@ interface ChatViewProps {
     onAddMembers:(members: Contact[]) => void;
     onUpdateGroup:(name: string, avatar?: string) => void;
     onRemoveMember:(member: Contact) => void;
+    onSaveContact?:(c: PhoneContact) => Promise<string | null>;
     animateIn?:   boolean;
 }
 
@@ -71,7 +74,7 @@ interface LocShareStatus {
     theyShare?: boolean;
 }
 
-export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend, onReact, onPayRequest, onLocationRespond, onAddMembers, onUpdateGroup, onRemoveMember, animateIn = true }: ChatViewProps) {
+export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend, onReact, onPayRequest, onLocationRespond, onAddMembers, onUpdateGroup, onRemoveMember, onSaveContact, animateIn = true }: ChatViewProps) {
     const { theme } = useTheme('theme');
     const isDark    = theme === 'dark';
 
@@ -111,6 +114,7 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
     const [savedPreview, setSavedPreview] = useState(false);
     const [addingMembers, setAddingMembers] = useState(false);
     const [editingGroup, setEditingGroup] = useState(false);
+    const [addingContact, setAddingContact] = useState(false);
     const listRef   = useRef<HTMLDivElement>(null);
     const inputRef  = useRef<HTMLInputElement>(null);
 
@@ -231,6 +235,13 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
 
     const name = conv.groupName ?? conv.participants[0]?.name ?? t('messages.unknown', 'Unknown');
 
+    // For a 1:1 thread with a number that isn't saved yet, offer to add it as a contact.
+    const soloNumber = !conv.groupName
+        ? (conv.participants[0]?.phone ?? conv.participants[0]?.id ?? '').replace(/\D/g, '')
+        : '';
+    const isKnownNumber = !soloNumber || contacts.some(c => (c.phone ?? '').replace(/\D/g, '') === soloNumber);
+    const canAddContact = !!onSaveContact && !!soloNumber && !isKnownNumber;
+
     interface RenderMsg { kind: 'msg'; msg: Message; isLast: boolean; contact?: Contact }
     interface RenderSep { kind: 'separator'; ts: number }
     type RenderItem = RenderMsg | RenderSep;
@@ -297,6 +308,17 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
                         >
                             <GroupAvatar contacts={conv.participants} size={72} avatar={conv.groupAvatar} />
                             <span className="text-[19px] font-semibold leading-none text-black dark:text-white">{name}</span>
+                        </button>
+                    ) : canAddContact ? (
+                        <button
+                            type="button"
+                            onClick={() => { setPanel(null); inputRef.current?.blur(); setAddingContact(true); }}
+                            aria-label={t('messages.addContact', 'Add Contact')}
+                            className="flex flex-col items-center gap-1 active:opacity-60"
+                        >
+                            <ContactAvatar contact={conv.participants[0]} size={72} />
+                            <span className="text-[19px] font-semibold leading-none text-black dark:text-white">{name}</span>
+                            <span className="text-[13px] font-medium leading-none text-[#007AFF]">{t('messages.addContact', 'Add Contact')}</span>
                         </button>
                     ) : (
                         <div className="flex flex-col items-center gap-1.5">
@@ -670,6 +692,16 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
                     onSave={(name, avatar) => { onUpdateGroup(name, avatar); setEditingGroup(false); }}
                     onRemoveMember={onRemoveMember}
                 />
+            )}
+
+            {addingContact && onSaveContact && (
+                <div className="absolute inset-0 z-30">
+                    <AddContact
+                        initialPhone={soloNumber}
+                        onCancel={() => setAddingContact(false)}
+                        onSave={onSaveContact}
+                    />
+                </div>
             )}
         </div>
     );

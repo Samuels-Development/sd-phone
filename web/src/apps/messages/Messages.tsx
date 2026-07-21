@@ -21,6 +21,8 @@ import {
 } from '@/shared/chat/messagesApi';
 import type { Reaction } from '@/shared/chat/data';
 import { peekMessagesTarget, clearMessagesTarget } from '@/shell/deeplink';
+import { saveNewContact } from '@/stores/contactsStore';
+import type { Contact as PhoneContact } from '@/apps/phone/data';
 
 type Draft = Omit<SendInput, 'conversation'>;
 
@@ -295,6 +297,24 @@ export function Messages({ onClose }: { onClose: () => void }) {
         setOpenId(prev => (prev === data.conversation ? null : prev));
     }, []));
 
+    const saveContactForThread = useCallback(async (conversationId: string, c: PhoneContact): Promise<string | null> => {
+        const res = await saveNewContact(c);
+        if (res.error || !res.contact) return res.error ?? t('phone.failedToAddContact', 'Failed to add contact.');
+        const created = res.contact;
+        const digits  = created.phone.replace(/\D/g, '');
+        const card: Contact = {
+            id: created.id, name: created.name, initials: created.initials,
+            color: created.color, avatar: created.avatar, phone: created.phone,
+        };
+        setContacts(prev => (prev.some(x => (x.phone ?? '').replace(/\D/g, '') === digits) ? prev : [...prev, card]));
+        setConversations(prev => prev.map(cv => (
+            cv.id === conversationId
+                ? { ...cv, participants: cv.participants.map(p => ((p.phone ?? p.id).replace(/\D/g, '') === digits ? card : p)) }
+                : cv
+        )));
+        return null;
+    }, []);
+
     const markRead = useCallback((ids: string[]) => {
         ids.forEach(id => markReadApi(id));
         setConversations(prev => ids.reduce((acc, id) => markConversationRead(acc, id), prev));
@@ -334,6 +354,7 @@ export function Messages({ onClose }: { onClose: () => void }) {
                     onAddMembers={members => addGroupMembers(conv.id, members)}
                     onUpdateGroup={(name, avatar) => updateGroup(conv.id, name, avatar)}
                     onRemoveMember={member => removeGroupMember(conv.id, member)}
+                    onSaveContact={c => saveContactForThread(conv.id, c)}
                 />
             )}
 
