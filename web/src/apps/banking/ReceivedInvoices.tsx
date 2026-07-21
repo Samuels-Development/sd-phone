@@ -1,8 +1,10 @@
 import { useCallback, useState } from 'react';
+import { ReceiptText } from 'lucide-react';
 
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { AlertDialog } from '@/ui/AlertDialog';
+import { EmptyState } from '@/ui/EmptyState';
 import { t } from '@/i18n';
 import { fetchReceivedInvoices, payInvoice, type ReceivedInvoice } from '@/apps/services/servicesApi';
 import { formatMoney } from './data';
@@ -16,7 +18,6 @@ export function ReceivedInvoices({ onPaid }: { onPaid: () => void }) {
     const [error,  setError]  = useState<string | null>(null);
 
     const invoices = data ?? [];
-    if (invoices.length === 0) return null;
 
     async function doPay(inv: ReceivedInvoice) {
         if (busy) return;
@@ -27,9 +28,18 @@ export function ReceivedInvoices({ onPaid }: { onPaid: () => void }) {
         else setError(res.message ?? t('banking.somethingWentWrong', 'Something went wrong'));
     }
 
+    if (invoices.length === 0) {
+        return (
+            <EmptyState
+                icon={ReceiptText}
+                title={t('banking.noReceivedInvoices', 'No Invoices')}
+                subtitle={t('banking.receivedInvoicesSub', 'Invoices sent to you will show up here.')}
+            />
+        );
+    }
+
     return (
         <>
-            <h2 className="mb-3 mt-6 text-[20px] font-bold tracking-tight">{t('banking.invoices', 'Invoices')}</h2>
             <div className="overflow-hidden rounded-[16px] bg-[#e5e5e5] dark:bg-surface">
                 {invoices.map((inv, i) => (
                     <div key={inv.id}>

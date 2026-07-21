@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, House, ReceiptText } from 'lucide-react';
 
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
@@ -12,12 +12,16 @@ import { AllTransactions } from './AllTransactions';
 import { SendMoney, prefillTransferAgain } from './SendMoney';
 import { FleecaCard } from './FleecaCard';
 import { TxRows } from './TxRow';
-import { ReceivedInvoices } from './ReceivedInvoices';
+import { InvoicesTab } from './InvoicesTab';
+import { TabBar, type TabBarItem } from '@/ui/TabBar';
+
+type BankingTab = 'home' | 'invoices';
 
 const CARD_EXPIRY = '08/29';
 
 export function Banking({ onClose: _onClose }: { onClose: () => void }) {
     const { data: overview, loading, refetch: refresh } = useAsyncData<BankOverview>(fetchOverview, []);
+    const [tab,      setTab]      = useSessionState<BankingTab>('banking:tab', 'home');
     const [showAll,  setShowAll]  = useSessionState('banking:showAll', false);
     const [sending,  setSending]  = useSessionState('banking:sending', false);
     const [actionTx, setActionTx] = useState<BankTx | null>(null);
@@ -38,10 +42,18 @@ export function Banking({ onClose: _onClose }: { onClose: () => void }) {
     const holder  = (overview?.name || t('banking.accountHolderFallback', 'Account')).toUpperCase();
     const last4   = (overview?.number || '').replace(/\D/g, '').slice(-4) || '0000';
 
+    const tabs: TabBarItem<BankingTab>[] = [
+        { id: 'home',     label: t('banking.tabHome', 'Home'),     icon: a => <House       className="h-[33px] w-[33px]" strokeWidth={a ? 2.2 : 1.9} /> },
+        { id: 'invoices', label: t('banking.invoices', 'Invoices'), icon: a => <ReceiptText className="h-[33px] w-[33px]" strokeWidth={a ? 2.2 : 1.9} /> },
+    ];
+
     return (
         <div className="absolute inset-0 z-10 flex flex-col bg-[#d4d4d4] text-black dark:bg-base dark:text-white">
             <div className="h-[54px] shrink-0" aria-hidden />
 
+            {tab === 'invoices' ? (
+                <InvoicesTab onPaid={refresh} />
+            ) : (<>
             <div className="px-5 pb-2 pt-0.5 text-[34px] font-bold tracking-tight">{t('banking.wallet', 'Wallet')}</div>
 
             <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-10 pt-3">
@@ -61,8 +73,6 @@ export function Banking({ onClose: _onClose }: { onClose: () => void }) {
                     </button>
                 </div>
 
-                <ReceivedInvoices onPaid={refresh} />
-
                 <div className="mb-3 mt-6 flex items-center justify-between">
                     <h2 className="text-[20px] font-bold tracking-tight">{t('banking.latestTransactions', 'Latest Transactions')}</h2>
                     {txs.length > 0 && (
@@ -81,6 +91,9 @@ export function Banking({ onClose: _onClose }: { onClose: () => void }) {
                     <TxRows items={latest} onSelect={setActionTx} />
                 )}
             </div>
+            </>)}
+
+            <TabBar tabs={tabs} active={tab} onChange={setTab} />
 
             <button type="button" onClick={_onClose} aria-label={t('banking.closeWallet', 'Close Wallet')} className="absolute inset-x-0 bottom-0 h-7 cursor-default" />
 
