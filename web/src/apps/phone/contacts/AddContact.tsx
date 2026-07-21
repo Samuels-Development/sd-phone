@@ -8,8 +8,10 @@ import { SheetHeader } from '@/ui/SheetHeader';
 
 const PALETTE = ['#0a84ff', '#30d158', '#ff375f', '#ff9f0a', '#bf5af2', '#ff453a', '#5e5ce6', '#64d2ff', '#ffd60a'];
 
-export function AddContact({ onCancel, onSave, initialPhone = '' }: { onCancel: () => void; onSave: (c: Contact) => Promise<string | null>; initialPhone?: string }) {
-    const [shown, setShown] = useState(false);
+export function AddContact({ onCancel, onSave, initialPhone = '', embedded = false }: { onCancel: () => void; onSave: (c: Contact) => Promise<string | null>; initialPhone?: string; embedded?: boolean }) {
+    // Embedded mode (inside a Sheet): the host animates the presentation, so the form's own
+    // slide-up/down is skipped and cancel/save hand back to the host immediately.
+    const [shown, setShown] = useState(embedded);
     const [first, setFirst] = useState('');
     const [last,  setLast]  = useState('');
     const [phone, setPhone] = useState(initialPhone);
@@ -20,9 +22,10 @@ export function AddContact({ onCancel, onSave, initialPhone = '' }: { onCancel: 
     const exit = useRef<() => void>(() => {});
 
     useEffect(() => {
+        if (embedded) return;
         const id = requestAnimationFrame(() => setShown(true));
         return () => cancelAnimationFrame(id);
-    }, []);
+    }, [embedded]);
 
     const canSave = !!(first.trim() || last.trim() || phone.trim());
 
@@ -35,13 +38,17 @@ export function AddContact({ onCancel, onSave, initialPhone = '' }: { onCancel: 
         return { id: `c-${Date.now()}`, name, initials, color, avatar: avatar || undefined, phone: phone.trim() || 'No Number' };
     }
 
-    function cancel() { exit.current = onCancel; setShown(false); }
+    function cancel() {
+        if (embedded) { onCancel(); return; }
+        exit.current = onCancel; setShown(false);
+    }
     async function save() {
         if (saving) return;
         setError(null);
         setSaving(true);
         const err = await onSave(build());
         if (err) { setSaving(false); setError(err); return; }
+        if (embedded) { onCancel(); return; }
         exit.current = onCancel;
         setShown(false);
     }
@@ -49,7 +56,7 @@ export function AddContact({ onCancel, onSave, initialPhone = '' }: { onCancel: 
     return (
         <div
             className="absolute inset-0 flex flex-col bg-[#d4d4d4] dark:bg-base"
-            style={{
+            style={embedded ? undefined : {
                 transform:  shown ? 'translateY(0)' : 'translateY(100%)',
                 transition: 'transform 0.34s cubic-bezier(0.32,0.72,0,1)',
             }}

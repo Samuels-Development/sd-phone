@@ -31,6 +31,7 @@ import { VoicePanel }    from './VoicePanel';
 import { AddMemberSheet } from './AddMemberSheet';
 import { EditGroupSheet } from './EditGroupSheet';
 import { AddContact } from '@/apps/phone/contacts/AddContact';
+import { Sheet } from '@/ui/Sheet';
 import type { Contact as PhoneContact } from '@/apps/phone/data';
 
 type Panel = 'emoji' | 'photos' | 'gif' | 'money' | 'location' | 'voice' | null;
@@ -236,11 +237,14 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
     const name = conv.groupName ?? conv.participants[0]?.name ?? t('messages.unknown', 'Unknown');
 
     // For a 1:1 thread with a number that isn't saved yet, offer to add it as a contact.
+    // Service short codes (5-digit app senders, password resets) aren't people: real player
+    // numbers are 10 digits (7+ on servers with imported numbers), so shorter senders hide it.
     const soloNumber = !conv.groupName
         ? (conv.participants[0]?.phone ?? conv.participants[0]?.id ?? '').replace(/\D/g, '')
         : '';
     const isKnownNumber = !soloNumber || contacts.some(c => (c.phone ?? '').replace(/\D/g, '') === soloNumber);
-    const canAddContact = !!onSaveContact && !!soloNumber && !isKnownNumber;
+    const isServiceNumber = soloNumber.length > 0 && soloNumber.length < 7;
+    const canAddContact = !!onSaveContact && !!soloNumber && !isServiceNumber && !isKnownNumber;
 
     interface RenderMsg { kind: 'msg'; msg: Message; isLast: boolean; contact?: Contact }
     interface RenderSep { kind: 'separator'; ts: number }
@@ -694,14 +698,19 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
                 />
             )}
 
+            {/* Standard sheet presentation (media-picker sizing); embedded AddContact lets the
+                sheet own the slide animation. */}
             {addingContact && onSaveContact && (
-                <div className="absolute inset-0 z-30">
-                    <AddContact
-                        initialPhone={soloNumber}
-                        onCancel={() => setAddingContact(false)}
-                        onSave={onSaveContact}
-                    />
-                </div>
+                <Sheet onClose={() => setAddingContact(false)} grabber={false} className="font-sf bg-[#d4d4d4] dark:bg-base">
+                    {({ close }) => (
+                        <AddContact
+                            embedded
+                            initialPhone={soloNumber}
+                            onCancel={close}
+                            onSave={onSaveContact}
+                        />
+                    )}
+                </Sheet>
             )}
         </div>
     );
