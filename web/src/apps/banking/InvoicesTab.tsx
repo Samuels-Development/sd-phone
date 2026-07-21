@@ -1,5 +1,9 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ReceiptText } from 'lucide-react';
+
+import { ContactAvatar, PlaceholderAvatar } from '@/shared/ContactAvatar';
+import { useContacts } from '@/stores/contactsStore';
+import { digits } from '@/lib/format';
 
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
@@ -24,6 +28,18 @@ export function InvoicesTab({ onPaid }: { onPaid: () => void }) {
 
     const { data: sent, refetch: refetchSent } = useAsyncData(fetchPersonalSent, []);
     useNuiEvent('sd-phone:services:invoices', useCallback(() => { refetchSent(); }, [refetchSent]));
+
+    // Live contact resolution for the sent rows: a saved card shows its avatar/initials, an
+    // unsaved number falls back to the silhouette the received list uses.
+    const { contacts } = useContacts('contacts');
+    const contactByNumber = useMemo(() => {
+        const map = new Map<string, (typeof contacts)[number]>();
+        for (const c of contacts) {
+            const key = digits(c.phone ?? '');
+            if (key) map.set(key, c);
+        }
+        return map;
+    }, [contacts]);
 
     async function doCancel(inv: PersonalInvoice) {
         const res = await cancelPersonalInvoice(inv.id);
@@ -70,10 +86,13 @@ export function InvoicesTab({ onPaid }: { onPaid: () => void }) {
                     />
                 ) : (
                     <div className="overflow-hidden rounded-[16px] bg-[#e5e5e5] dark:bg-surface">
-                        {sentList.map((inv, i) => (
+                        {sentList.map((inv, i) => {
+                            const card = contactByNumber.get(digits(inv.toNumber));
+                            return (
                             <div key={inv.id}>
                                 {i > 0 && <div className="pointer-events-none bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />}
                                 <div className="flex items-center gap-3 px-4 py-3.5">
+                                    {card ? <ContactAvatar contact={card} size={42} /> : <PlaceholderAvatar size={42} />}
                                     <div className="min-w-0 flex-1">
                                         <div className="truncate text-[17px] font-semibold text-black dark:text-white">{inv.toName}</div>
                                         <div className="truncate text-[15px] font-medium text-ios-gray">
@@ -98,7 +117,8 @@ export function InvoicesTab({ onPaid }: { onPaid: () => void }) {
                                     </div>
                                 </div>
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
                 </div>
