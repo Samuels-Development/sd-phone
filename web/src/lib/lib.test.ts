@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { colorFor, digits, hashColor, hashIndex, initials, initialsFor, newId } from './format';
+import { colorFor, digits, hashColor, hashIndex, initials, initialsFor, isNumericName, newId } from './format';
 import { formatDuration, format12h, relTimeCompact } from './time';
 import { hashSeed, seededRandom } from './random';
 
@@ -23,6 +23,19 @@ describe('format.digits', () => {
     it('strips non-digits', () => {
         expect(digits('(555) 123-4567')).toBe('5551234567');
         expect(digits('no digits')).toBe('');
+    });
+});
+
+describe('format.isNumericName', () => {
+    it('is true for phone numbers and digit-only strings', () => {
+        expect(isNumericName('(213) 555-0148')).toBe(true);
+        expect(isNumericName('2135550148')).toBe(true);
+        expect(isNumericName('+1 213 555 0148')).toBe(true);
+    });
+    it('is false for real contact names', () => {
+        expect(isNumericName('Amir Vance')).toBe(false);
+        expect(isNumericName('LS Mechanics')).toBe(false);
+        expect(isNumericName('Ghost')).toBe(false);
     });
 });
 

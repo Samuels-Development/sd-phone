@@ -152,11 +152,9 @@ function RecentAvatar({ entry }: { entry: CallEntry }) {
         );
     }
     return (
-        <div
-            className="flex shrink-0 items-center justify-center rounded-full bg-[#b6b6bb] text-white/90 dark:bg-control"
-            style={{ width: size, height: size, fontSize: size * 0.34, fontWeight: 600 }}
-        >
-            ??
-        </div>
+        <ContactAvatar
+            contact={{ id: entry.number, name: formatPhone(entry.number), initials: '', color: '#8e8e93', phone: entry.number }}
+            size={size}
+        />
     );
 }

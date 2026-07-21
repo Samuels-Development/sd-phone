@@ -1,4 +1,6 @@
-import { initials } from '@/lib/format';
+import { UserRound } from 'lucide-react';
+
+import { initials, isNumericName } from '@/lib/format';
 
 export interface AvatarSubject {
     id?:      string;
@@ -6,6 +8,19 @@ export interface AvatarSubject {
     initials: string;
     color:    string;
     avatar?:  string;
+}
+
+// Unknown numbers (no saved contact) get an iOS-style person glyph instead of number-derived
+// initials. Matches the empty-avatar placeholder used by Add Contact and No Caller ID.
+function PlaceholderAvatar({ size }: { size: number }) {
+    return (
+        <span
+            className="shrink-0 flex items-center justify-center rounded-full bg-[#b6b6bb] dark:bg-control"
+            style={{ width: size, height: size }}
+        >
+            <UserRound className="text-white/90" strokeWidth={1.6} fill="currentColor" size={Math.round(size * 0.54)} />
+        </span>
+    );
 }
 
 export function ContactAvatar({ contact, size = 50 }: { contact: AvatarSubject; size?: number }) {
@@ -21,6 +36,10 @@ export function ContactAvatar({ contact, size = 50 }: { contact: AvatarSubject; 
                 style={{ width: size, height: size }}
             />
         );
+    }
+
+    if (isNumericName(contact.name)) {
+        return <PlaceholderAvatar size={size} />;
     }
 
     return (
@@ -80,6 +99,9 @@ export function GroupAvatar({ contacts, size = 50, avatar }: { contacts: AvatarS
 }
 
 export function InitialsAvatar({ name, color = '#3b82f6', size = 44 }: { name: string; color?: string; size?: number }) {
+    if (isNumericName(name)) {
+        return <PlaceholderAvatar size={size} />;
+    }
     return (
         <span
             className="flex shrink-0 items-center justify-center rounded-full font-bold text-white"
