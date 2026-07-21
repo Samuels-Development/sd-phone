@@ -1,6 +1,6 @@
 
 import { fetchNui, isFiveM } from '@/core/nui';
-import { colorFor, initialsFor } from '@/lib/format';
+import { colorFor, digits, initialsFor } from '@/lib/format';
 import { formatPhone } from '@/apps/phone/data';
 import { CONTACTS, CONVERSATIONS, ME, type Contact, type Conversation, type Message, type Reaction } from './data';
 import { apiCall, apiData } from '@/core/api';
@@ -31,6 +31,25 @@ export function contactFromNumber(number: string): Contact {
     const d = number.replace(/\D/g, '');
     const name = formatPhone(d);
     return { id: d, name, initials: initialsFor(name), color: colorFor(d || name), phone: d };
+}
+
+// Re-resolves a 1:1 conversation's display identity against the live contacts book, so a
+// contact rename/delete/add is reflected without a refetch. Groups keep their server-supplied
+// participants. Short numeric ids (service short codes) keep their server label, since those
+// senders are never saved contacts and carry a meaningful name (e.g. an app verification code).
+export function resolveConvParticipant(conv: Conversation, cardByNumber: Map<string, Contact>): Conversation {
+    if (conv.groupName) return conv;
+    const p   = conv.participants[0];
+    const key = digits(p?.phone ?? p?.id ?? conv.id ?? '');
+    if (!key) return conv;
+
+    const resolved = cardByNumber.get(key) ?? (key.length >= 7 ? contactFromNumber(key) : undefined);
+    if (!resolved) return conv;
+    if (p && p.name === resolved.name && p.avatar === resolved.avatar
+        && p.color === resolved.color && p.initials === resolved.initials) {
+        return conv;
+    }
+    return { ...conv, participants: [resolved] };
 }
 
 function cloneConv(c: Conversation): Conversation {
