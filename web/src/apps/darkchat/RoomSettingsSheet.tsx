@@ -8,7 +8,7 @@ import { hashColor } from '@/lib/format';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { Sheet } from '@/ui/Sheet';
 import { Toggle } from '@/ui/Toggle';
-import type { Room, RoomMember } from './data';
+import type { Room, RoomInfo, RoomMember } from './data';
 
 const PALETTE = ['#5ac8fa', '#34c759', '#ff9f0a', '#ff375f', '#bf5af2', '#64d2ff', '#ffd60a', '#ff453a'];
 
@@ -45,7 +45,7 @@ export function RoomSettingsSheet({ room, nickname, onClose, onLeave, onMemberRe
             return;
         }
         let alive = true;
-        apiData<{ notifications: boolean; isCreator: boolean; members?: RoomMember[] }>('sd-phone:darkchat:roomInfo', { roomId: room.id })
+        apiData<RoomInfo>('sd-phone:darkchat:roomInfo', { roomId: room.id })
             .then(r => {
                 if (!alive || !r) return;
                 setNotifications(r.notifications);
