@@ -214,7 +214,12 @@ function actions.dial(source, payload)
     local muted = moderation.guard(cid, 'calls'); if muted then return muted end
 
     local myNumber = settings.ensurePhoneNumber(cid)
-    if myNumber and digits(myNumber) == dialed then return fail('You can\'t call yourself') end
+    -- Number-dependent: no number in service (device mode with the SIM out) can't place a call.
+    -- In legacy/stock a resolvable caller always has a number, so this never trips.
+    if not myNumber or digits(myNumber) == '' then
+        return fail('No service. Install a SIM card to place calls.')
+    end
+    if digits(myNumber) == dialed then return fail('You can\'t call yourself') end
 
     local targetCid = settings.getCitizenByNumber(dialed)
     if not targetCid then

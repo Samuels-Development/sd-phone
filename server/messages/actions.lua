@@ -646,6 +646,12 @@ function actions.send(source, payload)
 
     local isGroup = conversation:sub(1, 2) == 'g-'
 
+    -- Number-dependent: a phone with no number in service can't send (device mode with the SIM
+    -- out; in legacy/stock a resolvable caller always has a number, so this never trips). Gate
+    -- BEFORE the money branch so a refused text never moves cash.
+    local myNumber = digits(settings.ensurePhoneNumber(cid) or '')
+    if myNumber == '' then return fail('No service. Install a SIM card to send messages.') end
+
     if kind == 'money' then
         if isGroup then return fail('Money can only be sent in a direct message') end
         if not meta.requested then
@@ -660,7 +666,6 @@ function actions.send(source, payload)
         end
     end
 
-    local myNumber = digits(settings.ensurePhoneNumber(cid) or '')
     local ts = os.time()
     local mid = store.newId()
 
