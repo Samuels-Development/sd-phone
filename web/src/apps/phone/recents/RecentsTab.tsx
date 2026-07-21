@@ -153,7 +153,7 @@ function RecentAvatar({ entry }: { entry: CallEntry }) {
     }
     return (
         <ContactAvatar
-            contact={{ id: entry.number, name: formatPhone(entry.number), initials: '', color: '#8e8e93', phone: entry.number }}
+            contact={{ id: entry.number, name: formatPhone(entry.number), initials: '', color: '#8e8e93' }}
             size={size}
         />
     );
