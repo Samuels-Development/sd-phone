@@ -25,6 +25,8 @@ local COMPANIES = SV.Companies or {}
 local MIN      = SV.MinInvoiceAmount or 1
 ---@type integer Largest invoice amount.
 local MAX_AMT  = SV.MaxInvoiceAmount or 1000000
+---@type boolean Master on/off for business invoicing (SV.InvoicesEnabled; defaults on).
+local ENABLED  = SV.InvoicesEnabled ~= false
 ---@type integer Cap on how many rows the sent/received lists return.
 local LIST_CAP = 50
 
@@ -132,6 +134,7 @@ end
 ---@param src number
 ---@return table
 function invoices.list(src)
+    if not ENABLED then return ok({ invoices = {} }) end
     if not job.supportsMultijob() then return ok({ invoices = {} }) end
     local cid = player.getIdentifier(src)
     if not cid then return fail('Player not found') end
@@ -150,6 +153,7 @@ end
 ---@param payload { number?: string, amount?: number, note?: string }
 ---@return table
 function invoices.create(src, payload)
+    if not ENABLED then return fail('Invoicing is disabled') end
     payload = type(payload) == 'table' and payload or {}
     local myJob, cidOrErr = requireOnDutyBusiness(src)
     if not myJob then return fail(cidOrErr) end
@@ -220,6 +224,7 @@ end
 ---@param payload { id?: string }
 ---@return table
 function invoices.cancel(src, payload)
+    if not ENABLED then return fail('Invoicing is disabled') end
     payload = type(payload) == 'table' and payload or {}
     local myJob, cidOrErr = requireOnDutyBusiness(src)
     if not myJob then return fail(cidOrErr) end
@@ -241,6 +246,7 @@ end
 ---@param src number
 ---@return table
 function invoices.received(src)
+    if not ENABLED then return ok({ invoices = {} }) end
     local cid = player.getIdentifier(src)
     if not cid then return fail('Player not found') end
 
@@ -256,6 +262,7 @@ end
 ---@param payload { id?: string }
 ---@return table
 function invoices.pay(src, payload)
+    if not ENABLED then return fail('Invoicing is disabled') end
     payload = type(payload) == 'table' and payload or {}
     local cid = player.getIdentifier(src)
     if not cid then return fail('Player not found') end

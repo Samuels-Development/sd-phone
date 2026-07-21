@@ -25,6 +25,7 @@ export interface Directory {
     companies:  Company[];
     myCompany?: MyCompany | null;
     multijob?:  boolean;
+    invoicesEnabled?: boolean;
     pendingOffers?: number;
 }
 
@@ -50,7 +51,7 @@ const DEV_MY_COMPANY: MyCompany = {
     employees: EMPLOYEES,
 };
 
-const DEV_DIRECTORY: Directory = { companies: COMPANIES, myCompany: DEV_MY_COMPANY, multijob: true, pendingOffers: 1 };
+const DEV_DIRECTORY: Directory = { companies: COMPANIES, myCompany: DEV_MY_COMPANY, multijob: true, invoicesEnabled: true, pendingOffers: 1 };
 
 export async function fetchDirectory(): Promise<Directory> {
     if (!isFiveM) return DEV_DIRECTORY;

@@ -22,9 +22,10 @@ function prevGrade(grades: Grade[], current: number): Grade | null {
     return grades.filter(g => g.level < current).sort((a, b) => b.level - a.level)[0] ?? null;
 }
 
-export function ActionsTab({ myCompany, multijob = false, onChanged }: {
+export function ActionsTab({ myCompany, multijob = false, invoicesEnabled = false, onChanged }: {
     myCompany: MyCompany | null;
     multijob?: boolean;
+    invoicesEnabled?: boolean;
     onChanged: (mc: MyCompany | null | undefined) => void;
 }) {
     const [amountFor, setAmountFor] = useState<null | 'deposit' | 'withdraw'>(null);
@@ -77,7 +78,7 @@ export function ActionsTab({ myCompany, multijob = false, onChanged }: {
 
     const showMoney     = myCompany.isBoss && myCompany.available;
     const showEmployees = myCompany.isBoss;
-    const showInvoices  = multijob && myCompany.duty;
+    const showInvoices  = invoicesEnabled && multijob && myCompany.duty;
     const dutyOff       = !myCompany.duty;
 
     return (
