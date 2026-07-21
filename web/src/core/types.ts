@@ -233,6 +233,7 @@ export type NuiMessage =
       } }
     | { action: 'sd-phone:darkchat:active'; data: { roomId: string; active: number } }
     | { action: 'sd-phone:darkchat:reaction'; data: { roomId: string; messageId: string; reactions: { emoji: string; count: number; mine: boolean }[] } }
+    | { action: 'sd-phone:darkchat:kicked'; data: { roomId: string } }
     | { action: 'sd-phone:call:incoming';  data: CallPush }
     | { action: 'sd-phone:call:outgoing';  data: CallPush }
     | { action: 'sd-phone:call:connected'; data: { channel: number } }

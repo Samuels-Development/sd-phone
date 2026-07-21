@@ -2,6 +2,8 @@
 local store   = require 'server.darkchat.store'
 ---@type table Dark Chat business logic (server.darkchat.actions): validated room/message/reaction handlers.
 local actions = require 'server.darkchat.actions'
+---@type table Player bridge (bridge.server.player): server id lookups from a citizenid.
+local player  = require 'bridge.server.player'
 
 -- Schema bootstrap runs once at load; a failure is printed.
 CreateThread(function()
@@ -105,6 +107,28 @@ local function broadcast(roomId, exceptSrc, message)
     end
 end
 
+---Fires the standard phone notification + darkchat badge to private-room members who opted in,
+---skipping the sender and anyone currently viewing the room (they already got the live message,
+---so no banner spam). Offline members are simply not reachable - Dark Chat keeps no server-side
+---unread badge.
+---@param roomId string room id
+---@param exceptSrc integer sender to skip
+---@param message table client-shaped message from actions.send
+local function pushNotifications(roomId, exceptSrc, message)
+    local note = actions.notifyTargets(exceptSrc, roomId, message)
+    if not note then return end
+    local viewers = present[roomId]
+    for _, cid in ipairs(note.citizenids) do
+        local tgt = player.getSourceByIdentifier(cid)
+        if tgt and tgt ~= exceptSrc and not (viewers and viewers[tgt]) then
+            TriggerClientEvent('sd-phone:client:notify', tgt, {
+                app = 'darkchat', appId = 'darkchat', time = 'now',
+                title = note.title, body = note.body,
+            })
+        end
+    end
+end
+
 ---Pushes a message's new reaction set to everyone in the room except the reactor.
 ---@param roomId string room id
 ---@param exceptSrc integer reactor to skip
@@ -177,7 +201,10 @@ end)
 lib.callback.register('sd-phone:server:darkchat:send', function(src, payload)
     if type(payload) ~= 'table' then payload = {} end
     local res = actions.send(src, payload.roomId, payload)
-    if res.success then broadcast(payload.roomId, src, res.data.message) end
+    if res.success then
+        broadcast(payload.roomId, src, res.data.message)
+        pushNotifications(payload.roomId, src, res.data.message)
+    end
     return res
 end)
 
@@ -218,6 +245,38 @@ end)
 lib.callback.register('sd-phone:server:darkchat:nickname', function(src, payload)
     if type(payload) ~= 'table' then payload = {} end
     return actions.setNickname(src, payload.nickname)
+end)
+
+---Room settings for a private room: the caller's notification flag, whether they are the creator,
+---and (creator only) the member list.
+---@param payload table { roomId: string }
+lib.callback.register('sd-phone:server:darkchat:roomInfo', function(src, payload)
+    local roomId = type(payload) == 'table' and payload.roomId or nil
+    if type(roomId) ~= 'string' then return { success = false } end
+    return actions.roomInfo(src, roomId)
+end)
+
+---Toggle the caller's own per-room notification flag.
+---@param payload table { roomId: string, enabled: boolean }
+lib.callback.register('sd-phone:server:darkchat:notifications', function(src, payload)
+    if type(payload) ~= 'table' then payload = {} end
+    return actions.setNotifications(src, payload.roomId, payload.enabled)
+end)
+
+---Creator removes a member: validated in actions.kick, then the kicked player is scrubbed from the
+---room's presence and told to drop it from their UI live. The client never sees the target's
+---citizenid - only the echoed member token comes back.
+---@param payload table { roomId: string, memberId: string }
+lib.callback.register('sd-phone:server:darkchat:kick', function(src, payload)
+    if type(payload) ~= 'table' then payload = {} end
+    local res = actions.kick(src, payload.roomId, payload.memberId)
+    if not res.success then return res end
+    local tgt = player.getSourceByIdentifier(res.data.targetCid)
+    if tgt then
+        leavePresence(tgt, res.data.roomId)
+        TriggerClientEvent('sd-phone:client:darkchat:kicked', tgt, { roomId = res.data.roomId })
+    end
+    return { success = true, data = { memberId = res.data.memberId } }
 end)
 
 ---A disconnecting player is scrubbed from all presence state, and each public room they were

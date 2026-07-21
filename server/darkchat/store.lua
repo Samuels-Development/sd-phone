@@ -5,6 +5,9 @@
 ---use 'p-<code>'.
 local store = {}
 
+local util = require 'server.util'
+local isTruthy = util.truthy
+
 ---Create the Dark Chat tables if they don't exist and back-fill newer columns, so the resource is
 ---drop-in. `kind` tags a message's type and `meta` holds a JSON blob of its extra fields (media
 ---URL, audio + duration, waypoint, reply quote); rows from before those columns exist default to
@@ -30,6 +33,10 @@ function store.ensureSchema()
             PRIMARY KEY (`room_id`, `citizenid`),
             KEY `citizenid` (`citizenid`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ]])
+    MySQL.query.await([[
+        ALTER TABLE `darkchat_members`
+            ADD COLUMN IF NOT EXISTS `notifications` TINYINT(1) NOT NULL DEFAULT 0
     ]])
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS `darkchat_messages` (
@@ -86,6 +93,15 @@ function store.roomByCode(code)
     return MySQL.single.await('SELECT * FROM `darkchat_rooms` WHERE code = ?', { code })
 end
 
+---The full room row for a room id, or nil. The row includes the owner citizenid (the room's
+---creator) - callers must never forward it to a client; it gates the kick permission check.
+---Read-only.
+---@param roomId string room id
+---@return table|nil row darkchat_rooms row
+function store.roomById(roomId)
+    return MySQL.single.await('SELECT * FROM `darkchat_rooms` WHERE id = ?', { roomId })
+end
+
 ---Every private room `cid` is a member of, newest joins first. Rows include the owner citizenid -
 ---callers must never forward it to a client. Read-only.
 ---@param cid string citizenid
@@ -122,6 +138,54 @@ end
 ---@return boolean member
 function store.isMember(roomId, cid)
     return MySQL.scalar.await('SELECT 1 FROM `darkchat_members` WHERE room_id = ? AND citizenid = ? LIMIT 1', { roomId, cid }) ~= nil
+end
+
+---Whether `cid` has per-room message notifications switched on for `roomId`; false when they
+---hold no membership row. Read-only.
+---@param roomId string room id
+---@param cid string citizenid
+---@return boolean enabled
+function store.getNotifications(roomId, cid)
+    return isTruthy(MySQL.scalar.await('SELECT notifications FROM `darkchat_members` WHERE room_id = ? AND citizenid = ?', { roomId, cid }))
+end
+
+---Set `cid`'s per-room notification flag on `roomId`. Scoped to the caller's own membership row.
+---@param roomId string room id
+---@param cid string citizenid
+---@param enabled boolean
+function store.setNotifications(roomId, cid, enabled)
+    MySQL.query.await('UPDATE `darkchat_members` SET notifications = ? WHERE room_id = ? AND citizenid = ?',
+        { enabled and 1 or 0, roomId, cid })
+end
+
+---The citizenids of every member of `roomId` who has notifications enabled, except `exceptCid`
+---(the sender). Feeds the incoming-message notification fan-out. Read-only.
+---@param roomId string room id
+---@param exceptCid string citizenid to skip (message author)
+---@return string[] citizenids
+function store.notifyMembersFor(roomId, exceptCid)
+    local rows = MySQL.query.await(
+        'SELECT citizenid FROM `darkchat_members` WHERE room_id = ? AND notifications = 1 AND citizenid <> ?',
+        { roomId, exceptCid }) or {}
+    local out = {}
+    for _, r in ipairs(rows) do out[#out + 1] = r.citizenid end
+    return out
+end
+
+---Every member of `roomId` with their saved Dark Chat nickname (NULL when they never picked
+---one), oldest join first. Reactor/owner anonymity does not apply here - the list is only ever
+---built for the room's creator and citizenids stay server-side (the caller maps them to opaque
+---tokens). Read-only.
+---@param roomId string room id
+---@return table[] rows { citizenid, nickname } rows
+function store.membersWithNames(roomId)
+    return MySQL.query.await([[
+        SELECT m.citizenid AS citizenid, n.nickname AS nickname
+        FROM `darkchat_members` m
+        LEFT JOIN `darkchat_nicknames` n ON n.citizenid = m.citizenid
+        WHERE m.room_id = ?
+        ORDER BY m.joined_at ASC
+    ]], { roomId }) or {}
 end
 
 ---How many players are members of a room. Read-only.
@@ -198,9 +262,6 @@ function store.toggleReaction(messageId, cid, emoji, ts)
         { messageId, cid, emoji, ts })
     return true
 end
-
-local util = require 'server.util'
-local isTruthy = util.truthy
 
 ---A message's reactions from `cid`'s viewpoint: one entry per emoji with a count (players who used
 ---it) and `mine` (did `cid` react with it), ordered by when each emoji first appeared. Reactor

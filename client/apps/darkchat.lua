@@ -13,6 +13,9 @@ proxy('sd-phone:darkchat:join',     'sd-phone:server:darkchat:join')
 proxy('sd-phone:darkchat:leave',    'sd-phone:server:darkchat:leave')
 proxy('sd-phone:darkchat:nickname', 'sd-phone:server:darkchat:nickname')
 proxy('sd-phone:darkchat:exit',     'sd-phone:server:darkchat:exit')
+proxy('sd-phone:darkchat:roomInfo', 'sd-phone:server:darkchat:roomInfo')
+proxy('sd-phone:darkchat:notifications', 'sd-phone:server:darkchat:notifications')
+proxy('sd-phone:darkchat:kick',     'sd-phone:server:darkchat:kick')
 
 ---Server push: a message landed in a room we're a member of; relays it to an open room.
 ---@param data table message record from server/darkchat
@@ -30,4 +33,10 @@ end)
 ---@param data table reaction patch from server/darkchat
 RegisterNetEvent('sd-phone:client:darkchat:reaction', function(data)
     SendNUIMessage({ action = 'sd-phone:darkchat:reaction', data = data })
+end)
+
+---Server push: the room's creator removed us; relays it so the app drops the room live.
+---@param data table { roomId } from server/darkchat
+RegisterNetEvent('sd-phone:client:darkchat:kicked', function(data)
+    SendNUIMessage({ action = 'sd-phone:darkchat:kicked', data = data })
 end)

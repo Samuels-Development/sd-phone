@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, LogOut, Users } from 'lucide-react';
+import { ArrowLeft, Info, Users } from 'lucide-react';
 
 import { fetchNui } from '@/core/nui';
 import { t } from '@/i18n';
@@ -14,19 +14,22 @@ import { useTapbackDismiss } from '@/shared/chat/useTapbackDismiss';
 import { decodeWaypoint } from '@/lib/waypointCode';
 import { apiSavePhotoFromUrl } from '@/core/photosApi';
 import { Composer } from './Composer';
+import { RoomSettingsSheet } from './RoomSettingsSheet';
 import { toBubbleMsg, type ChatMessage, type DarkChatDraft, type Room } from './data';
 
-export function RoomView({ room, nickname, onBack, onSend, onReact, onLeave, animateIn = true }: {
+export function RoomView({ room, nickname, onBack, onSend, onReact, onLeave, onMemberRemoved, animateIn = true }: {
     room:     Room;
     nickname: string;
     onBack:   () => void;
     onSend:   (draft: DarkChatDraft) => void;
     onReact:  (messageId: string, emoji: string) => void;
     onLeave:  () => void;
+    onMemberRemoved: () => void;
     animateIn?: boolean;
 }) {
     const { goBack, pageStyle } = useIosPush(onBack, animateIn);
     const [pickerId, setPickerId] = useState<string | null>(null);
+    const [settingsOpen, setSettingsOpen] = useState(false);
     const [reply,    setReply]    = useState<ChatMessage | null>(null);
     const [preview,  setPreview]  = useState<string | null>(null);
     const [savedPreview, setSavedPreview] = useState(false);
@@ -99,8 +102,8 @@ export function RoomView({ room, nickname, onBack, onSend, onReact, onLeave, ani
                 </div>
 
                 {room.isPrivate ? (
-                    <button type="button" onClick={onLeave} aria-label={t('darkchat.leaveRoom', 'Leave room')} className="z-10 text-ios-red active:opacity-60">
-                        <LogOut className="h-[23px] w-[23px]" strokeWidth={2.2} />
+                    <button type="button" onClick={() => setSettingsOpen(true)} aria-label={t('darkchat.roomSettings', 'Room Settings')} className="z-10 text-ios-blue active:opacity-60">
+                        <Info className="h-[25px] w-[25px]" strokeWidth={2.2} />
                     </button>
                 ) : (
                     <div className="h-[26px] w-[26px] shrink-0" aria-hidden />
@@ -179,6 +182,16 @@ export function RoomView({ room, nickname, onBack, onSend, onReact, onLeave, ani
                         label: savedPreview ? t('darkchat.savedToGallery', 'Saved to Gallery') : t('darkchat.saveToGallery', 'Save to Gallery'),
                         onClick: () => { if (!savedPreview) { void apiSavePhotoFromUrl(preview); setSavedPreview(true); } },
                     }}
+                />
+            )}
+
+            {settingsOpen && (
+                <RoomSettingsSheet
+                    room={room}
+                    nickname={nickname}
+                    onClose={() => setSettingsOpen(false)}
+                    onLeave={onLeave}
+                    onMemberRemoved={onMemberRemoved}
                 />
             )}
         </div>
