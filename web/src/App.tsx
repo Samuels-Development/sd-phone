@@ -1091,6 +1091,27 @@ function AppContent() {
             {import.meta.env.DEV && (
                 <button
                     type="button"
+                    onClick={() => window.postMessage({
+                        action: 'sd-phone:payphone:open',
+                        data: {
+                            number:    '2085550142',
+                            anonymous: false,
+                            myNumber:  '2085559873',
+                            favorites: [
+                                { name: 'Tommy V',      phone: '2085552398' },
+                                { name: 'Mechanic Joe', phone: '2085556641' },
+                                { name: 'Rosa',         phone: '2085551177' },
+                            ],
+                        },
+                    }, '*')}
+                    className="fixed left-3 top-[84px] z-[99999] rounded-md bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/20 hover:bg-black/90"
+                >
+                    Payphone
+                </button>
+            )}
+            {import.meta.env.DEV && (
+                <button
+                    type="button"
                     onClick={() => setHour24(!hour24)}
                     className="fixed left-3 top-[84px] z-[99999] rounded-md bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/20 hover:bg-black/90"
                 >

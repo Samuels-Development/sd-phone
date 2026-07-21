@@ -24,7 +24,9 @@ local ringing = {}
 local function ringAt(entity)
     local pos = GetEntityCoords(entity)
     for channel, entry in pairs(ringing) do
-        if #(pos - entry.coords) < 3.0 then return channel, entry end
+        -- Tight radius: banks of payphones sit ~1.5m apart, so a looser match would
+        -- offer "Answer Phone" on the booth NEXT to the one that is actually ringing.
+        if #(pos - entry.coords) < 0.8 then return channel, entry end
     end
     return nil
 end
@@ -43,6 +45,21 @@ end)
 AddEventHandler('sd-phone:client:wipeFocus', function()
     activeLocation = nil
 end)
+
+---Config-gated console print for the interaction/prop-swap path.
+local function dbg(fmt, ...)
+    if cfg.Debug then print(('[sd-phone:payphone] ' .. fmt):format(...)) end
+end
+
+---Reverse model lookup for readable debug output.
+---@param hash number entity model hash
+---@return string
+local function modelName(hash)
+    for _, model in ipairs(cfg.Models or {}) do
+        if joaat(model) == hash then return model end
+    end
+    return ('0x%X'):format(hash)
+end
 
 ---Rounded-coords key for a booth, matching what the server distance-checks against.
 ---@param coords vector3
@@ -95,9 +112,19 @@ end
 ---@param entity number world booth entity
 local function beginBoothAnim(entity)
     local scene = cfg.Scene
-    if not scene or scene.Enabled == false or not entity or entity == 0 then return end
-    local variant = animVariants[GetEntityModel(entity)]
-    if not loadSceneAssets(variant) then return end
+    if not scene or scene.Enabled == false or not entity or entity == 0 then
+        dbg('beginBoothAnim skipped: scene=%s entity=%s', tostring(scene and scene.Enabled), tostring(entity))
+        return
+    end
+    local model   = GetEntityModel(entity)
+    local variant = animVariants[model]
+    dbg('beginBoothAnim: entity=%d model=%s variant=%s coords=%s', entity, modelName(model), tostring(variant), tostring(GetEntityCoords(entity)))
+    if not loadSceneAssets(variant) then
+        dbg('scene assets FAILED to load: dict=%s (loaded=%s) variant=%s (loaded=%s)',
+            tostring(scene.Dict), tostring(HasAnimDictLoaded(scene.Dict)),
+            tostring(variant), tostring(variant and HasModelLoaded(joaat(variant))))
+        return
+    end
 
     local ped    = PlayerPedId()
     local booth  = GetEntityCoords(entity)
@@ -105,17 +132,22 @@ local function beginBoothAnim(entity)
 
     if variant then
         SetEntityVisible(entity, false, false)
-        animProp = CreateObjectNoOffset(joaat(variant), booth.x, booth.y, booth.z, true, true, true)
+        -- Local-only spawn: the swap is a personal visual; a networked object would
+        -- appear (unhidden and duplicated) for every other client nearby.
+        animProp = CreateObjectNoOffset(joaat(variant), booth.x, booth.y, booth.z, false, false, true)
         SetEntityHeading(animProp, GetEntityHeading(entity))
         SetEntityCompletelyDisableCollision(animProp, false, false)
         SetModelAsNoLongerNeeded(joaat(variant))
+        dbg('swap: hid entity=%d, spawned animProp=%d exists=%s at=%s heading=%.1f',
+            entity, animProp or -1, tostring(DoesEntityExist(animProp)), tostring(GetEntityCoords(animProp)), GetEntityHeading(animProp))
     end
 
     SetEntityCoords(ped, pos.x, pos.y, pos.z - 1.0, false, false, false, false)
     SetEntityHeading(ped, GetHeadingFromVector_2d(booth.x - pos.x, booth.y - pos.y))
 
     if animProp then
-        PlayEntityAnim(animProp, scene.EnterProp, scene.Dict, 10.0, true, true, true, 0.0, false)
+        local played = PlayEntityAnim(animProp, scene.EnterProp, scene.Dict, 10.0, true, true, true, 0.0, false)
+        dbg('PlayEntityAnim(%s / %s) -> %s', tostring(scene.Dict), tostring(scene.EnterProp), tostring(played))
     end
     TaskPlayAnim(ped, scene.Dict, scene.Enter, 8.0, 8.0, -1, 14, 0, false, false, false)
     animEntity = entity
@@ -149,6 +181,7 @@ local function endBoothAnim()
     local prop = animProp
     animProp = nil
     SetTimeout(2000, function()
+        dbg('endBoothAnim cleanup: deleting prop=%s, restoring entity=%s', tostring(prop), tostring(worldEntity))
         if prop and DoesEntityExist(prop) then DeleteEntity(prop) end
         if worldEntity and DoesEntityExist(worldEntity) then SetEntityVisible(worldEntity, true, false) end
         ClearPedTasks(PlayerPedId())
@@ -189,7 +222,19 @@ end
 ---@param state table payload from payphone:state
 local function openMenu(state)
     local function startCall(number)
+        -- Coin toll in menu mode: no slot to click, so the charge happens
+        -- implicitly on dial (the server still holds the authoritative gate).
+        if state.coin and state.coin.enabled and not state.credited then
+            local pay = lib.callback.await('sd-phone:server:payphone:insertCoin', false, { location = activeLocation })
+            if not pay or not pay.success then
+                lib.notify({ title = 'Payphone', description = (pay and pay.message) or 'You need change', type = 'error' })
+                endMenuSession()
+                return
+            end
+            state.credited = true
+        end
         local result = doDial(number)
+        if result.success then state.credited = false end -- the coin was spent on this call
         if not result.success then
             lib.notify({ title = 'Payphone', description = result.message or 'Call failed', type = 'error' })
             endMenuSession()
@@ -336,6 +381,14 @@ RegisterNUICallback('sd-phone:payphone:dial', function(data, cb)
     cb(doDial(tostring(data and data.number or '')))
 end)
 
+---NUI coin slot click: charge for one call credit (configs/payphone.lua Coin).
+RegisterNUICallback('sd-phone:payphone:insertcoin', function(_, cb)
+    if not activeLocation then return cb({ success = false }) end
+    cb(lib.callback.await('sd-phone:server:payphone:insertCoin', false, {
+        location = activeLocation,
+    }) or { success = false, message = 'No response from server' })
+end)
+
 RegisterNUICallback('sd-phone:payphone:hangup', function(_, cb)
     doHangup()
     cb({ ok = true })
@@ -398,6 +451,7 @@ if cfg.Enabled then
             end,
             onSelect = function(tdata)
                 local entity = tdata and tdata.entity
+                dbg('use target selected: tdata=%s entity=%s model=%s', type(tdata), tostring(entity), entity and entity ~= 0 and modelName(GetEntityModel(entity)) or '-')
                 if not entity or entity == 0 then return end
                 openPayphone(entity, GetEntityCoords(entity))
             end,
