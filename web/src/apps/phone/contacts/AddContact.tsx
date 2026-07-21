@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { UserRound } from 'lucide-react';
 
 import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
+import { PlaceholderAvatar } from '@/shared/ContactAvatar';
 import { t } from '@/i18n';
 import type { Contact } from '../data';
 import { SheetHeader } from '@/ui/SheetHeader';
@@ -70,9 +70,7 @@ export function AddContact({ onCancel, onSave, initialPhone = '', embedded = fal
                         {avatar ? (
                             <img src={avatar} alt="" draggable={false} className="h-full w-full object-cover" />
                         ) : (
-                            <span className="flex h-full w-full items-center justify-center bg-[#b6b6bb] dark:bg-control">
-                                <UserRound className="h-[64px] w-[64px] text-white/90" strokeWidth={1.6} fill="currentColor" />
-                            </span>
+                            <PlaceholderAvatar size={118} />
                         )}
                     </button>
                     <button type="button" onClick={() => setPicking(true)} className="mt-2.5 text-[16px] text-ios-blue active:opacity-60">
