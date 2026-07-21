@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { ChevronLeft, MessageSquare, Phone, Share, UserRound, Video } from 'lucide-react';
+import { ChevronLeft, MessageSquare, Phone, Share, Video } from 'lucide-react';
 
+import { PlaceholderAvatar } from '@/shared/ContactAvatar';
 import { formatPhone, type CallEntry } from '../data';
 import { t } from '@/i18n';
 
@@ -36,9 +37,7 @@ export function CallDetail({ entry, onBack, onAddToContacts }: {
 
             <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-6">
                 <div className="flex flex-col items-center pb-5 pt-1">
-                    <div className="flex items-center justify-center rounded-full bg-[#b6b6bb] dark:bg-control" style={{ width: 134, height: 134 }}>
-                        <UserRound className="h-[72px] w-[72px] text-white/90" strokeWidth={1.5} fill="currentColor" />
-                    </div>
+                    <PlaceholderAvatar size={134} />
                     <div className="mt-3 text-center text-[30px] font-semibold text-black dark:text-white">{title}</div>
                 </div>
 

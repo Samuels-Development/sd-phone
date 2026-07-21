@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Clock, Info, UserRound } from 'lucide-react';
+import { Clock, Info } from 'lucide-react';
 
-import { ContactAvatar } from '@/shared/ContactAvatar';
+import { ContactAvatar, PlaceholderAvatar } from '@/shared/ContactAvatar';
 import { EmptyState } from '@/ui/EmptyState';
 import { useSessionState } from '@/hooks/useSessionState';
 import { SegmentedControl } from '@/ui/SegmentedControl';
@@ -145,11 +145,7 @@ function RecentAvatar({ entry }: { entry: CallEntry }) {
         return <ContactAvatar contact={entry.contact} size={size} />;
     }
     if (entry.noCallerId) {
-        return (
-            <div className="flex shrink-0 items-center justify-center rounded-full bg-[#c2c2c7] dark:bg-control" style={{ width: size, height: size }}>
-                <UserRound className="h-[30px] w-[30px] text-white/90" strokeWidth={1.6} fill="currentColor" />
-            </div>
-        );
+        return <PlaceholderAvatar size={size} />;
     }
     return (
         <ContactAvatar

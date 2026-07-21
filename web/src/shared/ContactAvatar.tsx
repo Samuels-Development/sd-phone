@@ -1,5 +1,3 @@
-import { UserRound } from 'lucide-react';
-
 import { initials, isNumericName } from '@/lib/format';
 
 export interface AvatarSubject {
@@ -10,15 +8,26 @@ export interface AvatarSubject {
     avatar?:  string;
 }
 
-// Unknown numbers (no saved contact) get an iOS-style person glyph instead of number-derived
-// initials. Matches the empty-avatar placeholder used by Add Contact and No Caller ID.
-function PlaceholderAvatar({ size }: { size: number }) {
+// Full-bleed head-and-shoulders silhouette (the same shape Birdy uses for missing profile
+// pictures); the viewBox keeps the proportions at every avatar size.
+function PersonBust({ size }: { size: number }) {
+    return (
+        <svg viewBox="0 0 40 40" width={size} height={size} aria-hidden fill="currentColor">
+            <circle cx="20" cy="15.5" r="7.5" />
+            <path d="M3,40 C3,28 9.5,23 20,23 C30.5,23 37,28 37,40 Z" />
+        </svg>
+    );
+}
+
+// Unknown numbers (no saved contact) get an iOS-style silhouette instead of number-derived
+// initials; shared by the recents No Caller ID rows and the call detail header.
+export function PlaceholderAvatar({ size }: { size: number }) {
     return (
         <span
-            className="shrink-0 flex items-center justify-center rounded-full bg-[#b6b6bb] dark:bg-control"
+            className="shrink-0 flex items-center justify-center overflow-hidden rounded-full bg-[#b6b6bb] text-white/90 dark:bg-control"
             style={{ width: size, height: size }}
         >
-            <UserRound className="text-white/90" strokeWidth={1.6} fill="currentColor" size={Math.round(size * 0.54)} />
+            <PersonBust size={size} />
         </span>
     );
 }
