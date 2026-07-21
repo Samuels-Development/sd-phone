@@ -196,6 +196,12 @@ function AppContent() {
     const [landscape,       setLandscape]       = useState(false);
     const [installedApps,   setInstalledApps]   = useState<Set<string>>(new Set());
     const [savedLayout,     setSavedLayout]     = useState<SavedLayout | null>(null);
+    // In FiveM the installed apps + saved layout arrive via the sd-phone:apps follow-up (kept off
+    // the open round-trip). Hold the home grid until they land: the Homescreen seeds its slot
+    // layout once at mount, so mounting it against the transient empty layout would auto-arrange
+    // and then persist that arrangement back, clobbering the real one. The dev harness resolves
+    // both synchronously on open, so it's ready immediately.
+    const [appsReady,       setAppsReady]       = useState(!isFiveM);
     const [frameColor,      setFrameColor]      = useState<string>(DEFAULT_FRAME_COLOR);
     const downloadingIds = useDownloadingIds();
     const downloadQueue = useRef<string[]>([]);
@@ -320,8 +326,12 @@ function AppContent() {
         setSwitcherClosing(false);
         setSwitcherReady(false);
         setNotifs([]);
+        // In FiveM the installed list + saved layout arrive via the sd-phone:apps follow-up (kept
+        // off the open round-trip so the phone reveals instantly); only the dev harness fetches
+        // them inline here.
         if (data.installedApps) setInstalledApps(new Set([...data.installedApps, ...installedCustomIds()]));
-        else void listInstalledApps().then(ids => setInstalledApps(new Set([...ids, ...installedCustomIds()])));
+        else if (!isFiveM) void listInstalledApps().then(ids => setInstalledApps(new Set([...ids, ...installedCustomIds()])));
+        setAppsReady(!isFiveM);
         // Under unique phones the localStorage layout fallback is another profile's - server only.
         setSavedLayout(data.homeLayout ? parseLayout(data.homeLayout) : (data.sim?.enabled ? null : loadHomeLayout()));
         setLocked(data.locked);
@@ -333,6 +343,15 @@ function AppContent() {
         if (isFiveM) void fetchNui<Record<string, number>>('sd-phone:badges:get').then(m => useBadgeStore.getState().setServer(m ?? {}));
         if (isFiveM) void fetchNui<{ on: boolean }>('sd-phone:flashlight:state').then(r => setFlashlightOn(!!r?.on));
         useCustomAppsStore.getState().hydrate();
+    }, []));
+
+    // Follow-up to sd-phone:open: the authoritative installed-apps list and saved home layout,
+    // fetched after the reveal so the server round-trip never delayed the phone appearing.
+    useNuiEvent('sd-phone:apps', useCallback((data) => {
+        if (!data) return;
+        setInstalledApps(new Set([...(data.installedApps ?? []), ...installedCustomIds()]));
+        setSavedLayout(data.homeLayout ? parseLayout(data.homeLayout) : null);
+        setAppsReady(true);
     }, []));
 
     useNuiEvent('sd-phone:simState', useCallback((data) => {
@@ -1115,7 +1134,7 @@ function AppContent() {
                         onOpenCamera={openCameraFromLock}
                     />
                 ) : (
-                    !cameraMode && (
+                    !cameraMode && appsReady && (
                         <Homescreen
                             apps={effectiveApps}
                             dock={view.dock}
