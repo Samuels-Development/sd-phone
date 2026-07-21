@@ -71,6 +71,13 @@ lib.callback.register('sd-phone:server:mail:markRead', function(src, payload)
     return result
 end)
 
+---Mark-many-read (the "mark all" action) repushes the badge snapshot after a single write.
+lib.callback.register('sd-phone:server:mail:markManyRead', function(src, payload)
+    local result = actions.markManyRead(src, payload)
+    badges.push(src)
+    return result
+end)
+
 lib.callback.register('sd-phone:server:mail:toggleFlag', function(src, payload)
     return actions.toggleFlag(src, payload)
 end)
