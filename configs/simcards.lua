@@ -1,12 +1,19 @@
 -- Unique phones + SIM cards (opt-in). When enabled, characters no longer auto-receive a phone
--- number: numbers live on sim_card items, and whichever SIM sits in your phone decides WHOSE
--- phone data you see (messages, call log, contacts, photos, settings - everything). Steal a
--- phone with its SIM and you read the owner's phone from their perspective; the number follows
--- the SIM, and the Cloud Backup section in Settings lets a player carry their data to a new
--- phone + SIM (the number stays behind on the old SIM).
+-- number: numbers live on sim_card items. How the DATA is owned depends on DeviceIdentity below.
 --
--- Without a SIM the phone still opens but shows a "No SIM" screen and every server action is
--- refused - no number, no service, no browsing.
+--   * DeviceIdentity = true  (DEFAULT) - the PHONE owns the data, the SIM only lends a number.
+--     Each phone item carries a persistent identity minted on first use, and that identity keys
+--     everything (messages, contacts, photos, notes, settings, installed apps, games). Popping
+--     a SIM out just drops your number/service: the phone still opens and every non-number app
+--     keeps working. Moving a SIM to another phone hands that phone your NUMBER, not your data.
+--
+--   * DeviceIdentity = false (LEGACY) - the SIM owns the data. Whichever SIM sits in a phone
+--     decides WHOSE phone data you see; steal a phone with its SIM and you read the owner's
+--     phone. Without a SIM the phone opens to a "No SIM" screen with no service and every
+--     server action refused. This is the original unique-phones behaviour, byte-for-byte.
+--
+-- Either way the number follows the SIM, and the Cloud Backup section in Settings lets a player
+-- carry their data to a new phone (the number stays behind on the old SIM).
 --
 -- Backend support: reading/writing per-slot item metadata is required. Supported out of the box:
 --   * ox_inventory              (metadata mode, or the physical SIM-tray container mode below)
@@ -17,6 +24,14 @@ return {
     -- Master switch. Off = sd-phone behaves exactly as before (numbers auto-assigned per
     -- character, phone always has service).
     Enabled = false,
+
+    -- Where the phone DATA lives (see the header above). true (default) = the phone item owns
+    -- its data and a SIM only supplies the number, so a SIM-less phone still opens and works.
+    -- false = LEGACY behaviour where the installed SIM's identity IS the data, and a SIM-less
+    -- phone is a dead "No SIM" screen. Flipping an existing legacy server to true is safe: on
+    -- first use each phone ADOPTS the identity of the SIM currently in it (grandfathering, so no
+    -- data is copied or lost), and only from then on does the number float free of the data.
+    DeviceIdentity = true,
 
     -- Inventory item that carries a phone number in its metadata ({ number = '2075550123' }).
     -- Sell or spawn it anywhere like a normal item: a blank card self-activates on first use.
