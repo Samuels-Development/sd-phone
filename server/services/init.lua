@@ -4,10 +4,14 @@ local store     = require 'server.services.store'
 local msgstore  = require 'server.services.msgstore'
 ---@type table Saved-jobs store (server.services.jobstore): multijob list, job offers, pending fires.
 local jobstore  = require 'server.services.jobstore'
+---@type table Business-invoices store (server.services.invoicestore): the phone_service_invoices rows.
+local invoicestore = require 'server.services.invoicestore'
 ---@type table Authoritative Services handlers (server.services.actions): directory, money, roster, inbox.
 local actions   = require 'server.services.actions'
 ---@type table Jobs-tab handlers (server.services.jobs): saved-job list/switch/remove + offer accept/decline.
 local jobs      = require 'server.services.jobs'
+---@type table Business-invoices handlers (server.services.invoices): create/list/cancel/received/pay.
+local invoices  = require 'server.services.invoices'
 ---@type table Framework detection (bridge.shared.framework): name is 'qb' or 'esx'.
 local framework = require 'bridge.shared.framework'
 ---@type table Shared server helpers (server.util): the { success, message? } envelope constructors.
@@ -19,6 +23,7 @@ CreateThread(function()
         store.ensureSchema()
         msgstore.ensureSchema()
         jobstore.ensureSchema()
+        invoicestore.ensureSchema()
     end)
     if not ok then
         print(('^1[sd-phone:services]^0 schema bootstrap failed: %s'):format(err))
@@ -68,6 +73,13 @@ lib.callback.register('sd-phone:server:services:switchJob', function(src, payloa
 lib.callback.register('sd-phone:server:services:removeJob', function(src, payload) return jobs.remove(src, payload) end)
 lib.callback.register('sd-phone:server:services:acceptInvite', function(src, payload) return jobs.accept(src, payload) end)
 lib.callback.register('sd-phone:server:services:declineInvite', function(src, payload) return jobs.decline(src, payload) end)
+
+-- Business invoicing callbacks: thin delegates into server.services.invoices.
+lib.callback.register('sd-phone:server:services:invoices:list', function(src) return invoices.list(src) end)
+lib.callback.register('sd-phone:server:services:invoices:create', function(src, payload) return invoices.create(src, payload) end)
+lib.callback.register('sd-phone:server:services:invoices:cancel', function(src, payload) return invoices.cancel(src, payload) end)
+lib.callback.register('sd-phone:server:services:invoices:received', function(src) return invoices.received(src) end)
+lib.callback.register('sd-phone:server:services:invoices:pay', function(src, payload) return invoices.pay(src, payload) end)
 
 ---Public export: exports['sd-phone']:getCompanyDirectory(). Returns the configured company
 ---directory rows in config order, as a fresh array each call.

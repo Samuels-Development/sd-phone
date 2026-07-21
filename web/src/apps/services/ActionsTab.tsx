@@ -8,6 +8,7 @@ import { PromptDialog } from '@/ui/PromptDialog';
 import { Toggle } from '@/ui/Toggle';
 import { t } from '@/i18n';
 import { fmtMoney, type Employee } from './data';
+import { InvoicesSection } from './InvoicesSection';
 import {
     demote, deposit, fire, hire, promote, quitCompany, setDuty, setJobCalls, setJobMessages, withdraw,
     type Grade, type MyCompany, type ServiceResult,
@@ -76,6 +77,7 @@ export function ActionsTab({ myCompany, multijob = false, onChanged }: {
 
     const showMoney     = myCompany.isBoss && myCompany.available;
     const showEmployees = myCompany.isBoss;
+    const showInvoices  = multijob && myCompany.duty;
     const dutyOff       = !myCompany.duty;
 
     return (
@@ -160,6 +162,8 @@ export function ActionsTab({ myCompany, multijob = false, onChanged }: {
                         </div>
                     </>
                 )}
+
+                {showInvoices && <InvoicesSection />}
 
                 <SectionHeader>{t('services.employment', 'Employment')}</SectionHeader>
                 <div className="overflow-hidden rounded-[12px] bg-[#e5e5e5] dark:bg-surface">

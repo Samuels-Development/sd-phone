@@ -24,6 +24,18 @@ return {
     -- Drop the player off duty when they switch active job (mirrors sd-multijob).
     SwitchOffDuty = true,
 
+    -- Business invoicing. On-duty employees send a banking invoice from their
+    -- business to another player; the target pays it from the Banking app and
+    -- the sender is notified. Only active on QBCore/QBox (on-duty state must be
+    -- resolvable); the section is hidden on ESX, like the Jobs tab.
+    -- Payout: when a society bank is available the payment is credited to the
+    -- business account; otherwise it falls back to the sending employee's own
+    -- bank (see bridge/server/society.lua).
+    InvoicesEnabled = true,
+    -- Smallest and largest amount a single invoice may be for.
+    MinInvoiceAmount = 1,
+    MaxInvoiceAmount = 1000000,
+
     -- One entry per company. `job` is the framework job name (the key everything
     -- keys off). `coords` powers the client-side "Locate" waypoint. Listing a job
     -- here adds it to the public directory and enables Job Calls / company

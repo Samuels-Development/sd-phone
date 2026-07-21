@@ -317,6 +317,7 @@ export type NuiMessage =
     | { action: 'sd-phone:services:inbox' }
     | { action: 'sd-phone:services:jobsChanged' }
     | { action: 'sd-phone:services:rosterChanged' }
+    | { action: 'sd-phone:services:invoices' }
     | { action: 'sd-phone:homes:refresh' }
     | { action: 'customApps:set';     data: CustomAppDef[] }
     | { action: 'customApps:message'; data: { id: string; message: unknown } };

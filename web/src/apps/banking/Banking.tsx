@@ -12,6 +12,7 @@ import { AllTransactions } from './AllTransactions';
 import { SendMoney, prefillTransferAgain } from './SendMoney';
 import { FleecaCard } from './FleecaCard';
 import { TxRows } from './TxRow';
+import { ReceivedInvoices } from './ReceivedInvoices';
 
 const CARD_EXPIRY = '08/29';
 
@@ -59,6 +60,8 @@ export function Banking({ onClose: _onClose }: { onClose: () => void }) {
                         {t('banking.send', 'Send')}
                     </button>
                 </div>
+
+                <ReceivedInvoices onPaid={refresh} />
 
                 <div className="mb-3 mt-6 flex items-center justify-between">
                     <h2 className="text-[20px] font-bold tracking-tight">{t('banking.latestTransactions', 'Latest Transactions')}</h2>
