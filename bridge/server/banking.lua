@@ -93,12 +93,47 @@ function banking.getBalance(src)
     return money.get(src, 'bank')
 end
 
+---@type table<number, { amount: number, minus: boolean, expires: number }[]> Phone-initiated
+---movements awaiting their framework echo, so the generic Wallet logger can skip them.
+local expected = {}
+
+---Registers a movement about to hit the player's bank account.
+---@param src number
+---@param amount number
+---@param minus boolean
+local function expect(src, amount, minus)
+    local list = expected[src]
+    if not list then list = {} expected[src] = list end
+    list[#list + 1] = { amount = math.floor(tonumber(amount) or 0), minus = minus, expires = GetGameTimer() + 3000 }
+end
+
+---Consumes one matching expected movement; false means the change came from another script.
+---@param src number
+---@param amount number
+---@param minus boolean
+---@return boolean consumed
+function banking.consumeExpected(src, amount, minus)
+    local list = expected[src]
+    if not list then return false end
+    local now = GetGameTimer()
+    for i = #list, 1, -1 do
+        if list[i].expires < now then
+            table.remove(list, i)
+        elseif list[i].amount == amount and list[i].minus == minus then
+            table.remove(list, i)
+            return true
+        end
+    end
+    return false
+end
+
 ---Credit the player's bank account. A dedicated provider path returns early only when its export
 ---call didn't error; otherwise the credit lands on the framework bank account.
 ---@param src number
 ---@param amount number
 ---@param reason? string
 function banking.addMoney(src, amount, reason)
+    expect(src, amount, false)
     local name = banking.name
     if name == 'wasabi_banking' then
         local id = player.getIdentifier(src)
@@ -117,6 +152,7 @@ end
 ---@param amount number
 ---@param reason? string
 function banking.removeMoney(src, amount, reason)
+    expect(src, amount, true)
     local name = banking.name
     if name == 'wasabi_banking' then
         local id = player.getIdentifier(src)

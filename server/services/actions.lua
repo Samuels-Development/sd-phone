@@ -230,10 +230,11 @@ end
 function actions.directory(src)
     local cid = player.getIdentifier(src)
     return ok({
-        companies     = actions.companyList(),
-        myCompany     = buildMyCompany(src),
-        multijob      = job.supportsMultijob(),
-        pendingOffers = cid and #jobstore.listInvites(cid) or 0,
+        companies       = actions.companyList(),
+        myCompany       = buildMyCompany(src),
+        multijob        = job.supportsMultijob(),
+        invoicesEnabled = SV.InvoicesEnabled ~= false,
+        pendingOffers   = cid and #jobstore.listInvites(cid) or 0,
     })
 end
 

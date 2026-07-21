@@ -10,11 +10,11 @@ import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useSessionState } from '@/hooks/useSessionState';
 import { formatPhone, toCallEntry, type Contact } from './data';
 import {
-    addContactApi, updateContactApi, deleteContactApi,
-    setFavoriteApi, saveCardApi, type ContactInput, type CardOverrides,
+    updateContactApi, deleteContactApi,
+    setFavoriteApi, saveCardApi, type CardOverrides,
 } from './contactsApi';
 import { dialCall } from './callsApi';
-import { useContacts, useContactsStore } from '@/stores/contactsStore';
+import { useContacts, useContactsStore, saveNewContact } from '@/stores/contactsStore';
 import { t } from '@/i18n';
 
 interface CallTarget { number: string; name?: string }
@@ -33,24 +33,9 @@ export function Phone({ onClose: _onClose }: { onClose: () => void }) {
     const favorites = contacts.filter(c => c.favorite);
     const recents   = recentsRaw.map(r => toCallEntry(r, contacts));
 
-    function toInput(c: Contact): ContactInput {
-        return { name: c.name, phone: c.phone, email: c.email, address: c.address, avatar: c.avatar };
-    }
-
     async function addContact(c: Contact): Promise<string | null> {
-        const newDigits = c.phone.replace(/\D/g, '');
-        if (!newDigits) return t('phone.enterPhoneNumber','Enter a phone number.');
-        if (myNumber.replace(/\D/g, '') === newDigits) return t('phone.cantAddOwnNumber',"You can't add your own number.");
-        if (contacts.some(x => (x.phone ?? '').replace(/\D/g, '') === newDigits)) {
-            return t('phone.duplicateContact','You already have a contact with this number.');
-        }
-        try {
-            const created = await addContactApi(toInput(c));
-            useContactsStore.getState().setContacts(prev => [...prev, created]);
-            return null;
-        } catch (e) {
-            return e instanceof Error ? e.message : t('phone.failedToAddContact','Failed to add contact.');
-        }
+        const res = await saveNewContact(c);
+        return res.error ?? null;
     }
     function updateContact(c: Contact) {
         useContactsStore.getState().setContacts(prev => prev.map(x => (x.id === c.id ? c : x)));

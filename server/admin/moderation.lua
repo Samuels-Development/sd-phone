@@ -9,6 +9,7 @@ local moderation = {}
 local SCOPES = {
     birdy     = true,
     photogram = true,
+    vibez     = true,
     cherry    = true,
     darkchat  = true,
     sms       = true,

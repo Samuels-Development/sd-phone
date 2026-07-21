@@ -135,15 +135,23 @@ function VehicleThumb({ v, show, size, radius, iconSize, iconStroke = 2 }: {
     );
 }
 
-const STATUS_BADGE: Record<VehicleStatus, { label: string; tone: PillTone }> = {
-    stored:  { label: t('garages.statusStored', 'Stored'),   tone: 'green' },
-    out:     { label: t('garages.statusOut', 'Out'),         tone: 'orange' },
-    impound: { label: t('garages.statusImpound', 'Impound'), tone: 'red' },
+const STATUS_TONE: Record<VehicleStatus, PillTone> = {
+    stored:  'green',
+    out:     'orange',
+    impound: 'red',
 };
 
+// Resolved at render, not module load, so the label follows the active locale after a
+// language switch or a late catalog load instead of freezing to the import-time language.
+function statusLabel(status: VehicleStatus): string {
+    if (status === 'stored')  return t('garages.statusStored', 'Stored');
+    if (status === 'impound') return t('garages.statusImpound', 'Impound');
+    return t('garages.statusOut', 'Out');
+}
+
 function StatusPill({ status, className = '' }: { status: VehicleStatus; className?: string }) {
-    const b = STATUS_BADGE[status] ?? STATUS_BADGE.out;
-    return <Pill tone={b.tone} className={className}>{b.label}</Pill>;
+    const tone = STATUS_TONE[status] ?? STATUS_TONE.out;
+    return <Pill tone={tone} className={className}>{statusLabel(status)}</Pill>;
 }
 
 function VehicleCard({ v, showImages, onOpen }: { v: Vehicle; showImages: boolean; onOpen: () => void }) {

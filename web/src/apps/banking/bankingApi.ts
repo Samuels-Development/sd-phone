@@ -3,6 +3,7 @@ import { t } from '@/i18n';
 import { ACCOUNTS, TRANSACTIONS } from './data';
 import { apiData, type Envelope } from '@/core/api';
 import { formatClockTime } from '@/lib/time';
+import type { SentInvoice, SentInvoicesResult } from '@/apps/services/servicesApi';
 
 export interface BankTx {
     id:        string;
@@ -52,6 +53,42 @@ export async function sendMoney(number: string, amount: number, note?: string): 
         };
     }
     return (await fetchNui<Envelope<{ balance: number; transaction: BankTx }>>('sd-phone:banking:send', { number, amount, note }))
+        ?? { success: false, message: t('banking.noServerResponse', 'No response from server') };
+}
+
+// Person-to-person invoices: same row shape the services sent list uses (the server shapes both
+// with shapeSent), fetched through the banking proxies.
+export type PersonalInvoice = SentInvoice;
+
+const DEV_PERSONAL_SENT: PersonalInvoice[] = [
+    { id: 'p1', amount: 250, note: 'Dinner split', status: 'pending', toName: 'Maya Lopez', toNumber: '3105550199', from: 'Sam Nicol', ts: Date.now() - 600_000 },
+    { id: 'p2', amount: 75,  note: 'Taxi ride',    status: 'paid',    toName: 'Ryan Carter', toNumber: '3105550148', from: 'Sam Nicol', ts: Date.now() - 5_400_000, paidAt: Date.now() - 4_800_000 },
+];
+
+export async function fetchPersonalSent(): Promise<PersonalInvoice[]> {
+    if (!isFiveM) return [...DEV_PERSONAL_SENT];
+    return (await apiData<{ invoices: PersonalInvoice[] }>('sd-phone:banking:invoices:sent'))?.invoices ?? [];
+}
+
+export async function createPersonalInvoice(target: { number?: string; serverId?: number }, amount: number, note: string): Promise<SentInvoicesResult> {
+    if (!isFiveM) {
+        DEV_PERSONAL_SENT.unshift({
+            id: 'p-' + Date.now(), amount, note, status: 'pending',
+            toName: target.number ?? `ID ${target.serverId ?? 0}`, toNumber: target.number ?? '', from: DEV_OVERVIEW.name, ts: Date.now(),
+        });
+        return { success: true, data: { invoices: [...DEV_PERSONAL_SENT] } };
+    }
+    return (await fetchNui<SentInvoicesResult>('sd-phone:banking:invoices:create', { number: target.number, serverId: target.serverId, amount, note }))
+        ?? { success: false, message: t('banking.noServerResponse', 'No response from server') };
+}
+
+export async function cancelPersonalInvoice(id: string): Promise<SentInvoicesResult> {
+    if (!isFiveM) {
+        const inv = DEV_PERSONAL_SENT.find(i => i.id === id);
+        if (inv) inv.status = 'cancelled';
+        return { success: true, data: { invoices: [...DEV_PERSONAL_SENT] } };
+    }
+    return (await fetchNui<SentInvoicesResult>('sd-phone:banking:invoices:cancel', { id }))
         ?? { success: false, message: t('banking.noServerResponse', 'No response from server') };
 }
 
