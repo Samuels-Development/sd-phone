@@ -25,6 +25,7 @@ export interface Directory {
     companies:  Company[];
     myCompany?: MyCompany | null;
     multijob?:  boolean;
+    invoicesEnabled?: boolean;
     pendingOffers?: number;
 }
 
@@ -50,7 +51,7 @@ const DEV_MY_COMPANY: MyCompany = {
     employees: EMPLOYEES,
 };
 
-const DEV_DIRECTORY: Directory = { companies: COMPANIES, myCompany: DEV_MY_COMPANY, multijob: true, pendingOffers: 1 };
+const DEV_DIRECTORY: Directory = { companies: COMPANIES, myCompany: DEV_MY_COMPANY, multijob: true, invoicesEnabled: true, pendingOffers: 1 };
 
 export async function fetchDirectory(): Promise<Directory> {
     if (!isFiveM) return DEV_DIRECTORY;
@@ -200,3 +201,89 @@ export const switchJob     = (job: string) => jobsMutate('sd-phone:services:swit
 export const removeJob     = (job: string) => jobsMutate('sd-phone:services:removeJob', { job });
 export const acceptInvite  = (id: string)  => jobsMutate('sd-phone:services:acceptInvite', { id });
 export const declineInvite = (id: string)  => jobsMutate('sd-phone:services:declineInvite', { id });
+
+type InvoiceStatus = 'pending' | 'paid' | 'cancelled';
+
+export interface SentInvoice {
+    id:       string;
+    code?:    string;
+    amount:   number;
+    note:     string;
+    status:   InvoiceStatus;
+    toName:   string;
+    toNumber: string;
+    from:     string;
+    ts:       number;
+    paidAt?:  number;
+}
+
+export interface ReceivedInvoice {
+    id:         string;
+    code?:      string;
+    job?:       string;
+    personal?:  boolean;
+    fromNumber?: string;
+    label:      string;
+    color:     string;
+    emoji:     string;
+    amount:    number;
+    note:      string;
+    status:    InvoiceStatus;
+    from:      string;
+    ts:        number;
+}
+
+const DEV_SENT_INVOICES: SentInvoice[] = [
+    { id: 's1', amount: 1200, note: 'Repair · engine rebuild', status: 'pending', toName: 'Maya Lopez',   toNumber: '3105550199', from: 'Sam Nicol', ts: Date.now() - 300_000 },
+    { id: 's2', amount: 450,  note: 'Tow fee',                 status: 'paid',    toName: 'Ryan Carter',  toNumber: '3105550148', from: 'Sam Nicol', ts: Date.now() - 3_600_000, paidAt: Date.now() - 3_000_000 },
+    { id: 's3', amount: 800,  note: '',                        status: 'cancelled', toName: 'John Doe',   toNumber: '5551234',    from: 'Sam Nicol', ts: Date.now() - 7_200_000 },
+];
+
+const DEV_RECEIVED_INVOICES: ReceivedInvoice[] = [
+    { id: 'r1', job: 'mechanic', label: 'Mechanic', color: '#3A3A3C', emoji: '⚙️', amount: 1200, note: 'Repair · engine rebuild', status: 'pending', from: 'Tommy V', ts: Date.now() - 240_000 },
+    { id: 'r2', personal: true, label: '(310) 555-0199', fromNumber: '3105550199', color: '#0A84FF', emoji: '🧾', amount: 250, note: 'Dinner split', status: 'pending', from: '', ts: Date.now() - 900_000 },
+    { id: 'r3', personal: true, label: '(310) 555-0148', fromNumber: '3105550148', color: '#0A84FF', emoji: '🧾', amount: 90, note: 'Fuel', status: 'paid', from: '', ts: Date.now() - 7_200_000 },
+    { id: 'r4', job: 'police', label: 'Police', color: '#0A5BD3', emoji: '🚓', amount: 500, note: 'Speeding fine', status: 'cancelled', from: 'Officer Reed', ts: Date.now() - 10_800_000 },
+];
+
+export async function fetchSentInvoices(): Promise<SentInvoice[]> {
+    if (!isFiveM) return DEV_SENT_INVOICES;
+    return (await apiData<{ invoices: SentInvoice[] }>('sd-phone:services:invoices:list'))?.invoices ?? [];
+}
+
+export async function fetchReceivedInvoices(): Promise<ReceivedInvoice[]> {
+    if (!isFiveM) return DEV_RECEIVED_INVOICES;
+    return (await apiData<{ invoices: ReceivedInvoice[] }>('sd-phone:services:invoices:received'))?.invoices ?? [];
+}
+
+export type SentInvoicesResult = Envelope<{ invoices: SentInvoice[] }>;
+
+export async function createInvoice(target: { number?: string; serverId?: number }, amount: number, note: string): Promise<SentInvoicesResult> {
+    if (!isFiveM) {
+        DEV_SENT_INVOICES.unshift({
+            id: 's-' + Date.now(), amount, note, status: 'pending',
+            toName: target.number ?? `ID ${target.serverId ?? 0}`, toNumber: target.number ?? '', from: 'Sam Nicol', ts: Date.now(),
+        });
+        return { success: true, data: { invoices: [...DEV_SENT_INVOICES] } };
+    }
+    return (await fetchNui<SentInvoicesResult>('sd-phone:services:invoices:create', { number: target.number, serverId: target.serverId, amount, note }))
+        ?? { success: false, message: t('services.noResponse', 'No response from server') };
+}
+
+export async function cancelInvoice(id: string): Promise<SentInvoicesResult> {
+    if (!isFiveM) return { success: true, data: { invoices: DEV_SENT_INVOICES.filter(i => i.id !== id) } };
+    return (await fetchNui<SentInvoicesResult>('sd-phone:services:invoices:cancel', { id }))
+        ?? { success: false, message: t('services.noResponse', 'No response from server') };
+}
+
+export type PayInvoiceResult = Envelope<{ balance: number; invoices: ReceivedInvoice[] }>;
+
+export async function payInvoice(id: string): Promise<PayInvoiceResult> {
+    if (!isFiveM) {
+        const inv = DEV_RECEIVED_INVOICES.find(i => i.id === id);
+        if (inv) inv.status = 'paid';
+        return { success: true, data: { balance: 0, invoices: [...DEV_RECEIVED_INVOICES] } };
+    }
+    return (await fetchNui<PayInvoiceResult>('sd-phone:services:invoices:pay', { id }))
+        ?? { success: false, message: t('services.noResponse', 'No response from server') };
+}

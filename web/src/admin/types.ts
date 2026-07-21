@@ -183,6 +183,7 @@ export interface MuteScopeDef {
 export const MUTE_SCOPES: MuteScopeDef[] = [
     { id: 'birdy',     label: 'Birdy',     social: true },
     { id: 'photogram', label: 'Photogram', social: true },
+    { id: 'vibez',     label: 'Vibez',     social: true },
     { id: 'cherry',    label: 'Cherry',    social: true },
     { id: 'darkchat',  label: 'Dark Chat', social: true },
     { id: 'sms',       label: 'Texts',     social: false },

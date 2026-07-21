@@ -40,6 +40,7 @@ require 'client.apps.compass'
 require 'client.apps.findfriends'
 require 'client.apps.cherry'
 require 'client.apps.photogram'
+require 'client.apps.vibez'
 require 'client.apps.voice'
 require 'client.apps.streaks'
 require 'client.apps.ryde'
@@ -75,7 +76,8 @@ local FRAME_COLORS = {
     pink = true, purple = true, red = true, yellow = true,
 }
 
----@type integer Wall-clock ms captured once at script load; session start for the Health app.
+---@type integer Wall-clock ms of the session start (re-stamped on character load); the Health app's
+---"time awake" anchor. Seeded at script load as a fallback for opens before the character resolves.
 local SESSION_START_MS = GetCloudTimeAsInt() * 1000
 
 ---@return boolean true while the phone NUI is open
@@ -405,7 +407,11 @@ local function TogglePhone()
     local color = res
     if type(res) == 'table' then
         color = res.color
-        currentSimState = { hasSim = res.hasSim == true, number = res.number }
+        if res.pending then
+            currentSimState = currentSimState or { hasSim = true, number = nil }
+        else
+            currentSimState = { hasSim = res.hasSim == true, number = res.number }
+        end
     else
         currentSimState = nil
     end
@@ -426,10 +432,19 @@ RegisterKeyMapping('+sdphone_look', 'Phone: Hold to look around', 'keyboard', co
 ---Opens the phone after a phone item is used, adopting the item variant's frame colour when it
 ---passes the FRAME_COLORS whitelist.
 ---@param color string|nil frame colour of the used item variant
----@param sim { hasSim: boolean, number: string|nil }|nil SIM snapshot (unique phones only)
-RegisterNetEvent('sd-phone:client:openFromItem', function(color, sim)
+---@param sim { hasSim: boolean, number: string|nil }|nil SIM snapshot (kept for signature compat; the server now defers and sends nil)
+---@param simPending boolean|nil true while the server resolves the SIM in the background (unique phones)
+RegisterNetEvent('sd-phone:client:openFromItem', function(color, sim, simPending)
     if color and FRAME_COLORS[color] then currentFrameColor = color end
-    currentSimState = sim and { hasSim = sim.hasSim == true, number = sim.number } or nil
+    if sim then
+        currentSimState = { hasSim = sim.hasSim == true, number = sim.number }
+    elseif simPending then
+        -- SIM resolve is still running server-side; keep the last snapshot (optimistic
+        -- has-service on a cold start) until the simState push corrects it.
+        currentSimState = currentSimState or { hasSim = true, number = nil }
+    else
+        currentSimState = nil
+    end
     OpenPhone()
 end)
 
@@ -439,6 +454,19 @@ end)
 RegisterNetEvent('sd-phone:client:simState', function(state)
     if type(state) ~= 'table' then return end
     currentSimState = state.enabled and { hasSim = state.hasSim == true, number = state.number } or nil
+    -- The active SIM'd phone's colour wins: a pending keybind open answered with the owned
+    -- colour before the resolve, so correct the frame, the hand prop and the UI rail here.
+    if state.color and FRAME_COLORS[state.color] and state.color ~= currentFrameColor then
+        currentFrameColor = state.color
+        if shouldHold() then
+            removePhoneProp()
+            attachPhoneProp(PlayerPedId())
+            broadcastHoldState()
+        end
+        if phoneState.open then
+            SendNUIMessage({ action = 'sd-phone:frameColor', data = { color = state.color } })
+        end
+    end
     if phoneState.open then
         SendNUIMessage({
             action = 'sd-phone:simState',
@@ -715,7 +743,9 @@ exports('isDisabled', function() return phoneDisabled end)
 ---the UI re-pulls its per-player state (wallpaper, tones, locale...) the moment the framework
 ---reports the player in - covering slow multichar picks and live character switches alike.
 local function pushCharacterLoaded()
+    SESSION_START_MS = GetCloudTimeAsInt() * 1000
     SendNUIMessage({ action = 'sd-phone:client:characterLoaded' })
+    SendNUIMessage({ action = 'sd-phone:session', data = { startMs = SESSION_START_MS } })
 end
 RegisterNetEvent('QBCore:Client:OnPlayerLoaded', pushCharacterLoaded)
 RegisterNetEvent('esx:playerLoaded', pushCharacterLoaded)

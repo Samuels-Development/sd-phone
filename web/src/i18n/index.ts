@@ -22,32 +22,35 @@ const catalogs: Record<string, Record<string, string>> = {
     en: {},
 };
 
-const loaders: Record<string, () => Promise<{ default: Record<string, unknown> }>> = {
-    de: () => import('../../../locales/de.json'),
-    es: () => import('../../../locales/es.json'),
-    fr: () => import('../../../locales/fr.json'),
-    it: () => import('../../../locales/it.json'),
-    pt: () => import('../../../locales/pt.json'),
-    nl: () => import('../../../locales/nl.json'),
-    pl: () => import('../../../locales/pl.json'),
-    da: () => import('../../../locales/da.json'),
-    no: () => import('../../../locales/no.json'),
-};
+// Every resource-root catalog, discovered at build time and code-split into its own lazy
+// chunk. Dropping a new locales/<code>.json in is all it takes: the loader and both language
+// pickers derive from the files (a UI rebuild is still required, as the catalogs are bundled).
+const catalogFiles = import.meta.glob<{ default: Record<string, unknown> }>(
+    ['../../../locales/*.json', '!**/en.json']);
+
+const loaders: Record<string, () => Promise<{ default: Record<string, unknown> }>> = {};
+for (const path in catalogFiles) {
+    const code = path.slice(path.lastIndexOf('/') + 1).replace('.json', '');
+    loaders[code] = catalogFiles[path];
+}
+
 export interface LocaleOption { code: string; name: string }
 
-// Player-facing language options — must stay in lockstep with `catalogs` above.
-// This list also drives the pickers in Setup and Settings > General > Language & Region.
+// A language's name for itself from the browser's own Intl data, e.g. 'fr' -> 'Français'.
+function nativeName(code: string): string {
+    try {
+        const raw = new Intl.DisplayNames([code], { type: 'language' }).of(code);
+        if (raw && raw !== code) return raw.charAt(0).toUpperCase() + raw.slice(1);
+    } catch { /* unrecognized code: fall through */ }
+    return code.toUpperCase();
+}
+
+// Player-facing language options, derived from the discovered catalogs: English (served by the
+// inline fallbacks) first, then every locales/*.json alphabetically. Drives the pickers in
+// Setup and Settings > General > Language & Region.
 export const SUPPORTED_LOCALES: LocaleOption[] = [
     { code: 'en', name: 'English' },
-    { code: 'fr', name: 'Français' },
-    { code: 'es', name: 'Español' },
-    { code: 'de', name: 'Deutsch' },
-    { code: 'it', name: 'Italiano' },
-    { code: 'pt', name: 'Português' },
-    { code: 'nl', name: 'Nederlands' },
-    { code: 'pl', name: 'Polski' },
-    { code: 'da', name: 'Dansk' },
-    { code: 'no', name: 'Norsk' },
+    ...Object.keys(loaders).sort().map(code => ({ code, name: nativeName(code) })),
 ];
 
 let active = catalogs.en;

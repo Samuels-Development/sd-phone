@@ -1,5 +1,7 @@
-import { useCallback, useMemo, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronRight, House, ReceiptText } from 'lucide-react';
+
+import { useDeckActive } from '@/shell/deckActive';
 
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
@@ -8,15 +10,24 @@ import { t } from '@/i18n';
 import { ActionSheet } from '@/ui/ActionSheet';
 import { formatMoney } from './data';
 import { fetchOverview, type BankOverview, type BankTx } from './bankingApi';
+import { fetchReceivedInvoices } from '@/apps/services/servicesApi';
 import { AllTransactions } from './AllTransactions';
 import { SendMoney, prefillTransferAgain } from './SendMoney';
 import { FleecaCard } from './FleecaCard';
 import { TxRows } from './TxRow';
+import { InvoicesTab } from './InvoicesTab';
+import { TabBar, type TabBarItem } from '@/ui/TabBar';
+
+type BankingTab = 'home' | 'invoices';
 
 const CARD_EXPIRY = '08/29';
 
 export function Banking({ onClose: _onClose }: { onClose: () => void }) {
     const { data: overview, loading, refetch: refresh } = useAsyncData<BankOverview>(fetchOverview, []);
+    // Received invoices live here, above the animated tab subtree: segment/tab switches render
+    // instantly from cached data, and the pending count feeds the Invoices tab badge.
+    const { data: receivedInv, loading: receivedLoading, refetch: refetchReceived } = useAsyncData(fetchReceivedInvoices, []);
+    const [tab,      setTab]      = useSessionState<BankingTab>('banking:tab', 'home');
     const [showAll,  setShowAll]  = useSessionState('banking:showAll', false);
     const [sending,  setSending]  = useSessionState('banking:sending', false);
     const [actionTx, setActionTx] = useState<BankTx | null>(null);
@@ -29,6 +40,16 @@ export function Banking({ onClose: _onClose }: { onClose: () => void }) {
 
     useNuiEvent('sd-phone:bank:received', useCallback(() => { refresh(); }, [refresh]));
     useNuiEvent('sd-phone:bank:txAdded', useCallback(() => { refresh(); }, [refresh]));
+    useNuiEvent('sd-phone:services:invoices', useCallback(() => { refetchReceived(); }, [refetchReceived]));
+
+    // Keep-alive: a backgrounded Wallet misses the pushes above (suspended handlers), so
+    // balance, transactions and received invoices re-sync on the foreground rising edge.
+    const deckActive = useDeckActive();
+    const wasActive  = useRef(deckActive);
+    useEffect(() => {
+        if (deckActive && !wasActive.current) { refresh(); refetchReceived(); }
+        wasActive.current = deckActive;
+    }, [deckActive, refresh, refetchReceived]);
 
     const txs    = overview?.transactions ?? [];
     const latest = useMemo(() => txs.slice(0, 8), [txs]);
@@ -37,10 +58,26 @@ export function Banking({ onClose: _onClose }: { onClose: () => void }) {
     const holder  = (overview?.name || t('banking.accountHolderFallback', 'Account')).toUpperCase();
     const last4   = (overview?.number || '').replace(/\D/g, '').slice(-4) || '0000';
 
+    const tabs: TabBarItem<BankingTab>[] = [
+        { id: 'home',     label: t('banking.tabHome', 'Home'),     icon: a => <House       className="h-[33px] w-[33px]" strokeWidth={a ? 2.2 : 1.9} /> },
+        { id: 'invoices', label: t('banking.invoices', 'Invoices'), icon: a => <ReceiptText className="h-[33px] w-[33px]" strokeWidth={a ? 2.2 : 1.9} />, badge: (receivedInv ?? []).filter(i => i.status === 'pending').length },
+    ];
+
     return (
         <div className="absolute inset-0 z-10 flex flex-col bg-[#d4d4d4] text-black dark:bg-base dark:text-white">
             <div className="h-[54px] shrink-0" aria-hidden />
 
+            {tab === 'invoices' ? (
+                <div key="invoices" className="flex min-h-0 flex-1 flex-col animate-swipe-in-left">
+                    <InvoicesTab
+                        received={receivedInv ?? []}
+                        receivedLoading={receivedLoading}
+                        onRefetchReceived={refetchReceived}
+                        onPaid={refresh}
+                    />
+                </div>
+            ) : (
+            <div key="home" className="flex min-h-0 flex-1 flex-col animate-swipe-in-left">
             <div className="px-5 pb-2 pt-0.5 text-[34px] font-bold tracking-tight">{t('banking.wallet', 'Wallet')}</div>
 
             <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-10 pt-3">
@@ -78,6 +115,10 @@ export function Banking({ onClose: _onClose }: { onClose: () => void }) {
                     <TxRows items={latest} onSelect={setActionTx} />
                 )}
             </div>
+            </div>
+            )}
+
+            <TabBar tabs={tabs} active={tab} onChange={setTab} />
 
             <button type="button" onClick={_onClose} aria-label={t('banking.closeWallet', 'Close Wallet')} className="absolute inset-x-0 bottom-0 h-7 cursor-default" />
 

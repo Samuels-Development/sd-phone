@@ -25,6 +25,11 @@ export function digits(s: string): string {
     return s.replace(/\D/g, '');
 }
 
+// True when a display name is a phone number (no letters) — i.e. an unsaved/unknown contact.
+export function isNumericName(name: string): boolean {
+    return !/\p{L}/u.test(name);
+}
+
 export function hashIndex(s: string, buckets: number): number {
     let h = 0;
     for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;

@@ -218,6 +218,31 @@ function store.mutateMessage(email, messageId, apply)
     return (affected or 0) > 0
 end
 
+---Marks every listed message id as read in a single read-modify-write, so a "mark all" cannot
+---lose updates by racing N concurrent single-message writes. Ids not present are ignored.
+---@param email string
+---@param ids string[]
+---@return number changed count of messages newly flagged read
+function store.markManyRead(email, ids)
+    local acc = store.getAccount(email); if not acc then return 0 end
+    local want = {}
+    for i = 1, #ids do want[ids[i]] = true end
+    local changed = 0
+    for i = 1, #acc.messages do
+        local m = acc.messages[i]
+        if want[m.id] and m.read ~= true then
+            m.read = true
+            changed = changed + 1
+        end
+    end
+    if changed == 0 then return 0 end
+    MySQL.update.await(
+        'UPDATE phone_mail_accounts SET messages = ? WHERE email = ?',
+        { encodeJson(acc.messages), email }
+    )
+    return changed
+end
+
 ---Overwrites an account's stored password hash.
 ---@param email string
 ---@param passwordHash string

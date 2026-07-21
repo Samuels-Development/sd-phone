@@ -76,16 +76,18 @@ local function txOut(row, contactMap)
         category = row.category,
         date     = iso(tonumber(row.created_at)),
     }
+    -- Invoice entries keep their label (it carries the reference code); the counterparty still
+    -- resolves the peer avatar, it just never displaces the title.
     local cp = digits(row.counterparty)
     if cp ~= '' then
         out.peerNumber = cp
         local contact = contactMap and contactMap[cp]
         if contact then
-            out.merchant     = contact.name
             out.peerInitials = initialsFor(contact.name)
             out.peerColor    = contact.color
             if contact.avatar and contact.avatar ~= '' then out.avatar = contact.avatar end
-        else
+            if row.category ~= 'invoice' then out.merchant = contact.name end
+        elseif row.category ~= 'invoice' then
             out.merchant = formatNumber(cp)
         end
     end

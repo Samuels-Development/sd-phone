@@ -327,6 +327,11 @@ export async function markRead(accountEmail: string, messageId: string): Promise
     await fetchNui<Envelope<unknown>>('sd-phone:mail:markRead', { accountEmail, messageId });
 }
 
+export async function markManyRead(accountEmail: string, messageIds: string[]): Promise<void> {
+    if (!isFiveM || messageIds.length === 0) return;
+    await fetchNui<Envelope<unknown>>('sd-phone:mail:markManyRead', { accountEmail, messageIds });
+}
+
 export async function toggleFlag(accountEmail: string, messageId: string): Promise<void> {
     if (!isFiveM) return;
     await fetchNui<Envelope<unknown>>('sd-phone:mail:toggleFlag', { accountEmail, messageId });

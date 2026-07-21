@@ -208,6 +208,7 @@ function session.push(source)
         enabled = true,
         hasSim  = s ~= nil and s.hasSim or false,
         number  = s and s.number or nil,
+        color   = s and s.color or nil,
     })
 end
 

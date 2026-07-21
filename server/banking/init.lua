@@ -6,6 +6,36 @@ local store = require 'server.banking.store'
 local actions = require 'server.banking.actions'
 ---@type table Shared server helpers (server.util): finite-number guard for the export boundary.
 local util = require 'server.util'
+---@type table Banking bridge (bridge.server.banking): expected-echo consumption for the logger.
+local bank = require 'bridge.server.banking'
+---@type table Player bridge (bridge.server.player): citizenid resolution for the logger.
+local player = require 'bridge.server.player'
+
+---Any script's bank movement lands in the Wallet log as a generic row (qb/qbox server money
+---event; ESX has no server broadcast). Phone-driven movements are skipped since their richer
+---rows are already written; 'set' rebalances carry no delta here, so they never log.
+AddEventHandler('QBCore:Server:OnMoneyChange', function(src, moneyType, amount, actionType, reason)
+    if moneyType ~= 'bank' then return end
+    if actionType ~= 'add' and actionType ~= 'remove' then return end
+    amount = math.floor(tonumber(amount) or 0)
+    if amount <= 0 then return end
+    local minus = actionType == 'remove'
+    if bank.consumeExpected(src, amount, minus) then return end
+    local cid = player.getIdentifier(src)
+    if not cid then return end
+
+    local label = tostring(reason or ''):gsub('[-_]', ' '):gsub('^%s+', ''):gsub('%s+$', '')
+    if label == '' or label:lower() == 'unknown' then
+        label = minus and 'Bank Charge' or 'Bank Credit'
+    else
+        label = label:sub(1, 1):upper() .. label:sub(2)
+    end
+    actions.addExternal(cid, {
+        label    = label,
+        amount   = minus and -amount or amount,
+        category = minus and 'transfer' or 'income',
+    })
+end)
 
 -- Schema bootstrap.
 CreateThread(function()

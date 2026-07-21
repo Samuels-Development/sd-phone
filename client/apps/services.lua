@@ -30,6 +30,19 @@ proxy('sd-phone:services:removeJob',      'sd-phone:server:services:removeJob')
 proxy('sd-phone:services:acceptInvite',   'sd-phone:server:services:acceptInvite')
 proxy('sd-phone:services:declineInvite',  'sd-phone:server:services:declineInvite')
 
+-- Thin delegates for business invoicing: send/list/cancel from the business side, received/pay
+-- from the target's Banking app.
+proxy('sd-phone:services:invoices:list',     'sd-phone:server:services:invoices:list')
+proxy('sd-phone:services:invoices:create',   'sd-phone:server:services:invoices:create')
+proxy('sd-phone:services:invoices:cancel',   'sd-phone:server:services:invoices:cancel')
+proxy('sd-phone:services:invoices:received', 'sd-phone:server:services:invoices:received')
+proxy('sd-phone:services:invoices:pay',      'sd-phone:server:services:invoices:pay')
+
+---Server nudge: re-pull invoices (a new one was sent, paid, or cancelled). No payload.
+RegisterNetEvent('sd-phone:client:services:invoices', function()
+    SendNUIMessage({ action = 'sd-phone:services:invoices' })
+end)
+
 ---Server nudge: re-pull the jobs/offers list. No payload.
 RegisterNetEvent('sd-phone:client:services:jobsChanged', function()
     SendNUIMessage({ action = 'sd-phone:services:jobsChanged' })

@@ -9,7 +9,7 @@ import { useStatusBarLight } from '@/shell/useStatusBarLight';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { POSTS, type User } from '../data';
 import { apiLiveStart, apiLiveEnd, apiLiveFrame, apiLiveChunk, apiLiveHeart, type LiveComment, type LiveEncoderConfig } from '../photogramApi';
-import { videoStreamingSupported, pickVideoMime, blobToBase64 } from './liveMedia';
+import { videoStreamingSupported, pickVideoMime, blobToBase64 } from '@/shared/liveMedia';
 import { getGameRender, type GameRender } from '@/render';
 import { VerifiedCheck } from '../ui';
 

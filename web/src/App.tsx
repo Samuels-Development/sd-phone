@@ -14,6 +14,7 @@ import { AppDeck, FullscreenStage, type DeckAppCtx } from '@/shell/AppDeck';
 import { Homescreen }  from '@/shell/Homescreen';
 import { useBadgeStore } from '@/stores/badgeStore';
 import { useBatteryStore } from '@/stores/batteryStore';
+import { useSessionStore } from '@/stores/sessionStore';
 import { useDownloadStore, useDownloadingIds } from '@/stores/downloadStore';
 import { useLocaleStore } from '@/stores/localeStore';
 import { HomeIndicator } from '@/shell/HomeIndicator';
@@ -100,7 +101,7 @@ interface ViewState {
     showDate:      boolean;
 }
 
-const SERVER_BADGE_APPS = new Set<AppId>(['messages', 'phone', 'mail', 'groups', 'photogram', 'birdy']);
+const SERVER_BADGE_APPS = new Set<AppId>(['messages', 'phone', 'mail', 'groups', 'photogram', 'birdy', 'vibez']);
 
 // How many apps the switcher shows / the recents list remembers. Every visible card
 // wants a live preview, so the retain cap below is bound to this - keeping them the
@@ -631,6 +632,10 @@ function AppContent() {
 
     useNuiEvent('sd-phone:battery', useCallback((pct) => {
         if (typeof pct === 'number') { setBattery(pct); useBatteryStore.getState().setLevel(pct); }
+    }, []));
+
+    useNuiEvent('sd-phone:session', useCallback((data) => {
+        if (data && typeof data.startMs === 'number') useSessionStore.getState().setStartMs(data.startMs);
     }, []));
 
     const [notifs, setNotifs] = useState<NotificationItem[]>([]);

@@ -8,6 +8,7 @@ import { PromptDialog } from '@/ui/PromptDialog';
 import { Toggle } from '@/ui/Toggle';
 import { t } from '@/i18n';
 import { fmtMoney, type Employee } from './data';
+import { InvoicesSection } from './InvoicesSection';
 import {
     demote, deposit, fire, hire, promote, quitCompany, setDuty, setJobCalls, setJobMessages, withdraw,
     type Grade, type MyCompany, type ServiceResult,
@@ -21,9 +22,10 @@ function prevGrade(grades: Grade[], current: number): Grade | null {
     return grades.filter(g => g.level < current).sort((a, b) => b.level - a.level)[0] ?? null;
 }
 
-export function ActionsTab({ myCompany, multijob = false, onChanged }: {
+export function ActionsTab({ myCompany, multijob = false, invoicesEnabled = false, onChanged }: {
     myCompany: MyCompany | null;
     multijob?: boolean;
+    invoicesEnabled?: boolean;
     onChanged: (mc: MyCompany | null | undefined) => void;
 }) {
     const [amountFor, setAmountFor] = useState<null | 'deposit' | 'withdraw'>(null);
@@ -76,6 +78,7 @@ export function ActionsTab({ myCompany, multijob = false, onChanged }: {
 
     const showMoney     = myCompany.isBoss && myCompany.available;
     const showEmployees = myCompany.isBoss;
+    const showInvoices  = invoicesEnabled && multijob && myCompany.duty;
     const dutyOff       = !myCompany.duty;
 
     return (
@@ -160,6 +163,8 @@ export function ActionsTab({ myCompany, multijob = false, onChanged }: {
                         </div>
                     </>
                 )}
+
+                {showInvoices && <InvoicesSection />}
 
                 <SectionHeader>{t('services.employment', 'Employment')}</SectionHeader>
                 <div className="overflow-hidden rounded-[12px] bg-[#e5e5e5] dark:bg-surface">

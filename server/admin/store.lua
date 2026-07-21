@@ -598,6 +598,29 @@ CONTENT.photogram = {
     end,
 }
 
+CONTENT.vibez = {
+    deletable = true,
+    list = function(ts, id, like, limit)
+        return MySQL.query.await(([[
+            SELECT p.id, p.created_at AS ts, %s AS author_cid, p.author, p.caption AS body,
+                   p.sound AS title, 'video' AS kind
+            FROM phone_vibez_posts p
+            WHERE (? IS NULL OR p.caption LIKE ? OR p.author LIKE ?)
+              AND (? IS NULL OR p.created_at < ? OR (p.created_at = ? AND p.id < ?))
+            ORDER BY p.created_at DESC, p.id DESC
+            LIMIT ?
+        ]]):format(SESSION_CID:format('vibez', 'p.author')),
+            { like, like, like, ts, ts, ts, id, limit }) or {}
+    end,
+    delete = function(id)
+        MySQL.update.await('DELETE FROM phone_vibez_comment_likes WHERE comment_id IN (SELECT id FROM phone_vibez_comments WHERE post_id = ?)', { id })
+        MySQL.update.await('DELETE FROM phone_vibez_comments WHERE post_id = ?', { id })
+        MySQL.update.await('DELETE FROM phone_vibez_likes WHERE post_id = ?', { id })
+        MySQL.update.await('DELETE FROM phone_vibez_saves WHERE post_id = ?', { id })
+        return tonumber(MySQL.update.await('DELETE FROM phone_vibez_posts WHERE id = ?', { id })) or 0
+    end,
+}
+
 CONTENT.cherry = {
     deletable = false,
     list = function(ts, id, like, limit)

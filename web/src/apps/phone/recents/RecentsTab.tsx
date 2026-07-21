@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Clock, Info, UserRound } from 'lucide-react';
+import { Clock, Info } from 'lucide-react';
 
-import { ContactAvatar } from '@/shared/ContactAvatar';
+import { ContactAvatar, PlaceholderAvatar } from '@/shared/ContactAvatar';
 import { EmptyState } from '@/ui/EmptyState';
 import { useSessionState } from '@/hooks/useSessionState';
 import { SegmentedControl } from '@/ui/SegmentedControl';
@@ -27,6 +27,10 @@ export function RecentsTab({ recents, onAddContact, onRequestCall, onUpdateConta
     const [addNumber, setAddNumber] = useState<string | null>(null);
 
     const list = filter === 'missed' ? recents.filter(c => c.missed) : recents;
+
+    // The open call detail must track the LIVE entry: saving the number as a contact rebuilds
+    // `recents` with the card attached, and a snapshot would keep showing Add to Contacts.
+    const liveCall = selectedCall ? (recents.find(r => r.id === selectedCall.id) ?? selectedCall) : null;
 
     function openProfile(entry: CallEntry) {
         if (entry.contact) setSelectedContact(entry.contact);
@@ -86,11 +90,11 @@ export function RecentsTab({ recents, onAddContact, onRequestCall, onUpdateConta
                     onToggleFavorite={onToggleFavorite}
                 />
             )}
-            {selectedCall && (
+            {liveCall && (
                 <CallDetail
-                    entry={selectedCall}
+                    entry={liveCall}
                     onBack={() => setSelectedCall(null)}
-                    onAddToContacts={() => setAddNumber(selectedCall.number)}
+                    onAddToContacts={() => setAddNumber(liveCall.number)}
                 />
             )}
             {addNumber !== null && (
@@ -145,18 +149,12 @@ function RecentAvatar({ entry }: { entry: CallEntry }) {
         return <ContactAvatar contact={entry.contact} size={size} />;
     }
     if (entry.noCallerId) {
-        return (
-            <div className="flex shrink-0 items-center justify-center rounded-full bg-[#c2c2c7] dark:bg-control" style={{ width: size, height: size }}>
-                <UserRound className="h-[30px] w-[30px] text-white/90" strokeWidth={1.6} fill="currentColor" />
-            </div>
-        );
+        return <PlaceholderAvatar size={size} />;
     }
     return (
-        <div
-            className="flex shrink-0 items-center justify-center rounded-full bg-[#b6b6bb] text-white/90 dark:bg-control"
-            style={{ width: size, height: size, fontSize: size * 0.34, fontWeight: 600 }}
-        >
-            ??
-        </div>
+        <ContactAvatar
+            contact={{ id: entry.number, name: formatPhone(entry.number), initials: '', color: '#8e8e93' }}
+            size={size}
+        />
     );
 }
