@@ -81,6 +81,11 @@ lib.callback.register('sd-phone:server:services:invoices:cancel', function(src, 
 lib.callback.register('sd-phone:server:services:invoices:received', function(src) return invoices.received(src) end)
 lib.callback.register('sd-phone:server:services:invoices:pay', function(src, payload) return invoices.pay(src, payload) end)
 
+-- Person-to-person invoicing (the Wallet's Invoices tab): same engine, job NULL.
+lib.callback.register('sd-phone:server:banking:invoices:create', function(src, payload) return invoices.personalCreate(src, payload) end)
+lib.callback.register('sd-phone:server:banking:invoices:sent', function(src) return invoices.personalSent(src) end)
+lib.callback.register('sd-phone:server:banking:invoices:cancel', function(src, payload) return invoices.personalCancel(src, payload) end)
+
 ---Public export: exports['sd-phone']:getCompanyDirectory(). Returns the configured company
 ---directory rows in config order, as a fresh array each call.
 ---@return table[] companies

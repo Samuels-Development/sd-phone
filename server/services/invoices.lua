@@ -30,6 +30,17 @@ local ENABLED  = SV.InvoicesEnabled ~= false
 ---@type integer Cap on how many rows the sent/received lists return.
 local LIST_CAP = 50
 
+---@type table Personal-invoice config (configs/banking.lua PersonalInvoices).
+local PI       = (config.Banking or {}).PersonalInvoices or {}
+---@type boolean Master on/off for person-to-person invoicing (defaults on).
+local PENABLED = PI.Enabled ~= false
+---@type integer Smallest personal invoice amount.
+local PMIN     = PI.MinAmount or 1
+---@type integer Largest personal invoice amount.
+local PMAX     = PI.MaxAmount or 1000000
+---@type integer Cap on a sender's outstanding pending personal invoices.
+local PMAXPEND = PI.MaxPending or 10
+
 ---@type table<string, table> Company config entry by job name, for O(1) directory-metadata lookups.
 local byJob = {}
 for _, c in ipairs(COMPANIES) do byJob[c.job] = c end
@@ -109,10 +120,33 @@ local function shapeSent(r)
     }
 end
 
----Shapes one pending invoice row for the target's received list (Banking).
+---A personal invoice's display label: the sender's character name, then their formatted number.
+---@param r table phone_service_invoices row
+---@return string
+local function personalLabel(r)
+    if r.sender_name and r.sender_name ~= '' then return r.sender_name end
+    return util.formatNumber(r.sender_number or '')
+end
+
+---Shapes one pending invoice row for the target's received list (Banking). A NULL job marks a
+---personal invoice: labelled by the sender, no company colour/emoji lookup.
 ---@param r table phone_service_invoices row
 ---@return table
 local function shapeReceived(r)
+    if r.job == nil then
+        return {
+            id       = r.id,
+            personal = true,
+            label    = personalLabel(r),
+            color    = '#0A84FF',
+            emoji    = '🧾',
+            amount   = tonumber(r.amount) or 0,
+            note     = r.note or '',
+            status   = r.status or 'pending',
+            from     = (r.sender_name and r.sender_name ~= '') and r.sender_name or '',
+            ts       = (tonumber(r.created_at) or 0) * 1000,
+        }
+    end
     local e = byJob[r.job]
     return {
         id     = r.id,
@@ -242,17 +276,123 @@ function invoices.cancel(src, payload)
     return invoices.list(src)
 end
 
----Returns the pending invoices addressed to the caller. Read-only.
+---Returns the pending invoices addressed to the caller, each type gated by its own config flag.
 ---@param src number
 ---@return table
 function invoices.received(src)
-    if not ENABLED then return ok({ invoices = {} }) end
+    if not ENABLED and not PENABLED then return ok({ invoices = {} }) end
     local cid = player.getIdentifier(src)
     if not cid then return fail('Player not found') end
 
     local out = {}
-    for _, r in ipairs(store.listReceivedPending(cid, LIST_CAP)) do out[#out + 1] = shapeReceived(r) end
+    for _, r in ipairs(store.listReceivedPending(cid, LIST_CAP)) do
+        local personal = r.job == nil
+        if (personal and PENABLED) or (not personal and ENABLED) then
+            out[#out + 1] = shapeReceived(r)
+        end
+    end
     return ok({ invoices = out })
+end
+
+---Returns the caller's personal invoices, newest first. Read-only.
+---@param src number
+---@return table
+function invoices.personalSent(src)
+    if not PENABLED then return ok({ invoices = {} }) end
+    local cid = player.getIdentifier(src)
+    if not cid then return fail('Player not found') end
+
+    local out = {}
+    for _, r in ipairs(store.listPersonalBySender(cid, LIST_CAP)) do out[#out + 1] = shapeSent(r) end
+    return ok({ invoices = out })
+end
+
+---Creates a person-to-person invoice to the owner of a phone number. Trust boundary: bounded
+---integer amount, a real target other than the caller, and the outstanding-pending cap.
+---@param src number
+---@param payload { number?: string, amount?: number, note?: string }
+---@return table
+function invoices.personalCreate(src, payload)
+    if not PENABLED then return fail('Invoicing is disabled') end
+    payload = type(payload) == 'table' and payload or {}
+    local cid = player.getIdentifier(src)
+    if not cid then return fail('Player not found') end
+
+    local amount = tonumber(payload.amount)
+    if not finite(amount) then return fail('Enter a valid amount') end
+    amount = math.floor(amount)
+    if amount < PMIN then return fail('Enter a valid amount') end
+    if amount > PMAX then return fail('That amount is too large') end
+
+    local number = digits(payload.number)
+    if number == '' then return fail('Enter a recipient number') end
+    local myNumber = digits(settings.ensurePhoneNumber(cid) or '')
+    if number == myNumber then return fail("You can't invoice yourself") end
+    local targetCid = settings.getCitizenByNumber(number)
+    if not targetCid then return fail('No one owns that number') end
+    if targetCid == cid then return fail("You can't invoice yourself") end
+
+    if store.countPendingPersonal(cid) >= PMAXPEND then return fail('You have too many unpaid invoices out') end
+
+    local note       = trim(payload.note):sub(1, 140)
+    local tsrc       = player.getSourceByIdentifier(targetCid)
+    local targetName = tsrc and player.getName(tsrc) or (society.namesByCids({ targetCid })[targetCid])
+    local senderName = player.getName(src)
+
+    local id = store.newId()
+    store.insert({
+        id           = id,
+        senderCid    = cid,
+        senderName   = senderName,
+        senderNumber = myNumber,
+        targetCid    = targetCid,
+        targetName   = targetName,
+        targetNumber = number,
+        amount       = amount,
+        note         = note ~= '' and note or nil,
+        createdAt    = os.time(),
+    })
+
+    if tsrc then
+        TriggerClientEvent('sd-phone:client:notify', tsrc, {
+            app = 'bank', appId = 'bank', title = 'Wallet',
+            body = ('%s sent you an invoice for %s.'):format(senderName or 'Someone', formatMoney(amount)),
+            time = 'now',
+        })
+        TriggerClientEvent('sd-phone:client:services:invoices', tsrc, {})
+    end
+
+    ---First-party hook: fires once per created invoice; job is nil for a personal invoice.
+    TriggerEvent('sd-phone:server:services:invoiceCreated', {
+        id = id, source = src, job = nil, label = nil,
+        senderCid = cid, senderNumber = myNumber,
+        targetCid = targetCid, targetSource = tsrc, targetNumber = number,
+        amount = amount, note = note, timestamp = os.time(),
+    })
+
+    return invoices.personalSent(src)
+end
+
+---Cancels one of the caller's own pending personal invoices. Idempotent against settled rows.
+---@param src number
+---@param payload { id?: string }
+---@return table
+function invoices.personalCancel(src, payload)
+    if not PENABLED then return fail('Invoicing is disabled') end
+    payload = type(payload) == 'table' and payload or {}
+    local cid = player.getIdentifier(src)
+    if not cid then return fail('Player not found') end
+
+    local id  = tostring(payload.id or '')
+    local inv = store.get(id)
+    if not inv then return fail('Invoice not found') end
+    if inv.job ~= nil or inv.sender_cid ~= cid then return fail("That invoice isn't yours") end
+    if inv.status ~= 'pending' then return fail('That invoice is no longer pending') end
+    if not store.markCancelled(id) then return fail('That invoice is no longer pending') end
+
+    local tsrc = player.getSourceByIdentifier(inv.target_cid)
+    if tsrc then TriggerClientEvent('sd-phone:client:services:invoices', tsrc, {}) end
+    return invoices.personalSent(src)
 end
 
 ---Pays a pending invoice addressed to the caller. Target-initiated only: re-checks ownership,
@@ -262,7 +402,7 @@ end
 ---@param payload { id?: string }
 ---@return table
 function invoices.pay(src, payload)
-    if not ENABLED then return fail('Invoicing is disabled') end
+    if not ENABLED and not PENABLED then return fail('Invoicing is disabled') end
     payload = type(payload) == 'table' and payload or {}
     local cid = player.getIdentifier(src)
     if not cid then return fail('Player not found') end
@@ -273,13 +413,18 @@ function invoices.pay(src, payload)
     if inv.target_cid ~= cid then return fail('That invoice is not yours') end
     if inv.status ~= 'pending' then return fail('That invoice is no longer pending') end
 
+    local personal = inv.job == nil
+    if personal and not PENABLED then return fail('Invoicing is disabled') end
+    if not personal and not ENABLED then return fail('Invoicing is disabled') end
+
     local amount = math.floor(tonumber(inv.amount) or 0)
     if amount <= 0 then return fail('Invalid invoice') end
 
     local balance = bank.getBalance(src) or 0
     if balance < amount then return fail('Insufficient funds') end
 
-    local label = (inv.label and inv.label ~= '') and inv.label or labelOf(inv.job)
+    local label = personal and personalLabel(inv)
+        or ((inv.label and inv.label ~= '') and inv.label or labelOf(inv.job))
 
     -- Flip pending -> paid first: the atomic guard means a second concurrent pay loses here,
     -- before any money moves.
@@ -288,7 +433,7 @@ function invoices.pay(src, payload)
     bank.removeMoney(src, amount, ('Invoice · %s'):format(label))
 
     local credited, viaSociety = false, false
-    if society.available() then
+    if not personal and society.available() then
         credited   = society.addMoney(inv.job, amount, ('Invoice from %s'):format(inv.sender_number or ''))
         viaSociety = credited
     end
@@ -325,10 +470,13 @@ function invoices.pay(src, payload)
     local ssrc = player.getSourceByIdentifier(inv.sender_cid)
     if ssrc then
         TriggerClientEvent('sd-phone:client:notify', ssrc, {
-            app = 'services', appId = 'services', title = label,
-            body = ('%s paid your invoice for %s.'):format(inv.target_name or 'A customer', formatMoney(amount)),
-            time = 'now',
+            app   = personal and 'bank' or 'services',
+            appId = personal and 'bank' or 'services',
+            title = personal and 'Wallet' or label,
+            body  = ('%s paid your invoice for %s.'):format(inv.target_name or (personal and 'Someone' or 'A customer'), formatMoney(amount)),
+            time  = 'now',
         })
+        if personal then TriggerClientEvent('sd-phone:client:services:invoices', ssrc, {}) end
     end
     notifyBusiness(inv.job)
 
