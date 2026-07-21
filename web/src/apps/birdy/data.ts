@@ -1,6 +1,6 @@
 
 import { t } from '@/i18n';
-import { formatClockTime, relTimeCompact } from '@/lib/time';
+import { formatClockTime, formatMediumDate, relTimeCompact } from '@/lib/time';
 import type { MsgKind, Reaction } from '@/shared/chat/data';
 
 export interface BirdyAuthor {
@@ -189,5 +189,5 @@ export function relativeTime(from: number, now: number = Date.now()): string {
 
 export function absoluteTime(ms: number): string {
     const d = new Date(ms);
-    return `${formatClockTime(d, true)} · ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+    return `${formatClockTime(d, true)} · ${formatMediumDate(d)}`;
 }
