@@ -1,36 +1,36 @@
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { Briefcase, ReceiptText } from 'lucide-react';
 
 import { PlaceholderAvatar } from '@/shared/ContactAvatar';
-
-import { useAsyncData } from '@/hooks/useAsyncData';
-import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { EmptyState } from '@/ui/EmptyState';
 import { t } from '@/i18n';
-import { fetchReceivedInvoices, payInvoice, type ReceivedInvoice } from '@/apps/services/servicesApi';
+import { payInvoice, type ReceivedInvoice } from '@/apps/services/servicesApi';
 import { formatMoney } from './data';
 
-export function ReceivedInvoices({ onPaid }: { onPaid: () => void }) {
-    const { data, refetch } = useAsyncData(fetchReceivedInvoices, []);
-    useNuiEvent('sd-phone:services:invoices', useCallback(() => { refetch(); }, [refetch]));
-
+// Presentational: the fetch lives in Banking (above the animated tab subtree) so segment
+// switches re-render instantly from props instead of refetching through a loading flash.
+export function ReceivedInvoices({ invoices, loading, onRefetch, onPaid }: {
+    invoices:  ReceivedInvoice[];
+    loading:   boolean;
+    onRefetch: () => void;
+    onPaid:    () => void;
+}) {
     const [paying, setPaying] = useState<ReceivedInvoice | null>(null);
     const [busy,   setBusy]   = useState(false);
     const [error,  setError]  = useState<string | null>(null);
-
-    const invoices = data ?? [];
 
     async function doPay(inv: ReceivedInvoice) {
         if (busy) return;
         setBusy(true);
         const res = await payInvoice(inv.id);
         setBusy(false);
-        if (res.success) { refetch(); onPaid(); }
+        if (res.success) { onRefetch(); onPaid(); }
         else setError(res.message ?? t('banking.somethingWentWrong', 'Something went wrong'));
     }
 
     if (invoices.length === 0) {
+        if (loading) return null;
         return (
             <EmptyState
                 icon={ReceiptText}

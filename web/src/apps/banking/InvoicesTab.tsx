@@ -13,6 +13,7 @@ import { EmptyState } from '@/ui/EmptyState';
 import { SegmentedControl } from '@/ui/SegmentedControl';
 import { t } from '@/i18n';
 import { formatPhone } from '@/lib/phone';
+import type { ReceivedInvoice } from '@/apps/services/servicesApi';
 import { cancelPersonalInvoice, fetchPersonalSent, type PersonalInvoice } from './bankingApi';
 import { formatMoney } from './data';
 import { NewInvoicePage } from './NewInvoicePage';
@@ -20,13 +21,18 @@ import { ReceivedInvoices } from './ReceivedInvoices';
 
 type Segment = 'received' | 'sent';
 
-export function InvoicesTab({ onPaid }: { onPaid: () => void }) {
+export function InvoicesTab({ received, receivedLoading, onRefetchReceived, onPaid }: {
+    received:          ReceivedInvoice[];
+    receivedLoading:   boolean;
+    onRefetchReceived: () => void;
+    onPaid:            () => void;
+}) {
     const [segment,    setSegment]    = useSessionState<Segment>('banking:invoicesSegment', 'received');
     const [composing,  setComposing]  = useState(false);
     const [cancelling, setCancelling] = useState<PersonalInvoice | null>(null);
     const [error,      setError]      = useState<string | null>(null);
 
-    const { data: sent, refetch: refetchSent } = useAsyncData(fetchPersonalSent, []);
+    const { data: sent, loading: sentLoading, refetch: refetchSent } = useAsyncData(fetchPersonalSent, []);
     useNuiEvent('sd-phone:services:invoices', useCallback(() => { refetchSent(); }, [refetchSent]));
 
     // Live contact resolution for the sent rows: a saved card shows its avatar/initials, an
@@ -77,13 +83,15 @@ export function InvoicesTab({ onPaid }: { onPaid: () => void }) {
             <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-10 pt-2">
                 <div key={segment} className="animate-swipe-in-left">
                 {segment === 'received' ? (
-                    <ReceivedInvoices onPaid={onPaid} />
+                    <ReceivedInvoices invoices={received} loading={receivedLoading} onRefetch={onRefetchReceived} onPaid={onPaid} />
                 ) : sentList.length === 0 ? (
+                    sentLoading ? null : (
                     <EmptyState
                         icon={ReceiptText}
                         title={t('banking.noSentInvoices', 'No Invoices Sent')}
                         subtitle={t('banking.sentInvoicesSub', 'Invoices you send will show up here.')}
                     />
+                    )
                 ) : (
                     <div className="overflow-hidden rounded-[16px] bg-[#e5e5e5] dark:bg-surface">
                         {sentList.map((inv, i) => {

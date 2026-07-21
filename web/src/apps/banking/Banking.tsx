@@ -8,6 +8,7 @@ import { t } from '@/i18n';
 import { ActionSheet } from '@/ui/ActionSheet';
 import { formatMoney } from './data';
 import { fetchOverview, type BankOverview, type BankTx } from './bankingApi';
+import { fetchReceivedInvoices } from '@/apps/services/servicesApi';
 import { AllTransactions } from './AllTransactions';
 import { SendMoney, prefillTransferAgain } from './SendMoney';
 import { FleecaCard } from './FleecaCard';
@@ -21,6 +22,9 @@ const CARD_EXPIRY = '08/29';
 
 export function Banking({ onClose: _onClose }: { onClose: () => void }) {
     const { data: overview, loading, refetch: refresh } = useAsyncData<BankOverview>(fetchOverview, []);
+    // Received invoices live here, above the animated tab subtree: segment/tab switches render
+    // instantly from cached data, and the pending count feeds the Invoices tab badge.
+    const { data: receivedInv, loading: receivedLoading, refetch: refetchReceived } = useAsyncData(fetchReceivedInvoices, []);
     const [tab,      setTab]      = useSessionState<BankingTab>('banking:tab', 'home');
     const [showAll,  setShowAll]  = useSessionState('banking:showAll', false);
     const [sending,  setSending]  = useSessionState('banking:sending', false);
@@ -34,6 +38,7 @@ export function Banking({ onClose: _onClose }: { onClose: () => void }) {
 
     useNuiEvent('sd-phone:bank:received', useCallback(() => { refresh(); }, [refresh]));
     useNuiEvent('sd-phone:bank:txAdded', useCallback(() => { refresh(); }, [refresh]));
+    useNuiEvent('sd-phone:services:invoices', useCallback(() => { refetchReceived(); }, [refetchReceived]));
 
     const txs    = overview?.transactions ?? [];
     const latest = useMemo(() => txs.slice(0, 8), [txs]);
@@ -44,7 +49,7 @@ export function Banking({ onClose: _onClose }: { onClose: () => void }) {
 
     const tabs: TabBarItem<BankingTab>[] = [
         { id: 'home',     label: t('banking.tabHome', 'Home'),     icon: a => <House       className="h-[33px] w-[33px]" strokeWidth={a ? 2.2 : 1.9} /> },
-        { id: 'invoices', label: t('banking.invoices', 'Invoices'), icon: a => <ReceiptText className="h-[33px] w-[33px]" strokeWidth={a ? 2.2 : 1.9} /> },
+        { id: 'invoices', label: t('banking.invoices', 'Invoices'), icon: a => <ReceiptText className="h-[33px] w-[33px]" strokeWidth={a ? 2.2 : 1.9} />, badge: (receivedInv ?? []).length },
     ];
 
     return (
@@ -53,7 +58,12 @@ export function Banking({ onClose: _onClose }: { onClose: () => void }) {
 
             {tab === 'invoices' ? (
                 <div key="invoices" className="flex min-h-0 flex-1 flex-col animate-swipe-in-left">
-                    <InvoicesTab onPaid={refresh} />
+                    <InvoicesTab
+                        received={receivedInv ?? []}
+                        receivedLoading={receivedLoading}
+                        onRefetchReceived={refetchReceived}
+                        onPaid={refresh}
+                    />
                 </div>
             ) : (
             <div key="home" className="flex min-h-0 flex-1 flex-col animate-swipe-in-left">
