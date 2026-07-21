@@ -59,6 +59,7 @@ export function InvoicesTab({ onPaid }: { onPaid: () => void }) {
             </div>
 
             <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-10 pt-2">
+                <div key={segment} className="animate-swipe-in-left">
                 {segment === 'received' ? (
                     <ReceivedInvoices onPaid={onPaid} />
                 ) : sentList.length === 0 ? (
@@ -100,6 +101,7 @@ export function InvoicesTab({ onPaid }: { onPaid: () => void }) {
                         ))}
                     </div>
                 )}
+                </div>
             </div>
 
             {cancelling && (
