@@ -52,8 +52,11 @@ export function Banking({ onClose: _onClose }: { onClose: () => void }) {
             <div className="h-[54px] shrink-0" aria-hidden />
 
             {tab === 'invoices' ? (
-                <InvoicesTab onPaid={refresh} />
-            ) : (<>
+                <div key="invoices" className="flex min-h-0 flex-1 flex-col animate-swipe-in-left">
+                    <InvoicesTab onPaid={refresh} />
+                </div>
+            ) : (
+            <div key="home" className="flex min-h-0 flex-1 flex-col animate-swipe-in-left">
             <div className="px-5 pb-2 pt-0.5 text-[34px] font-bold tracking-tight">{t('banking.wallet', 'Wallet')}</div>
 
             <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-10 pt-3">
@@ -91,7 +94,8 @@ export function Banking({ onClose: _onClose }: { onClose: () => void }) {
                     <TxRows items={latest} onSelect={setActionTx} />
                 )}
             </div>
-            </>)}
+            </div>
+            )}
 
             <TabBar tabs={tabs} active={tab} onChange={setTab} />
 
