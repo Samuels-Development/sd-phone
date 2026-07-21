@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useSessionState } from '@/hooks/useSessionState';
+import { useDeckActive } from '@/shell/deckActive';
 import { CompaniesTab } from './CompaniesTab';
 import { JobsTab } from './JobsTab';
 import { ServiceMessagesTab } from './ServiceMessagesTab';
@@ -28,6 +29,18 @@ export function Services({ onClose: _onClose }: { onClose: () => void }) {
     useNuiEvent('sd-phone:services:rosterChanged', useCallback(() => { void refresh(); }, [refresh]));
     useNuiEvent('sd-phone:services:inbox', useCallback(() => { void refreshInbox(); }, [refreshInbox]));
     useNuiEvent('sd-phone:services:jobsChanged', useCallback(() => { void refresh(); }, [refresh]));
+    // A paid business invoice credits the society account, so the invoices push also means the
+    // Actions tab's company balance moved.
+    useNuiEvent('sd-phone:services:invoices', useCallback(() => { void refresh(); }, [refresh]));
+
+    // Keep-alive: pushes are missed while the app sits suspended in the switcher, so the
+    // directory (company balance included) re-syncs on the foreground rising edge.
+    const deckActive = useDeckActive();
+    const wasActive  = useRef(deckActive);
+    useEffect(() => {
+        if (deckActive && !wasActive.current) { void refresh(); void refreshInbox(); }
+        wasActive.current = deckActive;
+    }, [deckActive, refresh, refreshInbox]);
 
     const patchMyCompany = useCallback((mc: MyCompany | null | undefined) => {
         setDir(d => (d ? { ...d, myCompany: mc ?? null } : d));
