@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { t } from '@/i18n';
 import { ChatView } from '@/shared/chat/ChatView';
@@ -17,9 +17,11 @@ import {
     removeGroupMemberApi, markReadApi,
     upsertConversation, appendMessage, replaceMessage, markConversationRead,
     deleteConversationApi, contactFromNumber, reactMessageApi, toggleReactionLocal,
-    applyReaction, type SendInput,
+    applyReaction, resolveConvParticipant, type SendInput,
 } from '@/shared/chat/messagesApi';
 import type { Reaction } from '@/shared/chat/data';
+import { useContacts, useContactsStore } from '@/stores/contactsStore';
+import { digits } from '@/lib/format';
 import { peekMessagesTarget, clearMessagesTarget } from '@/shell/deeplink';
 import { saveNewContact } from '@/stores/contactsStore';
 import type { Contact as PhoneContact } from '@/apps/phone/data';
@@ -36,6 +38,12 @@ export function Messages({ onClose }: { onClose: () => void }) {
 
     const [pending]        = useState(() => peekMessagesTarget());
     const [resolved, setResolved] = useState(!pending);
+
+    // The saved-contacts book, shared with the Phone app and kept live there (optimistic
+    // add/edit/delete + push events). Names are resolved against it at render so a contact
+    // change reflects in the conversation list / thread header without a Messages refetch.
+    const { contacts: liveCards } = useContacts('contacts');
+    useEffect(() => { void useContactsStore.getState().load(); }, []);
 
     useEffect(() => {
         clearMessagesTarget();
@@ -86,8 +94,28 @@ export function Messages({ onClose }: { onClose: () => void }) {
         if (openIdRef.current === incoming.id) markReadApi(incoming.id);
     }, []));
 
-    const conv = openId ? conversations.find(c => c.id === openId) ?? null : null;
-    const totalUnread = conversations.reduce((n, c) => n + unreadCount(c), 0);
+    const cardByNumber = useMemo(() => {
+        const m = new Map<string, Contact>();
+        for (const c of liveCards) {
+            const key = digits(c.phone ?? '');
+            if (key) m.set(key, { id: key, name: c.name, initials: c.initials, color: c.color, avatar: c.avatar, phone: key });
+        }
+        return m;
+    }, [liveCards]);
+
+    const resolvedConversations = useMemo(
+        () => conversations.map(c => resolveConvParticipant(c, cardByNumber)),
+        [conversations, cardByNumber],
+    );
+
+    // Recipient book for compose / add-member: the live shared book in-game, the fetched mock in dev.
+    const composeContacts = useMemo<Contact[]>(() => {
+        if (!isFiveM) return contacts;
+        return [...cardByNumber.values()].sort((a, b) => a.name.localeCompare(b.name));
+    }, [contacts, cardByNumber]);
+
+    const conv = openId ? resolvedConversations.find(c => c.id === openId) ?? null : null;
+    const totalUnread = resolvedConversations.reduce((n, c) => n + unreadCount(c), 0);
     const animateNav = useDidEnter(conversations.length > 0);
 
     const openConversation = useCallback((id: string) => {
@@ -330,7 +358,7 @@ export function Messages({ onClose }: { onClose: () => void }) {
         <div className="absolute inset-0 z-10 flex flex-col bg-[#d4d4d4] dark:bg-base text-black dark:text-white overflow-hidden">
             {resolved && (
                 <ConversationList
-                    conversations={conversations}
+                    conversations={resolvedConversations}
                     onOpen={openConversation}
                     onCompose={() => setComposing(true)}
                     onMarkRead={markRead}
@@ -344,7 +372,7 @@ export function Messages({ onClose }: { onClose: () => void }) {
                     conv={conv}
                     animateIn={animateNav}
                     totalUnread={totalUnread}
-                    contacts={contacts}
+                    contacts={composeContacts}
                     myNumber={myNumber}
                     onBack={() => setOpenId(null)}
                     onSend={draft => void sendMessage(conv.id, draft)}
@@ -360,7 +388,7 @@ export function Messages({ onClose }: { onClose: () => void }) {
 
             {resolved && composing && (
                 <NewMessage
-                    contacts={contacts}
+                    contacts={composeContacts}
                     myNumber={myNumber}
                     onCancel={() => setComposing(false)}
                     onSend={startConversation}
