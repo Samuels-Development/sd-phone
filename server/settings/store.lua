@@ -81,6 +81,7 @@ function store.ensureSchema()
             face_id            TINYINT(1)   NOT NULL DEFAULT 0,
             chat_text_scale    DECIMAL(3,2) NULL,
             hour24             TINYINT(1)   NULL,
+            reopen_app         TINYINT(1)   NULL,
             ringtone_volume    TINYINT UNSIGNED NULL,
             call_volume        TINYINT UNSIGNED NULL,
             locale             VARCHAR(8)   NULL,
@@ -95,6 +96,9 @@ function store.ensureSchema()
     end
     if not columnExists('phone_settings', 'hour24') then
         MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN hour24 TINYINT(1) NULL')
+    end
+    if not columnExists('phone_settings', 'reopen_app') then
+        MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN reopen_app TINYINT(1) NULL')
     end
     for _, col in ipairs({
         { 'card_name',    'VARCHAR(64) NULL'  },
@@ -814,6 +818,30 @@ function store.setHour24(citizenid, on)
     MySQL.update.await([[
         INSERT INTO phone_settings (citizenid, hour24) VALUES (?, ?)
         ON DUPLICATE KEY UPDATE hour24 = VALUES(hour24)
+    ]], { citizenid, on == true and 1 or 0 })
+end
+
+---Returns true if a player wants the phone to reopen into the holstered app, defaulting to
+---false when the reopen_app column is NULL. Read-only.
+---@param citizenid string framework per-character id
+---@return boolean reopenApp
+function store.getReopenApp(citizenid)
+    if not citizenid or citizenid == '' then return false end
+    local row = MySQL.single.await('SELECT reopen_app FROM phone_settings WHERE citizenid = ?', { citizenid })
+    if row and row.reopen_app ~= nil then
+        return row.reopen_app == true or tonumber(row.reopen_app) == 1
+    end
+    return false
+end
+
+---Persists a player's reopen-into-app preference (upsert), coerced to a strict boolean.
+---@param citizenid string framework per-character id
+---@param on boolean reopen into the holstered app
+function store.setReopenApp(citizenid, on)
+    if not citizenid or citizenid == '' then return end
+    MySQL.update.await([[
+        INSERT INTO phone_settings (citizenid, reopen_app) VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE reopen_app = VALUES(reopen_app)
     ]], { citizenid, on == true and 1 or 0 })
 end
 

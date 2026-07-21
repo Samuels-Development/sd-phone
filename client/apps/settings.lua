@@ -9,6 +9,7 @@ proxyCallback('sd-phone:settings:tones:add',    'sd-phone:server:settings:tones:
 proxyCallback('sd-phone:settings:tones:remove', 'sd-phone:server:settings:tones:remove')
 proxyCallback('sd-phone:settings:setAirplane',  'sd-phone:server:settings:setAirplane')
 proxyCallback('sd-phone:settings:setHour24',    'sd-phone:server:settings:setHour24')
+proxyCallback('sd-phone:settings:setReopenApp', 'sd-phone:server:settings:setReopenApp')
 proxyCallback('sd-phone:settings:setTheme',     'sd-phone:server:settings:setTheme')
 proxyCallback('sd-phone:settings:setDarkTheme', 'sd-phone:server:settings:setDarkTheme')
 proxyCallback('sd-phone:settings:setLockClock', 'sd-phone:server:settings:setLockClock')

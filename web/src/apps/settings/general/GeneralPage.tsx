@@ -1,18 +1,20 @@
 import { t } from '@/i18n';
 import { useSessionState } from '@/hooks/useSessionState';
+import { useTheme } from '@/stores/themeStore';
 import { AboutPage }          from './AboutPage';
 import { DateTimePage }        from './DateTimePage';
 import { LanguageRegionPage }  from './LanguageRegionPage';
 import { PhoneStoragePage }    from './PhoneStoragePage';
 import { ResetPhonePage }      from './ResetPhonePage';
 import { SoftwareUpdatePage }  from './SoftwareUpdatePage';
-import { ListGroup, ListRow } from '@/ui/ListGroup';
+import { ListGroup, ListRow, ToggleRow } from '@/ui/ListGroup';
 import { SubPage } from '../SettingsSubPage';
 
 type ActiveSub = 'about' | 'software-update' | 'phone-storage' | 'date-time' | 'language-region' | 'reset-phone' | null;
 
 export function GeneralPage({ onBack }: { onBack: () => void }) {
     const [sub, setSub] = useSessionState<ActiveSub>('settings:generalSub', null);
+    const { reopenLastApp, setReopenLastApp } = useTheme('reopenLastApp', 'setReopenLastApp');
     const back = () => setSub(null);
 
     const subNode =
@@ -35,6 +37,10 @@ export function GeneralPage({ onBack }: { onBack: () => void }) {
             <ListGroup>
                 <ListRow label={t('settings.dateTime', 'Date & Time')}       onPress={() => setSub('date-time')}       divider />
                 <ListRow label={t('settings.languageRegion', 'Language & Region')} onPress={() => setSub('language-region')} />
+            </ListGroup>
+
+            <ListGroup>
+                <ToggleRow label={t('settings.reopenLastApp', 'Reopen Last App')} on={reopenLastApp} onToggle={() => setReopenLastApp(!reopenLastApp)} />
             </ListGroup>
 
             <ListGroup>

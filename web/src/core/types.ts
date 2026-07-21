@@ -177,6 +177,7 @@ interface MusicSharePush {
 
 export type NuiMessage =
     | { action: 'sd-phone:open';    data: OpenPayload }
+    | { action: 'sd-phone:apps';    data: { installedApps?: string[]; homeLayout?: string | null } }
     | { action: 'sd-phone:simState'; data: SimStatePush }
     | { action: 'sd-phone:frameColor'; data: { color: string } }
     | { action: 'sd-phone:music:receive'; data: MusicSharePush }
@@ -220,6 +221,7 @@ export type NuiMessage =
         reactions: Reaction[];
       } }
     | { action: 'sd-phone:birdy:notification' }
+    | { action: 'sd-phone:birdy:feedChanged' }
     | { action: 'sd-phone:darkchat:message'; data: {
         roomId:  string;
         message: {
@@ -235,6 +237,9 @@ export type NuiMessage =
     | { action: 'sd-phone:call:outgoing';  data: CallPush }
     | { action: 'sd-phone:call:connected'; data: { channel: number } }
     | { action: 'sd-phone:call:ended';     data: CallEndedPush }
+    | { action: 'sd-phone:payphone:open';     data: { number: string; anonymous: boolean; myNumber?: string | null; favorites: { name: string; phone: string }[]; connected?: boolean; callerName?: string; coin?: { enabled: boolean; cost: number }; credited?: boolean } }
+    | { action: 'sd-phone:payphone:outgoing'; data: { channel: number; number: string } }
+    | { action: 'sd-phone:payphone:ended';    data: { channel: number; reason: string } }
     | { action: 'sd-phone:radio:status';   data: { on: boolean; freq: number; standby?: boolean } }
     | { action: 'sd-phone:radio:onair';    data: { active: boolean } }
     | { action: 'sd-phone:radio:count';    data: { count: number } }
@@ -324,6 +329,7 @@ export type NuiMessage =
     | { action: 'sd-phone:services:inbox' }
     | { action: 'sd-phone:services:jobsChanged' }
     | { action: 'sd-phone:services:rosterChanged' }
+    | { action: 'sd-phone:services:invoices' }
     | { action: 'sd-phone:homes:refresh' }
     | { action: 'customApps:set';     data: CustomAppDef[] }
     | { action: 'customApps:message'; data: { id: string; message: unknown } };

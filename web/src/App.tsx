@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { AdminPanel } from '@/admin/AdminPanel';
+import { PayphoneUI } from '@/payphone/PayphoneUI';
 import { CallLayer } from '@/apps/phone/CallLayer';
 import { NotificationHost, type NotificationItem } from '@/shell/Notifications';
 import { AirShareCard, type AirShareRequest } from '@/shared/AirShare';
@@ -13,6 +14,7 @@ import { AppDeck, FullscreenStage, type DeckAppCtx } from '@/shell/AppDeck';
 import { Homescreen }  from '@/shell/Homescreen';
 import { useBadgeStore } from '@/stores/badgeStore';
 import { useBatteryStore } from '@/stores/batteryStore';
+import { useSessionStore } from '@/stores/sessionStore';
 import { useDownloadStore, useDownloadingIds } from '@/stores/downloadStore';
 import { useLocaleStore } from '@/stores/localeStore';
 import { HomeIndicator } from '@/shell/HomeIndicator';
@@ -99,12 +101,28 @@ interface ViewState {
     showDate:      boolean;
 }
 
-const SERVER_BADGE_APPS = new Set<AppId>(['messages', 'phone', 'mail', 'groups', 'photogram']);
+const SERVER_BADGE_APPS = new Set<AppId>(['messages', 'phone', 'mail', 'groups', 'photogram', 'birdy', 'vibez']);
 
 // How many apps the switcher shows / the recents list remembers. Every visible card
 // wants a live preview, so the retain cap below is bound to this - keeping them the
 // same value is what stops the extra cards from falling back to a grey icon card.
 const RECENTS_CAP = 10;
+
+// Fullscreen app slot with a reveal animation. This wrapper mounts exactly when phone content
+// is revealed (open without a lock, or the unlock swipe finishing), so capturing hasApp at
+// mount animates only a restored app (Reopen Last App): a gentle zoom-in instead of a hard
+// pop. Later in-session launches keep their icon-zoom and never replay this.
+function AppResumeStage({ hasApp }: { hasApp: boolean }) {
+    const fxRef = useRef(hasApp);
+    return (
+        <div
+            className="absolute inset-0 z-10"
+            style={{ pointerEvents: 'none', animation: fxRef.current ? 'app-resume-in 0.34s cubic-bezier(0.3,0.9,0.4,1) both' : undefined }}
+        >
+            <FullscreenStage />
+        </div>
+    );
+}
 
 // How many preview-eligible apps are kept alive (live switcher cards) at once. The
 // active app is always live on top of this; anything past the cap downgrades to an
@@ -122,6 +140,7 @@ export function App() {
             <MusicProvider>
                 <AppContent />
                 <AdminPanel />
+                <PayphoneUI />
             </MusicProvider>
         </ThemeProvider>
     );
@@ -159,6 +178,8 @@ function AppContent() {
     // Active SIM number of the previous phone-open; a different number on the next open means
     // the player switched phones and the UI must shed the old profile's state.
     const lastSimNumberRef                      = useRef<string | null>(null);
+    // App the phone was holstered on; sd-phone:open restores it when config allows.
+    const lastOpenAppRef                        = useRef<AppId | null>(null);
     const [battery,         setBattery]         = useState<number>(100);
     const [currentApp,      setCurrentApp]      = useState<AppId | null>(null);
     const [launchOrigin,    setLaunchOrigin]    = useState<{ x: number; y: number } | null>(null);
@@ -176,6 +197,12 @@ function AppContent() {
     const [landscape,       setLandscape]       = useState(false);
     const [installedApps,   setInstalledApps]   = useState<Set<string>>(new Set());
     const [savedLayout,     setSavedLayout]     = useState<SavedLayout | null>(null);
+    // In FiveM the installed apps + saved layout arrive via the sd-phone:apps follow-up (kept off
+    // the open round-trip). Hold the home grid until they land: the Homescreen seeds its slot
+    // layout once at mount, so mounting it against the transient empty layout would auto-arrange
+    // and then persist that arrangement back, clobbering the real one. The dev harness resolves
+    // both synchronously on open, so it's ready immediately.
+    const [appsReady,       setAppsReady]       = useState(!isFiveM);
     const [frameColor,      setFrameColor]      = useState<string>(DEFAULT_FRAME_COLOR);
     const downloadingIds = useDownloadingIds();
     const downloadQueue = useRef<string[]>([]);
@@ -245,6 +272,7 @@ function AppContent() {
                 window.localStorage.removeItem('sd-phone:mail:folderOrder');
                 window.localStorage.removeItem('sd-phone:mail:activeAccount');
             } catch { /* ignore */ }
+            lastOpenAppRef.current = null;
             resetAuth();
             useMusicLibrary.getState().reset();
             useThemeStore.getState().hydrate();
@@ -282,15 +310,27 @@ function AppContent() {
         // session's retained apps are still alive - we deliberately do NOT clear them,
         // which is what brings the switcher previews back exactly where you left them.
         // "Close All" is the only thing that wipes them (iOS: apps stay open otherwise).
-        setCurrentApp(null);
+        // Reopen straight into the app the phone was holstered on when the player's Settings
+        // toggle (Settings > General > Reopen Last App, default off) says so. The deck kept
+        // the app alive, so this is a resume, not a launch; a SIM switch clears the memo.
+        setCurrentApp(useThemeStore.getState().reopenLastApp ? lastOpenAppRef.current : null);
         setIsClosing(false);
         setLaunchOrigin(null);
         setSwitcherOpen(false);
         setSwitcherClosing(false);
         setSwitcherReady(false);
         setNotifs([]);
-        if (data.installedApps) setInstalledApps(new Set([...data.installedApps, ...installedCustomIds()]));
-        else void listInstalledApps().then(ids => setInstalledApps(new Set([...ids, ...installedCustomIds()])));
+        // In FiveM the installed list + saved layout normally arrive via the sd-phone:apps
+        // follow-up (kept off the open round-trip so the phone reveals instantly). An inline
+        // payload still counts as ready - the Homescreen must never wait on a follow-up that
+        // isn't coming. The dev harness fetches from its local mock instead.
+        if (data.installedApps) {
+            setInstalledApps(new Set([...data.installedApps, ...installedCustomIds()]));
+            setAppsReady(true);
+        } else {
+            if (!isFiveM) void listInstalledApps().then(ids => setInstalledApps(new Set([...ids, ...installedCustomIds()])));
+            setAppsReady(!isFiveM);
+        }
         // Under unique phones the localStorage layout fallback is another profile's - server only.
         setSavedLayout(data.homeLayout ? parseLayout(data.homeLayout) : (data.sim?.enabled ? null : loadHomeLayout()));
         setLocked(data.locked);
@@ -302,6 +342,15 @@ function AppContent() {
         if (isFiveM) void fetchNui<Record<string, number>>('sd-phone:badges:get').then(m => useBadgeStore.getState().setServer(m ?? {}));
         if (isFiveM) void fetchNui<{ on: boolean }>('sd-phone:flashlight:state').then(r => setFlashlightOn(!!r?.on));
         useCustomAppsStore.getState().hydrate();
+    }, []));
+
+    // Follow-up to sd-phone:open: the authoritative installed-apps list and saved home layout,
+    // fetched after the reveal so the server round-trip never delayed the phone appearing.
+    useNuiEvent('sd-phone:apps', useCallback((data) => {
+        if (!data) return;
+        setInstalledApps(new Set([...(data.installedApps ?? []), ...installedCustomIds()]));
+        setSavedLayout(data.homeLayout ? parseLayout(data.homeLayout) : null);
+        setAppsReady(true);
     }, []));
 
     useNuiEvent('sd-phone:simState', useCallback((data) => {
@@ -578,6 +627,10 @@ function AppContent() {
         if (typeof pct === 'number') { setBattery(pct); useBatteryStore.getState().setLevel(pct); }
     }, []));
 
+    useNuiEvent('sd-phone:session', useCallback((data) => {
+        if (data && typeof data.startMs === 'number') useSessionStore.getState().setStartMs(data.startMs);
+    }, []));
+
     const [notifs, setNotifs] = useState<NotificationItem[]>([]);
     const [lockNotifs, setLockNotifs] = useState<NotificationItem[]>([]);
     const [peek, setPeek] = useState<'in' | 'out' | null>(null);
@@ -798,6 +851,7 @@ function AppContent() {
     useEffect(() => {
         if (!leaving) return;
         const t = window.setTimeout(() => {
+            lastOpenAppRef.current = currentAppRef.current;
             setView(null);
             setLeaving(false);
             setEntering(false);
@@ -1040,6 +1094,27 @@ function AppContent() {
             {import.meta.env.DEV && (
                 <button
                     type="button"
+                    onClick={() => window.postMessage({
+                        action: 'sd-phone:payphone:open',
+                        data: {
+                            number:    '2085550142',
+                            anonymous: false,
+                            myNumber:  '2085559873',
+                            favorites: [
+                                { name: 'Tommy V',      phone: '2085552398' },
+                                { name: 'Mechanic Joe', phone: '2085556641' },
+                                { name: 'Rosa',         phone: '2085551177' },
+                            ],
+                        },
+                    }, '*')}
+                    className="fixed left-3 top-[84px] z-[99999] rounded-md bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/20 hover:bg-black/90"
+                >
+                    Payphone
+                </button>
+            )}
+            {import.meta.env.DEV && (
+                <button
+                    type="button"
                     onClick={() => setHour24(!hour24)}
                     className="fixed left-3 top-[84px] z-[99999] rounded-md bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/20 hover:bg-black/90"
                 >
@@ -1083,7 +1158,7 @@ function AppContent() {
                         onOpenCamera={openCameraFromLock}
                     />
                 ) : (
-                    !cameraMode && (
+                    !cameraMode && appsReady && (
                         <Homescreen
                             apps={effectiveApps}
                             dock={view.dock}
@@ -1093,13 +1168,14 @@ function AppContent() {
                             savedLayout={savedLayout}
                             onLayoutChange={handleSaveLayout}
                             onEditingChange={setHomeEditing}
+                            bloomOnMount={currentApp === null}
                         />
                     )
                 )}
 
                 {/* The active app renders here: this only registers the fullscreen slot;
                     the actual live instance is re-parented in from the top-level deck. */}
-                {!showSetup && !locked && <FullscreenStage />}
+                {!showSetup && !locked && <AppResumeStage hasApp={currentApp !== null} />}
 
                 {!showSetup && switcherOpen && !locked && (
                     <AppSwitcher

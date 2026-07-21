@@ -30,6 +30,9 @@ import { warmPhotos, apiSavePhotoFromUrl } from '@/core/photosApi';
 import { VoicePanel }    from './VoicePanel';
 import { AddMemberSheet } from './AddMemberSheet';
 import { EditGroupSheet } from './EditGroupSheet';
+import { AddContact } from '@/apps/phone/contacts/AddContact';
+import { Sheet } from '@/ui/Sheet';
+import type { Contact as PhoneContact } from '@/apps/phone/data';
 
 type Panel = 'emoji' | 'photos' | 'gif' | 'money' | 'location' | 'voice' | null;
 
@@ -60,6 +63,7 @@ interface ChatViewProps {
     onAddMembers:(members: Contact[]) => void;
     onUpdateGroup:(name: string, avatar?: string) => void;
     onRemoveMember:(member: Contact) => void;
+    onSaveContact?:(c: PhoneContact) => Promise<string | null>;
     animateIn?:   boolean;
 }
 
@@ -71,7 +75,7 @@ interface LocShareStatus {
     theyShare?: boolean;
 }
 
-export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend, onReact, onPayRequest, onLocationRespond, onAddMembers, onUpdateGroup, onRemoveMember, animateIn = true }: ChatViewProps) {
+export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend, onReact, onPayRequest, onLocationRespond, onAddMembers, onUpdateGroup, onRemoveMember, onSaveContact, animateIn = true }: ChatViewProps) {
     const { theme } = useTheme('theme');
     const isDark    = theme === 'dark';
 
@@ -111,6 +115,7 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
     const [savedPreview, setSavedPreview] = useState(false);
     const [addingMembers, setAddingMembers] = useState(false);
     const [editingGroup, setEditingGroup] = useState(false);
+    const [addingContact, setAddingContact] = useState(false);
     const listRef   = useRef<HTMLDivElement>(null);
     const inputRef  = useRef<HTMLInputElement>(null);
 
@@ -231,6 +236,16 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
 
     const name = conv.groupName ?? conv.participants[0]?.name ?? t('messages.unknown', 'Unknown');
 
+    // For a 1:1 thread with a number that isn't saved yet, offer to add it as a contact.
+    // Service short codes (5-digit app senders, password resets) aren't people: real player
+    // numbers are 10 digits (7+ on servers with imported numbers), so shorter senders hide it.
+    const soloNumber = !conv.groupName
+        ? (conv.participants[0]?.phone ?? conv.participants[0]?.id ?? '').replace(/\D/g, '')
+        : '';
+    const isKnownNumber = !soloNumber || contacts.some(c => (c.phone ?? '').replace(/\D/g, '') === soloNumber);
+    const isServiceNumber = soloNumber.length > 0 && soloNumber.length < 7;
+    const canAddContact = !!onSaveContact && !!soloNumber && !isServiceNumber && !isKnownNumber;
+
     interface RenderMsg { kind: 'msg'; msg: Message; isLast: boolean; contact?: Contact }
     interface RenderSep { kind: 'separator'; ts: number }
     type RenderItem = RenderMsg | RenderSep;
@@ -297,6 +312,17 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
                         >
                             <GroupAvatar contacts={conv.participants} size={72} avatar={conv.groupAvatar} />
                             <span className="text-[19px] font-semibold leading-none text-black dark:text-white">{name}</span>
+                        </button>
+                    ) : canAddContact ? (
+                        <button
+                            type="button"
+                            onClick={() => { setPanel(null); inputRef.current?.blur(); setAddingContact(true); }}
+                            aria-label={t('messages.addContact', 'Add Contact')}
+                            className="flex flex-col items-center gap-1 active:opacity-60"
+                        >
+                            <ContactAvatar contact={conv.participants[0]} size={72} />
+                            <span className="text-[19px] font-semibold leading-none text-black dark:text-white">{name}</span>
+                            <span className="text-[13px] font-medium leading-none text-[#007AFF]">{t('messages.addContact', 'Add Contact')}</span>
                         </button>
                     ) : (
                         <div className="flex flex-col items-center gap-1.5">
@@ -670,6 +696,21 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
                     onSave={(name, avatar) => { onUpdateGroup(name, avatar); setEditingGroup(false); }}
                     onRemoveMember={onRemoveMember}
                 />
+            )}
+
+            {/* Standard sheet presentation (media-picker sizing); embedded AddContact lets the
+                sheet own the slide animation. */}
+            {addingContact && onSaveContact && (
+                <Sheet onClose={() => setAddingContact(false)} grabber={false} className="font-sf bg-[#d4d4d4] dark:bg-base">
+                    {({ close }) => (
+                        <AddContact
+                            embedded
+                            initialPhone={soloNumber}
+                            onCancel={close}
+                            onSave={onSaveContact}
+                        />
+                    )}
+                </Sheet>
             )}
         </div>
     );

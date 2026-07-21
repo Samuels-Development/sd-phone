@@ -7,6 +7,7 @@ export interface BirdyAuthor {
     name:     string;
     handle:   string;
     verified: boolean;
+    avatar?:  string;
 }
 
 export interface BirdyProfile {
@@ -18,6 +19,7 @@ export interface BirdyProfile {
     following:    number;
     followers:    number;
     protected:    boolean;
+    avatar?:      string;
     banner?:      string;
     isMe?:        boolean;
     isFollowing?: boolean;
@@ -40,6 +42,7 @@ export interface BirdyPost {
     createdAt: number;
     replies:   number;
     reposts:   number;
+    reposted?: boolean;
     likes:     number;
     liked:     boolean;
     images?:   string[];
@@ -113,6 +116,8 @@ export const SEED_POSTS: BirdyPost[] = [
 export type BirdyNotification =
     | { id: string; kind: 'reply';  post: BirdyPost }
     | { id: string; kind: 'like';   user: BirdyAuthor; text: string; post?: BirdyPost }
+    | { id: string; kind: 'repost'; user: BirdyAuthor; text: string; post?: BirdyPost }
+    | { id: string; kind: 'post';   user: BirdyAuthor; text: string; post?: BirdyPost }
     | { id: string; kind: 'follow'; user: BirdyAuthor };
 
 export const SEED_NOTIFICATIONS: BirdyNotification[] = [

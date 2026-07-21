@@ -356,6 +356,27 @@ input[type='number'] {
     to   { opacity: 1; transform: scale(1);    }
 }
 
+@keyframes payphone-in {
+    from { opacity: 0; transform: translateY(22px) scale(0.94); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes payphone-out {
+    from { opacity: 1; transform: translateY(0) scale(1); }
+    to   { opacity: 0; transform: translateY(16px) scale(0.96); }
+}
+
+@keyframes home-icon-in {
+    from { opacity: 0; transform: scale(0.35); }
+    60%  { opacity: 1; }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes app-resume-in {
+    from { opacity: 0; transform: scale(0.88); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
 @keyframes mail-nav-from-bottom {
     from { opacity: 0; transform: translateY(16px); }
     to   { opacity: 1; transform: translateY(0);    }

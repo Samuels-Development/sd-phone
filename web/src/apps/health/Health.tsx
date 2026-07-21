@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Footprints, Heart, MoonStar, Route } from 'lucide-react';
 
 import { useNuiEvent } from '@/hooks/useNuiEvent';
+import { useSessionStore } from '@/stores/sessionStore';
 import { t } from '@/i18n';
 
 const SB_H = 54;
@@ -13,7 +14,6 @@ interface HealthProps {
 }
 
 const live = {
-    sessionStart: null as number | null,
     steps:        null as number | null,
     distanceM:    null as number | null,
     heartRate:    null as number | null,
@@ -21,9 +21,7 @@ const live = {
 window.addEventListener('message', (e: MessageEvent) => {
     const msg = e.data as { action?: string; data?: Record<string, unknown> } | undefined;
     if (!msg?.data) return;
-    if (msg.action === 'sd-phone:session') {
-        if (typeof msg.data.startMs === 'number') live.sessionStart = msg.data.startMs;
-    } else if (msg.action === 'sd-phone:health') {
+    if (msg.action === 'sd-phone:health') {
         if (typeof msg.data.steps     === 'number') live.steps     = msg.data.steps;
         if (typeof msg.data.distanceM === 'number') live.distanceM = msg.data.distanceM;
         if (typeof msg.data.heartRate === 'number') live.heartRate = msg.data.heartRate;
@@ -31,16 +29,12 @@ window.addEventListener('message', (e: MessageEvent) => {
 });
 
 export function Health({ onClose }: HealthProps) {
-    const [sessionStart, setSessionStart] = useState<number>(() => live.sessionStart ?? Date.now());
+    const storeStart = useSessionStore((s) => s.startMs);
+    const [fallbackStart]                 = useState<number>(() => Date.now());
     const [now,          setNow]          = useState<number>(() => Date.now());
     const [steps,        setSteps]        = useState<number>(() => live.steps ?? 0);
     const [distanceM,    setDistanceM]    = useState<number>(() => live.distanceM ?? 0);
     const [hr,           setHr]           = useState<number>(() => live.heartRate ?? 70);
-
-    useNuiEvent('sd-phone:session', useCallback((data) => {
-        if (!data || typeof data.startMs !== 'number') return;
-        setSessionStart(data.startMs);
-    }, []));
 
     useNuiEvent('sd-phone:health', useCallback((data) => {
         if (!data) return;
@@ -54,7 +48,7 @@ export function Health({ onClose }: HealthProps) {
         return () => window.clearInterval(id);
     }, []);
 
-    const awakeMs  = Math.max(0, now - sessionStart);
+    const awakeMs  = Math.max(0, now - (storeStart ?? fallbackStart));
     const distance = distanceM / M_PER_MILE;
 
     return (

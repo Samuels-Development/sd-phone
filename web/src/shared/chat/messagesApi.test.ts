@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { appendThreadMessage, patchThreadMessage } from './messagesApi';
+import { appendThreadMessage, contactFromNumber, patchThreadMessage, resolveConvParticipant } from './messagesApi';
+import type { Contact, Conversation } from './data';
 
 interface TestMsg { id: string; body: string }
 interface TestThread { id: string; topic?: string; messages: TestMsg[] }
@@ -64,5 +65,48 @@ describe('messagesApi.patchThreadMessage', () => {
         const threads = [thread('a', [msg])];
         const next = patchThreadMessage(threads, 'a', 'missing', m => ({ ...m, body: 'nope' }));
         expect(next[0].messages).toEqual([msg]);
+    });
+});
+
+describe('messagesApi.resolveConvParticipant', () => {
+    function conv(id: string, participant: Contact): Conversation {
+        return { id, participants: [participant], messages: [], pinned: false, muted: false };
+    }
+    const card = (over: Partial<Contact>): Contact => ({
+        id: '5551234567', name: 'Card', initials: 'C', color: '#000', phone: '5551234567', ...over,
+    });
+
+    it('reverts to the formatted number when a saved contact was deleted', () => {
+        const c = conv('5551234567', card({ name: 'John Smith' }));
+        const next = resolveConvParticipant(c, new Map());
+        expect(next.participants[0].name).toBe('(555) 123-4567');
+        expect(next.participants[0].avatar).toBeUndefined();
+    });
+
+    it('uses the live contact card when the number is saved (add / rename)', () => {
+        const c = conv('5551234567', card({ name: '(555) 123-4567', phone: '5551234567' }));
+        const map = new Map<string, Contact>([['5551234567', card({ name: 'Jane Doe', avatar: 'a.png' })]]);
+        const next = resolveConvParticipant(c, map);
+        expect(next.participants[0].name).toBe('Jane Doe');
+        expect(next.participants[0].avatar).toBe('a.png');
+    });
+
+    it('keeps a short service-code label (no revert to number)', () => {
+        const c = conv('74682', card({ id: '74682', name: 'Photogram', phone: '74682' }));
+        const next = resolveConvParticipant(c, new Map());
+        expect(next).toBe(c);
+        expect(next.participants[0].name).toBe('Photogram');
+    });
+
+    it('leaves group conversations untouched', () => {
+        const c: Conversation = { ...conv('g-1', card({ name: 'Anyone' })), groupName: 'Wolfpack' };
+        const next = resolveConvParticipant(c, new Map());
+        expect(next).toBe(c);
+    });
+
+    it('returns the same reference when an unsaved number already shows its formatted form', () => {
+        const c = conv('5551234567', contactFromNumber('5551234567'));
+        const next = resolveConvParticipant(c, new Map());
+        expect(next).toBe(c);
     });
 });

@@ -52,6 +52,7 @@ require 'client.apps.games'
 require 'client.apps.settings'
 require 'client.apps.sim'
 require 'client.admin'
+require 'client.payphone'
 
 ---@type table Phone visibility state: open/locked flags + cosmetic battery percentage.
 local phoneState = {
@@ -75,7 +76,8 @@ local FRAME_COLORS = {
     pink = true, purple = true, red = true, yellow = true,
 }
 
----@type integer Wall-clock ms captured once at script load; session start for the Health app.
+---@type integer Wall-clock ms of the session start (re-stamped on character load); the Health app's
+---"time awake" anchor. Seeded at script load as a fallback for opens before the character resolves.
 local SESSION_START_MS = GetCloudTimeAsInt() * 1000
 
 ---@return boolean true while the phone NUI is open
@@ -146,21 +148,6 @@ end
 local function attachPhoneProp(ped)
     if phoneProp and DoesEntityExist(phoneProp) then return end
     phoneProp = createHandProp(ped, currentFrameColor)
-    if not phoneProp then return end
-
-    CreateThread(function()
-        Wait(0)
-        print(('[sd-phone][prop] exists=%s attached=%s networked=%s'):format(
-            tostring(DoesEntityExist(phoneProp)),
-            tostring(phoneProp and IsEntityAttachedToEntity(phoneProp, ped)),
-            tostring(phoneProp and NetworkGetEntityIsNetworked(phoneProp))))
-        Wait(1500)
-        if phoneProp and DoesEntityExist(phoneProp) then
-            local pp = GetEntityCoords(phoneProp)
-            local hb = GetPedBoneCoords(ped, config.Phone.PropBone, 0.0, 0.0, 0.0)
-            print(('[sd-phone][prop] gap prop<->hand = %.3f m (small & steady = welded)'):format(#(pp - hb)))
-        end
-    end)
 end
 
 ---Delete the attached phone prop, if any. Idempotent.
@@ -173,14 +160,21 @@ end
 ---config.Phone.HoldAnimation is off.
 local function startPose()
     if not config.Phone.HoldAnimation then return end
-    local ped = PlayerPedId()
-    RequestAnimDict(config.Phone.AnimDict)
-    local started = GetGameTimer()
-    while not HasAnimDictLoaded(config.Phone.AnimDict) and GetGameTimer() - started < 1000 do Wait(0) end
-    if not IsEntityPlayingAnim(ped, config.Phone.AnimDict, config.Phone.AnimName, 3) then
-        TaskPlayAnim(ped, config.Phone.AnimDict, config.Phone.AnimName, 6.0, -1.0, -1, 49, 0.0, false, false, false)
-    end
-    attachPhoneProp(ped)
+    -- Load the dict and play the pose on its own thread: the anim is cosmetic and must never
+    -- gate the phone opening. Blocking here (up to 1s waiting on the dict) used to stall the
+    -- NUI reveal since OpenPhone runs this synchronously before focusing the UI.
+    CreateThread(function()
+        RequestAnimDict(config.Phone.AnimDict)
+        local started = GetGameTimer()
+        while not HasAnimDictLoaded(config.Phone.AnimDict) and GetGameTimer() - started < 1000 do Wait(0) end
+        -- The player may have closed the phone (or the camera took the pose) during the load.
+        if not shouldHold() then return end
+        local ped = PlayerPedId()
+        if not IsEntityPlayingAnim(ped, config.Phone.AnimDict, config.Phone.AnimName, 3) then
+            TaskPlayAnim(ped, config.Phone.AnimDict, config.Phone.AnimName, 6.0, -1.0, -1, 49, 0.0, false, false, false)
+        end
+        attachPhoneProp(ped)
+    end)
 end
 
 ---Stop the hold anim (only when it's actually our clip playing) and remove the prop.
@@ -322,11 +316,6 @@ local function OpenPhone()
     TriggerEvent('sd-phone:client:openState', true)
     TriggerServerEvent('sd-phone:server:phone:setOpen', true)
 
-    local installedRes  = lib.callback.await('sd-phone:server:apps:list', false)
-    if not phoneState.open then return end
-    local installedApps = (installedRes and installedRes.success and installedRes.data and installedRes.data.installed) or {}
-    local homeLayout    = (installedRes and installedRes.success and installedRes.data and installedRes.data.layout) or nil
-
     SetNuiFocus(true, true)
     if config.Phone.AllowMovement then
         typingInPhone = false
@@ -347,8 +336,6 @@ local function OpenPhone()
             showDate  = config.Lockscreen.ShowDate,
             dock      = config.Homescreen.Dock,
             apps      = config.Homescreen.Apps,
-            installedApps = installedApps,
-            homeLayout = homeLayout,
             mailDomain = config.Mail.Domain,
             wallpaper = {
                 lock = config.Lockscreen.Wallpaper,
@@ -370,6 +357,22 @@ local function OpenPhone()
     })
 
     debugPrint('phone opened')
+
+    -- Installed apps + saved home layout need a server round-trip. Fetch them AFTER the phone is
+    -- on screen (the home screen sits behind the lockscreen anyway) and push them in as a
+    -- follow-up, so the round-trip never gates the reveal. The NUI paints instantly from its own
+    -- fallbacks and reconciles when this lands.
+    CreateThread(function()
+        local installedRes = lib.callback.await('sd-phone:server:apps:list', false)
+        if not phoneState.open then return end
+        SendNUIMessage({
+            action = 'sd-phone:apps',
+            data   = {
+                installedApps = (installedRes and installedRes.success and installedRes.data and installedRes.data.installed) or {},
+                homeLayout    = (installedRes and installedRes.success and installedRes.data and installedRes.data.layout) or nil,
+            },
+        })
+    end)
 end
 
 ---Closes the phone NUI, announces the close, releases NUI focus, and drops the pose unless the
@@ -451,10 +454,15 @@ RegisterNetEvent('sd-phone:client:simState', function(state)
 end)
 
 ---Admin wipe (server /wipemyphone): closes the phone and tells the React app to clear its local
----storage and reload.
+---storage and reload. The reload tears down the phone AND the admin-panel React trees, so any NUI
+---focus they were holding must be dropped here - otherwise the reloaded (empty) NUI keeps focus
+---with no UI left to release it, and the player is stuck. wipeFocus lets the panels clear their
+---own open flags first so a later phone close doesn't re-assert focus over nothing.
 RegisterNetEvent('sd-phone:client:wipe', function()
+    TriggerEvent('sd-phone:client:wipeFocus')
     if phoneState.open then ClosePhone() end
     SendNUIMessage({ action = 'sd-phone:wipe' })
+    SetNuiFocus(false, false)
 end)
 
 ---React to Lua: the NUI requests the phone be closed (swipe down / back gesture).
@@ -704,6 +712,17 @@ end)
 ---Returns the disable switch - exports['sd-phone']:isDisabled().
 ---@return boolean disabled
 exports('isDisabled', function() return phoneDisabled end)
+
+---Character-loaded signal for the NUI: settings can only resolve once the citizenid exists, so
+---the UI re-pulls its per-player state (wallpaper, tones, locale...) the moment the framework
+---reports the player in - covering slow multichar picks and live character switches alike.
+local function pushCharacterLoaded()
+    SESSION_START_MS = GetCloudTimeAsInt() * 1000
+    SendNUIMessage({ action = 'sd-phone:client:characterLoaded' })
+    SendNUIMessage({ action = 'sd-phone:session', data = { startMs = SESSION_START_MS } })
+end
+RegisterNetEvent('QBCore:Client:OnPlayerLoaded', pushCharacterLoaded)
+RegisterNetEvent('esx:playerLoaded', pushCharacterLoaded)
 
 ---Resource-stop cleanup: releases NUI focus, deletes props, clears the statebag, and stops the
 ---hold anim.

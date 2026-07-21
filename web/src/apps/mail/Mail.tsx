@@ -11,7 +11,7 @@ import { isAuthed, signIn as unlockMail, signOut as lockMail } from '@/stores/au
 import { Compose } from './Compose';
 import {
     getFolderLabels, deleteAccount, discardDraft, inFolder, listMail, loadActiveAccountId, loadFolderOrder, markRead,
-    moveToBin, moveTo, saveActiveAccountId, saveDraft, saveFolderOrder, sendMail, signIn as mailSignIn,
+    markManyRead, moveToBin, moveTo, saveActiveAccountId, saveDraft, saveFolderOrder, sendMail, signIn as mailSignIn,
     signOut, signUp as mailSignUp, toggleFlag,
 } from './data';
 import type { Folder, MailAccount, MailAttachment, MailMessage } from './data';
@@ -112,7 +112,15 @@ export function Mail({ onClose }: { onClose: () => void }) {
         const targets = messages.filter(m => ids.includes(m.id) && !m.read);
         if (targets.length === 0) return;
         setMessages(prev => prev.map(m => ids.includes(m.id) ? { ...m, read: true } : m));
-        for (const m of targets) void markRead(m.accountId, m.id);
+        // One bulk write per account: firing a single markRead per message races N read-modify-
+        // writes over the same JSON column, losing updates so the badge never clears.
+        const byAccount = new Map<string, string[]>();
+        for (const m of targets) {
+            const list = byAccount.get(m.accountId);
+            if (list) list.push(m.id);
+            else byAccount.set(m.accountId, [m.id]);
+        }
+        for (const [accountId, messageIds] of byAccount) void markManyRead(accountId, messageIds);
     }
 
     // Batch delete from the list pages: bin messages are erased for good (the server

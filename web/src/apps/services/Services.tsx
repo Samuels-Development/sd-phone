@@ -60,7 +60,7 @@ export function Services({ onClose: _onClose }: { onClose: () => void }) {
                             ? <JobsTab onJobChanged={refresh} />
                             : activeTab === 'messages'
                                 ? <ServiceMessagesTab inbox={inbox} loaded={inboxLoaded} onInboxChange={setInbox} onMarkRead={markRead} />
-                                : <ActionsTab myCompany={dir?.myCompany ?? null} multijob={showJobs} onChanged={patchMyCompany} />}
+                                : <ActionsTab myCompany={dir?.myCompany ?? null} multijob={showJobs} invoicesEnabled={dir?.invoicesEnabled ?? false} onChanged={patchMyCompany} />}
                 </div>
             </div>
 

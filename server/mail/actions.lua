@@ -618,6 +618,25 @@ function actions.markRead(source, payload)
     return ok()
 end
 
+---Marks many messages read in one write, so a "mark all" can't lose updates by racing N single
+---writes. Ownership-gated; non-string, empty, unknown or already-read ids are skipped.
+---@param source number
+---@param payload { accountEmail?: string, messageIds?: string[] }
+---@return table
+function actions.markManyRead(source, payload)
+    payload = payload or {}
+    local _, err = requireOwnership(source, payload.accountEmail); if err then return err end
+    local raw = payload.messageIds
+    if type(raw) ~= 'table' then return ok() end
+    local ids = {}
+    for i = 1, #raw do
+        if #ids >= mailCfg.MaxMessagesPerAccount then break end
+        if type(raw[i]) == 'string' and raw[i] ~= '' then ids[#ids + 1] = raw[i] end
+    end
+    if #ids > 0 then store.markManyRead(payload.accountEmail, ids) end
+    return ok()
+end
+
 ---Toggles a message's flag. Ownership-gated; the new state derives from the stored message.
 ---@param source number
 ---@param payload { accountEmail?: string, messageId?: string }

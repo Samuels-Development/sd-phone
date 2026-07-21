@@ -128,6 +128,8 @@ interface ThemeState {
     setAirplaneMode:   (on: boolean) => void;
     hour24:            boolean;
     setHour24:         (on: boolean) => void;
+    reopenLastApp:     boolean;
+    setReopenLastApp:  (on: boolean) => void;
     ringtone:            string;
     setRingtone:         (id: string) => void;
     notificationTone:    string;
@@ -174,6 +176,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     callVol: 60,
     airplaneMode: false,
     hour24: false,
+    reopenLastApp: false,
     ringtone: DEFAULT_RINGTONE,
     notificationTone: DEFAULT_NOTIFICATION,
     customRingtones: [],
@@ -269,6 +272,11 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         void fetchNui('sd-phone:settings:setHour24', { on }).catch(() => {});
     },
 
+    setReopenLastApp: (on) => {
+        set({ reopenLastApp: on });
+        void fetchNui('sd-phone:settings:setReopenApp', { on }).catch(() => {});
+    },
+
     setRingtone: (id) => {
         set({ ringtone: id });
         void fetchNui('sd-phone:settings:setTones', { ringtone: id, notificationTone: get().notificationTone }).catch(() => {});
@@ -334,7 +342,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
                 window.setTimeout(() => get().hydrate(attempt + 1), HYDRATE_RETRY_MS);
             }
         };
-        void fetchNui<{ data?: { ringtone?: string; notificationTone?: string; customRingtones?: CustomTone[]; customNotificationTones?: CustomTone[]; airplaneMode?: boolean; hour24?: boolean; lockClock?: Partial<LockClock>; passcode?: string | null; faceId?: boolean; wallpaper?: string; customWallpapers?: string[]; chatTextScale?: number; ringtoneVol?: number; callVol?: number; theme?: string; darkTheme?: string } }>('sd-phone:settings:get')
+        void fetchNui<{ data?: { ringtone?: string; notificationTone?: string; customRingtones?: CustomTone[]; customNotificationTones?: CustomTone[]; airplaneMode?: boolean; hour24?: boolean; reopenApp?: boolean; lockClock?: Partial<LockClock>; passcode?: string | null; faceId?: boolean; wallpaper?: string; customWallpapers?: string[]; chatTextScale?: number; ringtoneVol?: number; callVol?: number; theme?: string; darkTheme?: string } }>('sd-phone:settings:get')
             .then(res => {
                 if (!res?.data) { retry(); return; }
                 const d = res.data;
@@ -347,6 +355,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
                 if (d.notificationTone) patch.notificationTone = d.notificationTone;
                 if (typeof d.airplaneMode === 'boolean') patch.airplaneMode = d.airplaneMode;
                 if (typeof d.hour24 === 'boolean') patch.hour24 = d.hour24;
+                if (typeof d.reopenApp === 'boolean') patch.reopenLastApp = d.reopenApp;
                 if (d.theme === 'light' || d.theme === 'dark') patch.theme = d.theme;
                 if (typeof d.darkTheme === 'string' && (DARK_THEMES as string[]).includes(d.darkTheme)) patch.darkTheme = d.darkTheme as DarkTheme;
                 if (typeof d.chatTextScale === 'number') patch.chatTextScale = clampChatScale(d.chatTextScale);
