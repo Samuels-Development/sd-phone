@@ -42,7 +42,7 @@ import { listInstalledApps, installApp, uninstallApp, loadHomeLayout, saveHomeLa
 import { customToAppDef, installedCustomIds, isCustomApp, setCustomInstalled, useCustomApps, useCustomAppsStore } from '@/stores/customAppsStore';
 import { resolveWallpaper } from '@/shell/wallpapers';
 import { NoSimScreen } from '@/shell/NoSimScreen';
-import { useNoSim, useSimStore } from '@/stores/simStore';
+import { useNoService, useNoSim, useSimStore } from '@/stores/simStore';
 import { playOnce } from '@/apps/settings/tonePlayer';
 import { resolveTone, toneUrl } from '@/apps/settings/tones';
 import { AlarmRinging, AlarmPeekBanner } from '@/apps/clock/AlarmRinging';
@@ -209,6 +209,10 @@ function AppContent() {
     const downloadTimer = useRef<number>();
 
     const noSim = useNoSim();
+    // Device mode: no SIM means no cellular service, but the phone still opens and works - the
+    // status bar shows "No Service" and only number-dependent actions (call/text) are refused
+    // server-side. (In legacy mode useNoSim drives the full-screen wall instead.)
+    const noService = useNoService();
     // A pulled SIM drops the phone straight back to the (blocked) lock state: no app stays
     // foregrounded and the switcher/control-center close.
     useEffect(() => {
@@ -258,13 +262,17 @@ function AppContent() {
     // drop every trace of the previous profile from the UI (kept-alive apps, cached app
     // logins, hydrated settings). The server never leaks across identities; this stops the
     // client's own memory from doing it. Runs on every open AND on live SIM swaps.
-    const applySimProfile = useCallback((enabled?: boolean, hasSim?: boolean, num?: string) => {
-        const simNumber = (enabled && hasSim && num) || null;
+    const applySimProfile = useCallback((enabled?: boolean, hasSim?: boolean, num?: string, device?: boolean, profile?: string) => {
+        // Device mode keys per-phone state off the DEVICE identity (stable across SIM swaps on
+        // one phone); legacy keys off the SIM number. Either way a null key means "don't switch".
+        const key = enabled
+            ? (device ? (profile || null) : ((hasSim && num) || null))
+            : null;
         let switched = false;
-        if (simNumber) {
-            setSetupProfile(simNumber);
-            if (lastSimNumberRef.current && lastSimNumberRef.current !== simNumber) switched = true;
-            lastSimNumberRef.current = simNumber;
+        if (key) {
+            setSetupProfile(key);
+            if (lastSimNumberRef.current && lastSimNumberRef.current !== key) switched = true;
+            lastSimNumberRef.current = key;
         }
         if (enabled) setSetup(loadSetup());
         if (switched) {
@@ -299,7 +307,7 @@ function AppContent() {
         if (data.locale) useLocaleStore.getState().applyServerDefault(data.locale);   // server default, unless the player already picked their own
         if (data.mailDomain) setMailDomain(data.mailDomain);
         useSimStore.getState().apply(data.sim);
-        applySimProfile(data.sim?.enabled, data.sim?.hasSim, data.sim?.number);
+        applySimProfile(data.sim?.enabled, data.sim?.hasSim, data.sim?.number, data.sim?.device, data.sim?.profile);
         const nextView: ViewState = {
             apps:          data.apps,
             dock:          data.dock,
@@ -362,7 +370,7 @@ function AppContent() {
 
     useNuiEvent('sd-phone:simState', useCallback((data) => {
         useSimStore.getState().apply(data);
-        applySimProfile(data?.enabled, data?.hasSim, data?.number);
+        applySimProfile(data?.enabled, data?.hasSim, data?.number, data?.device, data?.profile);
     }, [applySimProfile]));
 
     useNuiEvent('sd-phone:close', useCallback(() => {
@@ -1037,11 +1045,12 @@ function AppContent() {
                         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/30 via-black/5 to-transparent" />
                         <StatusBar
                             use24h={hour24}
-                            signal={(airplaneMode || noSim) ? 0 : (lv?.signal ?? 4)}
+                            signal={(airplaneMode || noSim || noService) ? 0 : (lv?.signal ?? 4)}
                             showWifi={(airplaneMode || noSim) ? false : ((lv?.showWifi ?? true) && ccWifi)}
                             battery={battery}
                             airplane={airplaneMode}
                             noSim={noSim}
+                            noService={noService}
                             light
                         />
                         {ringingAlarm ? (
@@ -1132,11 +1141,12 @@ function AppContent() {
                 {!(showSetup && setupHello && !noSim) && (
                     <StatusBar
                         use24h={hour24}
-                        signal={(airplaneMode || noSim) ? 0 : view.signal}
+                        signal={(airplaneMode || noSim || noService) ? 0 : view.signal}
                         showWifi={(airplaneMode || noSim) ? false : (view.showWifi && ccWifi)}
                         battery={battery}
                         airplane={airplaneMode}
                         noSim={noSim}
+                        noService={noService}
                         light={noSim ? true : (showSetup ? false : (cameraMode ? true : (statusLightOverride ?? statusBarAutoLight ?? statusLight)))}
                         controlHint={!showSetup && !cameraMode && !ccOpen && !homeEditing && !noSim}
                         editing={homeEditing && onHomescreen}

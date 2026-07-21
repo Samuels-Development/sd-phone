@@ -31,6 +31,12 @@ export interface SimStatePush {
     enabled: boolean;
     hasSim?: boolean;
     number?: string;
+    /** DeviceIdentity mode: the phone owns its data and opens without a SIM (no No-SIM wall,
+     *  "No Service" in the status bar instead). Absent/false = legacy SIM-is-identity mode. */
+    device?: boolean;
+    /** Device mode only: the phone's device identity, used to namespace per-phone UI state
+     *  (setup completion, auth cache) so swapping SIMs on one phone never resets it. */
+    profile?: string;
 }
 
 export interface AppDef {

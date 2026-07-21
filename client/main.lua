@@ -64,8 +64,10 @@ local phoneState = {
 ---@type boolean True while another resource has disabled the phone.
 local phoneDisabled = false
 
----@type { hasSim: boolean, number: string|nil }|nil Last SIM snapshot from the server; nil
----while unique phones are off (stock behaviour).
+---@type { hasSim: boolean, number: string|nil, device: boolean|nil, profile: string|nil }|nil
+---Last SIM snapshot from the server; nil while unique phones are off (stock behaviour). `device`
+---marks DeviceIdentity mode (phone opens without a SIM, "No Service" instead of a No-SIM wall);
+---`profile` is the device identity the UI namespaces per-phone state under in that mode.
 local currentSimState = nil
 
 ---@type string Current frame colour; always one of FRAME_COLORS.
@@ -345,6 +347,8 @@ local function OpenPhone()
                 enabled = true,
                 hasSim  = currentSimState.hasSim == true,
                 number  = currentSimState.number,
+                device  = currentSimState.device == true,
+                profile = currentSimState.profile,
             } or { enabled = false },
         },
     })
@@ -450,10 +454,15 @@ end)
 
 ---Live SIM state push (SIM inserted/ejected/moved). Keeps the local snapshot fresh and, while
 ---the phone is open, swaps the NUI's "No SIM" screen in or out immediately.
----@param state { enabled: boolean, hasSim: boolean, number: string|nil }
+---@param state { enabled: boolean, hasSim: boolean, number: string|nil, device: boolean|nil, profile: string|nil }
 RegisterNetEvent('sd-phone:client:simState', function(state)
     if type(state) ~= 'table' then return end
-    currentSimState = state.enabled and { hasSim = state.hasSim == true, number = state.number } or nil
+    currentSimState = state.enabled and {
+        hasSim  = state.hasSim == true,
+        number  = state.number,
+        device  = state.device == true,
+        profile = state.profile,
+    } or nil
     -- The active SIM'd phone's colour wins: a pending keybind open answered with the owned
     -- colour before the resolve, so correct the frame, the hand prop and the UI rail here.
     if state.color and FRAME_COLORS[state.color] and state.color ~= currentFrameColor then
@@ -474,6 +483,8 @@ RegisterNetEvent('sd-phone:client:simState', function(state)
                 enabled = state.enabled == true,
                 hasSim  = state.hasSim == true,
                 number  = state.number,
+                device  = state.device == true,
+                profile = state.profile,
             },
         })
     end
