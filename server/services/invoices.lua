@@ -105,6 +105,14 @@ local function notifyBusiness(jobName)
     end
 end
 
+---Short human reference for an invoice (the id's tail, upper-cased); printed on both parties'
+---wallet entries so a payment can be matched to its invoice.
+---@param id string invoice id
+---@return string
+local function codeOf(id)
+    return (tostring(id):gsub('^bill_', '')):sub(1, 6):upper()
+end
+
 ---Shapes one invoice row for the business's sent list.
 ---@param r table phone_service_invoices row
 ---@return table
@@ -129,14 +137,6 @@ end
 ---@return string
 local function personalLabel(r)
     return util.formatNumber(r.sender_number or '')
-end
-
----Short human reference for an invoice (the id's tail, upper-cased); printed on both parties'
----wallet entries so a payment can be matched to its invoice.
----@param id string invoice id
----@return string
-local function codeOf(id)
-    return (tostring(id):gsub('^bill_', '')):sub(1, 6):upper()
 end
 
 ---Resolves a number to a saved-contact name in an owner's book, or nil.
