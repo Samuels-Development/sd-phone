@@ -74,10 +74,6 @@ require 'server.compat.lbphone.init'
 ---@type table SIM feature flags (server.sim.state): active + mode.
 local simState = require 'server.sim.state'
 
----The player's SIM snapshot for the open flow, or nil while unique phones are off. Opening is
----rare, so the session cache is dropped first - the open always reflects the live inventory.
----@param source integer player server id
----@return { hasSim: boolean, number: string|nil, color: string|nil }|nil
 ---Registers each configured phone item (config.Phone.Items) as a usable item; using one opens
 ---the phone with the variant's frame colour (plus the SIM snapshot under unique phones). The
 ---used slot marks that exact phone as the active one, so a player carrying several SIM'd
@@ -121,9 +117,9 @@ local function ResolveOwnedColor(source, preferred)
     return nil
 end
 
----Keybind open request: may this player open a phone, and in which colour? Read-only. Returns
----the bare colour string normally; under unique phones a table { color, hasSim, number } so the
----client can open into the "No SIM" state (the SIM's phone wins the colour pick).
+---Keybind open request: may this player open a phone, and in which colour? Returns the bare
+---colour string normally; under unique phones { color, pending = true } and the deferred
+---simState push corrects hasSim/number - and the colour, since the SIM'd phone's wins.
 lib.callback.register('sd-phone:server:phone:resolveOpen', function(source, preferred)
     local color = ResolveOwnedColor(source, preferred)
     if not simState.active then return color end

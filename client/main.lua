@@ -432,7 +432,8 @@ RegisterKeyMapping('+sdphone_look', 'Phone: Hold to look around', 'keyboard', co
 ---Opens the phone after a phone item is used, adopting the item variant's frame colour when it
 ---passes the FRAME_COLORS whitelist.
 ---@param color string|nil frame colour of the used item variant
----@param sim { hasSim: boolean, number: string|nil }|nil SIM snapshot (unique phones only)
+---@param sim { hasSim: boolean, number: string|nil }|nil SIM snapshot (kept for signature compat; the server now defers and sends nil)
+---@param simPending boolean|nil true while the server resolves the SIM in the background (unique phones)
 RegisterNetEvent('sd-phone:client:openFromItem', function(color, sim, simPending)
     if color and FRAME_COLORS[color] then currentFrameColor = color end
     if sim then
@@ -453,6 +454,19 @@ end)
 RegisterNetEvent('sd-phone:client:simState', function(state)
     if type(state) ~= 'table' then return end
     currentSimState = state.enabled and { hasSim = state.hasSim == true, number = state.number } or nil
+    -- The active SIM'd phone's colour wins: a pending keybind open answered with the owned
+    -- colour before the resolve, so correct the frame, the hand prop and the UI rail here.
+    if state.color and FRAME_COLORS[state.color] and state.color ~= currentFrameColor then
+        currentFrameColor = state.color
+        if shouldHold() then
+            removePhoneProp()
+            attachPhoneProp(PlayerPedId())
+            broadcastHoldState()
+        end
+        if phoneState.open then
+            SendNUIMessage({ action = 'sd-phone:frameColor', data = { color = state.color } })
+        end
+    end
     if phoneState.open then
         SendNUIMessage({
             action = 'sd-phone:simState',
