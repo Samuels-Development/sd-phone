@@ -407,7 +407,11 @@ local function TogglePhone()
     local color = res
     if type(res) == 'table' then
         color = res.color
-        currentSimState = { hasSim = res.hasSim == true, number = res.number }
+        if res.pending then
+            currentSimState = currentSimState or { hasSim = true, number = nil }
+        else
+            currentSimState = { hasSim = res.hasSim == true, number = res.number }
+        end
     else
         currentSimState = nil
     end
@@ -429,9 +433,17 @@ RegisterKeyMapping('+sdphone_look', 'Phone: Hold to look around', 'keyboard', co
 ---passes the FRAME_COLORS whitelist.
 ---@param color string|nil frame colour of the used item variant
 ---@param sim { hasSim: boolean, number: string|nil }|nil SIM snapshot (unique phones only)
-RegisterNetEvent('sd-phone:client:openFromItem', function(color, sim)
+RegisterNetEvent('sd-phone:client:openFromItem', function(color, sim, simPending)
     if color and FRAME_COLORS[color] then currentFrameColor = color end
-    currentSimState = sim and { hasSim = sim.hasSim == true, number = sim.number } or nil
+    if sim then
+        currentSimState = { hasSim = sim.hasSim == true, number = sim.number }
+    elseif simPending then
+        -- SIM resolve is still running server-side; keep the last snapshot (optimistic
+        -- has-service on a cold start) until the simState push corrects it.
+        currentSimState = currentSimState or { hasSim = true, number = nil }
+    else
+        currentSimState = nil
+    end
     OpenPhone()
 end)
 
