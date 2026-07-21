@@ -75,7 +75,8 @@ local FRAME_COLORS = {
     pink = true, purple = true, red = true, yellow = true,
 }
 
----@type integer Wall-clock ms captured once at script load; session start for the Health app.
+---@type integer Wall-clock ms of the session start (re-stamped on character load); the Health app's
+---"time awake" anchor. Seeded at script load as a fallback for opens before the character resolves.
 local SESSION_START_MS = GetCloudTimeAsInt() * 1000
 
 ---@return boolean true while the phone NUI is open
@@ -715,7 +716,9 @@ exports('isDisabled', function() return phoneDisabled end)
 ---the UI re-pulls its per-player state (wallpaper, tones, locale...) the moment the framework
 ---reports the player in - covering slow multichar picks and live character switches alike.
 local function pushCharacterLoaded()
+    SESSION_START_MS = GetCloudTimeAsInt() * 1000
     SendNUIMessage({ action = 'sd-phone:client:characterLoaded' })
+    SendNUIMessage({ action = 'sd-phone:session', data = { startMs = SESSION_START_MS } })
 end
 RegisterNetEvent('QBCore:Client:OnPlayerLoaded', pushCharacterLoaded)
 RegisterNetEvent('esx:playerLoaded', pushCharacterLoaded)
