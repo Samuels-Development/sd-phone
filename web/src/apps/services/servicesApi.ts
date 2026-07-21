@@ -217,16 +217,17 @@ export interface SentInvoice {
 }
 
 export interface ReceivedInvoice {
-    id:     string;
-    job:    string;
-    label:  string;
-    color:  string;
-    emoji:  string;
-    amount: number;
-    note:   string;
-    status: InvoiceStatus;
-    from:   string;
-    ts:     number;
+    id:        string;
+    job?:      string;
+    personal?: boolean;
+    label:     string;
+    color:     string;
+    emoji:     string;
+    amount:    number;
+    note:      string;
+    status:    InvoiceStatus;
+    from:      string;
+    ts:        number;
 }
 
 const DEV_SENT_INVOICES: SentInvoice[] = [
@@ -237,6 +238,7 @@ const DEV_SENT_INVOICES: SentInvoice[] = [
 
 const DEV_RECEIVED_INVOICES: ReceivedInvoice[] = [
     { id: 'r1', job: 'mechanic', label: 'Mechanic', color: '#3A3A3C', emoji: '⚙️', amount: 1200, note: 'Repair · engine rebuild', status: 'pending', from: 'Tommy V', ts: Date.now() - 240_000 },
+    { id: 'r2', personal: true, label: 'Maya Lopez', color: '#0A84FF', emoji: '🧾', amount: 250, note: 'Dinner split', status: 'pending', from: 'Maya Lopez', ts: Date.now() - 900_000 },
 ];
 
 export async function fetchSentInvoices(): Promise<SentInvoice[]> {
