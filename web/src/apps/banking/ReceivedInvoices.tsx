@@ -57,23 +57,23 @@ export function ReceivedInvoices({ invoices, loading, onRefetch, onPaid, contact
                 {invoices.map((inv, i) => (
                     <div key={inv.id}>
                         {i > 0 && <div className="pointer-events-none bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />}
-                        <div className="flex items-center gap-3 px-4 py-3.5">
+                        <div className="flex items-center gap-3.5 px-4 py-4">
                             {inv.personal ? (
                                 cardOf(inv)
-                                    ? <ContactAvatar contact={cardOf(inv) as PhoneContact} size={42} />
-                                    : <PlaceholderAvatar size={42} />
+                                    ? <ContactAvatar contact={cardOf(inv) as PhoneContact} size={46} />
+                                    : <PlaceholderAvatar size={46} />
                             ) : (
                                 <div
-                                    className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[11px] shadow-sm"
+                                    className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[12px] shadow-sm"
                                     style={{ background: inv.color }}
                                     aria-hidden
                                 >
-                                    <Briefcase className="h-[21px] w-[21px] text-white" strokeWidth={2.2} />
+                                    <Briefcase className="h-[23px] w-[23px] text-white" strokeWidth={2.2} />
                                 </div>
                             )}
                             <div className="min-w-0 flex-1">
-                                <div className="truncate text-[17px] font-semibold text-black dark:text-white">{labelOf(inv)}</div>
-                                <div className="truncate text-[15px] font-medium text-ios-gray">
+                                <div className="truncate text-[18px] font-semibold text-black dark:text-white">{labelOf(inv)}</div>
+                                <div className="truncate text-[16px] font-medium text-ios-gray">
                                     {inv.note
                                         ? inv.note
                                         : inv.from
@@ -82,7 +82,7 @@ export function ReceivedInvoices({ invoices, loading, onRefetch, onPaid, contact
                                 </div>
                             </div>
                             <div className="flex shrink-0 flex-col items-end gap-1.5">
-                                <span className="text-[17px] font-bold tabular-nums text-black dark:text-white">{formatMoney(inv.amount, { whole: true })}</span>
+                                <span className="text-[18px] font-bold tabular-nums text-black dark:text-white">{formatMoney(inv.amount, { whole: true })}</span>
                                 {inv.status === 'pending' ? (
                                     <button
                                         type="button"

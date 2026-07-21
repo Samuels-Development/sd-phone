@@ -99,18 +99,18 @@ export function InvoicesTab({ received, receivedLoading, onRefetchReceived, onPa
                             return (
                             <div key={inv.id}>
                                 {i > 0 && <div className="pointer-events-none bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />}
-                                <div className="flex items-center gap-3 px-4 py-3.5">
-                                    {card ? <ContactAvatar contact={card} size={42} /> : <PlaceholderAvatar size={42} />}
+                                <div className="flex items-center gap-3.5 px-4 py-4">
+                                    {card ? <ContactAvatar contact={card} size={46} /> : <PlaceholderAvatar size={46} />}
                                     <div className="min-w-0 flex-1">
-                                        <div className="truncate text-[17px] font-semibold text-black dark:text-white">{card ? card.name : formatPhone(inv.toNumber)}</div>
+                                        <div className="truncate text-[18px] font-semibold text-black dark:text-white">{card ? card.name : formatPhone(inv.toNumber)}</div>
                                         {(inv.note || card) && (
-                                            <div className="truncate text-[15px] font-medium text-ios-gray">
+                                            <div className="truncate text-[16px] font-medium text-ios-gray">
                                                 {inv.note || formatPhone(inv.toNumber)}
                                             </div>
                                         )}
                                     </div>
                                     <div className="flex shrink-0 flex-col items-end gap-1.5">
-                                        <span className="text-[17px] font-bold tabular-nums text-black dark:text-white">{formatMoney(inv.amount, { whole: true })}</span>
+                                        <span className="text-[18px] font-bold tabular-nums text-black dark:text-white">{formatMoney(inv.amount, { whole: true })}</span>
                                         {inv.status === 'pending' ? (
                                             <button
                                                 type="button"
