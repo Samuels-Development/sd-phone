@@ -72,13 +72,16 @@ export function ReceivedInvoices({ invoices, loading, onRefetch, onPaid, contact
                                 </div>
                             )}
                             <div className="min-w-0 flex-1">
-                                <div className="truncate text-[18px] font-semibold text-black dark:text-white">{labelOf(inv)}</div>
+                                <div className="flex items-baseline gap-1.5">
+                                    <span className="truncate text-[18px] font-semibold text-black dark:text-white">{labelOf(inv)}</span>
+                                    {inv.code && <span className="shrink-0 text-[13px] font-semibold tracking-wide text-ios-gray">#{inv.code}</span>}
+                                </div>
                                 <div className="truncate text-[16px] font-medium text-ios-gray">
                                     {inv.note
                                         ? inv.note
                                         : inv.from
                                             ? t('banking.invoiceFrom', 'From {name}', { name: inv.from })
-                                            : inv.code ? `#${inv.code}` : t('banking.invoiceDue', 'Invoice due')}
+                                            : t('banking.invoiceDue', 'Invoice due')}
                                 </div>
                             </div>
                             <div className="flex shrink-0 flex-col items-end gap-1.5">

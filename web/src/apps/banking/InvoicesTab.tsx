@@ -102,10 +102,13 @@ export function InvoicesTab({ received, receivedLoading, onRefetchReceived, onPa
                                 <div className="flex items-center gap-3.5 px-4 py-4">
                                     {card ? <ContactAvatar contact={card} size={46} /> : <PlaceholderAvatar size={46} />}
                                     <div className="min-w-0 flex-1">
-                                        <div className="truncate text-[18px] font-semibold text-black dark:text-white">{card ? card.name : formatPhone(inv.toNumber)}</div>
-                                        {(inv.note || card || inv.code) && (
+                                        <div className="flex items-baseline gap-1.5">
+                                            <span className="truncate text-[18px] font-semibold text-black dark:text-white">{card ? card.name : formatPhone(inv.toNumber)}</span>
+                                            {inv.code && <span className="shrink-0 text-[13px] font-semibold tracking-wide text-ios-gray">#{inv.code}</span>}
+                                        </div>
+                                        {(inv.note || card) && (
                                             <div className="truncate text-[16px] font-medium text-ios-gray">
-                                                {inv.note || (card ? formatPhone(inv.toNumber) : `#${inv.code}`)}
+                                                {inv.note || formatPhone(inv.toNumber)}
                                             </div>
                                         )}
                                     </div>
