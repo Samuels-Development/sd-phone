@@ -25,7 +25,10 @@ export function NewInvoicePage({ onClose, onSent }: {
     const [exiting, setExiting] = useState(false);
 
     const amountNum = parseInt(amount || '0', 10);
-    const canSend   = digits(number).length >= 3 && amountNum > 0 && !busy;
+    // 5 digits or fewer is a server id (real phone numbers are 7+); longer input is a number.
+    const recipientDigits = digits(number);
+    const isServerId      = recipientDigits.length >= 1 && recipientDigits.length <= 5;
+    const canSend         = recipientDigits.length >= 1 && amountNum > 0 && !busy;
 
     function clearDraft() { clearSessionState(`${DRAFT_KEY}:`); }
 
@@ -43,7 +46,9 @@ export function NewInvoicePage({ onClose, onSent }: {
     async function submit() {
         if (!canSend || exiting) return;
         setBusy(true); setError(null);
-        const res = await createPersonalInvoice(digits(number), amountNum, note.trim());
+        const res = await createPersonalInvoice(
+            isServerId ? { serverId: parseInt(recipientDigits, 10) } : { number: recipientDigits },
+            amountNum, note.trim());
         setBusy(false);
         if (res.success) {
             const invoices = res.data?.invoices ?? [];
@@ -90,9 +95,9 @@ export function NewInvoicePage({ onClose, onSent }: {
                             type="tel"
                             inputMode="tel"
                             aria-label={t('banking.recipientNumber', 'Recipient number')}
-                            value={number ? formatPhonePartial(number) : ''}
+                            value={number ? (isServerId ? recipientDigits : formatPhonePartial(number)) : ''}
                             onChange={e => setNumber(digits(e.target.value).slice(0, 24))}
-                            placeholder={t('banking.phonePlaceholder', '(555) 123-4567')}
+                            placeholder={t('banking.recipientPlaceholder', '(555) 123-4567 or server ID')}
                             className="w-full rounded-[14px] bg-[#e5e5e5] px-4 py-4 text-[18px] text-black placeholder-black/80 outline-none dark:bg-surface dark:text-white dark:placeholder-white/65"
                         />
                         <button
@@ -130,6 +135,10 @@ export function NewInvoicePage({ onClose, onSent }: {
 
                     {error ? (
                         <p className="mt-1 px-1 text-[16px] font-medium leading-snug text-ios-red">{error}</p>
+                    ) : isServerId ? (
+                        <p className="mt-1 px-1 text-[16px] leading-snug text-ios-gray">
+                            {t('banking.serverIdHint', 'Sending to server ID {id}.', { id: recipientDigits })}
+                        </p>
                     ) : (
                         <p className="mt-1 px-1 text-[16px] leading-snug text-ios-gray">
                             {t('banking.invoiceHint', "They'll get a notification and can pay it from their Wallet.")}

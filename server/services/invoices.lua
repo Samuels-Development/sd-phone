@@ -307,10 +307,10 @@ function invoices.personalSent(src)
     return ok({ invoices = out })
 end
 
----Creates a person-to-person invoice to the owner of a phone number. Trust boundary: bounded
----integer amount, a real target other than the caller, and the outstanding-pending cap.
+---Creates a person-to-person invoice to a phone number's owner or an online server id. Trust
+---boundary: bounded integer amount, a real target other than the caller, the pending cap.
 ---@param src number
----@param payload { number?: string, amount?: number, note?: string }
+---@param payload { number?: string, serverId?: number, amount?: number, note?: string }
 ---@return table
 function invoices.personalCreate(src, payload)
     if not PENABLED then return fail('Invoicing is disabled') end
@@ -324,19 +324,34 @@ function invoices.personalCreate(src, payload)
     if amount < PMIN then return fail('Enter a valid amount') end
     if amount > PMAX then return fail('That amount is too large') end
 
-    local number = digits(payload.number)
-    if number == '' then return fail('Enter a recipient number') end
     local myNumber = digits(settings.ensurePhoneNumber(cid) or '')
-    if number == myNumber then return fail("You can't invoice yourself") end
-    local targetCid = settings.getCitizenByNumber(number)
-    if not targetCid then return fail('No one owns that number') end
-    if targetCid == cid then return fail("You can't invoice yourself") end
+    local number, targetCid, targetName, tsrc
+
+    local serverId = tonumber(payload.serverId)
+    if serverId and finite(serverId) then
+        serverId = math.floor(serverId)
+        if serverId <= 0 or serverId > 65535 then return fail('No player with that server ID') end
+        if serverId == src then return fail("You can't invoice yourself") end
+        targetCid = player.getIdentifier(serverId)
+        if not targetCid then return fail('No player with that server ID') end
+        if targetCid == cid then return fail("You can't invoice yourself") end
+        tsrc       = serverId
+        number     = digits(settings.ensurePhoneNumber(targetCid) or '')
+        targetName = player.getName(serverId)
+    else
+        number = digits(payload.number)
+        if number == '' then return fail('Enter a recipient number') end
+        if number == myNumber then return fail("You can't invoice yourself") end
+        targetCid = settings.getCitizenByNumber(number)
+        if not targetCid then return fail('No one owns that number') end
+        if targetCid == cid then return fail("You can't invoice yourself") end
+        tsrc       = player.getSourceByIdentifier(targetCid)
+        targetName = tsrc and player.getName(tsrc) or (society.namesByCids({ targetCid })[targetCid])
+    end
 
     if store.countPendingPersonal(cid) >= PMAXPEND then return fail('You have too many unpaid invoices out') end
 
     local note       = trim(payload.note):sub(1, 140)
-    local tsrc       = player.getSourceByIdentifier(targetCid)
-    local targetName = tsrc and player.getName(tsrc) or (society.namesByCids({ targetCid })[targetCid])
     local senderName = player.getName(src)
 
     local id = store.newId()

@@ -70,15 +70,15 @@ export async function fetchPersonalSent(): Promise<PersonalInvoice[]> {
     return (await apiData<{ invoices: PersonalInvoice[] }>('sd-phone:banking:invoices:sent'))?.invoices ?? [];
 }
 
-export async function createPersonalInvoice(number: string, amount: number, note: string): Promise<SentInvoicesResult> {
+export async function createPersonalInvoice(target: { number?: string; serverId?: number }, amount: number, note: string): Promise<SentInvoicesResult> {
     if (!isFiveM) {
         DEV_PERSONAL_SENT.unshift({
             id: 'p-' + Date.now(), amount, note, status: 'pending',
-            toName: number, toNumber: number, from: DEV_OVERVIEW.name, ts: Date.now(),
+            toName: target.number ?? `ID ${target.serverId ?? 0}`, toNumber: target.number ?? '', from: DEV_OVERVIEW.name, ts: Date.now(),
         });
         return { success: true, data: { invoices: [...DEV_PERSONAL_SENT] } };
     }
-    return (await fetchNui<SentInvoicesResult>('sd-phone:banking:invoices:create', { number, amount, note }))
+    return (await fetchNui<SentInvoicesResult>('sd-phone:banking:invoices:create', { number: target.number, serverId: target.serverId, amount, note }))
         ?? { success: false, message: t('banking.noServerResponse', 'No response from server') };
 }
 
