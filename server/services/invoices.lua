@@ -453,7 +453,8 @@ end
 
 ---Pays a pending invoice addressed to the caller. Target-initiated only: re-checks ownership,
 ---pending status (atomically) and funds server-side, debits the payer's bank, then credits the
----business society account (or the sending employee's own bank when no society bank exists).
+---business society account (or the sending employee's own bank when no society bank exists). A
+---society-credited business invoice splits off the company's `commission` cut to the sender.
 ---@param src number
 ---@param payload { id?: string }
 ---@return table
@@ -489,10 +490,36 @@ function invoices.pay(src, payload)
     local code = codeOf(id)
     bank.removeMoney(src, amount, ('Invoice %s'):format(code))
 
-    local credited, viaSociety = false, false
+    -- Business commission: a per-company fraction of a society-credited invoice goes to the
+    -- sending employee instead of the society, so the two legs always sum to the invoice amount
+    -- and no money is minted. Clamped to 0-1; a sub-$1 cut is dropped.
+    local credited, viaSociety, commission = false, false, 0
     if not personal and society.available() then
-        credited   = society.addMoney(inv.job, amount, ('Invoice %s from %s'):format(code, inv.sender_number or ''))
+        local rate = (byJob[inv.job] and tonumber(byJob[inv.job].commission)) or 0
+        if rate < 0 then rate = 0 elseif rate > 1 then rate = 1 end
+        local cut = math.floor(amount * rate)
+        if cut < 1 then cut = 0 end
+
+        credited   = society.addMoney(inv.job, amount - cut, ('Invoice %s from %s'):format(code, inv.sender_number or ''))
         viaSociety = credited
+
+        if credited and cut > 0 then
+            -- Pay the sending employee their cut (online -> bank, offline -> DB write). On failure
+            -- top the society up to the full amount so nothing is lost; never refund the payer.
+            local esrc = player.getSourceByIdentifier(inv.sender_cid)
+            local paid
+            if esrc then
+                bank.addMoney(esrc, cut, ('Commission · %s'):format(code))
+                paid = true
+            else
+                paid = bank.addOffline(inv.sender_cid, cut)
+            end
+            if paid then
+                commission = cut
+            else
+                society.addMoney(inv.job, cut, ('Invoice %s from %s'):format(code, inv.sender_number or ''))
+            end
+        end
     end
     if not credited then
         local ssrc = player.getSourceByIdentifier(inv.sender_cid)
@@ -524,6 +551,13 @@ function invoices.pay(src, payload)
             category = 'invoice',
         })
     end
+    if commission > 0 then
+        bankActions.addExternal(inv.sender_cid, {
+            label    = ('Commission · %s'):format(code),
+            amount   = commission,
+            category = 'income',
+        })
+    end
 
     local ssrc = player.getSourceByIdentifier(inv.sender_cid)
     if ssrc then
@@ -531,11 +565,13 @@ function invoices.pay(src, payload)
         local payerShown = personal
             and (contactNameFor(inv.sender_cid, digits(inv.target_number or '')) or util.formatNumber(inv.target_number or ''))
             or (inv.target_name or 'A customer')
+        local body = ('%s paid your invoice for %s.'):format(payerShown, formatMoney(amount))
+        if commission > 0 then body = body .. (' You earned %s commission.'):format(formatMoney(commission)) end
         TriggerClientEvent('sd-phone:client:notify', ssrc, {
             app   = personal and 'bank' or 'services',
             appId = personal and 'bank' or 'services',
             title = personal and 'Wallet' or label,
-            body  = ('%s paid your invoice for %s.'):format(payerShown, formatMoney(amount)),
+            body  = body,
             time  = 'now',
         })
         if personal then TriggerClientEvent('sd-phone:client:services:invoices', ssrc, {}) end
@@ -543,11 +579,12 @@ function invoices.pay(src, payload)
     notifyBusiness(inv.job)
 
     ---First-party hook: fires once per paid invoice; viaSociety tells whether the business account
-    ---or the sender's personal bank received the money.
+    ---or the sender's personal bank received the money. commission is the cut split from a
+    ---society-credited business invoice to the sending employee (0 when none).
     TriggerEvent('sd-phone:server:services:invoicePaid', {
         id = id, job = inv.job, label = label,
         senderCid = inv.sender_cid, targetCid = inv.target_cid, targetSource = src,
-        amount = amount, viaSociety = viaSociety, timestamp = os.time(),
+        amount = amount, viaSociety = viaSociety, commission = commission, timestamp = os.time(),
     })
 
     return ok({ balance = bank.getBalance(src) or (balance - amount), invoices = invoices.received(src).data.invoices })
