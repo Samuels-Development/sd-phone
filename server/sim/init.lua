@@ -34,15 +34,28 @@ function player.getIdentifier(source)
 end
 
 -- Reachability: a player is "online as" EVERY identity whose SIM they carry, not just the
--- active phone's - calls and messages addressed to any of their numbers reach them. (The
--- acting identity above stays the single active phone.)
+-- active phone's - calls addressed to any of their numbers ring them (a pocketed phone rings).
+local baseGetAnySource = player.getAnySourceByIdentifier
+function player.getAnySourceByIdentifier(citizenid)
+    if not state.active then return baseGetAnySource(citizenid) end
+    if not citizenid or citizenid == '' then return nil end
+    for _, src in ipairs(GetPlayers()) do
+        local s = tonumber(src)
+        if s and session.hasIdentity(s, citizenid) then return s end
+    end
+    return nil
+end
+
+-- Live-UI delivery: every push resolved through this lands only when `citizenid` is the phone
+-- the player is currently acting as. A push for the OTHER phone in their pocket is skipped -
+-- its data is already stored, and that phone surfaces it (threads, badges) on its next open.
 local baseGetSource = player.getSourceByIdentifier
 function player.getSourceByIdentifier(citizenid)
     if not state.active then return baseGetSource(citizenid) end
     if not citizenid or citizenid == '' then return nil end
     for _, src in ipairs(GetPlayers()) do
         local s = tonumber(src)
-        if s and session.hasIdentity(s, citizenid) then return s end
+        if s and session.identity(s) == citizenid then return s end
     end
     return nil
 end
@@ -207,6 +220,28 @@ inv.registerUsable(config.Sim.SimItem, function(source, itemArg, _invArg, slotAr
         or 'SIM installed - your number is %s.'):format(util.formatNumber(number)), 'success')
 end)
 
+---@type table<number, number> Last requestPush per source (GetGameTimer ms); floods are dropped.
+local lastRequestPush = {}
+
+---Client asks for a fresh SIM snapshot (fired once after character load, so the closed-phone
+---frame colour is right before the first open). Cooldown-guarded: push does a full inventory
+---rescan, so a flooding client only gets one every 5s.
+RegisterNetEvent('sd-phone:server:sim:requestPush', function()
+    local source = source
+    if not state.active then return end
+    -- No character yet (a resource-restart probe firing before the multichar pick): stay
+    -- silent and leave the cooldown unarmed, so the real character-load request still lands.
+    if not player.getRealIdentifier(source) then return end
+    local now = GetGameTimer()
+    if lastRequestPush[source] and (now - lastRequestPush[source]) < 5000 then return end
+    lastRequestPush[source] = now
+    session.push(source)
+end)
+
+AddEventHandler('playerDropped', function()
+    lastRequestPush[source] = nil
+end)
+
 ---The player's SIM panel snapshot for Settings -> SIM & Backup. Drops the session cache first
 ---so the panel always reflects the live inventory. Read-only.
 lib.callback.register('sd-phone:server:sim:get', function(source)
@@ -326,6 +361,9 @@ lib.callback.register('sd-phone:server:sim:backup:restore', function(source, pay
     simStore.setBackup(realCid, s.identity, true, nil)
     print(('^3[sd-phone:sim]^0 restored backup %s -> %s for %s (%d rows)')
         :format(b.identity, s.identity, realCid, rows))
+    -- The restored data replaced the acting profile in place: the client resets the NUI (kept-
+    -- alive apps, hydrated settings, caches) so nothing keeps showing pre-restore state.
+    TriggerClientEvent('sd-phone:client:profileReset', source)
     return util.ok({ rows = rows })
 end)
 

@@ -152,10 +152,26 @@ interface ThemeState {
     faceId:      boolean;
     setFaceId:   (on: boolean) => void;
     setSecurity: (pin: string | null, faceId: boolean) => void;
+    /** Server-side first-run-setup flag for the acting profile; null until its hydrate lands. */
+    setupDone: boolean | null;
+    resetProfileVisuals: () => void;
+    applyWallpaperProfile: (key: string | null) => void;
     hydrate: (attempt?: number) => void;
 }
 
 const initialSecurity = isFiveM ? { passcode: null, faceId: false } : loadSecurityLocal();
+
+// In-game last-known-wallpaper cache, keyed per phone profile (unique phones) or bare (stock
+// servers): painted in the same frame as the reveal so the first open never flashes the stock
+// wallpaper while the settings hydrate is in flight. The hydrate stays authoritative.
+const WALLPAPER_CACHE_BASE = 'sd-phone:wallpaperCache:v1';
+let wallpaperProfileKey: string | null = null;
+function wallpaperCacheKey(): string {
+    return wallpaperProfileKey ? `${WALLPAPER_CACHE_BASE}:${wallpaperProfileKey}` : WALLPAPER_CACHE_BASE;
+}
+function cacheWallpaper(value: string): void {
+    try { window.localStorage.setItem(wallpaperCacheKey(), value); } catch { /* ignore */ }
+}
 
 function persistSecurity(pin: string | null, face: boolean) {
     if (isFiveM) void fetchNui('sd-phone:settings:setSecurity', { passcode: pin, faceId: face }).catch(() => {});
@@ -188,6 +204,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     lockClock: isFiveM ? DEFAULT_LOCK_CLOCK : loadLockClockLocal(),
     passcode: initialSecurity.passcode,
     faceId: initialSecurity.faceId,
+    setupDone: null,
 
     setTheme: (next) => {
         if (isFiveM) void fetchNui('sd-phone:settings:setTheme', { theme: next }).catch(() => {});
@@ -205,8 +222,12 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     setWallpaper: (value) => {
         set({ wallpaper: value });
         const key = wallpaperKey(value);
-        if (isFiveM) void fetchNui('sd-phone:settings:setWallpaper', { wallpaper: key }).catch(() => {});
-        else saveWallpaperLocal(key);
+        if (isFiveM) {
+            cacheWallpaper(value);
+            void fetchNui('sd-phone:settings:setWallpaper', { wallpaper: key }).catch(() => {});
+        } else {
+            saveWallpaperLocal(key);
+        }
     },
 
     // Resolves to null on success, or an error message ('' = caller supplies a generic one).
@@ -333,6 +354,28 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         persistSecurity(pin, finalFace);
     },
 
+    resetProfileVisuals: () => {
+        // Profile switch/restore: paint the stock look NOW, so the previous phone's wallpaper
+        // and clock never show on this one while the async hydrate is still in flight. The
+        // setup flag goes back to "unknown" so Hello waits for THIS profile's answer.
+        set({
+            wallpaper: isFiveM ? lockscreenAsset : (loadWallpaperLocal() ?? devDefaultAsset),
+            lockClock: DEFAULT_LOCK_CLOCK,
+            setupDone: null,
+        });
+    },
+
+    applyWallpaperProfile: (key) => {
+        // Selects the acting profile's wallpaper cache and paints its last-known value NOW
+        // (same render batch as the phone reveal). Dev already persists wallpaper locally.
+        if (!isFiveM) return;
+        wallpaperProfileKey = key;
+        try {
+            const cached = window.localStorage.getItem(wallpaperCacheKey());
+            if (cached) set({ wallpaper: cached });
+        } catch { /* ignore */ }
+    },
+
     hydrate: (attempt = 0) => {
         // In-game only: on first join the character may not be loaded yet, so settings:get returns
         // no data. Reschedule until it does (or we hit the cap). In dev there is no server, so no
@@ -342,12 +385,17 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
                 window.setTimeout(() => get().hydrate(attempt + 1), HYDRATE_RETRY_MS);
             }
         };
-        void fetchNui<{ data?: { ringtone?: string; notificationTone?: string; customRingtones?: CustomTone[]; customNotificationTones?: CustomTone[]; airplaneMode?: boolean; hour24?: boolean; reopenApp?: boolean; lockClock?: Partial<LockClock>; passcode?: string | null; faceId?: boolean; wallpaper?: string; customWallpapers?: string[]; chatTextScale?: number; ringtoneVol?: number; callVol?: number; theme?: string; darkTheme?: string } }>('sd-phone:settings:get')
+        const keyAtRequest = wallpaperProfileKey;
+        void fetchNui<{ data?: { ringtone?: string; notificationTone?: string; customRingtones?: CustomTone[]; customNotificationTones?: CustomTone[]; airplaneMode?: boolean; hour24?: boolean; reopenApp?: boolean; setupDone?: boolean; lockClock?: Partial<LockClock>; passcode?: string | null; faceId?: boolean; wallpaper?: string; customWallpapers?: string[]; chatTextScale?: number; ringtoneVol?: number; callVol?: number; theme?: string; darkTheme?: string } }>('sd-phone:settings:get')
             .then(res => {
                 if (!res?.data) { retry(); return; }
                 const d = res.data;
                 const patch: Partial<ThemeState> = {};
-                if (typeof d.wallpaper === 'string' && d.wallpaper) patch.wallpaper = wallpaperKey(d.wallpaper);
+                // Always assigned: a profile that never saved one must PAINT the default, not
+                // keep the previous phone's wallpaper (unique phones swap profiles live).
+                patch.wallpaper = (typeof d.wallpaper === 'string' && d.wallpaper)
+                    ? wallpaperKey(d.wallpaper)
+                    : (isFiveM ? lockscreenAsset : (loadWallpaperLocal() ?? devDefaultAsset));
                 if (Array.isArray(d.customWallpapers)) {
                     patch.customWallpapers = d.customWallpapers.filter((u): u is string => typeof u === 'string');
                 }
@@ -356,12 +404,17 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
                 if (typeof d.airplaneMode === 'boolean') patch.airplaneMode = d.airplaneMode;
                 if (typeof d.hour24 === 'boolean') patch.hour24 = d.hour24;
                 if (typeof d.reopenApp === 'boolean') patch.reopenLastApp = d.reopenApp;
+                // Always assigned (true/false, never left null) - the per-profile answer is
+                // what lets the Hello gate decide, and a stale previous-profile value may not leak.
+                patch.setupDone = d.setupDone === true;
                 if (d.theme === 'light' || d.theme === 'dark') patch.theme = d.theme;
                 if (typeof d.darkTheme === 'string' && (DARK_THEMES as string[]).includes(d.darkTheme)) patch.darkTheme = d.darkTheme as DarkTheme;
                 if (typeof d.chatTextScale === 'number') patch.chatTextScale = clampChatScale(d.chatTextScale);
                 if (typeof d.ringtoneVol === 'number') patch.ringtoneVol = clampVol(d.ringtoneVol);
                 if (typeof d.callVol === 'number') patch.callVol = clampVol(d.callVol);
-                if (d.lockClock && typeof d.lockClock === 'object') patch.lockClock = { ...DEFAULT_LOCK_CLOCK, ...d.lockClock };
+                patch.lockClock = (d.lockClock && typeof d.lockClock === 'object')
+                    ? { ...DEFAULT_LOCK_CLOCK, ...d.lockClock }
+                    : DEFAULT_LOCK_CLOCK;
                 const pin = typeof d.passcode === 'string' && d.passcode ? d.passcode : null;
                 patch.passcode = pin;
                 patch.faceId   = pin !== null && !!d.faceId;
@@ -370,6 +423,11 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
                 patch.customRingtones         = ring;
                 patch.customNotificationTones = notif;
                 set(patch);
+                // Freshest server answer becomes the profile's cached wallpaper - unless the
+                // acting profile changed while this request was in flight.
+                if (isFiveM && typeof patch.wallpaper === 'string' && keyAtRequest === wallpaperProfileKey) {
+                    cacheWallpaper(patch.wallpaper);
+                }
                 if (isFiveM) void fetchNui('sd-phone:call:setVolume', { volume: get().callVol }).catch(() => {});
                 const ringIsYt  = !!d.ringtone         && ring.some(c => c.id === d.ringtone);
                 const notifIsYt = !!d.notificationTone && notif.some(c => c.id === d.notificationTone);

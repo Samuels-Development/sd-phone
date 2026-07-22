@@ -4,6 +4,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { loadPhoneState, addContactApi } from '@/apps/phone/contactsApi';
 import type { CardOverrides } from '@/apps/phone/contactsApi';
 import type { Contact, RawCall } from '@/apps/phone/data';
+import type { SimStatePush } from '@/core/types';
 import { t } from '@/i18n';
 
 interface ContactsState {
@@ -66,6 +67,26 @@ export function useContacts(...keys: (keyof ContactsState)[]): unknown {
             return out;
         }),
     );
+}
+
+/** Unique phones: the acting profile changed (different phone, or a restore replaced its data)
+ *  - drop the cache so the next load() fetches the new profile's contacts, and refetch NOW when
+ *  something already consumed it (kept-alive Phone/Messages read this store live). */
+export function resetContacts(): void {
+    const wasLoaded = useContactsStore.getState().loaded;
+    useContactsStore.setState({ contacts: [], recents: [], myNumber: '', myName: '', card: {}, loaded: false });
+    if (wasLoaded) void useContactsStore.getState().refresh();
+}
+
+/** Unique phones: a SIM swap/eject changes the phone's number (and in legacy mode the whole
+ *  identity) under this load-once cache, so a loaded store refetches whenever a live SIM push
+ *  carries a number that differs from the cached My Card one. Unloaded stores load lazily. */
+export function syncSimNumber(push: SimStatePush | undefined): void {
+    if (push?.enabled !== true) return;
+    const s = useContactsStore.getState();
+    if (!s.loaded) return;
+    if ((push.number ?? '') === s.myNumber) return;
+    void s.refresh();
 }
 
 /** Canonical add-contact path: guards duplicates/own-number, persists via the

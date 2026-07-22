@@ -25,6 +25,10 @@ local cfg = config.Messages
 ---@type table Actions module; the table returned at end of file.
 local actions = {}
 
+---@type table Notification routing (server.notifications.init): identity-addressed banners
+---incl. the pocketed-phone (carried, not active) transient buzz.
+local notifications = require 'server.notifications.init'
+
 local util = require 'server.util'
 local ok, fail, digits, trim, initialsFor, formatNumber = util.ok, util.fail, util.digits, util.trim, util.initialsFor, util.formatNumber
 
@@ -354,6 +358,25 @@ function actions.list(source)
     })
 end
 
+---@type integer Store-and-forward cap per number; past this the carrier drops new texts silently.
+local MAX_PENDING_PER_NUMBER = 100
+
+---Queues a text for a number that is registered on a SIM but currently out of service (unique
+---phones: the SIM is in no phone). Unregistered numbers still drop silently, like stock.
+---@param target string recipient number digits
+---@param mid string shared logical message id
+---@param senderNumber string
+---@param kind string
+---@param body string
+---@param meta table
+---@param ts number
+local function queueForNumber(target, mid, senderNumber, kind, body, meta, ts)
+    if not require('server.sim.state').active then return end
+    if not require('server.sim.store').get(target) then return end
+    if store.pendingCount(target) >= MAX_PENDING_PER_NUMBER then return end
+    store.queuePending(store.newId(), mid, target, senderNumber, kind, body, meta, ts)
+end
+
 ---Delivers one 1:1 message: the sender's copy is always stored; the recipient's copy + live
 ---push happen only when the number is in service, unblocked, and not in airplane mode.
 ---@param source number
@@ -376,7 +399,9 @@ local function sendDirect(source, cid, myNumber, target, kind, body, meta, ts, m
 
     local targetCid = settings.getCitizenByNumber(target)
     local inId, withheld, targetSrc
-    if targetCid and targetCid ~= cid and not contactsStore.isBlocked(targetCid, myNumber) then
+    if not targetCid then
+        queueForNumber(target, mid, myNumber, kind, body, meta, ts)
+    elseif targetCid ~= cid and not contactsStore.isBlocked(targetCid, myNumber) then
         withheld = settings.isAirplane(targetCid)
         inId = store.newId()
         store.insertMessage(inId, mid, targetCid, myNumber, myNumber, 'incoming', kind, body, meta, false, ts, withheld)
@@ -398,6 +423,17 @@ local function sendDirect(source, cid, myNumber, target, kind, body, meta, ts, m
                 muted        = false,
             })
             notify(targetSrc, participant.name, previewFor(kind, body, meta))
+        elseif not withheld then
+            -- Recipient identity sits on a phone in someone's pocket (carried, not active):
+            -- transient colour-tagged buzz, no thread push - that phone catches up on open.
+            local theirContacts = contactMapFor(targetCid)
+            local participant   = resolveParticipant(myNumber, theirContacts[myNumber])
+            notifications.notifyCid(targetCid, {
+                appId = 'messages',
+                title = participant.name,
+                body  = previewFor(kind, body, meta),
+                time  = 'now',
+            })
         end
     end
 
@@ -530,6 +566,13 @@ function actions.systemText(senderNumber, senderName, targetNumber, body, opts)
             muted        = false,
         })
         notify(targetSrc, participant.name, previewFor(kind, body, meta))
+    elseif not withheld then
+        notifications.notifyCid(targetCid, {
+            appId = 'messages',
+            title = senderName or formatNumber(senderNumber),
+            body  = previewFor(kind, body, meta),
+            time  = 'now',
+        })
     end
 
     -- First-party send announcement (system shape).
@@ -598,6 +641,13 @@ local function sendGroup(source, cid, myNumber, groupId, kind, body, meta, ts, m
                     muted        = false,
                 })
                 notify(targetSrc, group.name, senderName .. ': ' .. previewFor(kind, body, meta))
+            elseif not withheld then
+                notifications.notifyCid(m.citizenid, {
+                    appId = 'messages',
+                    title = group.name,
+                    body  = senderName .. ': ' .. previewFor(kind, body, meta),
+                    time  = 'now',
+                })
             end
         end
     end
@@ -1012,6 +1062,57 @@ function actions.releaseWithheld(source)
 
     local n = #convs
     notify(source, 'Messages', ('You have new messages in %d conversation%s.'):format(n, n == 1 and '' or 's'))
+end
+
+---Delivers every text queued for `number` while it was out of service, into the identity the
+---number just attached to (unique phones: SIM installed / moved). Mirrors releaseWithheld:
+---inserts the copies, pushes each affected thread live, fires one summary banner. Blocked
+---senders are dropped here, since the recipient was unknown at queue time.
+---@param source number player server id holding the phone the number attached to
+---@param cid string data identity the number now belongs to
+---@param number string bare-digit number that came back into service
+function actions.deliverPending(source, cid, number)
+    local rows = store.takePending(number)
+    if #rows == 0 then return end
+
+    local airplane = settings.isAirplane(cid)
+    local convs, seen = {}, {}
+    for _, row in ipairs(rows) do
+        if not contactsStore.isBlocked(cid, row.sender) then
+            local meta = row.meta
+            if type(meta) == 'string' then
+                local okDecode, decoded = pcall(json.decode, meta)
+                meta = okDecode and decoded or nil
+            end
+            store.insertMessage(store.newId(), row.mid, cid, row.sender, row.sender, 'incoming',
+                row.kind, row.body, meta, false, tonumber(row.created_at) or os.time(), airplane)
+            if not seen[row.sender] then
+                seen[row.sender] = true
+                convs[#convs + 1] = row.sender
+            end
+        end
+    end
+    if #convs == 0 then return end
+
+    for _, conversation in ipairs(convs) do
+        store.pruneThread(cid, conversation, cfg.MessagesPerThread)
+    end
+
+    if airplane or not GetPlayerName(source) then
+        badges.push(source)
+        return
+    end
+
+    local myNumber   = digits(settings.getPhoneNumber(cid) or '')
+    local contactMap = contactMapFor(cid)
+    for _, conversation in ipairs(convs) do
+        local threadRows = store.threadMessages(cid, conversation, cfg.MessagesPerThread)
+        TriggerClientEvent('sd-phone:client:messages:incoming', source,
+            buildConversation(cid, myNumber, conversation, threadRows, contactMap))
+    end
+
+    local n = #convs
+    notify(source, 'Messages', ('Delivered while you were out of service: %d conversation%s.'):format(n, n == 1 and '' or 's'))
 end
 
 ---Uploads a recorded voice message to Fivemanage and returns its hosted URL. The payload must

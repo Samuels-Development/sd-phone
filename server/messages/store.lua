@@ -137,6 +137,21 @@ function store.ensureSchema()
     if not acol or tonumber(acol.n) == 0 then
         MySQL.query.await('ALTER TABLE phone_message_groups ADD COLUMN avatar VARCHAR(512) NULL')
     end
+
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS phone_pending_messages (
+            id          VARCHAR(16)  NOT NULL,
+            mid         VARCHAR(16)  NOT NULL,
+            number      VARCHAR(48)  NOT NULL,
+            sender      VARCHAR(32)  NOT NULL,
+            kind        VARCHAR(16)  NOT NULL DEFAULT 'text',
+            body        TEXT         NULL,
+            meta        JSON         NULL,
+            created_at  BIGINT       NOT NULL,
+            PRIMARY KEY (id),
+            INDEX idx_phone_pending_messages_number (number, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ]])
 end
 
 ---Lists a player's conversation keys, most-recently-active first, each with the newest message
@@ -262,6 +277,62 @@ function store.releaseWithheld(citizenid)
     MySQL.update.await(
         'UPDATE phone_messages SET withheld = 0 WHERE citizenid = ? AND withheld = 1',
         { citizenid }
+    )
+end
+
+---Queues a message for a registered number that is currently out of service (unique phones:
+---its SIM is in no phone). Delivered by deliverPending when the number attaches again.
+---@param id string
+---@param mid string shared logical message id
+---@param number string target number digits
+---@param sender string sender's number digits
+---@param kind string
+---@param body string|nil
+---@param meta table|nil
+---@param createdAt number unix epoch
+function store.queuePending(id, mid, number, sender, kind, body, meta, createdAt)
+    MySQL.insert.await([[
+        INSERT INTO phone_pending_messages (id, mid, number, sender, kind, body, meta, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ]], { id, mid, number, sender, kind, body, encodeJson(meta), createdAt })
+end
+
+---How many messages are queued for a number. Read-only.
+---@param number string target number digits
+---@return number
+function store.pendingCount(number)
+    local row = MySQL.single.await(
+        'SELECT COUNT(*) AS n FROM phone_pending_messages WHERE number = ?', { number })
+    return row and tonumber(row.n) or 0
+end
+
+---Drains the queue for a number: returns its rows oldest-first and deletes them in one step,
+---so a second concurrent drain gets nothing.
+---@param number string target number digits
+---@return { id: string, mid: string, sender: string, kind: string, body: string|nil, meta: string|nil, created_at: number }[]
+function store.takePending(number)
+    local rows = MySQL.query.await([[
+        SELECT id, mid, sender, kind, body, meta, created_at
+        FROM phone_pending_messages
+        WHERE number = ?
+        ORDER BY created_at ASC
+    ]], { number }) or {}
+    if #rows > 0 then
+        local ids = {}
+        for i = 1, #rows do ids[i] = rows[i].id end
+        local placeholders = ('?,'):rep(#ids):sub(1, -2)
+        MySQL.update.await(
+            'DELETE FROM phone_pending_messages WHERE id IN (' .. placeholders .. ')', ids)
+    end
+    return rows
+end
+
+---Deletes queued messages older than `maxAgeSeconds`; the carrier eventually gives up. Run at boot.
+---@param maxAgeSeconds number
+function store.prunePending(maxAgeSeconds)
+    MySQL.update.await(
+        'DELETE FROM phone_pending_messages WHERE created_at < ?',
+        { os.time() - math.floor(tonumber(maxAgeSeconds) or 0) }
     )
 end
 

@@ -7,6 +7,9 @@ local store   = require 'server.messages.store'
 ---@type table Authoritative message handlers (server.messages.actions): validation + delivery fan-out.
 local actions = require 'server.messages.actions'
 
+---@type integer Queued out-of-service texts older than this are dropped at boot (carrier gives up).
+local PENDING_MAX_AGE = 14 * 24 * 60 * 60
+
 ---Boots the message schema; a failure is printed and leaves the module inert.
 CreateThread(function()
     local success, err = pcall(store.ensureSchema)
@@ -14,6 +17,7 @@ CreateThread(function()
         print(('^1[sd-phone:messages]^0 schema bootstrap failed: %s'):format(err))
         return
     end
+    pcall(store.prunePending, PENDING_MAX_AGE)
     print('^2[sd-phone:messages]^0 schema ready')
 end)
 
@@ -34,6 +38,17 @@ lib.callback.register('sd-phone:server:messages:react', function(src, payload) r
 ---@param source number player server id
 AddEventHandler('sd-phone:server:airplane:released', function(source)
     actions.releaseWithheld(source)
+end)
+
+---Delivers texts queued while a number was out of service, when the SIM session attaches the
+---number to an identity (SIM installed or moved). Threaded: the attach fires mid-resolve.
+---@param source number player server id
+---@param cid string data identity the number attached to
+---@param number string bare-digit number
+AddEventHandler('sd-phone:server:sim:numberAttached', function(source, cid, number)
+    CreateThread(function()
+        actions.deliverPending(source, cid, number)
+    end)
 end)
 
 ---Sends a message on a player's behalf from another resource. Mirrors the NUI `send` payload;

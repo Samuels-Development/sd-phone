@@ -198,6 +198,7 @@ export type NuiMessage =
     | { action: 'sd-phone:ryde:ratingReceived'; data: { id: string; stars: number; tip?: number } }
     | { action: 'sd-phone:ryde:peerLocation';   data: { tripId: string; role: 'rider' | 'driver'; x: number; y: number; h: number } }
     | { action: 'sd-phone:close' }
+    | { action: 'sd-phone:profileReset' }
     | { action: 'sd-phone:client:characterLoaded' }
     | { action: 'sd-phone:launchApp'; data: { id: string; link?: Record<string, unknown> } }
     | { action: 'sd-phone:battery'; data: number }
@@ -326,7 +327,7 @@ export type NuiMessage =
     | { action: 'wordle:start';        data: { gameId: string; color: string; opponent: string; pot: number } }
     | { action: 'wordle:move';         data: { gameId: string; move: { rows: string[][]; solved: boolean; failed: boolean; tries: number; finishMs: number } } }
     | { action: 'wordle:ended';        data: { reason: string } }
-    | { action: 'sd-phone:notification';       data: { id?: string; app?: string; image?: string; title: string; body?: string; time?: string; appId?: string; quietInApp?: boolean } }
+    | { action: 'sd-phone:notification';       data: { id?: string; app?: string; image?: string; title: string; body?: string; time?: string; appId?: string; quietInApp?: boolean; otherPhone?: boolean; phoneColor?: string; profileKey?: string } }
     | { action: 'sd-phone:badges';             data: Record<string, number> }
     | { action: 'sd-phone:airshare';           data: { id: string; kind: string; fromName: string } }
     | { action: 'sd-phone:maps:friends:update'; data: FriendsUpdatePush }

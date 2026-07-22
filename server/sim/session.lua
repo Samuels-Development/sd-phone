@@ -117,6 +117,8 @@ local function computeLegacy(source, phones)
             if identity then
                 if settingsStore.getPhoneNumber(identity) ~= number then
                     settingsStore.setPhoneNumber(identity, number)
+                    -- Back in service: store-and-forward listeners deliver anything queued.
+                    TriggerEvent('sd-phone:server:sim:numberAttached', source, identity, number)
                 end
                 sims[#sims + 1] = {
                     slot     = phone.slot,
@@ -195,6 +197,8 @@ local function computeDevice(source, phones)
             simStore.ensureRegistered(number, realCid)
             if settingsStore.getPhoneNumber(identity) ~= number then
                 settingsStore.setPhoneNumber(identity, number)
+                -- Back in service: store-and-forward listeners deliver anything queued.
+                TriggerEvent('sd-phone:server:sim:numberAttached', source, identity, number)
             end
         else
             local existing = settingsStore.getPhoneNumber(identity)

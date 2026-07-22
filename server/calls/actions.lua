@@ -252,7 +252,9 @@ function actions.dial(source, payload)
         return fail('Number not in service')
     end
 
-    local targetSrc = player.getSourceByIdentifier(targetCid)
+    -- Any-phone resolver: a call rings the target even when the dialed number sits on the
+    -- OTHER phone in their pocket (unlike UI pushes, which only land on the active phone).
+    local targetSrc = player.getAnySourceByIdentifier(targetCid)
     if not targetSrc then return fail('This number is currently unavailable') end
     if settings.isAirplane(targetCid) then return fail('This number is currently unavailable') end
     if contacts.isBlocked(targetCid, digits(myNumber)) then return fail('This number is currently unavailable') end
@@ -309,7 +311,7 @@ function actions.dialPayphone(source, payload)
     local targetCid = settings.getCitizenByNumber(dialed)
     if not targetCid then return fail('Number not in service') end
 
-    local targetSrc = player.getSourceByIdentifier(targetCid)
+    local targetSrc = player.getAnySourceByIdentifier(targetCid)
     if not targetSrc then return fail('This number is currently unavailable') end
     if settings.isAirplane(targetCid) then return fail('This number is currently unavailable') end
     if callerNumber ~= '' and contacts.isBlocked(targetCid, callerNumber) then return fail('This number is currently unavailable') end
