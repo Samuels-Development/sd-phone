@@ -3,6 +3,7 @@ import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent, 
 import { Camera, Check, Delete, Flashlight, Lock, ScanFace } from 'lucide-react';
 
 import { formatClockTime, formatLongDate, useClock } from '@/hooks/useClock';
+import { useKeypadInput } from '@/hooks/useKeypadInput';
 import { fetchNui, isFiveM } from '@/core/nui';
 import { resolveWallpaper } from './wallpapers';
 import { useTheme } from '@/stores/themeStore';
@@ -290,6 +291,13 @@ function PasscodeEntry({ wallpaper, expected, onSuccess, onCancel }: {
         }
     }
     function del() { setPin(p => p.slice(0, -1)); }
+
+    useKeypadInput({
+        onPress: press,
+        onDelete: del,
+        canDelete: pin.length > 0 && !shake && !exiting,
+        enabled: !exiting,
+    });
 
     return (
         <div className={`absolute inset-0 z-[80] ${exiting ? 'animate-passcode-out' : 'animate-passcode-in'}`}>

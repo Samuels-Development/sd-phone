@@ -1,5 +1,6 @@
 import { Delete } from 'lucide-react';
 
+import { useKeypadInput } from '@/hooks/useKeypadInput';
 import { t } from '@/i18n';
 
 
@@ -22,6 +23,13 @@ export function Keypad({ variant = 'pin', onPress, onDelete, canDelete = true, c
 }) {
     const showLetters = variant === 'phone' || variant === 'pin';
     const zeroSub     = variant === 'phone' ? '+' : '';
+
+    useKeypadInput({
+        onPress,
+        onDelete,
+        canDelete,
+        extraKeys: variant === 'decimal' ? ['.'] : [],
+    });
 
     return (
         <div className={`grid grid-cols-3 gap-x-3 gap-y-2.5 ${className}`}>

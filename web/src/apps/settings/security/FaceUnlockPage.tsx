@@ -3,6 +3,7 @@ import { Delete } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { useIosPush } from '@/hooks/useIosPush';
+import { useKeypadInput } from '@/hooks/useKeypadInput';
 import { useTheme } from '@/stores/themeStore';
 import { ListGroup } from '@/ui/ListGroup';
 import { SubPage } from '../SettingsSubPage';
@@ -157,6 +158,12 @@ function PinFlow({
     }
 
     function del() { setPin(p => p.slice(0, -1)); setError(''); }
+
+    useKeypadInput({
+        onPress: press,
+        onDelete: del,
+        canDelete: pin.length > 0,
+    });
 
     function advance(entered: string) {
         if (step === 'old') {

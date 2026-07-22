@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Delete, Phone, Plus } from 'lucide-react';
 
+import { useKeypadInput } from '@/hooks/useKeypadInput';
 import { useSessionState } from '@/hooks/useSessionState';
 import { AddContact } from '../contacts/AddContact';
 import { playDtmf } from './dtmf';
@@ -25,6 +26,18 @@ export function KeypadTab({ onAddContact, onCall }: {
         setDigits(prev => (prev.length >= 24 ? prev : prev + d));
         playDtmf(d);
     }
+
+    function del() {
+        setDigits(prev => prev.slice(0, -1));
+    }
+
+    useKeypadInput({
+        onPress: press,
+        onDelete: del,
+        canDelete: digits.length > 0,
+        enabled: !adding,
+        extraKeys: ['*', '#'],
+    });
 
     const size = digits.length > 15 ? 'text-[29px]' : digits.length > 11 ? 'text-[36px]' : 'text-[44px]';
     const shown = /^\d{10}$/.test(digits) ? formatPhone(digits) : digits;
@@ -72,7 +85,7 @@ export function KeypadTab({ onAddContact, onCall }: {
                     <button
                         type="button"
                         aria-label={t('phone.delete','Delete')}
-                        onClick={() => setDigits(prev => prev.slice(0, -1))}
+                        onClick={del}
                         className="flex h-[88px] w-[88px] items-center justify-center text-black/70 active:opacity-50 dark:text-white/70"
                     >
                         <Delete className="h-[37px] w-[37px]" strokeWidth={1.8} />
