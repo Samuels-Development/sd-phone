@@ -102,6 +102,16 @@ export function DarkChat({ onClose: _onClose }: { onClose: () => void }) {
         setOpenId(cur => (cur === data.roomId ? null : cur));
     }, [setOpenId]));
 
+    useNuiEvent('sd-phone:darkchat:code', useCallback((data) => {
+        if (!data) return;
+        setPrivateRooms(prev => prev.map(r => (r.id === data.roomId ? { ...r, code: data.code } : r)));
+    }, []));
+
+    useNuiEvent('sd-phone:darkchat:members', useCallback((data) => {
+        if (!data) return;
+        setPrivateRooms(prev => prev.map(r => (r.id === data.roomId ? { ...r, members: data.members } : r)));
+    }, []));
+
     const decrementMembers = useCallback((roomId: string) => {
         const apply = (list: Room[]) => list.map(r => (r.id === roomId ? { ...r, members: Math.max(1, r.members - 1) } : r));
         setPublicRooms(apply);
@@ -279,6 +289,7 @@ export function DarkChat({ onClose: _onClose }: { onClose: () => void }) {
                     onReact={reactToMessage}
                     onLeave={() => setLeaveId(openRoom.id)}
                     onMemberRemoved={() => decrementMembers(openRoom.id)}
+                    onCodeChanged={code => patchRoom(openRoom.id, r => ({ ...r, code }))}
                     animateIn={animateNav}
                 />
             )}

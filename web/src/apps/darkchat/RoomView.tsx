@@ -17,7 +17,7 @@ import { Composer } from './Composer';
 import { RoomSettingsSheet } from './RoomSettingsSheet';
 import { toBubbleMsg, type ChatMessage, type DarkChatDraft, type Room } from './data';
 
-export function RoomView({ room, nickname, onBack, onSend, onReact, onLeave, onMemberRemoved, animateIn = true }: {
+export function RoomView({ room, nickname, onBack, onSend, onReact, onLeave, onMemberRemoved, onCodeChanged, animateIn = true }: {
     room:     Room;
     nickname: string;
     onBack:   () => void;
@@ -25,6 +25,7 @@ export function RoomView({ room, nickname, onBack, onSend, onReact, onLeave, onM
     onReact:  (messageId: string, emoji: string) => void;
     onLeave:  () => void;
     onMemberRemoved: () => void;
+    onCodeChanged:   (code: string) => void;
     animateIn?: boolean;
 }) {
     const { goBack, pageStyle } = useIosPush(onBack, animateIn);
@@ -192,6 +193,7 @@ export function RoomView({ room, nickname, onBack, onSend, onReact, onLeave, onM
                     onClose={() => setSettingsOpen(false)}
                     onLeave={onLeave}
                     onMemberRemoved={onMemberRemoved}
+                    onCodeChanged={onCodeChanged}
                 />
             )}
         </div>

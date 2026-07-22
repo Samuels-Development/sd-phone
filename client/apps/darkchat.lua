@@ -16,6 +16,9 @@ proxy('sd-phone:darkchat:exit',     'sd-phone:server:darkchat:exit')
 proxy('sd-phone:darkchat:roomInfo', 'sd-phone:server:darkchat:roomInfo')
 proxy('sd-phone:darkchat:notifications', 'sd-phone:server:darkchat:notifications')
 proxy('sd-phone:darkchat:kick',     'sd-phone:server:darkchat:kick')
+proxy('sd-phone:darkchat:ban',      'sd-phone:server:darkchat:ban')
+proxy('sd-phone:darkchat:unban',    'sd-phone:server:darkchat:unban')
+proxy('sd-phone:darkchat:regenCode', 'sd-phone:server:darkchat:regenCode')
 
 ---Server push: a message landed in a room we're a member of; relays it to an open room.
 ---@param data table message record from server/darkchat
@@ -39,4 +42,18 @@ end)
 ---@param data table { roomId } from server/darkchat
 RegisterNetEvent('sd-phone:client:darkchat:kicked', function(data)
     SendNUIMessage({ action = 'sd-phone:darkchat:kicked', data = data })
+end)
+
+---Server push: a room we belong to got a fresh join code; relays it so the app shows the
+---current one everywhere.
+---@param data table { roomId, code } from server/darkchat
+RegisterNetEvent('sd-phone:client:darkchat:code', function(data)
+    SendNUIMessage({ action = 'sd-phone:darkchat:code', data = data })
+end)
+
+---Server push: a private room's member count changed (join/leave/kick/ban); relays the
+---authoritative count so the list and chat header update live.
+---@param data table { roomId, members } from server/darkchat
+RegisterNetEvent('sd-phone:client:darkchat:members', function(data)
+    SendNUIMessage({ action = 'sd-phone:darkchat:members', data = data })
 end)

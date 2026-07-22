@@ -144,6 +144,22 @@ local function broadcastReaction(roomId, exceptSrc, messageId, reactions)
     end
 end
 
+---Pushes a private room's authoritative member count to its online members, so joins/leaves/
+---removals show up live instead of waiting for the next app open. The actor is skipped - their
+---own callback response already carries the fresh count. Public rooms track presence instead.
+---@param roomId string room id
+---@param exceptSrc integer|nil member to skip
+local function broadcastMembers(roomId, exceptSrc)
+    if actions.isPublic(roomId) then return end
+    local n = store.memberCount(roomId)
+    for _, m in ipairs(store.membersWithNames(roomId)) do
+        local tgt = player.getSourceByIdentifier(m.citizenid)
+        if tgt and tgt ~= exceptSrc then
+            TriggerClientEvent('sd-phone:client:darkchat:members', tgt, { roomId = roomId, members = n })
+        end
+    end
+end
+
 ---Room list + preloaded histories. Fetching the list also marks the caller as sitting on the
 ---homepage for live active-count pushes.
 lib.callback.register('sd-phone:server:darkchat:rooms', function(src)
@@ -228,7 +244,9 @@ end)
 
 lib.callback.register('sd-phone:server:darkchat:join', function(src, payload)
     if type(payload) ~= 'table' then payload = {} end
-    return actions.join(src, payload.code)
+    local res = actions.join(src, payload.code)
+    if res.success then broadcastMembers(res.data.room.id, src) end
+    return res
 end)
 
 ---Leave a private room: drop the caller's presence in it first, then remove their membership via
@@ -237,7 +255,9 @@ end)
 lib.callback.register('sd-phone:server:darkchat:leave', function(src, payload)
     if type(payload) ~= 'table' then payload = {} end
     if payload.roomId then leavePresence(src, payload.roomId) end
-    return actions.leave(src, payload.roomId)
+    local res = actions.leave(src, payload.roomId)
+    if res.success and type(res.data.roomId) == 'string' then broadcastMembers(res.data.roomId, src) end
+    return res
 end)
 
 ---Save the caller's nickname (validated in actions.setNickname).
@@ -276,7 +296,56 @@ lib.callback.register('sd-phone:server:darkchat:kick', function(src, payload)
         leavePresence(tgt, res.data.roomId)
         TriggerClientEvent('sd-phone:client:darkchat:kicked', tgt, { roomId = res.data.roomId })
     end
+    broadcastMembers(res.data.roomId, src)
     return { success = true, data = { memberId = res.data.memberId } }
+end)
+
+---Creator bans a member: validated in actions.ban (kick + ban list), then the banned player is
+---scrubbed from presence, told to drop the room live, and shown a banner saying they were
+---banned. The client only ever sees the echoed member token.
+---@param payload table { roomId: string, memberId: string }
+lib.callback.register('sd-phone:server:darkchat:ban', function(src, payload)
+    if type(payload) ~= 'table' then payload = {} end
+    local res = actions.ban(src, payload.roomId, payload.memberId)
+    if not res.success then return res end
+    local tgt = player.getSourceByIdentifier(res.data.targetCid)
+    if tgt then
+        leavePresence(tgt, res.data.roomId)
+        TriggerClientEvent('sd-phone:client:darkchat:kicked', tgt, { roomId = res.data.roomId })
+        TriggerClientEvent('sd-phone:client:notify', tgt, {
+            app = 'darkchat', appId = 'darkchat', time = 'now',
+            title = res.data.roomName,
+            body  = 'You have been banned from this room.',
+        })
+    end
+    broadcastMembers(res.data.roomId, src)
+    return { success = true, data = { memberId = res.data.memberId, name = res.data.name } }
+end)
+
+---Creator lifts a ban (validated in actions.unban). The unbanned player gets no push - nothing
+---changes for them until they choose to rejoin with the code.
+---@param payload table { roomId: string, memberId: string }
+lib.callback.register('sd-phone:server:darkchat:unban', function(src, payload)
+    if type(payload) ~= 'table' then payload = {} end
+    return actions.unban(src, payload.roomId, payload.memberId)
+end)
+
+---Creator mints a fresh room code (cooldown-validated in actions.regenCode); every other online
+---member's app patches the code live so nobody keeps sharing the retired one.
+---@param payload table { roomId: string }
+lib.callback.register('sd-phone:server:darkchat:regenCode', function(src, payload)
+    if type(payload) ~= 'table' then payload = {} end
+    local res = actions.regenCode(src, payload.roomId)
+    if not res.success then return res end
+    for _, m in ipairs(store.membersWithNames(res.data.roomId)) do
+        local tgt = player.getSourceByIdentifier(m.citizenid)
+        if tgt and tgt ~= src then
+            TriggerClientEvent('sd-phone:client:darkchat:code', tgt, {
+                roomId = res.data.roomId, code = res.data.code,
+            })
+        end
+    end
+    return res
 end)
 
 ---A disconnecting player is scrubbed from all presence state, and each public room they were

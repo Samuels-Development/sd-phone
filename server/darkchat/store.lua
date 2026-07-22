@@ -71,6 +71,18 @@ function store.ensureSchema()
             PRIMARY KEY (`citizenid`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ]])
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS `darkchat_bans` (
+            `room_id`   VARCHAR(40) NOT NULL,
+            `citizenid` VARCHAR(60) NOT NULL,
+            `banned_at` BIGINT      NOT NULL,
+            PRIMARY KEY (`room_id`, `citizenid`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ]])
+    MySQL.query.await([[
+        ALTER TABLE `darkchat_rooms`
+            ADD COLUMN IF NOT EXISTS `code_changed_at` BIGINT NULL
+    ]])
 end
 
 ---Insert a private room row. Caller guarantees the code (and therefore the 'p-<code>' id) is
@@ -308,6 +320,56 @@ function store.reactionsForRoom(roomId, cid)
         out[key][#out[key] + 1] = { emoji = r.emoji, count = tonumber(r.cnt) or 1, mine = isTruthy(r.mine) }
     end
     return out
+end
+
+---Re-points a room at a fresh join code, stamping when it changed (the regen cooldown reads
+---it). The room ID stays what it was - only joining resolves through the code column, so
+---nothing keyed by room id moves. Caller guarantees the new code is unique.
+---@param roomId string room id
+---@param code string new join code
+---@param ts integer unix seconds
+function store.updateRoomCode(roomId, code, ts)
+    MySQL.query.await('UPDATE `darkchat_rooms` SET code = ?, code_changed_at = ? WHERE id = ?',
+        { code, ts, roomId })
+end
+
+---Ban a player from a room. INSERT IGNORE, so re-banning changes nothing.
+---@param roomId string room id
+---@param cid string citizenid
+---@param ts integer unix seconds
+function store.addBan(roomId, cid, ts)
+    MySQL.query.await('INSERT IGNORE INTO `darkchat_bans` (room_id, citizenid, banned_at) VALUES (?, ?, ?)',
+        { roomId, cid, ts })
+end
+
+---Lift one player's ban. Scoped to (room, citizenid). Idempotent.
+---@param roomId string room id
+---@param cid string citizenid
+function store.removeBan(roomId, cid)
+    MySQL.query.await('DELETE FROM `darkchat_bans` WHERE room_id = ? AND citizenid = ?', { roomId, cid })
+end
+
+---Whether `cid` is banned from `roomId`. Read-only.
+---@param roomId string room id
+---@param cid string citizenid
+---@return boolean banned
+function store.isBanned(roomId, cid)
+    return MySQL.scalar.await('SELECT 1 FROM `darkchat_bans` WHERE room_id = ? AND citizenid = ? LIMIT 1', { roomId, cid }) ~= nil
+end
+
+---Every banned player of `roomId` with their saved nickname (NULL when they never picked one),
+---oldest ban first. Same anonymity posture as membersWithNames: only ever built for the room's
+---creator, citizenids stay server-side. Read-only.
+---@param roomId string room id
+---@return table[] rows { citizenid, nickname } rows
+function store.bansWithNames(roomId)
+    return MySQL.query.await([[
+        SELECT b.citizenid AS citizenid, n.nickname AS nickname
+        FROM `darkchat_bans` b
+        LEFT JOIN `darkchat_nicknames` n ON n.citizenid = b.citizenid
+        WHERE b.room_id = ?
+        ORDER BY b.banned_at ASC
+    ]], { roomId }) or {}
 end
 
 ---A character's saved nickname, or nil if they never picked one. Read-only.
