@@ -43,7 +43,7 @@ local config = {
     WeazelNews  = require 'configs.weazelnews',     -- broadcast network: staff-published articles + breaking ticker
     Streaks     = require 'configs.streaks',        -- photo-a-day streaks: milestone cash + global gallery
     Migrate     = require 'configs.migrate',         -- one-time lb-phone -> sd-phone data import
-    Sim         = require 'configs.uniquephones',    -- unique phones (SIM card items or built-in numbers)
+    Sim         = require 'configs.uniqueandsim',    -- unique phones + SIM cards (see its pick-your-setup header)
 }
 
 -- Server-only secrets: third-party API keys live in configs/server/apikeys.lua, which is NOT in

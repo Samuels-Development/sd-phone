@@ -1,5 +1,13 @@
--- Unique phones (opt-in). When enabled, numbers come from sim_card items - or, with
--- BuiltInNumbers, from the phone itself (no SIM items at all). Who owns the DATA is DataOwner:
+-- Phones, numbers and who owns what. Pick your setup:
+--
+--   Stock phone (shared data, automatic numbers)        -> Enabled = false
+--   Unique phones, SIM cards carry the number (default) -> Enabled = true, DataOwner = 'device'
+--   Unique phones, no SIM items (built-in numbers)      -> Enabled = true, DataOwner = 'device', BuiltInNumbers = true
+--   Stock data, SIMs only change your number            -> Enabled = true, DataOwner = 'character'
+--   The SIM IS the phone (original unique phones)       -> Enabled = true, DataOwner = 'sim'
+--
+-- When enabled, numbers come from sim_card items - or, with BuiltInNumbers, from the phone
+-- itself (no SIM items at all). Who owns the DATA is DataOwner:
 --
 --   * DataOwner = 'device' (DEFAULT) - the PHONE owns the data, the SIM only lends a number.
 --     Each phone item carries a persistent identity minted on first use, and that identity keys

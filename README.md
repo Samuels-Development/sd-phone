@@ -133,7 +133,17 @@ Building from a git clone yourself: `cd web && npm ci && npm run build`. The out
 
 ## Unique Phones & SIM Cards (optional)
 
-Off by default. Flip `Enabled = true` in `configs/uniquephones.lua` and phone numbers stop belonging to characters — they live on **SIM card items**. A second switch, `DataOwner`, decides who owns the *data*:
+Everything lives in `configs/uniqueandsim.lua`. The short version:
+
+| You want | Set |
+|---|---|
+| Stock behaviour (shared data, automatic numbers) | `Enabled = false` |
+| Unique phones, SIM cards carry the number | `Enabled = true`, `DataOwner = 'device'` |
+| Unique phones, **no SIM items** (built-in numbers) | `'device'` + `BuiltInNumbers = true` |
+| Stock data, SIMs **only change your number** | `Enabled = true`, `DataOwner = 'character'` |
+| The SIM *is* the phone (original unique phones) | `Enabled = true`, `DataOwner = 'sim'` |
+
+Off by default. Flip `Enabled = true` and phone numbers stop belonging to characters — they live on **SIM card items**. A second switch, `DataOwner`, decides who owns the *data*:
 
 - **`DataOwner = 'device'` (default) — the phone owns the data, the SIM only lends a number.** Each phone item gets a persistent identity the first time it's used, and that identity keys everything: messages, call log, contacts, photos, notes, app logins, settings, games. Popping the SIM out just drops your **number and service** — the phone still opens and every non-number app keeps working, the status bar reads **No Service**. Move a SIM to another phone and that phone gets your **number**, not your data. Steal a phone and you get *its* apps behind the owner's lockscreen (Face Unlock never works for you), but never their number unless the SIM is inside.
 - **`DataOwner = 'sim'` (legacy) — the SIM owns the data.** Whichever SIM is in a phone decides whose data that phone shows — everything. Steal someone's phone with the SIM inside and you're reading *their* phone; without any SIM, a phone opens to a full-screen **No SIM** screen with no service and every server action refused.
@@ -145,7 +155,7 @@ Either mode: the number follows the SIM, and Cloud Backup carries a character's 
 
 ### Setup
 
-1. Enable the feature in `configs/uniquephones.lua` and add the SIM item to your inventory (ox_inventory example; not needed with `BuiltInNumbers`):
+1. Enable the feature in `configs/uniqueandsim.lua` and add the SIM item to your inventory (ox_inventory example; not needed with `BuiltInNumbers`):
 
    ```lua
    ['sim_card'] = {
