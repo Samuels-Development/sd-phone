@@ -4,6 +4,7 @@ import { Coins, Delete, Hash, Phone, PhoneOff, RotateCcw, X } from 'lucide-react
 
 import { t } from '@/i18n';
 import { fetchNui, isFiveM } from '@/core/nui';
+import { useKeypadInput } from '@/hooks/useKeypadInput';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { playDtmf } from '@/apps/phone/keypad/dtmf';
 import { formatPhone } from '@/lib/phone';
@@ -336,6 +337,19 @@ export function PayphoneUI() {
         playDtmf(k);
     }
 
+    function delDigit() {
+        if (phaseRef.current !== 'idle') return;
+        setDigits(prev => prev.slice(0, -1));
+    }
+
+    useKeypadInput({
+        onPress: press,
+        onDelete: delDigit,
+        canDelete: digits.length > 0,
+        enabled: open && phase === 'idle',
+        extraKeys: ['*', '#'],
+    });
+
     /** Feed the slot: charge server-side, then run the coin-drop and unlock. */
     async function insertCoin() {
         if (!coinRef.current.enabled || creditRef.current || coinBusy.current || phaseRef.current !== 'idle') return;
@@ -615,7 +629,7 @@ export function PayphoneUI() {
                                 <div className="flex gap-1.5">
                                     <button
                                         type="button"
-                                        onClick={() => { if (phase === 'idle') setDigits(prev => prev.slice(0, -1)); }}
+                                        onClick={delDigit}
                                         aria-label={t('payphone.clear', 'Clear')}
                                         title={t('payphone.clear', 'Clear')}
                                         className="flex h-[42px] w-[42px] items-center justify-center rounded-[7px] text-[#2a2c30] active:translate-y-[1px] active:brightness-90"
