@@ -2,16 +2,19 @@
 local config = require 'configs.config'
 ---@type table Inventory bridge (bridge.server.inventory): aggregate + slot-level item ops.
 local bridge = require 'bridge.server.inventory'
----@type table Shared server helpers (server.util): digits/formatNumber.
+---@type table Shared server helpers (server.util): digits/formatNumber/newId.
 local util   = require 'server.util'
 
 ---@type table Inv module; the table returned at end of file. SIM-feature glue over the bridge's
 ---slot-level API: find phone items, read/write the SIM number on them, and (container mode)
----read the SIM out of a phone's SIM-tray container.
+---read the SIM out of a per-device SIM-tray stash (or a legacy nested ox container).
 local inv = {}
 
 ---@type string ox_inventory resource name (container mode is ox-only).
 local OX = 'ox_inventory'
+
+---@type string Prefix for per-device SIM-tray stashes (ox RegisterStash).
+local STASH_PREFIX = 'sd_phone_sim_'
 
 ---@type table<string, string> Phone item name -> frame colour, built from config.Phone.Items.
 local phoneColors = {}
@@ -35,6 +38,20 @@ function inv.isOx()
     return bridge.slotBackendName() == OX
 end
 
+---Stash id for a phone's SIM tray. Device ids may contain punctuation; sanitize for ox.
+---@param deviceId string
+---@return string
+function inv.simStashId(deviceId)
+    return STASH_PREFIX .. tostring(deviceId):gsub('[^%w]', '_')
+end
+
+---True when an inventory id is one of our SIM trays.
+---@param invId any
+---@return boolean
+function inv.isSimStash(invId)
+    return type(invId) == 'string' and invId:sub(1, #STASH_PREFIX) == STASH_PREFIX
+end
+
 ---All phone items the player carries, as { slot, name, color, metadata } rows in
 ---config.Phone.Items priority order. Metadata is never nil.
 ---@param source number player server id
@@ -54,22 +71,152 @@ function inv.findPhones(source)
     return out
 end
 
+---Reads the persistent DEVICE identity + Face Unlock owner from a phone row's metadata.
+---Used by DeviceIdentity mode: the phone item owns its data profile (`deviceId`), and the
+---first activator (`deviceOwner`) gates Face Unlock. Read-only; nils when not yet minted.
+---@param phone { metadata: table }
+---@return string|nil identity, string|nil owner
+function inv.getDevice(phone)
+    local md = phone and phone.metadata
+    if type(md) ~= 'table' then return nil, nil end
+    local identity = md.deviceId
+    if type(identity) ~= 'string' or identity == '' then identity = nil end
+    local owner = md.deviceOwner
+    if type(owner) ~= 'string' or owner == '' then owner = nil end
+    return identity, owner
+end
+
+---Persists a phone's DEVICE identity + Face Unlock owner onto the item metadata. Merges into
+---the slot's existing metadata so SIM numbers etc. survive.
+---@param source number player server id
+---@param slot number phone item slot
+---@param identity string device identity (e.g. device:<id> or an adopted sim profile)
+---@param owner string|nil first-activator citizenid
+---@return boolean ok
+function inv.setPhoneDevice(source, slot, identity, owner)
+    local row = bridge.getSlot(source, slot)
+    if not row then return false end
+    local metadata = row.metadata
+    metadata.deviceId    = identity
+    metadata.deviceOwner = owner
+    return bridge.setSlotMetadata(source, slot, metadata)
+end
+
+---Ensures the phone slot has a deviceId (minting one when missing). Used before opening the
+---SIM tray so the stash can be keyed off a stable identity. Does not stamp Face Unlock owner
+---(that happens on first full resolve).
+---@param source number player server id
+---@param slot number phone item slot
+---@return string|nil deviceId
+function inv.ensureDeviceId(source, slot)
+    local row = bridge.getSlot(source, slot)
+    if not row then return nil end
+    local identity = inv.getDevice({ metadata = row.metadata })
+    if identity then return identity end
+    identity = 'device:' .. util.newId(16)
+    if not inv.setPhoneDevice(source, slot, identity, nil) then return nil end
+    return identity
+end
+
+---Registers (or refreshes) the 1-slot SIM-tray stash for a device. Idempotent.
+---@param deviceId string
+function inv.registerSimStash(deviceId)
+    if not inv.isOx() or not deviceId or deviceId == '' then return end
+    pcall(function()
+        exports[OX]:RegisterStash(inv.simStashId(deviceId), 'SIM Tray', 1, 1000, false)
+    end)
+end
+
+---Items inside a phone's SIM tray stash. Nil when the stash is empty/unreadable.
+---@param deviceId string
+---@return table|nil
+local function stashItems(deviceId)
+    if not deviceId or deviceId == '' then return nil end
+    inv.registerSimStash(deviceId)
+    local ok, items = pcall(function()
+        return exports[OX]:GetInventoryItems(inv.simStashId(deviceId))
+    end)
+    if not ok or type(items) ~= 'table' then return nil end
+    return items
+end
+
+---Bare-digit number on a sim_card row, or nil.
+---@param item table|nil
+---@return string|nil
+local function simDigits(item)
+    if not item or item.name ~= config.Sim.SimItem or type(item.metadata) ~= 'table' then return nil end
+    local digits = util.digits(item.metadata.number)
+    return digits ~= '' and digits or nil
+end
+
+---Migrates a legacy nested ox container tray (metadata.container) into the per-device stash
+---and strips container metadata so USING the phone opens the UI instead of the tray.
+---@param source number player server id
+---@param slot number phone item slot
+---@return string|nil deviceId
+function inv.migrateNestedContainer(source, slot)
+    if not inv.isOx() then return nil end
+    local row = bridge.getSlot(source, slot)
+    if not row or type(row.metadata) ~= 'table' or not row.metadata.container then
+        return inv.getDevice({ metadata = row and row.metadata })
+    end
+
+    local deviceId = inv.ensureDeviceId(source, slot)
+    if not deviceId then return nil end
+    inv.registerSimStash(deviceId)
+
+    local containerId = row.metadata.container
+    local nested = bridge.containerItems(source, slot)
+    if type(nested) == 'table' then
+        local stashId = inv.simStashId(deviceId)
+        for _, item in pairs(nested) do
+            if item and item.name == config.Sim.SimItem then
+                pcall(function()
+                    exports[OX]:AddItem(stashId, item.name, item.count or 1, item.metadata)
+                    exports[OX]:RemoveItem(containerId, item.name, item.count or 1, nil, item.slot)
+                end)
+            end
+        end
+    end
+
+    row = bridge.getSlot(source, slot)
+    if row and type(row.metadata) == 'table' then
+        local metadata = row.metadata
+        metadata.container = nil
+        metadata.size = nil
+        bridge.setSlotMetadata(source, slot, metadata)
+    end
+    return deviceId
+end
+
 ---The SIM number installed in one phone row from findPhones, honouring the configured attach
----mode: container mode reads the sim_card item inside the phone's SIM tray, metadata mode reads
----the number written onto the phone item itself. Read-only.
+---mode: container mode reads the sim_card inside the per-device SIM tray (or a legacy nested
+---container still awaiting migration), metadata mode reads the number written onto the phone
+---item itself. Read-only.
 ---@param source number player server id
 ---@param phone { slot: number, metadata: table }
 ---@return string|nil number bare-digit SIM number, nil when no SIM is installed
 function inv.getSimNumber(source, phone)
     if config.Sim.UseContainers and inv.isOx() then
-        if not phone.metadata or not phone.metadata.container then return nil end
-        local items = bridge.containerItems(source, phone.slot)
+        -- Legacy nested containers: still readable until migrateNestedContainer runs.
+        if phone.metadata and phone.metadata.container then
+            local items = bridge.containerItems(source, phone.slot)
+            if type(items) == 'table' then
+                for _, item in pairs(items) do
+                    local digits = simDigits(item)
+                    if digits then return digits end
+                end
+            end
+            return nil
+        end
+
+        local deviceId = inv.getDevice(phone)
+        if not deviceId then return nil end
+        local items = stashItems(deviceId)
         if type(items) ~= 'table' then return nil end
         for _, item in pairs(items) do
-            if item and item.name == config.Sim.SimItem and item.metadata then
-                local digits = util.digits(item.metadata.number)
-                if digits ~= '' then return digits end
-            end
+            local digits = simDigits(item)
+            if digits then return digits end
         end
         return nil
     end
@@ -78,40 +225,8 @@ function inv.getSimNumber(source, phone)
     return digits ~= '' and digits or nil
 end
 
----The persistent DEVICE identity stamped onto a phone item, plus the first-activator cid that
----owns it. Both live on the phone item metadata in either attach mode (they describe the PHONE,
----not the SIM). Read-only; nil fields when never minted.
----@param phone { metadata: table }
----@return string|nil deviceId, string|nil ownerCid
-function inv.getDevice(phone)
-    local md = phone.metadata
-    if type(md) ~= 'table' then return nil, nil end
-    local id = md.deviceId
-    if type(id) ~= 'string' or id == '' then id = nil end
-    local owner = md.deviceOwner
-    if type(owner) ~= 'string' or owner == '' then owner = nil end
-    return id, owner
-end
-
----Stamps the device identity (and, first time, the owning character) onto a phone item's
----metadata, merging into the existing slot metadata so the SIM number, container id and
----durability survive. Device-identity mode only.
----@param source number player server id
----@param slot number phone item slot
----@param deviceId string persistent device identity
----@param ownerCid string|nil first-activator real citizenid (Face Unlock owner gate)
----@return boolean ok
-function inv.setPhoneDevice(source, slot, deviceId, ownerCid)
-    local row = bridge.getSlot(source, slot)
-    if not row then return false end
-    local metadata = row.metadata
-    metadata.deviceId = deviceId
-    if ownerCid then metadata.deviceOwner = ownerCid end
-    return bridge.setSlotMetadata(source, slot, metadata)
-end
-
 ---Writes (or clears, with nil) the SIM number onto a phone item's metadata - metadata mode
----only. Merges into the slot's existing metadata so container ids, durability etc. survive.
+---only. Merges into the slot's existing metadata so durability etc. survive.
 ---@param source number player server id
 ---@param slot number phone item slot
 ---@param number string|nil bare-digit SIM number, nil to eject
@@ -150,24 +265,40 @@ function inv.giveSimItem(source, number)
 end
 
 ---Rewrites the number on the SIM inside a phone: metadata mode updates the phone item itself,
----container mode updates the sim_card item inside the phone's tray (ox SetMetadata on the
----container inventory). Used by the setSimNumber export.
+---container mode updates the sim_card item inside the tray stash (or legacy nested container).
 ---@param source number player server id
 ---@param phone { slot: number, metadata: table }
 ---@param number string new bare-digit number
 ---@return boolean ok
 function inv.rewriteSimNumber(source, phone, number)
     if config.Sim.UseContainers and inv.isOx() then
-        local containerId = phone.metadata and phone.metadata.container
-        if not containerId then return false end
-        local items = bridge.containerItems(source, phone.slot)
+        if phone.metadata and phone.metadata.container then
+            local containerId = phone.metadata.container
+            local items = bridge.containerItems(source, phone.slot)
+            if type(items) ~= 'table' then return false end
+            for _, item in pairs(items) do
+                if item and item.name == config.Sim.SimItem then
+                    local metadata = type(item.metadata) == 'table' and item.metadata or {}
+                    metadata.number      = number
+                    metadata.description = ('SIM: %s'):format(util.formatNumber(number))
+                    local ok = pcall(function() exports[OX]:SetMetadata(containerId, item.slot, metadata) end)
+                    return ok
+                end
+            end
+            return false
+        end
+
+        local deviceId = inv.getDevice(phone)
+        if not deviceId then return false end
+        local stashId = inv.simStashId(deviceId)
+        local items = stashItems(deviceId)
         if type(items) ~= 'table' then return false end
         for _, item in pairs(items) do
             if item and item.name == config.Sim.SimItem then
                 local metadata = type(item.metadata) == 'table' and item.metadata or {}
                 metadata.number      = number
                 metadata.description = ('SIM: %s'):format(util.formatNumber(number))
-                local ok = pcall(function() exports[OX]:SetMetadata(containerId, item.slot, metadata) end)
+                local ok = pcall(function() exports[OX]:SetMetadata(stashId, item.slot, metadata) end)
                 return ok
             end
         end
@@ -176,22 +307,42 @@ function inv.rewriteSimNumber(source, phone, number)
     return inv.setPhoneSim(source, phone.slot, number)
 end
 
----Registers every configured phone item as a 1-slot ox container whitelisted to the SIM item.
----Container mode boot step; a no-op off ox.
+---Opens the SIM tray for a phone inventory slot: migrates any legacy nested container, ensures
+---a device id + stash, then force-opens the stash inventory for the player.
+---@param source number player server id
+---@param slot number phone item slot
+---@return boolean ok, string|nil err 'no_phone'|'no_device'|'open_failed'|nil
+function inv.openSimTray(source, slot)
+    if not inv.isOx() then return false, 'open_failed' end
+    slot = tonumber(slot)
+    if not slot then return false, 'no_phone' end
+    local row = bridge.getSlot(source, slot)
+    if not row or not phoneColors[row.name] then return false, 'no_phone' end
+
+    local deviceId = inv.migrateNestedContainer(source, slot) or inv.ensureDeviceId(source, slot)
+    if not deviceId then return false, 'no_device' end
+    inv.registerSimStash(deviceId)
+
+    local stashId = inv.simStashId(deviceId)
+    local ok, opened = pcall(function()
+        return exports[OX]:forceOpenInventory(source, 'stash', stashId)
+    end)
+    if not ok or not opened then return false, 'open_failed' end
+    return true, nil
+end
+
+---Container-mode boot: no longer registers phones as nested ox containers (that made USE open
+---the tray). Trays are stashes registered lazily per deviceId. Kept as the boot hook name so
+---init.lua stays stable.
 function inv.registerContainers()
-    if not inv.isOx() then return end
-    for _, entry in ipairs(config.Phone.Items or {}) do
-        pcall(function()
-            exports[OX]:setContainerProperties(entry.item, {
-                slots     = 1,
-                maxWeight = 1000,
-                whitelist = { config.Sim.SimItem },
-            })
-        end)
-    end
+    -- Intentionally empty: nested setContainerProperties made ox intercept USE. SIM trays are
+    -- RegisterStash'd on demand via registerSimStash / openSimTray.
 end
 
 ---@type table<string, string> Public copy of the phone item -> colour map.
 inv.phoneColors = phoneColors
+
+---@type string Public stash prefix for hook filters.
+inv.STASH_PREFIX = STASH_PREFIX
 
 return inv

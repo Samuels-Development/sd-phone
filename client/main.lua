@@ -51,6 +51,7 @@ require 'client.apps.stocks'
 require 'client.apps.games'
 require 'client.apps.settings'
 require 'client.apps.sim'
+require 'client.items'
 require 'client.admin'
 require 'client.payphone'
 

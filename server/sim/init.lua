@@ -73,15 +73,28 @@ function player.onlineCidMap()
     return out
 end
 
----ox_inventory only: watch SIM/phone item moves so a pulled SIM cuts service within a swap, not
----a cache TTL. Any matching move flushes the whole session cache (rare event, cheap rescan) and
----pushes fresh state to the player who moved it.
+---ox_inventory only: watch SIM/phone item moves (player inv + SIM-tray stashes) so a pulled SIM
+---cuts service within a swap, not a cache TTL. Matching moves flush the session cache and push
+---fresh state. Tray hooks also reject non-SIM items into sd_phone_sim_* stashes.
 local function registerHooks()
     local watched = { [config.Sim.SimItem] = true }
     for item in pairs(siminv.phoneColors) do watched[item] = true end
     pcall(function()
         exports.ox_inventory:registerHook('swapItems', function(payload)
-            if not watched[payload.fromSlot and payload.fromSlot.name or ''] then return end
+            local fromName = payload.fromSlot and payload.fromSlot.name or ''
+            local toInv = payload.toInventory
+            local fromInv = payload.fromInventory
+
+            -- SIM tray whitelist: only sim_card may enter a phone's tray stash.
+            if siminv.isSimStash(toInv) and fromName ~= '' and fromName ~= config.Sim.SimItem then
+                return false
+            end
+
+            local touched = watched[fromName]
+                or siminv.isSimStash(toInv)
+                or siminv.isSimStash(fromInv)
+            if not touched then return end
+
             SetTimeout(0, function()
                 session.invalidate(nil)
                 local src = tonumber(payload.source)
@@ -162,12 +175,16 @@ local function toast(source, description, kind)
 end
 
 -- Using a sim_card: metadata mode installs it into the first phone without service (consuming
--- the item); container mode reads the number back (installation is dragging it into the tray).
--- A blank card (spawned raw by any shop or script) self-activates with a fresh minted number.
--- Built-in-numbers mode has no SIM items at all, so the usable item never registers (config
--- gate, not state: registration happens at load, before the boot thread flips the flags).
+-- the item); container mode activates blank cards and tells the player to use the SIM Tray
+-- button (installation is dragging it into the tray). Built-in-numbers mode has no SIM items.
 if config.Sim.BuiltInNumbers ~= true then
-inv.registerUsable(config.Sim.SimItem, function(source, itemArg, _invArg, slotArg)
+
+---Activates a blank SIM and/or installs it, shared by the ox usable export and the client
+---export net event. `itemArg`/`slotArg` follow the usable-item callback shapes.
+---@param source number
+---@param itemArg any
+---@param slotArg any
+local function handleSimUse(source, itemArg, slotArg)
     local slot, number = usedSim(source, itemArg, slotArg)
     local blank = number == nil
     if blank and (config.Sim.ActivateBlankSims == false or not slot) then
@@ -175,19 +192,22 @@ inv.registerUsable(config.Sim.SimItem, function(source, itemArg, _invArg, slotAr
         return
     end
 
-    if state.mode == 'container' then
+    -- Treat configured container mode as container even if boot hasn't flipped state.mode yet.
+    local containerMode = state.mode == 'container'
+        or (config.Sim.UseContainers and siminv.isOx() and not state.builtin)
+
+    if containerMode then
         if blank then
-            -- Swap the blank item for one stamped with the freshly registered number.
             number = simStore.create({})
             if not number or not siminv.takeSimItem(source, slot) or not siminv.giveSimItem(source, number) then
                 toast(source, 'Could not activate the SIM card.', 'error')
                 return
             end
-            toast(source, ('SIM activated - your number is %s. Right-click a phone to open its SIM tray.')
+            toast(source, ('SIM activated - your number is %s. Use the phone\'s "SIM Tray" inventory button to insert it.')
                 :format(util.formatNumber(number)), 'success')
             return
         end
-        toast(source, ('SIM number: %s. Right-click a phone to open its SIM tray.')
+        toast(source, ('SIM number: %s. Use the phone\'s "SIM Tray" inventory button to insert it.')
             :format(util.formatNumber(number)), 'inform')
         return
     end
@@ -209,7 +229,6 @@ inv.registerUsable(config.Sim.SimItem, function(source, itemArg, _invArg, slotAr
         return
     end
 
-    -- Minted only after the phone checks above, so a failed use never orphans a number.
     if blank then
         number = simStore.create({})
         if not number then
@@ -223,7 +242,6 @@ inv.registerUsable(config.Sim.SimItem, function(source, itemArg, _invArg, slotAr
         return
     end
     if not siminv.setPhoneSim(source, target.slot, number) then
-        -- The refund keeps the minted number: an activated SIM stays activated.
         siminv.giveSimItem(source, number)
         toast(source, 'Could not install the SIM card.', 'error')
         return
@@ -232,7 +250,22 @@ inv.registerUsable(config.Sim.SimItem, function(source, itemArg, _invArg, slotAr
     session.push(source)
     toast(source, (blank and 'SIM activated and installed - your number is %s.'
         or 'SIM installed - your number is %s.'):format(util.formatNumber(number)), 'success')
+end
+
+inv.registerUsable(config.Sim.SimItem, function(source, itemArg, _invArg, slotArg)
+    handleSimUse(source, itemArg, slotArg)
 end)
+
+---Client export path (ox client.export on sim_card).
+RegisterNetEvent('sd-phone:server:useSimItem', function(slot)
+    local source = source
+    slot = tonumber(slot)
+    if not slot then return end
+    local row = inv.getSlot(source, slot)
+    if not row or row.name ~= config.Sim.SimItem then return end
+    handleSimUse(source, { slot = slot, name = row.name, metadata = row.metadata }, slot)
+end)
+
 end
 
 ---@type table<number, number> Last requestPush per source (GetGameTimer ms); floods are dropped.
@@ -255,6 +288,22 @@ end)
 
 AddEventHandler('playerDropped', function()
     lastRequestPush[source] = nil
+end)
+
+---Opens the SIM tray stash for a phone inventory slot (ox container-mode). Migrates any legacy
+---nested container onto the per-device stash first so USE can open the phone UI instead.
+lib.callback.register('sd-phone:server:sim:openTray', function(source, payload)
+    if not state.active or state.mode ~= 'container' then
+        return util.fail('SIM trays are not enabled')
+    end
+    local slot = type(payload) == 'table' and tonumber(payload.slot) or tonumber(payload)
+    local ok, err = siminv.openSimTray(source, slot)
+    if not ok then
+        if err == 'no_phone' then return util.fail('That is not a phone.') end
+        if err == 'no_device' then return util.fail('Could not identify this phone.') end
+        return util.fail('Could not open the SIM tray.')
+    end
+    return util.ok()
 end)
 
 ---The player's SIM panel snapshot for Settings -> SIM & Backup. Drops the session cache first

@@ -174,15 +174,16 @@ Either mode: the number follows the SIM, and Cloud Backup carries a character's 
    - `/givesim <playerId>` (admin) — a pre-activated SIM with a fresh number.
    - `/givesim <playerId> bind` — a **character-bound** SIM: it carries the player's existing number and their existing phone data, so servers switching the feature on lose nothing.
    - From another resource: `exports['sd-phone']:giveSimCard(source, { citizenid = cid })` for character-bound SIMs, or `{ number = '2085550123' }` to hardcode a specific number.
-3. Phones handed out **before** enabling the feature keep working as items, but in container mode they have no SIM tray until re-issued.
+3. Phones handed out **before** enabling tray mode keep working; the first resolve migrates any legacy nested ox container onto the per-device SIM stash automatically.
 
 ### Two attach modes
 
 | | `UseContainers = false` (default, universal) | `UseContainers = true` (ox_inventory only) |
 |---|---|---|
-| Install SIM | **Use the sim_card item** — it's consumed and written onto your phone | Right-click/use the phone → SIM tray opens → drag the SIM in |
+| Install SIM | **Use the sim_card item** — it's consumed and written onto your phone | Inventory **"SIM Tray"** button → drag the SIM in (activate blank cards by using them first) |
 | Eject SIM | Settings → **SIM & Backup** → *Eject SIM Card* (returns the item, number intact) | Drag the SIM out of the tray |
-| Using the phone item | Opens the phone UI | Opens the SIM tray (ox intercepts container items); the phone UI opens via the keybind (default F1) |
+| Using the phone item | Opens the phone UI | Opens the phone UI (marks that phone active; persisted across restarts) |
+| Open SIM tray | n/a | Inventory button **"SIM Tray"** on the phone item |
 | Backends | every supported backend below | ox_inventory |
 
 Supported backends (via the slot-level bridge API in `bridge/server/inventory.lua`): **ox_inventory**, **qb-inventory**, **ps-inventory**, **lj-inventory**, **qs-inventory(-pro)**, **tgiann-inventory**, **codem-inventory**, **origen_inventory**, **jaksam_inventory**, plus a framework-native fallback for QBCore setups without a dedicated inventory. Plain ESX inventory has no item metadata and cannot support unique phones.

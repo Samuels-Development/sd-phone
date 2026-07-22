@@ -2727,7 +2727,7 @@
     "simEjectConfirm": "Eject",
     "simEjectMessage": "The SIM card returns to your inventory and this phone loses service until a SIM is installed again.",
     "simEjectTitle": "Eject SIM Card?",
-    "simFooterContainer": "Your number lives on the SIM card in this phone. Open the phone in your inventory to swap the SIM.",
+    "simFooterContainer": "Your number lives on the SIM card in this phone. Use the SIM Tray button on the phone in your inventory to swap the SIM.",
     "simFooterMetadata": "Your number lives on the SIM card installed in this phone. Use a SIM card item to install it.",
     "simInstalled": "Installed",
     "simNone": "No SIM",
