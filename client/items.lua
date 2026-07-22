@@ -27,7 +27,7 @@ end
 
 ---ox_inventory buttons[].action(slot) / export: opens the SIM tray for that phone slot.
 ---Only meaningful when UseContainers is on and the item def includes the SIM Tray button
----(see configs/ox_inventory_items.lua — two item variants).
+---(see docs/ox_inventory_items.lua — two item variants).
 ---@param slotOrNil number|nil slot when called from buttons[].action
 ---@param context { slot?: number }|nil optional context from export-style calls
 local function openSimTray(slotOrNil, context)

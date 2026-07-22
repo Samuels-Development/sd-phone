@@ -124,7 +124,7 @@ Full guide: [docs.samueldev.shop/resources/phone/installation](https://docs.samu
 **Dependencies:** [ox_lib](https://github.com/CommunityOx/ox_lib) · [oxmysql](https://github.com/CommunityOx/oxmysql) · [sd-phone-props](https://github.com/Samuels-Development/sd-phone-props) (streams the in-hand phone models)
 
 1. Drop `sd-phone` and [`sd-phone-props`](https://github.com/Samuels-Development/sd-phone-props) into your resources folder and ensure them after `ox_lib` and `oxmysql`. Database tables create themselves on first boot.
-2. Add the phone items to your inventory, one per frame colour (`phone_black`, `phone_blue`, `phone_green`, `phone_orange`, `phone_pink`, `phone_purple`, `phone_red`, `phone_yellow`). Ready-made ox_inventory definitions and item icons are in the [installation docs](https://docs.samueldev.shop/resources/phone/installation); the icons ship in this repo's `images/` folder. Players can also open with the keybind (default F1), gated on owning a phone item.
+2. Add the phone items to your inventory, one per frame colour (`phone_black`, `phone_blue`, `phone_green`, `phone_orange`, `phone_pink`, `phone_purple`, `phone_red`, `phone_yellow`). Ready-made ox_inventory definitions live in [`docs/ox_inventory_items.lua`](docs/ox_inventory_items.lua) (and the [installation docs](https://docs.samueldev.shop/resources/phone/installation)); item icons ship in this repo's `images/` folder. Players can also open with the keybind (default F1), gated on owning a phone item.
 3. Set your API keys in `configs/server/apikeys.lua`: a [Fivemanage](https://refer.fivemanage.com/samuel) token of type **Media** in `FivemanageMedia` (required for the Camera, Photos and Voice Memos apps to upload), and optionally a GIPHY key for the Messages GIF picker.
 
 **Download the [latest release](https://github.com/Samuels-Development/sd-phone/releases)** (the packaged `sd-phone-*.zip`), not the green *Code -> Download ZIP*. The release zip carries the compiled UI and runs as-is; the source zip is code only and has no `web/build/`, so the phone opens blank.
@@ -155,7 +155,7 @@ Either mode: the number follows the SIM, and Cloud Backup carries a character's 
 
 ### Setup
 
-1. Enable the feature in `configs/uniqueandsim.lua` and add the SIM item to your inventory (ox_inventory example; not needed with `BuiltInNumbers`):
+1. Enable the feature in `configs/uniqueandsim.lua` and copy the matching phone + `sim_card` defs from [`docs/ox_inventory_items.lua`](docs/ox_inventory_items.lua) into ox_inventory (SECTION A if `UseContainers = true`, SECTION B otherwise; skip SIMs when using `BuiltInNumbers`). Minimal SIM-only example:
 
    ```lua
    ['sim_card'] = {
@@ -164,6 +164,7 @@ Either mode: the number follows the SIM, and Cloud Backup carries a character's 
        stack = false,
        close = true,
        consume = 0, -- required: sd-phone consumes the item itself on install
+       client = { export = 'sd-phone.useSimCard' },
        server = { export = 'sd-phone.useSim_card' },
    },
    ```

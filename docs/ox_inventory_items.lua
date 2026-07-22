@@ -1,6 +1,5 @@
--- ox_inventory item definitions for sd-phone unique phones.
--- Copy the matching block into ox_inventory/data/items.lua (one phone colour shown;
--- duplicate for phone_blue / phone_green / … with the same shape).
+-- docs/ox_inventory_items.lua — copy-paste templates for ox_inventory/data/items.lua
+-- (not loaded by the resource; reference only).
 --
 -- Pick EXACTLY one phone variant to match configs/uniquephones.lua:
 --
