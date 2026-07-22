@@ -278,7 +278,7 @@ function ConvRow({ conv, editing, selected, onOpen, onToggleSelect }: {
                         <ChevronRight className="h-[18px] w-[18px] text-black/28 dark:text-white/28" strokeWidth={2.5} />
                     </div>
                 </div>
-                <span className="block truncate text-[17px] text-black/50 dark:text-white/50 leading-snug mt-[1px]">
+                <span className={`line-clamp-2 text-[17px] leading-snug mt-[1px] ${unread ? 'text-black/75 dark:text-white/80' : 'text-black/60 dark:text-white/65'}`}>
                     {preview}
                 </span>
             </div>

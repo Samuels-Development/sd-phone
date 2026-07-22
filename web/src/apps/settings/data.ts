@@ -44,7 +44,7 @@ export function getSettingsGroups(): SettingsGroup[] {
         {
             id: 'alerts',
             rows: [
-                { id: 'notifications',  icon: 'Bell',    iconBg: '#ff453a', label: t('settings.notifications', 'Notifications'),  subtitle: t('settings.notificationsSub', 'Choose which apps can send notifications') },
+                { id: 'notifications',  icon: 'Bell',    iconBg: '#ff453a', label: t('settings.notifications', 'Notifications'),  subtitle: t('settings.notificationsSub', 'Choose which apps can notify you') },
                 { id: 'sound-haptics',  icon: 'Volume2', iconBg: '#ff375f', label: t('settings.soundHaptics', 'Sound & Haptics'), subtitle: t('settings.soundHapticsSub', 'Change sounds and vibrations') },
             ],
         },
