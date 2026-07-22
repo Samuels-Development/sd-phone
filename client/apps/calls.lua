@@ -29,7 +29,8 @@ RegisterNUICallback('sd-phone:call:setVolume', function(data, cb)
 end)
 
 ---Incoming call: forces the phone open, waits briefly for the React tree to mount, then pushes
----the ringing payload.
+---the ringing payload. Unique-phones only deliver this when the dialed number is on the
+---currently active phone (server uses getSourceByIdentifier).
 ---@param data table incoming-call payload from the server
 RegisterNetEvent('sd-phone:client:call:incoming', function(data)
     exports['sd-phone']:open()

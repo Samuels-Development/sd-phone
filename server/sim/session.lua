@@ -392,8 +392,8 @@ function session.identity(source)
     return s and s.identity or nil
 end
 
----Every identity reachable on this player - one per carried SIM. A player with two SIM'd
----phones in their pocket receives calls/messages addressed to either number.
+---Every identity this player carries (one per SIM'd / device phone). Still useful for inventory
+---scans and admin tooling; live reachability uses the active identity only.
 ---@param source number player server id
 ---@return table<string, true> identities
 function session.identities(source)

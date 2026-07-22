@@ -32,7 +32,7 @@ registerLbExport('CreateCall', function(caller, callee, options)
     local src = tonumber(caller.source)
     if not src then
         local cid = settings.getCitizenByNumber(caller.phoneNumber)
-        src = cid and player.getAnySourceByIdentifier(cid) or nil
+        src = cid and player.getSourceByIdentifier(cid) or nil
     end
     if not src or not GetPlayerName(src) then return nil end
 

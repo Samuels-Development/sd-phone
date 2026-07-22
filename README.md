@@ -190,7 +190,7 @@ Supported backends (via the slot-level bridge API in `bridge/server/inventory.lu
 
 ### Multiple phones & SIMs
 
-A player can carry **several phones, each with its own SIM**. Whichever phone they open (use the item, or the keybind's last-used colour) is the **active** one — outgoing calls and messages act as that phone's number. All carried SIM'd phones stay **reachable**: a call or text to any of their numbers reaches the player, even while another phone is active. Settings → SIM & Backup lists the other phones on you.
+A player can carry **several phones, each with its own SIM**. Whichever phone they open (use the item, or the keybind's last-used colour) is the **active** one — outgoing calls, messages, notifications and live UI all act as that phone only (same as ng-phone equipped-line behaviour). A number on a pocketed phone is unreachable and silent until you open/equip that phone; data is still stored and catches up on next open. Settings → SIM & Backup lists the other phones on you.
 
 ### What players should know
 

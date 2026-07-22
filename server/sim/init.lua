@@ -33,22 +33,16 @@ function player.getIdentifier(source)
     return session.identity(source)
 end
 
--- Reachability: a player is "online as" EVERY identity whose SIM they carry, not just the
--- active phone's - calls addressed to any of their numbers ring them (a pocketed phone rings).
+-- Active-phone-only reachability (ng-phone equipped-line behaviour): a player is only
+-- "online as" the phone they are currently acting as. Pocketed SIMs stay dark for calls,
+-- live UI pushes, and notifications until that phone is opened/equipped.
 local baseGetAnySource = player.getAnySourceByIdentifier
 function player.getAnySourceByIdentifier(citizenid)
     if not state.active then return baseGetAnySource(citizenid) end
-    if not citizenid or citizenid == '' then return nil end
-    for _, src in ipairs(GetPlayers()) do
-        local s = tonumber(src)
-        if s and session.hasIdentity(s, citizenid) then return s end
-    end
-    return nil
+    return player.getSourceByIdentifier(citizenid)
 end
 
--- Live-UI delivery: every push resolved through this lands only when `citizenid` is the phone
--- the player is currently acting as. A push for the OTHER phone in their pocket is skipped -
--- its data is already stored, and that phone surfaces it (threads, badges) on its next open.
+-- Live-UI delivery + live calls + SMS banners: only when `citizenid` is the active phone.
 local baseGetSource = player.getSourceByIdentifier
 function player.getSourceByIdentifier(citizenid)
     if not state.active then return baseGetSource(citizenid) end
@@ -67,7 +61,8 @@ function player.onlineCidMap()
     for _, src in ipairs(GetPlayers()) do
         local s = tonumber(src)
         if s then
-            for identity in pairs(session.identities(s)) do out[identity] = s end
+            local identity = session.identity(s)
+            if identity then out[identity] = s end
         end
     end
     return out

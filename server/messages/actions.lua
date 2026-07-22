@@ -26,7 +26,7 @@ local cfg = config.Messages
 local actions = {}
 
 ---@type table Notification routing (server.notifications.init): identity-addressed banners
----incl. the pocketed-phone (carried, not active) transient buzz.
+---(active phone only under unique phones).
 local notifications = require 'server.notifications.init'
 
 local util = require 'server.util'
@@ -423,18 +423,9 @@ local function sendDirect(source, cid, myNumber, target, kind, body, meta, ts, m
                 muted        = false,
             })
             notify(targetSrc, participant.name, previewFor(kind, body, meta))
-        elseif not withheld then
-            -- Recipient identity sits on a phone in someone's pocket (carried, not active):
-            -- transient colour-tagged buzz, no thread push - that phone catches up on open.
-            local theirContacts = contactMapFor(targetCid)
-            local participant   = resolveParticipant(myNumber, theirContacts[myNumber])
-            notifications.notifyCid(targetCid, {
-                appId = 'messages',
-                title = participant.name,
-                body  = previewFor(kind, body, meta),
-                time  = 'now',
-            })
         end
+        -- If the recipient's identity is only on a pocketed (non-active) phone, no live push
+        -- and no banner: the message is stored and that phone catches up when equipped.
     end
 
     -- First-party send announcement (1:1 shape).
