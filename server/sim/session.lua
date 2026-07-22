@@ -158,8 +158,14 @@ local function resolveDevice(source, phone, number)
 
     if not identity then
         if number then
+            -- Adoption is a ONE-SHOT grandfathering step: the first phone to carry a legacy SIM
+            -- inherits its profile, but claimAdoption atomically binds the card so a second phone
+            -- that later receives the same SIM mints a fresh device identity (number, not data).
             local simIdentity = simStore.ensureRegistered(number, realCid)
-            if simIdentity and settingsStore.hasData(simIdentity) then identity = simIdentity end
+            if simIdentity and settingsStore.hasData(simIdentity)
+                and simStore.claimAdoption(number, simIdentity) then
+                identity = simIdentity
+            end
         end
         identity = identity or ('device:' .. util.newId(16))
         dirty = true

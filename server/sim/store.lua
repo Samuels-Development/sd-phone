@@ -19,11 +19,19 @@ function store.ensureSchema()
             number     VARCHAR(20) NOT NULL,
             identity   VARCHAR(64) NOT NULL,
             owner_cid  VARCHAR(64) NULL,
+            adopted_by VARCHAR(64) NULL,
             created_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (number),
             INDEX idx_phone_sim_identity (identity)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
+    local hasAdoptedBy = MySQL.scalar.await([[
+        SELECT COUNT(*) FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'phone_sim_cards' AND column_name = 'adopted_by'
+    ]])
+    if (tonumber(hasAdoptedBy) or 0) == 0 then
+        MySQL.query.await('ALTER TABLE phone_sim_cards ADD COLUMN adopted_by VARCHAR(64) NULL')
+    end
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_cloud_backups (
             citizenid  VARCHAR(64) NOT NULL,
@@ -146,6 +154,21 @@ function store.ensureRegistered(number, activatorCid)
         row.owner_cid = activatorCid
     end
     return row.identity
+end
+
+---One-shot claim of a SIM's legacy profile for device-mode grandfathering: atomically stamps
+---`adopted_by` on the card, succeeding only for the FIRST phone to adopt it. A second phone that
+---later receives the same SIM sees the claim and gets the number, not the data.
+---@param number string bare-digit SIM number
+---@param identity string data identity being adopted (the card's legacy sim:/citizenid identity)
+---@return boolean claimed true only when THIS call took the (previously unclaimed) card
+function store.claimAdoption(number, identity)
+    local digits = util.digits(number)
+    if digits == '' or not identity or identity == '' then return false end
+    local affected = MySQL.update.await(
+        'UPDATE phone_sim_cards SET adopted_by = ? WHERE number = ? AND adopted_by IS NULL',
+        { identity, digits })
+    return (tonumber(affected) or 0) > 0
 end
 
 ---Reads a character's cloud-backup pointer, or nil when never enabled. Read-only.
