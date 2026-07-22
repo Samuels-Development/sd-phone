@@ -64,8 +64,10 @@ local phoneState = {
 ---@type boolean True while another resource has disabled the phone.
 local phoneDisabled = false
 
----@type { hasSim: boolean, number: string|nil }|nil Last SIM snapshot from the server; nil
----while unique phones are off (stock behaviour).
+---@type { hasSim: boolean, number: string|nil, device: boolean|nil, profile: string|nil }|nil
+---Last SIM snapshot from the server; nil while unique phones are off (stock behaviour). `device`
+---marks DeviceIdentity mode (phone opens without a SIM, "No Service" instead of a No-SIM wall);
+---`profile` is the device identity the UI namespaces per-phone state under in that mode.
 local currentSimState = nil
 
 ---@type string Current frame colour; always one of FRAME_COLORS.
@@ -345,6 +347,8 @@ local function OpenPhone()
                 enabled = true,
                 hasSim  = currentSimState.hasSim == true,
                 number  = currentSimState.number,
+                device  = currentSimState.device == true,
+                profile = currentSimState.profile,
             } or { enabled = false },
         },
     })
@@ -362,17 +366,21 @@ local function OpenPhone()
     -- on screen (the home screen sits behind the lockscreen anyway) and push them in as a
     -- follow-up, so the round-trip never gates the reveal. The NUI paints instantly from its own
     -- fallbacks and reconciles when this lands.
-    CreateThread(function()
-        local installedRes = lib.callback.await('sd-phone:server:apps:list', false)
-        if not phoneState.open then return end
-        SendNUIMessage({
-            action = 'sd-phone:apps',
-            data   = {
-                installedApps = (installedRes and installedRes.success and installedRes.data and installedRes.data.installed) or {},
-                homeLayout    = (installedRes and installedRes.success and installedRes.data and installedRes.data.layout) or nil,
-            },
-        })
-    end)
+    CreateThread(PushInstalledApps)
+end
+
+---Fetches the acting profile's installed apps + home layout and pushes them into the open NUI.
+---Runs as the open follow-up and again after a cloud-backup restore replaces the profile data.
+function PushInstalledApps()
+    local installedRes = lib.callback.await('sd-phone:server:apps:list', false)
+    if not phoneState.open then return end
+    SendNUIMessage({
+        action = 'sd-phone:apps',
+        data   = {
+            installedApps = (installedRes and installedRes.success and installedRes.data and installedRes.data.installed) or {},
+            homeLayout    = (installedRes and installedRes.success and installedRes.data and installedRes.data.layout) or nil,
+        },
+    })
 end
 
 ---Closes the phone NUI, announces the close, releases NUI focus, and drops the pose unless the
@@ -434,14 +442,22 @@ RegisterKeyMapping('+sdphone_look', 'Phone: Hold to look around', 'keyboard', co
 ---@param color string|nil frame colour of the used item variant
 ---@param sim { hasSim: boolean, number: string|nil }|nil SIM snapshot (kept for signature compat; the server now defers and sends nil)
 ---@param simPending boolean|nil true while the server resolves the SIM in the background (unique phones)
-RegisterNetEvent('sd-phone:client:openFromItem', function(color, sim, simPending)
+---@param deviceHint string|nil the used phone's device identity, read synchronously from its
+---item metadata: a DIFFERENT device than the last snapshot seeds the switch at reveal time
+RegisterNetEvent('sd-phone:client:openFromItem', function(color, sim, simPending, deviceHint)
     if color and FRAME_COLORS[color] then currentFrameColor = color end
     if sim then
         currentSimState = { hasSim = sim.hasSim == true, number = sim.number }
     elseif simPending then
-        -- SIM resolve is still running server-side; keep the last snapshot (optimistic
-        -- has-service on a cold start) until the simState push corrects it.
-        currentSimState = currentSimState or { hasSim = true, number = nil }
+        if deviceHint and not (currentSimState and currentSimState.profile == deviceHint) then
+            -- Another phone than last time: seed its profile now so the NUI tears the previous
+            -- one down during the reveal; the deferred simState push still reconciles the rest.
+            currentSimState = { hasSim = true, number = nil, device = true, profile = deviceHint }
+        else
+            -- SIM resolve is still running server-side; keep the last snapshot (optimistic
+            -- has-service on a cold start) until the simState push corrects it.
+            currentSimState = currentSimState or { hasSim = true, number = nil }
+        end
     else
         currentSimState = nil
     end
@@ -450,22 +466,30 @@ end)
 
 ---Live SIM state push (SIM inserted/ejected/moved). Keeps the local snapshot fresh and, while
 ---the phone is open, swaps the NUI's "No SIM" screen in or out immediately.
----@param state { enabled: boolean, hasSim: boolean, number: string|nil }
+---@param state { enabled: boolean, hasSim: boolean, number: string|nil, device: boolean|nil, profile: string|nil }
 RegisterNetEvent('sd-phone:client:simState', function(state)
     if type(state) ~= 'table' then return end
-    currentSimState = state.enabled and { hasSim = state.hasSim == true, number = state.number } or nil
+    currentSimState = state.enabled and {
+        hasSim  = state.hasSim == true,
+        number  = state.number,
+        device  = state.device == true,
+        profile = state.profile,
+    } or nil
     -- The active SIM'd phone's colour wins: a pending keybind open answered with the owned
     -- colour before the resolve, so correct the frame, the hand prop and the UI rail here.
-    if state.color and FRAME_COLORS[state.color] and state.color ~= currentFrameColor then
-        currentFrameColor = state.color
-        if shouldHold() then
-            removePhoneProp()
-            attachPhoneProp(PlayerPedId())
-            broadcastHoldState()
+    if state.color and FRAME_COLORS[state.color] then
+        if state.color ~= currentFrameColor then
+            currentFrameColor = state.color
+            if shouldHold() then
+                removePhoneProp()
+                attachPhoneProp(PlayerPedId())
+                broadcastHoldState()
+            end
         end
-        if phoneState.open then
-            SendNUIMessage({ action = 'sd-phone:frameColor', data = { color = state.color } })
-        end
+        -- ALWAYS forwarded (even while closed, even when the client already believed this
+        -- colour): the NUI boots with its own default and has no other pre-open sync point,
+        -- so a skipped forward leaves closed-shell peeks wearing the wrong frame.
+        SendNUIMessage({ action = 'sd-phone:frameColor', data = { color = state.color } })
     end
     if phoneState.open then
         SendNUIMessage({
@@ -474,9 +498,20 @@ RegisterNetEvent('sd-phone:client:simState', function(state)
                 enabled = state.enabled == true,
                 hasSim  = state.hasSim == true,
                 number  = state.number,
+                device  = state.device == true,
+                profile = state.profile,
             },
         })
     end
+end)
+
+---Cloud-backup restore replaced the acting profile's data in place: the NUI drops every cached
+---trace (kept-alive apps, hydrated settings, data stores) and rehydrates. Forwarded even while
+---the phone is closed - the NUI keeps running hidden and would otherwise reopen on stale state.
+---The installed-apps follow-up re-runs too, since the restore changes apps + home layout.
+RegisterNetEvent('sd-phone:client:profileReset', function()
+    SendNUIMessage({ action = 'sd-phone:profileReset' })
+    if phoneState.open then CreateThread(PushInstalledApps) end
 end)
 
 ---Admin wipe (server /wipemyphone): closes the phone and tells the React app to clear its local
@@ -746,9 +781,21 @@ local function pushCharacterLoaded()
     SESSION_START_MS = GetCloudTimeAsInt() * 1000
     SendNUIMessage({ action = 'sd-phone:client:characterLoaded' })
     SendNUIMessage({ action = 'sd-phone:session', data = { startMs = SESSION_START_MS } })
+    -- Unique phones: ask for a SIM snapshot once the inventory has settled, so the active
+    -- phone's frame colour (closed-shell peeks, hand prop) is right before the first open.
+    SetTimeout(2000, function() TriggerServerEvent('sd-phone:server:sim:requestPush') end)
 end
 RegisterNetEvent('QBCore:Client:OnPlayerLoaded', pushCharacterLoaded)
 RegisterNetEvent('esx:playerLoaded', pushCharacterLoaded)
+
+---Resource restart with the character already in: the framework load events above won't
+---re-fire, but the freshly reloaded NUI still needs the character signal and a SIM snapshot
+---(closed-shell frame colour before the first open). On a fresh join this fires before any
+---character exists - the server ignores the SIM request then, and the real load event follows.
+AddEventHandler('onClientResourceStart', function(resource)
+    if resource ~= GetCurrentResourceName() then return end
+    SetTimeout(5000, pushCharacterLoaded)
+end)
 
 ---Resource-stop cleanup: releases NUI focus, deletes props, clears the statebag, and stops the
 ---hold anim.

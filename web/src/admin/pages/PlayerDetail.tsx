@@ -333,7 +333,7 @@ function SimCard({ ov, toast, reload }: {
                 {sim.backup
                     ? <span className="inline-flex items-center gap-1.5">
                         {sim.backup.enabled ? <Badge tone="green">On</Badge> : <Badge>Off</Badge>}
-                        <span className="font-mono text-[12px] text-zinc-500">{sim.backup.identity}</span>
+                        <span className="font-mono text-[12px] text-zinc-500">{sim.backup.profiles} phone{sim.backup.profiles === 1 ? '' : 's'}</span>
                         {sim.backup.hasPassword && <Badge>password set</Badge>}
                     </span>
                     : 'Never enabled'}

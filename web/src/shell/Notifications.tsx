@@ -15,6 +15,14 @@ export interface NotificationItem {
     time?:  string;
     appId?: string;
     link?:  Record<string, unknown>;
+    /** Pocket buzz from a carried-but-not-active phone: transient banner only, never this
+     *  phone's lockscreen stack or badges. */
+    otherPhone?: boolean;
+    /** Pocket buzz: the buzzing phone's frame colour, tinting the closed-shell peek. */
+    phoneColor?: string;
+    /** Pocket buzz: the buzzing phone's profile key - the banner parks on that profile's
+     *  banked lockscreen stack so it shows when THAT phone is next opened. */
+    profileKey?: string;
 }
 
 const SHOW_MS = 5000;
@@ -28,10 +36,13 @@ export function NotifIcon({ item, size = 38 }: { item: NotificationItem; size?: 
             </span>
         );
     }
-    if (item.app) {
+    // Pocket buzzes label the SOURCE as "<Color> Phone" in `app`; the glyph must still be the
+    // originating app's, so they resolve via appId first.
+    const icon = item.otherPhone ? (item.appId ?? item.app) : item.app;
+    if (icon) {
         return (
             <span className="squircle shrink-0" style={style}>
-                <AppIconSVG icon={item.app} size={size} />
+                <AppIconSVG icon={icon} size={size} />
             </span>
         );
     }

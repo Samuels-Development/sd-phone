@@ -100,6 +100,9 @@ function store.ensureSchema()
     if not columnExists('phone_settings', 'reopen_app') then
         MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN reopen_app TINYINT(1) NULL')
     end
+    if not columnExists('phone_settings', 'setup_done') then
+        MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN setup_done TINYINT(1) NULL')
+    end
     for _, col in ipairs({
         { 'card_name',    'VARCHAR(64) NULL'  },
         { 'card_avatar',  'VARCHAR(512) NULL' },
@@ -376,6 +379,24 @@ function store.setPhoneNumber(citizenid, number)
         INSERT INTO phone_settings (citizenid, phone_number) VALUES (?, ?)
         ON DUPLICATE KEY UPDATE phone_number = VALUES(phone_number)
     ]], { citizenid, clean })
+end
+
+---Clears a phone identity's number mirror (device mode: a phone whose SIM was pulled has no
+---number and must report none). A no-op when the row does not exist.
+---@param citizenid string phone data identity
+function store.clearPhoneNumber(citizenid)
+    if not citizenid or citizenid == '' then return end
+    MySQL.update.await('UPDATE phone_settings SET phone_number = NULL WHERE citizenid = ?', { citizenid })
+end
+
+---True when a phone identity already has a settings row (used by device-mode identity minting to
+---decide whether to ADOPT an existing SIM/character profile instead of opening a blank one).
+---Read-only.
+---@param citizenid string phone data identity
+---@return boolean hasData
+function store.hasData(citizenid)
+    if not citizenid or citizenid == '' then return false end
+    return MySQL.scalar.await('SELECT 1 FROM phone_settings WHERE citizenid = ? LIMIT 1', { citizenid }) ~= nil
 end
 
 ---Returns a player's number, generating and saving a unique one on first access; tries 20
@@ -808,6 +829,26 @@ function store.getHour24(citizenid)
         return row.hour24 == true or tonumber(row.hour24) == 1
     end
     return defaultHour24()
+end
+
+---True once this profile finished the first-run setup. Server-side twin of the client's
+---localStorage flag, so a cleared FiveM cache or another PC never re-runs Hello. Read-only.
+---@param citizenid string framework per-character id
+---@return boolean done
+function store.getSetupDone(citizenid)
+    if not citizenid or citizenid == '' then return false end
+    local row = MySQL.single.await('SELECT setup_done FROM phone_settings WHERE citizenid = ?', { citizenid })
+    return row ~= nil and (row.setup_done == true or tonumber(row.setup_done) == 1)
+end
+
+---Marks this profile's first-run setup as completed (upsert, one-way).
+---@param citizenid string framework per-character id
+function store.setSetupDone(citizenid)
+    if not citizenid or citizenid == '' then return end
+    MySQL.update.await([[
+        INSERT INTO phone_settings (citizenid, setup_done) VALUES (?, 1)
+        ON DUPLICATE KEY UPDATE setup_done = 1
+    ]], { citizenid })
 end
 
 ---Persists a player's 24-hour time preference (upsert), coerced to a strict boolean.

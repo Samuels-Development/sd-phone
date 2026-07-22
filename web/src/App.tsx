@@ -42,7 +42,8 @@ import { listInstalledApps, installApp, uninstallApp, loadHomeLayout, saveHomeLa
 import { customToAppDef, installedCustomIds, isCustomApp, setCustomInstalled, useCustomApps, useCustomAppsStore } from '@/stores/customAppsStore';
 import { resolveWallpaper } from '@/shell/wallpapers';
 import { NoSimScreen } from '@/shell/NoSimScreen';
-import { useNoSim, useSimStore } from '@/stores/simStore';
+import { useNoService, useNoSim, useSimStore } from '@/stores/simStore';
+import { resetContacts, syncSimNumber } from '@/stores/contactsStore';
 import { playOnce } from '@/apps/settings/tonePlayer';
 import { resolveTone, toneUrl } from '@/apps/settings/tones';
 import { AlarmRinging, AlarmPeekBanner } from '@/apps/clock/AlarmRinging';
@@ -209,6 +210,16 @@ function AppContent() {
     const downloadTimer = useRef<number>();
 
     const noSim = useNoSim();
+    const simEnabled = useSimStore(s => s.enabled);
+    // Unique phones: setup completion lives in a per-profile localStorage namespace, and the
+    // profile arrives via the deferred SIM resolve - AFTER the reveal on a fresh NUI (rejoin).
+    // Until it lands, the bare namespace reads "not completed", so the Hello screen must wait
+    // for the profile or a set-up phone re-runs setup on every rejoin.
+    const [simProfileReady, setSimProfileReady] = useState(false);
+    // Device mode: no SIM means no cellular service, but the phone still opens and works - the
+    // status bar shows "No Service" and only number-dependent actions (call/text) are refused
+    // server-side. (In legacy mode useNoSim drives the full-screen wall instead.)
+    const noService = useNoService();
     // A pulled SIM drops the phone straight back to the (blocked) lock state: no app stays
     // foregrounded and the switcher/control-center close.
     useEffect(() => {
@@ -222,6 +233,10 @@ function AppContent() {
     }, [noSim]);
 
     const [setup, setSetup] = useState<SetupSaved>(() => loadSetup());
+    // Server-side twin of the localStorage flag (phone_settings.setup_done): survives a cleared
+    // FiveM cache / another PC. null = this profile's hydrate hasn't answered yet.
+    const serverSetupDone = useThemeStore(s => s.setupDone);
+    const setupCompleted = setup.completed || serverSetupDone === true;
     // Theme and wallpaper are NOT re-applied from the saved setup on launch. Both
     // persist server-side (phone_settings) and hydrate via settings:get on mount;
     // re-applying the localStorage setup value every launch clobbered the player's
@@ -239,6 +254,8 @@ function AppContent() {
         };
         setSetup(next);
         saveSetup(next);
+        useThemeStore.setState({ setupDone: true });
+        if (isFiveM) void fetchNui('sd-phone:settings:setSetupDone').catch(() => {});
         setTheme(result.theme);
         setWallpaper(result.wallpaper);
         setSecurity(result.pin, result.faceUnlock);
@@ -258,34 +275,75 @@ function AppContent() {
     // drop every trace of the previous profile from the UI (kept-alive apps, cached app
     // logins, hydrated settings). The server never leaks across identities; this stops the
     // client's own memory from doing it. Runs on every open AND on live SIM swaps.
-    const applySimProfile = useCallback((enabled?: boolean, hasSim?: boolean, num?: string) => {
-        const simNumber = (enabled && hasSim && num) || null;
+    // Drops every UI trace of the acting profile: kept-alive apps, cached logins, notification
+    // stacks, data caches, hydrated settings. Visuals reset to stock synchronously so the
+    // previous profile's wallpaper/clock never paint while the fresh hydrate is in flight.
+    // Runs on a phone/SIM switch AND when a cloud-backup restore replaces the data in place.
+    const resetProfileUi = useCallback(() => {
+        try {
+            window.localStorage.removeItem('sd-phone:mail:folderOrder');
+            window.localStorage.removeItem('sd-phone:mail:activeAccount');
+        } catch { /* ignore */ }
+        lastOpenAppRef.current = null;
+        resetAuth();
+        useMusicLibrary.getState().reset();
+        useThemeStore.getState().resetProfileVisuals();
+        useThemeStore.getState().hydrate();
+        useLocaleStore.getState().hydrate();
+        resetContacts();
+        setNotifs([]);
+        setLockNotifs([]);
+        setPeekNotif(null);
+        useBadgeStore.getState().setServer({});
+        if (isFiveM) void fetchNui<Record<string, number>>('sd-phone:badges:get').then(m => useBadgeStore.getState().setServer(m ?? {}));
+        setLocked(true);
+        setCurrentApp(null);
+        setRecentApps([]);
+        setRetained([]);
+        setForegroundKeys({});
+        setSwitcherOpen(false);
+        setSwitcherClosing(false);
+    }, []);
+
+    const applySimProfile = useCallback((enabled?: boolean, hasSim?: boolean, num?: string, device?: boolean, profile?: string) => {
+        // Device mode keys per-phone state off the DEVICE identity (stable across SIM swaps on
+        // one phone); legacy keys off the SIM number. Either way a null key means "don't switch".
+        const key = enabled
+            ? (device ? (profile || null) : ((hasSim && num) || null))
+            : null;
         let switched = false;
-        if (simNumber) {
-            setSetupProfile(simNumber);
-            if (lastSimNumberRef.current && lastSimNumberRef.current !== simNumber) switched = true;
-            lastSimNumberRef.current = simNumber;
+        const prevKey = lastSimNumberRef.current;
+        if (key) {
+            setSetupProfile(key);
+            setSimProfileReady(true);
+            if (prevKey && prevKey !== key) switched = true;
+            lastSimNumberRef.current = key;
+            if (!prevKey) {
+                // First profile application this NUI session (fresh rejoin): collect banners
+                // parked for this phone by pocket buzzes that arrived before its first open.
+                const parked = lockNotifBankRef.current[key];
+                delete lockNotifBankRef.current[key];
+                if (parked && parked.length > 0) {
+                    setLockNotifs(prev => [...prev, ...parked.filter(p => !prev.some(n => n.id === p.id))].slice(0, 5));
+                }
+            }
         }
         if (enabled) setSetup(loadSetup());
         if (switched) {
-            try {
-                window.localStorage.removeItem('sd-phone:mail:folderOrder');
-                window.localStorage.removeItem('sd-phone:mail:activeAccount');
-            } catch { /* ignore */ }
-            lastOpenAppRef.current = null;
-            resetAuth();
-            useMusicLibrary.getState().reset();
-            useThemeStore.getState().hydrate();
-            useLocaleStore.getState().hydrate();
-            setLocked(true);
-            setCurrentApp(null);
-            setRecentApps([]);
-            setRetained([]);
-            setForegroundKeys({});
-            setSwitcherOpen(false);
-            setSwitcherClosing(false);
+            // Each phone keeps its OWN lockscreen stack: bank the outgoing phone's before the
+            // reset wipes it, and bring back whatever the incoming phone held when we last
+            // switched away from it (move semantics - the bank entry is consumed on return).
+            if (prevKey) lockNotifBankRef.current[prevKey] = lockNotifsRef.current;
+            const banked = key ? lockNotifBankRef.current[key] : undefined;
+            if (key) delete lockNotifBankRef.current[key];
+            resetProfileUi();
+            if (banked && banked.length > 0) setLockNotifs(banked);
         }
-    }, []);
+        // After any reset above: paint this profile's last-known wallpaper in the SAME render
+        // batch as the reveal, so the first open never flashes the stock background while the
+        // authoritative hydrate is still in flight.
+        useThemeStore.getState().applyWallpaperProfile(key);
+    }, [resetProfileUi]);
 
     // The framework loaded a character (first join or a switch): per-player settings become
     // resolvable only now, so restart both hydration pulls with a fresh retry budget.
@@ -299,7 +357,8 @@ function AppContent() {
         if (data.locale) useLocaleStore.getState().applyServerDefault(data.locale);   // server default, unless the player already picked their own
         if (data.mailDomain) setMailDomain(data.mailDomain);
         useSimStore.getState().apply(data.sim);
-        applySimProfile(data.sim?.enabled, data.sim?.hasSim, data.sim?.number);
+        applySimProfile(data.sim?.enabled, data.sim?.hasSim, data.sim?.number, data.sim?.device, data.sim?.profile);
+        syncSimNumber(data.sim);
         const nextView: ViewState = {
             apps:          data.apps,
             dock:          data.dock,
@@ -362,8 +421,16 @@ function AppContent() {
 
     useNuiEvent('sd-phone:simState', useCallback((data) => {
         useSimStore.getState().apply(data);
-        applySimProfile(data?.enabled, data?.hasSim, data?.number);
+        applySimProfile(data?.enabled, data?.hasSim, data?.number, data?.device, data?.profile);
+        syncSimNumber(data);
     }, [applySimProfile]));
+
+    // Cloud-backup restore replaced the acting profile's data in place (same identity, new
+    // contents): the same full reset as a phone switch, so no kept-alive app or hydrated
+    // setting keeps showing pre-restore data.
+    useNuiEvent('sd-phone:profileReset', useCallback(() => {
+        resetProfileUi();
+    }, [resetProfileUi]));
 
     useNuiEvent('sd-phone:close', useCallback(() => {
         setLeaving(true);
@@ -640,8 +707,16 @@ function AppContent() {
 
     const [notifs, setNotifs] = useState<NotificationItem[]>([]);
     const [lockNotifs, setLockNotifs] = useState<NotificationItem[]>([]);
+    const lockNotifsRef = useRef(lockNotifs);
+    lockNotifsRef.current = lockNotifs;
+    // Per-profile lockscreen stacks parked while another phone is active (in-memory, like the
+    // stacks themselves): written on switch-away, consumed on switch-back.
+    const lockNotifBankRef = useRef<Record<string, NotificationItem[]>>({});
     const [peek, setPeek] = useState<'in' | 'out' | null>(null);
     const [peekNotif, setPeekNotif] = useState<NotificationItem | null>(null);
+    // Pocket buzz: the buzzing phone's frame colour, so the closed-shell peek wears THAT
+    // phone's rail instead of the last-opened one's. Null = active phone's colour.
+    const [peekColor, setPeekColor] = useState<string | null>(null);
     const peekTimer = useRef<number | undefined>(undefined);
     const [ringingAlarm, setRingingAlarm] = useState<AlarmDef | null>(null);
     const ringingAlarmRef = useRef(ringingAlarm);
@@ -670,19 +745,31 @@ function AppContent() {
         if (phoneOpenRef.current && !lockedRef.current) {
             setNotifs(prev => [item, ...prev.filter(n => n.id !== item.id)].slice(0, 4));
         }
-        setLockNotifs(prev => [item, ...prev.filter(n => n.id !== item.id)].slice(0, 5));
         if (!phoneOpenRef.current && !ringingAlarmRef.current) {
             setPeekNotif(item);
+            setPeekColor(data.otherPhone ? (data.phoneColor ?? null) : null);
             setPeek('in');
             if (peekTimer.current) window.clearTimeout(peekTimer.current);
             peekTimer.current = window.setTimeout(() => setPeek('out'), 4200);
         }
+        const tones = useThemeStore.getState();
+        playOnce(resolveTone('notification', tones.notificationTone, tones.customNotificationTones).url, tones.ringtoneVol / 100);
+        // A pocket buzz belongs to the OTHER phone: transient banner + tone above, and the
+        // item parks on THAT phone's banked lockscreen stack for its next open - never this
+        // phone's live stack or badges.
+        if (data.otherPhone) {
+            const park = data.profileKey;
+            if (park) {
+                const bank = lockNotifBankRef.current;
+                bank[park] = [item, ...(bank[park] ?? []).filter(n => n.id !== item.id)].slice(0, 5);
+            }
+            return;
+        }
+        setLockNotifs(prev => [item, ...prev.filter(n => n.id !== item.id)].slice(0, 5));
         const badgeTarget = asAppId(target);
         if (badgeTarget && badgeTarget !== currentAppRef.current && !SERVER_BADGE_APPS.has(badgeTarget)) {
             useBadgeStore.getState().bump(badgeTarget);
         }
-        const tones = useThemeStore.getState();
-        playOnce(resolveTone('notification', tones.notificationTone, tones.customNotificationTones).url, tones.ringtoneVol / 100);
     }, []));
     const removeNotif = useCallback((id: string) => setNotifs(prev => prev.filter(n => n.id !== id)), []);
     const toggleFlashlight = useCallback(() => {
@@ -715,7 +802,7 @@ function AppContent() {
     }, []);
     useNuiEvent('sd-phone:launchApp', useCallback((data) => {
         const id = asAppId(data?.id);
-        if (!id || !setup.completed) return;
+        if (!id || !setupCompleted) return;
         if (lockedRef.current) {
             pendingCcApp.current = id;
             pendingLaunchLink.current = data.link;
@@ -724,21 +811,21 @@ function AppContent() {
             applyNotifLink(data.link);
             openAppById(id, { x: 0.5, y: 0.5 });
         }
-    }, [setup.completed, applyNotifLink, openAppById]));
+    }, [setupCompleted, applyNotifLink, openAppById]));
     useEffect(() => {
         if (peek !== 'out') return;
         const t = window.setTimeout(() => setPeek(null), 440);
         return () => window.clearTimeout(t);
     }, [peek]);
     useEffect(() => {
-        if (view) { setPeek(null); setPeekNotif(null); if (peekTimer.current) window.clearTimeout(peekTimer.current); }
+        if (view) { setPeek(null); setPeekNotif(null); setPeekColor(null); if (peekTimer.current) window.clearTimeout(peekTimer.current); }
     }, [view]);
 
     useEffect(() => { hydrateAlarms(); }, []);
     const phoneOpen = !!view;
     useEffect(() => { if (phoneOpen) hydrateAlarms(true); }, [phoneOpen]);
     useAutoContrast(
-        phoneOpen && !locked && setup.completed && currentApp !== 'camera',
+        phoneOpen && !locked && setupCompleted && currentApp !== 'camera',
         `${currentApp ?? ''}|${theme}|${locked}`,
     );
 
@@ -1032,16 +1119,17 @@ function AppContent() {
                 {deckLayer}
                 <div key="shell-closed" className={theme === 'dark' ? 'dark' : undefined} data-dark-theme={darkTheme}>
                 {peek && (
-                    <PhoneShell peek={peek} frameColor={frameColor} radioIsland={radioIsland} alarmIsland={{ ringing: !!ringingAlarm, since: ringingSince }}>
+                    <PhoneShell peek={peek} frameColor={peekColor ?? frameColor} radioIsland={radioIsland} alarmIsland={{ ringing: !!ringingAlarm, since: ringingSince }}>
                         <div className="wallpaper absolute inset-0" style={{ backgroundImage: `url(${peekWall})` }} />
                         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/30 via-black/5 to-transparent" />
                         <StatusBar
                             use24h={hour24}
-                            signal={(airplaneMode || noSim) ? 0 : (lv?.signal ?? 4)}
+                            signal={(airplaneMode || noSim || noService) ? 0 : (lv?.signal ?? 4)}
                             showWifi={(airplaneMode || noSim) ? false : ((lv?.showWifi ?? true) && ccWifi)}
                             battery={battery}
                             airplane={airplaneMode}
                             noSim={noSim}
+                            noService={noService}
                             light
                         />
                         {ringingAlarm ? (
@@ -1070,7 +1158,13 @@ function AppContent() {
 
     const canShowSwitcher = recentApps.length > 0 || !!currentApp;
 
-    const showSetup = !setup.completed;
+    // Hello only renders once the answer is trustworthy: the localStorage flag OR the server
+    // flag says completed -> never; unique phones -> wait for the resolved profile; in-game ->
+    // wait for the profile's settings hydrate (serverSetupDone non-null) so a cleared cache
+    // can't flash setup at a phone whose server flag says done.
+    const showSetup = !setupCompleted
+        && (!simEnabled || simProfileReady)
+        && (!isFiveM || serverSetupDone !== null);
 
     const cameraMode = currentApp === 'camera' && !isClosing && !locked;
 
@@ -1132,11 +1226,12 @@ function AppContent() {
                 {!(showSetup && setupHello && !noSim) && (
                     <StatusBar
                         use24h={hour24}
-                        signal={(airplaneMode || noSim) ? 0 : view.signal}
+                        signal={(airplaneMode || noSim || noService) ? 0 : view.signal}
                         showWifi={(airplaneMode || noSim) ? false : (view.showWifi && ccWifi)}
                         battery={battery}
                         airplane={airplaneMode}
                         noSim={noSim}
+                        noService={noService}
                         light={noSim ? true : (showSetup ? false : (cameraMode ? true : (statusLightOverride ?? statusBarAutoLight ?? statusLight)))}
                         controlHint={!showSetup && !cameraMode && !ccOpen && !homeEditing && !noSim}
                         editing={homeEditing && onHomescreen}

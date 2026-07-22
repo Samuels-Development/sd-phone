@@ -45,6 +45,14 @@ export function ContactDetail({ contact, onBack, backLabel = t('phone.contacts',
         return () => cancelAnimationFrame(id);
     }, [animateIn]);
 
+    // `current` is a local copy so edits/favorites reflect instantly, but the parent re-derives
+    // the prop from the live contacts store (My Card's number changes on a SIM swap mid-view) -
+    // sync when the prop CONTENT changes, keeping locally-toggled fields like favorite.
+    const { name, initials, phone, email, address, avatar } = contact;
+    useEffect(() => {
+        setCurrent(c => ({ ...c, name, initials, phone, email, address, avatar }));
+    }, [name, initials, phone, email, address, avatar]);
+
     useAsyncData(() => isNumberBlockedApi(current.phone), [current.phone], { enabled: !minimal, onData: setBlocked });
 
     function onBlockRow() {

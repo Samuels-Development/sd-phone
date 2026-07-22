@@ -81,13 +81,22 @@ local simState = require 'server.sim.state'
 local function RegisterPhoneItems()
     for _, entry in ipairs(config.Phone.Items or {}) do
         inv.registerUsable(entry.item, function(source, itemArg, _invArg, slotArg)
+            local deviceHint
             if simState.active then
                 local usedSlot = (type(itemArg) == 'table' and tonumber(itemArg.slot)) or tonumber(slotArg)
                 require('server.sim.session').setActive(source, { slot = usedSlot, color = entry.color })
+                -- Synchronous metadata peek (no DB): hands the client this phone's device
+                -- identity with the open, so switching phones tears the old profile down AT the
+                -- reveal instead of a server round-trip later.
+                if usedSlot then
+                    local row = inv.getSlot(source, usedSlot)
+                    local md = row and row.metadata
+                    deviceHint = type(md) == 'table' and md.deviceId or nil
+                end
             end
             -- Open immediately: the SIM resolve does inventory scans + awaited DB writes, so it
             -- runs AFTER the reveal and reconciles through the live simState push.
-            TriggerClientEvent('sd-phone:client:openFromItem', source, entry.color, nil, simState.active)
+            TriggerClientEvent('sd-phone:client:openFromItem', source, entry.color, nil, simState.active, deviceHint)
             if simState.active then
                 CreateThread(function() require('server.sim.session').push(source) end)
             end

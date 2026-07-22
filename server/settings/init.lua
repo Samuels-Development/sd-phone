@@ -46,6 +46,7 @@ lib.callback.register('sd-phone:server:settings:get', function(source)
     data.airplaneMode            = store.isAirplane(cid)
     data.hour24                  = store.getHour24(cid)
     data.reopenApp               = store.getReopenApp(cid)
+    data.setupDone               = store.getSetupDone(cid)
     data.theme                   = store.getTheme(cid)
     data.darkTheme               = store.getDarkTheme(cid)
     data.lockClock               = store.getLockClock(cid)
@@ -161,6 +162,15 @@ lib.callback.register('sd-phone:server:settings:setHour24', function(source, pay
     if not cid then return { success = false, message = 'Player not found' } end
     payload = type(payload) == 'table' and payload or {}
     store.setHour24(cid, payload.on == true)
+    return { success = true }
+end)
+
+---Marks the caller's profile as having completed first-run setup (one-way; the wipe path
+---deletes the whole settings row, which is what un-sets it).
+lib.callback.register('sd-phone:server:settings:setSetupDone', function(source)
+    local cid = player.getIdentifier(source)
+    if not cid then return { success = false, message = 'Player not found' } end
+    store.setSetupDone(cid)
     return { success = true }
 end)
 

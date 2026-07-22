@@ -133,7 +133,12 @@ Building from a git clone yourself: `cd web && npm ci && npm run build`. The out
 
 ## Unique Phones & SIM Cards (optional)
 
-Off by default. Flip `Enabled = true` in `configs/simcards.lua` and phone numbers stop belonging to characters — they live on **SIM card items**. Whichever SIM is in a phone decides whose data that phone shows: messages, call log, contacts, photos, app logins, settings — everything. Steal someone's phone with the SIM inside and you're reading *their* phone; without any SIM, a phone opens to a **No SIM** screen with no service and every server action refused.
+Off by default. Flip `Enabled = true` in `configs/simcards.lua` and phone numbers stop belonging to characters — they live on **SIM card items**. A second switch, `DeviceIdentity`, decides who owns the *data*:
+
+- **`DeviceIdentity = true` (default) — the phone owns the data, the SIM only lends a number.** Each phone item gets a persistent identity the first time it's used, and that identity keys everything: messages, call log, contacts, photos, notes, app logins, settings, games. Popping the SIM out just drops your **number and service** — the phone still opens and every non-number app keeps working, the status bar reads **No Service**. Move a SIM to another phone and that phone gets your **number**, not your data. Steal a phone and you get *its* apps behind the owner's lockscreen (Face Unlock never works for you), but never their number unless the SIM is inside.
+- **`DeviceIdentity = false` (legacy) — the SIM owns the data.** Whichever SIM is in a phone decides whose data that phone shows — everything. Steal someone's phone with the SIM inside and you're reading *their* phone; without any SIM, a phone opens to a full-screen **No SIM** screen with no service and every server action refused.
+
+Either mode: the number follows the SIM, and Cloud Backup carries a character's data to a new phone (the number stays behind on the old SIM). Flipping an existing legacy server to the default device mode is safe and automatic — the first time each phone is used it **adopts** the identity of the SIM currently in it, so no data is copied or lost; only from then on does the number float free of the data.
 
 ### Setup
 
@@ -175,9 +180,9 @@ A player can carry **several phones, each with its own SIM**. Whichever phone th
 
 ### What players should know
 
-- **No SIM = no service.** The phone opens but shows the No SIM screen; nothing works until a SIM is installed.
-- **Your number lives on the SIM.** Move the SIM to another phone and the number (and the whole phone profile) moves with it. **A lost number is lost** — restores never bring numbers back.
-- **Passcodes still protect you.** A thief sees your lockscreen; if you set a passcode they must know it — Face Unlock never works for anyone but the SIM's original owner.
+- **No SIM = no service.** In the default device mode the phone still opens and non-number apps (photos, notes, settings, account apps, games) keep working — you just can't call or text and the bar shows **No Service** until a SIM is installed. In legacy mode a SIM-less phone is a dead **No SIM** screen.
+- **Your number lives on the SIM.** Move the SIM to another phone and the number moves with it — and in legacy mode the whole phone profile follows too. **A lost number is lost** — restores never bring numbers back.
+- **Passcodes still protect you.** A thief sees your lockscreen; if you set a passcode they must know it — Face Unlock never works for anyone but the phone's original owner.
 - **Cloud Backup** (Settings → SIM & Backup) belongs to your **character** and is protected by a **backup password** you set when turning it on (a copy is saved into your Passwords app). After losing your phone, get a new phone + blank SIM, press *Restore from Backup* and enter the password: your contacts, messages, photos, notes, settings and app logins are copied to the new phone. The number is **not** restored — your new SIM keeps its own number, and the old number stays on the old SIM.
 
 ### SIM exports

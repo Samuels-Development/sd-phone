@@ -78,6 +78,38 @@ function inv.getSimNumber(source, phone)
     return digits ~= '' and digits or nil
 end
 
+---The persistent DEVICE identity stamped onto a phone item, plus the first-activator cid that
+---owns it. Both live on the phone item metadata in either attach mode (they describe the PHONE,
+---not the SIM). Read-only; nil fields when never minted.
+---@param phone { metadata: table }
+---@return string|nil deviceId, string|nil ownerCid
+function inv.getDevice(phone)
+    local md = phone.metadata
+    if type(md) ~= 'table' then return nil, nil end
+    local id = md.deviceId
+    if type(id) ~= 'string' or id == '' then id = nil end
+    local owner = md.deviceOwner
+    if type(owner) ~= 'string' or owner == '' then owner = nil end
+    return id, owner
+end
+
+---Stamps the device identity (and, first time, the owning character) onto a phone item's
+---metadata, merging into the existing slot metadata so the SIM number, container id and
+---durability survive. Device-identity mode only.
+---@param source number player server id
+---@param slot number phone item slot
+---@param deviceId string persistent device identity
+---@param ownerCid string|nil first-activator real citizenid (Face Unlock owner gate)
+---@return boolean ok
+function inv.setPhoneDevice(source, slot, deviceId, ownerCid)
+    local row = bridge.getSlot(source, slot)
+    if not row then return false end
+    local metadata = row.metadata
+    metadata.deviceId = deviceId
+    if ownerCid then metadata.deviceOwner = ownerCid end
+    return bridge.setSlotMetadata(source, slot, metadata)
+end
+
 ---Writes (or clears, with nil) the SIM number onto a phone item's metadata - metadata mode
 ---only. Merges into the slot's existing metadata so container ids, durability etc. survive.
 ---@param source number player server id

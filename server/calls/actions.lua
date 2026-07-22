@@ -214,7 +214,12 @@ function actions.dial(source, payload)
     local muted = moderation.guard(cid, 'calls'); if muted then return muted end
 
     local myNumber = settings.ensurePhoneNumber(cid)
-    if myNumber and digits(myNumber) == dialed then return fail('You can\'t call yourself') end
+    -- Number-dependent: no number in service (device mode with the SIM out) can't place a call.
+    -- In legacy/stock a resolvable caller always has a number, so this never trips.
+    if not myNumber or digits(myNumber) == '' then
+        return fail('No service. Install a SIM card to place calls.')
+    end
+    if digits(myNumber) == dialed then return fail('You can\'t call yourself') end
 
     local targetCid = settings.getCitizenByNumber(dialed)
     if not targetCid then
@@ -247,7 +252,9 @@ function actions.dial(source, payload)
         return fail('Number not in service')
     end
 
-    local targetSrc = player.getSourceByIdentifier(targetCid)
+    -- Any-phone resolver: a call rings the target even when the dialed number sits on the
+    -- OTHER phone in their pocket (unlike UI pushes, which only land on the active phone).
+    local targetSrc = player.getAnySourceByIdentifier(targetCid)
     if not targetSrc then return fail('This number is currently unavailable') end
     if settings.isAirplane(targetCid) then return fail('This number is currently unavailable') end
     if contacts.isBlocked(targetCid, digits(myNumber)) then return fail('This number is currently unavailable') end
@@ -304,7 +311,7 @@ function actions.dialPayphone(source, payload)
     local targetCid = settings.getCitizenByNumber(dialed)
     if not targetCid then return fail('Number not in service') end
 
-    local targetSrc = player.getSourceByIdentifier(targetCid)
+    local targetSrc = player.getAnySourceByIdentifier(targetCid)
     if not targetSrc then return fail('This number is currently unavailable') end
     if settings.isAirplane(targetCid) then return fail('This number is currently unavailable') end
     if callerNumber ~= '' and contacts.isBlocked(targetCid, callerNumber) then return fail('This number is currently unavailable') end

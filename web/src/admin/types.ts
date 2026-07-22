@@ -70,7 +70,7 @@ export interface AdminOverview {
     sim?: {
         mode: 'container' | 'metadata';
         sims: AdminSimRow[];
-        backup?: { identity: string; enabled: boolean; hasPassword: boolean } | null;
+        backup?: { profiles: number; enabled: boolean; hasPassword: boolean } | null;
         /** Only while the player is online. */
         activeNumber?: string | null;
         carried?: { number: string; color: string; active: boolean }[];

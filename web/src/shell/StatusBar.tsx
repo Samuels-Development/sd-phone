@@ -1,4 +1,5 @@
 import { formatClockTime, useClock } from '@/hooks/useClock';
+import { t } from '@/i18n';
 
 export interface StatusBarProps {
     use24h: boolean;
@@ -7,12 +8,13 @@ export interface StatusBarProps {
     battery: number;
     airplane?: boolean;
     noSim?: boolean;
+    noService?: boolean;
     light?: boolean;
     controlHint?: boolean;
     editing?: boolean;
 }
 
-export function StatusBar({ use24h, signal, showWifi, battery, airplane = false, noSim = false, light = true, controlHint = false, editing = false }: StatusBarProps) {
+export function StatusBar({ use24h, signal, showWifi, battery, airplane = false, noSim = false, noService = false, light = true, controlHint = false, editing = false }: StatusBarProps) {
     const time  = formatClockTime(useClock(), use24h);
     const color = light ? '#ffffff' : '#000000';
 
@@ -32,6 +34,8 @@ export function StatusBar({ use24h, signal, showWifi, battery, airplane = false,
                     <Airplane size={23} />
                 ) : noSim ? (
                     <span className="font-sf text-[13px] font-semibold leading-none opacity-80">No SIM</span>
+                ) : noService ? (
+                    <span className="font-sf text-[13px] font-semibold leading-none opacity-80">{t('shell.noService', 'No Service')}</span>
                 ) : (
                     <>
                         {signal > 0 && <Cellular size={21} />}
