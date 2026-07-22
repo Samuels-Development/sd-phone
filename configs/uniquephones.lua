@@ -1,5 +1,7 @@
--- Unique phones + SIM cards (opt-in). When enabled, characters no longer auto-receive a phone
--- number: numbers live on sim_card items. How the DATA is owned depends on DeviceIdentity below.
+-- Unique phones (opt-in). When enabled, every phone item is a distinct device and characters
+-- no longer auto-receive a phone number. Numbers come from sim_card items - or, with
+-- BuiltInNumbers, from the phone itself (no SIM items at all). How the DATA is owned depends
+-- on DeviceIdentity below.
 --
 --   * DeviceIdentity = true  (DEFAULT) - the PHONE owns the data, the SIM only lends a number.
 --     Each phone item carries a persistent identity minted on first use, and that identity keys

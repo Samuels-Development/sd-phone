@@ -133,16 +133,18 @@ Building from a git clone yourself: `cd web && npm ci && npm run build`. The out
 
 ## Unique Phones & SIM Cards (optional)
 
-Off by default. Flip `Enabled = true` in `configs/simcards.lua` and phone numbers stop belonging to characters — they live on **SIM card items**. A second switch, `DeviceIdentity`, decides who owns the *data*:
+Off by default. Flip `Enabled = true` in `configs/uniquephones.lua` and phone numbers stop belonging to characters — they live on **SIM card items**. A second switch, `DeviceIdentity`, decides who owns the *data*:
 
 - **`DeviceIdentity = true` (default) — the phone owns the data, the SIM only lends a number.** Each phone item gets a persistent identity the first time it's used, and that identity keys everything: messages, call log, contacts, photos, notes, app logins, settings, games. Popping the SIM out just drops your **number and service** — the phone still opens and every non-number app keeps working, the status bar reads **No Service**. Move a SIM to another phone and that phone gets your **number**, not your data. Steal a phone and you get *its* apps behind the owner's lockscreen (Face Unlock never works for you), but never their number unless the SIM is inside.
 - **`DeviceIdentity = false` (legacy) — the SIM owns the data.** Whichever SIM is in a phone decides whose data that phone shows — everything. Steal someone's phone with the SIM inside and you're reading *their* phone; without any SIM, a phone opens to a full-screen **No SIM** screen with no service and every server action refused.
 
 Either mode: the number follows the SIM, and Cloud Backup carries a character's data to a new phone (the number stays behind on the old SIM). Flipping an existing legacy server to the default device mode is safe and automatic — the first time each phone is used it **adopts** the identity of the SIM currently in it, so no data is copied or lost; only from then on does the number float free of the data.
 
+**Don't want SIM cards at all?** Set `BuiltInNumbers = true` and phones stay unique devices but mint their own **permanent built-in number** on first use (an eSIM, stamped onto the item) — no `sim_card` item, no install/eject, the number lives and dies with the phone. Device identity is implied; skip the SIM item setup below entirely.
+
 ### Setup
 
-1. Enable the feature in `configs/simcards.lua` and add the SIM item to your inventory (ox_inventory example):
+1. Enable the feature in `configs/uniquephones.lua` and add the SIM item to your inventory (ox_inventory example; not needed with `BuiltInNumbers`):
 
    ```lua
    ['sim_card'] = {
