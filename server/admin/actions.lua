@@ -181,15 +181,19 @@ function actions.overview(source, payload)
 
     -- Unique phones: the character's SIM footprint - every number registered to them (activated
     -- by them or living on their character-bound profile), what they carry right now, and their
-    -- cloud-backup pointer.
+    -- cloud-backup profiles.
     if simState.active then
         local simStore = require 'server.sim.store'
         local sim = { mode = simState.mode, sims = store.simsFor(cid) }
-        local b = simStore.getBackup(cid)
-        sim.backup = b and {
-            identity    = b.identity,
-            enabled     = b.enabled,
-            hasPassword = b.password ~= nil,
+        local profiles = simStore.listProfiles(cid)
+        local enabledAny = false
+        for _, p in ipairs(profiles) do
+            if p.enabled then enabledAny = true break end
+        end
+        sim.backup = #profiles > 0 and {
+            profiles    = #profiles,
+            enabled     = enabledAny,
+            hasPassword = simStore.getBackupPassword(cid) ~= nil,
         } or nil
         local liveSrc = sourceByRealCid(cid)
         if liveSrc then

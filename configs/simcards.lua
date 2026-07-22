@@ -64,5 +64,9 @@ return {
     -- SIM keeps the old number and the data that was on it.
     Backup = {
         Enabled = true,
+
+        -- How many phones one character can back up at once (each holds a full cloud snapshot).
+        -- Enabling backup on another phone past the cap asks the player to delete one first.
+        MaxProfiles = 3,
     },
 }

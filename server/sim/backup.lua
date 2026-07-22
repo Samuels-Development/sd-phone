@@ -113,33 +113,31 @@ local SETTINGS_COLS = {
     'ringtone_volume', 'call_volume', 'locale', 'dark_theme', 'theme',
 }
 
----Restores a phone profile: copies `fromId`'s data onto `toId` (the current SIM identity) and
----moves live group-chat membership over, rewriting the stored member number to the new SIM's.
----The source profile keeps its rows - whoever holds the old SIM keeps what was on it.
----@param fromId string backed-up identity
----@param toId string current SIM identity
----@param toNumber string current SIM bare-digit number
----@return integer rows total rows written
-function backup.restore(fromId, toId, toNumber)
-    local rows = 0
-
-    -- Settings row: overwrite the new profile's preferences with the backup's.
+---Overwrites `toId`'s phone_settings preference columns with `fromId`'s, creating the target
+---row when it doesn't exist yet (a fresh cloud snapshot has none).
+---@param fromId string source identity
+---@param toId string target identity
+---@return integer rows
+local function copySettings(fromId, toId)
+    local rows = run('INSERT IGNORE INTO phone_settings (citizenid) VALUES (?)', { toId })
     local setParts = {}
     for _, col in ipairs(SETTINGS_COLS) do
         setParts[#setParts + 1] = ('a.`%s` = b.`%s`'):format(col, col)
     end
-    rows = rows + run(([[
+    return rows + run(([[
         UPDATE phone_settings a
         JOIN phone_settings b ON b.citizenid = ?
         SET %s WHERE a.citizenid = ?
     ]]):format(table.concat(setParts, ', ')), { fromId, toId })
+end
 
-    for _, t in ipairs(COPY) do
-        rows = rows + copyTable(t[1], t[2], fromId, toId)
-    end
-
-    -- Photo album contents: no identity column; remap both sides of the join like copyTable did.
-    rows = rows + run([[
+---Copies album membership rows across identities, remapping both foreign ids the way
+---copyTable remapped their parents (no identity column of its own).
+---@param fromId string source identity
+---@param toId string target identity
+---@return integer rows
+local function copyAlbumItems(fromId, toId)
+    return run([[
         INSERT IGNORE INTO phone_photo_album_items (album_id, photo_id, added_at)
         SELECT SUBSTRING(MD5(CONCAT(i.album_id, ?)), 1, 16),
                SUBSTRING(MD5(CONCAT(i.photo_id, ?)), 1, 16),
@@ -148,20 +146,75 @@ function backup.restore(fromId, toId, toNumber)
         JOIN phone_photo_albums a ON a.id = i.album_id
         WHERE a.citizenid = ?
     ]], { toId, toId, fromId })
+end
+
+---Deletes every snapshot row a cloud identity holds (profile deletion, and the wipe phase of
+---a sync). The phone_settings row goes too - a dead namespace keeps nothing.
+---@param cloudId string snapshot identity ('cloud:' prefixed)
+function backup.wipe(cloudId)
+    -- Album items go first: their parent album rows are the only link to the cloud identity.
+    run([[
+        DELETE i FROM phone_photo_album_items i
+        JOIN phone_photo_albums a ON a.id = i.album_id
+        WHERE a.citizenid = ?
+    ]], { cloudId })
+    for _, t in ipairs(COPY) do
+        run(('DELETE FROM `%s` WHERE `%s` = ?'):format(t[1], t[2]), { cloudId })
+    end
+    run('DELETE FROM phone_settings WHERE citizenid = ?', { cloudId })
+end
+
+---Snapshot sync: replaces the cloud profile's rows with a fresh copy of the enrolled phone's.
+---Wipe-then-copy (not merge) so deletions and edits on the phone reach the snapshot. Restore
+---side effects (group-membership move, mail-login append) deliberately stay out - the cloud
+---identity is a dead namespace that never acts.
+---@param fromId string enrolled phone identity
+---@param cloudId string snapshot identity ('cloud:' prefixed)
+---@return integer rows total rows written
+function backup.sync(fromId, cloudId)
+    backup.wipe(cloudId)
+
+    local rows = copySettings(fromId, cloudId)
+    for _, t in ipairs(COPY) do
+        rows = rows + copyTable(t[1], t[2], fromId, cloudId)
+    end
+    return rows + copyAlbumItems(fromId, cloudId)
+end
+
+---Restores a phone profile: copies `fromId`'s data onto `toId` (the current SIM identity) and
+---moves live group-chat membership over, rewriting the stored member number to the new SIM's.
+---The source profile keeps its rows - whoever holds the old SIM keeps what was on it. Live
+---room state (groups, mail logins) can't come from a snapshot, so it moves from `liveFromId` -
+---the previously enrolled phone - which for legacy pointer backups IS the backup identity.
+---@param fromId string backed-up identity (cloud snapshot, or a phone identity on legacy rows)
+---@param toId string current SIM identity
+---@param toNumber string current SIM bare-digit number
+---@param liveFromId string|nil previously enrolled phone identity (defaults to fromId)
+---@return integer rows total rows written
+function backup.restore(fromId, toId, toNumber, liveFromId)
+    liveFromId = liveFromId or fromId
+    local rows = copySettings(fromId, toId)
+
+    for _, t in ipairs(COPY) do
+        rows = rows + copyTable(t[1], t[2], fromId, toId)
+    end
+
+    rows = rows + copyAlbumItems(fromId, toId)
 
     -- Group chats fan out by the member rows, so membership MOVES to the restored profile
-    -- (the old SIM drops out) and the stored member number becomes the new SIM's number.
+    -- (the old phone drops out) and the stored member number becomes the new SIM's number.
     rows = rows + run(
         'UPDATE IGNORE phone_message_group_members SET citizenid = ?, number = ? WHERE citizenid = ?',
-        { toId, toNumber, fromId })
+        { toId, toNumber, liveFromId })
     rows = rows + run(
-        'UPDATE phone_message_groups SET owner_cid = ? WHERE owner_cid = ?', { toId, fromId })
+        'UPDATE phone_message_groups SET owner_cid = ? WHERE owner_cid = ?', { toId, liveFromId })
 
-    -- Mailboxes: add the new identity to every account the old identity was signed into.
+    -- Mailboxes: add the new identity to every account the previously enrolled phone was
+    -- signed into (mail logins are live state - the snapshot identity never signs in).
     local ok, mails = pcall(function()
         return MySQL.query.await(
             "SELECT email, logged_in_citizens FROM phone_mail_accounts WHERE JSON_SEARCH(logged_in_citizens, 'one', ?) IS NOT NULL",
-            { fromId })
+            { liveFromId })
     end)
     if ok and type(mails) == 'table' then
         for _, m in ipairs(mails) do

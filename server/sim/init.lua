@@ -249,7 +249,6 @@ lib.callback.register('sd-phone:server:sim:get', function(source)
     if not realCid then return util.fail('Player not found') end
     session.invalidate(source)
     local s = session.resolve(source)
-    local b = simStore.getBackup(realCid)
     local sims = {}
     if s then
         for _, entry in ipairs(s.sims) do
@@ -263,6 +262,29 @@ lib.callback.register('sd-phone:server:sim:get', function(source)
             end
         end
     end
+
+    -- Backup profiles: one per phone. A profile restores once its snapshot exists (legacy
+    -- pointer rows restore from the live phone identity instead - unless it IS this phone).
+    local myProfile
+    local profiles = {}
+    local restorable = false
+    for _, p in ipairs(simStore.listProfiles(realCid)) do
+        local isCloud = p.identity:sub(1, 6) == 'cloud:'
+        local thisPhone = s ~= nil and s.identity == p.deviceIdentity
+        local canUse = (isCloud and p.syncedAt ~= nil)
+            or (not isCloud and (s == nil or s.identity ~= p.identity))
+        if thisPhone then myProfile = p end
+        profiles[#profiles + 1] = {
+            device     = p.deviceIdentity,
+            color      = p.color,
+            number     = p.number,
+            syncedAt   = p.syncedAt,
+            thisPhone  = thisPhone,
+            restorable = canUse,
+        }
+        if canUse then restorable = true end
+    end
+
     return util.ok({
         mode          = state.mode,
         device        = state.device,
@@ -273,10 +295,16 @@ lib.callback.register('sd-phone:server:sim:get', function(source)
         ejectable     = state.mode == 'metadata' and config.Sim.AllowEject ~= false
                         and s ~= nil and s.hasSim or false,
         backupOn      = config.Sim.Backup and config.Sim.Backup.Enabled ~= false or false,
-        backupEnabled = b ~= nil and b.enabled or false,
+        -- A password only binds while profiles exist (no profiles = enabling may set a new one).
+        hasPassword   = simStore.getBackupPassword(realCid) ~= nil
+                        and #profiles > 0 or false,
+        backupEnabled = myProfile ~= nil and myProfile.enabled or false,
+        autoSync      = myProfile ~= nil and myProfile.autoSync or false,
+        syncedAt      = myProfile and myProfile.syncedAt or nil,
+        profiles      = profiles,
+        maxProfiles   = tonumber(config.Sim.Backup and config.Sim.Backup.MaxProfiles) or 3,
         -- Device mode restores onto the DEVICE identity (no SIM required); legacy needs the SIM.
-        canRestore    = b ~= nil and b.enabled and s ~= nil and s.identity ~= nil
-                        and s.identity ~= b.identity
+        canRestore    = restorable and s ~= nil and s.identity ~= nil
                         and (state.device or s.hasSim) or false,
     })
 end)
@@ -302,9 +330,39 @@ lib.callback.register('sd-phone:server:sim:eject', function(source)
     return util.ok()
 end)
 
----Toggles the caller's cloud backup. Enabling requires a backup password: it protects the
----restore, and a copy is saved into the phone's Passwords app so the player can look it up.
----Backups only ever copy data the caller can already read, never grant new access.
+---True when a backup identity is a snapshot namespace (vs a legacy pointer at a phone).
+---@param identity string|nil
+---@return boolean
+local function isCloudIdentity(identity)
+    return type(identity) == 'string' and identity:sub(1, 6) == 'cloud:'
+end
+
+---Takes a fresh snapshot of `s.identity` into ITS profile, converting a legacy pointer row to
+---a `cloud:` namespace on first use, and stamps the picker labels (colour + number).
+---@param realCid string real (framework) citizenid
+---@param profile table this phone's profile row (simStore.getProfile shape)
+---@param s SimSession resolved session of the syncing phone
+---@return number syncedAt
+local function runProfileSync(realCid, profile, s)
+    local cloudId = profile.identity
+    if not isCloudIdentity(cloudId) then
+        cloudId = 'cloud:' .. util.newId(16)
+        simStore.setProfileIdentity(realCid, profile.deviceIdentity, cloudId)
+    end
+    backup.sync(s.identity, cloudId)
+    local syncedAt = os.time()
+    local entry
+    for _, e in ipairs(s.sims) do
+        if e.identity == s.identity then entry = e break end
+    end
+    simStore.setProfileSynced(realCid, profile.deviceIdentity, syncedAt,
+        entry and entry.color or s.color, entry and entry.number or s.number)
+    return syncedAt
+end
+
+---Toggles cloud backup FOR THIS PHONE (each phone owns its profile, up to MaxProfiles).
+---Enabling requires the character's backup password - set on first use, verified after - and
+---takes the first snapshot immediately. A copy of the password lands in the Passwords app.
 lib.callback.register('sd-phone:server:sim:backup:set', function(source, payload)
     if not (config.Sim.Backup and config.Sim.Backup.Enabled ~= false) then
         return util.fail('Cloud backup is disabled.')
@@ -312,55 +370,176 @@ lib.callback.register('sd-phone:server:sim:backup:set', function(source, payload
     local realCid = player.getRealIdentifier(source)
     if not realCid then return util.fail('Player not found') end
     payload = type(payload) == 'table' and payload or {}
+    local s = session.resolve(source)
+    if not s or not s.identity then return util.fail('Install a SIM card first.') end
 
     if payload.on == true then
-        local s = session.resolve(source)
-        if not s or not s.identity then return util.fail('Install a SIM card first.') end
         local password = type(payload.password) == 'string' and payload.password or ''
         if #password < 4 or #password > 32 then
             return util.fail('Backup password must be 4-32 characters.')
         end
         local accounts = require 'server.accounts.store'
-        simStore.setBackup(realCid, s.identity, true, accounts.hashPassword(password))
+        local existing = simStore.getBackupPassword(realCid)
+        -- With no profiles left there is nothing the password protects: the entered password
+        -- becomes the new one (also the recovery path for a forgotten password).
+        if existing and simStore.profileCount(realCid) > 0 then
+            if accounts.hashPassword(password) ~= existing then
+                return util.fail('Wrong backup password. It\'s saved in the Passwords app of your backed-up phone.')
+            end
+        else
+            simStore.setBackupPassword(realCid, accounts.hashPassword(password))
+        end
+
+        local profile = simStore.getProfile(realCid, s.identity)
+        if not profile then
+            local cap = tonumber(config.Sim.Backup.MaxProfiles) or 3
+            if simStore.profileCount(realCid) >= cap then
+                return util.fail(('You can back up at most %d phones. Delete a backup first.'):format(cap))
+            end
+        end
+        local cloudId = (profile and isCloudIdentity(profile.identity)) and profile.identity
+            or ('cloud:' .. util.newId(16))
+        simStore.upsertProfile(realCid, s.identity, cloudId)
         accounts.saveVaultEntry(s.identity, 'cloud', 'Cloud Backup', password, nil, s.number)
+        profile = simStore.getProfile(realCid, s.identity)
+        if profile then runProfileSync(realCid, profile, s) end
     else
-        local b = simStore.getBackup(realCid)
-        if b then simStore.setBackup(realCid, b.identity, false) end
+        simStore.setProfileEnabled(realCid, s.identity, false)
     end
     return util.ok()
 end)
 
----Restores the caller's cloud backup onto the current SIM profile: the old phone's settings,
----contacts, messages, photos and app data are copied over - the phone NUMBER never is (it lives
----on the old SIM; a lost number is lost). Requires the backup password when one is set.
+---Manual "Back Up Now" for the caller's phone (its own profile only).
+lib.callback.register('sd-phone:server:sim:backup:sync', function(source)
+    if not (config.Sim.Backup and config.Sim.Backup.Enabled ~= false) then
+        return util.fail('Cloud backup is disabled.')
+    end
+    local realCid = player.getRealIdentifier(source)
+    if not realCid then return util.fail('Player not found') end
+    local s = session.resolve(source)
+    if not s or not s.identity then return util.fail('No phone to back up.') end
+    local profile = simStore.getProfile(realCid, s.identity)
+    if not profile or not profile.enabled then
+        return util.fail('Cloud Backup is not enabled on this phone.')
+    end
+
+    local syncedAt = runProfileSync(realCid, profile, s)
+    return util.ok({ syncedAt = syncedAt })
+end)
+
+---Toggles auto-sync (snapshot on holster, throttled) for the caller's phone.
+lib.callback.register('sd-phone:server:sim:backup:setAuto', function(source, payload)
+    local realCid = player.getRealIdentifier(source)
+    if not realCid then return util.fail('Player not found') end
+    local s = session.resolve(source)
+    if not s or not s.identity then return util.fail('No phone.') end
+    if not simStore.getProfile(realCid, s.identity) then
+        return util.fail('Cloud Backup is not enabled on this phone.')
+    end
+    payload = type(payload) == 'table' and payload or {}
+    simStore.setProfileAuto(realCid, s.identity, payload.on == true)
+    return util.ok()
+end)
+
+---Deletes one backup profile AND its snapshot data. Any of the character's profiles may be
+---deleted from any phone (freeing a slot for a new phone).
+lib.callback.register('sd-phone:server:sim:backup:delete', function(source, payload)
+    local realCid = player.getRealIdentifier(source)
+    if not realCid then return util.fail('Player not found') end
+    payload = type(payload) == 'table' and payload or {}
+    local device = type(payload.device) == 'string' and payload.device or ''
+    local profile = simStore.getProfile(realCid, device)
+    if not profile then return util.fail('Backup profile not found.') end
+    if isCloudIdentity(profile.identity) then backup.wipe(profile.identity) end
+    simStore.deleteProfile(realCid, device)
+    return util.ok()
+end)
+
+---@type integer Auto-sync throttle: the enrolled phone re-snapshots at most this often (seconds).
+local AUTO_SYNC_MIN_GAP = 300
+
+---@type table<number, boolean> Per-source auto-sync in progress; drops overlapping attempts.
+local autoSyncBusy = {}
+
+---Auto-sync trigger: holstering the phone is the natural save point. A phone only ever syncs
+---ITS OWN profile, so a lost or stolen phone can never overwrite another phone's backup.
+---Second listener on the share module's open-state event.
+RegisterNetEvent('sd-phone:server:phone:setOpen', function(open)
+    local source = source
+    if open or not state.active then return end
+    if not (config.Sim.Backup and config.Sim.Backup.Enabled ~= false) then return end
+    if autoSyncBusy[source] then return end
+    autoSyncBusy[source] = true
+    CreateThread(function()
+        local okRun, err = pcall(function()
+            local realCid = player.getRealIdentifier(source)
+            if not realCid then return end
+            local s = session.resolve(source)
+            if not s or not s.identity then return end
+            local profile = simStore.getProfile(realCid, s.identity)
+            if not profile or not profile.enabled or not profile.autoSync then return end
+            if (os.time() - (profile.syncedAt or 0)) < AUTO_SYNC_MIN_GAP then return end
+            runProfileSync(realCid, profile, s)
+        end)
+        if not okRun then print(('^1[sd-phone:sim]^0 auto-sync failed for %s: %s'):format(source, err)) end
+        autoSyncBusy[source] = nil
+    end)
+end)
+
+---Restores a chosen backup profile onto the current phone: settings, contacts, messages,
+---photos and app data are copied over - the phone NUMBER never is (it lives on the SIM; a lost
+---number is lost). `payload.device` picks the profile (optional when only one restores).
+---Requires the character's backup password. Restoring does NOT touch the snapshot or move any
+---profile enrollment - the source phone keeps backing itself up.
 lib.callback.register('sd-phone:server:sim:backup:restore', function(source, payload)
     if not (config.Sim.Backup and config.Sim.Backup.Enabled ~= false) then
         return util.fail('Cloud backup is disabled.')
     end
     local realCid = player.getRealIdentifier(source)
     if not realCid then return util.fail('Player not found') end
-    local b = simStore.getBackup(realCid)
-    if not b or not b.enabled then return util.fail('No cloud backup found for this character.') end
+    payload = type(payload) == 'table' and payload or {}
     local s = session.resolve(source)
     -- Device mode restores onto the phone's own identity, no SIM/number required; legacy needs
     -- the installed SIM (its identity + number ARE the phone).
     if not s or not s.identity then return util.fail('Install a SIM card first.') end
     if not state.device and not s.number then return util.fail('Install a SIM card first.') end
-    if s.identity == b.identity then return util.fail('This phone already holds the backed-up data.') end
 
-    if b.password then
-        payload = type(payload) == 'table' and payload or {}
+    local profile
+    if type(payload.device) == 'string' and payload.device ~= '' then
+        profile = simStore.getProfile(realCid, payload.device)
+    else
+        -- No pick: allowed only when exactly one profile can restore here.
+        local candidates = {}
+        for _, p in ipairs(simStore.listProfiles(realCid)) do
+            local isCloud = isCloudIdentity(p.identity)
+            if (isCloud and p.syncedAt ~= nil) or (not isCloud and p.identity ~= s.identity) then
+                candidates[#candidates + 1] = p
+            end
+        end
+        if #candidates > 1 then return util.fail('Pick which backup to restore.') end
+        profile = candidates[1]
+    end
+    if not profile then return util.fail('No cloud backup found for this character.') end
+    local isCloud = isCloudIdentity(profile.identity)
+    if isCloud and profile.syncedAt == nil then return util.fail('That backup has never completed.') end
+    if not isCloud and profile.identity == s.identity then
+        return util.fail('This phone already holds the backed-up data.')
+    end
+
+    local stored = simStore.getBackupPassword(realCid)
+    if stored then
         local given = type(payload.password) == 'string' and payload.password or ''
         local accounts = require 'server.accounts.store'
-        if accounts.hashPassword(given) ~= b.password then
+        if accounts.hashPassword(given) ~= stored then
             return util.fail('Wrong backup password.')
         end
     end
 
-    local rows = backup.restore(b.identity, s.identity, s.number or '')
-    simStore.setBackup(realCid, s.identity, true, nil)
+    -- Snapshot untouched: restore copies OUT of the cloud. Live room state (groups, mail
+    -- logins) moves from the profile's source phone; legacy pointer rows ARE that phone.
+    local rows = backup.restore(profile.identity, s.identity, s.number or '', profile.deviceIdentity)
     print(('^3[sd-phone:sim]^0 restored backup %s -> %s for %s (%d rows)')
-        :format(b.identity, s.identity, realCid, rows))
+        :format(profile.identity, s.identity, realCid, rows))
     -- The restored data replaced the acting profile in place: the client resets the NUI (kept-
     -- alive apps, hydrated settings, caches) so nothing keeps showing pre-restore state.
     TriggerClientEvent('sd-phone:client:profileReset', source)
