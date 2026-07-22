@@ -33,7 +33,7 @@ function player.getIdentifier(source)
     return session.identity(source)
 end
 
--- Active-phone-only reachability (ng-phone equipped-line behaviour): a player is only
+-- Active-phone-only reachability: a player is only
 -- "online as" the phone they are currently acting as. Pocketed SIMs stay dark for calls,
 -- live UI pushes, and notifications until that phone is opened/equipped.
 local baseGetAnySource = player.getAnySourceByIdentifier

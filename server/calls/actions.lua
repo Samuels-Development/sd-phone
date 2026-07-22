@@ -252,8 +252,8 @@ function actions.dial(source, payload)
         return fail('Number not in service')
     end
 
-    -- Active-phone only (ng-phone style): a call rings only when the dialed number sits on the
-    -- phone the player is currently acting as. Pocketed SIMs stay unreachable until equipped.
+    -- Active-phone only: a call rings only when the dialed number sits on the phone the
+    -- player is currently acting as. Pocketed SIMs stay unreachable until equipped.
     local targetSrc = player.getSourceByIdentifier(targetCid)
     if not targetSrc then return fail('This number is currently unavailable') end
     if settings.isAirplane(targetCid) then return fail('This number is currently unavailable') end
