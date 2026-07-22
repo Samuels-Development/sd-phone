@@ -192,6 +192,15 @@ local function computeDevice(source, phones)
     local devices = {}
     for _, phone in ipairs(phones) do
         local number = siminv.getSimNumber(source, phone)
+        if not number and state.builtin then
+            -- Built-in numbers: the phone's eSIM activates itself on first use. The minted
+            -- number is stamped onto the item and belongs to this phone for good; a failed
+            -- stamp skips the number (retried next resolve) rather than orphaning it silently.
+            local minted = simStore.create({})
+            if minted and siminv.setPhoneSim(source, phone.slot, minted) then
+                number = minted
+            end
+        end
         local identity, owner = resolveDevice(source, phone, number)
         if number then
             simStore.ensureRegistered(number, realCid)

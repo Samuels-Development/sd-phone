@@ -111,13 +111,17 @@ CreateThread(function()
         return
     end
 
-    state.mode   = (config.Sim.UseContainers and siminv.isOx()) and 'container' or 'metadata'
-    state.device = config.Sim.DeviceIdentity ~= false
+    state.builtin = config.Sim.BuiltInNumbers == true
+    -- Built-in numbers imply the phone owns everything: device identity is forced and the
+    -- attach mode is always metadata (there is no SIM item to drag into a tray).
+    state.mode   = (not state.builtin and config.Sim.UseContainers and siminv.isOx()) and 'container' or 'metadata'
+    state.device = state.builtin or config.Sim.DeviceIdentity ~= false
     state.active = true
     if state.mode == 'container' then siminv.registerContainers() end
     if siminv.isOx() then registerHooks() end
-    print(('^2[sd-phone:sim]^0 unique phones active (%s mode, %s identity, %s backend)')
-        :format(state.mode, state.device and 'device' or 'sim', siminv.backendName()))
+    print(('^2[sd-phone:sim]^0 unique phones active (%s mode, %s identity%s, %s backend)')
+        :format(state.mode, state.device and 'device' or 'sim',
+            state.builtin and ', built-in numbers' or '', siminv.backendName()))
 end)
 
 ---Extracts the used item's slot + SIM number for both usable-item callback shapes (ox passes a
@@ -153,6 +157,9 @@ end
 -- Using a sim_card: metadata mode installs it into the first phone without service (consuming
 -- the item); container mode reads the number back (installation is dragging it into the tray).
 -- A blank card (spawned raw by any shop or script) self-activates with a fresh minted number.
+-- Built-in-numbers mode has no SIM items at all, so the usable item never registers (config
+-- gate, not state: registration happens at load, before the boot thread flips the flags).
+if config.Sim.BuiltInNumbers ~= true then
 inv.registerUsable(config.Sim.SimItem, function(source, itemArg, _invArg, slotArg)
     local slot, number = usedSim(source, itemArg, slotArg)
     local blank = number == nil
@@ -219,6 +226,7 @@ inv.registerUsable(config.Sim.SimItem, function(source, itemArg, _invArg, slotAr
     toast(source, (blank and 'SIM activated and installed - your number is %s.'
         or 'SIM installed - your number is %s.'):format(util.formatNumber(number)), 'success')
 end)
+end
 
 ---@type table<number, number> Last requestPush per source (GetGameTimer ms); floods are dropped.
 local lastRequestPush = {}
@@ -288,12 +296,13 @@ lib.callback.register('sd-phone:server:sim:get', function(source)
     return util.ok({
         mode          = state.mode,
         device        = state.device,
+        builtin       = state.builtin,
         hasSim        = s ~= nil and s.hasSim or false,
         number        = s and s.number or nil,
         color         = s and s.color or nil,
         sims          = sims,
         ejectable     = state.mode == 'metadata' and config.Sim.AllowEject ~= false
-                        and s ~= nil and s.hasSim or false,
+                        and not state.builtin and s ~= nil and s.hasSim or false,
         backupOn      = config.Sim.Backup and config.Sim.Backup.Enabled ~= false or false,
         -- A password only binds while profiles exist (no profiles = enabling may set a new one).
         hasPassword   = simStore.getBackupPassword(realCid) ~= nil
@@ -312,6 +321,7 @@ end)
 ---Ejects the installed SIM (metadata mode): clears the phone item's number and hands the
 ---sim_card item back with its number intact. The phone loses service immediately.
 lib.callback.register('sd-phone:server:sim:eject', function(source)
+    if state.builtin then return util.fail('This phone\'s SIM is built in.') end
     if state.mode ~= 'metadata' or config.Sim.AllowEject == false then
         return util.fail('Take the SIM out of the phone\'s SIM tray instead.')
     end
@@ -553,6 +563,8 @@ end)
 ---@param opts? { number?: string, citizenid?: string }
 ---@return string|nil number bare-digit number on success, nil on failure
 exports('giveSimCard', function(source, opts)
+    -- Built-in-numbers mode has no usable SIM items - a handed-out card would be inert.
+    if state.builtin then return nil end
     if type(source) ~= 'number' or not GetPlayerName(source) then return nil end
     opts = type(opts) == 'table' and opts or {}
     local number = simStore.create({ number = opts.number, bindCid = opts.citizenid })

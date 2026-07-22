@@ -26,6 +26,7 @@ interface BackupProfile {
 
 interface SimInfo {
     mode: 'container' | 'metadata';
+    builtin: boolean;
     hasSim: boolean;
     number?: string;
     color?: string;
@@ -44,7 +45,7 @@ interface SimInfo {
 type Envelope<T> = { success: boolean; data?: T; message?: string };
 
 const DEV_INFO: SimInfo = {
-    mode: 'metadata', hasSim: true, number: '2075550149', color: 'yellow',
+    mode: 'metadata', builtin: false, hasSim: true, number: '2075550149', color: 'yellow',
     sims: [
         { number: '2075550149', color: 'yellow', active: true },
         { number: '3125550188', color: 'black', active: false },
@@ -182,12 +183,16 @@ export function SimBackupPage({ onBack }: { onBack: () => void }) {
     return (
         <>
             <SubPage title={t('settings.simBackup', 'SIM & Backup')} onBack={onBack}>
-                <ListGroup footer={info?.mode === 'container'
-                    ? t('settings.simFooterContainer', 'Your number lives on the SIM card in this phone. Open the phone in your inventory to swap the SIM.')
-                    : t('settings.simFooterMetadata', 'Your number lives on the SIM card installed in this phone. Use a SIM card item to install it.')}>
+                <ListGroup footer={info?.builtin
+                    ? t('settings.simFooterBuiltin', 'This phone\'s SIM is built in. Its number was assigned the first time the phone was used and stays with the phone.')
+                    : info?.mode === 'container'
+                        ? t('settings.simFooterContainer', 'Your number lives on the SIM card in this phone. Open the phone in your inventory to swap the SIM.')
+                        : t('settings.simFooterMetadata', 'Your number lives on the SIM card installed in this phone. Use a SIM card item to install it.')}>
                     <ListRow
                         label={t('settings.simStatus', 'SIM Status')}
-                        value={info === null ? '…' : (info.hasSim ? t('settings.simInstalled', 'Installed') : t('settings.simNone', 'No SIM'))}
+                        value={info === null ? '…' : (info.builtin
+                            ? t('settings.simBuiltin', 'Built-in')
+                            : info.hasSim ? t('settings.simInstalled', 'Installed') : t('settings.simNone', 'No SIM'))}
                         divider
                     />
                     <ListRow label={t('settings.myNumber', 'My Number')} value={info?.hasSim ? number : '—'} divider={!!info?.ejectable} />

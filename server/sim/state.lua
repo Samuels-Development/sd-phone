@@ -11,4 +11,8 @@ return {
     ---owns the data and a SIM only lends a number. False = LEGACY, where the SIM is the identity.
     ---Only meaningful while `active`.
     device = false,
+    ---@type boolean True in built-in-numbers mode (config.Sim.BuiltInNumbers): unique phones
+    ---WITHOUT SIM items - every phone mints its own permanent number on first use ("eSIM").
+    ---Implies `device`; SIM install/eject does not exist. Only meaningful while `active`.
+    builtin = false,
 }

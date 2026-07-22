@@ -33,6 +33,12 @@ return {
     -- data is copied or lost), and only from then on does the number float free of the data.
     DeviceIdentity = true,
 
+    -- Unique phones WITHOUT SIM cards ("eSIM"): every phone mints its own permanent number the
+    -- first time it is used - no sim_card item, no install/eject, the number lives and dies
+    -- with the phone. Forces DeviceIdentity behaviour and the metadata attach mode; SimItem,
+    -- UseContainers, AllowEject, ActivateBlankSims and /givesim become inert.
+    BuiltInNumbers = false,
+
     -- Inventory item that carries a phone number in its metadata ({ number = '2075550123' }).
     -- Sell or spawn it anywhere like a normal item: a blank card self-activates on first use.
     -- Add the item definition to your inventory (see README - "Unique Phones & SIM Cards").
