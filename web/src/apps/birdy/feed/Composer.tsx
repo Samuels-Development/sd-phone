@@ -80,7 +80,7 @@ export function Composer({ onClose, onPost }: {
                     type="button"
                     onClick={submit}
                     disabled={!canPost}
-                    className="rounded-full px-4 py-1.5 text-[15px] font-bold text-white disabled:opacity-50"
+                    className="rounded-full px-4 py-1.5 text-[15px] font-bold text-white transition-[transform,opacity] active:scale-95 disabled:opacity-50"
                     style={{ background: BLUE }}
                 >
                     {t('birdy.post', 'Post')}
@@ -141,6 +141,7 @@ export function Composer({ onClose, onPost }: {
                 >
                     <Smile className="h-[26px] w-[26px]" style={{ color: BLUE }} strokeWidth={2} />
                 </button>
+                <CounterRing len={text.length} />
             </div>
 
             {picking && (
@@ -151,5 +152,35 @@ export function Composer({ onClose, onPost }: {
                 />
             )}
         </div>
+    );
+}
+
+/** Twitter's character budget as a filling ring: quiet blue while there's room, the remaining
+ *  number fades in for the last 20 characters, red when the budget is spent. Hidden until the
+ *  first character so an empty composer stays clean. */
+function CounterRing({ len }: { len: number }) {
+    if (len === 0) return null;
+    const remaining = MAX_POST_LENGTH - len;
+    const frac = Math.min(1, len / MAX_POST_LENGTH);
+    const R = 9;
+    const C = 2 * Math.PI * R;
+    const color = remaining <= 0 ? '#f4212e' : remaining <= 20 ? '#ffad1f' : BLUE;
+    return (
+        <span className="ml-auto mr-1 flex items-center gap-1.5">
+            {remaining <= 20 && (
+                <span className={`text-[13px] tabular-nums ${remaining <= 0 ? 'font-semibold text-[#f4212e]' : 'text-[#536471]'}`}>
+                    {remaining}
+                </span>
+            )}
+            <svg width="22" height="22" viewBox="0 0 22 22" className="-rotate-90" aria-hidden>
+                <circle cx="11" cy="11" r={R} fill="none" stroke="#eff3f4" strokeWidth="2.5" />
+                <circle
+                    cx="11" cy="11" r={R} fill="none"
+                    stroke={color} strokeWidth="2.5" strokeLinecap="round"
+                    strokeDasharray={C} strokeDashoffset={C * (1 - frac)}
+                    className="transition-[stroke-dashoffset,stroke] duration-150"
+                />
+            </svg>
+        </span>
     );
 }

@@ -4,6 +4,8 @@ import { Heart, MessageCircle, MoreHorizontal, Repeat2 } from 'lucide-react';
 import { t } from '@/i18n';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { LIKE, META, REPOST, relativeTime, type BirdyPost } from '../data';
+import { compactCount } from '../polish/format';
+import { HeartBurst } from '../polish/HeartBurst';
 import { Avatar, PostImages, RichText, VerifiedBadge } from '../ui';
 
 export function PostCard({ post, isOwn, onToggleLike, onToggleRepost, onOpen, onOpenAuthor }: {
@@ -81,12 +83,14 @@ export function PostCard({ post, isOwn, onToggleLike, onToggleRepost, onOpen, on
                     <ActionButton
                         tone="like"
                         icon={
-                            <Heart
-                                className="h-[25px] w-[25px]"
-                                strokeWidth={1.9}
-                                fill={post.liked ? LIKE : 'none'}
-                                color={post.liked ? LIKE : 'currentColor'}
-                            />
+                            <HeartBurst liked={post.liked === true}>
+                                <Heart
+                                    className="h-[25px] w-[25px]"
+                                    strokeWidth={1.9}
+                                    fill={post.liked ? LIKE : 'none'}
+                                    color={post.liked ? LIKE : 'currentColor'}
+                                />
+                            </HeartBurst>
                         }
                         count={post.likes}
                         color={post.liked ? LIKE : undefined}
@@ -136,7 +140,7 @@ function ActionButton({ icon, count, color, tone, onClick }: {
             <span className={`-m-1.5 flex h-9 w-9 items-center justify-center rounded-full transition-colors ${t.bg}`}>
                 {icon}
             </span>
-            <span className="min-w-[1.5rem] text-left text-[15px] tabular-nums">{count}</span>
+            <span className="min-w-[1.5rem] text-left text-[15px] tabular-nums">{compactCount(count)}</span>
         </button>
     );
 }

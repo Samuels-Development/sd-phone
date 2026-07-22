@@ -3,6 +3,8 @@ import { ArrowLeft, Heart, MessageCircle, Repeat2 } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { absoluteTime, BG, BLUE, LIKE, META, PILL, REPOST, type BirdyAuthor, type BirdyPost } from '../data';
+import { compactCount } from '../polish/format';
+import { HeartBurst } from '../polish/HeartBurst';
 import { PostCard } from './PostCard';
 import { Avatar, PostImages, RichText, VerifiedBadge } from '../ui';
 
@@ -51,7 +53,7 @@ export function PostDetail({ post, me, onBack, onToggleLike, onToggleRepost, onT
                     </button>
 
                     {post.body && (
-                        <p className="mt-3 whitespace-pre-wrap break-words text-[18px] leading-snug text-black">
+                        <p className="mt-3 whitespace-pre-wrap break-words text-[22px] leading-[1.35] text-black">
                             <RichText text={post.body} />
                         </p>
                     )}
@@ -59,31 +61,41 @@ export function PostDetail({ post, me, onBack, onToggleLike, onToggleRepost, onT
                     <PostImages images={post.images} />
 
                     <div className="mt-3 text-[14px]" style={{ color: META }}>
-                        {absoluteTime(post.createdAt)} · {post.views ?? 0} {t('birdy.views', 'views')}
+                        {absoluteTime(post.createdAt)} · <span className="font-semibold text-black">{compactCount(post.views ?? 0)}</span> {t('birdy.views', 'views')}
                     </div>
                 </div>
 
                 <div className="mx-4 mt-3 border-t border-black/10 py-3 text-[14px]" style={{ color: META }}>
-                    <span className="font-bold text-black">{post.reposts}</span> {t('birdy.reposts', 'Reposts')}
-                    <span className="ml-5 font-bold text-black">{post.likes}</span> {t('birdy.likes', 'Likes')}
+                    <span className="font-bold text-black">{compactCount(post.reposts)}</span> {t('birdy.reposts', 'Reposts')}
+                    <span className="ml-5 font-bold text-black">{compactCount(post.likes)}</span> {t('birdy.likes', 'Likes')}
                 </div>
 
                 <div className="mx-4 flex items-center justify-around border-y border-black/10 py-2.5" style={{ color: META }}>
-                    <button type="button" aria-label={t('birdy.reply', 'Reply')} onClick={() => inputRef.current?.focus()}><MessageCircle className="h-[22px] w-[22px]" strokeWidth={1.8} /></button>
-                    <button type="button" aria-label={t('birdy.repost', 'Repost')} onClick={onToggleRepost} style={post.reposted ? { color: REPOST } : undefined}><Repeat2 className="h-[22px] w-[22px]" strokeWidth={1.8} /></button>
-                    <button type="button" aria-label={t('birdy.like', 'Like')} onClick={onToggleLike} style={post.liked ? { color: LIKE } : undefined}>
-                        <Heart className="h-[22px] w-[22px]" strokeWidth={1.8} fill={post.liked ? LIKE : 'none'} color={post.liked ? LIKE : 'currentColor'} />
+                    <button type="button" aria-label={t('birdy.reply', 'Reply')} onClick={() => inputRef.current?.focus()} className="transition-transform active:scale-90"><MessageCircle className="h-[22px] w-[22px]" strokeWidth={1.8} /></button>
+                    <button type="button" aria-label={t('birdy.repost', 'Repost')} onClick={onToggleRepost} className="transition-transform active:scale-90" style={post.reposted ? { color: REPOST } : undefined}><Repeat2 className="h-[22px] w-[22px]" strokeWidth={1.8} /></button>
+                    <button type="button" aria-label={t('birdy.like', 'Like')} onClick={onToggleLike} className="transition-transform active:scale-90" style={post.liked ? { color: LIKE } : undefined}>
+                        <HeartBurst liked={post.liked === true}>
+                            <Heart className="h-[22px] w-[22px]" strokeWidth={1.8} fill={post.liked ? LIKE : 'none'} color={post.liked ? LIKE : 'currentColor'} />
+                        </HeartBurst>
                     </button>
                 </div>
 
+                {(post.thread?.length ?? 0) > 0 && (
+                    <p className="px-4 pt-3 text-[13px] font-semibold uppercase tracking-wide" style={{ color: META }}>
+                        {t('birdy.replies', 'Replies')}
+                    </p>
+                )}
                 {post.thread?.map(r => (
-                    <PostCard
-                        key={r.id}
-                        post={r}
-                        isOwn={r.author.handle === me.handle}
-                        onToggleLike={() => onToggleReplyLike(r.id)}
-                        onOpenAuthor={onOpenAuthor}
-                    />
+                    <div key={r.id} className="relative">
+                        {/* Thread rail: ties each reply back to the focal post, Twitter-style. */}
+                        <span aria-hidden className="absolute bottom-0 left-[43px] top-0 w-[2px] rounded bg-black/[0.08]" />
+                        <PostCard
+                            post={r}
+                            isOwn={r.author.handle === me.handle}
+                            onToggleLike={() => onToggleReplyLike(r.id)}
+                            onOpenAuthor={onOpenAuthor}
+                        />
+                    </div>
                 ))}
             </div>
 

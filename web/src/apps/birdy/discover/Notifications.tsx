@@ -6,10 +6,11 @@ import { useAsyncData } from '@/hooks/useAsyncData';
 import { EmptyState } from '@/ui/EmptyState';
 import { apiNotifications } from '../birdyApi';
 import { BG, BLUE, LIKE, META, REPOST, type BirdyAuthor, type BirdyNotification } from '../data';
+import { FeedSkeleton } from '../polish/Skeleton';
 import { PostCard } from '../feed/PostCard';
 import { Avatar, PersonGlyph } from '../ui';
 
-export function Notifications({ onOpenProfile }: { onOpenProfile: () => void }) {
+export function Notifications({ onOpenProfile }: { onOpenProfile: (handle?: string) => void }) {
     const [items, setItems] = useState<BirdyNotification[]>([]);
 
     const { loading } = useAsyncData(apiNotifications, [], { onData: setItems });
@@ -25,12 +26,13 @@ export function Notifications({ onOpenProfile }: { onOpenProfile: () => void }) 
     return (
         <div className="flex h-full flex-col" style={{ background: BG }}>
             <header className="flex shrink-0 items-center px-4 py-2">
-                <button type="button" onClick={onOpenProfile} aria-label={t('birdy.yourProfile', 'Your profile')}><Avatar size={44} /></button>
+                <button type="button" onClick={() => onOpenProfile()} aria-label={t('birdy.yourProfile', 'Your profile')}><Avatar size={44} /></button>
                 <h1 className="flex-1 text-center text-[22px] font-extrabold text-black">{t('birdy.notifications', 'Notifications')}</h1>
                 <div className="w-11" aria-hidden />
             </header>
 
             <div className="min-h-0 flex-1 overflow-y-auto">
+                {loading && items.length === 0 && <FeedSkeleton />}
                 {!loading && items.length === 0 && (
                     <EmptyState
                         center
@@ -52,16 +54,16 @@ export function Notifications({ onOpenProfile }: { onOpenProfile: () => void }) 
                             : <PersonGlyph className="h-8 w-8" color={BLUE} />;
                     const text = n.kind === 'follow' ? t('birdy.followedYou', 'followed you') : n.text;
                     const preview = n.kind === 'follow' ? undefined : n.post?.body;
-                    return <NotifRow key={n.id} icon={icon} user={n.user} text={text} preview={preview} />;
+                    return <NotifRow key={n.id} icon={icon} user={n.user} text={text} preview={preview} onOpen={() => onOpenProfile(n.user.handle)} />;
                 })}
             </div>
         </div>
     );
 }
 
-function NotifRow({ icon, user, text, preview }: { icon: React.ReactNode; user: BirdyAuthor; text: string; preview?: string }) {
+function NotifRow({ icon, user, text, preview, onOpen }: { icon: React.ReactNode; user: BirdyAuthor; text: string; preview?: string; onOpen?: () => void }) {
     return (
-        <div className="flex gap-3.5 border-b border-black/10 px-4 py-4">
+        <button type="button" onClick={onOpen} className="flex w-full gap-3.5 border-b border-black/10 px-4 py-4 text-left transition-colors active:bg-black/[0.04]">
             <div className="flex w-8 shrink-0 justify-center pt-1">{icon}</div>
             <div className="min-w-0 flex-1">
                 <Avatar size={48} src={user.avatar} />
@@ -72,6 +74,6 @@ function NotifRow({ icon, user, text, preview }: { icon: React.ReactNode; user: 
                     <div className="mt-1 line-clamp-2 text-[16px] leading-snug" style={{ color: META }}>{preview}</div>
                 )}
             </div>
-        </div>
+        </button>
     );
 }

@@ -7,6 +7,8 @@ import { useStatusBarLight } from '@/shell/useStatusBarLight';
 import { EmptyState } from '@/ui/EmptyState';
 import { apiProfilePosts } from '../birdyApi';
 import { BG, BLUE, META, type BirdyAuthor, type BirdyProfile } from '../data';
+import { compactCount } from '../polish/format';
+import { FeedSkeleton } from '../polish/Skeleton';
 import { FollowList } from './FollowList';
 import { PostCard } from '../feed/PostCard';
 import { Avatar, VerifiedBadge } from '../ui';
@@ -46,8 +48,12 @@ export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onTog
     const empty = tabEmptyStates();
     const [tab, setTab] = useState<Tab>('posts');
     const { data: postsData } = useAsyncData(() => apiProfilePosts(tab, handle), [tab, handle]);
+    const postsLoading = postsData === undefined;
     const posts = postsData ?? [];
     const [following, setFollowing] = useState(false);
+    const [followHover, setFollowHover] = useState(false);
+    // Another player's profile hasn't answered yet: bones instead of flashing OUR name/handle.
+    const headerLoading = isOther && profile === null;
 
     useEffect(() => { setFollowing(!!profile?.isFollowing); }, [profile?.isFollowing]);
 
@@ -101,12 +107,18 @@ export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onTog
                                 <button
                                     type="button"
                                     onClick={toggleFollow}
-                                    className="rounded-full px-5 py-2 text-[15px] font-bold transition-colors active:opacity-80"
+                                    onMouseEnter={() => setFollowHover(true)}
+                                    onMouseLeave={() => setFollowHover(false)}
+                                    className="min-w-[108px] rounded-full px-5 py-2 text-[15px] font-bold transition-colors active:opacity-80"
                                     style={following
-                                        ? { border: `1.5px solid ${BLUE}`, color: BLUE }
+                                        ? (followHover
+                                            ? { border: '1.5px solid rgba(244,33,46,0.45)', color: '#f4212e', background: 'rgba(244,33,46,0.08)' }
+                                            : { border: `1.5px solid ${BLUE}`, color: BLUE })
                                         : { background: BLUE, color: '#fff' }}
                                 >
-                                    {following ? t('birdy.following', 'Following') : t('birdy.follow', 'Follow')}
+                                    {following
+                                        ? (followHover ? t('birdy.unfollow', 'Unfollow') : t('birdy.following', 'Following'))
+                                        : t('birdy.follow', 'Follow')}
                                 </button>
                             </div>
                         ) : (
@@ -121,11 +133,22 @@ export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onTog
                         )}
                     </div>
 
-                    <div className="mt-2 flex items-center gap-1.5">
-                        <span className="text-[22px] font-extrabold text-black">{name}</span>
-                        {verified && <VerifiedBadge size={20} />}
-                    </div>
-                    <div className="text-[16px]" style={{ color: META }}>@{displayHandle}</div>
+                    {headerLoading ? (
+                        <div className="mt-3 flex flex-col gap-2" aria-hidden>
+                            <div className="h-6 w-40 animate-shimmer rounded-full bg-black/[0.07]"
+                                style={{ backgroundImage: 'linear-gradient(90deg, rgba(0,0,0,0) 35%, rgba(255,255,255,0.55) 50%, rgba(0,0,0,0) 65%)', backgroundSize: '200% 100%' }} />
+                            <div className="h-4 w-28 animate-shimmer rounded-full bg-black/[0.07]"
+                                style={{ backgroundImage: 'linear-gradient(90deg, rgba(0,0,0,0) 35%, rgba(255,255,255,0.55) 50%, rgba(0,0,0,0) 65%)', backgroundSize: '200% 100%' }} />
+                        </div>
+                    ) : (
+                        <>
+                            <div className="mt-2 flex items-center gap-1.5">
+                                <span className="text-[22px] font-extrabold text-black">{name}</span>
+                                {verified && <VerifiedBadge size={20} />}
+                            </div>
+                            <div className="text-[16px]" style={{ color: META }}>@{displayHandle}</div>
+                        </>
+                    )}
 
                     {profile?.bio ? (
                         <p className="mt-2 whitespace-pre-wrap text-[16px] leading-snug text-black">{profile.bio}</p>
@@ -140,21 +163,30 @@ export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onTog
 
                     <div className="mt-2 flex gap-4 text-[16px]" style={{ color: META }}>
                         <button type="button" onClick={() => setFollowView('following')} className="hover:underline">
-                            <span className="font-bold text-black">{profile?.following ?? 0}</span> {t('birdy.following', 'Following')}
+                            <span className="font-bold tabular-nums text-black">{compactCount(profile?.following ?? 0)}</span> {t('birdy.following', 'Following')}
                         </button>
                         <button type="button" onClick={() => setFollowView('followers')} className="hover:underline">
-                            <span className="font-bold text-black">{profile?.followers ?? 0}</span> {t('birdy.followers', 'Followers')}
+                            <span className="font-bold tabular-nums text-black">{compactCount(profile?.followers ?? 0)}</span> {t('birdy.followers', 'Followers')}
                         </button>
                     </div>
                 </div>
 
-                <div className="mt-3 flex border-b border-black/10">
+                <div className="relative mt-3 flex border-b border-black/10">
                     {TABS.map(tabId => (
                         <ProfileTab key={tabId} label={label[tabId]} active={tab === tabId} onClick={() => setTab(tabId)} />
                     ))}
+                    <span
+                        aria-hidden
+                        className="absolute bottom-0 left-0 flex w-1/4 justify-center transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                        style={{ transform: `translateX(${TABS.indexOf(tab) * 100}%)` }}
+                    >
+                        <span className="h-[3px] w-12 rounded-full" style={{ background: BLUE }} />
+                    </span>
                 </div>
 
-                {locked ? (
+                {postsLoading && !locked ? (
+                    <FeedSkeleton />
+                ) : locked ? (
                     <EmptyState
                         icon={<Lock className="h-7 w-7" strokeWidth={1.8} />}
                         circleClassName="bg-black/[0.06] text-black/35"
@@ -204,13 +236,10 @@ export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onTog
 
 function ProfileTab({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
     return (
-        <button type="button" onClick={onClick} className="relative flex-1 py-3.5 text-[17px]">
-            <span className={active ? 'font-bold text-black' : 'font-medium'} style={active ? undefined : { color: META }}>
+        <button type="button" onClick={onClick} className="relative flex-1 py-3.5 text-[16px]">
+            <span className={`transition-colors duration-200 ${active ? 'font-bold text-black' : 'font-medium'}`} style={active ? undefined : { color: META }}>
                 {label}
             </span>
-            {active && (
-                <span className="absolute bottom-0 left-1/2 h-[3px] w-12 -translate-x-1/2 rounded-full" style={{ background: BLUE }} />
-            )}
         </button>
     );
 }

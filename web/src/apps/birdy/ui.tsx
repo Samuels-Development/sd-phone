@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import { t } from '@/i18n';
 
 export function Avatar({ size = 40, src }: { size?: number; src?: string }) {
@@ -34,17 +36,6 @@ export function VerifiedBadge({ size = 16 }: { size?: number }) {
     );
 }
 
-export function BirdMark({ className }: { className?: string }) {
-    return (
-        <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-label="Birdy">
-            <ellipse cx="12.5" cy="15.5" rx="8" ry="4" transform="rotate(-8 12.5 15.5)" />
-            <circle cx="6" cy="12" r="3.6" />
-            <polygon points="3,11.2 0.3,12.4 3,13.6" />
-            <path d="M9 14.5 Q13 3 21.5 3.5 Q17.5 11.5 14 15 Z" />
-            <polygon points="18.5,16 23.6,19.6 17.5,18" />
-        </svg>
-    );
-}
 
 export function PersonGlyph({ className, color }: { className?: string; color?: string }) {
     return (
@@ -69,6 +60,23 @@ export function RichText({ text }: { text: string }) {
     return <>{nodes}</>;
 }
 
+/** Post media that keeps its box while loading (no layout shift) and fades the pixels in when
+ *  they arrive, over the same placeholder grey the skeletons use. */
+function FadeImg({ src, height }: { src: string; height: number }) {
+    const [loaded, setLoaded] = useState(false);
+    return (
+        <div className="w-full bg-black/[0.06]" style={{ height }}>
+            <img
+                src={src}
+                alt=""
+                draggable={false}
+                onLoad={() => setLoaded(true)}
+                className={`h-full w-full object-cover transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+            />
+        </div>
+    );
+}
+
 export function PostImages({ images }: { images?: string[] }) {
     if (!images || images.length === 0) return null;
     const n = images.length;
@@ -78,9 +86,7 @@ export function PostImages({ images }: { images?: string[] }) {
             className="mt-3 grid gap-0.5 overflow-hidden rounded-[16px] border border-black/10"
             style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
         >
-            {images.map((src, i) => (
-                <img key={`${src}-${i}`} src={src} alt="" draggable={false} className="w-full object-cover" style={{ height: h }} />
-            ))}
+            {images.map((src, i) => <FadeImg key={`${src}-${i}`} src={src} height={h} />)}
         </div>
     );
 }

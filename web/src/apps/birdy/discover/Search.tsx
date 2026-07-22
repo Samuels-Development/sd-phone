@@ -5,7 +5,9 @@ import { useSessionState } from '@/hooks/useSessionState';
 import { SearchBar } from '@/ui/SearchBar';
 import { apiSearch } from '../birdyApi';
 import { BG, BLUE, META, PILL, type BirdyAuthor } from '../data';
-import { Avatar, BirdMark, VerifiedBadge } from '../ui';
+import { Feather } from 'lucide-react';
+
+import { Avatar, VerifiedBadge } from '../ui';
 
 const TRENDING = [
     { tag: '#LosSantos',   posts: '4,812 posts' },
@@ -18,13 +20,19 @@ const TRENDING = [
 export function Search({ onOpenProfile }: { onOpenProfile: (handle?: string) => void }) {
     const [query,   setQuery]   = useSessionState('birdy:searchQuery', '');
     const [results, setResults] = useState<BirdyAuthor[]>([]);
+    const [pending, setPending] = useState(false);
     const searching = query.trim().length > 0;
 
     useEffect(() => {
-        if (!searching) { setResults([]); return; }
+        if (!searching) { setResults([]); setPending(false); return; }
         let alive = true;
+        setPending(true);
         const t = window.setTimeout(() => {
-            void apiSearch(query).then(r => { if (alive) setResults(r); });
+            void apiSearch(query).then(r => {
+                if (!alive) return;
+                setResults(r);
+                setPending(false);
+            });
         }, 200);
         return () => { alive = false; window.clearTimeout(t); };
     }, [query, searching]);
@@ -47,22 +55,26 @@ export function Search({ onOpenProfile }: { onOpenProfile: (handle?: string) => 
             <div className="min-h-0 flex-1 overflow-y-auto">
                 {searching ? (
                     results.length === 0 ? (
-                        <div className="px-10 py-16 text-center text-[14px]" style={{ color: META }}>{t('birdy.noAccountsFound', 'No accounts found.')}</div>
+                        // While the debounce + fetch run, say nothing rather than a false
+                        // "no accounts" that corrects itself a beat later.
+                        pending ? null : (
+                            <div className="px-10 py-16 text-center text-[15px]" style={{ color: META }}>{t('birdy.noAccountsFound', 'No accounts found.')}</div>
+                        )
                     ) : (
                         results.map(u => (
                             <button
                                 key={u.handle}
                                 type="button"
                                 onClick={() => onOpenProfile(u.handle)}
-                                className="flex w-full items-center gap-3 px-4 py-2.5 text-left active:bg-black/[0.04]"
+                                className="flex w-full items-center gap-3.5 px-4 py-3 text-left transition-colors active:bg-black/[0.04]"
                             >
-                                <Avatar size={42} src={u.avatar} />
+                                <Avatar size={48} src={u.avatar} />
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-1">
-                                        <span className="truncate text-[15px] font-bold text-black">{u.name}</span>
-                                        {u.verified && <VerifiedBadge size={15} />}
+                                        <span className="truncate text-[17px] font-bold text-black">{u.name}</span>
+                                        {u.verified && <VerifiedBadge size={16} />}
                                     </div>
-                                    <div className="truncate text-[14px]" style={{ color: META }}>@{u.handle}</div>
+                                    <div className="truncate text-[15px]" style={{ color: META }}>@{u.handle}</div>
                                 </div>
                             </button>
                         ))
@@ -70,7 +82,7 @@ export function Search({ onOpenProfile }: { onOpenProfile: (handle?: string) => 
                 ) : (
                     <div>
                         <div className="relative flex h-[200px] w-full items-center justify-center overflow-hidden pb-6" style={{ background: BLUE }}>
-                            <BirdMark className="h-32 w-32 text-white" />
+                            <Feather className="h-28 w-28 text-white" strokeWidth={1.5} />
                             <span className="absolute bottom-4 left-4 text-[17px] font-bold text-white">{t('birdy.startSearching', 'Start searching to explore Birdy')}</span>
                         </div>
 

@@ -480,6 +480,33 @@ function NotesIcon() {
     );
 }
 
+function DocumentsIcon() {
+    // Passwords-icon technique: one folder glyph repeated in yellow/green/blue, cascading
+    // diagonally, each with a tile-coloured stroke pass behind it so the layers cut cleanly
+    // out of each other.
+    const TILE = '#F1F2F5';
+    const FOLDER = 'M -16 -9 h 9 a 2 2 0 0 1 1.6 0.9 l 1.8 2.3 h 16.2 a 3 3 0 0 1 3 3 v 11.8 a 3 3 0 0 1 -3 3 h -25.6 a 3 3 0 0 1 -3 -3 v -15 a 3 3 0 0 1 3 -3 z';
+    const fold = (grad: string, tx: number, ty: number) => (
+        <g transform={`translate(${tx} ${ty})`}>
+            <g fill={grad} stroke={TILE} strokeWidth="2.6"><path d={FOLDER} /></g>
+            <g fill={grad}><path d={FOLDER} /></g>
+        </g>
+    );
+    return (
+        <svg viewBox={`0 0 ${S} ${S}`} width={S} height={S}>
+            <defs>
+                <LinearGrad id="docy" top="#FFE03D" bot="#F5A623" angle={160} />
+                <LinearGrad id="docg" top="#5BE372" bot="#1FAE43" angle={160} />
+                <LinearGrad id="docb" top="#56C8FF" bot="#0A6CDE" angle={160} />
+            </defs>
+            <rect width={S} height={S} fill={TILE} />
+            {fold('url(#docy)', 23.5, 23.5)}
+            {fold('url(#docg)', 28.5, 29.5)}
+            {fold('url(#docb)', 33.5, 35.5)}
+        </svg>
+    );
+}
+
 function SettingsIcon() {
     const teeth = (n: number, base: number, tip: number, bhw: number, thw: number, fill: string) =>
         Array.from({ length: n }).map((_, i) => (
@@ -661,11 +688,27 @@ function CalculatorIcon() {
 }
 
 function BirdyIcon() {
+    // A quill on the sky: Lucide's Feather vane filled solid, with the shaft and barb masked
+    // OUT so the tile gradient shows through the cuts (true cutouts, not painted-on lines).
     return (
         <svg viewBox={`0 0 ${S} ${S}`} width={S} height={S}>
-            <rect width={S} height={S} fill="#3d9ef8" />
-            <svg x="0" y="0" width={S} height={S} viewBox="0 0 128 128" fill="#fff">
-                <path fillRule="evenodd" d="M 30.632 36.250 C 31.370 40.371, 33.853 50.454, 34.626 52.468 C 35.112 53.734, 34.221 54, 29.493 54 L 23.773 54 24.469 58.750 C 26.523 72.765, 36.138 83.434, 50.413 87.537 C 67.495 92.447, 86.119 81.769, 92.014 63.685 C 93.485 59.173, 94.054 58.589, 99.057 56.449 L 104.500 54.121 98.482 51.497 C 94.441 49.735, 91.903 47.895, 90.757 45.898 C 89.020 42.873, 82.173 39.044, 78.500 39.044 C 72.147 39.044, 64.013 46.174, 64.004 51.750 C 64.002 52.987, 63.729 54, 63.397 54 C 63.066 54, 59.128 52.268, 54.647 50.152 C 46.302 46.210, 34.742 38.161, 32.676 34.852 C 30.904 32.015, 29.986 32.643, 30.632 36.250 Z" />
+            <defs>
+                <LinearGrad id="bdy" top="#6BC1FF" mid="#3D9EF8" bot="#1D7BE8" />
+                <mask id="bdyfcut">
+                    <rect x="0" y="0" width="24" height="24" fill="white" />
+                    <g fill="none" stroke="black" strokeWidth="1.9" strokeLinecap="round">
+                        <path d="M16 8 2 22" />
+                        <path d="M17.5 15H9" />
+                    </g>
+                </mask>
+            </defs>
+            <rect width={S} height={S} fill="url(#bdy)" />
+            <svg x="9" y="9" width="42" height="42" viewBox="0 0 24 24">
+                <path
+                    d="M12.67 19a2 2 0 0 0 1.416-.588l6.154-6.172a6 6 0 0 0-8.49-8.49L5.586 9.914A2 2 0 0 0 5 11.328V18a1 1 0 0 0 1 1z"
+                    fill="#fff"
+                    mask="url(#bdyfcut)"
+                />
             </svg>
         </svg>
     );
@@ -1216,6 +1259,7 @@ const ICON_MAP: Record<string, IconComponent> = {
     clock:    ClockIcon,
     calendar: CalendarIcon,
     notes:    NotesIcon,
+    documents: DocumentsIcon,
     voicememos: VoiceMemosIcon,
     bank:     BankIcon,
     settings: SettingsIcon,

@@ -135,6 +135,24 @@ module.exports = {
                     '62%':  { transform: 'scale(0.93)' },
                     '100%': { transform: 'scale(1)' },
                 },
+                // Skeleton shimmer: a highlight band sweeping a wide gradient background.
+                'shimmer': {
+                    '0%':   { backgroundPosition: '-200% 0' },
+                    '100%': { backgroundPosition: '200% 0' },
+                },
+                // Like feedback: the heart overshoots then settles...
+                'heart-pop': {
+                    '0%':   { transform: 'scale(1)' },
+                    '30%':  { transform: 'scale(1.38)' },
+                    '60%':  { transform: 'scale(0.88)' },
+                    '100%': { transform: 'scale(1)' },
+                },
+                // ...while a ring blooms outward and dissolves behind it.
+                'burst-ring': {
+                    '0%':   { transform: 'scale(0.3)', opacity: 0.55 },
+                    '70%':  { transform: 'scale(1.25)', opacity: 0.22 },
+                    '100%': { transform: 'scale(1.55)', opacity: 0 },
+                },
             },
             animation: {
                 'slide-up-fade':   'slide-up-fade 0.32s ease-out',
@@ -150,6 +168,9 @@ module.exports = {
                 'tab-in-left':     'tab-in-left 0.26s cubic-bezier(0.22,0.9,0.3,1)',
                 'app-jiggle':      'app-jiggle 0.32s ease-in-out infinite',
                 'plop':            'plop 0.4s cubic-bezier(0.34,1.56,0.64,1)',
+                'shimmer':         'shimmer 1.6s linear infinite',
+                'heart-pop':       'heart-pop 0.42s cubic-bezier(0.34,1.56,0.64,1)',
+                'burst-ring':      'burst-ring 0.5s ease-out forwards',
             },
         },
     },

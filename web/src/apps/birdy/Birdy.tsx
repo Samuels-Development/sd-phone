@@ -33,7 +33,8 @@ export function Birdy({ onClose }: { onClose: () => void }) {
     const [me,          setMe]          = useState<BirdyAuthor>(CURRENT_USER);
     const { authed, setAuthed, authChecked, justAuthed, setJustAuthed, myNumber, myEmail, savedLogin } = useAppAuth('birdy',
         () => apiMe().then(s => { if (s.me) setMe(s.me); return s.loggedIn; }));
-    const [posts,       setPosts]       = useState<BirdyPost[]>([]);
+    // null = not fetched yet (the feed shows skeletons instead of a false "no posts" flash).
+    const [posts,       setPosts]       = useState<BirdyPost[] | null>(null);
     const [convos,      setConvos]      = useState<BirdyConversation[]>([]);
     const [tab,         setTab]         = useSessionState<Tab>('birdy:tab', 'home');
     const [feed,        setFeed]        = useSessionState<'all' | 'following'>('birdy:feed', 'all');
@@ -154,7 +155,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
     function toggleLike(id: string) {
         const flip = (p: BirdyPost): BirdyPost =>
             p.id === id ? { ...p, liked: !p.liked, likes: p.likes + (p.liked ? -1 : 1) } : p;
-        setPosts(prev => prev.map(flip));
+        setPosts(prev => (prev ? prev.map(flip) : prev));
         setOpenPost(prev => prev ? { ...flip(prev), thread: prev.thread?.map(flip) } : prev);
         void apiToggleLike(id);
     }
@@ -162,18 +163,29 @@ export function Birdy({ onClose }: { onClose: () => void }) {
     function toggleRepost(id: string) {
         const flip = (p: BirdyPost): BirdyPost =>
             p.id === id ? { ...p, reposted: !p.reposted, reposts: p.reposts + (p.reposted ? -1 : 1) } : p;
-        setPosts(prev => prev.map(flip));
+        setPosts(prev => (prev ? prev.map(flip) : prev));
         setOpenPost(prev => prev ? { ...flip(prev), thread: prev.thread?.map(flip) } : prev);
         void apiToggleRepost(id);
     }
 
     async function addPost(body: string, images: string[]) {
         const post = await apiCreate(body, images.length ? images : undefined);
-        if (post) setPosts(prev => [post, ...prev]);
+        if (post) setPosts(prev => (prev ? [post, ...prev] : [post]));
         setComposing(false);
         setTab('home');
         setFeed('all');
     }
+
+    // Switching feeds drops back to skeletons; a same-tab tap changes nothing.
+    function switchFeed(f: 'all' | 'following') {
+        if (f !== feed) setPosts(null);
+        setFeed(f);
+    }
+
+    const refreshNow = useCallback(
+        () => apiFeed(feed === 'following').then(p => setPosts(p)),
+        [feed],
+    );
 
     async function sendMessage(convoId: string, draft: MessageDraft) {
         const optimistic: BirdyMessage = {
@@ -247,7 +259,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
 
     let content: React.ReactNode;
     if (tab === 'home') {
-        content = <Feed posts={posts} me={me} feed={feed} onFeedChange={setFeed} onToggleLike={toggleLike} onToggleRepost={toggleRepost} onOpenPost={setOpenPostId} onOpenProfile={openProfile} onOpenAuthor={openProfile} />;
+        content = <Feed posts={posts} me={me} feed={feed} onFeedChange={switchFeed} onRefresh={refreshNow} onToggleLike={toggleLike} onToggleRepost={toggleRepost} onOpenPost={setOpenPostId} onOpenProfile={openProfile} onOpenAuthor={openProfile} />;
     } else if (tab === 'search') {
         content = <Search onOpenProfile={openProfile} />;
     } else if (tab === 'notifications') {
