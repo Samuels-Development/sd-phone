@@ -110,6 +110,20 @@ function player.getSourceByIdentifier(citizenid)
     return nil
 end
 
+---Reachability resolver: the source carrying `citizenid` on ANY phone, not just the active one.
+---Identical to getSourceByIdentifier until unique phones wraps the two apart (calls ring a
+---pocketed phone; live UI pushes only land on the active one).
+---@param citizenid string|nil
+---@return number|nil source
+function player.getAnySourceByIdentifier(citizenid)
+    if not citizenid or citizenid == '' then return nil end
+    for _, src in ipairs(GetPlayers()) do
+        local s = tonumber(src)
+        if s and player.getIdentifier(s) == citizenid then return s end
+    end
+    return nil
+end
+
 ---`{ [citizenid] = source }` over framework-native identifiers, bypassing SIM indirection.
 ---@return table<string, number>
 function player.onlineRealCidMap()

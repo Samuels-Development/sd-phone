@@ -30,7 +30,8 @@ return {
     -- resolvable); the section is hidden on ESX, like the Jobs tab.
     -- Payout: when a society bank is available the payment is credited to the
     -- business account; otherwise it falls back to the sending employee's own
-    -- bank (see bridge/server/society.lua).
+    -- bank (see bridge/server/society.lua). A per-company `commission` (below)
+    -- splits off a cut of the society-credited payment to the sending employee.
     InvoicesEnabled = true,
     -- Smallest and largest amount a single invoice may be for.
     MinInvoiceAmount = 1,
@@ -43,6 +44,12 @@ return {
     -- bank, employees, quit) - they just won't appear in the directory.
     -- `bossGrade` is an ESX-ONLY fallback (overrides DefaultBossGrade for this
     -- company); QBCore/QBox ignore it and use the grade's isboss flag.
+    -- `commission` is an OPTIONAL fraction 0.0-1.0 of a paid business invoice
+    -- that goes to the sending employee, with the remainder going to the society
+    -- account (the two always sum to the invoice amount, so no money is minted).
+    -- Absent or 0 means the whole amount goes to the society. Only applies when a
+    -- society bank is available; the no-society fallback already pays the sending
+    -- employee in full, so no commission is split there.
     Companies = {
         {
             job = 'police',
@@ -74,6 +81,7 @@ return {
             emoji = '⚙️',
             canCall = false,
             bossGrade = 2,
+            commission = 0.1,
             coords = { x = -347.3, y = -133.8, z = 39.0 },
         },
         {
@@ -84,6 +92,7 @@ return {
             emoji = '🚕',
             canCall = false,
             bossGrade = 2,
+            commission = 0.15,
             coords = { x = 895.7, y = -179.3, z = 74.7 },
         },
     },

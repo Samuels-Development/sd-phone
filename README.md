@@ -133,11 +133,29 @@ Building from a git clone yourself: `cd web && npm ci && npm run build`. The out
 
 ## Unique Phones & SIM Cards (optional)
 
-Off by default. Flip `Enabled = true` in `configs/simcards.lua` and phone numbers stop belonging to characters — they live on **SIM card items**. Whichever SIM is in a phone decides whose data that phone shows: messages, call log, contacts, photos, app logins, settings — everything. Steal someone's phone with the SIM inside and you're reading *their* phone; without any SIM, a phone opens to a **No SIM** screen with no service and every server action refused.
+Everything lives in `configs/uniqueandsim.lua`. The short version:
+
+| You want | Set |
+|---|---|
+| Stock behaviour (shared data, automatic numbers) | `Enabled = false` |
+| Unique phones, SIM cards carry the number | `Enabled = true`, `DataOwner = 'device'` |
+| Unique phones, **no SIM items** (built-in numbers) | `'device'` + `BuiltInNumbers = true` |
+| Stock data, SIMs **only change your number** | `Enabled = true`, `DataOwner = 'character'` |
+| The SIM *is* the phone (original unique phones) | `Enabled = true`, `DataOwner = 'sim'` |
+
+Off by default. Flip `Enabled = true` and phone numbers stop belonging to characters — they live on **SIM card items**. A second switch, `DataOwner`, decides who owns the *data*:
+
+- **`DataOwner = 'device'` (default) — the phone owns the data, the SIM only lends a number.** Each phone item gets a persistent identity the first time it's used, and that identity keys everything: messages, call log, contacts, photos, notes, app logins, settings, games. Popping the SIM out just drops your **number and service** — the phone still opens and every non-number app keeps working, the status bar reads **No Service**. Move a SIM to another phone and that phone gets your **number**, not your data. Steal a phone and you get *its* apps behind the owner's lockscreen (Face Unlock never works for you), but never their number unless the SIM is inside.
+- **`DataOwner = 'sim'` (legacy) — the SIM owns the data.** Whichever SIM is in a phone decides whose data that phone shows — everything. Steal someone's phone with the SIM inside and you're reading *their* phone; without any SIM, a phone opens to a full-screen **No SIM** screen with no service and every server action refused.
+- **`DataOwner = 'character'` — stock data, SIM numbers.** Every phone opens the holder's *own* character profile, exactly like the feature being off — a stolen phone shows the thief's data, never the owner's. Without a SIM the character keeps a vanilla auto-assigned number with full service; installing a SIM changes **only the number**, ejecting falls back to a fresh auto number. Enabling this on an existing stock server keeps everyone's data untouched.
+
+Either mode: the number follows the SIM, and Cloud Backup carries a character's data to a new phone (the number stays behind on the old SIM). Flipping an existing legacy server to the default device mode is safe and automatic — the first time each phone is used it **adopts** the identity of the SIM currently in it, so no data is copied or lost; only from then on does the number float free of the data.
+
+**Don't want SIM cards at all?** Set `BuiltInNumbers = true` and phones stay unique devices but mint their own **permanent built-in number** on first use (an eSIM, stamped onto the item) — no `sim_card` item, no install/eject, the number lives and dies with the phone. Device identity is implied; skip the SIM item setup below entirely.
 
 ### Setup
 
-1. Enable the feature in `configs/simcards.lua` and add the SIM item to your inventory (ox_inventory example):
+1. Enable the feature in `configs/uniqueandsim.lua` and add the SIM item to your inventory (ox_inventory example; not needed with `BuiltInNumbers`):
 
    ```lua
    ['sim_card'] = {
@@ -150,10 +168,12 @@ Off by default. Flip `Enabled = true` in `configs/simcards.lua` and phone number
    },
    ```
 
-2. Give players a phone item plus a SIM:
-   - `/givesim <playerId>` (admin) — a blank SIM with a fresh number.
+2. Get SIMs to players — **no integration needed**: sell or spawn `sim_card` like any normal item (ox_inventory shop, loot table, `/give`, anything). A blank card **activates itself on first use**, minting and registering a fresh number on the spot; once activated the number stays on that card through every eject and reinsert. (`ActivateBlankSims = false` turns this off if you want SIM distribution controlled.)
+
+   Optional paths for special cases:
+   - `/givesim <playerId>` (admin) — a pre-activated SIM with a fresh number.
    - `/givesim <playerId> bind` — a **character-bound** SIM: it carries the player's existing number and their existing phone data, so servers switching the feature on lose nothing.
-   - Or from another resource: `exports['sd-phone']:giveSimCard(source, { citizenid = cid })`.
+   - From another resource: `exports['sd-phone']:giveSimCard(source, { citizenid = cid })` for character-bound SIMs, or `{ number = '2085550123' }` to hardcode a specific number.
 3. Phones handed out **before** enabling the feature keep working as items, but in container mode they have no SIM tray until re-issued.
 
 ### Two attach modes
@@ -173,9 +193,9 @@ A player can carry **several phones, each with its own SIM**. Whichever phone th
 
 ### What players should know
 
-- **No SIM = no service.** The phone opens but shows the No SIM screen; nothing works until a SIM is installed.
-- **Your number lives on the SIM.** Move the SIM to another phone and the number (and the whole phone profile) moves with it. **A lost number is lost** — restores never bring numbers back.
-- **Passcodes still protect you.** A thief sees your lockscreen; if you set a passcode they must know it — Face Unlock never works for anyone but the SIM's original owner.
+- **No SIM = no service.** In the default device mode the phone still opens and non-number apps (photos, notes, settings, account apps, games) keep working — you just can't call or text and the bar shows **No Service** until a SIM is installed. In legacy mode a SIM-less phone is a dead **No SIM** screen.
+- **Your number lives on the SIM.** Move the SIM to another phone and the number moves with it — and in legacy mode the whole phone profile follows too. **A lost number is lost** — restores never bring numbers back.
+- **Passcodes still protect you.** A thief sees your lockscreen; if you set a passcode they must know it — Face Unlock never works for anyone but the phone's original owner.
 - **Cloud Backup** (Settings → SIM & Backup) belongs to your **character** and is protected by a **backup password** you set when turning it on (a copy is saved into your Passwords app). After losing your phone, get a new phone + blank SIM, press *Restore from Backup* and enter the password: your contacts, messages, photos, notes, settings and app logins are copied to the new phone. The number is **not** restored — your new SIM keeps its own number, and the old number stays on the old SIM.
 
 ### SIM exports

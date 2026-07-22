@@ -19,11 +19,19 @@ function store.ensureSchema()
             number     VARCHAR(20) NOT NULL,
             identity   VARCHAR(64) NOT NULL,
             owner_cid  VARCHAR(64) NULL,
+            adopted_by VARCHAR(64) NULL,
             created_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (number),
             INDEX idx_phone_sim_identity (identity)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
+    local hasAdoptedBy = MySQL.scalar.await([[
+        SELECT COUNT(*) FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'phone_sim_cards' AND column_name = 'adopted_by'
+    ]])
+    if (tonumber(hasAdoptedBy) or 0) == 0 then
+        MySQL.query.await('ALTER TABLE phone_sim_cards ADD COLUMN adopted_by VARCHAR(64) NULL')
+    end
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_cloud_backups (
             citizenid  VARCHAR(64) NOT NULL,
@@ -41,6 +49,60 @@ function store.ensureSchema()
     ]])
     if (tonumber(hasPassword) or 0) == 0 then
         MySQL.query.await('ALTER TABLE phone_cloud_backups ADD COLUMN password VARCHAR(64) NULL')
+    end
+    local hasDevice = MySQL.scalar.await([[
+        SELECT COUNT(*) FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'phone_cloud_backups' AND column_name = 'device_identity'
+    ]])
+    if (tonumber(hasDevice) or 0) == 0 then
+        MySQL.query.await('ALTER TABLE phone_cloud_backups ADD COLUMN device_identity VARCHAR(64) NULL')
+        MySQL.query.await('ALTER TABLE phone_cloud_backups ADD COLUMN auto_sync TINYINT(1) NOT NULL DEFAULT 1')
+        MySQL.query.await('ALTER TABLE phone_cloud_backups ADD COLUMN synced_at BIGINT NULL')
+    end
+
+    -- Multi-profile backups: one row per (character, phone). The single-slot table above stays
+    -- as the migration source and is otherwise unused.
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS phone_cloud_profiles (
+            citizenid       VARCHAR(64) NOT NULL,
+            device_identity VARCHAR(64) NOT NULL,
+            identity        VARCHAR(64) NOT NULL,
+            enabled         TINYINT(1)  NOT NULL DEFAULT 1,
+            auto_sync       TINYINT(1)  NOT NULL DEFAULT 1,
+            synced_at       BIGINT      NULL,
+            color           VARCHAR(32) NULL,
+            number          VARCHAR(32) NULL,
+            updated_at      TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
+                ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (citizenid, device_identity)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ]])
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS phone_cloud_accounts (
+            citizenid  VARCHAR(64) NOT NULL,
+            password   VARCHAR(64) NULL,
+            updated_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
+                ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (citizenid)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ]])
+    -- One-shot migration of single-slot rows (a legacy pointer row's device IS its identity).
+    -- Only when the profiles table has never been populated, so deleted profiles stay deleted.
+    local migrated = MySQL.scalar.await('SELECT 1 FROM phone_cloud_profiles LIMIT 1')
+    if not migrated then
+        pcall(function()
+            MySQL.query.await([[
+                INSERT IGNORE INTO phone_cloud_profiles
+                    (citizenid, device_identity, identity, enabled, auto_sync, synced_at)
+                SELECT citizenid, COALESCE(device_identity, identity), identity, enabled,
+                       COALESCE(auto_sync, 1), synced_at
+                FROM phone_cloud_backups
+            ]])
+            MySQL.query.await([[
+                INSERT IGNORE INTO phone_cloud_accounts (citizenid, password)
+                SELECT citizenid, password FROM phone_cloud_backups WHERE password IS NOT NULL
+            ]])
+        end)
     end
 end
 
@@ -148,33 +210,157 @@ function store.ensureRegistered(number, activatorCid)
     return row.identity
 end
 
----Reads a character's cloud-backup pointer, or nil when never enabled. Read-only.
----@param citizenid string real (framework) citizenid
----@return { identity: string, enabled: boolean, password: string|nil }|nil
-function store.getBackup(citizenid)
-    if not citizenid or citizenid == '' then return nil end
-    local row = MySQL.single.await(
-        'SELECT identity, enabled, password FROM phone_cloud_backups WHERE citizenid = ?', { citizenid })
-    if not row then return nil end
-    return { identity = row.identity, enabled = util.truthy(row.enabled), password = row.password }
+---One-shot claim of a SIM's legacy profile for device-mode grandfathering: atomically stamps
+---`adopted_by` on the card, succeeding only for the FIRST phone to adopt it. A second phone that
+---later receives the same SIM sees the claim and gets the number, not the data.
+---@param number string bare-digit SIM number
+---@param identity string data identity being adopted (the card's legacy sim:/citizenid identity)
+---@return boolean claimed true only when THIS call took the (previously unclaimed) card
+function store.claimAdoption(number, identity)
+    local digits = util.digits(number)
+    if digits == '' or not identity or identity == '' then return false end
+    local affected = MySQL.update.await(
+        'UPDATE phone_sim_cards SET adopted_by = ? WHERE number = ? AND adopted_by IS NULL',
+        { identity, digits })
+    return (tonumber(affected) or 0) > 0
 end
 
----Upserts a character's cloud-backup pointer: which phone profile is "in the cloud", whether
----backup is currently on, and the (hashed) backup password. A nil passwordHash keeps whatever
----password is already stored.
+---Shapes a phone_cloud_profiles row for callers.
+---@param row table raw DB row
+---@return table profile
+local function shapeProfile(row)
+    return {
+        deviceIdentity = row.device_identity,
+        identity       = row.identity,
+        enabled        = util.truthy(row.enabled),
+        autoSync       = util.truthy(row.auto_sync),
+        syncedAt       = tonumber(row.synced_at),
+        color          = row.color,
+        number         = row.number,
+    }
+end
+
+---A character's backup profiles, most recently synced first. Read-only.
 ---@param citizenid string real (framework) citizenid
----@param identity string phone profile the backup points at
----@param enabled boolean
----@param passwordHash string|nil hashed backup password
-function store.setBackup(citizenid, identity, enabled, passwordHash)
-    if not citizenid or citizenid == '' or not identity or identity == '' then return end
+---@return table[] profiles
+function store.listProfiles(citizenid)
+    if not citizenid or citizenid == '' then return {} end
+    local rows = MySQL.query.await([[
+        SELECT device_identity, identity, enabled, auto_sync, synced_at, color, number
+        FROM phone_cloud_profiles WHERE citizenid = ?
+        ORDER BY synced_at DESC
+    ]], { citizenid }) or {}
+    local out = {}
+    for i = 1, #rows do out[i] = shapeProfile(rows[i]) end
+    return out
+end
+
+---One phone's backup profile, or nil.
+---@param citizenid string real (framework) citizenid
+---@param deviceIdentity string phone identity
+---@return table|nil profile
+function store.getProfile(citizenid, deviceIdentity)
+    if not citizenid or citizenid == '' or not deviceIdentity or deviceIdentity == '' then return nil end
+    local row = MySQL.single.await([[
+        SELECT device_identity, identity, enabled, auto_sync, synced_at, color, number
+        FROM phone_cloud_profiles WHERE citizenid = ? AND device_identity = ?
+    ]], { citizenid, deviceIdentity })
+    return row and shapeProfile(row) or nil
+end
+
+---Creates or re-enables a phone's backup profile with its snapshot namespace.
+---@param citizenid string real (framework) citizenid
+---@param deviceIdentity string phone identity
+---@param cloudIdentity string snapshot identity
+function store.upsertProfile(citizenid, deviceIdentity, cloudIdentity)
+    if not citizenid or citizenid == '' or not deviceIdentity or deviceIdentity == '' then return end
     MySQL.update.await([[
-        INSERT INTO phone_cloud_backups (citizenid, identity, enabled, password) VALUES (?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE
-            identity = VALUES(identity),
-            enabled  = VALUES(enabled),
-            password = COALESCE(VALUES(password), password)
-    ]], { citizenid, identity, enabled and 1 or 0, passwordHash })
+        INSERT INTO phone_cloud_profiles (citizenid, device_identity, identity, enabled)
+        VALUES (?, ?, ?, 1)
+        ON DUPLICATE KEY UPDATE enabled = 1, identity = VALUES(identity)
+    ]], { citizenid, deviceIdentity, cloudIdentity })
+end
+
+---Flips one profile's enabled flag.
+---@param citizenid string real (framework) citizenid
+---@param deviceIdentity string phone identity
+---@param on boolean
+function store.setProfileEnabled(citizenid, deviceIdentity, on)
+    MySQL.update.await(
+        'UPDATE phone_cloud_profiles SET enabled = ? WHERE citizenid = ? AND device_identity = ?',
+        { on == true and 1 or 0, citizenid, deviceIdentity })
+end
+
+---Flips one profile's auto-sync flag.
+---@param citizenid string real (framework) citizenid
+---@param deviceIdentity string phone identity
+---@param on boolean
+function store.setProfileAuto(citizenid, deviceIdentity, on)
+    MySQL.update.await(
+        'UPDATE phone_cloud_profiles SET auto_sync = ? WHERE citizenid = ? AND device_identity = ?',
+        { on == true and 1 or 0, citizenid, deviceIdentity })
+end
+
+---Records a completed snapshot sync plus the picker labels (frame colour + number at sync time).
+---@param citizenid string real (framework) citizenid
+---@param deviceIdentity string phone identity
+---@param syncedAt number unix epoch
+---@param color string|nil frame colour
+---@param number string|nil bare-digit number
+function store.setProfileSynced(citizenid, deviceIdentity, syncedAt, color, number)
+    MySQL.update.await([[
+        UPDATE phone_cloud_profiles SET synced_at = ?, color = ?, number = ?
+        WHERE citizenid = ? AND device_identity = ?
+    ]], { syncedAt, color, number, citizenid, deviceIdentity })
+end
+
+---Converts a legacy pointer profile to its minted snapshot namespace.
+---@param citizenid string real (framework) citizenid
+---@param deviceIdentity string phone identity
+---@param identity string new snapshot identity
+function store.setProfileIdentity(citizenid, deviceIdentity, identity)
+    MySQL.update.await(
+        'UPDATE phone_cloud_profiles SET identity = ? WHERE citizenid = ? AND device_identity = ?',
+        { identity, citizenid, deviceIdentity })
+end
+
+---Deletes one profile row (the caller wipes the snapshot data itself).
+---@param citizenid string real (framework) citizenid
+---@param deviceIdentity string phone identity
+function store.deleteProfile(citizenid, deviceIdentity)
+    MySQL.update.await(
+        'DELETE FROM phone_cloud_profiles WHERE citizenid = ? AND device_identity = ?',
+        { citizenid, deviceIdentity })
+end
+
+---How many backup profiles a character holds (enabled or not - disabled ones keep snapshots).
+---@param citizenid string real (framework) citizenid
+---@return number
+function store.profileCount(citizenid)
+    local n = MySQL.scalar.await(
+        'SELECT COUNT(*) FROM phone_cloud_profiles WHERE citizenid = ?', { citizenid })
+    return tonumber(n) or 0
+end
+
+---The character's cloud-account password hash, or nil when never set.
+---@param citizenid string real (framework) citizenid
+---@return string|nil passwordHash
+function store.getBackupPassword(citizenid)
+    if not citizenid or citizenid == '' then return nil end
+    local row = MySQL.single.await(
+        'SELECT password FROM phone_cloud_accounts WHERE citizenid = ?', { citizenid })
+    return row and row.password or nil
+end
+
+---Sets the character-level backup password (upsert; one password guards every profile).
+---@param citizenid string real (framework) citizenid
+---@param passwordHash string
+function store.setBackupPassword(citizenid, passwordHash)
+    if not citizenid or citizenid == '' then return end
+    MySQL.update.await([[
+        INSERT INTO phone_cloud_accounts (citizenid, password) VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE password = VALUES(password)
+    ]], { citizenid, passwordHash })
 end
 
 ---Moves a registered SIM to a different number, keeping its identity, owner and backups intact.

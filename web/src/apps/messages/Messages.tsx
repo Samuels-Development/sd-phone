@@ -31,7 +31,6 @@ type Draft = Omit<SendInput, 'conversation'>;
 export function Messages({ onClose }: { onClose: () => void }) {
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [contacts,      setContacts]      = useState<Contact[]>([]);
-    const [myNumber,      setMyNumber]      = useState('');
     const [openId,        setOpenId]        = useSessionState<string | null>('messages:openConvoId', null);
     const [composing,     setComposing]     = useSessionState('messages:composing', false);
     const [sendError,     setSendError]     = useState<string | null>(null);
@@ -42,7 +41,9 @@ export function Messages({ onClose }: { onClose: () => void }) {
     // The saved-contacts book, shared with the Phone app and kept live there (optimistic
     // add/edit/delete + push events). Names are resolved against it at render so a contact
     // change reflects in the conversation list / thread header without a Messages refetch.
-    const { contacts: liveCards } = useContacts('contacts');
+    // myNumber rides along for the same reason: the store refetches on live SIM swaps, so the
+    // own-number guards here never hold a pre-swap number.
+    const { contacts: liveCards, myNumber } = useContacts('contacts', 'myNumber');
     useEffect(() => { void useContactsStore.getState().load(); }, []);
 
     useEffect(() => {
@@ -52,7 +53,6 @@ export function Messages({ onClose }: { onClose: () => void }) {
             if (!active) return;
             setConversations(state.conversations);
             setContacts(state.contacts);
-            setMyNumber(state.myNumber);
 
             if (!pending) return;
             const digits = pending.number.replace(/\D/g, '');

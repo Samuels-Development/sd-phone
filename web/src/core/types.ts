@@ -31,6 +31,12 @@ export interface SimStatePush {
     enabled: boolean;
     hasSim?: boolean;
     number?: string;
+    /** DeviceIdentity mode: the phone owns its data and opens without a SIM (no No-SIM wall,
+     *  "No Service" in the status bar instead). Absent/false = legacy SIM-is-identity mode. */
+    device?: boolean;
+    /** Device mode only: the phone's device identity, used to namespace per-phone UI state
+     *  (setup completion, auth cache) so swapping SIMs on one phone never resets it. */
+    profile?: string;
 }
 
 export interface AppDef {
@@ -192,6 +198,7 @@ export type NuiMessage =
     | { action: 'sd-phone:ryde:ratingReceived'; data: { id: string; stars: number; tip?: number } }
     | { action: 'sd-phone:ryde:peerLocation';   data: { tripId: string; role: 'rider' | 'driver'; x: number; y: number; h: number } }
     | { action: 'sd-phone:close' }
+    | { action: 'sd-phone:profileReset' }
     | { action: 'sd-phone:client:characterLoaded' }
     | { action: 'sd-phone:launchApp'; data: { id: string; link?: Record<string, unknown> } }
     | { action: 'sd-phone:battery'; data: number }
@@ -323,7 +330,7 @@ export type NuiMessage =
     | { action: 'wordle:start';        data: { gameId: string; color: string; opponent: string; pot: number } }
     | { action: 'wordle:move';         data: { gameId: string; move: { rows: string[][]; solved: boolean; failed: boolean; tries: number; finishMs: number } } }
     | { action: 'wordle:ended';        data: { reason: string } }
-    | { action: 'sd-phone:notification';       data: { id?: string; app?: string; image?: string; title: string; body?: string; time?: string; appId?: string; quietInApp?: boolean } }
+    | { action: 'sd-phone:notification';       data: { id?: string; app?: string; image?: string; title: string; body?: string; time?: string; appId?: string; quietInApp?: boolean; otherPhone?: boolean; phoneColor?: string; profileKey?: string } }
     | { action: 'sd-phone:badges';             data: Record<string, number> }
     | { action: 'sd-phone:airshare';           data: { id: string; kind: string; fromName: string } }
     | { action: 'sd-phone:maps:friends:update'; data: FriendsUpdatePush }
