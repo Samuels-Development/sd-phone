@@ -28,6 +28,50 @@ local function compare(a, b)
     return 0
 end
 
+---Returns this resource's manifest version as bare x.y.z, or nil when the metadata is missing
+---or unparseable. Read-only.
+---@return string|nil current
+function version.current()
+    local raw = GetResourceMetadata(GetCurrentResourceName(), 'version', 0)
+              or GetResourceMetadata(GetCurrentResourceName(), 'Version', 0)
+    return raw and raw:match('%d+%.%d+%.%d+') or nil
+end
+
+---@type integer Seconds a latest-release answer (or failure) stays cached.
+local LATEST_TTL = 3600
+
+-- Latest-release cache; failures are cached too so a broken lookup never hammers GitHub.
+---@type { value: string|nil, at: number }|nil
+local latestCache
+
+---Resolves the latest non-prerelease GitHub release of `repo` as bare x.y.z, cached for
+---LATEST_TTL. Yields; nil when the lookup fails.
+---@param repo string GitHub repo in `owner/name` form.
+---@return string|nil latest
+function version.latest(repo)
+    if latestCache and (os.time() - latestCache.at) < LATEST_TTL then
+        return latestCache.value
+    end
+    local p = promise.new()
+    PerformHttpRequest(('https://api.github.com/repos/%s/releases/latest'):format(repo), function(status, response)
+        if status ~= 200 then return p:resolve(nil) end
+        local ok, data = pcall(json.decode, response or '')
+        if not ok or type(data) ~= 'table' or data.prerelease then return p:resolve(nil) end
+        p:resolve(type(data.tag_name) == 'string' and data.tag_name:match('%d+%.%d+%.%d+') or nil)
+    end, 'GET', '', { ['User-Agent'] = 'sd-phone' })
+    local latest = Citizen.Await(p)
+    latestCache = { value = latest, at = os.time() }
+    return latest
+end
+
+---True when `b` is a strictly newer version than `a`.
+---@param a string version as x.y.z
+---@param b string version as x.y.z
+---@return boolean newer
+function version.isNewer(a, b)
+    return compare(parse(a), parse(b)) < 0
+end
+
 ---Asynchronously check the resource's `version` metadata against the latest GitHub release on
 ---`repo` and print the verdict. Prereleases are skipped; read-only, no retries.
 ---@param repo string GitHub repo in `owner/name` form.

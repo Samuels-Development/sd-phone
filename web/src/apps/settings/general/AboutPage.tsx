@@ -5,10 +5,11 @@ import { formatPhone } from '@/lib/phone';
 import { useContacts } from '@/stores/contactsStore';
 import { ListGroup, ListRow } from '@/ui/ListGroup';
 import { SubPage } from '../SettingsSubPage';
-import { OS_VERSION } from './SoftwareUpdatePage';
+import { useVersionInfo } from './useVersionInfo';
 
 export function AboutPage({ onBack }: { onBack: () => void }) {
     const { myName, myNumber, card, load } = useContacts('myName', 'myNumber', 'card', 'load');
+    const version = useVersionInfo();
     useEffect(() => { void load(); }, [load]);
     const [legalOpen, setLegalOpen] = useState(false);
 
@@ -24,7 +25,7 @@ export function AboutPage({ onBack }: { onBack: () => void }) {
             </ListGroup>
 
             <ListGroup>
-                <ListRow label={t('settings.aboutSoftwareVersion', 'Software Version')} value={OS_VERSION.replace(/^\D+/, '')} divider />
+                <ListRow label={t('settings.aboutSoftwareVersion', 'Software Version')} value={version?.current ?? '...'} divider />
                 <ListRow label={t('settings.aboutModelName', 'Model Name')}       value="SD Phone Pro"  divider />
                 <ListRow label={t('settings.aboutModelNumber', 'Model Number')}     value="SP-2024"       divider />
                 <ListRow label={t('settings.aboutCapacity', 'Capacity')}         value="256 GB"        />
