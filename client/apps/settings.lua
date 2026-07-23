@@ -20,6 +20,7 @@ proxyCallback('sd-phone:settings:wallpapers:add',    'sd-phone:server:settings:w
 proxyCallback('sd-phone:settings:wallpapers:remove', 'sd-phone:server:settings:wallpapers:remove')
 proxyCallback('sd-phone:settings:setChatTextScale', 'sd-phone:server:settings:setChatTextScale')
 proxyCallback('sd-phone:settings:setPhoneScale',    'sd-phone:server:settings:setPhoneScale')
+proxyCallback('sd-phone:settings:setPhoneAlign',    'sd-phone:server:settings:setPhoneAlign')
 proxyCallback('sd-phone:settings:setVolumes',       'sd-phone:server:settings:setVolumes')
 proxyCallback('sd-phone:settings:setLocale',        'sd-phone:server:settings:setLocale')
 proxyCallback('sd-phone:settings:getNotifPref', 'sd-phone:server:settings:getNotifPref')
