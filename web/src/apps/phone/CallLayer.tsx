@@ -4,8 +4,11 @@ import { Mic, MicOff, Phone, Plus, User, Video, Volume2 } from 'lucide-react';
 
 import { resolveWallpaper } from '@/shell/wallpapers';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
+import { fetchNui } from '@/core/nui';
+import { useContacts } from '@/stores/contactsStore';
 import { acceptCall, declineCall, getCurrentCall, hangupCall } from './callsApi';
 import { formatPhone } from './data';
+import { playDtmf } from './keypad/dtmf';
 import { startRing } from './calls/ringtone';
 import { startRingtone } from '@/apps/settings/tonePlayer';
 import { resolveTone } from '@/apps/settings/tones';
@@ -20,6 +23,8 @@ function fmtElapsed(seconds: number): string {
     return formatDuration(seconds);
 }
 
+const KEYPAD_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
+
 export function CallLayer({ wallpaper }: { wallpaper?: string }) {
     const phase     = useCallStore(s => s.phase);
     const channel   = useCallStore(s => s.channel);
@@ -28,20 +33,29 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
     const startedAt = useCallStore(s => s.startedAt);
     const [muted, setMuted]     = useState(false);
     const [speaker, setSpeaker] = useState(false);
+    const [keypadOpen, setKeypadOpen]     = useState(false);
+    const [contactsOpen, setContactsOpen] = useState(false);
+    const [dtmfDialed, setDtmfDialed]     = useState('');
     const [now, setNow]         = useState(() => Date.now());
     const [videoPhase, setVideoPhase]         = useState<'off' | 'requesting' | 'incoming' | 'active'>('off');
     const [videoInitiator, setVideoInitiator] = useState(false);
     const { ringtone, ringtoneVol, customRingtones } = useTheme('ringtone', 'ringtoneVol', 'customRingtones');
+    const { contacts: contactList, load: loadContacts } = useContacts('contacts', 'load');
+
+    const resetControls = useCallback(() => {
+        setMuted(false); setSpeaker(false); setVideoPhase('off');
+        setKeypadOpen(false); setContactsOpen(false); setDtmfDialed('');
+    }, []);
 
     useNuiEvent('sd-phone:call:incoming', useCallback((data) => {
-        setMuted(false); setSpeaker(false); setVideoPhase('off');
+        resetControls();
         useCallStore.getState().incoming(data);
-    }, []));
+    }, [resetControls]));
 
     useNuiEvent('sd-phone:call:outgoing', useCallback((data) => {
-        setMuted(false); setSpeaker(false); setVideoPhase('off');
+        resetControls();
         useCallStore.getState().outgoing(data);
-    }, []));
+    }, [resetControls]));
 
     useNuiEvent('sd-phone:call:connected', useCallback((data) => {
         useCallStore.getState().connected(data);
@@ -51,8 +65,8 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
     useNuiEvent('sd-phone:call:ended', useCallback(() => {
         consumePendingVideo();
         useCallStore.getState().ended();
-        setVideoPhase('off');
-    }, []));
+        resetControls();
+    }, [resetControls]));
 
     useNuiEvent('sd-phone:video:request', useCallback(() => setVideoPhase('incoming'), []));
     useNuiEvent('sd-phone:video:accept',  useCallback(() => { setVideoInitiator(true); setVideoPhase('active'); }, []));
@@ -127,8 +141,18 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
                         <div className="flex flex-1 items-center">
                             <div className="rounded-[38px] bg-white/[0.12] px-7 py-8 shadow-[0_8px_40px_rgba(0,0,0,0.35)] ring-1 ring-white/10 backdrop-blur-2xl">
                                 <div className="grid grid-cols-3 justify-items-center gap-x-7 gap-y-6">
-                                    <ControlButton label={t('phone.speaker','Speaker')} active={speaker} onClick={() => setSpeaker(s => !s)} icon={<Volume2 className="h-[31px] w-[31px]" strokeWidth={2} />} />
-                                    <ControlButton label={t('phone.mute','Mute')} active={muted} onClick={() => setMuted(m => !m)} icon={muted ? <MicOff className="h-[31px] w-[31px]" strokeWidth={2} /> : <Mic className="h-[31px] w-[31px]" strokeWidth={2} />} />
+                                    <ControlButton
+                                        label={t('phone.speaker','Speaker')}
+                                        active={speaker}
+                                        onClick={() => { const on = !speaker; setSpeaker(on); void fetchNui('sd-phone:call:speaker', { on }); }}
+                                        icon={<Volume2 className="h-[31px] w-[31px]" strokeWidth={2} />}
+                                    />
+                                    <ControlButton
+                                        label={t('phone.mute','Mute')}
+                                        active={muted}
+                                        onClick={() => { const on = !muted; setMuted(on); void fetchNui('sd-phone:call:mute', { on }); }}
+                                        icon={muted ? <MicOff className="h-[31px] w-[31px]" strokeWidth={2} /> : <Mic className="h-[31px] w-[31px]" strokeWidth={2} />}
+                                    />
                                     <ControlButton
                                         label={t('phone.video','Video')}
                                         active={videoPhase === 'requesting'}
@@ -136,8 +160,8 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
                                         icon={<Video className="h-[31px] w-[31px]" strokeWidth={2} />}
                                     />
                                     <ControlButton label={t('phone.addCall','Add call')} icon={<Plus className="h-[34px] w-[34px]" strokeWidth={2} />} />
-                                    <ControlButton label={t('phone.keypad','Keypad')} icon={<KeypadDots />} />
-                                    <ControlButton label={t('phone.contacts','Contacts')} icon={<User className="h-[31px] w-[31px]" strokeWidth={2} />} />
+                                    <ControlButton label={t('phone.keypad','Keypad')} active={keypadOpen} onClick={() => setKeypadOpen(true)} icon={<KeypadDots />} />
+                                    <ControlButton label={t('phone.contacts','Contacts')} active={contactsOpen} onClick={() => { setContactsOpen(true); void loadContacts(); }} icon={<User className="h-[31px] w-[31px]" strokeWidth={2} />} />
                                 </div>
                             </div>
                         </div>
@@ -155,6 +179,59 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
                     </>
                 )}
             </div>
+
+            {keypadOpen && (
+                <div className="absolute inset-0 z-[66] flex flex-col items-center justify-end bg-black/60 pb-[120px] backdrop-blur-xl">
+                    <div className="mb-5 flex h-[40px] items-center text-[30px] font-light tracking-wider text-white tabular-nums">
+                        {dtmfDialed.slice(-12) || <span className="text-[17px] font-normal text-white/40">{t('phone.keypad','Keypad')}</span>}
+                    </div>
+                    <div className="grid grid-cols-3 gap-x-6 gap-y-4">
+                        {KEYPAD_KEYS.map(k => (
+                            <button
+                                key={k}
+                                type="button"
+                                onClick={() => { playDtmf(k); setDtmfDialed(d => (d + k).slice(-24)); }}
+                                className="flex h-[70px] w-[70px] items-center justify-center rounded-full bg-white/[0.14] text-[30px] font-light text-white active:bg-white/35"
+                            >
+                                {k}
+                            </button>
+                        ))}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setKeypadOpen(false)}
+                        className="mt-7 text-[17px] font-semibold text-white/85 active:opacity-60"
+                    >
+                        {t('phone.hideKeypad','Hide')}
+                    </button>
+                </div>
+            )}
+
+            {contactsOpen && (
+                <div className="absolute inset-0 z-[66] flex flex-col bg-black/75 backdrop-blur-2xl">
+                    <div className="flex items-center justify-between px-6 pb-2 pt-[70px]">
+                        <span className="text-[22px] font-bold text-white">{t('phone.contacts','Contacts')}</span>
+                        <button
+                            type="button"
+                            onClick={() => setContactsOpen(false)}
+                            className="text-[17px] font-semibold text-ios-blue active:opacity-60"
+                        >
+                            {t('phone.done','Done')}
+                        </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto no-scrollbar px-6 pb-10">
+                        {contactList.length === 0 && (
+                            <p className="pt-8 text-center text-[15px] text-white/50">{t('phone.noContacts','No contacts yet')}</p>
+                        )}
+                        {contactList.map(c => (
+                            <div key={c.id} className="border-b border-white/[0.08] py-3">
+                                <div className="text-[17px] font-medium text-white">{c.name}</div>
+                                <div className="text-[14px] tabular-nums text-white/55">{formatPhone(c.phone)}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {videoPhase === 'incoming' && phase === 'active' && (
                 <div className="absolute inset-x-0 bottom-[150px] z-[65] flex flex-col items-center gap-3 px-8">

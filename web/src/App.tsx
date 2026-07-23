@@ -38,6 +38,7 @@ import { voiceHub, setLocalTalking } from '@/media/nearbyVoice';
 import { useMusicLibrary } from '@/stores/musicLibraryStore';
 import { DEFAULT_FRAME_COLOR } from '@/shell/frameColors';
 import { ThemeProvider, useTheme, useThemeStore } from '@/stores/themeStore';
+import { useCallStore } from '@/stores/callStore';
 import type { AppDef } from '@/core/types';
 import { listInstalledApps, installApp, uninstallApp, loadHomeLayout, saveHomeLayout, parseLayout, type SavedLayout } from '@/apps/appstore/appsApi';
 import { customToAppDef, installedCustomIds, isCustomApp, setCustomInstalled, useCustomApps, useCustomAppsStore } from '@/stores/customAppsStore';
@@ -719,6 +720,11 @@ function AppContent() {
     // phone's rail instead of the last-opened one's. Null = active phone's colour.
     const [peekColor, setPeekColor] = useState<string | null>(null);
     const peekTimer = useRef<number | undefined>(undefined);
+    // An ongoing call keeps the closed shell peeked (green island + timer) until it ends.
+    const callOngoing = useCallStore(s => s.phase !== null);
+    const callOngoingRef = useRef(callOngoing);
+    callOngoingRef.current = callOngoing;
+    const callPeekRef = useRef(false);
     const [ringingAlarm, setRingingAlarm] = useState<AlarmDef | null>(null);
     const ringingAlarmRef = useRef(ringingAlarm);
     ringingAlarmRef.current = ringingAlarm;
@@ -751,7 +757,7 @@ function AppContent() {
             setPeekColor(data.otherPhone ? (data.phoneColor ?? null) : null);
             setPeek('in');
             if (peekTimer.current) window.clearTimeout(peekTimer.current);
-            peekTimer.current = window.setTimeout(() => setPeek('out'), 4200);
+            peekTimer.current = window.setTimeout(() => { if (!callOngoingRef.current) setPeek('out'); }, 4200);
         }
         const tones = useThemeStore.getState();
         playOnce(resolveTone('notification', tones.notificationTone, tones.customNotificationTones).url, tones.ringtoneVol / 100);
@@ -821,6 +827,19 @@ function AppContent() {
     useEffect(() => {
         if (view) { setPeek(null); setPeekNotif(null); setPeekColor(null); if (peekTimer.current) window.clearTimeout(peekTimer.current); }
     }, [view]);
+    // Closing the phone mid-call lands on the peek shell and STAYS there - the call island
+    // (green timer pill) keeps the call visible; the peek retracts when the call ends.
+    useEffect(() => {
+        if (view) return;
+        if (callOngoing) {
+            callPeekRef.current = true;
+            if (peekTimer.current) window.clearTimeout(peekTimer.current);
+            setPeek('in');
+        } else if (callPeekRef.current) {
+            callPeekRef.current = false;
+            setPeek(p => (p === 'in' ? 'out' : p));
+        }
+    }, [callOngoing, view]);
 
     useEffect(() => { hydrateAlarms(); }, []);
     const phoneOpen = !!view;

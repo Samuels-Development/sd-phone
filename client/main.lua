@@ -567,6 +567,14 @@ RegisterNUICallback('sd-phone:unlock', function(_, cb)
     cb({ ok = true })
 end)
 
+---React to Lua: the closed-shell peek's call island was tapped; reopen the phone onto the
+---live call.
+---@param cb fun(result: table) NUI response
+RegisterNUICallback('sd-phone:requestOpen', function(_, cb)
+    OpenPhone()
+    cb({ ok = true })
+end)
+
 ---React to Lua: a text field gained or lost focus. Full typing releases keep-input so keys
 ---reach only the field; numeric typing (PIN pads, dialers) keeps it so the player can still
 ---move, with the digit weapon binds suppressed by the movement thread instead.

@@ -15,6 +15,33 @@ local function pushCall(action, data)
     SendNUIMessage({ action = action, data = data })
 end
 
+---@type boolean True while the local mic is muted for the active call.
+local micMuted = false
+
+---Mutes/unmutes the local mic entirely (call AND proximity - a muted caller isn't talking).
+---Mumble's audio input distance gates capture at the source; near-zero captures nothing.
+---@param on boolean
+local function setMicMuted(on)
+    micMuted = on == true
+    MumbleSetAudioInputDistance(micMuted and 0.05 or 9999.0)
+end
+
+---React to Lua: the call UI's Mute button.
+---@param data { on: boolean }
+---@param cb fun(ok: string) NUI response
+RegisterNUICallback('sd-phone:call:mute', function(data, cb)
+    setMicMuted(data and data.on)
+    cb('ok')
+end)
+
+---React to Lua: the call UI's Speaker button; the server joins/drops nearby players.
+---@param data { on: boolean }
+---@param cb fun(ok: string) NUI response
+RegisterNUICallback('sd-phone:call:speaker', function(data, cb)
+    TriggerServerEvent('sd-phone:server:call:speaker', data and data.on == true)
+    cb('ok')
+end)
+
 ---Applies the phone's call-volume setting (0-100) to pma-voice so it controls how loud the other
 ---party sounds. pcall-guarded for non-pma-voice setups.
 ---@param data { volume: number } clamped 0-100
@@ -48,6 +75,7 @@ RegisterNetEvent('sd-phone:client:call:connected', function(data)
 end)
 
 RegisterNetEvent('sd-phone:client:call:ended', function(data)
+    if micMuted then setMicMuted(false) end
     pushCall('sd-phone:call:ended', data)
 end)
 

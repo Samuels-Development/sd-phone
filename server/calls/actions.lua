@@ -101,6 +101,103 @@ local function setVoice(src, channel)
     pcall(function() exports['pma-voice']:setPlayerCall(src, channel) end)
 end
 
+-- Speakerphone: while a participant keeps speaker on, players standing near them join the
+-- pma-voice call channel (they hear AND can talk - a real speakerphone circle) and drop out
+-- again when they walk away, the speaker turns off, or the call ends.
+---@type number Metres a bystander may stand from a speaker-holder and stay in the circle.
+local SPEAKER_RANGE = 3.0
+---@type table<number, number> Speaker-enabled participant source -> their call channel.
+local speakerOn = {}
+---@type table<number, table<number, boolean>> Channel -> joined bystander sources.
+local speakerGuests = {}
+---@type boolean True while the proximity sweep thread is alive.
+local speakerThreadRunning = false
+
+---Drops every speakerphone bystander of a channel out of voice. A no-op for channels without
+---guests.
+---@param channel number
+local function clearSpeakerGuests(channel)
+    local guests = speakerGuests[channel]
+    if not guests then return end
+    speakerGuests[channel] = nil
+    for gsrc in pairs(guests) do setVoice(gsrc, 0) end
+end
+
+---Turns a participant's speaker off, releasing the channel's guests when no other participant
+---keeps it on.
+---@param src number participant source
+local function dropSpeaker(src)
+    local channel = speakerOn[src]
+    if not channel then return end
+    speakerOn[src] = nil
+    for _, ochan in pairs(speakerOn) do
+        if ochan == channel then return end
+    end
+    clearSpeakerGuests(channel)
+end
+
+---One proximity sweep: computes who should currently sit in each speaker circle, then joins
+---newcomers and drops leavers. Bystanders in their own call or pending ring are never pulled in.
+local function sweepSpeakers()
+    local want = {}
+    for hsrc, channel in pairs(speakerOn) do
+        local s = sessions[channel]
+        if not s or s.state ~= 'active' then
+            speakerOn[hsrc] = nil
+        else
+            local ped = GetPlayerPed(hsrc)
+            if ped and ped ~= 0 then
+                local at = GetEntityCoords(ped)
+                want[channel] = want[channel] or {}
+                for _, pidStr in ipairs(GetPlayers()) do
+                    local psrc = tonumber(pidStr)
+                    if psrc and psrc ~= s.caller.src and psrc ~= s.callee.src
+                        and not sessionForSource(psrc) and not ringForSource(psrc) then
+                        local pped = GetPlayerPed(psrc)
+                        if pped and pped ~= 0 and #(GetEntityCoords(pped) - at) <= SPEAKER_RANGE then
+                            want[channel][psrc] = true
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    local channels = {}
+    for ch in pairs(speakerGuests) do channels[ch] = true end
+    for ch in pairs(want) do channels[ch] = true end
+    for ch in pairs(channels) do
+        local cur, desired = speakerGuests[ch] or {}, want[ch] or {}
+        for gsrc in pairs(cur) do
+            if not desired[gsrc] then cur[gsrc] = nil; setVoice(gsrc, 0) end
+        end
+        for gsrc in pairs(desired) do
+            if not cur[gsrc] then cur[gsrc] = true; setVoice(gsrc, ch) end
+        end
+        speakerGuests[ch] = next(cur) and cur or nil
+    end
+end
+
+---Enables/disables speakerphone for a call participant. The sweep thread runs only while
+---someone keeps a speaker on; turning it off releases that channel's bystanders immediately.
+---@param source number participant server id
+---@param on boolean
+function actions.setSpeaker(source, on)
+    if not on then dropSpeaker(source) return end
+    local s = sessionForSource(source)
+    if not s or s.state ~= 'active' then return end
+    speakerOn[source] = s.channel
+    if speakerThreadRunning then return end
+    speakerThreadRunning = true
+    CreateThread(function()
+        while next(speakerOn) do
+            sweepSpeakers()
+            Wait(1500)
+        end
+        speakerThreadRunning = false
+    end)
+end
+
 ---Persists one side of a finished call to its owner's recents log, pruning to the configured
 ---cap.
 ---@param citizenid string
@@ -170,6 +267,9 @@ local function endCall(channel, reason, endedBy)
         setVoice(s.caller.src, 0)
         setVoice(s.callee.src, 0)
     end
+    speakerOn[s.caller.src] = nil
+    speakerOn[s.callee.src] = nil
+    clearSpeakerGuests(channel)
 
     local answered = s.state == 'active'
     local duration = (answered and s.startedAt) and (os.time() - s.startedAt) or 0

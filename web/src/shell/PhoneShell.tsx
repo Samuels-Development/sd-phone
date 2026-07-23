@@ -293,7 +293,8 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
 
     const [musicExpanded, setMusicExpanded] = useState(false);
 
-    const callActive = useCallStore(s => s.phase !== null);
+    const callActive    = useCallStore(s => s.phase !== null);
+    const callStartedAt = useCallStore(s => s.startedAt);
 
     const radioOn      = radioIsland?.on      ?? false;
     const radioStandby = radioIsland?.standby ?? false;
@@ -566,10 +567,16 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                     />
                 )}
 
-                <IslandPill active={callActive} compactX={DI_X} compactW={DI_W} expandedX={CALL_X} expandedW={CALL_W}>
+                <IslandPill
+                    active={callActive}
+                    onClick={() => void fetchNui('sd-phone:requestOpen')}
+                    compactX={DI_X} compactW={DI_W} expandedX={CALL_X} expandedW={CALL_W}
+                >
                     <span className="absolute left-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
                         <Phone className="h-[14px] w-[14px]" style={{ color: '#30D158' }} fill="currentColor" strokeWidth={0} />
-                        <span className="text-[13px] font-semibold" style={{ color: '#30D158' }}>{t('shell.mobile','Mobile')}</span>
+                        <span className="text-[13px] font-semibold tabular-nums" style={{ color: '#30D158' }}>
+                            {callStartedAt ? <RingDuration since={callStartedAt} /> : t('shell.mobile','Mobile')}
+                        </span>
                     </span>
                 </IslandPill>
 

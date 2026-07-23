@@ -13,6 +13,12 @@ lib.callback.register('sd-phone:server:call:decline', function(src, payload) ret
 lib.callback.register('sd-phone:server:call:hangup', function(src, payload) return actions.hangup(src, payload) end)
 lib.callback.register('sd-phone:server:call:current', function(src) return actions.current(src) end)
 
+---Speakerphone toggle from the call UI (fire-and-forget): joins nearby players into the call
+---channel while on, drops them when off.
+RegisterNetEvent('sd-phone:server:call:speaker', function(on)
+    actions.setSpeaker(source, on == true)
+end)
+
 -- Video calling: the ICE config is request/response; the rest are one-way signaling relays.
 lib.callback.register('sd-phone:server:call:video:config', function() return actions.iceConfig() end)
 RegisterNetEvent('sd-phone:server:call:video:request', function() actions.videoRequest(source) end)
