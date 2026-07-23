@@ -80,6 +80,7 @@ function store.ensureSchema()
             passcode           VARCHAR(8)   NULL,
             face_id            TINYINT(1)   NOT NULL DEFAULT 0,
             chat_text_scale    DECIMAL(3,2) NULL,
+            phone_scale        TINYINT UNSIGNED NULL,
             hour24             TINYINT(1)   NULL,
             reopen_app         TINYINT(1)   NULL,
             ringtone_volume    TINYINT UNSIGNED NULL,
@@ -148,6 +149,9 @@ function store.ensureSchema()
     end
     if not columnExists('phone_settings', 'chat_text_scale') then
         MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN chat_text_scale DECIMAL(3,2) NULL')
+    end
+    if not columnExists('phone_settings', 'phone_scale') then
+        MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN phone_scale TINYINT UNSIGNED NULL')
     end
     if not columnExists('phone_settings', 'ringtone_volume') then
         MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN ringtone_volume TINYINT UNSIGNED NULL')
@@ -652,6 +656,43 @@ function store.setChatTextScale(citizenid, scale)
     MySQL.update.await([[
         INSERT INTO phone_settings (citizenid, chat_text_scale) VALUES (?, ?)
         ON DUPLICATE KEY UPDATE chat_text_scale = VALUES(chat_text_scale)
+    ]], { citizenid, clean })
+end
+
+---Clamps the phone frame scale to an integer 0-100; nil for non-numbers and NaN, out-of-range
+---values fall to the nearest bound.
+---@param v any client-supplied scale
+---@return number|nil scale integer 0-100, nil if unusable
+local function clampPhoneScale(v)
+    local n = tonumber(v)
+    if not n or n ~= n then return nil end
+    n = math.floor(n + 0.5)
+    if n < 0 then n = 0 elseif n > 100 then n = 100 end
+    return n
+end
+
+---Reads a player's phone frame scale (slider value 0-100), tonumber-coerced, or nil if unset.
+---Read-only.
+---@param citizenid string framework per-character id
+---@return number|nil scale saved slider value
+function store.getPhoneScale(citizenid)
+    if not citizenid or citizenid == '' then return nil end
+    local row = MySQL.single.await('SELECT phone_scale FROM phone_settings WHERE citizenid = ?', { citizenid })
+    if not row or row.phone_scale == nil then return nil end
+    return tonumber(row.phone_scale)
+end
+
+---Persists a player's phone frame scale, leaving other settings intact. An out-of-range /
+---non-numeric value is ignored.
+---@param citizenid string framework per-character id
+---@param scale number slider value (clamped to 0-100)
+function store.setPhoneScale(citizenid, scale)
+    if not citizenid or citizenid == '' then return end
+    local clean = clampPhoneScale(scale)
+    if not clean then return end
+    MySQL.update.await([[
+        INSERT INTO phone_settings (citizenid, phone_scale) VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE phone_scale = VALUES(phone_scale)
     ]], { citizenid, clean })
 end
 

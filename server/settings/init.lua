@@ -53,6 +53,7 @@ lib.callback.register('sd-phone:server:settings:get', function(source)
     data.wallpaper               = store.getWallpaper(cid)
     data.customWallpapers        = store.getCustomWallpapers(cid)
     data.chatTextScale           = store.getChatTextScale(cid)
+    data.phoneScale              = store.getPhoneScale(cid)
     local vols = store.getVolumes(cid)
     data.ringtoneVol             = vols.ringtone
     data.callVol                 = vols.call
@@ -124,6 +125,15 @@ lib.callback.register('sd-phone:server:settings:setChatTextScale', function(sour
     if not cid then return { success = false, message = 'Player not found' } end
     payload = type(payload) == 'table' and payload or {}
     store.setChatTextScale(cid, payload.scale)
+    return { success = true }
+end)
+
+---Persists the caller's phone frame scale (slider value 0-100).
+lib.callback.register('sd-phone:server:settings:setPhoneScale', function(source, payload)
+    local cid = player.getIdentifier(source)
+    if not cid then return { success = false, message = 'Player not found' } end
+    payload = type(payload) == 'table' and payload or {}
+    store.setPhoneScale(cid, payload.scale)
     return { success = true }
 end)
 
