@@ -403,18 +403,18 @@ function RichImage({ url }: { url: string }) {
 
 export function SignatureBlock({ sig }: { sig: Omit<DocSignature, 'id'> }) {
     return (
-        <div className="rounded-[12px] border border-black/[0.08] bg-white px-4 py-3 shadow-sm dark:border-white/[0.1]">
+        <div className="rounded-[12px] border border-black/[0.08] bg-[#e5e5e5] px-4 py-3 shadow-sm dark:border-white/[0.1] dark:bg-[#ececec]">
             {sig.image ? (
-                <img src={sig.image} alt="" className="h-[64px] max-w-full object-contain" draggable={false} />
+                <img src={sig.image} alt="" className="h-[74px] max-w-full object-contain" draggable={false} />
             ) : (
-                <span className="block py-2 font-serif text-[26px] italic leading-none text-[#1d1d1f]">
+                <span className="block py-2 font-serif text-[29px] italic leading-none text-[#1d1d1f]">
                     {sig.signer}
                 </span>
             )}
-            <div className="mt-2 flex items-center justify-between border-t border-black/[0.06] pt-2">
-                <span className="text-[13px] font-semibold text-black">{sig.signer}</span>
-                <span className="flex items-center gap-1 text-[12px] text-ios-blue">
-                    <BadgeCheck className="h-[13px] w-[13px]" strokeWidth={2.2} />
+            <div className="mt-2 flex items-center justify-between border-t border-black/[0.08] pt-2">
+                <span className="text-[15px] font-semibold text-black">{sig.signer}</span>
+                <span className="flex items-center gap-1.5 text-[14px] text-ios-blue">
+                    <BadgeCheck className="h-[15px] w-[15px]" strokeWidth={2.2} />
                     {t('documents.signedOn', 'Signed {date}', { date: formatDocDate(sig.signedAt) })}
                 </span>
             </div>
