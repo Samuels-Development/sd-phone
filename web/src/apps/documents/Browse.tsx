@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, FolderPlus, FolderSearch, Plus } from 'lucide-react';
 
 import { t } from '@/i18n';
@@ -143,6 +143,13 @@ type PromptKind = 'folder' | 'doc';
 export function Browse({ list, onOpenDoc, onMoreDoc, onMoreFolder, onCreateFolder, onCreateDoc, onImportImage, animateIn }: Props) {
     const [path, setPath] = useSessionState<string[]>('documents:path', []);
     const [addFor,  setAddFor]  = useState<{ folderId: string | null } | null>(null);
+    // Depth restored from session state on mount (tab switches remount Browse). Folders at
+    // or below this depth were already open, so they render at rest instead of replaying
+    // the drill-in push; the ref shrinks with the path so re-entering a folder animates.
+    const restoredDepth = useRef(path.length);
+    useEffect(() => {
+        if (path.length < restoredDepth.current) restoredDepth.current = path.length;
+    }, [path]);
     const [prompt,  setPrompt]  = useState<{ kind: PromptKind; folderId: string | null } | null>(null);
     const [picking, setPicking] = useState<{ folderId: string | null } | null>(null);
 
@@ -188,7 +195,7 @@ export function Browse({ list, onOpenDoc, onMoreDoc, onMoreFolder, onCreateFolde
                     onMoreDoc={onMoreDoc}
                     onMoreFolder={onMoreFolder}
                     onAdd={folderId => setAddFor({ folderId })}
-                    animateIn={animateIn}
+                    animateIn={animateIn && i >= restoredDepth.current}
                 />
             ))}
 
