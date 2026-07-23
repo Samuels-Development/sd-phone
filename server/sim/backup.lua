@@ -127,7 +127,7 @@ local SETTINGS_COLS = {
     'active_group_id', 'ringtone', 'notification_tone', 'card_name', 'card_avatar',
     'card_email', 'card_address', 'installed_apps', 'home_layout', 'lock_clock',
     'wallpaper', 'custom_wallpapers', 'passcode', 'face_id', 'chat_text_scale', 'phone_scale',
-    'hour24', 'ringtone_volume', 'call_volume', 'locale', 'dark_theme', 'theme',
+    'phone_align', 'hour24', 'ringtone_volume', 'call_volume', 'locale', 'dark_theme', 'theme',
 }
 
 ---Overwrites `toId`'s phone_settings preference columns with `fromId`'s, creating the target

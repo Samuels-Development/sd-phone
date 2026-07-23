@@ -54,6 +54,7 @@ lib.callback.register('sd-phone:server:settings:get', function(source)
     data.customWallpapers        = store.getCustomWallpapers(cid)
     data.chatTextScale           = store.getChatTextScale(cid)
     data.phoneScale              = store.getPhoneScale(cid)
+    data.phoneAlign              = store.getPhoneAlign(cid)
     local vols = store.getVolumes(cid)
     data.ringtoneVol             = vols.ringtone
     data.callVol                 = vols.call
@@ -134,6 +135,15 @@ lib.callback.register('sd-phone:server:settings:setPhoneScale', function(source,
     if not cid then return { success = false, message = 'Player not found' } end
     payload = type(payload) == 'table' and payload or {}
     store.setPhoneScale(cid, payload.scale)
+    return { success = true }
+end)
+
+---Persists the caller's phone anchor position (whitelisted).
+lib.callback.register('sd-phone:server:settings:setPhoneAlign', function(source, payload)
+    local cid = player.getIdentifier(source)
+    if not cid then return { success = false, message = 'Player not found' } end
+    payload = type(payload) == 'table' and payload or {}
+    store.setPhoneAlign(cid, payload.align)
     return { success = true }
 end)
 

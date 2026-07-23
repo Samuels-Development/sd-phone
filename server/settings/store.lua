@@ -81,6 +81,7 @@ function store.ensureSchema()
             face_id            TINYINT(1)   NOT NULL DEFAULT 0,
             chat_text_scale    DECIMAL(3,2) NULL,
             phone_scale        TINYINT UNSIGNED NULL,
+            phone_align        VARCHAR(16) NULL,
             hour24             TINYINT(1)   NULL,
             reopen_app         TINYINT(1)   NULL,
             ringtone_volume    TINYINT UNSIGNED NULL,
@@ -152,6 +153,9 @@ function store.ensureSchema()
     end
     if not columnExists('phone_settings', 'phone_scale') then
         MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN phone_scale TINYINT UNSIGNED NULL')
+    end
+    if not columnExists('phone_settings', 'phone_align') then
+        MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN phone_align VARCHAR(16) NULL')
     end
     if not columnExists('phone_settings', 'ringtone_volume') then
         MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN ringtone_volume TINYINT UNSIGNED NULL')
@@ -694,6 +698,36 @@ function store.setPhoneScale(citizenid, scale)
         INSERT INTO phone_settings (citizenid, phone_scale) VALUES (?, ?)
         ON DUPLICATE KEY UPDATE phone_scale = VALUES(phone_scale)
     ]], { citizenid, clean })
+end
+
+-- Mirrors the PhoneAlign union in web/src/stores/themeStore.tsx.
+---@type table<string, boolean> Whitelist of storable phone anchor positions.
+local PHONE_ALIGNS = {
+    ['top-left'] = true,    ['top-center'] = true,    ['top-right'] = true,
+    ['middle-left'] = true, ['middle-center'] = true, ['middle-right'] = true,
+    ['bottom-left'] = true, ['bottom-center'] = true, ['bottom-right'] = true,
+}
+
+---Reads a player's phone anchor position, or nil if unset. Read-only.
+---@param citizenid string framework per-character id
+---@return string|nil align saved anchor position
+function store.getPhoneAlign(citizenid)
+    if not citizenid or citizenid == '' then return nil end
+    local row = MySQL.single.await('SELECT phone_align FROM phone_settings WHERE citizenid = ?', { citizenid })
+    if not row or not row.phone_align or row.phone_align == '' then return nil end
+    return row.phone_align
+end
+
+---Persists a player's phone anchor position, whitelist-checked against PHONE_ALIGNS.
+---@param citizenid string framework per-character id
+---@param align any client-supplied anchor position
+function store.setPhoneAlign(citizenid, align)
+    if not citizenid or citizenid == '' then return end
+    if type(align) ~= 'string' or not PHONE_ALIGNS[align] then return end
+    MySQL.update.await([[
+        INSERT INTO phone_settings (citizenid, phone_align) VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE phone_align = VALUES(phone_align)
+    ]], { citizenid, align })
 end
 
 ---Clamps a volume to an integer 0-100; nil for non-numbers and NaN, out-of-range values fall to
