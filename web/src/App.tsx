@@ -1380,8 +1380,8 @@ function AppContent() {
                 )}
 
                 {airshare[0] && (
-                    <div className="absolute inset-x-0 top-[10px] z-[58] px-3">
-                        <AirShareCard request={airshare[0]} onRespond={(a) => respondAirshare(airshare[0]!.id, a)} />
+                    <div className="absolute inset-x-0 top-0 z-[58] px-3">
+                        <AirShareCard key={airshare[0].id} request={airshare[0]} onRespond={(a) => respondAirshare(airshare[0]!.id, a)} />
                     </div>
                 )}
 

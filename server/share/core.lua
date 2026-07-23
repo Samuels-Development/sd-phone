@@ -2,6 +2,8 @@
 local config = require 'configs.config'
 ---@type table Player bridge (bridge.server.player): citizenid/name/phone-number lookups.
 local player = require 'bridge.server.player'
+---@type table Settings persistence (server.settings.store): citizenid -> phone-number lookups.
+local settings = require 'server.settings.store'
 
 ---@type table Core module; the table returned at end of file.
 local core = {}
@@ -129,9 +131,10 @@ local function coordsOf(src)
 end
 
 ---Players (other than `src`) with their phone open, within config.Share.Range, nearest first,
----capped at config.Share.MaxTargets. Read-only.
+---capped at config.Share.MaxTargets. Each carries their phone number so the picker can show
+---the receiver as a saved contact (or their number) instead of a character name. Read-only.
 ---@param src number player server id
----@return { id: number, name: string }[] targets
+---@return { id: number, name: string, number?: string }[] targets
 function core.nearby(src)
     local origin = coordsOf(src)
     if not origin then return {} end
@@ -154,7 +157,8 @@ function core.nearby(src)
 
     local out = {}
     for i = 1, math.min(#found, config.Share.MaxTargets) do
-        out[#out + 1] = { id = found[i].id, name = found[i].name }
+        local cid = player.getIdentifier(found[i].id)
+        out[#out + 1] = { id = found[i].id, name = found[i].name, number = cid and settings.getPhoneNumber(cid) or nil }
     end
     return out
 end
