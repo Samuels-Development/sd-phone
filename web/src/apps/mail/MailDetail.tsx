@@ -22,7 +22,7 @@ interface Props {
 }
 
 export function MailDetail({ msg, backLabel, prevId, nextId, onBack, onOpenSibling, onToggleFlag, onDelete, onMove, onReply }: Props) {
-    const { goBack, pageStyle } = useIosPush(onBack);
+    const { goBack, pageStyle, animating } = useIosPush(onBack);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [confirmSpam, setConfirmSpam] = useState(false);
     const [detailsOpen, setDetailsOpen] = useState(false);
@@ -147,7 +147,7 @@ export function MailDetail({ msg, backLabel, prevId, nextId, onBack, onOpenSibli
                 )}
             </div>
 
-            <div className="absolute inset-x-0 bottom-0 flex items-center justify-around border-t border-black/10 bg-[#f7f7f7]/95 px-4 pb-9 pt-2.5 backdrop-blur-xl dark:border-white/10 dark:bg-base/80">
+            <div className={`absolute inset-x-0 bottom-0 flex items-center justify-around border-t border-black/10 px-4 pb-9 pt-2.5 dark:border-white/10 ${animating ? 'bg-[#f7f7f7] dark:bg-base' : 'bg-[#f7f7f7]/95 backdrop-blur-xl dark:bg-base/80'}`}>
                 <ActionBtn
                     label={t('mail.flag', 'Flag')}
                     icon={Flag}
