@@ -5,7 +5,7 @@ import { useSessionState } from '@/hooks/useSessionState';
 import { SearchBar } from '@/ui/SearchBar';
 import { apiSearch } from '../birdyApi';
 import { BG, BLUE, META, PILL, type BirdyAuthor } from '../data';
-import { Feather } from 'lucide-react';
+import { BirdyBird } from '../BirdyBird';
 
 import { Avatar, VerifiedBadge } from '../ui';
 
@@ -82,7 +82,7 @@ export function Search({ onOpenProfile }: { onOpenProfile: (handle?: string) => 
                 ) : (
                     <div>
                         <div className="relative flex h-[200px] w-full items-center justify-center overflow-hidden pb-6" style={{ background: BLUE }}>
-                            <Feather className="h-28 w-28 text-white" strokeWidth={1.5} />
+                            <BirdyBird className="h-28 w-28 text-white" />
                             <span className="absolute bottom-4 left-4 text-[17px] font-bold text-white">{t('birdy.startSearching', 'Start searching to explore Birdy')}</span>
                         </div>
 
