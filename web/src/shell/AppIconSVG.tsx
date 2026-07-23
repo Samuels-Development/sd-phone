@@ -690,27 +690,27 @@ function CalculatorIcon() {
 }
 
 function BirdyIcon() {
-    // A quill on the sky: Lucide's Feather vane filled solid, with the shaft and barb masked
-    // OUT so the tile gradient shows through the cuts (true cutouts, not painted-on lines).
+    // The user-drawn "plump two-feather flyer" final mark (Downloads/BirdyIconNEWEST2.jsx)
+    // with its authored periwinkle palette; the bare glyph twin lives in apps/birdy/BirdyBird.
     return (
         <svg viewBox={`0 0 ${S} ${S}`} width={S} height={S}>
             <defs>
-                <LinearGrad id="bdy" top="#6BC1FF" mid="#3D9EF8" bot="#1D7BE8" />
-                <mask id="bdyfcut">
-                    <rect x="0" y="0" width="24" height="24" fill="white" />
-                    <g fill="none" stroke="black" strokeWidth="1.9" strokeLinecap="round">
-                        <path d="M16 8 2 22" />
-                        <path d="M17.5 15H9" />
-                    </g>
-                </mask>
+                <linearGradient id="bdy" x1="0.15" y1="0" x2="0.85" y2="1">
+                    <stop offset="0" stopColor="#6b8ff5" />
+                    <stop offset="0.55" stopColor="#5570e8" />
+                    <stop offset="1" stopColor="#4353d4" />
+                </linearGradient>
             </defs>
             <rect width={S} height={S} fill="url(#bdy)" />
-            <svg x="9" y="9" width="42" height="42" viewBox="0 0 24 24">
-                <path
-                    d="M12.67 19a2 2 0 0 0 1.416-.588l6.154-6.172a6 6 0 0 0-8.49-8.49L5.586 9.914A2 2 0 0 0 5 11.328V18a1 1 0 0 0 1 1z"
-                    fill="#fff"
-                    mask="url(#bdyfcut)"
-                />
+            <svg x="0" y="0" width={S} height={S} viewBox="0 0 512 512">
+                {/* Centered on the artwork's bounding box (x 8-95, y 19-96 in its 100-frame). */}
+                <g transform="translate(37,11.5) scale(4.25)">
+                    <path
+                        fill="#fff"
+                        d="M95 25 C89 29 83 33 78 35 C82 43 84 52 80 58 C74 78 60 95 37 95 C28 96 18 94 8 90 C18 84 26 80 32 76 C23 75 16 69 14 60 C19 62 24 62 28 61 C17 55 10 42 13 28 C20 38 30 43 41 44 C42 36 46 29 52 25 C57 20 65 19 70 22 C75 24 79 25 82 26 C86 26 90 25 95 25 Z"
+                    />
+                    <circle cx="67" cy="30" r="4" fill="#5570e8" />
+                </g>
             </svg>
         </svg>
     );
