@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { BadgeCheck, ChevronLeft, Lock, PenLine } from 'lucide-react';
+import { BadgeCheck, ChevronLeft, Image as ImageIcon, Lock, PenLine, X } from 'lucide-react';
 
 import { useIosPush } from '@/hooks/useIosPush';
 import { t } from '@/i18n';
 import { useContacts } from '@/stores/contactsStore';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { Sheet } from '@/ui/Sheet';
+import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
 import { apiGetSignature, apiSetSignature, apiSignDoc } from './documentsApi';
 import { SIGNATURE_STYLES, SignaturePad, renderTypedSignature, type SignaturePadHandle } from './SignaturePad';
 import { MAX_TEXT_LENGTH, formatDocDate, type DocFile, type DocSignature } from './data';
@@ -22,14 +23,65 @@ interface Props {
 export function TextEditor({ doc, backLabel, onBack, onSave, onSigned, animateIn = true }: Props) {
     const { goBack, pageStyle } = useIosPush(onBack, animateIn);
 
-    const [body, setBody] = useState(doc.content ?? '');
+    // The editor works on blocks (text runs + inline images) over the same storage format the
+    // exports use: a line that is exactly one URL is an image. Serializing the blocks yields
+    // the canonical string, so signing, AirShare and script-issued documents stay compatible.
+    const [blocks, setBlocks] = useState<EditBlock[]>(() => parseEditBlocks(doc.content ?? ''));
     const signed   = doc.signed === true;
     const readOnly = doc.locked || signed;
     const [signOpen, setSignOpen] = useState(false);
+    const [picking,  setPicking]  = useState(false);
 
-    const lastSaved = useRef(doc.content ?? '');
+    const body = readOnly ? (doc.content ?? '') : serializeBlocks(blocks);
+
+    // Baseline is the parsed round-trip, not the raw content, so normalization alone never
+    // triggers a save.
+    const lastSaved = useRef<string>();
+    lastSaved.current ??= serializeBlocks(blocks);
     const onSaveRef = useRef(onSave);
     onSaveRef.current = onSave;
+
+    // Caret bookkeeping so an inserted image lands where the player is typing.
+    const caretRef    = useRef<{ index: number; pos: number } | null>(null);
+    const taRefs      = useRef(new Map<number, HTMLTextAreaElement>());
+    const focusAfter  = useRef<number | null>(null);
+
+    useLayoutEffect(() => {
+        if (focusAfter.current === null) return;
+        const el = taRefs.current.get(focusAfter.current);
+        focusAfter.current = null;
+        if (el) { el.focus(); el.setSelectionRange(0, 0); }
+    }, [blocks]);
+
+    function setTextBlock(id: number, value: string) {
+        setBlocks(prev => prev.map(b => (b.id === id && b.kind === 'text' ? { ...b, value } : b)));
+    }
+
+    function insertImage(url: string) {
+        setPicking(false);
+        if (body.length + url.length + 1 > MAX_TEXT_LENGTH) return;
+        setBlocks(prev => {
+            const at = caretRef.current;
+            const target = at && prev[at.index];
+            if (target && target.kind === 'text') {
+                const after: EditBlock = { id: nextBlockId(), kind: 'text', value: target.value.slice(at.pos) };
+                focusAfter.current = after.id;
+                return normalizeBlocks([
+                    ...prev.slice(0, at.index),
+                    { ...target, value: target.value.slice(0, at.pos) },
+                    { id: nextBlockId(), kind: 'image', url },
+                    after,
+                    ...prev.slice(at.index + 1),
+                ]);
+            }
+            return normalizeBlocks([...prev, { id: nextBlockId(), kind: 'image', url }]);
+        });
+    }
+
+    function removeImage(id: number) {
+        caretRef.current = null;
+        setBlocks(prev => normalizeBlocks(prev.filter(b => b.id !== id)));
+    }
 
     useEffect(() => {
         if (readOnly) return;
@@ -90,15 +142,30 @@ export function TextEditor({ doc, backLabel, onBack, onSave, onSigned, animateIn
                 {readOnly ? (
                     <RichBody content={body} />
                 ) : (
-                    <textarea
-                        value={body}
-                        maxLength={MAX_TEXT_LENGTH}
-                        onChange={e => setBody(e.target.value)}
-                        placeholder={t('documents.startWriting', 'Start writing…')}
-                        className="mt-4 w-full resize-none bg-transparent text-[17px] leading-snug outline-none placeholder:text-ios-gray"
-                        style={{ minHeight: 320 }}
-                        aria-label={t('documents.documentBody', 'Document body')}
-                    />
+                    <div
+                        className="mt-4 flex min-h-[320px] flex-col gap-3 pb-4"
+                        onMouseDown={e => {
+                            if (e.target !== e.currentTarget) return;
+                            e.preventDefault();
+                            const last = blocks[blocks.length - 1];
+                            const el = last ? taRefs.current.get(last.id) : undefined;
+                            if (el) { el.focus(); const n = el.value.length; el.setSelectionRange(n, n); }
+                        }}
+                    >
+                        {blocks.map((b, i) => b.kind === 'image' ? (
+                            <EditImage key={b.id} url={b.url} onRemove={() => removeImage(b.id)} />
+                        ) : (
+                            <TextBlockArea
+                                key={b.id}
+                                value={b.value}
+                                placeholder={blocks.length === 1 && i === 0 ? t('documents.startWriting', 'Start writing…') : undefined}
+                                maxLength={b.value.length + Math.max(0, MAX_TEXT_LENGTH - body.length)}
+                                taRef={el => { if (el) taRefs.current.set(b.id, el); else taRefs.current.delete(b.id); }}
+                                onValue={v => setTextBlock(b.id, v)}
+                                onCaret={pos => { caretRef.current = { index: i, pos }; }}
+                            />
+                        ))}
+                    </div>
                 )}
 
                 {(doc.signatures?.length ?? 0) > 0 && (
@@ -112,16 +179,28 @@ export function TextEditor({ doc, backLabel, onBack, onSave, onSigned, animateIn
                 <span className="text-[14px] text-ios-gray tabular-nums">
                     {t('documents.charCount', '{n} of {max} characters', { n: body.length, max: MAX_TEXT_LENGTH })}
                 </span>
-                {!signed && doc.signable !== false && (
-                    <button
-                        type="button"
-                        onClick={() => setSignOpen(true)}
-                        className="flex items-center gap-1.5 text-[17px] font-semibold text-ios-blue active:opacity-60"
-                    >
-                        <PenLine className="h-[18px] w-[18px]" strokeWidth={2.3} />
-                        {t('documents.sign', 'Sign')}
-                    </button>
-                )}
+                <div className="flex items-center gap-5">
+                    {!readOnly && (
+                        <button
+                            type="button"
+                            onClick={() => setPicking(true)}
+                            aria-label={t('documents.addImage', 'Add image')}
+                            className="flex items-center text-ios-blue active:opacity-60"
+                        >
+                            <ImageIcon className="h-[21px] w-[21px]" strokeWidth={2.1} />
+                        </button>
+                    )}
+                    {!signed && doc.signable !== false && (
+                        <button
+                            type="button"
+                            onClick={() => setSignOpen(true)}
+                            className="flex items-center gap-1.5 text-[17px] font-semibold text-ios-blue active:opacity-60"
+                        >
+                            <PenLine className="h-[18px] w-[18px]" strokeWidth={2.3} />
+                            {t('documents.sign', 'Sign')}
+                        </button>
+                    )}
+                </div>
             </div>
 
             {signOpen && (
@@ -135,6 +214,132 @@ export function TextEditor({ doc, backLabel, onBack, onSave, onSigned, animateIn
                     }}
                 />
             )}
+
+            {picking && (
+                <MediaPickerSheet
+                    onSelect={photo => insertImage(photo.url)}
+                    onClose={() => setPicking(false)}
+                />
+            )}
+        </div>
+    );
+}
+
+
+// ---- Block editing model -------------------------------------------------------------------
+// Same storage format as script-issued documents: a line that is exactly one http(s) URL is an
+// image. The editor holds an alternating list (text run, image, text run, ...) so images render
+// inline while editing; serializing joins the pieces back into the canonical string.
+
+const URL_LINE = /^https?:\/\/\S+$/;
+
+let editBlockSeq = 0;
+const nextBlockId = () => ++editBlockSeq;
+
+type EditBlock =
+    | { id: number; kind: 'text'; value: string }
+    | { id: number; kind: 'image'; url: string };
+
+function parseEditBlocks(content: string): EditBlock[] {
+    const list: EditBlock[] = [];
+    let run: string[] = [];
+    const flush = () => { list.push({ id: nextBlockId(), kind: 'text', value: run.join('\n') }); run = []; };
+    for (const line of content.split('\n')) {
+        const trimmed = line.trim();
+        if (URL_LINE.test(trimmed)) { flush(); list.push({ id: nextBlockId(), kind: 'image', url: trimmed }); }
+        else run.push(line);
+    }
+    flush();
+    return normalizeBlocks(list);
+}
+
+// Merges adjacent text runs and guarantees a text block at both ends and between images, so
+// there is always somewhere to type around every picture.
+function normalizeBlocks(list: EditBlock[]): EditBlock[] {
+    const out: EditBlock[] = [];
+    for (const b of list) {
+        const last = out[out.length - 1];
+        if (b.kind === 'text') {
+            if (last && last.kind === 'text') {
+                const merged = last.value === '' ? b.value : b.value === '' ? last.value : `${last.value}\n${b.value}`;
+                out[out.length - 1] = { ...last, value: merged };
+            } else {
+                out.push(b);
+            }
+        } else {
+            if (!last || last.kind === 'image') out.push({ id: nextBlockId(), kind: 'text', value: '' });
+            out.push(b);
+        }
+    }
+    if (out.length === 0 || out[out.length - 1].kind === 'image') out.push({ id: nextBlockId(), kind: 'text', value: '' });
+    return out;
+}
+
+function serializeBlocks(blocks: EditBlock[]): string {
+    const parts: string[] = [];
+    for (const b of blocks) {
+        if (b.kind === 'image') parts.push(b.url);
+        else if (b.value !== '') parts.push(b.value);
+    }
+    return parts.join('\n');
+}
+
+function TextBlockArea({ value, placeholder, maxLength, taRef, onValue, onCaret }: {
+    value:       string;
+    placeholder?: string;
+    maxLength:   number;
+    taRef:       (el: HTMLTextAreaElement | null) => void;
+    onValue:     (v: string) => void;
+    onCaret:     (pos: number) => void;
+}) {
+    const innerRef = useRef<HTMLTextAreaElement | null>(null);
+    useLayoutEffect(() => {
+        const el = innerRef.current;
+        if (!el) return;
+        el.style.height = 'auto';
+        el.style.height = `${el.scrollHeight}px`;
+    }, [value]);
+    const report = (el: HTMLTextAreaElement) => onCaret(el.selectionStart ?? el.value.length);
+    return (
+        <textarea
+            ref={el => { innerRef.current = el; taRef(el); }}
+            value={value}
+            maxLength={maxLength}
+            placeholder={placeholder}
+            rows={1}
+            onChange={e => { onValue(e.target.value); report(e.target); }}
+            onSelect={e => report(e.currentTarget)}
+            onFocus={e => report(e.currentTarget)}
+            className="w-full resize-none overflow-hidden bg-transparent text-[17px] leading-snug outline-none placeholder:text-ios-gray"
+            aria-label={t('documents.documentBody', 'Document body')}
+        />
+    );
+}
+
+function EditImage({ url, onRemove }: { url: string; onRemove: () => void }) {
+    const [failed, setFailed] = useState(false);
+    return (
+        <div className="relative">
+            {failed ? (
+                <p className="break-all pr-10 text-[15px] text-ios-blue">{url}</p>
+            ) : (
+                <img
+                    src={url}
+                    alt=""
+                    draggable={false}
+                    onError={() => setFailed(true)}
+                    className="max-h-[340px] w-full rounded-[12px] object-cover"
+                    style={{ border: '0.5px solid rgba(0,0,0,0.12)' }}
+                />
+            )}
+            <button
+                type="button"
+                onClick={onRemove}
+                aria-label={t('documents.removeImage', 'Remove image')}
+                className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 active:opacity-70"
+            >
+                <X className="h-[16px] w-[16px] text-white" strokeWidth={2.6} />
+            </button>
         </div>
     );
 }
