@@ -220,7 +220,9 @@ export function Documents({ onClose: _onClose }: { onClose: () => void }) {
                     onBack={() => setOpenText(null)}
                     onSave={content => void saveText(openText.id, content)}
                     onSigned={updated => {
-                        patchDoc(updated.id, d => ({ ...d, signed: true }));
+                        // Merge the full server doc (signed, signedByMe, signatures) so menu
+                        // gates like Request Signature update without a refetch.
+                        patchDoc(updated.id, d => ({ ...d, ...updated }));
                         setOpenText(prev => (prev && prev.id === updated.id ? { ...prev, ...updated } : prev));
                     }}
                 />
