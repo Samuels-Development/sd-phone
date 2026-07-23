@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { t } from '@/i18n';
 import { formatPhone } from '@/lib/phone';
 import { useContacts } from '@/stores/contactsStore';
-import { ListGroup, ListRow } from '@/ui/ListGroup';
+import { GroupCard, ListGroup, ListRow } from '@/ui/ListGroup';
 import { SubPage } from '../SettingsSubPage';
 import { useVersionInfo } from './useVersionInfo';
 
@@ -47,12 +47,12 @@ export function AboutPage({ onBack }: { onBack: () => void }) {
 function LegalPage({ onBack }: { onBack: () => void }) {
     return (
         <SubPage title={t('settings.aboutLegalRegulatory', 'Legal & Regulatory')} backLabel={t('settings.about', 'About')} onBack={onBack}>
-            <div className="mx-4 flex flex-col gap-4 rounded-[10px] bg-white px-4 py-4 text-[13px] leading-relaxed text-ios-gray dark:bg-surface">
+            <GroupCard className="mx-4 flex flex-col gap-4 px-4 py-4 text-[13px] leading-relaxed text-ios-gray">
                 <p>{t('settings.legalIntro', 'This device and its software are provided as part of your service agreement with LifeInvader Wireless.')}</p>
                 <p>{t('settings.legalWarranty', 'Hardware is covered by a one-year limited warranty. Unauthorized modification of the operating system voids all warranty coverage.')}</p>
                 <p>{t('settings.legalRf', 'This equipment complies with San Andreas RF exposure limits for portable devices. FCC ID: SA-SP2024.')}</p>
                 <p>{t('settings.legalTrademarks', 'All product names, logos and brands are property of their respective owners in the state of San Andreas.')}</p>
-            </div>
+            </GroupCard>
         </SubPage>
     );
 }
