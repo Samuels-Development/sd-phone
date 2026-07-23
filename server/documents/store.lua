@@ -41,9 +41,31 @@ function store.ensureSchema()
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
 
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS `phone_document_signatures` (
+            `id`         VARCHAR(16) NOT NULL,
+            `doc_id`     VARCHAR(16) NOT NULL,
+            `citizenid`  VARCHAR(64) NOT NULL,
+            `signer`     VARCHAR(64) NOT NULL,
+            `image`      MEDIUMTEXT  NULL,
+            `created_at` BIGINT      NOT NULL,
+            PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ]])
+
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS `phone_signatures` (
+            `citizenid`  VARCHAR(64) NOT NULL,
+            `image`      MEDIUMTEXT  NOT NULL,
+            `updated_at` BIGINT      NOT NULL,
+            PRIMARY KEY (`citizenid`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ]])
+
     util.ensureIndex('phone_documents', 'idx_phone_documents_folder', '(citizenid, folder_id)')
     util.ensureIndex('phone_documents', 'idx_phone_documents_updated', '(citizenid, updated_at)')
     util.ensureIndex('phone_document_folders', 'idx_phone_document_folders_cid', '(citizenid)')
+    util.ensureIndex('phone_document_signatures', 'idx_phone_document_signatures_doc', '(doc_id)')
 end
 
 ---All of a player's folders. Read-only.
@@ -225,6 +247,92 @@ function store.reparentLockedToRoot(cid, idList)
             :format(table.concat(placeholders, ', ')),
         params
     )
+end
+
+---A document's signatures, oldest first. Ownership of the parent document is the caller's
+---responsibility (check getDoc first). Read-only.
+---@param docId string document id
+---@return table[] rows {id, citizenid, signer, image, created_at}
+function store.listSignatures(docId)
+    if not docId or docId == '' then return {} end
+    return MySQL.query.await([[
+        SELECT id, citizenid, signer, image, created_at
+        FROM `phone_document_signatures` WHERE doc_id = ? ORDER BY created_at ASC
+    ]], { docId }) or {}
+end
+
+---The ids of a player's documents that carry at least one signature, as a set. Read-only.
+---@param cid string owner citizenid
+---@return table<string, boolean> signed
+function store.listSignedDocIds(cid)
+    local rows = MySQL.query.await([[
+        SELECT DISTINCT s.doc_id FROM `phone_document_signatures` s
+        JOIN `phone_documents` d ON d.id = s.doc_id
+        WHERE d.citizenid = ?
+    ]], { cid }) or {}
+    local set = {}
+    for i = 1, #rows do set[rows[i].doc_id] = true end
+    return set
+end
+
+---True when this signer already has a signature on the document. Read-only.
+---@param docId string document id
+---@param cid string signer citizenid
+---@return boolean signed
+function store.hasSigned(docId, cid)
+    return MySQL.scalar.await(
+        'SELECT 1 FROM `phone_document_signatures` WHERE doc_id = ? AND citizenid = ? LIMIT 1',
+        { docId, cid }) ~= nil
+end
+
+---True when the document carries any signature (drives the content-freeze guards). Read-only.
+---@param docId string document id
+---@return boolean signed
+function store.hasSignatures(docId)
+    return MySQL.scalar.await(
+        'SELECT 1 FROM `phone_document_signatures` WHERE doc_id = ? LIMIT 1', { docId }) ~= nil
+end
+
+---Inserts a signature row.
+---@param sig { id: string, docId: string, citizenid: string, signer: string, image: string|nil, ts: number }
+function store.addSignature(sig)
+    MySQL.insert.await([[
+        INSERT INTO `phone_document_signatures` (id, doc_id, citizenid, signer, image, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ]], { sig.id, sig.docId, sig.citizenid, sig.signer, sig.image, sig.ts })
+end
+
+---Removes every signature on a set of documents, in one parameterized IN statement. A no-op on
+---an empty list.
+---@param docIds string[] document ids
+function store.deleteSignaturesForDocs(docIds)
+    if not docIds or #docIds == 0 then return end
+    local placeholders = {}
+    for i = 1, #docIds do placeholders[i] = '?' end
+    MySQL.update.await(
+        ('DELETE FROM `phone_document_signatures` WHERE doc_id IN (%s)')
+            :format(table.concat(placeholders, ', ')),
+        docIds
+    )
+end
+
+---A player's saved personal signature image, or nil when never drawn. Read-only.
+---@param cid string owner citizenid
+---@return string|nil image PNG data-URL
+function store.getPersonalSignature(cid)
+    if not cid or cid == '' then return nil end
+    return MySQL.scalar.await('SELECT image FROM `phone_signatures` WHERE citizenid = ?', { cid })
+end
+
+---Saves a player's personal signature image (upsert).
+---@param cid string owner citizenid
+---@param image string PNG data-URL
+---@param ts number epoch-seconds save time
+function store.setPersonalSignature(cid, image, ts)
+    MySQL.update.await([[
+        INSERT INTO `phone_signatures` (citizenid, image, updated_at) VALUES (?, ?, ?)
+        ON DUPLICATE KEY UPDATE image = VALUES(image), updated_at = VALUES(updated_at)
+    ]], { cid, image, ts })
 end
 
 ---Counts a player's documents (drives the per-player cap). Read-only.

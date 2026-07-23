@@ -119,6 +119,7 @@ local COPY = {
     { 'phone_app_sessions',      'citizenid' },
     { 'phone_documents',         'citizenid' },
     { 'phone_document_folders',  'citizenid' },
+    { 'phone_signatures',        'citizenid' },
 }
 
 ---@type string[] phone_settings columns carried by a restore. The number, citizenid and
@@ -149,6 +150,24 @@ local function copySettings(fromId, toId)
     ]]):format(table.concat(setParts, ', ')), { fromId, toId })
 end
 
+---Copies document signature rows across identities, remapping their own id and the doc_id FK
+---the way copyTable remapped phone_documents. The signer's citizenid copies VERBATIM: it names
+---who signed (possibly another character), not who owns the document.
+---@param fromId string source identity
+---@param toId string target identity
+---@return integer rows
+local function copyDocSignatures(fromId, toId)
+    return run([[
+        INSERT IGNORE INTO phone_document_signatures (id, doc_id, citizenid, signer, image, created_at)
+        SELECT SUBSTRING(MD5(CONCAT(s.id, ?)), 1, 16),
+               SUBSTRING(MD5(CONCAT(s.doc_id, ?)), 1, 16),
+               s.citizenid, s.signer, s.image, s.created_at
+        FROM phone_document_signatures s
+        JOIN phone_documents d ON d.id = s.doc_id
+        WHERE d.citizenid = ?
+    ]], { toId, toId, fromId })
+end
+
 ---Copies album membership rows across identities, remapping both foreign ids the way
 ---copyTable remapped their parents (no identity column of its own).
 ---@param fromId string source identity
@@ -170,11 +189,16 @@ end
 ---a sync). The phone_settings row goes too - a dead namespace keeps nothing.
 ---@param cloudId string snapshot identity ('cloud:' prefixed)
 function backup.wipe(cloudId)
-    -- Album items go first: their parent album rows are the only link to the cloud identity.
+    -- Join-keyed children go first: their parent rows are the only link to the cloud identity.
     run([[
         DELETE i FROM phone_photo_album_items i
         JOIN phone_photo_albums a ON a.id = i.album_id
         WHERE a.citizenid = ?
+    ]], { cloudId })
+    run([[
+        DELETE s FROM phone_document_signatures s
+        JOIN phone_documents d ON d.id = s.doc_id
+        WHERE d.citizenid = ?
     ]], { cloudId })
     for _, t in ipairs(COPY) do
         run(('DELETE FROM `%s` WHERE `%s` = ?'):format(t[1], t[2]), { cloudId })
@@ -196,6 +220,7 @@ function backup.sync(fromId, cloudId)
     for _, t in ipairs(COPY) do
         rows = rows + copyTable(t[1], t[2], fromId, cloudId)
     end
+    rows = rows + copyDocSignatures(fromId, cloudId)
     return rows + copyAlbumItems(fromId, cloudId)
 end
 
@@ -217,6 +242,7 @@ function backup.restore(fromId, toId, toNumber, liveFromId)
         rows = rows + copyTable(t[1], t[2], fromId, toId)
     end
 
+    rows = rows + copyDocSignatures(fromId, toId)
     rows = rows + copyAlbumItems(fromId, toId)
 
     -- Group chats fan out by the member rows, so membership MOVES to the restored profile

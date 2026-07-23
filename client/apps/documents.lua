@@ -15,6 +15,9 @@ proxy('sd-phone:documents:delete',       'sd-phone:server:documents:delete')
 proxy('sd-phone:documents:deleteFolder', 'sd-phone:server:documents:deleteFolder')
 proxy('sd-phone:documents:duplicate',    'sd-phone:server:documents:duplicate')
 proxy('sd-phone:documents:importImage',  'sd-phone:server:documents:importImage')
+proxy('sd-phone:documents:signature:get', 'sd-phone:server:documents:signature:get')
+proxy('sd-phone:documents:signature:set', 'sd-phone:server:documents:signature:set')
+proxy('sd-phone:documents:sign',          'sd-phone:server:documents:sign')
 proxy('sd-phone:documents:share',        'sd-phone:server:documents:share')
 
 ---Server push: a document was created for us elsewhere (an export or another resource); relays

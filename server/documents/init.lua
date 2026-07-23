@@ -40,6 +40,9 @@ lib.callback.register('sd-phone:server:documents:delete', function(src, payload)
 lib.callback.register('sd-phone:server:documents:deleteFolder', function(src, payload) return actions.deleteFolder(src, payload) end)
 lib.callback.register('sd-phone:server:documents:duplicate', function(src, payload) return actions.duplicate(src, payload) end)
 lib.callback.register('sd-phone:server:documents:importImage', function(src, payload) return actions.importImage(src, payload) end)
+lib.callback.register('sd-phone:server:documents:signature:get', function(src) return actions.getSignature(src) end)
+lib.callback.register('sd-phone:server:documents:signature:set', function(src, payload) return actions.setSignature(src, payload) end)
+lib.callback.register('sd-phone:server:documents:sign', function(src, payload) return actions.sign(src, payload) end)
 
 ---AirShares a document to a nearby player; the payload carries both the recipient and the id.
 lib.callback.register('sd-phone:server:documents:share', function(src, payload)
@@ -140,4 +143,17 @@ exports('deleteDocumentById', function(source, docId)
     local cid = player.getIdentifier(source)
     if not cid then return false end
     return actions.deleteForCid(cid, docId)
+end)
+
+---Reads a document's signatures for a player, for other resources: each entry carries the
+---frozen signer name, the epoch signing time and the signature image. Read-only; always an
+---array, empty when the document doesn't exist or belong to the player.
+---@param source number acting player's server id
+---@param docId string document id
+---@return table[] signatures { id, signer, image, signedAt }
+exports('getDocumentSignatures', function(source, docId)
+    if type(source) ~= 'number' then return {} end
+    local cid = player.getIdentifier(source)
+    if not cid then return {} end
+    return actions.listSignaturesForCid(cid, docId)
 end)

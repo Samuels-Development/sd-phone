@@ -3,13 +3,14 @@ import { apiCall, apiData } from '@/core/api';
 import { newId } from '@/lib/format';
 import {
     MOCK_DOCS, MOCK_FOLDERS, byteLength, nowSec,
-    type DocFile, type DocFolder, type DocList,
+    type DocFile, type DocFolder, type DocList, type DocSignature,
 } from './data';
 
 // Dev store: a mutable in-memory mirror so isFiveM=false is fully navigable
 // (create / rename / move / duplicate / delete all persist for the session).
 const devFolders: DocFolder[] = MOCK_FOLDERS.map(f => ({ ...f }));
 const devDocs:    DocFile[]   = MOCK_DOCS.map(d => ({ ...d }));
+let devSignature: string | null = null;
 
 function strip(d: DocFile): DocFile {
     const { content: _content, ...rest } = d;
@@ -155,4 +156,29 @@ export async function apiDeleteFolder(id: string): Promise<number | null> {
 export async function shareDocumentApi(target: number, id: string): Promise<boolean> {
     if (!isFiveM) return true;
     return (await apiCall('sd-phone:documents:share', { target, id })).success;
+}
+
+export async function apiGetSignature(): Promise<string | null> {
+    if (!isFiveM) return devSignature;
+    return (await apiData<{ image?: string | null }>('sd-phone:documents:signature:get'))?.image ?? null;
+}
+
+export async function apiSetSignature(image: string): Promise<boolean> {
+    if (!isFiveM) {
+        devSignature = image;
+        return true;
+    }
+    return (await apiCall('sd-phone:documents:signature:set', { image })).success;
+}
+
+export async function apiSignDoc(id: string): Promise<DocFile | null> {
+    if (!isFiveM) {
+        const doc = devDocs.find(d => d.id === id);
+        if (!doc || doc.kind !== 'text' || doc.signed || !devSignature) return null;
+        const sig: DocSignature = { id: newId('s'), signer: 'You', image: devSignature, signedAt: nowSec() };
+        doc.signed = true;
+        doc.signatures = [...(doc.signatures ?? []), sig];
+        return { ...doc };
+    }
+    return (await apiData<{ doc: DocFile }>('sd-phone:documents:sign', { id }))?.doc ?? null;
 }

@@ -48,6 +48,35 @@ local function serializeFolder(row)
     return { id = row.id, name = row.name, parentId = row.parent_id }
 end
 
+---Reshapes a stored signature row into the React shape. The signer's citizenid stays
+---server-side; the client only needs the frozen display name.
+---@param row table stored signature row
+---@return table
+local function serializeSig(row)
+    return { id = row.id, signer = row.signer, image = row.image, signedAt = tonumber(row.created_at) or 0 }
+end
+
+---Attaches the signature list and signed flag to a serialized text document.
+---@param doc table serialized document (mutated)
+---@param docId string document id
+---@return table doc
+local function attachSignatures(doc, docId)
+    local sigs = {}
+    for _, row in ipairs(store.listSignatures(docId)) do sigs[#sigs + 1] = serializeSig(row) end
+    doc.signed     = #sigs > 0
+    doc.signatures = sigs
+    return doc
+end
+
+---Validates a client-supplied signature image: a PNG data-URL within the configured length.
+---@param v any client-supplied image
+---@return string|nil image verbatim data-URL, nil if unusable
+local function sanitizeSignatureImage(v)
+    if type(v) ~= 'string' or #v > cfg.MaxSignatureLength then return nil end
+    if not v:match('^data:image/png;base64,[A-Za-z0-9+/=]+$') then return nil end
+    return v
+end
+
 ---Resolves a client-supplied target folder id: nil/empty means root, otherwise the id must
 ---belong to the caller. Returns (nil) for root, (id) when valid, or (nil, err) when missing.
 ---@param cid string acting citizenid
@@ -121,8 +150,13 @@ function actions.list(src)
     local folders = {}
     for _, row in ipairs(store.listFolders(cid)) do folders[#folders + 1] = serializeFolder(row) end
 
+    local signed = store.listSignedDocIds(cid)
     local docs = {}
-    for _, row in ipairs(store.listDocs(cid)) do docs[#docs + 1] = serializeDoc(row) end
+    for _, row in ipairs(store.listDocs(cid)) do
+        local doc = serializeDoc(row)
+        doc.signed = signed[row.id] == true
+        docs[#docs + 1] = doc
+    end
 
     return ok({ folders = folders, docs = docs })
 end
@@ -139,7 +173,9 @@ function actions.get(src, payload)
     local id = type(payload.id) == 'string' and payload.id or ''
     local row = store.getDoc(cid, id)
     if not row then return fail('Document not found') end
-    return ok({ doc = serializeDoc(row) })
+    local doc = serializeDoc(row)
+    if row.kind == 'text' then attachSignatures(doc, id) end
+    return ok({ doc = doc })
 end
 
 ---Creates a folder for the caller. The name is required, the folder cap applies, and the new
@@ -226,6 +262,7 @@ function actions.save(src, payload)
     local row = store.getDoc(cid, id)
     if not row then return fail('Document not found') end
     if isTruthy(row.locked) then return fail('This document is locked') end
+    if store.hasSignatures(id) then return fail('This document has been signed and can no longer be edited') end
 
     local ts, size = os.time(), #content
     if store.updateContent(cid, id, content, size, ts) == 0 then return fail('Could not save document') end
@@ -249,6 +286,7 @@ function actions.rename(src, payload)
     local row = store.getDoc(cid, id)
     if not row then return fail('Document not found') end
     if isTruthy(row.locked) then return fail('This document is locked') end
+    if store.hasSignatures(id) then return fail('This document has been signed and can no longer be renamed') end
 
     if store.renameDoc(cid, id, name, os.time()) == 0 then return fail('Could not rename document') end
     return ok({})
@@ -311,6 +349,7 @@ function actions.delete(src, payload)
     if isTruthy(row.locked) then return fail('This document is locked') end
 
     if store.deleteDoc(cid, id) == 0 then return fail('Could not delete document') end
+    store.deleteSignaturesForDocs({ id })
     return ok({})
 end
 
@@ -348,16 +387,18 @@ function actions.deleteFolder(src, payload)
         end
     end
 
-    local removedDocs = 0
+    local removedDocs, removedIds = 0, {}
     for _, row in ipairs(store.listDocs(cid)) do
         if row.folder_id and inSet[row.folder_id] and not isTruthy(row.locked) then
             removedDocs = removedDocs + 1
+            removedIds[#removedIds + 1] = row.id
         end
     end
 
     store.reparentLockedToRoot(cid, idList)
     store.deleteDocsInFolders(cid, idList)
     store.deleteFolders(cid, idList)
+    store.deleteSignaturesForDocs(removedIds)
     return ok({ removedDocs = removedDocs })
 end
 
@@ -529,7 +570,74 @@ end
 function actions.deleteForCid(cid, docId)
     if type(cid) ~= 'string' or cid == '' then return false end
     if type(docId) ~= 'string' or docId == '' then return false end
-    return store.deleteDoc(cid, docId) > 0
+    if store.deleteDoc(cid, docId) == 0 then return false end
+    store.deleteSignaturesForDocs({ docId })
+    return true
+end
+
+---A document's signatures for a citizenid, for other resources. Read-only; an empty array when
+---the document doesn't exist or belong to the player.
+---@param cid string acting citizenid
+---@param docId any document id
+---@return table[] signatures
+function actions.listSignaturesForCid(cid, docId)
+    if type(cid) ~= 'string' or cid == '' then return {} end
+    if type(docId) ~= 'string' or docId == '' then return {} end
+    if not store.getDoc(cid, docId) then return {} end
+    local out = {}
+    for _, row in ipairs(store.listSignatures(docId)) do out[#out + 1] = serializeSig(row) end
+    return out
+end
+
+---The caller's saved personal signature image, or nil when never drawn.
+---@param src integer player server id
+---@return table result envelope with { image }
+function actions.getSignature(src)
+    local cid = player.getIdentifier(src)
+    if not cid then return fail('Player not found') end
+    return ok({ image = store.getPersonalSignature(cid) })
+end
+
+---Saves the caller's personal signature image (a PNG data-URL within the configured length).
+---@param src integer player server id
+---@param payload { image?: string }
+---@return table result envelope
+function actions.setSignature(src, payload)
+    if type(payload) ~= 'table' then payload = {} end
+    local cid = player.getIdentifier(src)
+    if not cid then return fail('Player not found') end
+
+    local image = sanitizeSignatureImage(payload.image)
+    if not image then return fail('That signature could not be saved') end
+    store.setPersonalSignature(cid, image, os.time())
+    return ok({})
+end
+
+---Signs one of the caller's text documents with their saved personal signature. The image is
+---snapshotted onto the signature row, so redrawing the personal signature later never rewrites
+---history; the presence of any signature freezes the document's content and name.
+---@param src integer player server id
+---@param payload { id?: string }
+---@return table result envelope with { doc }
+function actions.sign(src, payload)
+    if type(payload) ~= 'table' then payload = {} end
+    local cid = player.getIdentifier(src)
+    if not cid then return fail('Player not found') end
+
+    local id = type(payload.id) == 'string' and payload.id or ''
+    local row = store.getDoc(cid, id)
+    if not row then return fail('Document not found') end
+    if row.kind ~= 'text' then return fail('Only text documents can be signed') end
+    if store.hasSigned(id, cid) then return fail('You have already signed this document') end
+
+    local image = store.getPersonalSignature(cid)
+    if not image then return fail('Draw your signature first') end
+
+    store.addSignature({
+        id = newId(), docId = id, citizenid = cid,
+        signer = player.getName(src) or 'Unknown', image = image, ts = os.time(),
+    })
+    return ok({ doc = attachSignatures(serializeDoc(row), id) })
 end
 
 ---Opens an AirShare request offering one of the caller's documents to a nearby player. The
@@ -549,6 +657,13 @@ function actions.requestShare(src, target, payload)
     if not row then return fail('Document not found') end
     if isTruthy(row.locked) then return fail('This document cannot be shared') end
 
+    -- Signatures travel with the copy (read server-side here, re-inserted server-side on
+    -- delivery), so a signed contract stays verifiably signed on the recipient's phone.
+    local sigs = {}
+    for _, s in ipairs(store.listSignatures(id)) do
+        sigs[#sigs + 1] = { citizenid = s.citizenid, signer = s.signer, image = s.image, created_at = s.created_at }
+    end
+
     local okSent, msg = share.request(src, target, 'document', {
         name    = row.name,
         kind    = row.kind,
@@ -557,6 +672,7 @@ function actions.requestShare(src, target, payload)
         size    = tonumber(row.size) or 0,
         source  = row.source,
         fromName = player.getName(src),
+        signatures = sigs,
     })
     if not okSent then return fail(msg or 'Could not send request') end
     return ok({})
@@ -599,10 +715,26 @@ function actions.deliverShare(targetSrc, payload)
         content = content, url = url, size = size, locked = 0, source = source, ts = ts,
     })
 
+    -- Re-attach the sender's signature rows to the delivered copy; the payload was built
+    -- server-side in requestShare, so the rows stay authentic.
+    if kind == 'text' and type(payload.signatures) == 'table' then
+        for _, s in ipairs(payload.signatures) do
+            if type(s) == 'table' and type(s.citizenid) == 'string' and s.citizenid ~= '' then
+                store.addSignature({
+                    id = newId(), docId = id, citizenid = s.citizenid,
+                    signer = type(s.signer) == 'string' and s.signer:sub(1, 64) or 'Unknown',
+                    image = sanitizeSignatureImage(s.image),
+                    ts = tonumber(s.created_at) or ts,
+                })
+            end
+        end
+    end
+
     local doc = serializeDoc({
         id = id, folder_id = nil, name = name, kind = kind, content = content, url = url,
         size = size, locked = 0, source = source, created_at = ts, updated_at = ts,
     })
+    if kind == 'text' then attachSignatures(doc, id) end
     local fromName = type(payload.fromName) == 'string' and payload.fromName ~= '' and payload.fromName or 'Someone'
     TriggerClientEvent('sd-phone:client:documents:receive', targetSrc, { doc = doc, fromName = fromName })
     TriggerClientEvent('sd-phone:client:notify', targetSrc, {
