@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { BadgeCheck, ChevronLeft, Lock, PenLine } from 'lucide-react';
 
 import { useIosPush } from '@/hooks/useIosPush';
 import { t } from '@/i18n';
 import { useContacts } from '@/stores/contactsStore';
+import { AlertDialog } from '@/ui/AlertDialog';
 import { Sheet } from '@/ui/Sheet';
 import { apiGetSignature, apiSetSignature, apiSignDoc } from './documentsApi';
 import { SIGNATURE_STYLES, SignaturePad, renderTypedSignature, type SignaturePadHandle } from './SignaturePad';
@@ -126,6 +127,7 @@ export function TextEditor({ doc, backLabel, onBack, onSave, onSigned, animateIn
             {signOpen && (
                 <SignSheet
                     docId={doc.id}
+                    docName={doc.name}
                     onClose={() => setSignOpen(false)}
                     onSigned={updated => {
                         setSignOpen(false);
@@ -218,8 +220,34 @@ function SignatureBlock({ sig }: { sig: DocSignature }) {
 
 type SignMode = 'saved' | 'draw' | 'type';
 
-function SignSheet({ docId, onClose, onSigned }: {
+// The sheet is bottom-anchored, so animating this wrapper's height makes mode switches grow
+// and shrink upward smoothly instead of snapping. Content height is tracked live (fonts and
+// the saved-signature image settle async), driven by CSS - no rAF (starved in CEF in-game).
+function AnimatedHeight({ children }: { children: React.ReactNode }) {
+    const innerRef = useRef<HTMLDivElement>(null);
+    const [height, setHeight] = useState<number | null>(null);
+    useLayoutEffect(() => {
+        const el = innerRef.current;
+        if (!el) return;
+        const measure = () => setHeight(el.offsetHeight);
+        measure();
+        const ro = new ResizeObserver(measure);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+    return (
+        <div
+            className="overflow-hidden"
+            style={{ height: height ?? undefined, transition: 'height 0.32s cubic-bezier(0.32, 0.72, 0, 1)' }}
+        >
+            <div ref={innerRef}>{children}</div>
+        </div>
+    );
+}
+
+function SignSheet({ docId, docName, onClose, onSigned }: {
     docId:    string;
+    docName:  string;
     onClose:  () => void;
     onSigned: (doc: DocFile) => void;
 }) {
@@ -233,6 +261,7 @@ function SignSheet({ docId, onClose, onSigned }: {
     const [styleId, setStyleId] = useState(SIGNATURE_STYLES[0].id);
     const [busy,    setBusy]    = useState(false);
     const [error,   setError]   = useState<string | null>(null);
+    const [confirming, setConfirming] = useState(false);
 
     useEffect(() => { void load(); }, [load]);
     useEffect(() => {
@@ -298,51 +327,55 @@ function SignSheet({ docId, onClose, onSigned }: {
                         </div>
                     )}
 
-                    {loading ? (
-                        <div className="h-[150px]" />
-                    ) : mode === 'saved' ? (
-                        <div className="flex items-center justify-center rounded-[12px] border border-black/10 bg-white px-4 py-5">
-                            <img src={saved ?? undefined} alt="" className="h-[84px] max-w-full object-contain" draggable={false} />
+                    <AnimatedHeight>
+                        <div className="flex flex-col gap-3">
+                            {loading ? (
+                                <div className="h-[150px]" />
+                            ) : mode === 'saved' ? (
+                                <div className="flex items-center justify-center rounded-[12px] border border-black/10 bg-white px-4 py-5">
+                                    <img src={saved ?? undefined} alt="" className="h-[84px] max-w-full object-contain" draggable={false} />
+                                </div>
+                            ) : mode === 'draw' ? (
+                                <SignaturePad ref={padRef} onInkChange={setHasInk} />
+                            ) : (
+                                <>
+                                    <input
+                                        value={typed}
+                                        onChange={e => setTyped(e.target.value)}
+                                        maxLength={40}
+                                        placeholder={t('documents.typeYourName', 'Type your name')}
+                                        className="rounded-[12px] border border-black/10 bg-white px-4 py-3 text-[17px] text-black outline-none placeholder:text-ios-gray3 focus:border-ios-blue"
+                                    />
+                                    <div className="flex flex-col gap-2">
+                                        {SIGNATURE_STYLES.map(s => (
+                                            <button
+                                                key={s.id}
+                                                type="button"
+                                                onClick={() => setStyleId(s.id)}
+                                                className={`flex h-[58px] items-center justify-between rounded-[12px] border bg-white px-4 text-left ${
+                                                    styleId === s.id ? 'border-ios-blue ring-1 ring-ios-blue' : 'border-black/10'
+                                                }`}
+                                            >
+                                                <span
+                                                    className="min-w-0 flex-1 truncate text-[#1d1d1f]"
+                                                    style={{
+                                                        fontFamily: s.fontFamily,
+                                                        fontWeight: s.fontWeight,
+                                                        fontStyle:  s.fontStyle,
+                                                        fontSize:   Math.round(s.fontSize * 0.55),
+                                                        lineHeight: 1.5,
+                                                    }}
+                                                >
+                                                    {typed.trim() || t('documents.typeYourName', 'Type your name')}
+                                                </span>
+                                                <span className="ml-3 shrink-0 text-[12px] text-ios-gray">{s.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
                         </div>
-                    ) : mode === 'draw' ? (
-                        <SignaturePad ref={padRef} onInkChange={setHasInk} />
-                    ) : (
-                        <>
-                            <input
-                                value={typed}
-                                onChange={e => setTyped(e.target.value)}
-                                maxLength={40}
-                                placeholder={t('documents.typeYourName', 'Type your name')}
-                                className="rounded-[12px] border border-black/10 bg-white px-4 py-3 text-[17px] text-black outline-none placeholder:text-ios-gray3 focus:border-ios-blue"
-                            />
-                            <div className="flex flex-col gap-2">
-                                {SIGNATURE_STYLES.map(s => (
-                                    <button
-                                        key={s.id}
-                                        type="button"
-                                        onClick={() => setStyleId(s.id)}
-                                        className={`flex items-center justify-between rounded-[12px] border bg-white px-4 py-2 text-left ${
-                                            styleId === s.id ? 'border-ios-blue ring-1 ring-ios-blue' : 'border-black/10'
-                                        }`}
-                                    >
-                                        <span
-                                            className="min-w-0 flex-1 truncate text-[#1d1d1f]"
-                                            style={{
-                                                fontFamily: s.fontFamily,
-                                                fontWeight: s.fontWeight,
-                                                fontStyle:  s.fontStyle,
-                                                fontSize:   Math.round(s.fontSize * 0.55),
-                                                lineHeight: 1.4,
-                                            }}
-                                        >
-                                            {typed.trim() || t('documents.typeYourName', 'Type your name')}
-                                        </span>
-                                        <span className="ml-3 shrink-0 text-[12px] text-ios-gray">{s.label}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </>
-                    )}
+                    </AnimatedHeight>
 
                     <p className="text-center text-[13px] leading-snug text-ios-gray">
                         {t('documents.signLockHint', 'Signing adds your name and locks this document from further edits.')}
@@ -353,11 +386,21 @@ function SignSheet({ docId, onClose, onSigned }: {
                     <button
                         type="button"
                         disabled={!canSign}
-                        onClick={() => void sign()}
+                        onClick={() => setConfirming(true)}
                         className="rounded-[12px] bg-ios-blue py-3 text-[16px] font-semibold text-white active:opacity-80 disabled:opacity-40"
                     >
                         {t('documents.signDocument', 'Sign Document')}
                     </button>
+
+                    {confirming && (
+                        <AlertDialog
+                            title={t('documents.confirmSignTitle', 'Sign Document?')}
+                            message={t('documents.confirmSignBody', 'You are about to sign "{name}". This locks the document from further edits and cannot be undone.', { name: docName })}
+                            confirmLabel={t('documents.sign', 'Sign')}
+                            onCancel={() => setConfirming(false)}
+                            onConfirm={() => { setConfirming(false); void sign(); }}
+                        />
+                    )}
 
                     {mode === 'saved' ? (
                         <button
