@@ -760,10 +760,13 @@ function actions.deliverShare(targetSrc, payload)
     if kind == 'text' then attachSignatures(doc, id) end
     local fromName = type(payload.fromName) == 'string' and payload.fromName ~= '' and payload.fromName or 'Someone'
     TriggerClientEvent('sd-phone:client:documents:receive', targetSrc, { doc = doc, fromName = fromName })
-    TriggerClientEvent('sd-phone:client:notify', targetSrc, {
-        app = 'documents', appId = 'documents', time = 'now',
-        title = 'Files', body = ('%s shared "%s" with you'):format(fromName, name),
-    })
+    -- quiet deliveries (e.g. saving a mail attachment) are recipient-initiated: no banner.
+    if payload.quiet ~= true then
+        TriggerClientEvent('sd-phone:client:notify', targetSrc, {
+            app = 'documents', appId = 'documents', time = 'now',
+            title = 'Files', body = ('%s shared "%s" with you'):format(fromName, name),
+        })
+    end
     return true
 end
 

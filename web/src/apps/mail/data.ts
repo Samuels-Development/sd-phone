@@ -17,7 +17,20 @@ export interface MailAccount {
 export type MailAttachment =
     | { kind: 'photo'; url: string }
     | { kind: 'audio'; url: string; name: string; duration: number }
-    | { kind: 'note';  title: string; body: string };
+    | { kind: 'note';  title: string; body: string }
+    // Compose sends a bare { docId } reference; the server resolves it into a snapshot from the
+    // sender's own library (content + signature rows read server-side), which is what readers get.
+    | {
+        kind:        'document';
+        docId?:      string;
+        name:        string;
+        docKind:     'text' | 'image' | 'file';
+        content?:    string;
+        url?:        string;
+        size:        number;
+        signable?:   boolean;
+        signatures?: { signer: string; image?: string | null; signedAt?: number }[];
+    };
 
 export interface MailMessage {
     id:        string;
@@ -146,8 +159,13 @@ const MOCK: { accounts: MailAccount[]; messages: MailMessage[] } = {
             id: 'm5', accountId: PRIMARY_EMAIL, folder: 'inbox',
             from: { name: 'Vinewood Realty', email: 'lettings@vinewoodrealty.com' }, to: [PRIMARY_EMAIL],
             subject: 'Viewing confirmed for Friday',
-            body: 'Your apartment viewing is confirmed for Friday at 2pm. The agent will meet you in the lobby.\n\nReply to reschedule.',
+            body: 'Your apartment viewing is confirmed for Friday at 2pm. The agent will meet you in the lobby.\n\nAttached is the draft tenancy agreement to read before the viewing.\n\nReply to reschedule.',
             sentAt: ago(2 * DAY), read: true, flagged: false,
+            attachments: [{
+                kind: 'document', name: 'Tenancy Agreement', docKind: 'text', size: 182,
+                content: 'DRAFT TENANCY AGREEMENT\n\nProperty: Apt 12, Vinewood Hills.\nTerm: 12 months. Rent due on the 1st.\n\nhttps://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800\n\nSigned copies to follow at the viewing.',
+                signatures: [{ signer: 'Dana Cortez', image: null, signedAt: Math.floor((MOCK_NOW - 2 * DAY) / 1000) }],
+            }],
         },
 
         {

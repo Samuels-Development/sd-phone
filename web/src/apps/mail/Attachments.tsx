@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AudioLines, Check, Download, Paperclip, Pause, Play, StickyNote, X } from 'lucide-react';
+import { AudioLines, Check, Download, FileText, Paperclip, Pause, Play, StickyNote, X } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { isFiveM } from '@/core/nui';
@@ -9,7 +9,12 @@ import { ImageLightbox } from '@/ui/ImageLightbox';
 import { Sheet } from '@/ui/Sheet';
 import { fetchMemos, fmtDuration, fmtMemoDate, type VoiceMemo } from '@/apps/voicememos/voiceApi';
 import { loadState as loadNotes, noteTitle, notePreview, type Note, type NotesState } from '@/apps/notes/data';
+import { apiList } from '@/apps/documents/documentsApi';
+import { RichBody, SignatureBlock } from '@/apps/documents/TextEditor';
+import type { DocFile } from '@/apps/documents/data';
 import { attachmentSaveStates, saveAttachment, type MailAttachment } from './data';
+
+type DocAttachment = Extract<MailAttachment, { kind: 'document' }>;
 
 export function AttachmentStrip({ attachments, max, onRemove }: {
     attachments: MailAttachment[];
@@ -63,6 +68,14 @@ export function AttachmentStrip({ attachments, max, onRemove }: {
                         <div className="flex items-center gap-3 px-4 py-3">
                             {a.kind === 'audio' ? (
                                 <StripAudioRow att={a} />
+                            ) : a.kind === 'document' ? (
+                                <div className="flex min-w-0 flex-1 items-center gap-3">
+                                    <FileText className="h-[24px] w-[24px] shrink-0 text-ios-blue" strokeWidth={2} />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="truncate text-[16px] font-medium">{a.name}</div>
+                                        <div className="truncate text-[13px] text-ios-gray">{t('mail.document', 'Document')}</div>
+                                    </div>
+                                </div>
                             ) : a.kind === 'note' && (
                                 <button
                                     type="button"
@@ -279,6 +292,111 @@ export function NotePickerSheet({ max, onPickMany, onClose }: {
     );
 }
 
+export function DocPickerSheet({ excludeIds, max, onPickMany, onClose }: {
+    excludeIds: Set<string>;
+    max:        number;
+    onPickMany: (docs: DocFile[]) => void;
+    onClose:    () => void;
+}) {
+    const [docs,     setDocs]     = useState<DocFile[] | null>(null);
+    const [selected, setSelected] = useState<Set<string>>(new Set());
+    useEffect(() => { void apiList().then(l => setDocs(l?.docs ?? [])); }, []);
+
+    // Locked documents cannot be shared on (mirrors AirShare); the server enforces it too.
+    const candidates = (docs ?? []).filter(d => !d.locked && !excludeIds.has(d.id));
+
+    function toggle(id: string) {
+        setSelected(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else if (next.size < max) next.add(id);
+            return next;
+        });
+    }
+
+    return (
+        <PickerSheet
+            title={t('mail.attachDocumentTitle', 'Attach Documents')}
+            action={{
+                label: `${t('mail.add', 'Add')}${selected.size ? ` (${selected.size}/${max})` : ''}`,
+                disabled: selected.size === 0,
+                onClick: () => onPickMany(candidates.filter(d => selected.has(d.id))),
+            }}
+            onClose={onClose}
+        >
+            {docs !== null && candidates.length === 0 ? (
+                <p className="pt-10 text-center text-[14px] text-black/45 dark:text-white/45">
+                    {t('mail.noDocuments', 'No documents to attach. Create one in Files first.')}
+                </p>
+            ) : (
+                <div className="overflow-hidden rounded-[10px] bg-[#e5e5e5] dark:bg-surface">
+                    {candidates.map((d, i) => (
+                        <div key={d.id}>
+                            <button
+                                type="button"
+                                onClick={() => toggle(d.id)}
+                                className="flex w-full items-center gap-3 px-4 py-4 text-left active:bg-black/5 dark:active:bg-white/5"
+                            >
+                                <FileText className="h-[24px] w-[24px] shrink-0 text-ios-blue" strokeWidth={2} />
+                                <div className="min-w-0 flex-1">
+                                    <div className="truncate text-[17px] font-medium">{d.name}</div>
+                                    <div className="truncate text-[14px] text-ios-gray">
+                                        {t('mail.document', 'Document')}
+                                        {d.signed && ` · ${t('mail.documentSigned', 'Signed')}`}
+                                    </div>
+                                </div>
+                                <SelectCircle selected={selected.has(d.id)} />
+                            </button>
+                            {i < candidates.length - 1 && <div className="bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </PickerSheet>
+    );
+}
+
+function DocAttachmentSheet({ att, onClose }: { att: DocAttachment; onClose: () => void }) {
+    const [leaving, setLeaving] = useState(false);
+    function close() {
+        if (leaving) return;
+        setLeaving(true);
+        window.setTimeout(onClose, 260);
+    }
+    return (
+        <div
+            className="absolute inset-0 z-50 flex flex-col bg-[#d4d4d4] text-black dark:bg-base dark:text-white"
+            style={{ animation: leaving
+                ? 'ios-sheet-down 0.26s cubic-bezier(0.32,0,0.68,1) forwards'
+                : 'ios-sheet-up 0.34s cubic-bezier(0.32,0.72,0,1)' }}
+        >
+            <div className="h-[54px] shrink-0" aria-hidden />
+            <div className="relative flex h-11 shrink-0 items-center px-4">
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <span className="max-w-[60%] truncate text-[15px] font-semibold">{att.name}</span>
+                </div>
+                <button type="button" onClick={close} className="ml-auto text-[16px] font-medium text-ios-blue">
+                    {t('mail.done', 'Done')}
+                </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar px-5 pb-10">
+                {att.docKind === 'image' && att.url ? (
+                    <img src={att.url} alt="" draggable={false} className="mt-3 w-full rounded-[12px] object-contain" />
+                ) : (
+                    <RichBody content={att.content ?? ''} />
+                )}
+                {(att.signatures?.length ?? 0) > 0 && (
+                    <div className="mb-4 mt-2 flex flex-col gap-2.5">
+                        {att.signatures!.map((s, i) => (
+                            <SignatureBlock key={i} sig={{ signer: s.signer, image: s.image ?? null, signedAt: s.signedAt ?? 0 }} />
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
 function NoteSheet({ title, body, onClose }: { title: string; body: string; onClose: () => void }) {
     const [leaving, setLeaving] = useState(false);
     function close() {
@@ -422,6 +540,7 @@ export function AttachmentsView({ attachments, accountEmail, messageId, canSave 
 }) {
     const [viewer,   setViewer]   = useState<{ url: string; i: number } | null>(null);
     const [openNote, setOpenNote] = useState<Extract<MailAttachment, { kind: 'note' }> | null>(null);
+    const [openDoc,  setOpenDoc]  = useState<DocAttachment | null>(null);
     const [savedIdx, setSavedIdx] = useState<Set<number>>(new Set());
     const [saveErr,  setSaveErr]  = useState<string | null>(null);
     // Save buttons stay hidden until the server reports which attachments are already saved,
@@ -473,6 +592,31 @@ export function AttachmentsView({ attachments, accountEmail, messageId, canSave 
                         onSave={showSave ? () => void saveOther(i) : undefined}
                     />
                 )
+                : a.kind === 'document'
+                ? (
+                    <div
+                        key={i}
+                        className="flex items-center gap-3 rounded-[12px] bg-[#e5e5e5] px-3.5 py-3 dark:bg-white/[0.07]"
+                    >
+                        <button
+                            type="button"
+                            onClick={() => setOpenDoc(a)}
+                            className="flex min-w-0 flex-1 items-center gap-3 text-left active:opacity-70"
+                        >
+                            <FileText className="h-[22px] w-[22px] shrink-0 text-ios-blue" strokeWidth={2} />
+                            <div className="min-w-0 flex-1">
+                                <div className="truncate text-[15px] font-medium">{a.name}</div>
+                                <div className="truncate text-[13px] text-ios-gray">
+                                    {t('mail.document', 'Document')}
+                                    {(a.signatures?.length ?? 0) > 0 && ` · ${t('mail.documentSigned', 'Signed')}`}
+                                </div>
+                            </div>
+                        </button>
+                        {showSave && (
+                            <SaveButton saved={savedIdx.has(i)} onSave={() => void saveOther(i)} label={t('mail.saveToFiles', 'Save to Files')} />
+                        )}
+                    </div>
+                )
                 : a.kind === 'note' && (
                     <div
                         key={i}
@@ -507,6 +651,7 @@ export function AttachmentsView({ attachments, accountEmail, messageId, canSave 
             )}
 
             {openNote && <NoteSheet title={openNote.title} body={openNote.body} onClose={() => setOpenNote(null)} />}
+            {openDoc && <DocAttachmentSheet att={openDoc} onClose={() => setOpenDoc(null)} />}
 
             {saveErr && (
                 <AlertDialog

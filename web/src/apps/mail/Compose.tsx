@@ -5,7 +5,7 @@ import { ActionSheet } from '@/ui/ActionSheet';
 import { t } from '@/i18n';
 import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
 import { noteTitle } from '@/apps/notes/data';
-import { AttachmentStrip, MemoPickerSheet, NotePickerSheet } from './Attachments';
+import { AttachmentStrip, DocPickerSheet, MemoPickerSheet, NotePickerSheet } from './Attachments';
 import type { MailAccount, MailAttachment } from './data';
 
 const MAX_ATTACHMENTS = 5;
@@ -33,7 +33,7 @@ export function Compose({ accounts, defaultAccountId, initialTo = '', initialSub
     const [body,    setBody]    = useState(initialBody);
     const [attachments,   setAttachments]   = useState<MailAttachment[]>(() => initialAttachments ?? []);
     const [attachSheet,   setAttachSheet]   = useState(false);
-    const [attachPicker,  setAttachPicker]  = useState<'photo' | 'audio' | 'note' | null>(null);
+    const [attachPicker,  setAttachPicker]  = useState<'photo' | 'audio' | 'note' | 'document' | null>(null);
     const [exiting,       setExiting]       = useState(false);
     const [confirmCancel, setConfirmCancel] = useState(false);
 
@@ -208,6 +208,7 @@ export function Compose({ accounts, defaultAccountId, initialTo = '', initialSub
                         { label: t('mail.attachPhoto', 'Photo'), onClick: () => setAttachPicker('photo') },
                         { label: t('mail.attachMemo', 'Voice Memo'), onClick: () => setAttachPicker('audio') },
                         { label: t('mail.attachNote', 'Note'), onClick: () => setAttachPicker('note') },
+                        { label: t('mail.attachDocument', 'Document'), onClick: () => setAttachPicker('document') },
                     ]}
                     cancelLabel={t('mail.cancel', 'Cancel')}
                     onClose={() => setAttachSheet(false)}
@@ -244,6 +245,22 @@ export function Compose({ accounts, defaultAccountId, initialTo = '', initialSub
                     max={MAX_ATTACHMENTS - attachments.length}
                     onPickMany={notes => {
                         addAttachments(notes.map(n => ({ kind: 'note' as const, title: noteTitle(n), body: n.body })));
+                        setAttachPicker(null);
+                    }}
+                    onClose={() => setAttachPicker(null)}
+                />
+            )}
+
+            {attachPicker === 'document' && (
+                <DocPickerSheet
+                    max={MAX_ATTACHMENTS - attachments.length}
+                    excludeIds={new Set(attachments.flatMap(a => (a.kind === 'document' && a.docId ? [a.docId] : [])))}
+                    onPickMany={docs => {
+                        // Only the docId reference matters to the server (it snapshots the
+                        // document itself); the rest is for the compose strip display.
+                        addAttachments(docs.map(d => ({
+                            kind: 'document' as const, docId: d.id, name: d.name, docKind: d.kind, size: d.size,
+                        })));
                         setAttachPicker(null);
                     }}
                     onClose={() => setAttachPicker(null)}

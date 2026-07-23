@@ -128,11 +128,15 @@ local function serializeAccount(acc)
     return { id = acc.email, name = acc.display_name, email = acc.email }
 end
 
----Whitelists a client-supplied attachments list down to well-formed photo/audio/note entries;
----malformed entries are dropped and the result is capped at MAX_ATTACHMENTS.
+---Whitelists a client-supplied attachments list down to well-formed photo/audio/note/document
+---entries; malformed entries are dropped and the result is capped at MAX_ATTACHMENTS. Document
+---entries arrive as { kind = 'document', docId } references and are resolved into snapshots
+---from the sender's own library here - content, flags and signature rows all read server-side,
+---so a crafted payload can never plant fake content or signatures in a mailbox.
 ---@param raw any
+---@param cid string|nil sender citizenid for document resolution; nil drops document references
 ---@return table[]|nil attachments nil when nothing valid remains
-local function sanitizeAttachments(raw)
+local function sanitizeAttachments(raw, cid)
     if type(raw) ~= 'table' then return nil end
     local out = {}
     for i = 1, #raw do
@@ -145,6 +149,29 @@ local function sanitizeAttachments(raw)
                 local name = type(a.name) == 'string' and a.name or ''
                 if #name > MAX_ATTACHMENT_NAME_LEN then name = name:sub(1, MAX_ATTACHMENT_NAME_LEN) end
                 out[#out + 1] = { kind = 'audio', url = a.url, name = name, duration = tonumber(a.duration) or 0 }
+            elseif a.kind == 'document' and cid and type(a.docId) == 'string' and a.docId ~= '' then
+                local docsStore = require 'server.documents.store'
+                local row = docsStore.getDoc(cid, a.docId)
+                if row and not (row.locked == true or row.locked == 1) then
+                    local sigs = nil
+                    if row.kind == 'text' then
+                        local list = docsStore.listSignatures(a.docId)
+                        if #list > 0 then
+                            sigs = {}
+                            for j = 1, #list do
+                                local s = list[j]
+                                sigs[j] = { citizenid = s.citizenid, signer = s.signer, image = s.image, created_at = s.created_at }
+                            end
+                        end
+                    end
+                    out[#out + 1] = {
+                        kind = 'document', docId = a.docId, name = row.name, docKind = row.kind,
+                        content = row.content, url = row.url, size = tonumber(row.size) or 0,
+                        source = row.source,
+                        signable = not (row.signable == false or row.signable == 0),
+                        signatures = sigs,
+                    }
+                end
             elseif a.kind == 'note' then
                 local title = type(a.title) == 'string' and a.title or ''
                 local body  = type(a.body)  == 'string' and a.body  or ''
@@ -157,6 +184,33 @@ local function sanitizeAttachments(raw)
         end
     end
     return #out > 0 and out or nil
+end
+
+---Client-safe attachment list: document snapshots keep authentic signature rows (incl. the
+---signer citizenid) in the stored mailbox row for re-delivery, but the citizenid never leaves
+---the server - readers get signer name, image and timestamp only.
+---@param atts table[]|nil
+---@return table[]|nil
+local function clientAttachments(atts)
+    if type(atts) ~= 'table' then return atts end
+    local out = {}
+    for i = 1, #atts do
+        local a = atts[i]
+        if a.kind == 'document' and type(a.signatures) == 'table' then
+            local copy = {}
+            for k, v in pairs(a) do copy[k] = v end
+            local sigs = {}
+            for j = 1, #a.signatures do
+                local s = a.signatures[j]
+                sigs[j] = { signer = s.signer, image = s.image, signedAt = s.created_at }
+            end
+            copy.signatures = sigs
+            out[i] = copy
+        else
+            out[i] = a
+        end
+    end
+    return out
 end
 
 ---Reshapes a hydrated message into the React `MailMessage` shape, injecting `accountId` and
@@ -176,7 +230,7 @@ local function serializeMessage(accountEmail, msg)
         sentAt    = msg.sentAt    or '',
         read      = msg.read      == true,
         flagged   = msg.flagged   == true,
-        attachments = msg.attachments,
+        attachments = clientAttachments(msg.attachments),
     }
 end
 
@@ -371,7 +425,7 @@ function actions.send(source, payload)
     local body    = type(payload.body) == 'string' and payload.body or ''
     if #body > MAX_BODY_LEN then body = body:sub(1, MAX_BODY_LEN) end
     local sentAt      = os.date('!%Y-%m-%dT%H:%M:%S')
-    local attachments = sanitizeAttachments(payload.attachments)
+    local attachments = sanitizeAttachments(payload.attachments, me.cid)
 
     local sentMessage = {
         id      = store.newId(),
@@ -582,7 +636,7 @@ function actions.saveDraft(source, payload)
         sentAt  = os.date('!%Y-%m-%dT%H:%M:%S'),
         read    = true,
         flagged = false,
-        attachments = sanitizeAttachments(payload.attachments),
+        attachments = sanitizeAttachments(payload.attachments, me.cid),
     }
     store.appendMessage(sender.email, draft, mailCfg.MaxMessagesPerAccount)
 
@@ -762,6 +816,25 @@ function actions.saveAttachment(source, payload)
         end
         return ok()
     end
+    if att.kind == 'document' then
+        local docsStore = require 'server.documents.store'
+        for _, row in ipairs(docsStore.listDocs(cid)) do
+            if row.name == att.name and row.kind == (att.docKind or 'text') and (tonumber(row.size) or 0) == (tonumber(att.size) or 0) then
+                return ok()
+            end
+        end
+        -- The snapshot was built server-side at send time, so the signature rows re-attached
+        -- by deliverShare are authentic. quiet: the saver initiated this, no banner needed.
+        local docsActions = require 'server.documents.actions'
+        if not docsActions.deliverShare(source, {
+            name = att.name, kind = att.docKind, content = att.content, url = att.url,
+            size = att.size, source = att.source, signable = att.signable,
+            signatures = att.signatures, fromName = msg.from and msg.from.name or nil, quiet = true,
+        }) then
+            return fail('Could not save to Files')
+        end
+        return ok()
+    end
     return fail('This attachment cannot be saved')
 end
 
@@ -794,6 +867,15 @@ function actions.attachmentSaveStates(source, payload)
         elseif a.kind == 'note' then
             local body = (type(a.body) == 'string' and a.body ~= '') and a.body or (a.title or '')
             saved[i] = require('server.notes.store').hasBody(cid, body)
+        elseif a.kind == 'document' then
+            local matched = false
+            for _, row in ipairs(require('server.documents.store').listDocs(cid)) do
+                if row.name == a.name and row.kind == (a.docKind or 'text') and (tonumber(row.size) or 0) == (tonumber(a.size) or 0) then
+                    matched = true
+                    break
+                end
+            end
+            saved[i] = matched
         else
             saved[i] = false
         end

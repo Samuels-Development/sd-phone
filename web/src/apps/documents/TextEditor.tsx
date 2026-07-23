@@ -370,7 +370,7 @@ function parseBlocks(content: string): RichBlock[] {
     return blocks;
 }
 
-function RichBody({ content }: { content: string }) {
+export function RichBody({ content }: { content: string }) {
     const blocks = useMemo(() => parseBlocks(content), [content]);
     return (
         <div className="mb-2 mt-4 flex flex-col gap-3">
@@ -401,7 +401,7 @@ function RichImage({ url }: { url: string }) {
 }
 
 
-function SignatureBlock({ sig }: { sig: DocSignature }) {
+export function SignatureBlock({ sig }: { sig: Omit<DocSignature, 'id'> }) {
     return (
         <div className="rounded-[12px] border border-black/[0.08] bg-white px-4 py-3 shadow-sm dark:border-white/[0.1]">
             {sig.image ? (
