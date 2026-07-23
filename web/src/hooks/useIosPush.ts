@@ -35,5 +35,9 @@ export function useIosPush(onBack: () => void, animateIn = true) {
             : enter ? 'ios-push 0.34s cubic-bezier(0.32,0.72,0,1) forwards' : undefined,
     };
 
-    return { goBack, pageStyle };
+    // True while the page is sliding; backdrop-filter children don't composite under a
+    // transform-animated ancestor in CEF, so frosted bars should render solid until this clears.
+    const animating = enter || leaving;
+
+    return { goBack, pageStyle, animating };
 }
