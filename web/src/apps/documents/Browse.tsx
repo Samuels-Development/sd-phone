@@ -8,6 +8,7 @@ import { ActionSheet } from '@/ui/ActionSheet';
 import { EmptyState } from '@/ui/EmptyState';
 import { GroupCard } from '@/ui/ListGroup';
 import { PromptDialog } from '@/ui/PromptDialog';
+import { portalToPhoneScreen } from '@/ui/portal';
 import { SearchBar } from '@/ui/SearchBar';
 import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
 import { FileRow, FolderRow } from './DocRow';
@@ -219,7 +220,9 @@ export function Browse({ list, onOpenDoc, onMoreDoc, onMoreFolder, onCreateFolde
                 />
             )}
 
-            {prompt && (
+            {/* Portaled like Sheet/ActionSheet: Browse lives above the tab bar, so an in-place
+                dialog would dim and blur only the content area and leave the tab bar sharp. */}
+            {prompt && portalToPhoneScreen(
                 <PromptDialog
                     title={prompt.kind === 'folder' ? t('documents.newFolder', 'New Folder') : t('documents.newDocument', 'New Document')}
                     label={t('documents.name', 'Name')}
