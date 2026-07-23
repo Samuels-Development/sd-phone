@@ -1,5 +1,5 @@
 import { t } from '@/i18n';
-import { ListGroup, ListRow, ToggleRow } from '@/ui/ListGroup';
+import { GroupCard, ListGroup, ListRow, ToggleRow } from '@/ui/ListGroup';
 import { SubPage } from '../SettingsSubPage';
 import { useTheme } from '@/stores/themeStore';
 import { formatClockTime, formatLongDate, useClock } from '@/hooks/useClock';
@@ -19,12 +19,12 @@ export function DateTimePage({ onBack }: { onBack: () => void }) {
                 <ListRow label={t('settings.dateTimeZone', 'Time Zone')} value="Los Santos (UTC−8)" />
             </ListGroup>
 
-            <div className="mx-4 overflow-hidden rounded-[10px] bg-white px-4 py-5 text-center dark:bg-surface">
+            <GroupCard className="mx-4 px-4 py-5 text-center">
                 <div className="text-[42px] font-thin tracking-tight text-black dark:text-white">{formatClockTime(now, hour24)}</div>
                 <div className="mt-1 text-[15px] font-normal text-ios-gray">
                     {formatLongDate(now)}
                 </div>
-            </div>
+            </GroupCard>
         </SubPage>
     );
 }

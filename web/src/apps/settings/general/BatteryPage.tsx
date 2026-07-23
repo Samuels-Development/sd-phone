@@ -2,7 +2,7 @@ import { BatteryCharging } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { useBatteryStore } from '@/stores/batteryStore';
-import { ListGroup, ListRow, ToggleRow } from '@/ui/ListGroup';
+import { GroupCard, ListGroup, ListRow, ToggleRow } from '@/ui/ListGroup';
 import { SubPage } from '../SettingsSubPage';
 
 export function BatteryPage({ onBack }: { onBack: () => void }) {
@@ -11,10 +11,10 @@ export function BatteryPage({ onBack }: { onBack: () => void }) {
 
     return (
         <SubPage title={t('settings.battery', 'Battery')} backLabel={t('settings.settings', 'Settings')} onBack={onBack}>
-            <div className="mx-4 overflow-hidden rounded-[10px] bg-white px-4 py-4 dark:bg-surface">
+            <GroupCard className="mx-4 px-4 py-4">
                 <div className="flex items-center justify-between">
                     <span className="text-[15px] font-semibold text-black dark:text-white">{t('settings.batteryLevel', 'Battery Level')}</span>
-                    <span className="text-[15px] font-semibold tabular-nums" style={{ color: low ? '#ff3b30' : undefined }}>
+                    <span className="text-[15px] font-semibold tabular-nums text-black dark:text-white" style={{ color: low ? '#ff3b30' : undefined }}>
                         {level}%
                     </span>
                 </div>
@@ -28,7 +28,7 @@ export function BatteryPage({ onBack }: { onBack: () => void }) {
                     <BatteryCharging className="h-[14px] w-[14px]" strokeWidth={2} />
                     {t('settings.batteryDrainNote', 'Battery drains while the phone is in use and recharges automatically over time.')}
                 </div>
-            </div>
+            </GroupCard>
 
             <ListGroup footer={t('settings.lowPowerFooter', 'Low Power Mode reduces background activity until your phone recharges.')}>
                 <ToggleRow label={t('settings.lowPowerMode', 'Low Power Mode')} />

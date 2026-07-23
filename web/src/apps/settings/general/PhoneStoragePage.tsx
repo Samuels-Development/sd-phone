@@ -1,5 +1,5 @@
 import { t } from '@/i18n';
-import { ListGroup, ListRow } from '@/ui/ListGroup';
+import { GroupCard, ListGroup, ListRow } from '@/ui/ListGroup';
 import { SubPage } from '../SettingsSubPage';
 
 const USED_GB  = 154.2;
@@ -19,7 +19,7 @@ const APPS = [
 export function PhoneStoragePage({ onBack }: { onBack: () => void }) {
     return (
         <SubPage title={t('settings.phoneStorage', 'Phone Storage')} onBack={onBack}>
-            <div className="mx-4 overflow-hidden rounded-[10px] bg-white px-4 py-4 dark:bg-surface">
+            <GroupCard className="mx-4 px-4 py-4">
                 <div className="mb-1 text-[13px] font-normal text-ios-gray">
                     {t('settings.storageCapacity', '{gb} GB Capacity', { gb: TOTAL_GB })}
                 </div>
@@ -33,7 +33,7 @@ export function PhoneStoragePage({ onBack }: { onBack: () => void }) {
                     <span>{t('settings.storageUsed', '{gb} GB Used', { gb: USED_GB })}</span>
                     <span>{t('settings.storageAvailable', '{gb} GB Available', { gb: FREE_GB })}</span>
                 </div>
-            </div>
+            </GroupCard>
 
             <ListGroup header={t('settings.storageByCategory', 'Storage by category')}>
                 {APPS.map((app, i) => (

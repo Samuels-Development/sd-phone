@@ -1,6 +1,7 @@
 import { Smartphone } from 'lucide-react';
 
 import { t } from '@/i18n';
+import { GroupCard } from '@/ui/ListGroup';
 import { SubPage } from '../SettingsSubPage';
 import { useVersionInfo } from './useVersionInfo';
 
@@ -15,7 +16,7 @@ export function SoftwareUpdatePage({ onBack }: { onBack: () => void }) {
 
     return (
         <SubPage title={t('settings.softwareUpdate', 'Software Update')} onBack={onBack}>
-            <div className="mx-4 flex flex-col items-center gap-3 overflow-hidden rounded-[10px] bg-white px-4 py-6 dark:bg-surface">
+            <GroupCard className="mx-4 flex flex-col items-center gap-3 px-4 py-6">
                 <div className="flex h-[64px] w-[64px] items-center justify-center rounded-[14px] bg-ios-blue shadow-md">
                     <Smartphone className="h-9 w-9 text-white" strokeWidth={1.75} />
                 </div>
@@ -25,10 +26,10 @@ export function SoftwareUpdatePage({ onBack }: { onBack: () => void }) {
                     </div>
                     <div className="mt-0.5 text-[13px] text-ios-gray">{status}</div>
                 </div>
-            </div>
+            </GroupCard>
 
             {info?.updateAvailable && info.latest && (
-                <div className="mx-4 overflow-hidden rounded-[10px] bg-white dark:bg-surface">
+                <GroupCard className="mx-4">
                     <div className="flex items-start gap-3 px-4 py-3.5">
                         <span className="mt-[7px] h-[8px] w-[8px] shrink-0 rounded-full bg-ios-red" />
                         <div className="min-w-0">
@@ -40,7 +41,7 @@ export function SoftwareUpdatePage({ onBack }: { onBack: () => void }) {
                             </div>
                         </div>
                     </div>
-                </div>
+                </GroupCard>
             )}
         </SubPage>
     );
