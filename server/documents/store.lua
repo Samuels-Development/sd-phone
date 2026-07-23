@@ -85,6 +85,11 @@ function store.ensureSchema()
         MySQL.query.await('ALTER TABLE `phone_documents` ADD COLUMN `deletable` TINYINT(1) NOT NULL DEFAULT 1')
     end
 
+    -- Repair: createDoc used to coerce a numeric locked = 0 to 1 (0 is truthy in Lua), so every
+    -- player-created document landed locked. Player rows never carry a source; issued rows
+    -- always name their invoking resource - so this unlock is safe to run every boot.
+    MySQL.query.await('UPDATE `phone_documents` SET locked = 0 WHERE locked = 1 AND source IS NULL')
+
     util.ensureIndex('phone_documents', 'idx_phone_documents_folder', '(citizenid, folder_id)')
     util.ensureIndex('phone_documents', 'idx_phone_documents_updated', '(citizenid, updated_at)')
     util.ensureIndex('phone_document_folders', 'idx_phone_document_folders_cid', '(citizenid)')
@@ -177,7 +182,7 @@ function store.createDoc(cid, doc)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ]], {
         doc.id, cid, doc.folderId, doc.name, doc.kind, doc.content, doc.url,
-        doc.size or 0, doc.locked and 1 or 0, doc.signable == false and 0 or 1,
+        doc.size or 0, (doc.locked == true or doc.locked == 1) and 1 or 0, doc.signable == false and 0 or 1,
         doc.deletable == false and 0 or 1, doc.source, doc.ts, doc.ts,
     })
 end
