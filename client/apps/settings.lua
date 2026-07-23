@@ -23,6 +23,7 @@ proxyCallback('sd-phone:settings:setPhoneScale',    'sd-phone:server:settings:se
 proxyCallback('sd-phone:settings:setPhoneAlign',    'sd-phone:server:settings:setPhoneAlign')
 proxyCallback('sd-phone:settings:setVolumes',       'sd-phone:server:settings:setVolumes')
 proxyCallback('sd-phone:settings:setLocale',        'sd-phone:server:settings:setLocale')
+proxyCallback('sd-phone:settings:versionInfo',  'sd-phone:server:settings:versionInfo')
 proxyCallback('sd-phone:settings:getNotifPref', 'sd-phone:server:settings:getNotifPref')
 proxyCallback('sd-phone:settings:setNotifPref', 'sd-phone:server:settings:setNotifPref')
 proxyCallback('sd-phone:settings:factoryReset', 'sd-phone:server:settings:factoryReset')

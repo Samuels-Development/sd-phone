@@ -121,8 +121,8 @@ export function ListRow({ label, sub, value, chevron, divider, destructive, sele
             )}
             {divider && (
                 <div
-                    className="pointer-events-none absolute bottom-0 right-0 bg-ios-gray4 dark:bg-control"
-                    style={{ left: '16px', height: '0.5px' }}
+                    className="pointer-events-none absolute inset-x-0 bottom-0 bg-ios-gray4 dark:bg-control"
+                    style={{ height: '0.5px' }}
                 />
             )}
         </button>
@@ -152,8 +152,8 @@ export function ToggleRow({ label, defaultOn = false, divider, on: controlledOn,
             </div>
             {divider && (
                 <div
-                    className="pointer-events-none absolute bottom-0 right-0 bg-ios-gray4 dark:bg-control"
-                    style={{ left: '16px', height: '0.5px' }}
+                    className="pointer-events-none absolute inset-x-0 bottom-0 bg-ios-gray4 dark:bg-control"
+                    style={{ height: '0.5px' }}
                 />
             )}
         </button>

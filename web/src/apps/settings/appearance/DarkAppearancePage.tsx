@@ -108,7 +108,7 @@ function PreviewRow({ left, label, value, right, divider }: {
             {value && <span className="text-[15px] text-ios-gray">{value}</span>}
             {right}
             {!right && !value && <ChevronRight className="h-4 w-4 text-ios-gray" strokeWidth={2.5} />}
-            {divider && <div className="pointer-events-none absolute bottom-0 right-0 h-[0.5px] bg-control" style={{ left: '46px' }} />}
+            {divider && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[0.5px] bg-control" />}
         </div>
     );
 }

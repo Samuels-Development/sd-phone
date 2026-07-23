@@ -12,6 +12,12 @@ local badges = require 'server.badges.init'
 ---@type table Photos actions (server.photos.actions): the URL-import gate + host allow/blocklist
 ---policy, shared verbatim by wallpaper link imports.
 local photos = require 'server.photos.actions'
+---@type table Version helpers (bridge.server.version): manifest version + cached latest-GitHub-
+---release lookup for the Software Update page.
+local version = require 'bridge.server.version'
+
+---@type string GitHub repo the Software Update page checks for new releases.
+local UPDATE_REPO = 'Samuels-Development/sd-phone'
 
 -- Schema bootstrap.
 CreateThread(function()
@@ -127,6 +133,18 @@ lib.callback.register('sd-phone:server:settings:setChatTextScale', function(sour
     payload = type(payload) == 'table' and payload or {}
     store.setChatTextScale(cid, payload.scale)
     return { success = true }
+end)
+
+---Returns the installed phone version plus the latest GitHub release, so the Software Update
+---page can flag when this build is behind. Read-only; the release lookup is cached an hour.
+lib.callback.register('sd-phone:server:settings:versionInfo', function()
+    local current = version.current()
+    local latest  = version.latest(UPDATE_REPO)
+    return { success = true, data = {
+        current         = current,
+        latest          = latest,
+        updateAvailable = current ~= nil and latest ~= nil and version.isNewer(current, latest),
+    } }
 end)
 
 ---Persists the caller's phone frame scale (slider value 0-100).
