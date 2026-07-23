@@ -8,4 +8,5 @@ return {
     MaxNameLength   = 60,     -- max length of a document or folder name
     MaxFolderDepth  = 5,      -- deepest nesting allowed in the folder tree
     AllowShare      = true,    -- whether AirShare to a nearby phone is offered
+    MaxSignatureLength = 150000, -- characters of a drawn-signature image data-URL
 }

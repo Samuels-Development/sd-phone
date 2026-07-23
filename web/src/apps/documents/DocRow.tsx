@@ -1,4 +1,4 @@
-import { ChevronRight, File as FileIcon, FileText, Folder, Image as ImageIcon, Lock, MoreHorizontal } from 'lucide-react';
+import { BadgeCheck, ChevronRight, File as FileIcon, FileText, Folder, Image as ImageIcon, Lock, MoreHorizontal } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { ListRow } from '@/ui/ListGroup';
@@ -94,6 +94,7 @@ export function FileRow({ doc, onOpen, onMore, divider }: {
                 }
                 right={
                     <span className="flex items-center gap-1">
+                        {doc.signed && <BadgeCheck className="h-[15px] w-[15px] shrink-0 text-ios-blue" strokeWidth={2.2} />}
                         {doc.locked && <Lock className="h-[14px] w-[14px] shrink-0 text-ios-gray" strokeWidth={2.4} />}
                         <MoreGlyph onMore={onMore} />
                     </span>

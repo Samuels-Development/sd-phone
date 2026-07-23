@@ -157,7 +157,7 @@ export function Documents({ onClose: _onClose }: { onClose: () => void }) {
     }
 
     const docActions = moreDoc ? [
-        ...(moreDoc.locked ? [] : [{
+        ...(moreDoc.locked || moreDoc.signed ? [] : [{
             label: t('documents.rename', 'Rename'),
             onClick: () => setRenaming({ kind: 'doc', id: moreDoc.id, name: moreDoc.name }),
         }]),
@@ -212,6 +212,10 @@ export function Documents({ onClose: _onClose }: { onClose: () => void }) {
                     animateIn={animateNav}
                     onBack={() => setOpenText(null)}
                     onSave={content => void saveText(openText.id, content)}
+                    onSigned={updated => {
+                        patchDoc(updated.id, d => ({ ...d, signed: true }));
+                        setOpenText(prev => (prev && prev.id === updated.id ? { ...prev, ...updated } : prev));
+                    }}
                 />
             )}
 
