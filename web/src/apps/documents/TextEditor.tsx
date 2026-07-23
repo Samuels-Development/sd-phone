@@ -112,7 +112,7 @@ export function TextEditor({ doc, backLabel, onBack, onSave, onSigned, animateIn
                 <span className="text-[13px] text-ios-gray tabular-nums">
                     {t('documents.charCount', '{n} of {max} characters', { n: body.length, max: MAX_TEXT_LENGTH })}
                 </span>
-                {!signed && (
+                {!signed && doc.signable !== false && (
                     <button
                         type="button"
                         onClick={() => setSignOpen(true)}

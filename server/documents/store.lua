@@ -6,6 +6,20 @@ local store = {}
 ---@type table Shared server helpers (server.util): legacy-table rescue and index bootstrap.
 local util = require 'server.util'
 
+---Returns true if a column already exists on the given table (information_schema probe).
+---@param tbl string table name
+---@param name string column name
+---@return boolean exists
+local function columnExists(tbl, name)
+    local row = MySQL.single.await([[
+        SELECT COUNT(*) AS n FROM information_schema.columns
+        WHERE table_schema = DATABASE()
+          AND table_name = ?
+          AND column_name = ?
+    ]], { tbl, name })
+    return row ~= nil and tonumber(row.n) > 0
+end
+
 ---Creates the phone_documents and phone_document_folders tables idempotently and adds their
 ---secondary indexes. Runs once at boot; an lb-phone-shaped same-named table is moved aside first.
 function store.ensureSchema()
@@ -23,6 +37,7 @@ function store.ensureSchema()
             `url`        VARCHAR(1024) NULL,
             `size`       INT           NOT NULL DEFAULT 0,
             `locked`     TINYINT(1)    NOT NULL DEFAULT 0,
+            `signable`   TINYINT(1)    NOT NULL DEFAULT 1,
             `source`     VARCHAR(64)   NULL,
             `created_at` BIGINT        NOT NULL,
             `updated_at` BIGINT        NOT NULL,
@@ -62,6 +77,10 @@ function store.ensureSchema()
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
 
+    if not columnExists('phone_documents', 'signable') then
+        MySQL.query.await('ALTER TABLE `phone_documents` ADD COLUMN `signable` TINYINT(1) NOT NULL DEFAULT 1')
+    end
+
     util.ensureIndex('phone_documents', 'idx_phone_documents_folder', '(citizenid, folder_id)')
     util.ensureIndex('phone_documents', 'idx_phone_documents_updated', '(citizenid, updated_at)')
     util.ensureIndex('phone_document_folders', 'idx_phone_document_folders_cid', '(citizenid)')
@@ -83,7 +102,7 @@ end
 ---@return table[] rows {id, folder_id, name, kind, url, size, locked, source, created_at, updated_at}
 function store.listDocs(cid)
     return MySQL.query.await([[
-        SELECT id, folder_id, name, kind, url, size, locked, source, created_at, updated_at
+        SELECT id, folder_id, name, kind, url, size, locked, signable, source, created_at, updated_at
         FROM `phone_documents` WHERE citizenid = ? ORDER BY updated_at DESC
     ]], { cid }) or {}
 end
@@ -96,7 +115,7 @@ end
 function store.getDoc(cid, id)
     if not id or id == '' then return nil end
     return MySQL.single.await([[
-        SELECT id, folder_id, name, kind, content, url, size, locked, source, created_at, updated_at
+        SELECT id, folder_id, name, kind, content, url, size, locked, signable, source, created_at, updated_at
         FROM `phone_documents` WHERE citizenid = ? AND id = ?
     ]], { cid, id })
 end
@@ -150,11 +169,12 @@ end
 function store.createDoc(cid, doc)
     MySQL.insert.await([[
         INSERT INTO `phone_documents`
-            (id, citizenid, folder_id, name, kind, content, url, size, locked, source, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, citizenid, folder_id, name, kind, content, url, size, locked, signable, source, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ]], {
         doc.id, cid, doc.folderId, doc.name, doc.kind, doc.content, doc.url,
-        doc.size or 0, doc.locked and 1 or 0, doc.source, doc.ts, doc.ts,
+        doc.size or 0, doc.locked and 1 or 0, doc.signable == false and 0 or 1,
+        doc.source, doc.ts, doc.ts,
     })
 end
 

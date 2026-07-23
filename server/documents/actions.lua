@@ -33,6 +33,7 @@ local function serializeDoc(row)
         folderId  = row.folder_id,
         size      = tonumber(row.size) or 0,
         locked    = isTruthy(row.locked),
+        signable  = row.signable == nil or isTruthy(row.signable),
         source    = row.source,
         url       = row.url,
         content   = row.content,
@@ -511,16 +512,17 @@ function actions.createForCid(cid, opts, sourceLabel)
     local folderId, ferr = resolveFolderName(cid, opts.folder)
     if ferr then return nil, ferr end
 
-    local locked = opts.locked == true and 1 or 0
+    local locked   = opts.locked == true and 1 or 0
+    local signable = opts.signable ~= false
     local source = type(sourceLabel) == 'string' and sourceLabel ~= '' and sourceLabel or nil
     local id, ts = newId(), os.time()
     store.createDoc(cid, {
         id = id, folderId = folderId, name = name, kind = kind,
-        content = content, url = url, size = size, locked = locked, source = source, ts = ts,
+        content = content, url = url, size = size, locked = locked, signable = signable, source = source, ts = ts,
     })
     return id, nil, serializeDoc({
         id = id, folder_id = folderId, name = name, kind = kind, content = content, url = url,
-        size = size, locked = locked, source = source, created_at = ts, updated_at = ts,
+        size = size, locked = locked, signable = signable and 1 or 0, source = source, created_at = ts, updated_at = ts,
     })
 end
 
@@ -640,6 +642,7 @@ function actions.sign(src, payload)
     local row = store.getDoc(cid, id)
     if not row then return fail('Document not found') end
     if row.kind ~= 'text' then return fail('Only text documents can be signed') end
+    if row.signable ~= nil and not isTruthy(row.signable) then return fail('This document cannot be signed') end
     if store.hasSigned(id, cid) then return fail('You have already signed this document') end
 
     local image = store.getPersonalSignature(cid)
@@ -683,6 +686,7 @@ function actions.requestShare(src, target, payload)
         url     = row.url,
         size    = tonumber(row.size) or 0,
         source  = row.source,
+        signable = row.signable == nil or isTruthy(row.signable),
         fromName = player.getName(src),
         signatures = sigs,
     })
@@ -721,10 +725,11 @@ function actions.deliverShare(targetSrc, payload)
     end
 
     local source = type(payload.source) == 'string' and payload.source ~= '' and payload.source or nil
+    local signable = payload.signable ~= false
     local id, ts = newId(), os.time()
     store.createDoc(tcid, {
         id = id, folderId = nil, name = name, kind = kind,
-        content = content, url = url, size = size, locked = 0, source = source, ts = ts,
+        content = content, url = url, size = size, locked = 0, signable = signable, source = source, ts = ts,
     })
 
     -- Re-attach the sender's signature rows to the delivered copy; the payload was built
@@ -744,7 +749,7 @@ function actions.deliverShare(targetSrc, payload)
 
     local doc = serializeDoc({
         id = id, folder_id = nil, name = name, kind = kind, content = content, url = url,
-        size = size, locked = 0, source = source, created_at = ts, updated_at = ts,
+        size = size, locked = 0, signable = signable and 1 or 0, source = source, created_at = ts, updated_at = ts,
     })
     if kind == 'text' then attachSignatures(doc, id) end
     local fromName = type(payload.fromName) == 'string' and payload.fromName ~= '' and payload.fromName or 'Someone'

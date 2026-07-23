@@ -26,6 +26,8 @@ export interface DocFile {
     locked:    boolean;
     /** True when the document carries at least one signature (content + name frozen). */
     signed?:   boolean;
+    /** False when the issuing script forbade signing this document (default signable). */
+    signable?: boolean;
     /** Present on full reads only, like content. */
     signatures?: DocSignature[];
     source?:   string | null;
@@ -130,7 +132,7 @@ export const MOCK_DOCS: DocFile[] = [
         locked: false, signed: true, content: RICH_SAMPLE, createdAt: nowSec() - 14400, updatedAt: nowSec() - 14400,
         signatures: [{ id: 's-1', signer: 'Jordan Reyes', image: null, signedAt: nowSec() - 14000 }],
     },
-    { id: 'd-lease',   name: 'Apartment Lease',  kind: 'text',  folderId: 'f-personal', size: byteLength(SAMPLE), locked: true,  source: 'sd-housing', content: SAMPLE, createdAt: nowSec() - 86400, updatedAt: nowSec() - 86400 },
+    { id: 'd-lease',   name: 'Apartment Lease',  kind: 'text',  folderId: 'f-personal', size: byteLength(SAMPLE), locked: true,  signable: false, source: 'sd-housing', content: SAMPLE, createdAt: nowSec() - 86400, updatedAt: nowSec() - 86400 },
     { id: 'd-q3',      name: 'Q3 Summary',       kind: 'text',  folderId: 'f-reports',  size: byteLength(SAMPLE), locked: false, content: SAMPLE, createdAt: nowSec() - 7200,  updatedAt: nowSec() - 7200 },
     { id: 'd-photo',   name: 'Site Photo',       kind: 'image', folderId: 'f-work',     size: 184320,             locked: false, url: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=800', createdAt: nowSec() - 5400, updatedAt: nowSec() - 5400 },
     { id: 'd-receipt', name: 'Receipt.pdf',      kind: 'file',  folderId: null,        size: 51200,              locked: false, source: 'sd-banking', url: 'https://example.com/receipt.pdf', createdAt: nowSec() - 9000, updatedAt: nowSec() - 9000 },
