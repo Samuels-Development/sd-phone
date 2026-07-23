@@ -206,6 +206,17 @@ function persistSecurity(pin: string | null, face: boolean) {
     else saveSecurityLocal({ passcode: pin, faceId: face });
 }
 
+// Range sliders fire a persist per drag tick; store state must follow every tick, but one
+// server write per gesture is enough. Trailing timer, keyed per setting so concurrent
+// sliders never cancel each other's writes. The NUI document survives phone close/holster,
+// so a pending timer still fires - only a resource restart inside the window can drop one.
+const PERSIST_DEBOUNCE_MS = 300;
+const persistTimers: Record<string, number> = {};
+function persistDebounced(key: string, send: () => void) {
+    window.clearTimeout(persistTimers[key]);
+    persistTimers[key] = window.setTimeout(send, PERSIST_DEBOUNCE_MS);
+}
+
 export const useThemeStore = create<ThemeState>((set, get) => ({
     theme: isFiveM ? 'light' : loadThemeLocal(),
     darkTheme: isFiveM ? 'graphite' : loadDarkThemeLocal(),
@@ -299,18 +310,19 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     setPhoneScale: (v) => {
         const next = clampPhoneScale(v);
         set({ phoneScale: next });
-        if (isFiveM) void fetchNui('sd-phone:settings:setPhoneScale', { scale: next }).catch(() => {});
+        if (isFiveM) persistDebounced('phoneScale', () => { void fetchNui('sd-phone:settings:setPhoneScale', { scale: get().phoneScale }).catch(() => {}); });
         else savePhoneScaleLocal(next);
     },
 
     setRingtoneVol: (v) => {
         set({ ringtoneVol: v });
-        if (isFiveM) void fetchNui('sd-phone:settings:setVolumes', { ringtone: v, call: get().callVol }).catch(() => {});
+        if (isFiveM) persistDebounced('volumes', () => { void fetchNui('sd-phone:settings:setVolumes', { ringtone: get().ringtoneVol, call: get().callVol }).catch(() => {}); });
     },
     setCallVol: (v) => {
         set({ callVol: v });
         if (isFiveM) {
-            void fetchNui('sd-phone:settings:setVolumes', { ringtone: get().ringtoneVol, call: v }).catch(() => {});
+            persistDebounced('volumes', () => { void fetchNui('sd-phone:settings:setVolumes', { ringtone: get().ringtoneVol, call: get().callVol }).catch(() => {}); });
+            // Live in-call volume must track the drag in real time - never debounced.
             void fetchNui('sd-phone:call:setVolume', { volume: v }).catch(() => {});
         }
     },
@@ -318,7 +330,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     setChatTextScale: (v) => {
         const next = clampChatScale(v);
         set({ chatTextScale: next });
-        if (isFiveM) void fetchNui('sd-phone:settings:setChatTextScale', { scale: next }).catch(() => {});
+        if (isFiveM) persistDebounced('chatTextScale', () => { void fetchNui('sd-phone:settings:setChatTextScale', { scale: get().chatTextScale }).catch(() => {}); });
         else saveChatScaleLocal(next);
     },
 

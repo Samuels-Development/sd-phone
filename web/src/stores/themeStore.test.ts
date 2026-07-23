@@ -17,11 +17,18 @@ let storage: ReturnType<typeof fakeLocalStorage>;
 
 beforeEach(() => {
     storage = fakeLocalStorage();
-    vi.stubGlobal('window', { localStorage: storage, setTimeout, clearTimeout });
+    // Forward timer calls at invocation time so vi.useFakeTimers() (installed after this
+    // stub is created) still intercepts the store's window.setTimeout.
+    vi.stubGlobal('window', {
+        localStorage: storage,
+        setTimeout: (...args: Parameters<typeof setTimeout>) => setTimeout(...args),
+        clearTimeout: (...args: Parameters<typeof clearTimeout>) => clearTimeout(...args),
+    });
     vi.resetModules();
 });
 
 afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.doUnmock('@/core/nui');
 });
@@ -63,12 +70,36 @@ describe('themeStore phone scale persistence (dev)', () => {
 });
 
 describe('themeStore phone scale persistence (in-game)', () => {
-    it('persists the scale through the settings NUI callback', async () => {
+    it('debounces a drag gesture into one NUI persist with the final value', async () => {
+        vi.useFakeTimers();
         const fetchNui = vi.fn().mockResolvedValue({ success: true });
         vi.doMock('@/core/nui', () => ({ isFiveM: true, fetchNui }));
         const store = await importStore();
+        store.getState().setPhoneScale(31);
+        store.getState().setPhoneScale(33);
         store.getState().setPhoneScale(35);
+        expect(store.getState().phoneScale).toBe(35);
+        expect(fetchNui).not.toHaveBeenCalled();
+        vi.advanceTimersByTime(300);
+        expect(fetchNui).toHaveBeenCalledTimes(1);
         expect(fetchNui).toHaveBeenCalledWith('sd-phone:settings:setPhoneScale', { scale: 35 });
+    });
+
+    it('merges rapid volume changes into one settings write, keeping live call volume immediate', async () => {
+        vi.useFakeTimers();
+        const fetchNui = vi.fn().mockResolvedValue({ success: true });
+        vi.doMock('@/core/nui', () => ({ isFiveM: true, fetchNui }));
+        const store = await importStore();
+        store.getState().setRingtoneVol(10);
+        store.getState().setRingtoneVol(55);
+        store.getState().setCallVol(80);
+        const writesBefore = fetchNui.mock.calls.filter(c => c[0] === 'sd-phone:settings:setVolumes');
+        expect(writesBefore).toHaveLength(0);
+        expect(fetchNui).toHaveBeenCalledWith('sd-phone:call:setVolume', { volume: 80 });
+        vi.advanceTimersByTime(300);
+        const writes = fetchNui.mock.calls.filter(c => c[0] === 'sd-phone:settings:setVolumes');
+        expect(writes).toHaveLength(1);
+        expect(writes[0][1]).toEqual({ ringtone: 55, call: 80 });
     });
 
     it('applies the server-saved scale on hydrate', async () => {
