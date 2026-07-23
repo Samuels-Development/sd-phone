@@ -234,6 +234,19 @@ local function startMovementThread()
                 DisableControlAction(0, 106, true)
                 DisableControlAction(0, 245, true)
                 DisableControlAction(0, 246, true)
+                -- Scroll-wheel fall-throughs under keep-input: the phone owns the wheel, so
+                -- vehicle radio cycling, the radio wheel and weapon cycling must not react.
+                DisableControlAction(0, 14, true)
+                DisableControlAction(0, 15, true)
+                DisableControlAction(0, 16, true)
+                DisableControlAction(0, 17, true)
+                DisableControlAction(0, 81, true)
+                DisableControlAction(0, 82, true)
+                DisableControlAction(0, 83, true)
+                DisableControlAction(0, 84, true)
+                DisableControlAction(0, 85, true)
+                DisableControlAction(0, 99, true)
+                DisableControlAction(0, 100, true)
             end
             Wait(0)
         end
