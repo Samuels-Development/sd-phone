@@ -106,6 +106,17 @@ export function orderedFolders(folders: DocFolder[]): { folder: DocFolder; depth
 
 const SAMPLE = 'This is a sample document. In dev mode the Files app runs entirely off local mocks so every screen is navigable without the game.';
 
+// Read-only docs render URL-only lines as inline images; this mock demos the mixed layout.
+const RICH_SAMPLE = [
+    'VEHICLE SALES CONTRACT',
+    '',
+    'The seller transfers one (1) used Blista, VIN 1D4HR48N73F526809, to the buyer for the agreed sum of $12,500, payable on delivery.',
+    'https://picsum.photos/seed/sdphone-car/640/360',
+    'Condition at handover is documented above. The buyer acknowledges existing wear on the front bumper and both front seats.',
+    'https://picsum.photos/seed/sdphone-int/640/360',
+    'This agreement is binding once signed. Signatures below are recorded and verified by the phone.',
+].join('\n');
+
 export const MOCK_FOLDERS: DocFolder[] = [
     { id: 'f-work',     name: 'Work',     parentId: null },
     { id: 'f-personal', name: 'Personal', parentId: null },
@@ -115,8 +126,8 @@ export const MOCK_FOLDERS: DocFolder[] = [
 export const MOCK_DOCS: DocFile[] = [
     { id: 'd-todo',    name: 'To-do',            kind: 'text',  folderId: null,        size: byteLength(SAMPLE), locked: false, content: SAMPLE, createdAt: nowSec() - 3600,  updatedAt: nowSec() - 600 },
     {
-        id: 'd-contract', name: 'Sales Contract', kind: 'text', folderId: null, size: byteLength(SAMPLE),
-        locked: false, signed: true, content: SAMPLE, createdAt: nowSec() - 14400, updatedAt: nowSec() - 14400,
+        id: 'd-contract', name: 'Sales Contract', kind: 'text', folderId: null, size: byteLength(RICH_SAMPLE),
+        locked: false, signed: true, content: RICH_SAMPLE, createdAt: nowSec() - 14400, updatedAt: nowSec() - 14400,
         signatures: [{ id: 's-1', signer: 'Jordan Reyes', image: null, signedAt: nowSec() - 14000 }],
     },
     { id: 'd-lease',   name: 'Apartment Lease',  kind: 'text',  folderId: 'f-personal', size: byteLength(SAMPLE), locked: true,  source: 'sd-housing', content: SAMPLE, createdAt: nowSec() - 86400, updatedAt: nowSec() - 86400 },

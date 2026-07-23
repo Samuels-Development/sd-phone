@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BadgeCheck, ChevronLeft, Lock, PenLine } from 'lucide-react';
 
 import { useIosPush } from '@/hooks/useIosPush';
@@ -85,16 +85,19 @@ export function TextEditor({ doc, backLabel, onBack, onSave, onSigned, animateIn
             </div>
 
             <div className="flex-1 overflow-y-auto no-scrollbar px-4">
-                <textarea
-                    value={body}
-                    readOnly={readOnly}
-                    maxLength={MAX_TEXT_LENGTH}
-                    onChange={e => setBody(e.target.value)}
-                    placeholder={t('documents.startWriting', 'Start writing…')}
-                    className="mt-4 w-full resize-none bg-transparent text-[17px] leading-snug outline-none placeholder:text-ios-gray"
-                    style={{ minHeight: signed ? 180 : 320 }}
-                    aria-label={t('documents.documentBody', 'Document body')}
-                />
+                {readOnly ? (
+                    <RichBody content={body} />
+                ) : (
+                    <textarea
+                        value={body}
+                        maxLength={MAX_TEXT_LENGTH}
+                        onChange={e => setBody(e.target.value)}
+                        placeholder={t('documents.startWriting', 'Start writing…')}
+                        className="mt-4 w-full resize-none bg-transparent text-[17px] leading-snug outline-none placeholder:text-ios-gray"
+                        style={{ minHeight: 320 }}
+                        aria-label={t('documents.documentBody', 'Document body')}
+                    />
+                )}
 
                 {(doc.signatures?.length ?? 0) > 0 && (
                     <div className="mb-4 mt-2 flex flex-col gap-2.5">
@@ -130,6 +133,62 @@ export function TextEditor({ doc, backLabel, onBack, onSave, onSigned, animateIn
                 />
             )}
         </div>
+    );
+}
+
+
+type RichBlock = { kind: 'text' | 'image'; value: string };
+
+// A line that is exactly one http(s) URL becomes an inline image in the read view; everything
+// else stays running text. Script-issued documents (citations, dossiers, contracts) use this
+// to mix paragraphs and pictures in a single document.
+function parseBlocks(content: string): RichBlock[] {
+    const blocks: RichBlock[] = [];
+    let run: string[] = [];
+    const flush = () => {
+        const text = run.join('\n');
+        if (text.trim() !== '') blocks.push({ kind: 'text', value: text });
+        run = [];
+    };
+    for (const line of content.split('\n')) {
+        if (/^https?:\/\/\S+$/.test(line.trim())) {
+            flush();
+            blocks.push({ kind: 'image', value: line.trim() });
+        } else {
+            run.push(line);
+        }
+    }
+    flush();
+    return blocks;
+}
+
+function RichBody({ content }: { content: string }) {
+    const blocks = useMemo(() => parseBlocks(content), [content]);
+    return (
+        <div className="mb-2 mt-4 flex flex-col gap-3">
+            {blocks.map((b, i) => (
+                b.kind === 'image'
+                    ? <RichImage key={i} url={b.value} />
+                    : <p key={i} className="whitespace-pre-wrap text-[17px] leading-snug">{b.value}</p>
+            ))}
+        </div>
+    );
+}
+
+function RichImage({ url }: { url: string }) {
+    const [failed, setFailed] = useState(false);
+    if (failed) {
+        return <p className="break-all text-[15px] text-ios-blue">{url}</p>;
+    }
+    return (
+        <img
+            src={url}
+            alt=""
+            draggable={false}
+            onError={() => setFailed(true)}
+            className="max-h-[340px] w-full rounded-[12px] object-cover"
+            style={{ border: '0.5px solid rgba(0,0,0,0.12)' }}
+        />
     );
 }
 
