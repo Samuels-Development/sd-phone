@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, Feather, Loader2 } from 'lucide-react';
+import { ArrowUp, Loader2 } from 'lucide-react';
+
+import { BirdyBird } from '../BirdyBird';
 
 import { t } from '@/i18n';
 import { EmptyState } from '@/ui/EmptyState';
@@ -54,7 +56,7 @@ export function Feed({ posts, me, feed, onFeedChange, onRefresh, onToggleLike, o
                 <div className="flex items-center px-4 py-2">
                     <button type="button" onClick={onOpenProfile} aria-label={t('birdy.yourProfile', 'Your profile')}><Avatar size={44} src={me.avatar} /></button>
                     <div className="flex flex-1 justify-center">
-                        <Feather className="h-8 w-8 text-[#1d9bf0]" strokeWidth={2.1} />
+                        <BirdyBird className="h-8 w-8 text-[#1d9bf0]" />
                     </div>
                     <div className="w-11" aria-hidden />
                 </div>
@@ -111,7 +113,7 @@ export function Feed({ posts, me, feed, onFeedChange, onRefresh, onToggleLike, o
                     ) : shown.length === 0 ? (
                         <EmptyState
                             center
-                            icon={<Feather className="h-8 w-8" strokeWidth={1.8} />}
+                            icon={<BirdyBird className="h-8 w-8" />}
                             circleClassName="bg-black/[0.06] text-black/35"
                             title={feed === 'following'
                                 ? t('birdy.nothingHereYet', 'Nothing here yet')

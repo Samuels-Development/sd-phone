@@ -690,27 +690,25 @@ function CalculatorIcon() {
 }
 
 function BirdyIcon() {
-    // A quill on the sky: Lucide's Feather vane filled solid, with the shaft and barb masked
-    // OUT so the tile gradient shows through the cuts (true cutouts, not painted-on lines).
+    // The user-drawn Birdy bird on its own diagonal blue (Downloads/BirdyIcon.jsx); the bare
+    // glyph twin lives in apps/birdy/BirdyBird for in-app branding.
     return (
         <svg viewBox={`0 0 ${S} ${S}`} width={S} height={S}>
             <defs>
-                <LinearGrad id="bdy" top="#6BC1FF" mid="#3D9EF8" bot="#1D7BE8" />
-                <mask id="bdyfcut">
-                    <rect x="0" y="0" width="24" height="24" fill="white" />
-                    <g fill="none" stroke="black" strokeWidth="1.9" strokeLinecap="round">
-                        <path d="M16 8 2 22" />
-                        <path d="M17.5 15H9" />
-                    </g>
-                </mask>
+                <linearGradient id="bdy" x1="0.15" y1="0" x2="0.85" y2="1">
+                    <stop offset="0" stopColor="#4aa8e8" />
+                    <stop offset="0.55" stopColor="#2f7fdc" />
+                    <stop offset="1" stopColor="#2560c9" />
+                </linearGradient>
             </defs>
             <rect width={S} height={S} fill="url(#bdy)" />
-            <svg x="9" y="9" width="42" height="42" viewBox="0 0 24 24">
-                <path
-                    d="M12.67 19a2 2 0 0 0 1.416-.588l6.154-6.172a6 6 0 0 0-8.49-8.49L5.586 9.914A2 2 0 0 0 5 11.328V18a1 1 0 0 0 1 1z"
-                    fill="#fff"
-                    mask="url(#bdyfcut)"
-                />
+            <svg x="0" y="0" width={S} height={S} viewBox="0 0 512 512">
+                <g transform="translate(102,102) scale(3.08)">
+                    <path
+                        d="M91 27 C87 31 82 33 78 35 C81 41 82 48 80 54 C76 76 60 94 37 95 C27 96 16 93 7 88 C16 86 24 83 31 78 C24 78 17 73 14 66 C18 67 22 67 26 65 C17 62 11 56 10 47 C13 49 17 51 21 51 C14 45 11 37 13 28 C20 38 30 43 41 44 C42 36 46 29 52 25 C57 20 65 19 70 22 C75 24 79 25 82 26 C85 26 88 26 91 27 Z"
+                        fill="#fff"
+                    />
+                </g>
             </svg>
         </svg>
     );
