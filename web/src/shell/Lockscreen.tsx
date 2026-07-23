@@ -34,7 +34,7 @@ export function Lockscreen({ use24h, showDate, wallpaper, unlockTrigger, onUnloc
     const date = formatLongDate(now);
     const [exiting, setExiting] = useState(false);
 
-    const { lockClock, setLockClock, passcode, faceId } = useTheme('lockClock', 'setLockClock', 'passcode', 'faceId');
+    const { lockClock, setLockClock, passcode, faceId, blurLock } = useTheme('lockClock', 'setLockClock', 'passcode', 'faceId', 'blurLock');
     const [customizing, setCustomizing] = useState(false);
     const [authMode, setAuthMode] = useState<null | 'face' | 'passcode'>(null);
 
@@ -121,7 +121,11 @@ export function Lockscreen({ use24h, showDate, wallpaper, unlockTrigger, onUnloc
         <div className="absolute inset-0 select-none">
             <div
                 className="wallpaper absolute inset-0"
-                style={{ backgroundImage: `url(${resolveWallpaper(wallpaper)})` }}
+                style={{
+                    backgroundImage: `url(${resolveWallpaper(wallpaper)})`,
+                    filter:    blurLock ? 'blur(28px) saturate(0.85)' : undefined,
+                    transform: blurLock ? 'scale(1.08)'               : undefined,
+                }}
             />
 
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/25 via-black/5 to-black/55" />

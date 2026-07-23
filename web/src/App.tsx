@@ -151,7 +151,7 @@ function AppContent() {
     // Tone/volume fields are deliberately NOT subscribed here — they're only
     // read inside event callbacks (via useThemeStore.getState()), so slider
     // drags in Control Center don't re-render the whole tree from the root.
-    const { theme, darkTheme, wallpaper, setTheme, setWallpaper, statusLightOverride, statusBarAutoLight, hideHomeIndicator, airplaneMode, hour24, setHour24, setSecurity } = useTheme('theme', 'darkTheme', 'wallpaper', 'setTheme', 'setWallpaper', 'statusLightOverride', 'statusBarAutoLight', 'hideHomeIndicator', 'airplaneMode', 'hour24', 'setHour24', 'setSecurity');
+    const { theme, darkTheme, wallpaperLock, wallpaperHome, setTheme, setWallpaper, statusLightOverride, statusBarAutoLight, hideHomeIndicator, airplaneMode, hour24, setHour24, setSecurity } = useTheme('theme', 'darkTheme', 'wallpaperLock', 'wallpaperHome', 'setTheme', 'setWallpaper', 'statusLightOverride', 'statusBarAutoLight', 'hideHomeIndicator', 'airplaneMode', 'hour24', 'setHour24', 'setSecurity');
     const locale = useLocaleStore(s => s.locale);
     useEffect(() => { useLocaleStore.getState().hydrate(); }, []);
 
@@ -257,7 +257,7 @@ function AppContent() {
         useThemeStore.setState({ setupDone: true });
         if (isFiveM) void fetchNui('sd-phone:settings:setSetupDone').catch(() => {});
         setTheme(result.theme);
-        setWallpaper(result.wallpaper);
+        setWallpaper(result.wallpaper, 'both');
         setSecurity(result.pin, result.faceUnlock);
         setLocked(false);
         setFinishingSetup(true);
@@ -933,8 +933,9 @@ function AppContent() {
     }, []);
 
     useEffect(() => {
-        if (wallpaper) warmImage(resolveWallpaper(wallpaper));
-    }, [wallpaper, warmImage]);
+        if (wallpaperLock) warmImage(resolveWallpaper(wallpaperLock));
+        if (wallpaperHome) warmImage(resolveWallpaper(wallpaperHome));
+    }, [wallpaperLock, wallpaperHome, warmImage]);
 
     useEffect(() => {
         if (!entering) return;
@@ -1113,7 +1114,7 @@ function AppContent() {
 
     if (!view) {
         const lv = lastViewRef.current;
-        const peekWall = resolveWallpaper(wallpaper || lv?.wallpaperLock || 'lockscreen.jpg');
+        const peekWall = resolveWallpaper(wallpaperLock || lv?.wallpaperLock || 'lockscreen.jpg');
         return (
             <>
                 {deckLayer}
@@ -1150,7 +1151,8 @@ function AppContent() {
     }
 
     const statusLight = locked || !currentApp || theme === 'dark';
-    const activeWallpaper = wallpaper || view.wallpaperHome;
+    const homeWallpaper = wallpaperHome || view.wallpaperHome;
+    const lockWallpaper = wallpaperLock || view.wallpaperLock;
 
     const allApps       = [...view.apps, ...customDefs.filter(c => !view.apps.some(a => a.id === c.id))];
     const effectiveApps = allApps.filter(a => a.base || installedApps.has(a.id) || downloadingIds.includes(a.id));
@@ -1247,7 +1249,7 @@ function AppContent() {
                     <Lockscreen
                         use24h={hour24}
                         showDate={view.showDate}
-                        wallpaper={activeWallpaper}
+                        wallpaper={lockWallpaper}
                         unlockTrigger={unlockTrigger}
                         onUnlock={() => setLocked(false)}
                         launchTrigger={launchTrigger}
@@ -1264,7 +1266,7 @@ function AppContent() {
                         <Homescreen
                             apps={effectiveApps}
                             dock={view.dock}
-                            wallpaper={activeWallpaper}
+                            wallpaper={homeWallpaper}
                             onLaunchApp={launchApp}
                             onUninstall={handleUninstallApp}
                             savedLayout={savedLayout}
@@ -1317,7 +1319,7 @@ function AppContent() {
                     />
                 )}
 
-                <CallLayer wallpaper={activeWallpaper} />
+                <CallLayer wallpaper={homeWallpaper} />
 
                 {ringingAlarm && (
                     <div className="absolute inset-0 z-30">

@@ -56,7 +56,11 @@ lib.callback.register('sd-phone:server:settings:get', function(source)
     data.theme                   = store.getTheme(cid)
     data.darkTheme               = store.getDarkTheme(cid)
     data.lockClock               = store.getLockClock(cid)
-    data.wallpaper               = store.getWallpaper(cid)
+    local walls = store.getWallpapers(cid)
+    data.wallpaper               = walls.lock
+    data.wallpaperHome           = walls.home
+    data.blurLock                = walls.blurLock
+    data.blurHome                = walls.blurHome
     data.customWallpapers        = store.getCustomWallpapers(cid)
     data.chatTextScale           = store.getChatTextScale(cid)
     data.phoneScale              = store.getPhoneScale(cid)
@@ -73,12 +77,23 @@ lib.callback.register('sd-phone:server:settings:get', function(source)
     return { success = true, data = data }
 end)
 
----Persists the caller's selected wallpaper key.
+---Persists the caller's lock and/or home wallpaper key; an absent field leaves that screen
+---unchanged.
 lib.callback.register('sd-phone:server:settings:setWallpaper', function(source, payload)
     local cid = player.getIdentifier(source)
     if not cid then return { success = false, message = 'Player not found' } end
     payload = type(payload) == 'table' and payload or {}
-    store.setWallpaper(cid, payload.wallpaper)
+    store.setWallpaper(cid, payload.lock or payload.wallpaper, payload.home)
+    return { success = true }
+end)
+
+---Persists the caller's per-screen wallpaper blur flags; an absent field leaves that screen
+---unchanged.
+lib.callback.register('sd-phone:server:settings:setBlur', function(source, payload)
+    local cid = player.getIdentifier(source)
+    if not cid then return { success = false, message = 'Player not found' } end
+    payload = type(payload) == 'table' and payload or {}
+    store.setBlur(cid, payload.lock, payload.home)
     return { success = true }
 end)
 

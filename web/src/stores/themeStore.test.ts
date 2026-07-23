@@ -138,6 +138,63 @@ describe('themeStore phone align persistence (dev)', () => {
     });
 });
 
+describe('themeStore split wallpapers + per-screen blur', () => {
+    it('sets lock, home, or both wallpapers independently', async () => {
+        const store = await importStore();
+        store.getState().setWallpaper('https://x/lock.jpg', 'lock');
+        store.getState().setWallpaper('https://x/home.jpg', 'home');
+        expect(store.getState().wallpaperLock).toBe('https://x/lock.jpg');
+        expect(store.getState().wallpaperHome).toBe('https://x/home.jpg');
+        store.getState().setWallpaper('https://x/both.jpg', 'both');
+        expect(store.getState().wallpaperLock).toBe('https://x/both.jpg');
+        expect(store.getState().wallpaperHome).toBe('https://x/both.jpg');
+    });
+
+    it('persists per-screen blur through one settings NUI callback', async () => {
+        const fetchNui = vi.fn().mockResolvedValue({ success: true });
+        vi.doMock('@/core/nui', () => ({ isFiveM: true, fetchNui }));
+        const store = await importStore();
+        store.getState().setBlurLock(true);
+        expect(store.getState().blurLock).toBe(true);
+        expect(fetchNui).toHaveBeenCalledWith('sd-phone:settings:setBlur', { lock: true, home: false });
+        store.getState().setBlurHome(true);
+        expect(fetchNui).toHaveBeenCalledWith('sd-phone:settings:setBlur', { lock: true, home: true });
+    });
+
+    it('hydrates the home wallpaper with a fallback to the lock wallpaper', async () => {
+        const fetchNui = vi.fn().mockImplementation((event: string) => {
+            if (event === 'sd-phone:settings:get') {
+                return Promise.resolve({ data: { wallpaper: 'https://x/shared.jpg', blurLock: true } });
+            }
+            return Promise.resolve({ success: true });
+        });
+        vi.doMock('@/core/nui', () => ({ isFiveM: true, fetchNui }));
+        const store = await importStore();
+        store.getState().hydrate();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(store.getState().wallpaperLock).toBe('https://x/shared.jpg');
+        expect(store.getState().wallpaperHome).toBe('https://x/shared.jpg');
+        expect(store.getState().blurLock).toBe(true);
+        expect(store.getState().blurHome).toBe(false);
+    });
+
+    it('hydrates independent wallpapers when both are saved', async () => {
+        const fetchNui = vi.fn().mockImplementation((event: string) => {
+            if (event === 'sd-phone:settings:get') {
+                return Promise.resolve({ data: { wallpaper: 'https://x/l.jpg', wallpaperHome: 'https://x/h.jpg', blurHome: true } });
+            }
+            return Promise.resolve({ success: true });
+        });
+        vi.doMock('@/core/nui', () => ({ isFiveM: true, fetchNui }));
+        const store = await importStore();
+        store.getState().hydrate();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(store.getState().wallpaperLock).toBe('https://x/l.jpg');
+        expect(store.getState().wallpaperHome).toBe('https://x/h.jpg');
+        expect(store.getState().blurHome).toBe(true);
+    });
+});
+
 describe('themeStore phone align persistence (in-game)', () => {
     it('persists the anchor through the settings NUI callback', async () => {
         const fetchNui = vi.fn().mockResolvedValue({ success: true });

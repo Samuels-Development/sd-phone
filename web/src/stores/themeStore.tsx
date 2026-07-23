@@ -61,12 +61,33 @@ function saveSecurityLocal(s: Security) {
 const HYDRATE_RETRY_MS = 1500;
 const HYDRATE_MAX_RETRIES = 20;
 
+export type WallpaperTarget = 'lock' | 'home' | 'both';
+
 const WALLPAPER_KEY = 'sd-phone:wallpaper';
 function loadWallpaperLocal(): string | null {
     try { return window.localStorage.getItem(WALLPAPER_KEY); } catch { return null; }
 }
 function saveWallpaperLocal(v: string) {
     try { window.localStorage.setItem(WALLPAPER_KEY, v); } catch { /* ignore */ }
+}
+
+// The home screen's own wallpaper; the legacy single key above doubles as the lock
+// wallpaper so an existing dev profile keeps its wallpaper on both screens.
+const WALLPAPER_HOME_KEY = 'sd-phone:wallpaperHome';
+function loadWallpaperHomeLocal(): string | null {
+    try { return window.localStorage.getItem(WALLPAPER_HOME_KEY); } catch { return null; }
+}
+function saveWallpaperHomeLocal(v: string) {
+    try { window.localStorage.setItem(WALLPAPER_HOME_KEY, v); } catch { /* ignore */ }
+}
+
+const BLUR_LOCK_KEY = 'sd-phone:blurLock';
+const BLUR_HOME_KEY = 'sd-phone:blurHome';
+function loadBlurLocal(key: string): boolean {
+    try { return window.localStorage.getItem(key) === '1'; } catch { return false; }
+}
+function saveBlurLocal(key: string, v: boolean) {
+    try { window.localStorage.setItem(key, v ? '1' : '0'); } catch { /* ignore */ }
 }
 
 const CUSTOM_WALLPAPERS_KEY = 'sd-phone:customWallpapers';
@@ -133,13 +154,16 @@ interface ThemeState {
     setTheme:          (t: Theme) => void;
     darkTheme:         DarkTheme;
     setDarkTheme:      (t: DarkTheme) => void;
-    wallpaper:         string;
-    setWallpaper:      (url: string) => void;
+    wallpaperLock:     string;
+    wallpaperHome:     string;
+    setWallpaper:      (url: string, target: WallpaperTarget) => void;
     customWallpapers:      string[];
     addCustomWallpaper:    (url: string) => Promise<string | null>;
     removeCustomWallpaper: (url: string) => void;
-    blurHomescreen:    boolean;
-    setBlurHomescreen: (v: boolean) => void;
+    blurLock:          boolean;
+    setBlurLock:       (v: boolean) => void;
+    blurHome:          boolean;
+    setBlurHome:       (v: boolean) => void;
     brightness:        number;
     setBrightness:     (v: number) => void;
     phoneScale:        number;
@@ -197,8 +221,18 @@ let wallpaperProfileKey: string | null = null;
 function wallpaperCacheKey(): string {
     return wallpaperProfileKey ? `${WALLPAPER_CACHE_BASE}:${wallpaperProfileKey}` : WALLPAPER_CACHE_BASE;
 }
-function cacheWallpaper(value: string): void {
-    try { window.localStorage.setItem(wallpaperCacheKey(), value); } catch { /* ignore */ }
+function cacheWallpapers(lock: string, home: string): void {
+    try { window.localStorage.setItem(wallpaperCacheKey(), JSON.stringify({ lock, home })); } catch { /* ignore */ }
+}
+function readWallpaperCache(): { lock?: string; home?: string } | null {
+    try {
+        const raw = window.localStorage.getItem(wallpaperCacheKey());
+        if (!raw) return null;
+        // Pre-split caches stored a bare string that painted both screens.
+        if (!raw.startsWith('{')) return { lock: raw, home: raw };
+        const parsed: unknown = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed as { lock?: string; home?: string } : null;
+    } catch { return null; }
 }
 
 function persistSecurity(pin: string | null, face: boolean) {
@@ -220,9 +254,11 @@ function persistDebounced(key: string, send: () => void) {
 export const useThemeStore = create<ThemeState>((set, get) => ({
     theme: isFiveM ? 'light' : loadThemeLocal(),
     darkTheme: isFiveM ? 'graphite' : loadDarkThemeLocal(),
-    wallpaper: isFiveM ? lockscreenAsset : (loadWallpaperLocal() ?? devDefaultAsset),
+    wallpaperLock: isFiveM ? lockscreenAsset : (loadWallpaperLocal() ?? devDefaultAsset),
+    wallpaperHome: isFiveM ? lockscreenAsset : (loadWallpaperHomeLocal() ?? loadWallpaperLocal() ?? devDefaultAsset),
     customWallpapers: isFiveM ? [] : loadCustomWallpapersLocal(),
-    blurHomescreen: false,
+    blurLock: isFiveM ? false : loadBlurLocal(BLUR_LOCK_KEY),
+    blurHome: isFiveM ? false : loadBlurLocal(BLUR_HOME_KEY),
     brightness: 100,
     phoneScale: isFiveM ? 50 : loadPhoneScaleLocal(),
     chatTextScale: isFiveM ? 1 : loadChatScaleLocal(),
@@ -258,14 +294,21 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         }, 0);
     },
 
-    setWallpaper: (value) => {
-        set({ wallpaper: value });
+    setWallpaper: (value, target) => {
+        const lock = target !== 'home';
+        const home = target !== 'lock';
+        set(s => ({
+            wallpaperLock: lock ? value : s.wallpaperLock,
+            wallpaperHome: home ? value : s.wallpaperHome,
+        }));
         const key = wallpaperKey(value);
         if (isFiveM) {
-            cacheWallpaper(value);
-            void fetchNui('sd-phone:settings:setWallpaper', { wallpaper: key }).catch(() => {});
+            cacheWallpapers(get().wallpaperLock, get().wallpaperHome);
+            // Absent fields serialize away, so the server's COALESCE leaves that screen alone.
+            void fetchNui('sd-phone:settings:setWallpaper', { lock: lock ? key : undefined, home: home ? key : undefined }).catch(() => {});
         } else {
-            saveWallpaperLocal(key);
+            if (lock) saveWallpaperLocal(key);
+            if (home) saveWallpaperHomeLocal(key);
         }
     },
 
@@ -298,8 +341,18 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         else saveDarkThemeLocal(next);
     },
 
-    setBlurHomescreen: (v) => set({ blurHomescreen: v }),
     setBrightness:     (v) => set({ brightness: v }),
+
+    setBlurLock: (v) => {
+        set({ blurLock: v });
+        if (isFiveM) void fetchNui('sd-phone:settings:setBlur', { lock: v, home: get().blurHome }).catch(() => {});
+        else saveBlurLocal(BLUR_LOCK_KEY, v);
+    },
+    setBlurHome: (v) => {
+        set({ blurHome: v });
+        if (isFiveM) void fetchNui('sd-phone:settings:setBlur', { lock: get().blurLock, home: v }).catch(() => {});
+        else saveBlurLocal(BLUR_HOME_KEY, v);
+    },
 
     setPhoneAlign: (v) => {
         set({ phoneAlign: v });
@@ -409,8 +462,12 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         // Profile switch/restore: paint the stock look NOW, so the previous phone's wallpaper
         // and clock never show on this one while the async hydrate is still in flight. The
         // setup flag goes back to "unknown" so Hello waits for THIS profile's answer.
+        const stock = isFiveM ? lockscreenAsset : (loadWallpaperLocal() ?? devDefaultAsset);
         set({
-            wallpaper: isFiveM ? lockscreenAsset : (loadWallpaperLocal() ?? devDefaultAsset),
+            wallpaperLock: stock,
+            wallpaperHome: stock,
+            blurLock: false,
+            blurHome: false,
             lockClock: DEFAULT_LOCK_CLOCK,
             setupDone: null,
         });
@@ -421,10 +478,13 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         // (same render batch as the phone reveal). Dev already persists wallpaper locally.
         if (!isFiveM) return;
         wallpaperProfileKey = key;
-        try {
-            const cached = window.localStorage.getItem(wallpaperCacheKey());
-            if (cached) set({ wallpaper: cached });
-        } catch { /* ignore */ }
+        const cached = readWallpaperCache();
+        if (cached && (cached.lock || cached.home)) {
+            set(s => ({
+                wallpaperLock: cached.lock ?? s.wallpaperLock,
+                wallpaperHome: cached.home ?? cached.lock ?? s.wallpaperHome,
+            }));
+        }
     },
 
     hydrate: (attempt = 0) => {
@@ -437,16 +497,21 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
             }
         };
         const keyAtRequest = wallpaperProfileKey;
-        void fetchNui<{ data?: { ringtone?: string; notificationTone?: string; customRingtones?: CustomTone[]; customNotificationTones?: CustomTone[]; airplaneMode?: boolean; hour24?: boolean; reopenApp?: boolean; setupDone?: boolean; lockClock?: Partial<LockClock>; passcode?: string | null; faceId?: boolean; wallpaper?: string; customWallpapers?: string[]; chatTextScale?: number; phoneScale?: number; phoneAlign?: string; ringtoneVol?: number; callVol?: number; theme?: string; darkTheme?: string } }>('sd-phone:settings:get')
+        void fetchNui<{ data?: { ringtone?: string; notificationTone?: string; customRingtones?: CustomTone[]; customNotificationTones?: CustomTone[]; airplaneMode?: boolean; hour24?: boolean; reopenApp?: boolean; setupDone?: boolean; lockClock?: Partial<LockClock>; passcode?: string | null; faceId?: boolean; wallpaper?: string; wallpaperHome?: string; blurLock?: boolean; blurHome?: boolean; customWallpapers?: string[]; chatTextScale?: number; phoneScale?: number; phoneAlign?: string; ringtoneVol?: number; callVol?: number; theme?: string; darkTheme?: string } }>('sd-phone:settings:get')
             .then(res => {
                 if (!res?.data) { retry(); return; }
                 const d = res.data;
                 const patch: Partial<ThemeState> = {};
                 // Always assigned: a profile that never saved one must PAINT the default, not
-                // keep the previous phone's wallpaper (unique phones swap profiles live).
-                patch.wallpaper = (typeof d.wallpaper === 'string' && d.wallpaper)
-                    ? wallpaperKey(d.wallpaper)
-                    : (isFiveM ? lockscreenAsset : (loadWallpaperLocal() ?? devDefaultAsset));
+                // keep the previous phone's wallpaper (unique phones swap profiles live). A
+                // profile without a distinct home wallpaper mirrors its lock one.
+                const stockWall = isFiveM ? lockscreenAsset : (loadWallpaperLocal() ?? devDefaultAsset);
+                const lockWall  = (typeof d.wallpaper === 'string' && d.wallpaper) ? wallpaperKey(d.wallpaper) : stockWall;
+                const homeWall  = (typeof d.wallpaperHome === 'string' && d.wallpaperHome) ? wallpaperKey(d.wallpaperHome) : lockWall;
+                patch.wallpaperLock = lockWall;
+                patch.wallpaperHome = homeWall;
+                patch.blurLock = d.blurLock === true;
+                patch.blurHome = d.blurHome === true;
                 if (Array.isArray(d.customWallpapers)) {
                     patch.customWallpapers = d.customWallpapers.filter((u): u is string => typeof u === 'string');
                 }
@@ -476,10 +541,10 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
                 patch.customRingtones         = ring;
                 patch.customNotificationTones = notif;
                 set(patch);
-                // Freshest server answer becomes the profile's cached wallpaper - unless the
+                // Freshest server answer becomes the profile's cached wallpapers - unless the
                 // acting profile changed while this request was in flight.
-                if (isFiveM && typeof patch.wallpaper === 'string' && keyAtRequest === wallpaperProfileKey) {
-                    cacheWallpaper(patch.wallpaper);
+                if (isFiveM && keyAtRequest === wallpaperProfileKey) {
+                    cacheWallpapers(lockWall, homeWall);
                 }
                 if (isFiveM) void fetchNui('sd-phone:call:setVolume', { volume: get().callVol }).catch(() => {});
                 const ringIsYt  = !!d.ringtone         && ring.some(c => c.id === d.ringtone);

@@ -7,6 +7,7 @@ import { formatClockTime, formatLongDate, useClock } from '@/hooks/useClock';
 import { useIosPush } from '@/hooks/useIosPush';
 import { PushLayer } from '../SettingsSubPage';
 import { useTheme } from '@/stores/themeStore';
+import type { WallpaperTarget } from '@/stores/themeStore';
 import { resolveWallpaper } from '@/shell/wallpapers';
 import { Clockface } from '@/shell/lockClock';
 import { AppIconSVG } from '@/shell/AppIconSVG';
@@ -39,15 +40,15 @@ const DOCK_APPS = ['phone', 'messages', 'camera', 'photos'];
 
 export function WallpaperPage({ onBack }: { onBack: () => void }) {
     const { goBack, pageStyle } = useIosPush(onBack);
-    const { wallpaper, blurHomescreen, setBlurHomescreen, lockClock, hour24 } =
-        useTheme('wallpaper', 'blurHomescreen', 'setBlurHomescreen', 'lockClock', 'hour24');
-    const [showPicker, setShowPicker] = useState(false);
+    const { wallpaperLock, wallpaperHome, blurLock, setBlurLock, blurHome, setBlurHome, lockClock, hour24 } =
+        useTheme('wallpaperLock', 'wallpaperHome', 'blurLock', 'setBlurLock', 'blurHome', 'setBlurHome', 'lockClock', 'hour24');
+    const [pickerTarget, setPickerTarget] = useState<WallpaperTarget | null>(null);
 
     const now  = useClock();
     const time = formatClockTime(now, hour24);
     const date = formatLongDate(now);
 
-    const subNode = showPicker ? <WallpaperPickerPage onBack={() => setShowPicker(false)} /> : null;
+    const subNode = pickerTarget ? <WallpaperPickerPage target={pickerTarget} onBack={() => setPickerTarget(null)} /> : null;
 
     return (
         <PushLayer pageStyle={pageStyle} className="z-20" innerClassName="text-black dark:text-white" sub={subNode}>
@@ -61,7 +62,7 @@ export function WallpaperPage({ onBack }: { onBack: () => void }) {
                     <div className="overflow-hidden rounded-[10px] bg-[#e5e5e5] dark:bg-surface">
                         <button
                             type="button"
-                            onClick={() => setShowPicker(true)}
+                            onClick={() => setPickerTarget('both')}
                             className="relative flex w-full items-center px-4 py-3.5 active:bg-black/5 dark:active:bg-white/5"
                         >
                             <span className="flex-1 text-left text-[17px] text-black dark:text-white">
@@ -72,29 +73,23 @@ export function WallpaperPage({ onBack }: { onBack: () => void }) {
                     </div>
 
                     <div className="overflow-hidden rounded-[10px] bg-[#e5e5e5] dark:bg-surface">
-                        <div className="flex gap-3 p-4">
-                            <PreviewThumb>
-                                <LockPreview wallpaper={wallpaper} time={time} date={date} lockClock={lockClock} />
+                        <div className="flex gap-3 p-4 pb-3">
+                            <PreviewThumb caption={t('settings.lockScreen', 'Lock Screen')} onPress={() => setPickerTarget('lock')}>
+                                <LockPreview wallpaper={wallpaperLock} blurred={blurLock} time={time} date={date} lockClock={lockClock} />
                             </PreviewThumb>
-                            <PreviewThumb>
-                                <HomePreview wallpaper={wallpaper} blurred={blurHomescreen} />
+                            <PreviewThumb caption={t('settings.homeScreen', 'Home Screen')} onPress={() => setPickerTarget('home')}>
+                                <HomePreview wallpaper={wallpaperHome} blurred={blurHome} />
                             </PreviewThumb>
                         </div>
+                        <p className="pb-3 text-center text-[12px] text-ios-gray">
+                            {t('settings.tapPreviewHint', 'Tap a screen to change its wallpaper.')}
+                        </p>
 
                         <div className="h-[0.5px] bg-ios-gray4 dark:bg-control" />
 
-                        <button
-                            type="button"
-                            onClick={() => setBlurHomescreen(!blurHomescreen)}
-                            className="flex w-full items-center px-4 py-3 active:bg-black/5 dark:active:bg-white/5"
-                        >
-                            <span className="flex-1 text-left text-[17px] font-normal text-black dark:text-white">
-                                {t('settings.blurHomescreen', 'Blur Homescreen')}
-                            </span>
-                            <div className="pointer-events-none">
-                                <Toggle on={blurHomescreen} />
-                            </div>
-                        </button>
+                        <BlurRow label={t('settings.blurLockScreen', 'Blur Lock Screen')} on={blurLock} onToggle={() => setBlurLock(!blurLock)} />
+                        <div className="h-[0.5px] bg-ios-gray4 dark:bg-control" />
+                        <BlurRow label={t('settings.blurHomeScreen', 'Blur Home Screen')} on={blurHome} onToggle={() => setBlurHome(!blurHome)} />
                     </div>
 
                 </div>
@@ -104,10 +99,26 @@ export function WallpaperPage({ onBack }: { onBack: () => void }) {
 }
 
 
+function BlurRow({ label, on, onToggle }: { label: string; on: boolean; onToggle: () => void }) {
+    return (
+        <button
+            type="button"
+            onClick={onToggle}
+            className="flex w-full items-center px-4 py-3 active:bg-black/5 dark:active:bg-white/5"
+        >
+            <span className="flex-1 text-left text-[17px] font-normal text-black dark:text-white">{label}</span>
+            <div className="pointer-events-none">
+                <Toggle on={on} />
+            </div>
+        </button>
+    );
+}
+
+
 // Renders children on a full-size 440x956 stage, scale-transformed to the thumb's measured
 // width - so every child uses the real screens' CSS values verbatim.
-function PreviewThumb({ children }: { children: ReactNode }) {
-    const ref = useRef<HTMLDivElement>(null);
+function PreviewThumb({ caption, onPress, children }: { caption: string; onPress: () => void; children: ReactNode }) {
+    const ref = useRef<HTMLButtonElement>(null);
     const [scale, setScale] = useState(0);
     useLayoutEffect(() => {
         const el = ref.current;
@@ -119,12 +130,22 @@ function PreviewThumb({ children }: { children: ReactNode }) {
         return () => ro.disconnect();
     }, []);
     return (
-        <div ref={ref} className="pointer-events-none relative flex-1 select-none overflow-hidden rounded-[12px] shadow-md" style={{ aspectRatio: `${SW}/${SH}` }}>
-            {scale > 0 && (
-                <div className="absolute left-0 top-0" style={{ width: SW, height: SH, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
-                    {children}
-                </div>
-            )}
+        <div className="flex flex-1 flex-col items-center gap-2">
+            <button
+                ref={ref}
+                type="button"
+                onClick={onPress}
+                aria-label={caption}
+                className="relative w-full select-none overflow-hidden rounded-[12px] shadow-md active:opacity-80"
+                style={{ aspectRatio: `${SW}/${SH}` }}
+            >
+                {scale > 0 && (
+                    <div className="pointer-events-none absolute left-0 top-0" style={{ width: SW, height: SH, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+                        {children}
+                    </div>
+                )}
+            </button>
+            <span className="text-[13px] text-ios-gray">{caption}</span>
         </div>
     );
 }
@@ -143,15 +164,26 @@ function HomeIndicatorBar() {
 }
 
 
-function LockPreview({ wallpaper, time, date, lockClock }: {
+function LockPreview({ wallpaper, blurred, time, date, lockClock }: {
     wallpaper: string;
+    blurred:   boolean;
     time:      string;
     date:      string;
     lockClock: Parameters<typeof Clockface>[0]['config'];
 }) {
     return (
-        <div className="absolute inset-0">
-            <img src={resolveWallpaper(wallpaper)} className="absolute inset-0 h-full w-full object-cover" alt="" draggable={false} />
+        <div className="absolute inset-0 overflow-hidden">
+            <img
+                src={resolveWallpaper(wallpaper)}
+                className="absolute inset-0 h-full w-full object-cover"
+                style={{
+                    filter:     blurred ? 'blur(28px) saturate(0.85)' : undefined,
+                    transform:  blurred ? 'scale(1.08)'               : undefined,
+                    transition: 'filter 0.35s ease, transform 0.35s ease',
+                }}
+                alt=""
+                draggable={false}
+            />
             <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-black/5 to-black/55" />
 
             <div className={`relative flex pt-28 ${lockClock.layout === 'left' ? 'justify-start pl-9' : lockClock.layout === 'right' ? 'justify-end pr-9' : 'justify-center'}`}>

@@ -34,7 +34,7 @@ type Stage = 'language' | 'pin' | 'face' | 'theme' | 'wallpaper' | 'overview' | 
 const STAGE_ORDER: Stage[] = ['language', 'pin', 'face', 'theme', 'wallpaper', 'overview', 'done'];
 
 export function SetupFlow({ onDone, onHelloChange }: Props) {
-    const { theme, setTheme, wallpaper, setWallpaper } = useTheme('theme', 'setTheme', 'wallpaper', 'setWallpaper');
+    const { theme, setTheme, wallpaperLock, setWallpaper } = useTheme('theme', 'setTheme', 'wallpaperLock', 'setWallpaper');
 
     const [stage,     setStage]     = useState<Stage>('language');
     const [direction, setDirection] = useState<'forward' | 'backward'>('forward');
@@ -59,7 +59,7 @@ export function SetupFlow({ onDone, onHelloChange }: Props) {
     function next() {
         const i = STAGE_ORDER.indexOf(stage);
         if (i === STAGE_ORDER.length - 1) {
-            onDone({ language, pin, faceUnlock, theme, wallpaper });
+            onDone({ language, pin, faceUnlock, theme, wallpaper: wallpaperLock });
             return;
         }
         go(STAGE_ORDER[i + 1], 'forward');
@@ -147,8 +147,8 @@ export function SetupFlow({ onDone, onHelloChange }: Props) {
                 )}
                 {stage === 'wallpaper' && (
                     <WallpaperStage
-                        selected={wallpaper}
-                        onSelect={setWallpaper}
+                        selected={wallpaperLock}
+                        onSelect={url => setWallpaper(url, 'both')}
                         onContinue={next}
                     />
                 )}
@@ -158,12 +158,12 @@ export function SetupFlow({ onDone, onHelloChange }: Props) {
                         pin={pin}
                         faceUnlock={faceUnlock}
                         theme={theme}
-                        wallpaper={wallpaper}
+                        wallpaper={wallpaperLock}
                         onContinue={next}
                     />
                 )}
                 {stage === 'done' && (
-                    <DoneStage onFinish={() => onDone({ language, pin, faceUnlock, theme, wallpaper })} />
+                    <DoneStage onFinish={() => onDone({ language, pin, faceUnlock, theme, wallpaper: wallpaperLock })} />
                 )}
             </div>
 

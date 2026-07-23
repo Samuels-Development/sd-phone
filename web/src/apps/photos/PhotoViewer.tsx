@@ -190,7 +190,7 @@ export function PhotoViewer({
                                     type="button"
                                     onClick={() => {
                                         setMenuOpen(false);
-                                        useThemeStore.getState().setWallpaper(current.url);
+                                        useThemeStore.getState().setWallpaper(current.url, 'both');
                                         setWallpaperHud(v => v + 1);
                                     }}
                                     className="flex w-full items-center justify-between px-4 py-3 text-[16px] active:bg-black/5 dark:active:bg-white/10"

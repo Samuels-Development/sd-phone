@@ -1,5 +1,9 @@
 ---@type table sd-phone config root (configs/config.lua).
 local config = require 'configs.config'
+---@type table Server-wide helpers (server.util).
+local util = require 'server.util'
+---@type fun(v: any): boolean Boolean coercion for oxmysql TINYINT columns.
+local isTruthy = util.truthy
 
 ---@type table Store module; the table returned at end of file.
 local store = {}
@@ -76,6 +80,9 @@ function store.ensureSchema()
             home_layout        TEXT         NULL,
             lock_clock         TEXT         NULL,
             wallpaper          VARCHAR(512) NULL,
+            wallpaper_home     VARCHAR(512) NULL,
+            blur_lock          TINYINT(1)   NULL,
+            blur_home          TINYINT(1)   NULL,
             custom_wallpapers  TEXT         NULL,
             passcode           VARCHAR(8)   NULL,
             face_id            TINYINT(1)   NOT NULL DEFAULT 0,
@@ -141,6 +148,15 @@ function store.ensureSchema()
     end
     if not columnExists('phone_settings', 'custom_wallpapers') then
         MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN custom_wallpapers TEXT NULL')
+    end
+    if not columnExists('phone_settings', 'wallpaper_home') then
+        MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN wallpaper_home VARCHAR(512) NULL')
+    end
+    if not columnExists('phone_settings', 'blur_lock') then
+        MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN blur_lock TINYINT(1) NULL')
+    end
+    if not columnExists('phone_settings', 'blur_home') then
+        MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN blur_home TINYINT(1) NULL')
     end
     if not columnExists('phone_settings', 'passcode') then
         MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN passcode VARCHAR(8) NULL')
@@ -543,28 +559,58 @@ local function sanitizeWallpaper(v)
     return clean:sub(1, 255)
 end
 
----Reads a player's saved wallpaper key, or nil if unset. Read-only.
+---Reads a player's wallpaper preferences: lock/home wallpaper keys (nil = unset; a home of nil
+---mirrors the lock one client-side) plus the per-screen blur flags. Read-only.
 ---@param citizenid string framework per-character id
----@return string|nil wallpaper saved key
-function store.getWallpaper(citizenid)
-    if not citizenid or citizenid == '' then return nil end
-    local row = MySQL.single.await('SELECT wallpaper FROM phone_settings WHERE citizenid = ?', { citizenid })
-    if not row or not row.wallpaper or row.wallpaper == '' then return nil end
-    return row.wallpaper
+---@return { lock: string|nil, home: string|nil, blurLock: boolean, blurHome: boolean }
+function store.getWallpapers(citizenid)
+    if not citizenid or citizenid == '' then return { blurLock = false, blurHome = false } end
+    local row = MySQL.single.await(
+        'SELECT wallpaper, wallpaper_home, blur_lock, blur_home FROM phone_settings WHERE citizenid = ?',
+        { citizenid })
+    if not row then return { blurLock = false, blurHome = false } end
+    return {
+        lock     = row.wallpaper ~= '' and row.wallpaper or nil,
+        home     = row.wallpaper_home ~= '' and row.wallpaper_home or nil,
+        blurLock = isTruthy(row.blur_lock),
+        blurHome = isTruthy(row.blur_home),
+    }
 end
 
----Persists a player's selected wallpaper, leaving other settings intact; an empty or invalid
----value is ignored.
+---Persists a player's lock and/or home wallpaper (upsert), leaving other settings intact. A
+---nil / invalid field leaves that screen's wallpaper unchanged (COALESCE).
 ---@param citizenid string framework per-character id
----@param value string wallpaper key
-function store.setWallpaper(citizenid, value)
+---@param lock any lock-screen wallpaper key
+---@param home any home-screen wallpaper key
+function store.setWallpaper(citizenid, lock, home)
     if not citizenid or citizenid == '' then return end
-    local clean = sanitizeWallpaper(value)
-    if not clean then return end
+    local l = sanitizeWallpaper(lock)
+    local h = sanitizeWallpaper(home)
+    if not l and not h then return end
     MySQL.update.await([[
-        INSERT INTO phone_settings (citizenid, wallpaper) VALUES (?, ?)
-        ON DUPLICATE KEY UPDATE wallpaper = VALUES(wallpaper)
-    ]], { citizenid, clean })
+        INSERT INTO phone_settings (citizenid, wallpaper, wallpaper_home) VALUES (?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            wallpaper      = COALESCE(VALUES(wallpaper), wallpaper),
+            wallpaper_home = COALESCE(VALUES(wallpaper_home), wallpaper_home)
+    ]], { citizenid, l, h })
+end
+
+---Persists a player's per-screen wallpaper blur flags (upsert); a nil field leaves that
+---screen's flag unchanged (COALESCE).
+---@param citizenid string framework per-character id
+---@param lockOn any blur the lock screen wallpaper
+---@param homeOn any blur the home screen wallpaper
+function store.setBlur(citizenid, lockOn, homeOn)
+    if not citizenid or citizenid == '' then return end
+    if lockOn == nil and homeOn == nil then return end
+    local l = lockOn ~= nil and (lockOn == true and 1 or 0) or nil
+    local h = homeOn ~= nil and (homeOn == true and 1 or 0) or nil
+    MySQL.update.await([[
+        INSERT INTO phone_settings (citizenid, blur_lock, blur_home) VALUES (?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            blur_lock = COALESCE(VALUES(blur_lock), blur_lock),
+            blur_home = COALESCE(VALUES(blur_home), blur_home)
+    ]], { citizenid, l, h })
 end
 
 ---@type integer Cap on saved custom wallpapers per character.
@@ -812,9 +858,6 @@ local function sanitizePin(v)
     if type(v) ~= 'string' then return nil end
     return v:match('^%d%d%d%d%d?%d?$')
 end
-
-local util = require 'server.util'
-local isTruthy = util.truthy
 
 ---Reads a player's lock security (passcode + Face Unlock); `passcode` is nil when no code is
 ---set and `faceId` is forced false whenever no passcode exists. Read-only.

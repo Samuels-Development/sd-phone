@@ -6,6 +6,7 @@ import { PHOTO_SOURCES } from '@/apps/photos/data';
 import { apiListPhotos, getCanImportPhotos } from '@/core/photosApi';
 import { useIosPush } from '@/hooks/useIosPush';
 import { MAX_CUSTOM_WALLPAPERS, useTheme } from '@/stores/themeStore';
+import type { WallpaperTarget } from '@/stores/themeStore';
 import { resolveWallpaper } from '@/shell/wallpapers';
 import { NavBar } from '@/ui/NavBar';
 import { PromptDialog } from '@/ui/PromptDialog';
@@ -33,12 +34,12 @@ const WALLPAPER_LABELS = [
     'Ember',             // bg22
 ];
 
-export function WallpaperPickerPage({ onBack }: { onBack: () => void }) {
+export function WallpaperPickerPage({ target, onBack }: { target: WallpaperTarget; onBack: () => void }) {
     const { goBack, pageStyle } = useIosPush(onBack);
     const {
-        wallpaper, setWallpaper, customWallpapers, addCustomWallpaper, removeCustomWallpaper,
-    } = useTheme('wallpaper', 'setWallpaper', 'customWallpapers', 'addCustomWallpaper', 'removeCustomWallpaper');
-    const [selected, setSelected] = useState<string>(wallpaper);
+        wallpaperLock, wallpaperHome, setWallpaper, customWallpapers, addCustomWallpaper, removeCustomWallpaper,
+    } = useTheme('wallpaperLock', 'wallpaperHome', 'setWallpaper', 'customWallpapers', 'addCustomWallpaper', 'removeCustomWallpaper');
+    const [selected, setSelected] = useState<string>(target === 'home' ? wallpaperHome : wallpaperLock);
     const [canImport, setCanImport] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
 
@@ -53,7 +54,7 @@ export function WallpaperPickerPage({ onBack }: { onBack: () => void }) {
 
     function apply(src: string) {
         setSelected(src);
-        setWallpaper(src);
+        setWallpaper(src, target);
     }
 
     const isSelected = (src: string) => resolveWallpaper(selected) === src;
@@ -118,7 +119,11 @@ export function WallpaperPickerPage({ onBack }: { onBack: () => void }) {
                 </section>
 
                 <p className="mt-5 text-center text-[13px] text-ios-gray">
-                    {t('settings.tapWallpaperHint', 'Tap a wallpaper to apply it to both Lock Screen and Home Screen.')}
+                    {target === 'lock'
+                        ? t('settings.tapWallpaperHintLock', 'Tap a wallpaper to apply it to the Lock Screen.')
+                        : target === 'home'
+                            ? t('settings.tapWallpaperHintHome', 'Tap a wallpaper to apply it to the Home Screen.')
+                            : t('settings.tapWallpaperHint', 'Tap a wallpaper to apply it to both Lock Screen and Home Screen.')}
                 </p>
 
                 <div className="h-8" />

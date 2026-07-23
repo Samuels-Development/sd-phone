@@ -85,7 +85,7 @@ export interface HomescreenProps {
 }
 
 export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, savedLayout, onLayoutChange, onEditingChange, bloomOnMount = true }: HomescreenProps) {
-    const { blurHomescreen } = useTheme('blurHomescreen');
+    const { blurHome } = useTheme('blurHome');
     const badges = useBadges();
     // The homescreen mounts exactly when the phone content is revealed (open without a lock,
     // or the unlock swipe finishing), so a mount-triggered bloom staggers the icons in like
@@ -426,8 +426,8 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
                 className="wallpaper absolute inset-0"
                 style={{
                     backgroundImage: `url(${resolveWallpaper(wallpaper)})`,
-                    filter:    blurHomescreen ? 'blur(28px) saturate(0.85)' : undefined,
-                    transform: blurHomescreen ? 'scale(1.08)'               : undefined,
+                    filter:    blurHome ? 'blur(28px) saturate(0.85)' : undefined,
+                    transform: blurHome ? 'scale(1.08)'               : undefined,
                 }}
             />
             <div className="pointer-events-none absolute inset-0 z-0 bg-black/20" />
