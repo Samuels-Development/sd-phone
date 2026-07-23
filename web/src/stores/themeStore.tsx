@@ -112,6 +112,22 @@ export type PhoneAlign =
     | 'middle-left' | 'middle-center' | 'middle-right'
     | 'bottom-left' | 'bottom-center' | 'bottom-right';
 
+const PHONE_ALIGN_KEY = 'sd-phone:phoneAlign';
+const PHONE_ALIGNS: PhoneAlign[] = [
+    'top-left',    'top-center',    'top-right',
+    'middle-left', 'middle-center', 'middle-right',
+    'bottom-left', 'bottom-center', 'bottom-right',
+];
+function loadPhoneAlignLocal(): PhoneAlign {
+    try {
+        const v = window.localStorage.getItem(PHONE_ALIGN_KEY) as PhoneAlign | null;
+        return v && PHONE_ALIGNS.includes(v) ? v : 'bottom-right';
+    } catch { return 'bottom-right'; }
+}
+function savePhoneAlignLocal(v: PhoneAlign) {
+    try { window.localStorage.setItem(PHONE_ALIGN_KEY, v); } catch { /* ignore */ }
+}
+
 interface ThemeState {
     theme:             Theme;
     setTheme:          (t: Theme) => void;
@@ -199,7 +215,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     brightness: 100,
     phoneScale: isFiveM ? 50 : loadPhoneScaleLocal(),
     chatTextScale: isFiveM ? 1 : loadChatScaleLocal(),
-    phoneAlign: 'bottom-right',
+    phoneAlign: isFiveM ? 'bottom-right' : loadPhoneAlignLocal(),
     ringtoneVol: 40,
     callVol: 60,
     airplaneMode: false,
@@ -273,7 +289,12 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
 
     setBlurHomescreen: (v) => set({ blurHomescreen: v }),
     setBrightness:     (v) => set({ brightness: v }),
-    setPhoneAlign:     (v) => set({ phoneAlign: v }),
+
+    setPhoneAlign: (v) => {
+        set({ phoneAlign: v });
+        if (isFiveM) void fetchNui('sd-phone:settings:setPhoneAlign', { align: v }).catch(() => {});
+        else savePhoneAlignLocal(v);
+    },
 
     setPhoneScale: (v) => {
         const next = clampPhoneScale(v);
@@ -404,7 +425,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
             }
         };
         const keyAtRequest = wallpaperProfileKey;
-        void fetchNui<{ data?: { ringtone?: string; notificationTone?: string; customRingtones?: CustomTone[]; customNotificationTones?: CustomTone[]; airplaneMode?: boolean; hour24?: boolean; reopenApp?: boolean; setupDone?: boolean; lockClock?: Partial<LockClock>; passcode?: string | null; faceId?: boolean; wallpaper?: string; customWallpapers?: string[]; chatTextScale?: number; phoneScale?: number; ringtoneVol?: number; callVol?: number; theme?: string; darkTheme?: string } }>('sd-phone:settings:get')
+        void fetchNui<{ data?: { ringtone?: string; notificationTone?: string; customRingtones?: CustomTone[]; customNotificationTones?: CustomTone[]; airplaneMode?: boolean; hour24?: boolean; reopenApp?: boolean; setupDone?: boolean; lockClock?: Partial<LockClock>; passcode?: string | null; faceId?: boolean; wallpaper?: string; customWallpapers?: string[]; chatTextScale?: number; phoneScale?: number; phoneAlign?: string; ringtoneVol?: number; callVol?: number; theme?: string; darkTheme?: string } }>('sd-phone:settings:get')
             .then(res => {
                 if (!res?.data) { retry(); return; }
                 const d = res.data;
@@ -429,6 +450,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
                 if (typeof d.darkTheme === 'string' && (DARK_THEMES as string[]).includes(d.darkTheme)) patch.darkTheme = d.darkTheme as DarkTheme;
                 if (typeof d.chatTextScale === 'number') patch.chatTextScale = clampChatScale(d.chatTextScale);
                 if (typeof d.phoneScale === 'number') patch.phoneScale = clampPhoneScale(d.phoneScale);
+                if (typeof d.phoneAlign === 'string' && (PHONE_ALIGNS as string[]).includes(d.phoneAlign)) patch.phoneAlign = d.phoneAlign as PhoneAlign;
                 if (typeof d.ringtoneVol === 'number') patch.ringtoneVol = clampVol(d.ringtoneVol);
                 if (typeof d.callVol === 'number') patch.callVol = clampVol(d.callVol);
                 patch.lockClock = (d.lockClock && typeof d.lockClock === 'object')
