@@ -484,7 +484,9 @@ function DocumentsIcon() {
     // Passwords-icon technique: one folder glyph repeated in yellow/green/blue, cascading
     // diagonally, each with a tile-coloured stroke pass behind it so the layers cut cleanly
     // out of each other.
-    const TILE = '#F1F2F5';
+    // Flat, not the family's graphite gradient: the folder layers cut out of each other with
+    // TILE-coloured strokes, and only a flat tile keeps those cut lines invisible.
+    const TILE = '#1C1C1E';
     const FOLDER = 'M -16 -9 h 9 a 2 2 0 0 1 1.6 0.9 l 1.8 2.3 h 16.2 a 3 3 0 0 1 3 3 v 11.8 a 3 3 0 0 1 -3 3 h -25.6 a 3 3 0 0 1 -3 -3 v -15 a 3 3 0 0 1 3 -3 z';
     const fold = (grad: string, tx: number, ty: number) => (
         <g transform={`translate(${tx} ${ty})`}>
