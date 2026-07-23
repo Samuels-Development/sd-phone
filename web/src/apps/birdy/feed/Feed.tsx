@@ -56,7 +56,7 @@ export function Feed({ posts, me, feed, onFeedChange, onRefresh, onToggleLike, o
                 <div className="flex items-center px-4 py-2">
                     <button type="button" onClick={onOpenProfile} aria-label={t('birdy.yourProfile', 'Your profile')}><Avatar size={44} src={me.avatar} /></button>
                     <div className="flex flex-1 justify-center">
-                        <BirdyBird className="h-8 w-8 text-[#1d9bf0]" />
+                        <BirdyBird className="h-9 w-9 text-[#1d9bf0]" />
                     </div>
                     <div className="w-11" aria-hidden />
                 </div>
