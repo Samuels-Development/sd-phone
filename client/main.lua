@@ -114,6 +114,9 @@ local flashlightOn = false
 local cameraActive = false
 ---@type boolean True while a UI text field is focused.
 local typingInPhone = false
+---@type boolean True while the focused field is digit-only (PIN pads, dialers): keep-input
+---stays on so the player can move, and the digit weapon binds are suppressed instead.
+local typingNumeric = false
 ---@type boolean True while the hold-to-look keybind has released the cursor for camera control.
 local lookMode = false
 
@@ -215,7 +218,7 @@ local function startMovementThread()
         while phoneState.open do
             if IsPauseMenuActive() then
                 if ClosePhone then ClosePhone() end
-            elseif not typingInPhone and not cameraActive then
+            elseif (not typingInPhone or typingNumeric) and not cameraActive then
                 DisablePlayerFiring(PlayerId(), true)
                 if not lookMode then
                     DisableControlAction(0, 1, true)
@@ -247,6 +250,12 @@ local function startMovementThread()
                 DisableControlAction(0, 85, true)
                 DisableControlAction(0, 99, true)
                 DisableControlAction(0, 100, true)
+                if typingNumeric then
+                    -- Digit pad up: the number row must not fire GTA weapon-slot binds.
+                    for control = 157, 166 do
+                        DisableControlAction(0, control, true)
+                    end
+                end
             end
             Wait(0)
         end
@@ -258,7 +267,7 @@ end
 ---AllowMovement on.
 local function syncKeepInput()
     if phoneState.open and config.Phone.AllowMovement then
-        SetNuiFocusKeepInput(not typingInPhone and not cameraActive)
+        SetNuiFocusKeepInput((not typingInPhone or typingNumeric) and not cameraActive)
     end
 end
 
@@ -335,6 +344,7 @@ local function OpenPhone()
     SetNuiFocus(true, true)
     if config.Phone.AllowMovement then
         typingInPhone = false
+        typingNumeric = false
         SetNuiFocusKeepInput(true)
         startMovementThread()
     end
@@ -407,6 +417,7 @@ function ClosePhone()
     TriggerServerEvent('sd-phone:server:phone:setOpen', false)
     SetNuiFocus(false, false)
     typingInPhone = false
+    typingNumeric = false
     lookMode = false
     SendNUIMessage({ action = 'sd-phone:close' })
 
@@ -556,12 +567,14 @@ RegisterNUICallback('sd-phone:unlock', function(_, cb)
     cb({ ok = true })
 end)
 
----React to Lua: a text field gained or lost focus. Updates the typing flag and re-syncs
----keep-input; payload nil-guarded and coerced to a strict boolean.
----@param data table|nil { typing: boolean }
+---React to Lua: a text field gained or lost focus. Full typing releases keep-input so keys
+---reach only the field; numeric typing (PIN pads, dialers) keeps it so the player can still
+---move, with the digit weapon binds suppressed by the movement thread instead.
+---@param data table|nil { typing: boolean, numeric: boolean }
 ---@param cb fun(result: table) NUI response
 RegisterNUICallback('sd-phone:typing', function(data, cb)
     typingInPhone = data and data.typing and true or false
+    typingNumeric = typingInPhone and data and data.numeric and true or false
     syncKeepInput()
     cb({ ok = true })
 end)
