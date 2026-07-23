@@ -157,3 +157,15 @@ exports('getDocumentSignatures', function(source, docId)
     if not cid then return {} end
     return actions.listSignaturesForCid(cid, docId)
 end)
+
+---True when one of a player's documents carries at least one signature - the quick boolean
+---twin of getDocumentSignatures for scripts that only need a yes/no gate.
+---@param source number acting player's server id
+---@param docId string document id
+---@return boolean signed
+exports('isDocumentSigned', function(source, docId)
+    if type(source) ~= 'number' then return false end
+    local cid = player.getIdentifier(source)
+    if not cid then return false end
+    return actions.isSignedForCid(cid, docId)
+end)

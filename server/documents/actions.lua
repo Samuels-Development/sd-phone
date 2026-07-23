@@ -575,6 +575,18 @@ function actions.deleteForCid(cid, docId)
     return true
 end
 
+---True when a citizenid's document carries at least one signature. Read-only; false when the
+---document doesn't exist or belong to the player.
+---@param cid string acting citizenid
+---@param docId any document id
+---@return boolean signed
+function actions.isSignedForCid(cid, docId)
+    if type(cid) ~= 'string' or cid == '' then return false end
+    if type(docId) ~= 'string' or docId == '' then return false end
+    if not store.getDoc(cid, docId) then return false end
+    return store.hasSignatures(docId)
+end
+
 ---A document's signatures for a citizenid, for other resources. Read-only; an empty array when
 ---the document doesn't exist or belong to the player.
 ---@param cid string acting citizenid
