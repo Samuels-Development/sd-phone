@@ -20,39 +20,50 @@ import { useDeckActive } from '@/shell/deckActive';
 //
 // Refcounted, since two capturing views can briefly overlap during a transition and
 // the last one to unmount must not release a claim the other still holds.
-let holders = 0;
+// Two claim tiers. A FULL claim (letter-typing apps - the word games) releases keep-input
+// entirely: every key must reach only the phone, and movement freezes. A NUMERIC claim
+// (digit pads - lockscreen PIN, dialer) keeps keep-input on so the player can still move;
+// the client suppresses the GTA digit weapon binds per frame instead. A full claim anywhere
+// outranks any number of numeric ones.
+let fullHolders = 0;
+let numericHolders = 0;
 
-function setTyping(typing: boolean): void {
+function sync(): void {
     if (!isFiveM) return;
-    void fetchNui('sd-phone:typing', { typing });
+    const typing  = fullHolders > 0 || numericHolders > 0;
+    const numeric = fullHolders === 0 && numericHolders > 0;
+    void fetchNui('sd-phone:typing', { typing, numeric });
 }
 
-function acquire(): void {
-    holders += 1;
-    if (holders === 1) setTyping(true);
+function acquire(numeric: boolean): void {
+    if (numeric) numericHolders += 1;
+    else fullHolders += 1;
+    sync();
 }
 
-function release(): void {
-    holders = Math.max(0, holders - 1);
-    if (holders === 0) setTyping(false);
+function release(numeric: boolean): void {
+    if (numeric) numericHolders = Math.max(0, numericHolders - 1);
+    else fullHolders = Math.max(0, fullHolders - 1);
+    sync();
 }
 
 /** True while some app holds the keyboard, so shell-level hotkeys can stand down too. */
 export function isKeyboardCaptured(): boolean {
-    return holders > 0;
+    return fullHolders + numericHolders > 0;
 }
 
 /**
  * Keeps game keybinds from firing while a keyboard-driven app is the foreground app.
  * @param enabled pass false to hold the claim off (e.g. the game is over / a sheet is up)
+ * @param numeric digit-pad tier: the player keeps moving while the pad is active
  */
-export function useKeyboardCapture(enabled = true): void {
+export function useKeyboardCapture(enabled = true, numeric = false): void {
     const deckActive = useDeckActive();
     const on = enabled && deckActive;
 
     useEffect(() => {
         if (!on) return;
-        acquire();
-        return release;
-    }, [on]);
+        acquire(numeric);
+        return () => release(numeric);
+    }, [on, numeric]);
 }

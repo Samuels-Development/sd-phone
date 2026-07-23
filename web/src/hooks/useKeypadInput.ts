@@ -31,7 +31,9 @@ export function useKeypadInput({
 }): void {
     const deckActive = useDeckActive();
     const listening = enabled && deckActive;
-    useKeyboardCapture(capture && listening);
+    // Numeric tier: the player keeps moving while a digit pad is up (a PIN entry must not
+    // freeze WASD); the client disables the GTA digit weapon binds per frame instead.
+    useKeyboardCapture(capture && listening, true);
 
     const onPressRef   = useRef(onPress);
     const onDeleteRef  = useRef(onDelete);

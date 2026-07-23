@@ -1040,7 +1040,14 @@ function AppContent() {
             const t = el as HTMLElement | null;
             return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
         };
-        const onFocus = (e: FocusEvent) => { if (isText(e.target)) void fetchNui('sd-phone:typing', { typing: true }); };
+        // Digit-only inputs take the numeric typing tier: the player keeps moving while the
+        // field is focused (client/main.lua suppresses the digit weapon binds instead).
+        const isNumeric = (el: EventTarget | null) => {
+            const t = el as HTMLInputElement | null;
+            return !!t && t.tagName === 'INPUT'
+                && (['numeric', 'tel', 'decimal'].includes(t.inputMode) || ['number', 'tel'].includes(t.type));
+        };
+        const onFocus = (e: FocusEvent) => { if (isText(e.target)) void fetchNui('sd-phone:typing', { typing: true, numeric: isNumeric(e.target) }); };
         const onBlur  = (e: FocusEvent) => { if (isText(e.target)) void fetchNui('sd-phone:typing', { typing: false }); };
         document.addEventListener('focusin', onFocus);
         document.addEventListener('focusout', onBlur);
