@@ -26,6 +26,8 @@ export interface DocFile {
     locked:    boolean;
     /** True when the document carries at least one signature (content + name frozen). */
     signed?:   boolean;
+    /** True when the viewing player has already signed this document (gates counter-signing). */
+    signedByMe?: boolean;
     /** False when the issuing script forbade signing this document (default signable). */
     signable?: boolean;
     /** False when the issuing script forbade deleting this document (default deletable). */

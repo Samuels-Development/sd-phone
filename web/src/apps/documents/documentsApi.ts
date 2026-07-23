@@ -176,9 +176,10 @@ export async function apiSetSignature(image: string): Promise<boolean> {
 export async function apiSignDoc(id: string): Promise<DocFile | null> {
     if (!isFiveM) {
         const doc = devDocs.find(d => d.id === id);
-        if (!doc || doc.kind !== 'text' || doc.signed || doc.signable === false || !devSignature) return null;
+        if (!doc || doc.kind !== 'text' || doc.signedByMe || doc.signable === false || !devSignature) return null;
         const sig: DocSignature = { id: newId('s'), signer: 'You', image: devSignature, signedAt: nowSec() };
         doc.signed = true;
+        doc.signedByMe = true;
         doc.signatures = [...(doc.signatures ?? []), sig];
         return { ...doc };
     }

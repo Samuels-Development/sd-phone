@@ -58,14 +58,22 @@ local function serializeSig(row)
     return { id = row.id, signer = row.signer, image = row.image, signedAt = tonumber(row.created_at) or 0 }
 end
 
----Attaches the signature list and signed flag to a serialized text document.
+---Attaches the signature list, signed flag and the viewer's own-signature flag to a serialized
+---text document. signedByMe gates counter-signing in the UI: a signed contract still offers
+---Sign to a viewer who hasn't signed it yet.
 ---@param doc table serialized document (mutated)
 ---@param docId string document id
+---@param viewerCid string|nil viewing citizenid
 ---@return table doc
-local function attachSignatures(doc, docId)
+local function attachSignatures(doc, docId, viewerCid)
     local sigs = {}
-    for _, row in ipairs(store.listSignatures(docId)) do sigs[#sigs + 1] = serializeSig(row) end
+    local mine = false
+    for _, row in ipairs(store.listSignatures(docId)) do
+        sigs[#sigs + 1] = serializeSig(row)
+        if viewerCid and row.citizenid == viewerCid then mine = true end
+    end
     doc.signed     = #sigs > 0
+    doc.signedByMe = mine
     doc.signatures = sigs
     return doc
 end
@@ -176,7 +184,7 @@ function actions.get(src, payload)
     local row = store.getDoc(cid, id)
     if not row then return fail('Document not found') end
     local doc = serializeDoc(row)
-    if row.kind == 'text' then attachSignatures(doc, id) end
+    if row.kind == 'text' then attachSignatures(doc, id, cid) end
     return ok({ doc = doc })
 end
 
@@ -658,7 +666,7 @@ function actions.sign(src, payload)
         id = newId(), docId = id, citizenid = cid,
         signer = player.getName(src) or 'Unknown', image = image, ts = os.time(),
     })
-    return ok({ doc = attachSignatures(serializeDoc(row), id) })
+    return ok({ doc = attachSignatures(serializeDoc(row), id, cid) })
 end
 
 ---Opens an AirShare request offering one of the caller's documents to a nearby player. The
@@ -757,7 +765,7 @@ function actions.deliverShare(targetSrc, payload)
         id = id, folder_id = nil, name = name, kind = kind, content = content, url = url,
         size = size, locked = 0, signable = signable and 1 or 0, source = source, created_at = ts, updated_at = ts,
     })
-    if kind == 'text' then attachSignatures(doc, id) end
+    if kind == 'text' then attachSignatures(doc, id, tcid) end
     local fromName = type(payload.fromName) == 'string' and payload.fromName ~= '' and payload.fromName or 'Someone'
     TriggerClientEvent('sd-phone:client:documents:receive', targetSrc, { doc = doc, fromName = fromName })
     -- quiet deliveries (e.g. saving a mail attachment) are recipient-initiated: no banner.

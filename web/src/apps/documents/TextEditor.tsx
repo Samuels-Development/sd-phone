@@ -190,7 +190,7 @@ export function TextEditor({ doc, backLabel, onBack, onSave, onSigned, animateIn
                             <ImageIcon className="h-[21px] w-[21px]" strokeWidth={2.1} />
                         </button>
                     )}
-                    {!signed && doc.signable !== false && (
+                    {doc.signable !== false && doc.signedByMe !== true && (
                         <button
                             type="button"
                             onClick={() => setSignOpen(true)}
