@@ -64,14 +64,16 @@ export function Notifications({ onOpenProfile }: { onOpenProfile: (handle?: stri
 function NotifRow({ icon, user, text, preview, onOpen }: { icon: React.ReactNode; user: BirdyAuthor; text: string; preview?: string; onOpen?: () => void }) {
     return (
         <button type="button" onClick={onOpen} className="flex w-full gap-3.5 border-b border-black/10 px-4 py-4 text-left transition-colors active:bg-black/[0.04]">
-            <div className="flex w-8 shrink-0 justify-center pt-1">{icon}</div>
+            <div className="flex w-8 shrink-0 justify-center pt-2">{icon}</div>
             <div className="min-w-0 flex-1">
-                <Avatar size={48} src={user.avatar} />
-                <div className="mt-2 text-[18px] text-black">
-                    <span className="font-bold">{user.name}</span> {text}
+                <div className="flex items-center gap-3">
+                    <div className="shrink-0"><Avatar size={44} src={user.avatar} /></div>
+                    <div className="min-w-0 flex-1 text-[17px] leading-snug text-black">
+                        <span className="font-bold">{user.name}</span> {text}
+                    </div>
                 </div>
                 {preview && (
-                    <div className="mt-1 line-clamp-2 text-[16px] leading-snug" style={{ color: META }}>{preview}</div>
+                    <div className="mt-1.5 line-clamp-2 pl-[56px] text-[15px] leading-snug" style={{ color: META }}>{preview}</div>
                 )}
             </div>
         </button>
