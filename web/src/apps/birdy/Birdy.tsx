@@ -261,7 +261,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
     if (tab === 'home') {
         content = <Feed posts={posts} me={me} feed={feed} onFeedChange={switchFeed} onRefresh={refreshNow} onToggleLike={toggleLike} onToggleRepost={toggleRepost} onOpenPost={setOpenPostId} onOpenProfile={openProfile} onOpenAuthor={openProfile} />;
     } else if (tab === 'search') {
-        content = <Search onOpenProfile={openProfile} />;
+        content = <Search me={me} onOpenProfile={openProfile} onOpenPost={setOpenPostId} onToggleLike={toggleLike} onToggleRepost={toggleRepost} />;
     } else if (tab === 'notifications') {
         content = <Notifications onOpenProfile={openProfile} />;
     } else {
