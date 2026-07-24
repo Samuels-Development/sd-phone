@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import {
-    AlertOctagon, ChevronRight, FileText, Flag, GripVertical, Inbox, Send, SquarePen, Trash2,
+    AlertOctagon, BookUser, ChevronRight, FileText, Flag, GripVertical, Inbox, Send, SquarePen, Trash2,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 
@@ -24,6 +24,7 @@ interface Props {
     onLockApp:        () => void;
     onDeleteAccount:  (id: string) => void;
     onChangePassword: () => void;
+    onOpenSavedEmails: () => void;
 }
 
 const FOLDER_ICONS: Record<Folder, ComponentType<{ className?: string }>> = {
@@ -36,7 +37,7 @@ const FOLDER_ICONS: Record<Folder, ComponentType<{ className?: string }>> = {
 };
 
 export function MailboxList({
-    activeAccount, messages, folderOrder, onOpenFolder, onCompose, onReorderFolders, onLockApp, onDeleteAccount, onChangePassword,
+    activeAccount, messages, folderOrder, onOpenFolder, onCompose, onReorderFolders, onLockApp, onDeleteAccount, onChangePassword, onOpenSavedEmails,
 }: Props) {
     const [editing, setEditing] = useState(false);
     const [confirmOut, setConfirmOut] = useState(false);
@@ -127,14 +128,24 @@ export function MailboxList({
                 >
                     {editing ? t('mail.done', 'Done') : t('mail.edit', 'Edit')}
                 </button>
-                <button
-                    type="button"
-                    onClick={onCompose}
-                    disabled={composeDisabled}
-                    className="text-ios-blue active:opacity-60 disabled:opacity-30"
-                >
-                    <SquarePen className="h-[22px] w-[22px]" strokeWidth={2} />
-                </button>
+                <div className="flex items-center gap-5">
+                    <button
+                        type="button"
+                        onClick={onOpenSavedEmails}
+                        aria-label={t('mail.savedEmails', 'Saved Emails')}
+                        className="text-ios-blue active:opacity-60"
+                    >
+                        <BookUser className="h-[22px] w-[22px]" strokeWidth={2} />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onCompose}
+                        disabled={composeDisabled}
+                        className="text-ios-blue active:opacity-60 disabled:opacity-30"
+                    >
+                        <SquarePen className="h-[22px] w-[22px]" strokeWidth={2} />
+                    </button>
+                </div>
             </div>
 
             <div className="px-5 pb-3 pt-0.5">
