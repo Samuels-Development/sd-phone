@@ -829,6 +829,29 @@ function store.insertNotification(id, recipientCid, kind, actorCid, postId)
     ]], { id, recipientCid, kind, actorCid, postId })
 end
 
+---Inserts many notifications in one statement. The post fan-out wrote one row per follower, so
+---a 100-follower post cost 100 sequential round trips. A nil/empty list is a no-op.
+---Every field must be non-nil: the args are positional, and a nil would shift every following
+---row's values. Notification kinds with no post (follow) use insertNotification instead.
+---@param rows { id: string, recipient: string, kind: string, actor: string, postId: string }[]
+function store.insertNotifications(rows)
+    if type(rows) ~= 'table' or #rows == 0 then return end
+    local ph, args, n = {}, {}, 0
+    for i = 1, #rows do
+        local r = rows[i]
+        if r.id and r.recipient and r.kind and r.actor and r.postId then
+            ph[#ph + 1] = '(?, ?, ?, ?, ?)'
+            args[n + 1], args[n + 2], args[n + 3], args[n + 4], args[n + 5] =
+                r.id, r.recipient, r.kind, r.actor, r.postId
+            n = n + 5
+        end
+    end
+    if n == 0 then return end
+    MySQL.insert.await((
+        'INSERT INTO phone_birdy_notifications (id, recipient_cid, kind, actor_cid, post_id) VALUES %s'
+    ):format(table.concat(ph, ',')), args)
+end
+
 ---@param recipientCid string
 ---@param limit number
 ---@return table[] rows with `created_ms` added

@@ -231,6 +231,17 @@ function player.onlineRealCidMap()
     return buildCidMap()
 end
 
+---`{ [citizenid] = source }` for the identity each player is CURRENTLY ACTING AS. The batch
+---equivalent of getSourceByIdentifier: a fan-out builds this once and indexes it per recipient
+---instead of resolving each one separately. Kept distinct from the SIM-aware onlineCidMap
+---override because that one maps every carried SIM, so live-UI pushes would reach a phone sitting
+---in a player's pocket. In this base module the acting identity IS the framework identifier, so
+---both share one memoised table. Read-only.
+---@return table<string, number>
+function player.activeCidMap()
+    return buildCidMap()
+end
+
 ---A `{ [citizenid] = source }` lookup of every currently-connected player. Read-only.
 ---@return table<string, number>
 function player.onlineCidMap()

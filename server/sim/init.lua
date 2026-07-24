@@ -60,6 +60,22 @@ function player.getSourceByIdentifier(citizenid)
     return nil
 end
 
+-- Batch form of getSourceByIdentifier above, and it must track it: ACTIVE identity only, so a
+-- fan-out that indexes this map still skips the other phone in a player's pocket.
+local baseActiveCidMap = player.activeCidMap
+function player.activeCidMap()
+    if not state.active then return baseActiveCidMap() end
+    local out = {}
+    for _, src in ipairs(GetPlayers()) do
+        local s = tonumber(src)
+        if s then
+            local id = session.identity(s)
+            if id then out[id] = s end
+        end
+    end
+    return out
+end
+
 local baseCidMap = player.onlineCidMap
 function player.onlineCidMap()
     if not state.active then return baseCidMap() end

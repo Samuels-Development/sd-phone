@@ -508,12 +508,15 @@ function actions.setRequestStatus(citizenid, copyId, status)
     local mid = store.midForCopy(copyId, citizenid)
     if not mid then return false end
 
+    -- One pass over the connected players for the whole fan-out; resolving per copy re-scanned
+    -- every player on the server each time.
+    local activeSrcs = player.activeCidMap()
     for _, copy in ipairs(store.siblingCopies(mid)) do
         local meta = store.decodeJson(store.messageMeta(copy.id))
         meta.requestStatus = status
         store.updateMeta(copy.id, meta)
 
-        local tgt = player.getSourceByIdentifier(copy.citizenid)
+        local tgt = activeSrcs[copy.citizenid]
         if tgt then
             TriggerClientEvent('sd-phone:client:messages:meta', tgt, {
                 conversation  = copy.conversation,
@@ -618,6 +621,8 @@ local function sendGroup(source, cid, myNumber, groupId, kind, body, meta, ts, m
     local members    = store.groupMembers(groupId)
     local outId
 
+    -- One pass over the connected players for the whole fan-out.
+    local activeSrcs = player.activeCidMap()
     for _, m in ipairs(members) do
         local isMe = m.citizenid == cid
         local withheld = (not isMe) and settings.isAirplane(m.citizenid)
@@ -628,7 +633,7 @@ local function sendGroup(source, cid, myNumber, groupId, kind, body, meta, ts, m
         if isMe then
             outId = id
         else
-            local targetSrc = player.getSourceByIdentifier(m.citizenid)
+            local targetSrc = activeSrcs[m.citizenid]
             if targetSrc and not withheld then
                 local theirContacts = contactMapFor(m.citizenid)
                 local msg = buildMessage(id, myNumber, kind, body, meta, ts, false, digits(m.number))
@@ -747,9 +752,11 @@ function actions.react(source, payload)
 
     local rows = store.reactionsFor(mid)
 
+    -- One pass over the connected players for the whole fan-out.
+    local activeSrcs = player.activeCidMap()
     for _, copy in ipairs(store.siblingCopies(mid)) do
         if copy.citizenid ~= cid then
-            local tgt = player.getSourceByIdentifier(copy.citizenid)
+            local tgt = activeSrcs[copy.citizenid]
             if tgt then
                 TriggerClientEvent('sd-phone:client:messages:reaction', tgt, {
                     conversation = copy.conversation,
@@ -803,8 +810,10 @@ function actions.createGroup(source, payload)
     end
 
     store.addGroupMember(groupId, cid, myNumber, player.getName(source))
+    -- One pass over the connected players, shared by both loops below.
+    local activeSrcs = player.activeCidMap()
     for _, m in ipairs(resolved) do
-        local msrc  = player.getSourceByIdentifier(m.cid)
+        local msrc  = activeSrcs[m.cid]
         local mname = msrc and player.getName(msrc) or formatNumber(m.number)
         store.addGroupMember(groupId, m.cid, m.number, mname)
     end
@@ -812,7 +821,7 @@ function actions.createGroup(source, payload)
     local key = 'g-' .. groupId
 
     for _, m in ipairs(resolved) do
-        local msrc = player.getSourceByIdentifier(m.cid)
+        local msrc = activeSrcs[m.cid]
         if msrc then
             local theirContacts = contactMapFor(m.cid)
             TriggerClientEvent('sd-phone:client:messages:incoming', msrc, {
@@ -868,8 +877,10 @@ function actions.addGroupMember(source, payload)
         return fail(('Groups are capped at %d members'):format(cfg.MaxGroupMembers))
     end
 
+    -- One pass over the connected players, shared by both loops below.
+    local activeSrcs = player.activeCidMap()
     for _, m in ipairs(resolved) do
-        local msrc  = player.getSourceByIdentifier(m.cid)
+        local msrc  = activeSrcs[m.cid]
         local mname = msrc and player.getName(msrc) or formatNumber(m.number)
         store.addGroupMember(groupId, m.cid, m.number, mname)
     end
@@ -877,7 +888,7 @@ function actions.addGroupMember(source, payload)
     local groupName = (store.getGroup(groupId) or {}).name or 'Group'
     local roster = store.groupMembers(groupId)
     for _, m in ipairs(roster) do
-        local msrc = m.citizenid ~= cid and player.getSourceByIdentifier(m.citizenid)
+        local msrc = m.citizenid ~= cid and activeSrcs[m.citizenid]
         if msrc then
             TriggerClientEvent('sd-phone:client:messages:incoming', msrc, {
                 id           = key,
@@ -924,9 +935,11 @@ function actions.updateGroup(source, payload)
 
     local myNumber = digits(settings.ensurePhoneNumber(cid) or '')
 
+    -- One pass over the connected players for the whole fan-out.
+    local activeSrcs = player.activeCidMap()
     local roster = store.groupMembers(groupId)
     for _, m in ipairs(roster) do
-        local msrc = m.citizenid ~= cid and player.getSourceByIdentifier(m.citizenid)
+        local msrc = m.citizenid ~= cid and activeSrcs[m.citizenid]
         if msrc then
             TriggerClientEvent('sd-phone:client:messages:incoming', msrc, {
                 id           = key,
@@ -971,14 +984,17 @@ function actions.removeGroupMember(source, payload)
 
     store.removeGroupMember(groupId, mcid)
 
-    local removedSrc = player.getSourceByIdentifier(mcid)
+    -- One pass over the connected players, covering the removed member and the fan-out below.
+    local activeSrcs = player.activeCidMap()
+
+    local removedSrc = activeSrcs[mcid]
     if removedSrc then
         TriggerClientEvent('sd-phone:client:messages:removed', removedSrc, { conversation = key })
     end
 
     local roster = store.groupMembers(groupId)
     for _, m in ipairs(roster) do
-        local msrc = m.citizenid ~= cid and player.getSourceByIdentifier(m.citizenid)
+        local msrc = m.citizenid ~= cid and activeSrcs[m.citizenid]
         if msrc then
             TriggerClientEvent('sd-phone:client:messages:incoming', msrc, {
                 id           = key,

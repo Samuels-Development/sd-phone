@@ -49,12 +49,16 @@ end
 ---Online sources signed into `username`'s photogram account.
 ---@param username string photogram handle
 ---@return integer[] sources
-local function sourcesFor(username)
+---@param activeSrcs table<string, number>|nil prebuilt citizenid -> source map for a fan-out
+local function sourcesFor(username, activeSrcs)
     local acc = acctStore.getAccount('photogram', username)
     if not acc then return {} end
     local out = {}
     for _, cid in ipairs(acctStore.sessionCitizens('photogram', acc.id)) do
-        local src = player.getSourceByIdentifier(cid)
+        -- Indexing a prebuilt map is the same lookup getSourceByIdentifier does, minus the
+        -- rescan of every connected player that it costs once per recipient.
+        local src = activeSrcs and activeSrcs[cid] or nil
+        if not activeSrcs then src = player.getSourceByIdentifier(cid) end
         if src then out[#out + 1] = src end
     end
     return out
@@ -243,15 +247,23 @@ end
 ---@param actor string acting handle
 ---@param postId string|nil related post id
 ---@param preview string|nil comment preview (already capped by the caller)
-local function notify(recipient, kind, actor, postId, preview)
+---@param ctx { activeSrcs: table<string, number>, actorName: string, thumb: string|nil }|nil
+---per-fan-out context; without it the actor profile, post thumb and player scan are resolved
+---here, which a loop over recipients pays once per recipient for invariant values
+local function notify(recipient, kind, actor, postId, preview, ctx)
     if recipient == actor or recipient == '' then return end
     store.insertNotification(store.newId(), recipient, kind, actor, postId, preview, os.time())
 
-    local sources = sourcesFor(recipient)
+    local sources = sourcesFor(recipient, ctx and ctx.activeSrcs or nil)
     if #sources == 0 then return end
-    local actorRow  = store.getProfile(actor)
-    local actorName = (actorRow and actorRow.display_name ~= '' and actorRow.display_name) or actor
-    local thumb     = postId and store.postThumb(postId) or nil
+    local actorName, thumb
+    if ctx then
+        actorName, thumb = ctx.actorName, ctx.thumb
+    else
+        local actorRow = store.getProfile(actor)
+        actorName = (actorRow and actorRow.display_name ~= '' and actorRow.display_name) or actor
+        thumb     = postId and store.postThumb(postId) or nil
+    end
     for _, src in ipairs(sources) do
         TriggerClientEvent('sd-phone:client:photogram:notification', src, {})
         TriggerClientEvent('sd-phone:client:notify', src, {
@@ -460,15 +472,31 @@ function actions.create(src, payload)
     local id = store.newId()
     store.insertPost(id, acc.username, images, caption, location, os.time())
 
+    local mentions  = mentionsIn(caption, acc.username)
+    local followers = store.followerUsernames(acc.username)
+
+    -- Fan-out context resolved once, and only when there is someone to notify: the actor profile
+    -- and post thumb are the same for every recipient, and the source map replaces a
+    -- per-recipient rescan of every connected player.
+    local ctx
+    if #mentions > 0 or #followers > 0 then
+        local actorRow = store.getProfile(acc.username)
+        ctx = {
+            activeSrcs = player.activeCidMap(),
+            actorName  = (actorRow and actorRow.display_name ~= '' and actorRow.display_name) or acc.username,
+            thumb      = store.postThumb(id),
+        }
+    end
+
     local mentioned = {}
-    for _, m in ipairs(mentionsIn(caption, acc.username)) do
+    for _, m in ipairs(mentions) do
         if canView(m, me) then
             mentioned[m] = true
-            notify(m, 'mention', acc.username, id, nil)
+            notify(m, 'mention', acc.username, id, nil, ctx)
         end
     end
-    for _, f in ipairs(store.followerUsernames(acc.username)) do
-        if not mentioned[f] then notify(f, 'post', acc.username, id, nil) end
+    for _, f in ipairs(followers) do
+        if not mentioned[f] then notify(f, 'post', acc.username, id, nil, ctx) end
     end
     broadcast('feedChanged', {})
     -- First-party hook: one server-local event per created post.

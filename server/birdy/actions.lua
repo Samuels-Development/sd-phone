@@ -511,10 +511,22 @@ function actions.create(source, payload)
     -- The TriggerEvent above is server-local; this is what reaches players.
     TriggerClientEvent('sd-phone:client:birdy:feedChanged', -1, {})
 
-    local preview = body ~= '' and body:sub(1, 80) or 'shared a photo'
-    for _, cid in ipairs(store.followerCids(prof.citizenid)) do
-        store.insertNotification(store.newId(), cid, 'post', prof.citizenid, id)
-        local src = player.getSourceByIdentifier(cid)
+    local preview   = body ~= '' and body:sub(1, 80) or 'shared a photo'
+    local followers = store.followerCids(prof.citizenid)
+
+    if #followers == 0 then return ok({ post = serializePost(store.getPost(id, prof.citizenid)) }) end
+
+    local notifs = {}
+    for i = 1, #followers do
+        notifs[i] = { id = store.newId(), recipient = followers[i], kind = 'post', actor = prof.citizenid, postId = id }
+    end
+    store.insertNotifications(notifs)
+
+    -- One pass over the connected players for the whole fan-out; this resolved each follower
+    -- separately, and every resolution re-scanned every player on the server.
+    local activeSrcs = player.activeCidMap()
+    for _, cid in ipairs(followers) do
+        local src = activeSrcs[cid]
         if src then
             TriggerClientEvent('sd-phone:client:birdy:notification', src, {})
             TriggerClientEvent('sd-phone:client:notify', src, {
