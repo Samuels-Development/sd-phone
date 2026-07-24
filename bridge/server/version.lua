@@ -44,6 +44,9 @@ local LATEST_TTL = 3600
 ---@type { value: string|nil, at: number }|nil
 local latestCache
 
+---@type table|nil In-flight lookup, shared by every caller that arrives before it resolves.
+local latestInFlight
+
 ---Resolves the latest non-prerelease GitHub release of `repo` as bare x.y.z, cached for
 ---LATEST_TTL. Yields; nil when the lookup fails.
 ---@param repo string GitHub repo in `owner/name` form.
@@ -52,7 +55,11 @@ function version.latest(repo)
     if latestCache and (os.time() - latestCache.at) < LATEST_TTL then
         return latestCache.value
     end
+    -- Callers arriving while a lookup is in flight join it instead of each firing their own
+    -- request: the cache is only written once the await returns.
+    if latestInFlight then return Citizen.Await(latestInFlight) end
     local p = promise.new()
+    latestInFlight = p
     PerformHttpRequest(('https://api.github.com/repos/%s/releases/latest'):format(repo), function(status, response)
         if status ~= 200 then return p:resolve(nil) end
         local ok, data = pcall(json.decode, response or '')
@@ -60,7 +67,8 @@ function version.latest(repo)
         p:resolve(type(data.tag_name) == 'string' and data.tag_name:match('%d+%.%d+%.%d+') or nil)
     end, 'GET', '', { ['User-Agent'] = 'sd-phone' })
     local latest = Citizen.Await(p)
-    latestCache = { value = latest, at = os.time() }
+    latestCache    = { value = latest, at = os.time() }
+    latestInFlight = nil
     return latest
 end
 

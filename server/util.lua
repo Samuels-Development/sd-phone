@@ -117,6 +117,32 @@ function util.ensureIndex(tableName, indexName, columnsDDL)
     end
 end
 
+---Runs a one-shot repair or backfill exactly once per database, recording it in phone_migrations
+---so later boots skip it. Use for work whose predicate can't be indexed and would otherwise
+---re-scan a whole table every start to match nothing.
+---@param name string unique migration name
+---@param fn fun(): table|nil the work; may return stats to stamp on the marker row
+---@return boolean ran true when the work executed on this call
+function util.runOnce(name, fn)
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS phone_migrations (
+            name       VARCHAR(64) NOT NULL,
+            applied_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            stats      JSON        NULL,
+            PRIMARY KEY (name)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ]])
+    if MySQL.scalar.await('SELECT 1 FROM phone_migrations WHERE name = ? LIMIT 1', { name }) ~= nil then
+        return false
+    end
+    local stats = fn()
+    MySQL.query.await(
+        'INSERT IGNORE INTO phone_migrations (name, stats) VALUES (?, ?)',
+        { name, json.encode(stats or {}) }
+    )
+    return true
+end
+
 ---Rescues a same-named table left behind by another phone resource (lb-phone shares several
 ---table names with sd-phone): when `tbl` exists but is missing the sd-phone marker column, it
 ---is renamed to `<tbl>_lb` so the following CREATE TABLE builds the real sd-phone table. The

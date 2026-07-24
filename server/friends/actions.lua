@@ -57,14 +57,33 @@ end
 ---@param onlineCids? table<string, number> shared citizenid->src map; the tick loop builds it once
 ---and passes it to every watcher, nil = build it here (for one-off callback use)
 ---@return table[] roster entries
-function actions.snapshot(src, onlineCids)
-    local owner = cidOf(src)
-    if not owner then return {} end
+---@type integer Seconds a roster stays cached across live-push ticks. Only positions and online
+---state change tick-to-tick; the roster itself only changes on a mutation, which drops the entry.
+local ROSTER_TTL = 15
+---@type integer Cached rosters kept before the cache is dropped wholesale (keys are server-resolved
+---citizenids, so this only bounds growth over a long uptime).
+local ROSTER_KEYS_MAX = 256
 
-    local contacts = contactInfo(owner)
-    local sharers  = store.sharersOf(owner)
-    onlineCids     = onlineCids or player.onlineCidMap()
-    local nowMs    = os.time() * 1000
+local rosterCache, rosterKeys = {}, 0
+
+---Drops cached rosters so the next read rebuilds them. Every edge mutation invalidates BOTH
+---sides: one player's share flag or pending request is visible in the other's roster.
+---@param ... string|nil citizenids to invalidate
+local function invalidateRoster(...)
+    for i = 1, select('#', ...) do
+        local cid = select(i, ...)
+        if cid and rosterCache[cid] then rosterCache[cid] = nil; rosterKeys = rosterKeys - 1 end
+    end
+end
+
+---The query-backed half of a snapshot: contact cards, share flags, pending requests, friend edges
+---and their phone numbers. Cached, because the 3s push loop re-ran all five queries per watcher
+---per tick just to refresh coordinates.
+---@param owner string owner citizenid
+---@return table parts { contacts, sharers, requests, friends, numbers }
+local function rosterParts(owner)
+    local hit = rosterCache[owner]
+    if hit and (os.time() - hit.at) < ROSTER_TTL then return hit end
 
     local requests = store.requestsFor(owner)
     local friends  = store.friendsOf(owner)
@@ -72,7 +91,35 @@ function actions.snapshot(src, onlineCids)
     local cids = {}
     for i = 1, #requests do cids[#cids + 1] = requests[i] end
     for i = 1, #friends do cids[#cids + 1] = friends[i].friend end
-    local numbers = settings.numbersFor(cids)
+
+    if not hit then
+        if rosterKeys >= ROSTER_KEYS_MAX then rosterCache, rosterKeys = {}, 0 end
+        rosterKeys = rosterKeys + 1
+    end
+    local parts = {
+        at       = os.time(),
+        contacts = contactInfo(owner),
+        sharers  = store.sharersOf(owner),
+        requests = requests,
+        friends  = friends,
+        numbers  = settings.numbersFor(cids),
+    }
+    rosterCache[owner] = parts
+    return parts
+end
+
+function actions.snapshot(src, onlineCids)
+    local owner = cidOf(src)
+    if not owner then return {} end
+
+    local parts    = rosterParts(owner)
+    local contacts = parts.contacts
+    local sharers  = parts.sharers
+    local requests = parts.requests
+    local friends  = parts.friends
+    local numbers  = parts.numbers
+    onlineCids     = onlineCids or player.onlineCidMap()
+    local nowMs    = os.time() * 1000
 
     local out, inRoster = {}, {}
 
@@ -164,6 +211,7 @@ function actions.add(src, phone)
     end
 
     store.add(owner, fcid, os.date('!%Y-%m-%dT%H:%M:%S.000Z'), true)
+    invalidateRoster(owner, fcid)
 
     messages.appMessage(src, number, 'locrequest', 'Location sharing request',
         { requested = true, requestStatus = 'pending' })
@@ -193,8 +241,10 @@ function actions.respond(src, msgId, phone, accept)
 
     if accept then
         store.accept(rcid, owner, os.date('!%Y-%m-%dT%H:%M:%S.000Z'))
+        invalidateRoster(owner, rcid)
     else
         store.remove(rcid, owner)
+        invalidateRoster(owner, rcid)
     end
 
     local copyId = (type(msgId) == 'string' and msgId ~= '') and msgId
@@ -259,6 +309,7 @@ function actions.remove(src, id)
     local owner = cidOf(src)
     if not owner or type(id) ~= 'string' or id == '' then return { success = false } end
     store.remove(owner, id)
+    invalidateRoster(owner, id)
     return { success = true, data = actions.snapshot(src) }
 end
 
@@ -272,6 +323,7 @@ function actions.setShare(src, id, enabled)
     local owner = cidOf(src)
     if not owner or type(id) ~= 'string' or id == '' then return { success = false } end
     store.setShare(owner, id, enabled == true)
+    invalidateRoster(owner, id)
     return { success = true, data = actions.snapshot(src) }
 end
 

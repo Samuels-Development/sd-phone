@@ -46,34 +46,13 @@ end)
 lib.callback.register('sd-phone:server:settings:get', function(source)
     local cid = player.getIdentifier(source)
     if not cid then return { success = false, message = 'Player not found' } end
-    local data = store.getTones(cid)
+    -- One row read, not one per field: this used to issue 16 single-column PK lookups.
+    local data = store.snapshot(cid)
     data.customRingtones         = store.listCustomTones(cid, 'ringtone')
     data.customNotificationTones = store.listCustomTones(cid, 'notification')
-    data.airplaneMode            = store.isAirplane(cid)
-    data.hour24                  = store.getHour24(cid)
-    data.reopenApp               = store.getReopenApp(cid)
-    data.setupDone               = store.getSetupDone(cid)
-    data.theme                   = store.getTheme(cid)
-    data.darkTheme               = store.getDarkTheme(cid)
-    data.lockClock               = store.getLockClock(cid)
-    local walls = store.getWallpapers(cid)
-    data.wallpaper               = walls.lock
-    data.wallpaperHome           = walls.home
-    data.blurLock                = walls.blurLock
-    data.blurHome                = walls.blurHome
-    data.customWallpapers        = store.getCustomWallpapers(cid)
-    data.chatTextScale           = store.getChatTextScale(cid)
-    data.phoneScale              = store.getPhoneScale(cid)
-    data.phoneAlign              = store.getPhoneAlign(cid)
-    local vols = store.getVolumes(cid)
-    data.ringtoneVol             = vols.ringtone
-    data.callVol                 = vols.call
-    data.locale                  = store.getLocale(cid)
-    local sec = store.getSecurity(cid)
-    data.passcode                = sec.passcode
     -- Face Unlock only works for the SIM's first activator - a stolen phone still asks the
     -- thief for the passcode (a no-op outside unique-phones mode).
-    data.faceId                  = sec.faceId and require('server.sim.session').isOwner(source)
+    data.faceId                  = data.faceId and require('server.sim.session').isOwner(source)
     return { success = true, data = data }
 end)
 

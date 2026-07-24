@@ -12,11 +12,19 @@ local function run(sql, params)
     return ok and (tonumber(res) or 0) or 0
 end
 
+---@type table<string, table> Memoised describe() results. A table's shape can't change while the
+---resource is up, and one sync probed information_schema once per copied table. Callers only read
+---these, never mutate them. A failed probe is not cached.
+local shapeCache = {}
+
 ---Column metadata for a table: names in ordinal order, the auto-increment column (skipped on
 ---copy so fresh ids are allocated), and the primary-key column set.
 ---@param tbl string table name
 ---@return string[] cols, table<string, boolean> autoinc, table<string, boolean> pk
 local function describe(tbl)
+    local hit = shapeCache[tbl]
+    if hit then return hit[1], hit[2], hit[3] end
+
     local cols, autoinc, pk = {}, {}, {}
     local ok, rows = pcall(function()
         return MySQL.query.await([[
@@ -32,6 +40,7 @@ local function describe(tbl)
         if tostring(r.extra or ''):find('auto_increment') then autoinc[r.name] = true end
         if r.ckey == 'PRI' then pk[r.name] = true end
     end
+    shapeCache[tbl] = { cols, autoinc, pk }
     return cols, autoinc, pk
 end
 

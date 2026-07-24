@@ -1,3 +1,6 @@
+---@type table Shared server helpers (server.util): ensureIndex.
+local util = require 'server.util'
+
 ---@type table Stats module; the table returned at end of file. Unified per-character game stats
 ---(W/L/D, split vs-Computer / Online, cumulative chip amounts, and a single-player high score)
 ---shared by every game (chess, connectfour, blackjack, blocks, flappy, ...). One row per
@@ -46,6 +49,12 @@ function stats.ensureSchema()
             FROM phone_chess_stats
         ]])
     end
+    -- `game` is the SECOND primary-key column, so every board's `WHERE game = ?` had no usable
+    -- index and scanned the whole table.
+    util.ensureIndex('phone_game_stats', 'idx_game_stats_game_high',   '(game, high_score)')
+    util.ensureIndex('phone_game_stats', 'idx_game_stats_game_cpu',    '(game, cpu_wins)')
+    util.ensureIndex('phone_game_stats', 'idx_game_stats_game_online', '(game, online_wins)')
+    util.ensureIndex('phone_game_stats', 'idx_game_stats_game_chips',  '(game, chips_won)')
 end
 
 ---Reads a player's stats for one game: { cpu = {wins,losses,draws}, online = {...}, won, lost,
@@ -142,27 +151,55 @@ end
 ---chips (won - lost). A non-string game id returns the empty shape. Read-only.
 ---@param game any game id (client-supplied)
 ---@return table boards { cpu, online, winners, losers }
+---@type integer Seconds a computed board stays warm. The boards are cosmetic, and the callback
+---behind them is ungated, so a short cache also bounds how often a client can force the queries.
+local BOARD_TTL = 30
+---@type integer Cache entries kept before the whole cache is dropped. The game id comes from the
+---client, so the key space is attacker-chosen and must not grow without bound.
+local BOARD_KEYS_MAX = 64
+
+local boardCache, boardKeys = {}, 0
+
+---Returns a cached board, building and storing it when the entry is missing or stale.
+---@param key string cache key
+---@param build fun(): any board builder
+---@return any board
+local function cachedBoard(key, build)
+    local now = os.time()
+    local hit = boardCache[key]
+    if hit and (now - hit.at) < BOARD_TTL then return hit.data end
+    if not hit then
+        if boardKeys >= BOARD_KEYS_MAX then boardCache, boardKeys = {}, 0 end
+        boardKeys = boardKeys + 1
+    end
+    local data = build()
+    boardCache[key] = { at = now, data = data }
+    return data
+end
+
 function stats.leaderboard(game)
     if type(game) ~= 'string' then return { cpu = {}, online = {}, winners = {}, losers = {} } end
-    local function wlBoard(winCol, lossCol)
-        return MySQL.query.await((
-            'SELECT name, %s AS wins, %s AS losses FROM phone_game_stats ' ..
-            'WHERE game = ? AND (%s + %s) > 0 ORDER BY %s DESC, %s ASC LIMIT 20'
-        ):format(winCol, lossCol, winCol, lossCol, winCol, lossCol), { game }) or {}
-    end
-    local function chipBoard(cmp, order)
-        return MySQL.query.await((
-            'SELECT name, chips_won AS won, chips_lost AS lost, (chips_won - chips_lost) AS net ' ..
-            'FROM phone_game_stats WHERE game = ? AND (chips_won - chips_lost) %s 0 ' ..
-            'ORDER BY net %s LIMIT 20'
-        ):format(cmp, order), { game }) or {}
-    end
-    return {
-        cpu     = wlBoard('cpu_wins', 'cpu_losses'),
-        online  = wlBoard('online_wins', 'online_losses'),
-        winners = chipBoard('>', 'DESC'),
-        losers  = chipBoard('<', 'ASC'),
-    }
+    return cachedBoard('lb:' .. game, function()
+        local function wlBoard(winCol, lossCol)
+            return MySQL.query.await((
+                'SELECT name, %s AS wins, %s AS losses FROM phone_game_stats ' ..
+                'WHERE game = ? AND (%s + %s) > 0 ORDER BY %s DESC, %s ASC LIMIT 20'
+            ):format(winCol, lossCol, winCol, lossCol, winCol, lossCol), { game }) or {}
+        end
+        local function chipBoard(cmp, order)
+            return MySQL.query.await((
+                'SELECT name, chips_won AS won, chips_lost AS lost, (chips_won - chips_lost) AS net ' ..
+                'FROM phone_game_stats WHERE game = ? AND (chips_won - chips_lost) %s 0 ' ..
+                'ORDER BY net %s LIMIT 20'
+            ):format(cmp, order), { game }) or {}
+        end
+        return {
+            cpu     = wlBoard('cpu_wins', 'cpu_losses'),
+            online  = wlBoard('online_wins', 'online_losses'),
+            winners = chipBoard('>', 'DESC'),
+            losers  = chipBoard('<', 'ASC'),
+        }
+    end)
 end
 
 ---Global high-score board for a game: top 20 players by high score. A non-string game id returns
@@ -171,11 +208,13 @@ end
 ---@return { name: string, score: integer }[]
 function stats.scoreboard(game)
     if type(game) ~= 'string' then return {} end
-    return MySQL.query.await([[
-        SELECT name, high_score AS score FROM phone_game_stats
-        WHERE game = ? AND high_score > 0
-        ORDER BY high_score DESC LIMIT 20
-    ]], { game }) or {}
+    return cachedBoard('sb:' .. game, function()
+        return MySQL.query.await([[
+            SELECT name, high_score AS score FROM phone_game_stats
+            WHERE game = ? AND high_score > 0
+            ORDER BY high_score DESC LIMIT 20
+        ]], { game }) or {}
+    end)
 end
 
 return stats

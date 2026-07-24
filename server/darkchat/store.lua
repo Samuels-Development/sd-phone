@@ -297,23 +297,27 @@ function store.reactionsFor(messageId, cid)
     return out
 end
 
----Every message's reactions in a room, from `cid`'s viewpoint, keyed by message id AS A STRING to
+---Reactions for specific messages, from `cid`'s viewpoint, keyed by message id AS A STRING to
 ---match the string ids client messages carry: { [messageId] = { {emoji, count, mine}, ... } }.
----One grouped query for the whole room, so buildMessages attaches per-message sets without an N+1.
----Same anonymity posture as reactionsFor. Read-only.
----@param roomId string room id
+---Scoped by id, not by room: the ids come from the room's own history window, so decorating the
+---newest messages no longer aggregates a room's entire (never-pruned) reaction history. One
+---grouped query, so buildMessages attaches per-message sets without an N+1. Same anonymity
+---posture as reactionsFor. Read-only.
+---@param ids integer[] message ids from the room's history window
 ---@param cid string viewer citizenid
 ---@return table<string, table[]> reactions per-message reaction lists
-function store.reactionsForRoom(roomId, cid)
-    local rows = MySQL.query.await([[
+function store.reactionsForMessages(ids, cid)
+    local out = {}
+    if type(ids) ~= 'table' or #ids == 0 then return out end
+    local ph, args = {}, { cid }
+    for i = 1, #ids do ph[i] = '?'; args[#args + 1] = ids[i] end
+    local rows = MySQL.query.await(([[
         SELECT r.message_id AS message_id, r.emoji AS emoji, COUNT(*) AS cnt, MAX(r.citizenid = ?) AS mine
         FROM `darkchat_reactions` r
-        JOIN `darkchat_messages` m ON m.id = r.message_id
-        WHERE m.room_id = ?
+        WHERE r.message_id IN (%s)
         GROUP BY r.message_id, r.emoji
         ORDER BY MIN(r.created_at)
-    ]], { cid, roomId }) or {}
-    local out = {}
+    ]]):format(table.concat(ph, ',')), args) or {}
     for _, r in ipairs(rows) do
         local key = tostring(r.message_id)
         out[key] = out[key] or {}

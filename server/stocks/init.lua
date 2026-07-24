@@ -6,6 +6,8 @@ local store   = require 'server.stocks.store'
 local engine  = require 'server.stocks.engine'
 ---@type table Authoritative trade handlers (server.stocks.actions): validation + money movement.
 local actions = require 'server.stocks.actions'
+---@type table Watcher registry (server.stocks.watchers): shared with the per-trade broadcast.
+local watchers = require 'server.stocks.watchers'
 
 ---@type table Stocks config (config.Stocks): tick + save cadence.
 local ST = config.Stocks
@@ -18,21 +20,18 @@ lib.callback.register('sd-phone:server:stocks:buy',      function(src, payload) 
 lib.callback.register('sd-phone:server:stocks:sell',     function(src, payload) return actions.sell(src, payload)      end)
 lib.callback.register('sd-phone:server:stocks:holders',  function(src, payload) return actions.holders(src, payload)   end)
 
----@type table<number, boolean> Players with the Stocks app open (live price-push targets), by src.
-local watchers = {}
-
 ---Subscribes or unsubscribes the caller to the per-tick price push while the app is open.
 ---@param src number
 ---@param payload table { on: boolean }
 lib.callback.register('sd-phone:server:stocks:watch', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
-    if payload.on == true then watchers[src] = true else watchers[src] = nil end
+    watchers.watch(src, payload.on == true)
     return { success = true }
 end)
 
 ---Drops a departing watcher's entry.
 AddEventHandler('playerDropped', function()
-    watchers[source] = nil
+    watchers.drop(source)
 end)
 
 -- Boot then heartbeat: creates the schema, seeds prices, then ticks the market every
@@ -49,15 +48,8 @@ CreateThread(function()
     while true do
         Wait((ST.TickSeconds or 5) * 1000)
         engine.tick()
-        if next(watchers) then
-            local ticks = engine.ticks()
-            for src in pairs(watchers) do
-                if GetPlayerName(src) then
-                    TriggerClientEvent('sd-phone:client:stocks:prices', src, { assets = ticks })
-                else
-                    watchers[src] = nil
-                end
-            end
+        if watchers.any() then
+            watchers.push('sd-phone:client:stocks:prices', { assets = engine.ticks() })
         end
     end
 end)

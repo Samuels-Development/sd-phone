@@ -212,6 +212,18 @@ function store.ensureSchema()
             PRIMARY KEY (citizenid, app)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
+
+    -- setPhoneNumber has always written bare digits; only rows imported from another phone
+    -- resource can still carry separators. Normalising them once lets the number lookups compare
+    -- the bare column, so idx_phone_settings_number can be SEEKED instead of scanned through a
+    -- REPLACE() wrapper that made the predicate non-sargable.
+    util.runOnce('settings_phone_number_bare_digits', function()
+        local n = MySQL.update.await((
+            'UPDATE phone_settings SET phone_number = %s ' ..
+            'WHERE phone_number IS NOT NULL AND phone_number <> %s'
+        ):format(stripCol('phone_number'), stripCol('phone_number')))
+        return { normalized = tonumber(n) or 0 }
+    end)
 end
 
 ---Clamps an app id to a lowercase slug capped at 32 chars; nil for empty/invalid input.
@@ -375,7 +387,7 @@ function store.getCitizenByNumber(number)
     local digits = (tostring(number or ''):gsub('%D', ''))
     if digits == '' then return nil end
     local row = MySQL.single.await(
-        ('SELECT citizenid FROM phone_settings WHERE %s = ? LIMIT 1'):format(stripCol('phone_number')),
+        'SELECT citizenid FROM phone_settings WHERE phone_number = ? LIMIT 1',
         { digits }
     )
     return row and row.citizenid or nil
@@ -387,7 +399,7 @@ end
 function store.numberExists(number)
     local digits = (tostring(number or ''):gsub('%D', ''))
     local row = MySQL.single.await(
-        ('SELECT 1 AS hit FROM phone_settings WHERE %s = ? LIMIT 1'):format(stripCol('phone_number')),
+        'SELECT 1 AS hit FROM phone_settings WHERE phone_number = ? LIMIT 1',
         { digits }
     )
     return row ~= nil
@@ -1133,6 +1145,66 @@ function store.removeCustomTone(citizenid, id)
         'DELETE FROM phone_custom_ringtones WHERE citizenid = ? AND id = ?',
         { citizenid, id }
     )
+end
+
+---Decodes a JSON settings column, falling back to `fallback` on an empty or unparseable value.
+---@param raw any stored column value
+---@param fallback any value to return when the column can't be decoded
+---@return any
+local function decodeColumn(raw, fallback)
+    if not raw or raw == '' then return fallback end
+    local ok, decoded = pcall(json.decode, raw)
+    if not ok or type(decoded) ~= 'table' then return fallback end
+    return decoded
+end
+
+---The caller's whole settings row in ONE query, derived exactly as the individual getters do.
+---The per-field getters each ran their own single-column PK lookup, so building the snapshot the
+---settings screen wants cost 16 round trips per hydrate. Custom tones and their own table stay
+---separate. Read-only apart from warming the airplane cache.
+---@param citizenid string framework per-character id
+---@return table snapshot the settings:get payload shape
+function store.snapshot(citizenid)
+    if not citizenid or citizenid == '' then return {} end
+    local row = MySQL.single.await('SELECT * FROM phone_settings WHERE citizenid = ?', { citizenid })
+
+    local airplane = airplaneCache[citizenid]
+    if airplane == nil then
+        airplane = row ~= nil and isTruthy(row.airplane_mode) or false
+        airplaneCache[citizenid] = airplane
+    end
+
+    local pin = row and sanitizePin(row.passcode) or nil
+    local hour24 = (row and row.hour24 ~= nil)
+        and (row.hour24 == true or tonumber(row.hour24) == 1)
+        or defaultHour24()
+    local dark = row and row.dark_theme
+    if dark ~= 'graphite' and dark ~= 'black' and dark ~= 'warm' then dark = 'graphite' end
+
+    return {
+        ringtone         = row and row.ringtone or nil,
+        notificationTone = row and row.notification_tone or nil,
+        airplaneMode     = airplane,
+        hour24           = hour24,
+        reopenApp        = row ~= nil and (row.reopen_app == true or tonumber(row.reopen_app) == 1),
+        setupDone        = row ~= nil and (row.setup_done == true or tonumber(row.setup_done) == 1),
+        theme            = (row and row.theme == 'dark') and 'dark' or 'light',
+        darkTheme        = dark,
+        lockClock        = row and decodeColumn(row.lock_clock, nil) or nil,
+        wallpaper        = (row and row.wallpaper ~= '') and row.wallpaper or nil,
+        wallpaperHome    = (row and row.wallpaper_home ~= '') and row.wallpaper_home or nil,
+        blurLock         = row ~= nil and isTruthy(row.blur_lock),
+        blurHome         = row ~= nil and isTruthy(row.blur_home),
+        customWallpapers = row and decodeColumn(row.custom_wallpapers, {}) or {},
+        chatTextScale    = (row and row.chat_text_scale ~= nil) and tonumber(row.chat_text_scale) or nil,
+        phoneScale       = (row and row.phone_scale ~= nil) and tonumber(row.phone_scale) or nil,
+        phoneAlign       = (row and row.phone_align ~= '') and row.phone_align or nil,
+        ringtoneVol      = (row and row.ringtone_volume ~= nil) and tonumber(row.ringtone_volume) or nil,
+        callVol          = (row and row.call_volume ~= nil) and tonumber(row.call_volume) or nil,
+        locale           = (row and row.locale ~= '') and row.locale or nil,
+        passcode         = pin,
+        faceId           = pin ~= nil and row ~= nil and isTruthy(row.face_id),
+    }
 end
 
 return store

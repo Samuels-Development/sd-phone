@@ -16,7 +16,7 @@ import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useSessionState } from '@/hooks/useSessionState';
 import { mapsConfig } from './config';
 import { MapView, usePinStyle } from './MapView';
-import { LiveDot } from './LiveDot';
+import { LiveDot, useSelfLocation } from './LiveDot';
 import type { MapViewHandle } from './MapView';
 import {
     COLOR_SWATCHES, getDefaultMarkers, ICON_KEYS, loadMarkers, newId, saveMarkers,
@@ -107,17 +107,10 @@ export function Maps({ onClose }: { onClose: () => void }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const [me, setMe] = useState<{ x: number; y: number; h: number } | null>(
-        isFiveM ? null : { x: -1037, y: -2738, h: 0 },
-    );
-    useNuiEvent('sd-phone:maps:location', useCallback((d) => {
-        if (d) setMe({ x: d.x, y: d.y, h: d.h });
-    }, []));
-    useEffect(() => {
-        if (!isFiveM) return;
-        void fetchNui('sd-phone:maps:watch', { on: true });
-        return () => { void fetchNui('sd-phone:maps:watch', { on: false }); };
-    }, []);
+    // Shared with the ryde consumers: useSelfLocation refcounts the native stream and gates it on
+    // useDeckActive. Maps used to duplicate this inline without either, so a backgrounded Maps kept
+    // the stream running, and its ungated on/off fought the refcount other consumers rely on.
+    const me = useSelfLocation();
 
     useNuiEvent('sd-phone:maps:pinAdded', useCallback((m) => {
         if (!m || typeof m.id !== 'string') return;

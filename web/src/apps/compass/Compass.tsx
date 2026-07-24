@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { fetchNui, isFiveM } from '@/core/nui';
 import { t } from '@/i18n';
+import { useDeckActive } from '@/shell/deckActive';
 import { useTheme } from '@/stores/themeStore';
 
 const SB_H = 54;
@@ -56,7 +57,12 @@ export function Compass({ onClose: _onClose }: { onClose: () => void }) {
     const { theme } = useTheme('theme');
     const dark = theme === 'dark';
 
+    // Compass is retained in the app switcher, so without this gate its 250ms poll kept running
+    // (4 NUI round-trips a second) while the app sat suspended in the hidden deck layer.
+    const deckActive = useDeckActive();
+
     useEffect(() => {
+        if (!deckActive) return;
         if (!isFiveM) {
             const t = window.setInterval(() => {
                 if (!dragging.current) setRot(r => r + (Math.random() - 0.5) * 0.5);
@@ -85,7 +91,7 @@ export function Compass({ onClose: _onClose }: { onClose: () => void }) {
         poll();
         const t = window.setInterval(poll, 250);
         return () => { alive = false; window.clearInterval(t); };
-    }, []);
+    }, [deckActive]);
 
     const heading = ((-rot % 360) + 360) % 360;
 

@@ -1,3 +1,6 @@
+---@type table Shared server helpers (server.util): ensureIndex.
+local util = require 'server.util'
+
 ---@type table Store module; the table returned at end of file.
 local store = {}
 
@@ -102,6 +105,10 @@ function store.ensureSchema()
             INDEX idx_cherry_msgs_thread (match_id, created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
+
+    -- uq_cherry_pair leads on `a`, so matchesFor's `WHERE a = ? OR b = ?` had no index for the
+    -- `b` half and fell back to a full scan on every Cherry open.
+    util.ensureIndex('phone_cherry_matches', 'idx_cherry_match_b', '(b)')
 end
 
 ---A profile row by username (nil if none).

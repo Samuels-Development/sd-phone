@@ -86,9 +86,13 @@ function store.ensureSchema()
     end
 
     -- Repair: createDoc used to coerce a numeric locked = 0 to 1 (0 is truthy in Lua), so every
-    -- player-created document landed locked. Player rows never carry a source; issued rows
-    -- always name their invoking resource - so this unlock is safe to run every boot.
-    MySQL.query.await('UPDATE `phone_documents` SET locked = 0 WHERE locked = 1 AND source IS NULL')
+    -- player-created document landed locked. Player rows never carry a source; issued rows always
+    -- name their invoking resource. Run once: the predicate is unindexed, so repeating it every
+    -- boot scanned the whole table to match nothing.
+    util.runOnce('documents_unlock_player_rows', function()
+        local n = MySQL.update.await('UPDATE `phone_documents` SET locked = 0 WHERE locked = 1 AND source IS NULL')
+        return { repaired = tonumber(n) or 0 }
+    end)
 
     util.ensureIndex('phone_documents', 'idx_phone_documents_folder', '(citizenid, folder_id)')
     util.ensureIndex('phone_documents', 'idx_phone_documents_updated', '(citizenid, updated_at)')

@@ -142,9 +142,12 @@ end
 ---@param cid string viewer citizenid
 ---@return table[] messages oldest-first client message rows
 local function buildMessages(roomId, cid)
-    local reactions = store.reactionsForRoom(roomId, cid)
+    local rows = store.recentMessages(roomId, DC.HistoryLimit)
+    local ids = {}
+    for i = 1, #rows do ids[i] = rows[i].id end
+    local reactions = store.reactionsForMessages(ids, cid)
     local out = {}
-    for _, m in ipairs(store.recentMessages(roomId, DC.HistoryLimit)) do
+    for _, m in ipairs(rows) do
         local msg = {
             id = tostring(m.id), author = m.author, body = m.body, at = fmtTime(m.created_at),
             mine = m.citizenid == cid, kind = m.kind or 'text',

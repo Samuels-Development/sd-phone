@@ -8,6 +8,8 @@ local engine = require 'server.stocks.engine'
 local bank   = require 'bridge.server.banking'
 ---@type table Player bridge (bridge.server.player): citizenid lookups from a server id.
 local player = require 'bridge.server.player'
+---@type table Watcher registry (server.stocks.watchers): players with the app open.
+local watchers = require 'server.stocks.watchers'
 
 ---@type table Stocks config (config.Stocks): fees, trade bounds, market knobs, asset list.
 local ST = config.Stocks
@@ -44,13 +46,11 @@ local function withTradeGate(cid, fn)
     return result
 end
 
----Pushes a fresh price snapshot to every online player. Ticks carry symbol/price/% change only.
+---Pushes a fresh price snapshot to the players with Stocks open. Ticks carry symbol/price/%
+---change only. Scoped to watchers: a trade used to wake every client on the server.
 local function broadcastPrices()
-    local ticks = engine.ticks()
-    local players = GetPlayers()
-    for i = 1, #players do
-        TriggerClientEvent('sd-phone:client:stocks:prices', players[i], { assets = ticks })
-    end
+    if not watchers.any() then return end
+    watchers.push('sd-phone:client:stocks:prices', { assets = engine.ticks() })
 end
 
 ---Full market + the caller's positions + brokerage cash, for the app's main screen. Creates the

@@ -434,6 +434,17 @@ lib.callback.register('sd-phone:server:sim:backup:set', function(source, payload
     return util.ok()
 end)
 
+---@type integer Auto-sync throttle: the enrolled phone re-snapshots at most this often (seconds).
+local AUTO_SYNC_MIN_GAP = 300
+
+---@type integer Manual "Back Up Now" throttle. Shorter than the auto gap so the button stays
+---responsive, but enough that the ~88-statement run can't be looped at will.
+local MANUAL_SYNC_MIN_GAP = 30
+
+---@type table<number, boolean> Per-source sync in progress; drops overlapping attempts on both
+---the manual and the automatic path.
+local syncBusy = {}
+
 ---Manual "Back Up Now" for the caller's phone (its own profile only).
 lib.callback.register('sd-phone:server:sim:backup:sync', function(source)
     if not (config.Sim.Backup and config.Sim.Backup.Enabled ~= false) then
@@ -448,7 +459,16 @@ lib.callback.register('sd-phone:server:sim:backup:sync', function(source)
         return util.fail('Cloud Backup is not enabled on this phone.')
     end
 
-    local syncedAt = runProfileSync(realCid, profile, s)
+    if syncBusy[source] then return util.fail('A backup is already running.') end
+    local since = os.time() - (profile.syncedAt or 0)
+    if since < MANUAL_SYNC_MIN_GAP then
+        return util.fail(('Backed up moments ago. Try again in %ds.'):format(MANUAL_SYNC_MIN_GAP - since))
+    end
+
+    syncBusy[source] = true
+    local okRun, syncedAt = pcall(runProfileSync, realCid, profile, s)
+    syncBusy[source] = nil
+    if not okRun then error(syncedAt, 0) end
     return util.ok({ syncedAt = syncedAt })
 end)
 
@@ -480,12 +500,6 @@ lib.callback.register('sd-phone:server:sim:backup:delete', function(source, payl
     return util.ok()
 end)
 
----@type integer Auto-sync throttle: the enrolled phone re-snapshots at most this often (seconds).
-local AUTO_SYNC_MIN_GAP = 300
-
----@type table<number, boolean> Per-source auto-sync in progress; drops overlapping attempts.
-local autoSyncBusy = {}
-
 ---Auto-sync trigger: holstering the phone is the natural save point. A phone only ever syncs
 ---ITS OWN profile, so a lost or stolen phone can never overwrite another phone's backup.
 ---Second listener on the share module's open-state event.
@@ -493,8 +507,8 @@ RegisterNetEvent('sd-phone:server:phone:setOpen', function(open)
     local source = source
     if open or not state.active then return end
     if not (config.Sim.Backup and config.Sim.Backup.Enabled ~= false) then return end
-    if autoSyncBusy[source] then return end
-    autoSyncBusy[source] = true
+    if syncBusy[source] then return end
+    syncBusy[source] = true
     CreateThread(function()
         local okRun, err = pcall(function()
             local realCid = player.getRealIdentifier(source)
@@ -507,7 +521,7 @@ RegisterNetEvent('sd-phone:server:phone:setOpen', function(open)
             runProfileSync(realCid, profile, s)
         end)
         if not okRun then print(('^1[sd-phone:sim]^0 auto-sync failed for %s: %s'):format(source, err)) end
-        autoSyncBusy[source] = nil
+        syncBusy[source] = nil
     end)
 end)
 
