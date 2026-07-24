@@ -11,9 +11,9 @@ import { isAuthed, signIn as unlockMail, signOut as lockMail } from '@/stores/au
 import { Compose } from './Compose';
 import { AlertDialog } from '@/ui/AlertDialog';
 import {
-    getFolderLabels, deleteAccount, discardDraft, inFolder, listMail, listSavedEmails, loadActiveAccountId, loadFolderOrder, markRead,
+    getFolderLabels, declineEmail, deleteAccount, discardDraft, inFolder, listMail, listSavedEmails, loadActiveAccountId, loadFolderOrder, markRead,
     markManyRead, moveToBin, moveTo, removeSavedEmail, saveActiveAccountId, saveDraft, saveEmail, saveFolderOrder, sendMail, signIn as mailSignIn,
-    signOut, signUp as mailSignUp, toggleFlag,
+    signOut, signUp as mailSignUp, toggleFlag, type SavedEmailState,
 } from './data';
 import { isEmailish } from './mailSuggest';
 import { SavedEmailsPage } from './SavedEmails';
@@ -40,8 +40,14 @@ export function Mail({ onClose }: { onClose: () => void }) {
     const [nav,             setNav]             = useSessionState<Navigation>('mail:nav', { stage: 'mailboxes' });
     const [composeFor,      setComposeFor]      = useSessionState<{ accountId?: string; to?: string; subject?: string; body?: string; draftId?: string; attachments?: MailAttachment[] } | null>('mail:composeFor', null);
     const [savedEmails,     setSavedEmails]     = useState<string[]>([]);
+    const [declinedEmails,  setDeclinedEmails]  = useState<string[]>([]);
     const [savedPageOpen,   setSavedPageOpen]   = useState(false);
     const [savePromptQueue, setSavePromptQueue] = useState<string[]>([]);
+
+    const applySavedState = useCallback((s: SavedEmailState) => {
+        setSavedEmails(s.saved);
+        setDeclinedEmails(s.declined);
+    }, []);
 
     const refresh = useCallback(async () => {
         const next = await listMail();
@@ -52,7 +58,7 @@ export function Mail({ onClose }: { onClose: () => void }) {
 
     useEffect(() => { void refresh(); }, [refresh]);
     useEffect(() => { void accountsMyNumber().then(setMyNumber); }, []);
-    useEffect(() => { void listSavedEmails().then(setSavedEmails); }, []);
+    useEffect(() => { void listSavedEmails().then(applySavedState); }, [applySavedState]);
 
     useLayoutEffect(() => {
         const t = takeMailTarget();
@@ -175,8 +181,9 @@ export function Mail({ onClose }: { onClose: () => void }) {
         }
         const own = new Set(accounts.map(a => a.email.toLowerCase()));
         const saved = new Set(savedEmails.map(e => e.toLowerCase()));
+        const declined = new Set(declinedEmails.map(e => e.toLowerCase()));
         const unknown = [...new Set(draft.to.map(r => r.trim().toLowerCase()))]
-            .filter(r => isEmailish(r) && !own.has(r) && !saved.has(r));
+            .filter(r => isEmailish(r) && !own.has(r) && !saved.has(r) && !declined.has(r));
         if (unknown.length > 0) setSavePromptQueue(q => [...q, ...unknown]);
         setComposeFor(null);
     }
@@ -242,11 +249,15 @@ export function Mail({ onClose }: { onClose: () => void }) {
     }
 
     function addSavedEmail(email: string) {
-        void saveEmail(email).then(setSavedEmails);
+        void saveEmail(email).then(applySavedState);
     }
 
     function removeSaved(email: string) {
-        void removeSavedEmail(email).then(setSavedEmails);
+        void removeSavedEmail(email).then(applySavedState);
+    }
+
+    function declineSaved(email: string) {
+        void declineEmail(email).then(applySavedState);
     }
 
     const currentMsg = nav.stage === 'detail' ? messages.find(m => m.id === nav.msgId) : null;
@@ -410,11 +421,11 @@ export function Mail({ onClose }: { onClose: () => void }) {
             {savePromptQueue.length > 0 && (
                 <AlertDialog
                     title={t('mail.saveEmailTitle', 'Save Email')}
-                    message={t('mail.saveEmailMessage', 'Add {email} to your saved emails?', { email: savePromptQueue[0] })}
+                    message={t('mail.saveEmailMessage', "Add {email} to your saved emails? You'll only be asked once for this address.", { email: savePromptQueue[0] })}
                     confirmLabel={t('mail.save', 'Save')}
-                    cancelLabel={t('mail.notNow', 'Not Now')}
+                    cancelLabel={t('mail.dontSave', "Don't Save")}
                     onConfirm={() => { addSavedEmail(savePromptQueue[0]); setSavePromptQueue(q => q.slice(1)); }}
-                    onCancel={() => setSavePromptQueue(q => q.slice(1))}
+                    onCancel={() => { declineSaved(savePromptQueue[0]); setSavePromptQueue(q => q.slice(1)); }}
                 />
             )}
 

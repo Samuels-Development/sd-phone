@@ -124,9 +124,10 @@ const MOCK_NOW = Date.now();
 const ago = (ms: number) => new Date(MOCK_NOW - ms).toISOString();
 const ME = { name: 'Personal', email: PRIMARY_EMAIL };
 
-const MOCK: { accounts: MailAccount[]; messages: MailMessage[]; savedEmails: string[] } = {
+const MOCK: { accounts: MailAccount[]; messages: MailMessage[]; savedEmails: string[]; declinedEmails: string[] } = {
     accounts: [{ id: PRIMARY_EMAIL, name: 'Personal', email: PRIMARY_EMAIL }],
     savedEmails: ['samuelwhite@lifeinvader.com', 'marcus@lifeinvader.com'],
+    declinedEmails: [],
     messages: [
         {
             id: 'm1', accountId: PRIMARY_EMAIL, folder: 'inbox',
@@ -285,30 +286,54 @@ export async function deleteAccount(email: string): Promise<void> {
     await fetchNui<Envelope<unknown>>('sd-phone:mail:deleteAccount', { email });
 }
 
-export async function listSavedEmails(): Promise<string[]> {
-    if (!isFiveM) return [...MOCK.savedEmails];
-    return (await apiData<{ emails: string[] }>('sd-phone:mail:savedEmails'))?.emails ?? [];
+export interface SavedEmailState { saved: string[]; declined: string[] }
+
+function mockSavedState(): SavedEmailState {
+    return { saved: [...MOCK.savedEmails], declined: [...MOCK.declinedEmails] };
 }
 
-export async function saveEmail(email: string): Promise<string[]> {
+function toSavedState(data: { emails: string[]; declined: string[] } | undefined | null): SavedEmailState {
+    return { saved: data?.emails ?? [], declined: data?.declined ?? [] };
+}
+
+export async function listSavedEmails(): Promise<SavedEmailState> {
+    if (!isFiveM) return mockSavedState();
+    return toSavedState(await apiData<{ emails: string[]; declined: string[] }>('sd-phone:mail:savedEmails'));
+}
+
+export async function saveEmail(email: string): Promise<SavedEmailState> {
     const addr = email.trim().toLowerCase();
     if (!isFiveM) {
         if (addr && !MOCK.savedEmails.includes(addr)) MOCK.savedEmails.push(addr);
-        return [...MOCK.savedEmails];
+        MOCK.declinedEmails = MOCK.declinedEmails.filter(e => e !== addr);
+        return mockSavedState();
     }
-    const res = await apiCall<{ emails: string[] }>('sd-phone:mail:saveEmail', { email: addr });
-    if (res.success && res.data) return res.data.emails;
+    const res = await apiCall<{ emails: string[]; declined: string[] }>('sd-phone:mail:saveEmail', { email: addr });
+    if (res.success && res.data) return toSavedState(res.data);
     return listSavedEmails();
 }
 
-export async function removeSavedEmail(email: string): Promise<string[]> {
+export async function declineEmail(email: string): Promise<SavedEmailState> {
+    const addr = email.trim().toLowerCase();
+    if (!isFiveM) {
+        if (addr && !MOCK.savedEmails.includes(addr) && !MOCK.declinedEmails.includes(addr)) {
+            MOCK.declinedEmails.push(addr);
+        }
+        return mockSavedState();
+    }
+    const res = await apiCall<{ emails: string[]; declined: string[] }>('sd-phone:mail:declineEmail', { email: addr });
+    if (res.success && res.data) return toSavedState(res.data);
+    return listSavedEmails();
+}
+
+export async function removeSavedEmail(email: string): Promise<SavedEmailState> {
     const addr = email.trim().toLowerCase();
     if (!isFiveM) {
         MOCK.savedEmails = MOCK.savedEmails.filter(e => e !== addr);
-        return [...MOCK.savedEmails];
+        return mockSavedState();
     }
-    const res = await apiCall<{ emails: string[] }>('sd-phone:mail:removeSavedEmail', { email: addr });
-    if (res.success && res.data) return res.data.emails;
+    const res = await apiCall<{ emails: string[]; declined: string[] }>('sd-phone:mail:removeSavedEmail', { email: addr });
+    if (res.success && res.data) return toSavedState(res.data);
     return listSavedEmails();
 }
 

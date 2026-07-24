@@ -20,6 +20,7 @@ proxyCallback('sd-phone:mail:move',       'sd-phone:server:mail:move')
 proxyCallback('sd-phone:mail:deleteAccount', 'sd-phone:server:mail:deleteAccount')
 proxyCallback('sd-phone:mail:savedEmails', 'sd-phone:server:mail:savedEmails')
 proxyCallback('sd-phone:mail:saveEmail',   'sd-phone:server:mail:saveEmail')
+proxyCallback('sd-phone:mail:declineEmail', 'sd-phone:server:mail:declineEmail')
 proxyCallback('sd-phone:mail:removeSavedEmail', 'sd-phone:server:mail:removeSavedEmail')
 
 ---Server push: a mail landed in our signed-in inbox; relays it to the app.

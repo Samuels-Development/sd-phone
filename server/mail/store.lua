@@ -83,10 +83,20 @@ function store.ensureSchema()
         CREATE TABLE IF NOT EXISTS phone_mail_saved_emails (
             citizenid  VARCHAR(64)  NOT NULL,
             email      VARCHAR(128) NOT NULL,
+            declined   TINYINT(1)   NOT NULL DEFAULT 0,
             created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (citizenid, email)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
+
+    -- Backfills installs that created the table before the declined flag existed.
+    local declinedPresent = MySQL.scalar.await([[
+        SELECT COUNT(*) FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'phone_mail_saved_emails' AND column_name = 'declined'
+    ]])
+    if (tonumber(declinedPresent) or 0) == 0 then
+        MySQL.query.await('ALTER TABLE phone_mail_saved_emails ADD COLUMN declined TINYINT(1) NOT NULL DEFAULT 0')
+    end
 end
 
 ---Reads a single mail account (nil if no row matches); the email match is case-insensitive.
@@ -288,25 +298,49 @@ end
 ---@return string[]
 function store.listSavedEmails(citizenid)
     local rows = MySQL.query.await(
-        'SELECT email FROM phone_mail_saved_emails WHERE citizenid = ? ORDER BY created_at ASC, email ASC',
+        'SELECT email FROM phone_mail_saved_emails WHERE citizenid = ? AND declined = 0 ORDER BY created_at ASC, email ASC',
         { citizenid }) or {}
     local out = {}
     for i = 1, #rows do out[#out + 1] = rows[i].email end
     return out
 end
 
----Saves an address for a citizenid; INSERT IGNORE makes replays a no-op. Returns false only
----when the per-character cap is already reached.
+---Addresses the citizenid declined the save prompt for; each suppresses future prompts.
+---Read-only.
+---@param citizenid string
+---@return string[]
+function store.listDeclinedEmails(citizenid)
+    local rows = MySQL.query.await(
+        'SELECT email FROM phone_mail_saved_emails WHERE citizenid = ? AND declined = 1 ORDER BY created_at ASC, email ASC',
+        { citizenid }) or {}
+    local out = {}
+    for i = 1, #rows do out[#out + 1] = rows[i].email end
+    return out
+end
+
+---Saves an address for a citizenid; a previously declined row is revived to saved. Returns
+---false only when the per-character cap of saved rows is already reached.
 ---@param citizenid string
 ---@param email string
 ---@param maxSaved integer
 ---@return boolean
 function store.addSavedEmail(citizenid, email, maxSaved)
     local count = tonumber(MySQL.scalar.await(
-        'SELECT COUNT(*) FROM phone_mail_saved_emails WHERE citizenid = ?', { citizenid })) or 0
+        'SELECT COUNT(*) FROM phone_mail_saved_emails WHERE citizenid = ? AND declined = 0', { citizenid })) or 0
     if count >= maxSaved then return false end
-    MySQL.insert.await('INSERT IGNORE INTO phone_mail_saved_emails (citizenid, email) VALUES (?, ?)', { citizenid, email })
+    MySQL.insert.await([[
+        INSERT INTO phone_mail_saved_emails (citizenid, email, declined) VALUES (?, ?, 0)
+        ON DUPLICATE KEY UPDATE declined = 0
+    ]], { citizenid, email })
     return true
+end
+
+---Records a declined save prompt so the address is never offered again. A no-op when the
+---address is already saved (INSERT IGNORE keeps the saved row).
+---@param citizenid string
+---@param email string
+function store.declineSavedEmail(citizenid, email)
+    MySQL.insert.await('INSERT IGNORE INTO phone_mail_saved_emails (citizenid, email, declined) VALUES (?, ?, 1)', { citizenid, email })
 end
 
 ---Removes a saved address. Idempotent.

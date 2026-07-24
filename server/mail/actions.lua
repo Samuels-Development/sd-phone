@@ -896,12 +896,19 @@ function actions.deleteAccount(source, payload)
     return ok({ email = email })
 end
 
----A player's saved compose addresses. Read-only.
+---Both saved-email lists for a player: saved addresses and prompt-declined addresses.
+---@param cid string
+---@return table
+local function savedEmailState(cid)
+    return { emails = store.listSavedEmails(cid), declined = store.listDeclinedEmails(cid) }
+end
+
+---A player's saved compose addresses plus declined prompts. Read-only.
 ---@param source number
 ---@return table envelope
 function actions.savedEmails(source)
     local who = whois(source); if not who then return fail('No player') end
-    return ok({ emails = store.listSavedEmails(who.cid) })
+    return ok(savedEmailState(who.cid))
 end
 
 ---Saves a compose address for the player. Replays are no-ops; the fresh list is returned.
@@ -918,7 +925,23 @@ function actions.saveEmail(source, payload)
     if not store.addSavedEmail(who.cid, email, mailCfg.MaxSavedEmails) then
         return fail('Saved email limit reached')
     end
-    return ok({ emails = store.listSavedEmails(who.cid) })
+    return ok(savedEmailState(who.cid))
+end
+
+---Marks a save prompt as declined for an address, permanently suppressing future prompts
+---for it. Idempotent.
+---@param source number
+---@param payload { email?: string }|nil
+---@return table envelope
+function actions.declineEmail(source, payload)
+    local who = whois(source); if not who then return fail('No player') end
+    local email = type(payload) == 'table' and trim(payload.email) or nil
+    email = email and email:lower() or nil
+    if not email or #email == 0 or #email > 128 or not looksLikeEmail(email) then
+        return fail('Invalid email address')
+    end
+    store.declineSavedEmail(who.cid, email)
+    return ok(savedEmailState(who.cid))
 end
 
 ---Removes a saved compose address. Idempotent; the fresh list is returned.
@@ -931,7 +954,7 @@ function actions.removeSavedEmail(source, payload)
     email = email and email:lower() or nil
     if not email or #email == 0 then return fail('Invalid email address') end
     store.removeSavedEmail(who.cid, email)
-    return ok({ emails = store.listSavedEmails(who.cid) })
+    return ok(savedEmailState(who.cid))
 end
 
 return actions
