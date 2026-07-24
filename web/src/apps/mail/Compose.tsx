@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { BookUser, Check, ChevronDown, Paperclip } from 'lucide-react';
 
 import { ActionSheet } from '@/ui/ActionSheet';
@@ -42,6 +42,12 @@ export function Compose({ accounts, defaultAccountId, initialTo = '', initialSub
     const [savedPicker,   setSavedPicker]   = useState(false);
 
     const suggestions = suggestEmails(to, savedEmails);
+    const suggestionsOpen = suggestions.length > 0;
+    // The last non-empty list keeps rendering while the panel collapses, so rows fade out
+    // in place instead of vanishing a frame before the animation.
+    const lastSuggestions = useRef<string[]>([]);
+    if (suggestionsOpen) lastSuggestions.current = suggestions;
+    const displayedSuggestions = suggestionsOpen ? suggestions : lastSuggestions.current;
 
     const account = accounts.find(a => a.id === accountId) ?? accounts[0];
     const canSend = to.trim().length > 0 && subject.trim().length > 0 && !!account;
@@ -164,13 +170,18 @@ export function Compose({ accounts, defaultAccountId, initialTo = '', initialSub
                                 <BookUser className="h-[20px] w-[20px]" strokeWidth={2} />
                             </button>
                         </Row>
-                        {suggestions.length > 0 && (
-                            <>
+                        <div
+                            aria-hidden={!suggestionsOpen}
+                            className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
+                            style={{ gridTemplateRows: suggestionsOpen ? '1fr' : '0fr', opacity: suggestionsOpen ? 1 : 0 }}
+                        >
+                            <div className="min-h-0 overflow-hidden">
                                 <Divider />
-                                {suggestions.map(s => (
+                                {displayedSuggestions.map(s => (
                                     <button
                                         key={s}
                                         type="button"
+                                        tabIndex={suggestionsOpen ? 0 : -1}
                                         onClick={() => setTo(applySuggestion(to, s))}
                                         className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-black/5 dark:active:bg-white/5"
                                     >
@@ -178,8 +189,8 @@ export function Compose({ accounts, defaultAccountId, initialTo = '', initialSub
                                         <span className="truncate text-[16px] text-ios-blue">{s}</span>
                                     </button>
                                 ))}
-                            </>
-                        )}
+                            </div>
+                        </div>
                         <Divider />
                         <Row label={t('mail.subjectLabel', 'Subject:')}>
                             <input
