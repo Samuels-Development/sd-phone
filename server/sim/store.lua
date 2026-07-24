@@ -104,6 +104,47 @@ function store.ensureSchema()
             ]])
         end)
     end
+
+    -- Last-opened / equipped phone per character. Survives resource and server restarts so
+    -- keybind opens and call routing keep the same device without requiring a fresh item use.
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS phone_player_equipment (
+            citizenid  VARCHAR(64) NOT NULL,
+            device_id  VARCHAR(64) NULL,
+            color      VARCHAR(32) NULL,
+            updated_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
+                ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (citizenid)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ]])
+end
+
+---Reads the character's last-equipped phone preference. Read-only.
+---@param citizenid string
+---@return { deviceId: string|nil, color: string|nil }|nil
+function store.getEquipment(citizenid)
+    if not citizenid or citizenid == '' then return nil end
+    local row = MySQL.single.await(
+        'SELECT device_id, color FROM phone_player_equipment WHERE citizenid = ?',
+        { citizenid })
+    if not row then return nil end
+    return {
+        deviceId = (type(row.device_id) == 'string' and row.device_id ~= '') and row.device_id or nil,
+        color    = (type(row.color) == 'string' and row.color ~= '') and row.color or nil,
+    }
+end
+
+---Persists the character's last-equipped phone (device identity + frame colour).
+---@param citizenid string
+---@param deviceId string|nil
+---@param color string|nil
+function store.setEquipment(citizenid, deviceId, color)
+    if not citizenid or citizenid == '' then return end
+    MySQL.insert.await([[
+        INSERT INTO phone_player_equipment (citizenid, device_id, color)
+        VALUES (?, ?, ?)
+        ON DUPLICATE KEY UPDATE device_id = VALUES(device_id), color = VALUES(color)
+    ]], { citizenid, deviceId, color })
 end
 
 ---True when a number is already claimed - by a registered SIM or by any legacy

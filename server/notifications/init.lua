@@ -27,48 +27,22 @@ exports('notify', function(source, data)
     return relay(source, data)
 end)
 
----Delivers a notification to the player acting as `cid`. When the identity instead sits on a
----phone in their POCKET (carried, not active - unique phones), a transient "pocket buzz"
----banner tagged with that phone's colour goes out instead, flagged `otherPhone` so the NUI
----keeps it off the active phone's lockscreen stack and badges.
+---Delivers a notification only when `cid` is the player's currently active phone. Pocketed
+---(carried, not active) identities stay silent until that phone is equipped — same rule as
+---live calls.
 ---@param cid string data identity the notification belongs to
 ---@param data table notification payload (title required)
 ---@return boolean sent
 function notifications.notifyCid(cid, data)
     if type(cid) ~= 'string' or cid == '' then return false end
     local src = player.getSourceByIdentifier(cid)
-    if src then return relay(src, data) end
-    if type(data) ~= 'table' or type(data.title) ~= 'string' then return false end
-
-    local anySrc = player.getAnySourceByIdentifier(cid)
-    if not anySrc then return false end
-    local entry
-    local s = require('server.sim.session').resolve(anySrc)
-    if s then
-        for _, e in ipairs(s.sims) do
-            if e.identity == cid then entry = e break end
-        end
-    end
-    local color = entry and entry.color or nil
-    return relay(anySrc, {
-        app        = color and (color:gsub('^%l', string.upper) .. ' Phone') or 'Other Phone',
-        appId      = data.appId,
-        image      = data.image,
-        title      = data.title,
-        body       = data.body,
-        time       = data.time,
-        otherPhone = true,
-        -- The buzzing phone's frame colour (peek shell tint) and its NUI profile key (device
-        -- identity, or the number in legacy mode) so the banner can be parked on THAT phone's
-        -- banked lockscreen stack for its next open.
-        phoneColor = color,
-        profileKey = require('server.sim.state').device and cid or (entry and entry.number) or nil,
-    })
+    if not src then return false end
+    return relay(src, data)
 end
 
 ---Sends the same notification addressed by phone number instead of server id. The number is
----digit-normalised before lookup; an unassigned number or offline owner returns false. A
----number on a pocketed (non-active) phone arrives as a colour-tagged transient buzz.
+---digit-normalised before lookup; an unassigned number, offline owner, or number on a
+---pocketed (non-active) phone returns false.
 ---@param number string phone number in any formatting
 ---@param data table notification payload
 ---@return boolean sent

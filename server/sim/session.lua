@@ -48,8 +48,8 @@ local TTL = 5000
 ---@type table<number, { at: number, s: SimSession|nil }> Per-source cache; `s = nil` caches "no phone".
 local cache = {}
 
----@type table<number, { slot?: number, number?: string, color?: string }> Which phone each
----player last opened; matched slot > number > colour against the carried SIMs.
+---@type table<number, { deviceId?: string, slot?: number, number?: string, color?: string }> Which
+---phone each player last opened; matched deviceId > slot > number > colour against carried phones.
 local prefs = {}
 
 ---Drops one player's cached session (or everyone's with nil) so the next resolve re-scans.
@@ -58,34 +58,80 @@ function session.invalidate(source)
     if source then cache[source] = nil else cache = {} end
 end
 
----Records which phone the player just opened (or tried to). Matched against the carried SIMs
----on the next resolve; stale hints simply fall through to the first SIM'd phone. A colour-only
----hint (the keybind) never downgrades an existing slot-precise pick of the same colour, so
----using a specific phone item stays authoritative between keybind toggles.
+---Loads the character's persisted equipment preference into the in-memory prefs table when
+---missing (after reconnect / resource restart). No-op when already set or the character is
+---unknown.
 ---@param source number player server id
----@param pref { slot?: number, number?: string, color?: string }
+local function ensurePref(source)
+    if prefs[source] then return end
+    local cid = realIdentifier(source)
+    if not cid then return end
+    local row = simStore.getEquipment(cid)
+    if not row then return end
+    prefs[source] = { deviceId = row.deviceId, color = row.color }
+end
+
+---Records which phone the player just opened (or tried to). Matched against the carried phones
+---on the next resolve; stale hints simply fall through to the first entry. A colour-only hint
+---(the keybind) never downgrades an existing device/slot-precise pick of the same colour, so
+---using a specific phone item stays authoritative between keybind toggles. Persisted to
+---phone_player_equipment when a device identity is known.
+---@param source number player server id
+---@param pref { deviceId?: string, slot?: number, number?: string, color?: string }
 function session.setActive(source, pref)
     if type(pref) ~= 'table' then return end
     local existing = prefs[source]
-    if not pref.slot and not pref.number and pref.color
-        and existing and existing.slot and existing.color == pref.color then
+    if not pref.deviceId and not pref.slot and not pref.number and pref.color
+        and existing and (existing.deviceId or existing.slot) and existing.color == pref.color then
         return
     end
-    prefs[source] = { slot = tonumber(pref.slot), number = pref.number, color = pref.color }
+
+    -- Slot-only opens: resolve the device id from live inventory so the preference survives
+    -- reconnects (slots move; deviceId does not).
+    local deviceId = pref.deviceId
+    if not deviceId and pref.slot then
+        local row = siminv.findPhones(source)
+        for _, phone in ipairs(row) do
+            if phone.slot == tonumber(pref.slot) then
+                deviceId = select(1, siminv.getDevice(phone))
+                break
+            end
+        end
+    end
+
+    prefs[source] = {
+        deviceId = deviceId,
+        slot     = tonumber(pref.slot),
+        number   = pref.number,
+        color    = pref.color,
+    }
     session.invalidate(source)
+
+    local cid = realIdentifier(source)
+    if cid and deviceId then
+        simStore.setEquipment(cid, deviceId, pref.color)
+    end
 end
 
----Picks the active entry among `entries` from the player's last-opened hint (slot > number >
----colour), falling back to the first entry.
+---Picks the active entry among `entries` from the player's last-opened hint (deviceId > slot >
+---number > colour), falling back to the first entry. Loads persisted equipment when needed.
 ---@param source number player server id
 ---@param entries SimEntry[]
 ---@return SimEntry|nil
 local function pickActive(source, entries)
+    ensurePref(source)
     local active
     local pref = prefs[source]
     if pref then
-        for _, entry in ipairs(entries) do
-            if pref.slot and entry.slot == pref.slot then active = entry break end
+        if pref.deviceId then
+            for _, entry in ipairs(entries) do
+                if entry.identity == pref.deviceId then active = entry break end
+            end
+        end
+        if not active and pref.slot then
+            for _, entry in ipairs(entries) do
+                if entry.slot == pref.slot then active = entry break end
+            end
         end
         if not active and pref.number then
             for _, entry in ipairs(entries) do
@@ -307,6 +353,18 @@ end
 local function compute(source)
     local phones = siminv.findPhones(source)
     if #phones == 0 then return nil end
+    -- Container mode: peel legacy nested ox containers onto per-device stashes so USE opens
+    -- the phone UI (ox intercepts metadata.container client-side before any export).
+    if state.mode == 'container' then
+        local migrated = false
+        for _, phone in ipairs(phones) do
+            if phone.metadata and phone.metadata.container then
+                siminv.migrateNestedContainer(source, phone.slot)
+                migrated = true
+            end
+        end
+        if migrated then phones = siminv.findPhones(source) end
+    end
     if state.character then return computeCharacter(source, phones) end
     if state.device then return computeDevice(source, phones) end
     return computeLegacy(source, phones)
@@ -334,8 +392,8 @@ function session.identity(source)
     return s and s.identity or nil
 end
 
----Every identity reachable on this player - one per carried SIM. A player with two SIM'd
----phones in their pocket receives calls/messages addressed to either number.
+---Every identity this player carries (one per SIM'd / device phone). Still useful for inventory
+---scans and admin tooling; live reachability uses the active identity only.
 ---@param source number player server id
 ---@return table<string, true> identities
 function session.identities(source)

@@ -71,6 +71,7 @@ require 'client.apps.stocks'
 require 'client.apps.games'
 require 'client.apps.settings'
 require 'client.apps.sim'
+require 'client.items'
 require 'client.admin'
 require 'client.payphone'
 
@@ -491,7 +492,12 @@ RegisterKeyMapping('+sdphone_look', 'Phone: Hold to look around', 'keyboard', co
 RegisterNetEvent('sd-phone:client:openFromItem', function(color, sim, simPending, deviceHint)
     if color and FRAME_COLORS[color] then currentFrameColor = color end
     if sim then
-        currentSimState = { hasSim = sim.hasSim == true, number = sim.number }
+        currentSimState = {
+            hasSim  = sim.hasSim == true,
+            number  = sim.number,
+            device  = deviceHint ~= nil or sim.device == true,
+            profile = deviceHint or sim.profile,
+        }
     elseif simPending then
         if deviceHint and not (currentSimState and currentSimState.profile == deviceHint) then
             -- Another phone than last time: seed its profile now so the NUI tears the previous
@@ -505,7 +511,28 @@ RegisterNetEvent('sd-phone:client:openFromItem', function(color, sim, simPending
     else
         currentSimState = nil
     end
-    OpenPhone()
+
+    if phoneState.open then
+        -- Already open (e.g. incoming call for a pocketed phone): swap frame + profile in place
+        -- so the ring mounts on the dialed device instead of the previously equipped one.
+        if color and FRAME_COLORS[color] then
+            SendNUIMessage({ action = 'sd-phone:frameColor', data = { color = color } })
+        end
+        if currentSimState then
+            SendNUIMessage({
+                action = 'sd-phone:simState',
+                data   = {
+                    enabled = true,
+                    hasSim  = currentSimState.hasSim == true,
+                    number  = currentSimState.number,
+                    device  = currentSimState.device == true,
+                    profile = currentSimState.profile,
+                },
+            })
+        end
+    else
+        OpenPhone()
+    end
 end)
 
 ---Live SIM state push (SIM inserted/ejected/moved). Keeps the local snapshot fresh and, while

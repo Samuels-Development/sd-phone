@@ -79,31 +79,56 @@ local simState = require 'server.sim.state'
 ---the phone with the variant's frame colour (plus the SIM snapshot under unique phones). The
 ---used slot marks that exact phone as the active one, so a player carrying several SIM'd
 ---phones acts (and calls) as whichever phone they actually opened.
+local function openPhoneFromSlot(source, usedSlot, itemName)
+    local entry
+    for _, row in ipairs(config.Phone.Items or {}) do
+        if row.item == itemName then entry = row break end
+    end
+    if not entry then return end
+
+    local deviceHint
+    if simState.active then
+        usedSlot = tonumber(usedSlot)
+        -- Container mode: peel any legacy nested ox container onto the per-device stash so this
+        -- USE path opens the UI (ox would otherwise intercept metadata.container client-side).
+        if usedSlot and require('server.sim.state').mode == 'container' then
+            local siminv = require 'server.sim.inv'
+            deviceHint = siminv.migrateNestedContainer(source, usedSlot)
+                or siminv.ensureDeviceId(source, usedSlot)
+        elseif usedSlot then
+            local row = inv.getSlot(source, usedSlot)
+            local md = row and row.metadata
+            deviceHint = type(md) == 'table' and md.deviceId or nil
+        end
+        require('server.sim.session').setActive(source, {
+            slot     = usedSlot,
+            color    = entry.color,
+            deviceId = deviceHint,
+        })
+    end
+    -- Open immediately: the SIM resolve does inventory scans + awaited DB writes, so it
+    -- runs AFTER the reveal and reconciles through the live simState push.
+    TriggerClientEvent('sd-phone:client:openFromItem', source, entry.color, nil, simState.active, deviceHint)
+    if simState.active then
+        CreateThread(function() require('server.sim.session').push(source) end)
+    end
+end
+
 local function RegisterPhoneItems()
     for _, entry in ipairs(config.Phone.Items or {}) do
         inv.registerUsable(entry.item, function(source, itemArg, _invArg, slotArg)
-            local deviceHint
-            if simState.active then
-                local usedSlot = (type(itemArg) == 'table' and tonumber(itemArg.slot)) or tonumber(slotArg)
-                require('server.sim.session').setActive(source, { slot = usedSlot, color = entry.color })
-                -- Synchronous metadata peek (no DB): hands the client this phone's device
-                -- identity with the open, so switching phones tears the old profile down AT the
-                -- reveal instead of a server round-trip later.
-                if usedSlot then
-                    local row = inv.getSlot(source, usedSlot)
-                    local md = row and row.metadata
-                    deviceHint = type(md) == 'table' and md.deviceId or nil
-                end
-            end
-            -- Open immediately: the SIM resolve does inventory scans + awaited DB writes, so it
-            -- runs AFTER the reveal and reconciles through the live simState push.
-            TriggerClientEvent('sd-phone:client:openFromItem', source, entry.color, nil, simState.active, deviceHint)
-            if simState.active then
-                CreateThread(function() require('server.sim.session').push(source) end)
-            end
+            local usedSlot = (type(itemArg) == 'table' and tonumber(itemArg.slot)) or tonumber(slotArg)
+            local itemName = (type(itemArg) == 'table' and itemArg.name) or entry.item
+            openPhoneFromSlot(source, usedSlot, itemName)
         end)
     end
 end
+
+---Client inventory export path (ox client.export): same as usable-item open, keyed by slot.
+RegisterNetEvent('sd-phone:server:usePhoneItem', function(slot, itemName)
+    local source = source
+    openPhoneFromSlot(source, slot, itemName)
+end)
 
 ---Server-authoritative ownership gate for the keybind: returns the frame colour to open with,
 ---preferring the client's last-used hint among owned variants, else the first owned variant.

@@ -28,9 +28,11 @@
 --
 -- With 'device'/'sim' the number follows the SIM, and the Cloud Backup section in Settings
 -- lets a player carry their data to a new phone (the number stays behind on the old SIM).
+-- The last-opened phone is persisted in phone_player_equipment so it survives reconnects
+-- and restarts.
 --
 -- Backend support: reading/writing per-slot item metadata is required. Supported out of the box:
---   * ox_inventory              (metadata mode, or the physical SIM-tray container mode below)
+--   * ox_inventory              (metadata mode, or the physical SIM-tray stash mode below)
 --   * qb-inventory / ps / lj    (metadata mode via the QBCore item `info` table)
 -- Other inventories (qs / tgiann / codem / origen / jaksam) need a small adapter in
 -- server/sim/inv.lua; plain ESX inventory has no item metadata and cannot support this feature.
@@ -64,12 +66,11 @@ return {
     -- export (character-bound or hardcoded numbers) produce usable SIMs.
     ActivateBlankSims = true,
 
-    -- ox_inventory only: register every phone item as a 1-slot container ("SIM tray") instead
-    -- of writing the number onto the phone item. Players right-click/use the phone to open the
-    -- tray and drag the SIM in or out. Trade-off: with containers, USING the phone item opens
-    -- the tray (ox intercepts container items client-side), so the phone UI itself only opens
-    -- via the keybind. Leave false for the universal metadata mode, where using the phone opens
-    -- the phone UI and the SIM is installed by using the sim_card item.
+    -- ox_inventory only: each phone gets a 1-slot SIM-tray stash (sd_phone_sim_<deviceId>)
+    -- instead of writing the number onto the phone item. USING the phone opens the phone UI;
+    -- the inventory "SIM Tray" button opens the stash. ox cannot toggle buttons at runtime —
+    -- use the matching item def from docs/ox_inventory_items.lua (SECTION A with button
+    -- when true, SECTION B without when false). Leave false for metadata mode (use sim_card).
     UseContainers = false,
 
     -- Metadata mode only: allow ejecting the installed SIM from Settings -> SIM & Backup. The
