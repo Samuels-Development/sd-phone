@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { BookUser, ChevronLeft, Plus, Trash2 } from 'lucide-react';
 
 import { t } from '@/i18n';
@@ -15,6 +15,16 @@ export function SavedEmailsSheet({ emails, onPick, onClose }: {
     onPick:  (email: string) => void;
     onClose: () => void;
 }) {
+    const listRef = useRef<HTMLDivElement>(null);
+    const [moreBelow, setMoreBelow] = useState(false);
+
+    function updateMoreBelow() {
+        const el = listRef.current;
+        if (el) setMoreBelow(el.scrollHeight - el.scrollTop - el.clientHeight > 4);
+    }
+
+    useLayoutEffect(updateMoreBelow, [emails.length]);
+
     return (
         <Sheet onClose={onClose} fit="content" title={t('mail.savedEmails', 'Saved Emails')} className="bg-[#ececec] dark:bg-surface">
             {({ close }) => (
@@ -24,23 +34,34 @@ export function SavedEmailsSheet({ emails, onPick, onClose }: {
                             {t('mail.noSavedEmails', 'No saved emails yet.')}
                         </div>
                     ) : (
-                        // Capped at five rows; longer lists scroll inside the card.
-                        <div className="max-h-[260px] overflow-y-auto rounded-[12px] bg-[#e5e5e5] no-scrollbar dark:bg-white/5">
-                            {emails.map((email, i) => (
-                                <div key={email}>
-                                    <button
-                                        type="button"
-                                        onClick={() => { onPick(email); close(); }}
-                                        className="flex w-full min-w-0 items-center gap-3 px-4 py-3.5 text-left active:opacity-60"
-                                    >
-                                        <BookUser className="h-[20px] w-[20px] shrink-0 text-ios-gray" strokeWidth={2} />
-                                        <span className="truncate text-[17px] text-black dark:text-white">{email}</span>
-                                    </button>
-                                    {i < emails.length - 1 && (
-                                        <div className="bg-black/[0.12] dark:bg-white/10" style={{ height: '0.5px' }} />
-                                    )}
-                                </div>
-                            ))}
+                        <div className="relative">
+                            {/* Capped at five rows; longer lists scroll inside the card. */}
+                            <div
+                                ref={listRef}
+                                onScroll={updateMoreBelow}
+                                className="max-h-[260px] overflow-y-auto rounded-[12px] bg-[#e5e5e5] no-scrollbar dark:bg-white/5"
+                            >
+                                {emails.map((email, i) => (
+                                    <div key={email}>
+                                        <button
+                                            type="button"
+                                            onClick={() => { onPick(email); close(); }}
+                                            className="flex w-full min-w-0 items-center gap-3 px-4 py-3.5 text-left active:opacity-60"
+                                        >
+                                            <BookUser className="h-[20px] w-[20px] shrink-0 text-ios-gray" strokeWidth={2} />
+                                            <span className="truncate text-[17px] text-black dark:text-white">{email}</span>
+                                        </button>
+                                        {i < emails.length - 1 && (
+                                            <div className="bg-black/[0.12] dark:bg-white/10" style={{ height: '0.5px' }} />
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                            <div
+                                aria-hidden
+                                className="pointer-events-none absolute inset-x-0 bottom-0 h-10 rounded-b-[12px] bg-gradient-to-t from-[#e5e5e5] to-transparent transition-opacity duration-200 dark:from-surface"
+                                style={{ opacity: moreBelow ? 1 : 0 }}
+                            />
                         </div>
                     )}
                 </div>
