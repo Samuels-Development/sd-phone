@@ -31,7 +31,7 @@ export function Notifications({ onOpenProfile }: { onOpenProfile: (handle?: stri
                 <div className="w-11" aria-hidden />
             </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
                 {loading && items.length === 0 && <FeedSkeleton />}
                 {!loading && items.length === 0 && (
                     <EmptyState

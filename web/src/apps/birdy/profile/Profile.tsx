@@ -78,7 +78,7 @@ export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onTog
     return (
         <div className="relative flex h-full flex-col" style={{ background: BG }}>
             <div
-                className="min-h-0 flex-1 overflow-y-auto"
+                className="min-h-0 flex-1 overflow-y-auto no-scrollbar"
                 onScroll={e => setOverBanner(e.currentTarget.scrollTop < 72)}
             >
                 <div className="relative h-[132px] w-full overflow-hidden" style={{ background: BLUE }}>

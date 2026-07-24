@@ -67,11 +67,11 @@ export async function apiCreate(body: string, images?: string[]): Promise<BirdyP
     return (await call<{ post: BirdyPost }>('sd-phone:birdy:create', { body, images }))?.post ?? null;
 }
 
-export async function apiReply(parentId: string, body: string): Promise<BirdyPost | null> {
+export async function apiReply(parentId: string, body: string, images?: string[]): Promise<BirdyPost | null> {
     if (!isFiveM) {
-        return { id: newId('reply'), author: CURRENT_USER, body, createdAt: Date.now(), replies: 0, reposts: 0, likes: 0, liked: false };
+        return { id: newId('reply'), author: CURRENT_USER, body, images, createdAt: Date.now(), replies: 0, reposts: 0, likes: 0, liked: false };
     }
-    return (await call<{ post: BirdyPost }>('sd-phone:birdy:reply', { parentId, body }))?.post ?? null;
+    return (await call<{ post: BirdyPost }>('sd-phone:birdy:reply', { parentId, body, images }))?.post ?? null;
 }
 
 export async function apiToggleLike(id: string): Promise<void> {

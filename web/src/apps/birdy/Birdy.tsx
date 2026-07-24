@@ -247,8 +247,8 @@ export function Birdy({ onClose }: { onClose: () => void }) {
         void apiToggleFollow(handle);
     }
 
-    async function addReply(parentId: string, body: string) {
-        const reply = await apiReply(parentId, body);
+    async function addReply(parentId: string, body: string, images: string[]) {
+        const reply = await apiReply(parentId, body, images.length > 0 ? images : undefined);
         if (!reply) return;
         setOpenPost(prev => prev && prev.id === parentId
             ? { ...prev, replies: prev.replies + 1, thread: [...(prev.thread ?? []), reply] }
@@ -280,7 +280,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                         onToggleRepost={() => toggleRepost(openPost.id)}
                         onToggleReplyLike={rid => toggleLike(rid)}
                         onOpenAuthor={openProfile}
-                        onReply={b => addReply(openPost.id, b)}
+                        onReply={(b, imgs) => addReply(openPost.id, b, imgs)}
                     />
                 )
                 : <LoadingPane onBack={close} />}

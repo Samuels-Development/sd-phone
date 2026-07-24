@@ -4,6 +4,7 @@ import { Image as ImageIcon, Smile, X } from 'lucide-react';
 import { t } from '@/i18n';
 import { useSessionState } from '@/hooks/useSessionState';
 import { EmojiPanel } from '@/shared/chat/EmojiPanel';
+import { GifPickerSheet } from '@/shared/chat/GifPickerSheet';
 import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
 import { BG, BLUE, MAX_POST_LENGTH } from '../data';
 import { Avatar } from '../ui';
@@ -17,6 +18,7 @@ export function Composer({ onClose, onPost }: {
     const [text, setText] = useSessionState('birdy:composerDraft', '');
     const [images, setImages] = useState<string[]>([]);
     const [picking, setPicking] = useState(false);
+    const [pickingGif, setPickingGif] = useState(false);
     const [emojiOpen, setEmojiOpen] = useState(false);
     const [exiting, setExiting] = useState(false);
     const canPost = text.trim().length > 0 || images.length > 0;
@@ -87,7 +89,7 @@ export function Composer({ onClose, onPost }: {
                 </button>
             </header>
 
-            <div className="flex min-h-0 flex-1 gap-3 overflow-y-auto px-4 pt-3">
+            <div className="flex min-h-0 flex-1 gap-3 overflow-y-auto no-scrollbar px-4 pt-3">
                 <Avatar size={40} />
                 <div className="flex min-w-0 flex-1 flex-col">
                     <textarea
@@ -135,6 +137,15 @@ export function Composer({ onClose, onPost }: {
                 </button>
                 <button
                     type="button"
+                    aria-label={t('birdy.addGif', 'Add GIF')}
+                    disabled={atImageLimit}
+                    onClick={() => setPickingGif(true)}
+                    className="flex h-10 w-10 items-center justify-center rounded-full active:bg-black/5 disabled:opacity-40"
+                >
+                    <span className="rounded-[6px] border-2 px-[4px] py-[2px] text-[11px] font-extrabold leading-none" style={{ borderColor: BLUE, color: BLUE }}>GIF</span>
+                </button>
+                <button
+                    type="button"
                     aria-label={t('birdy.addEmoji', 'Add emoji')}
                     onClick={toggleEmoji}
                     className="flex h-10 w-10 items-center justify-center rounded-full active:bg-black/5"
@@ -149,6 +160,12 @@ export function Composer({ onClose, onPost }: {
                     multiple
                     onSelectMany={ps => addImages(ps.map(p => p.url))}
                     onClose={() => setPicking(false)}
+                />
+            )}
+            {pickingGif && (
+                <GifPickerSheet
+                    onSelect={url => { addImages([url]); setPickingGif(false); }}
+                    onClose={() => setPickingGif(false)}
                 />
             )}
         </div>

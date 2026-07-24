@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react';
-import { ArrowLeft, Heart, MessageCircle, Repeat2 } from 'lucide-react';
+import { ArrowLeft, Heart, Image as ImageIcon, MessageCircle, Repeat2, X } from 'lucide-react';
 
 import { t } from '@/i18n';
-import { absoluteTime, BG, BLUE, LIKE, META, PILL, REPOST, type BirdyAuthor, type BirdyPost } from '../data';
+import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
+import { GifPickerSheet } from '@/shared/chat/GifPickerSheet';
+import { absoluteTime, BG, BLUE, LIKE, MAX_POST_LENGTH, META, PILL, REPOST, type BirdyAuthor, type BirdyPost } from '../data';
 import { compactCount } from '../polish/format';
 import { HeartBurst } from '../polish/HeartBurst';
 import { PostCard } from './PostCard';
@@ -16,17 +18,25 @@ export function PostDetail({ post, me, onBack, onToggleLike, onToggleRepost, onT
     onToggleRepost:    () => void;
     onToggleReplyLike: (replyId: string) => void;
     onOpenAuthor?:     (handle: string) => void;
-    onReply?:          (body: string) => void;
+    onReply?:          (body: string, images: string[]) => void;
 }) {
     const [reply, setReply] = useState('');
+    const [media, setMedia] = useState<string[]>([]);
+    const [picking, setPicking] = useState<'photo' | 'gif' | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const openAuthor = () => onOpenAuthor?.(post.author.handle);
+    const canSend = reply.trim().length > 0 || media.length > 0;
 
     function sendReply() {
-        const body = reply.trim();
-        if (!body || !onReply) return;
-        onReply(body);
+        if (!canSend || !onReply) return;
+        onReply(reply.trim(), media);
         setReply('');
+        setMedia([]);
+    }
+
+    function addMedia(urls: string[]) {
+        setMedia(prev => [...prev, ...urls].slice(0, MAX_REPLY_IMAGES));
+        setPicking(null);
     }
 
     return (
@@ -39,7 +49,7 @@ export function PostDetail({ post, me, onBack, onToggleLike, onToggleRepost, onT
                 <div className="w-6" aria-hidden />
             </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
                 <div className="px-4 pt-3">
                     <button type="button" onClick={openAuthor} className="flex items-center gap-3 text-left">
                         <Avatar size={42} src={post.author.avatar} />
@@ -100,27 +110,78 @@ export function PostDetail({ post, me, onBack, onToggleLike, onToggleRepost, onT
             </div>
 
             {onReply && (
-                <div className="flex shrink-0 items-center gap-2 border-t border-black/10 px-3 py-2" style={{ background: BG }}>
-                    <input
-                        ref={inputRef}
-                        value={reply}
-                        onChange={e => setReply(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') sendReply(); }}
-                        placeholder={t('birdy.postYourReply', 'Post your reply')}
-                        className="min-w-0 flex-1 rounded-full px-4 py-2 text-[15px] text-black outline-none placeholder:text-[#657786]"
-                        style={{ background: PILL, caretColor: BLUE }}
-                    />
-                    <button
-                        type="button"
-                        onClick={sendReply}
-                        disabled={!reply.trim()}
-                        className="shrink-0 rounded-full px-4 py-2 text-[14px] font-bold text-white disabled:opacity-50"
-                        style={{ background: BLUE }}
-                    >
-                        {t('birdy.reply', 'Reply')}
-                    </button>
+                <div className="shrink-0 border-t border-black/10" style={{ background: BG }}>
+                    {media.length > 0 && (
+                        <div className="flex gap-2 px-3 pt-2">
+                            {media.map((url, i) => (
+                                <div key={`${url}-${i}`} className="relative">
+                                    <img src={url} alt="" draggable={false} className="h-14 w-14 rounded-[10px] object-cover" />
+                                    <button
+                                        type="button"
+                                        onClick={() => setMedia(prev => prev.filter((_, idx) => idx !== i))}
+                                        aria-label={t('birdy.removeImage', 'Remove image')}
+                                        className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 active:opacity-70"
+                                    >
+                                        <X className="h-[12px] w-[12px] text-white" strokeWidth={2.6} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    <div className="flex items-center gap-1 px-3 py-2">
+                        <button
+                            type="button"
+                            aria-label={t('birdy.addImage', 'Add image')}
+                            disabled={media.length >= MAX_REPLY_IMAGES}
+                            onClick={() => setPicking('photo')}
+                            className="flex h-9 w-8 shrink-0 items-center justify-center rounded-full active:bg-black/5 disabled:opacity-40"
+                        >
+                            <ImageIcon className="h-[21px] w-[21px]" style={{ color: BLUE }} strokeWidth={2} />
+                        </button>
+                        <button
+                            type="button"
+                            aria-label={t('birdy.addGif', 'Add GIF')}
+                            disabled={media.length >= MAX_REPLY_IMAGES}
+                            onClick={() => setPicking('gif')}
+                            className="mr-1 flex h-9 w-8 shrink-0 items-center justify-center rounded-full active:bg-black/5 disabled:opacity-40"
+                        >
+                            <span className="rounded-[5px] border-[1.5px] px-[3px] py-[1.5px] text-[10px] font-extrabold leading-none" style={{ borderColor: BLUE, color: BLUE }}>GIF</span>
+                        </button>
+                        <input
+                            ref={inputRef}
+                            value={reply}
+                            onChange={e => setReply(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') sendReply(); }}
+                            maxLength={MAX_POST_LENGTH}
+                            placeholder={t('birdy.postYourReply', 'Post your reply')}
+                            className="min-w-0 flex-1 rounded-full px-4 py-2 text-[15px] text-black outline-none placeholder:text-[#657786]"
+                            style={{ background: PILL, caretColor: BLUE }}
+                        />
+                        <button
+                            type="button"
+                            onClick={sendReply}
+                            disabled={!canSend}
+                            className="shrink-0 rounded-full px-4 py-2 text-[14px] font-bold text-white disabled:opacity-50"
+                            style={{ background: BLUE }}
+                        >
+                            {t('birdy.reply', 'Reply')}
+                        </button>
+                    </div>
                 </div>
+            )}
+
+            {picking === 'photo' && (
+                <MediaPickerSheet
+                    multiple
+                    onSelectMany={ps => addMedia(ps.map(p => p.url))}
+                    onClose={() => setPicking(null)}
+                />
+            )}
+            {picking === 'gif' && (
+                <GifPickerSheet onSelect={url => addMedia([url])} onClose={() => setPicking(null)} />
             )}
         </div>
     );
 }
+
+const MAX_REPLY_IMAGES = 3;

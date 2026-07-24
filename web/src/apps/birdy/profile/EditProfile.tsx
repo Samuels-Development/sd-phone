@@ -73,7 +73,7 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onDeleted }
                 <button type="button" onClick={save} disabled={busy} className="text-[15px] font-bold disabled:opacity-50" style={{ color: BLUE }}>{t('birdy.save', 'Save')}</button>
             </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
                 <div className="relative h-28 bg-black/10">
                     {banner && <img src={banner} alt="" draggable={false} className="h-full w-full object-cover" />}
                     <button type="button" onClick={() => setPicking('banner')} aria-label={t('birdy.changeCover', 'Change cover')} className="absolute left-1/2 top-1/2 flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white" style={{ background: 'rgba(0,0,0,0.4)' }}>

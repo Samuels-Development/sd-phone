@@ -64,7 +64,7 @@ export function MessagesList({ conversations, onOpen, onOpenProfile, onCompose }
                 />
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
                 {conversations.length === 0 ? (
                     <EmptyState
                         center
@@ -147,7 +147,7 @@ function NewDm({ onSelect, onBack }: { onSelect: (handle: string) => void; onBac
                 />
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
                 {users.map(u => (
                     <button key={u.handle} type="button" onClick={() => onSelect(u.handle)} className="flex w-full items-center gap-3.5 px-4 py-3 text-left active:bg-black/5">
                         <Avatar size={48} src={u.avatar} />

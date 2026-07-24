@@ -506,26 +506,28 @@ function actions.create(source, payload)
     return ok({ post = serializePost(store.getPost(id, prof.citizenid)) })
 end
 
----Replies to a post; the parent must exist. Returns the new reply plus the recipient citizenid
----for the parent-author notification (never for self-replies).
+---Replies to a post; the parent must exist. A reply needs text OR at least one image. Returns
+---the new reply plus the recipient citizenid for the parent-author notification (never for
+---self-replies).
 ---@param source number player server id
----@param payload { parentId?: string, body?: string }|nil
+---@param payload { parentId?: string, body?: string, images?: string[] }|nil
 ---@return table envelope
 function actions.reply(source, payload)
     local prof = viewer(source); if not prof then return fail('Player not found') end
     local muted = moderation.guard(prof.citizenid, 'birdy'); if muted then return muted end
     payload = tbl(payload)
     local parentId = payload and payload.parentId
-    local body = trimmed(payload and payload.body)
+    local body = trimmed(payload and payload.body) or ''
+    local images = sanitizeImages(payload and payload.images)
     if type(parentId) ~= 'string' or parentId == '' then return fail('Missing post') end
-    if not body or body == '' then return fail('Reply cannot be empty') end
+    if body == '' and not images then return fail('Reply cannot be empty') end
     if #body > birdyCfg.MaxPostLength then return fail('Reply is too long') end
 
     local parentAuthor = store.getPostAuthor(parentId)
     if not parentAuthor then return fail('Post not found') end
 
     local id = store.newId()
-    if not store.insertPost(id, prof.citizenid, body, parentId, nil) then return fail('Failed to reply') end
+    if not store.insertPost(id, prof.citizenid, body, parentId, images) then return fail('Failed to reply') end
 
     local notifyCid = nil
     if parentAuthor ~= prof.citizenid then

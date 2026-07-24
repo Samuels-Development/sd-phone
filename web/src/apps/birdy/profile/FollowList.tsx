@@ -30,7 +30,7 @@ export function FollowList({ kind, handle, onBack }: {
                 <div className="w-9" aria-hidden />
             </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
                 {(users ?? []).map(u => <FollowRow key={u.handle} user={u} />)}
             </div>
         </div>

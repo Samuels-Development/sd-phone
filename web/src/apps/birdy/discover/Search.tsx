@@ -52,7 +52,7 @@ export function Search({ onOpenProfile }: { onOpenProfile: (handle?: string) => 
                 />
             </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
                 {searching ? (
                     results.length === 0 ? (
                         // While the debounce + fetch run, say nothing rather than a false

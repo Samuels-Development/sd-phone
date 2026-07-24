@@ -102,7 +102,7 @@ export function Feed({ posts, me, feed, onFeedChange, onRefresh, onToggleLike, o
                 <div
                     ref={scrollRef}
                     key={feed}
-                    className="h-full animate-swipe-in-left overflow-y-auto"
+                    className="h-full animate-swipe-in-left overflow-y-auto no-scrollbar"
                     style={{
                         transform: pull > 0 ? `translateY(${pull}px)` : undefined,
                         transition: pull === 0 ? 'transform 0.28s cubic-bezier(0.22,1,0.36,1)' : undefined,
