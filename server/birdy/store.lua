@@ -507,6 +507,113 @@ function store.listReplies(parentId, viewerCid)
     return rows
 end
 
+---@type { at: number, data: table[]|nil } Cached trending list; dropped on every new post.
+local trendingCache = { at = 0, data = nil }
+
+---@type integer Seconds a computed trending list is served before a rescan.
+local TRENDING_TTL = 60
+
+---@type integer Most-recent posts scanned per trending computation.
+local TRENDING_SCAN_CAP = 500
+
+---Backslash-escapes LIKE wildcards in a literal.
+---@param s string
+---@return string
+local function escapeLike(s)
+    return (s:gsub('[%%_\\]', '\\%0'))
+end
+
+---Distinct lowercased hashtags in a body; optionally tallies raw casings into `casings`.
+---@param body string
+---@param casings table<string, table<string, number>>|nil
+---@return table<string, boolean>
+local function extractTags(body, casings)
+    local seen = {}
+    for raw in body:gmatch('#([%w_]+)') do
+        local key = raw:lower()
+        seen[key] = true
+        if casings then
+            local c = casings[key]
+            if not c then c = {}; casings[key] = c end
+            c[raw] = (c[raw] or 0) + 1
+        end
+    end
+    return seen
+end
+
+---Drops the cached trending list so the next read recomputes.
+function store.invalidateTrending()
+    trendingCache.at, trendingCache.data = 0, nil
+end
+
+---Top hashtags across recent posts from unprotected authors, as { tag = '#Gamer', count = n }
+---sorted by post count. Counts posts, not occurrences; cached for TRENDING_TTL seconds.
+---@param windowDays number
+---@param limit number
+---@return table[]
+function store.trendingHashtags(windowDays, limit)
+    if trendingCache.data and (os.time() - trendingCache.at) < TRENDING_TTL then
+        return trendingCache.data
+    end
+    local rows = MySQL.query.await([[
+        SELECT p.body FROM phone_birdy_posts p
+        JOIN phone_birdy_profiles pr ON pr.citizenid = p.author_cid
+        WHERE pr.protected = 0 AND p.body LIKE '%#%'
+          AND p.created_at > NOW() - INTERVAL ? DAY
+        ORDER BY p.created_at DESC LIMIT ?
+    ]], { windowDays, TRENDING_SCAN_CAP }) or {}
+
+    local counts, casings = {}, {}
+    for i = 1, #rows do
+        for key in pairs(extractTags(rows[i].body or '', casings)) do
+            counts[key] = (counts[key] or 0) + 1
+        end
+    end
+
+    local order = {}
+    for key, count in pairs(counts) do order[#order + 1] = { key = key, count = count } end
+    table.sort(order, function(a, b)
+        if a.count ~= b.count then return a.count > b.count end
+        return a.key < b.key
+    end)
+
+    local out = {}
+    for i = 1, math.min(limit, #order) do
+        local key = order[i].key
+        local best, bestN = key, 0
+        for raw, n in pairs(casings[key] or {}) do
+            if n > bestN then best, bestN = raw, n end
+        end
+        out[i] = { tag = '#' .. best, count = order[i].count }
+    end
+    trendingCache.at, trendingCache.data = os.time(), out
+    return out
+end
+
+---Posts and replies carrying an exact hashtag, newest first, honouring the feed's
+---protected-author visibility. `tagLower` arrives lowercased without the '#'.
+---@param tagLower string
+---@param viewerCid string
+---@param limit number
+---@return table[]
+function store.postsByHashtag(tagLower, viewerCid, limit)
+    local like = '%#' .. escapeLike(tagLower) .. '%'
+    local rows = MySQL.query.await(POST_SELECT .. [[
+        WHERE p.body LIKE ?
+          AND (pr.protected = 0 OR p.author_cid = ?
+               OR p.author_cid IN (SELECT target_cid FROM phone_birdy_follows WHERE follower_cid = ?))
+        ORDER BY p.created_at DESC LIMIT ?
+    ]], { viewerCid, viewerCid, like, viewerCid, viewerCid, limit }) or {}
+
+    local out = {}
+    for i = 1, #rows do
+        if extractTags(rows[i].body or '')[tagLower] then
+            out[#out + 1] = hydratePost(rows[i])
+        end
+    end
+    return out
+end
+
 ---Inserts a post row.
 ---@param id string
 ---@param authorCid string

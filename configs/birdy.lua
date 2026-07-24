@@ -16,6 +16,9 @@ return {
     -- Posts returned per feed load (newest first).
     FeedLimit = 50,
 
+    -- Days of post history the Search tab's trending-hashtag counts look at.
+    TrendingWindowDays = 7,
+
     -- Notifications returned per alerts-tab load.
     NotificationLimit = 50,
 

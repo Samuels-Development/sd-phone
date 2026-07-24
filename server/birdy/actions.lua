@@ -357,6 +357,28 @@ function actions.search(source, payload)
     return ok({ users = users })
 end
 
+---Top hashtags across recent posts, for the Search tab's trending list. Read-only.
+---@return table envelope
+function actions.trending()
+    return ok({ tags = store.trendingHashtags(birdyCfg.TrendingWindowDays, 5) })
+end
+
+---Posts using an exact hashtag; the tag may arrive with or without '#'. Read-only.
+---@param source number player server id
+---@param payload { tag?: string }|nil
+---@return table envelope
+function actions.hashtag(source, payload)
+    payload = tbl(payload)
+    local viewerCid = optionalViewerCid(source)
+    local raw = trimmed(payload.tag)
+    local tag = raw and raw:sub(1, 64):match('^#?([%w_]+)')
+    if not tag then return ok({ posts = {} }) end
+    local rows = store.postsByHashtag(tag:lower(), viewerCid, birdyCfg.FeedLimit)
+    local posts = {}
+    for i = 1, #rows do posts[i] = serializePost(rows[i]) end
+    return ok({ posts = posts })
+end
+
 ---Updates the signed-in user's editable profile fields. Missing fields keep their current
 ---value; everything is trimmed and bounds-checked.
 ---@param source number player server id
@@ -477,6 +499,7 @@ function actions.create(source, payload)
 
     local id = store.newId()
     if not store.insertPost(id, prof.citizenid, body, nil, images) then return fail('Failed to post') end
+    store.invalidateTrending()
 
     -- First-party hook: one server-local event per created post; the payload carries a citizenid.
     TriggerEvent('sd-phone:server:birdy:post', {
@@ -528,6 +551,7 @@ function actions.reply(source, payload)
 
     local id = store.newId()
     if not store.insertPost(id, prof.citizenid, body, parentId, images) then return fail('Failed to reply') end
+    store.invalidateTrending()
 
     local notifyCid = nil
     if parentAuthor ~= prof.citizenid then
