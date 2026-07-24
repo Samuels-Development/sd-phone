@@ -1,0 +1,23 @@
+version: 2
+updates:
+  # Frontend npm tree (web/package.json + lockfile). Monthly, one grouped PR
+  # instead of a PR per package.
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      npm-dependencies:
+        patterns:
+          - "*"
+
+  # Marketplace actions used by ci.yml and release.yml.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns:
+          - "*"
