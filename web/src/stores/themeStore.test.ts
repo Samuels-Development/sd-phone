@@ -228,3 +228,56 @@ describe('themeStore phone align persistence (in-game)', () => {
         expect(store.getState().phoneAlign).toBe('top-right');
     });
 });
+
+describe('themeStore brightness persistence', () => {
+    it('debounces a drag gesture into one NUI persist with the final value', async () => {
+        vi.useFakeTimers();
+        const fetchNui = vi.fn().mockResolvedValue({ success: true });
+        vi.doMock('@/core/nui', () => ({ isFiveM: true, fetchNui }));
+        const store = await importStore();
+        store.getState().setBrightness(70);
+        store.getState().setBrightness(55);
+        store.getState().setBrightness(42);
+        expect(store.getState().brightness).toBe(42);
+        expect(fetchNui).not.toHaveBeenCalled();
+        vi.advanceTimersByTime(300);
+        expect(fetchNui).toHaveBeenCalledTimes(1);
+        expect(fetchNui).toHaveBeenCalledWith('sd-phone:settings:setBrightness', { brightness: 42 });
+    });
+
+    it('clamps out-of-range values before storing them', async () => {
+        const store = await importStore();
+        store.getState().setBrightness(500);
+        expect(store.getState().brightness).toBe(100);
+        store.getState().setBrightness(-20);
+        expect(store.getState().brightness).toBe(0);
+    });
+
+    it('applies the server-saved brightness on hydrate', async () => {
+        const fetchNui = vi.fn().mockImplementation((event: string) => {
+            if (event === 'sd-phone:settings:get') {
+                return Promise.resolve({ data: { brightness: 35 } });
+            }
+            return Promise.resolve({ success: true });
+        });
+        vi.doMock('@/core/nui', () => ({ isFiveM: true, fetchNui }));
+        const store = await importStore();
+        store.getState().hydrate();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(store.getState().brightness).toBe(35);
+    });
+
+    it('ignores a garbage brightness from the server', async () => {
+        const fetchNui = vi.fn().mockImplementation((event: string) => {
+            if (event === 'sd-phone:settings:get') {
+                return Promise.resolve({ data: { brightness: 'very bright' } });
+            }
+            return Promise.resolve({ success: true });
+        });
+        vi.doMock('@/core/nui', () => ({ isFiveM: true, fetchNui }));
+        const store = await importStore();
+        store.getState().hydrate();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(store.getState().brightness).toBe(100);
+    });
+});

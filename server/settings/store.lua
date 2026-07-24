@@ -88,6 +88,7 @@ function store.ensureSchema()
             face_id            TINYINT(1)   NOT NULL DEFAULT 0,
             chat_text_scale    DECIMAL(3,2) NULL,
             phone_scale        TINYINT UNSIGNED NULL,
+            brightness         TINYINT UNSIGNED NULL,
             phone_align        VARCHAR(16) NULL,
             hour24             TINYINT(1)   NULL,
             reopen_app         TINYINT(1)   NULL,
@@ -169,6 +170,9 @@ function store.ensureSchema()
     end
     if not columnExists('phone_settings', 'phone_scale') then
         MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN phone_scale TINYINT UNSIGNED NULL')
+    end
+    if not columnExists('phone_settings', 'brightness') then
+        MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN brightness TINYINT UNSIGNED NULL')
     end
     if not columnExists('phone_settings', 'phone_align') then
         MySQL.query.await('ALTER TABLE phone_settings ADD COLUMN phone_align VARCHAR(16) NULL')
@@ -721,11 +725,11 @@ function store.setChatTextScale(citizenid, scale)
     ]], { citizenid, clean })
 end
 
----Clamps the phone frame scale to an integer 0-100; nil for non-numbers and NaN, out-of-range
----values fall to the nearest bound.
----@param v any client-supplied scale
----@return number|nil scale integer 0-100, nil if unusable
-local function clampPhoneScale(v)
+---Clamps a 0-100 slider value to an integer; nil for non-numbers and NaN, out-of-range values
+---fall to the nearest bound. Shared by the phone frame scale and screen brightness.
+---@param v any client-supplied slider value
+---@return number|nil value integer 0-100, nil if unusable
+local function clampSlider(v)
     local n = tonumber(v)
     if not n or n ~= n then return nil end
     n = math.floor(n + 0.5)
@@ -750,11 +754,36 @@ end
 ---@param scale number slider value (clamped to 0-100)
 function store.setPhoneScale(citizenid, scale)
     if not citizenid or citizenid == '' then return end
-    local clean = clampPhoneScale(scale)
+    local clean = clampSlider(scale)
     if not clean then return end
     MySQL.update.await([[
         INSERT INTO phone_settings (citizenid, phone_scale) VALUES (?, ?)
         ON DUPLICATE KEY UPDATE phone_scale = VALUES(phone_scale)
+    ]], { citizenid, clean })
+end
+
+---Reads a player's screen brightness (slider value 0-100), or nil when never set.
+---@param citizenid string framework per-character id
+---@return number|nil brightness
+function store.getBrightness(citizenid)
+    if not citizenid or citizenid == '' then return nil end
+    local row = MySQL.single.await('SELECT brightness FROM phone_settings WHERE citizenid = ?', { citizenid })
+    if not row or row.brightness == nil then return nil end
+    return tonumber(row.brightness)
+end
+
+---Persists a player's screen brightness, leaving other settings intact. An out-of-range /
+---non-numeric value is ignored. 0 is a valid setting (fully dimmed), so the clamp result is
+---compared against nil rather than tested for truthiness.
+---@param citizenid string framework per-character id
+---@param brightness number slider value (clamped to 0-100)
+function store.setBrightness(citizenid, brightness)
+    if not citizenid or citizenid == '' then return end
+    local clean = clampSlider(brightness)
+    if clean == nil then return end
+    MySQL.update.await([[
+        INSERT INTO phone_settings (citizenid, brightness) VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE brightness = VALUES(brightness)
     ]], { citizenid, clean })
 end
 
@@ -1198,6 +1227,7 @@ function store.snapshot(citizenid)
         customWallpapers = row and decodeColumn(row.custom_wallpapers, {}) or {},
         chatTextScale    = (row and row.chat_text_scale ~= nil) and tonumber(row.chat_text_scale) or nil,
         phoneScale       = (row and row.phone_scale ~= nil) and tonumber(row.phone_scale) or nil,
+        brightness       = (row and row.brightness ~= nil) and tonumber(row.brightness) or nil,
         phoneAlign       = (row and row.phone_align ~= '') and row.phone_align or nil,
         ringtoneVol      = (row and row.ringtone_volume ~= nil) and tonumber(row.ringtone_volume) or nil,
         callVol          = (row and row.call_volume ~= nil) and tonumber(row.call_volume) or nil,

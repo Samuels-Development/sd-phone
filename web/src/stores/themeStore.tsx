@@ -117,6 +117,7 @@ function saveChatScaleLocal(v: number) {
 }
 
 const PHONE_SCALE_KEY = 'sd-phone:phoneScale';
+// Shared by the phone frame scale and screen brightness; both are 0-100 sliders.
 const clampPhoneScale = (n: number) => Math.min(100, Math.max(0, Math.round(n)));
 function loadPhoneScaleLocal(): number {
     try {
@@ -341,7 +342,10 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         else saveDarkThemeLocal(next);
     },
 
-    setBrightness:     (v) => set({ brightness: v }),
+    setBrightness: (v) => {
+        set({ brightness: clampPhoneScale(v) });
+        if (isFiveM) persistDebounced('brightness', () => { void fetchNui('sd-phone:settings:setBrightness', { brightness: get().brightness }).catch(() => {}); });
+    },
 
     setBlurLock: (v) => {
         set({ blurLock: v });
@@ -497,7 +501,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
             }
         };
         const keyAtRequest = wallpaperProfileKey;
-        void fetchNui<{ data?: { ringtone?: string; notificationTone?: string; customRingtones?: CustomTone[]; customNotificationTones?: CustomTone[]; airplaneMode?: boolean; hour24?: boolean; reopenApp?: boolean; setupDone?: boolean; lockClock?: Partial<LockClock>; passcode?: string | null; faceId?: boolean; wallpaper?: string; wallpaperHome?: string; blurLock?: boolean; blurHome?: boolean; customWallpapers?: string[]; chatTextScale?: number; phoneScale?: number; phoneAlign?: string; ringtoneVol?: number; callVol?: number; theme?: string; darkTheme?: string } }>('sd-phone:settings:get')
+        void fetchNui<{ data?: { ringtone?: string; notificationTone?: string; customRingtones?: CustomTone[]; customNotificationTones?: CustomTone[]; airplaneMode?: boolean; hour24?: boolean; reopenApp?: boolean; setupDone?: boolean; lockClock?: Partial<LockClock>; passcode?: string | null; faceId?: boolean; wallpaper?: string; wallpaperHome?: string; blurLock?: boolean; blurHome?: boolean; customWallpapers?: string[]; chatTextScale?: number; phoneScale?: number; brightness?: number; phoneAlign?: string; ringtoneVol?: number; callVol?: number; theme?: string; darkTheme?: string } }>('sd-phone:settings:get')
             .then(res => {
                 if (!res?.data) { retry(); return; }
                 const d = res.data;
@@ -527,6 +531,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
                 if (typeof d.darkTheme === 'string' && (DARK_THEMES as string[]).includes(d.darkTheme)) patch.darkTheme = d.darkTheme as DarkTheme;
                 if (typeof d.chatTextScale === 'number') patch.chatTextScale = clampChatScale(d.chatTextScale);
                 if (typeof d.phoneScale === 'number') patch.phoneScale = clampPhoneScale(d.phoneScale);
+                if (typeof d.brightness === 'number') patch.brightness = clampPhoneScale(d.brightness);
                 if (typeof d.phoneAlign === 'string' && (PHONE_ALIGNS as string[]).includes(d.phoneAlign)) patch.phoneAlign = d.phoneAlign as PhoneAlign;
                 if (typeof d.ringtoneVol === 'number') patch.ringtoneVol = clampVol(d.ringtoneVol);
                 if (typeof d.callVol === 'number') patch.callVol = clampVol(d.callVol);

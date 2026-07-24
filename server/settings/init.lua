@@ -150,6 +150,15 @@ lib.callback.register('sd-phone:server:settings:setPhoneScale', function(source,
     return { success = true }
 end)
 
+---Persists the caller's screen brightness (0-100 slider).
+lib.callback.register('sd-phone:server:settings:setBrightness', function(source, payload)
+    local cid = player.getIdentifier(source)
+    if not cid then return { success = false, message = 'Player not found' } end
+    payload = type(payload) == 'table' and payload or {}
+    store.setBrightness(cid, payload.brightness)
+    return { success = true }
+end)
+
 ---Persists the caller's phone anchor position (whitelisted).
 lib.callback.register('sd-phone:server:settings:setPhoneAlign', function(source, payload)
     local cid = player.getIdentifier(source)
