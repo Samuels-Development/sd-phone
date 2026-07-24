@@ -44,14 +44,59 @@ end
 ---@type fun(p: any): string|nil Identifier extractor, bound once at load.
 local resolveIdentifier = chooseIdentifier()
 
+---@type integer Milliseconds a cached identifier is served before it is re-resolved. The
+---lifecycle handlers below keep the cache exact; this is only the backstop that stops a missed
+---event from being permanent.
+local IDENTITY_TTL = 2000
+
+---@type table<number, { cid: string|nil, at: number }> source -> resolved framework identifier.
+local identityCache = {}
+
+---Framework identifier for a source, memoised. Resolving it is the most frequent framework call
+---in the resource (227 call sites; nearly every callback opens with one, and the cid -> source
+---maps resolve it once per connected player). Only the identifier STRING is cached, never the
+---player object: the object carries live money/job state, the identifier does not change for the
+---lifetime of a loaded character.
+---@param source number player server id
+---@return string|nil
+local function cachedIdentifier(source)
+    local hit = identityCache[source]
+    if hit and (GetGameTimer() - hit.at) < IDENTITY_TTL then return hit.cid end
+    local p = resolveGet(source)
+    local cid = p and resolveIdentifier(p) or nil
+    identityCache[source] = { cid = cid, at = GetGameTimer() }
+    return cid
+end
+
+---Drops a source's cached identifier so the next read re-resolves it. Called on disconnect and
+---on every character load/unload: after a multichar switch the same source carries a DIFFERENT
+---character, and serving the previous one would hand the player the old character's data.
+---@param source number|nil player server id
+function player.forget(source)
+    if source then identityCache[tonumber(source) or source] = nil end
+end
+
+AddEventHandler('playerDropped', function() player.forget(source) end)
+
+-- Character lifecycle: both edges matter. Load clears a negative entry cached while the player
+-- was still connecting; unload clears the outgoing character before the next one is resolved.
+if framework.name == 'qb' then
+    AddEventHandler('QBCore:Server:PlayerLoaded', function(p)
+        player.forget(p and p.PlayerData and p.PlayerData.source)
+    end)
+    AddEventHandler('QBCore:Server:OnPlayerUnload', function(src) player.forget(src) end)
+elseif framework.name == 'esx' then
+    AddEventHandler('esx:playerLoaded', function(src) player.forget(src) end)
+    AddEventHandler('esx:playerLogout', function(src) player.forget(src) end)
+end
+
 ---The player's persistent per-character identifier (citizenid on QBCore/QBox, identifier on ESX).
 ---Nil when offline. NOTE: when unique phones are enabled, server/sim/init.lua rewraps this to
 ---return the acting SIM identity instead - use getRealIdentifier for character-scoped concerns.
 ---@param source number player server id
 ---@return string|nil
 function player.getIdentifier(source)
-    local p = resolveGet(source)
-    return p and resolveIdentifier(p) or nil
+    return cachedIdentifier(source)
 end
 
 ---Always the framework-native character identifier, bypassing any SIM indirection installed
@@ -59,8 +104,7 @@ end
 ---@param source number player server id
 ---@return string|nil
 function player.getRealIdentifier(source)
-    local p = resolveGet(source)
-    return p and resolveIdentifier(p) or nil
+    return cachedIdentifier(source)
 end
 
 ---A friendly "First Last" name for the player; 'Unknown' when the player can't be resolved.
