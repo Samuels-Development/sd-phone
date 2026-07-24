@@ -26,13 +26,14 @@ local PAGE = 20
 ---@type integer Bigger page for the content feeds (app pages + Birdy), still server-capped.
 local PAGE_CONTENT = 50
 
--- Downloadable app ids/labels, mirrored from the App Store rules (base apps are fixed).
+-- Downloadable app ids/labels, mirrored from the App Store rules (base apps are fixed,
+-- disabled apps don't exist on the phone at all).
 ---@type table<string, boolean> Set of installable app ids.
 local DOWNLOADABLE = {}
 ---@type table[] UI list of downloadable apps { id, label }.
 local DOWNLOADABLE_LIST = {}
-for _, app in ipairs(config.Homescreen.Apps or {}) do
-    if app.id and app.base ~= true then
+for _, app in ipairs(config.Apps.Apps or {}) do
+    if app.id and app.base ~= true and app.enabled ~= false then
         DOWNLOADABLE[app.id] = true
         DOWNLOADABLE_LIST[#DOWNLOADABLE_LIST + 1] = { id = app.id, label = app.label or app.id }
     end

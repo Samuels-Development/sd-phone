@@ -2,6 +2,25 @@
 local config = require 'configs.config'
 ---@type table Notify bridge (bridge.client.notify): backend-agnostic on-screen toasts.
 local notify = require 'bridge.client.notify'
+
+-- Apps disabled in configs/apps.lua never reach the NUI, so neither the home screen nor the
+-- App Store can show them. Built once - the catalog is static per boot.
+---@type table[] Enabled app entries, config order preserved.
+local ENABLED_APPS = {}
+---@type string[] Dock ids with disabled apps dropped.
+local ENABLED_DOCK = {}
+do
+    local ids = {}
+    for _, app in ipairs(config.Apps.Apps or {}) do
+        if app.enabled ~= false then
+            ENABLED_APPS[#ENABLED_APPS + 1] = app
+            if app.id then ids[app.id] = true end
+        end
+    end
+    for _, id in ipairs(config.Apps.Dock or {}) do
+        if ids[id] then ENABLED_DOCK[#ENABLED_DOCK + 1] = id end
+    end
+end
 ---@type table Weather bridge (bridge.client.weather): live weather + synced world-time reads.
 local weatherBridge = require 'bridge.client.weather'
 ---@type table Custom third-party app registry (client.customapps): add/remove/message + lifecycle.
@@ -360,12 +379,12 @@ local function OpenPhone()
             showWifi  = config.StatusBar.ShowWifi,
             use24h    = config.Lockscreen.Use24Hour,
             showDate  = config.Lockscreen.ShowDate,
-            dock      = config.Homescreen.Dock,
-            apps      = config.Homescreen.Apps,
+            dock      = ENABLED_DOCK,
+            apps      = ENABLED_APPS,
             mailDomain = config.Mail.Domain,
             wallpaper = {
                 lock = config.Lockscreen.Wallpaper,
-                home = config.Homescreen.Wallpaper,
+                home = config.Apps.Wallpaper,
             },
             sim = currentSimState and {
                 enabled = true,

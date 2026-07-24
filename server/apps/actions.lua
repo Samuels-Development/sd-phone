@@ -12,11 +12,13 @@ local util = require 'server.util'
 local ok, fail = util.ok, util.fail
 
 
--- Downloadable = every homescreen app NOT flagged `base`, built once from config.Homescreen.Apps.
+-- Downloadable = every enabled app NOT flagged `base`, built once from config.Apps.Apps. A
+-- disabled app drops out of this set, so sanitize() also strips it from stored installed
+-- lists on every read - disabling an app removes it from phones that had it.
 ---@type table<string, boolean> Set of app ids a player may install/uninstall.
 local DOWNLOADABLE = {}
-for _, app in ipairs(config.Homescreen.Apps or {}) do
-    if app.id and app.base ~= true then DOWNLOADABLE[app.id] = true end
+for _, app in ipairs(config.Apps.Apps or {}) do
+    if app.id and app.base ~= true and app.enabled ~= false then DOWNLOADABLE[app.id] = true end
 end
 
 ---Drops ids that aren't currently valid downloadables and de-dupes, preserving order. Runs on

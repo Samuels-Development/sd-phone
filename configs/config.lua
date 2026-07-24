@@ -13,7 +13,7 @@ local config = {
     -- Per-group settings (one file each).
     Phone       = require 'configs.phone',        -- open/close, keybind, safety blocks
     Lockscreen  = require 'configs.lockscreen',    -- wallpaper, clock format
-    Homescreen  = require 'configs.homescreen',    -- dock, wallpaper, app list
+    Apps        = require 'configs.apps',          -- dock, wallpaper, app catalog + enable flags
     StatusBar   = require 'configs.statusbar',     -- carrier / signal / battery
     Photos      = require 'configs.photos',        -- camera capture + Fivemanage upload
     Payphone    = require 'configs.payphone',      -- street payphones (ox_target + dial UI)
