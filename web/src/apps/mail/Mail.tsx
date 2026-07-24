@@ -9,11 +9,14 @@ import { ChangePasswordPage } from '@/shared/ChangePasswordPage';
 import { MAIL_DOMAIN, accountsConfirmReset, accountsMyNumber, accountsRequestReset, accountsSavePassword, accountsSavedLogin, accountsSuggestCode } from '@/core/accountsApi';
 import { isAuthed, signIn as unlockMail, signOut as lockMail } from '@/stores/authStore';
 import { Compose } from './Compose';
+import { AlertDialog } from '@/ui/AlertDialog';
 import {
-    getFolderLabels, deleteAccount, discardDraft, inFolder, listMail, loadActiveAccountId, loadFolderOrder, markRead,
-    markManyRead, moveToBin, moveTo, saveActiveAccountId, saveDraft, saveFolderOrder, sendMail, signIn as mailSignIn,
+    getFolderLabels, deleteAccount, discardDraft, inFolder, listMail, listSavedEmails, loadActiveAccountId, loadFolderOrder, markRead,
+    markManyRead, moveToBin, moveTo, removeSavedEmail, saveActiveAccountId, saveDraft, saveEmail, saveFolderOrder, sendMail, signIn as mailSignIn,
     signOut, signUp as mailSignUp, toggleFlag,
 } from './data';
+import { isEmailish } from './mailSuggest';
+import { SavedEmailsSheet } from './SavedEmails';
 import type { Folder, MailAccount, MailAttachment, MailMessage } from './data';
 import { MailDetail } from './MailDetail';
 import { MailList } from './MailList';
@@ -36,6 +39,9 @@ export function Mail({ onClose }: { onClose: () => void }) {
     const [activeAccountId, setActiveAccountId] = useState<string | null>(() => loadActiveAccountId());
     const [nav,             setNav]             = useSessionState<Navigation>('mail:nav', { stage: 'mailboxes' });
     const [composeFor,      setComposeFor]      = useSessionState<{ accountId?: string; to?: string; subject?: string; body?: string; draftId?: string; attachments?: MailAttachment[] } | null>('mail:composeFor', null);
+    const [savedEmails,     setSavedEmails]     = useState<string[]>([]);
+    const [savedSheetOpen,  setSavedSheetOpen]  = useState(false);
+    const [savePromptQueue, setSavePromptQueue] = useState<string[]>([]);
 
     const refresh = useCallback(async () => {
         const next = await listMail();
@@ -46,6 +52,7 @@ export function Mail({ onClose }: { onClose: () => void }) {
 
     useEffect(() => { void refresh(); }, [refresh]);
     useEffect(() => { void accountsMyNumber().then(setMyNumber); }, []);
+    useEffect(() => { void listSavedEmails().then(setSavedEmails); }, []);
 
     useLayoutEffect(() => {
         const t = takeMailTarget();
@@ -166,6 +173,11 @@ export function Mail({ onClose }: { onClose: () => void }) {
         } else {
             setMessages(prev => [result, ...prev]);
         }
+        const own = new Set(accounts.map(a => a.email.toLowerCase()));
+        const saved = new Set(savedEmails.map(e => e.toLowerCase()));
+        const unknown = [...new Set(draft.to.map(r => r.trim().toLowerCase()))]
+            .filter(r => isEmailish(r) && !own.has(r) && !saved.has(r));
+        if (unknown.length > 0) setSavePromptQueue(q => [...q, ...unknown]);
         setComposeFor(null);
     }
 
@@ -227,6 +239,14 @@ export function Mail({ onClose }: { onClose: () => void }) {
     function handleReorderFolders(next: Folder[]) {
         setFolderOrder(next);
         saveFolderOrder(next);
+    }
+
+    function addSavedEmail(email: string) {
+        void saveEmail(email).then(setSavedEmails);
+    }
+
+    function removeSaved(email: string) {
+        void removeSavedEmail(email).then(setSavedEmails);
     }
 
     const currentMsg = nav.stage === 'detail' ? messages.find(m => m.id === nav.msgId) : null;
@@ -305,6 +325,7 @@ export function Mail({ onClose }: { onClose: () => void }) {
                 onLockApp={() => { lockMail('mail'); setLocked(true); }}
                 onDeleteAccount={(id) => void handleDeleteAccount(id)}
                 onChangePassword={() => setPwOpen(true)}
+                onOpenSavedEmails={() => setSavedSheetOpen(true)}
             />
 
             {(nav.stage === 'list' || nav.stage === 'detail') && (
@@ -373,6 +394,28 @@ export function Mail({ onClose }: { onClose: () => void }) {
                     onSaveDraft={handleSaveDraft}
                     onCancel={() => setComposeFor(null)}
                     resumingDraft={!!composeFor.draftId}
+                    savedEmails={savedEmails}
+                />
+            )}
+
+            {savedSheetOpen && (
+                <SavedEmailsSheet
+                    emails={savedEmails}
+                    mode="manage"
+                    onAdd={addSavedEmail}
+                    onRemove={removeSaved}
+                    onClose={() => setSavedSheetOpen(false)}
+                />
+            )}
+
+            {savePromptQueue.length > 0 && (
+                <AlertDialog
+                    title={t('mail.saveEmailTitle', 'Save Email')}
+                    message={t('mail.saveEmailMessage', 'Add {email} to your saved emails?', { email: savePromptQueue[0] })}
+                    confirmLabel={t('mail.save', 'Save')}
+                    cancelLabel={t('mail.notNow', 'Not Now')}
+                    onConfirm={() => { addSavedEmail(savePromptQueue[0]); setSavePromptQueue(q => q.slice(1)); }}
+                    onCancel={() => setSavePromptQueue(q => q.slice(1))}
                 />
             )}
 
