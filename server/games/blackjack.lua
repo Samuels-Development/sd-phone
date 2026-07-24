@@ -110,14 +110,18 @@ local function statResultFor(outcome)
     return 'loss'
 end
 
----Closes out the caller's hand: optionally plays the dealer, decides the outcome, credits the
----payout, records the result and clears the session.
+---Closes out the caller's hand: claims the session, optionally plays the dealer, decides the
+---outcome, credits the payout and records the result. Nil when the hand was already settled.
 ---@param src integer player server id
 ---@param cid string citizenid
 ---@param playDealer boolean draw the dealer to 17 (false on a player bust / natural)
----@return table result { phase = 'result', player, dealer, outcome, net, chips, bet }
+---@return table|nil result { phase = 'result', player, dealer, outcome, net, chips, bet }
 local function resolve(src, cid, playDealer)
     local s = hands[cid]
+    if not s then return nil end
+    -- Claimed before the first yield: chips.add and stats.record both await, and a second bjStand
+    -- arriving in that window would settle this same hand again off one debited wager.
+    hands[cid] = nil
     if playDealer then
         while dealerShouldHit(s.dealer) do s.dealer[#s.dealer + 1] = draw(s.deck) end
     end
@@ -126,9 +130,7 @@ local function resolve(src, cid, playDealer)
     local bal = s.bal
     if credit > 0 then bal = chips.add(cid, credit) end
     stats.record(cid, 'blackjack', 'cpu', statResultFor(outcome), nameOf(src), net)
-    local result = { phase = 'result', player = s.player, dealer = s.dealer, outcome = outcome, net = net, chips = bal, bet = s.bet }
-    hands[cid] = nil
-    return result
+    return { phase = 'result', player = s.player, dealer = s.dealer, outcome = outcome, net = net, chips = bal, bet = s.bet }
 end
 
 ---Starts a hand: sanitises + debits the wager, deals two cards each, and resolves immediately on a
@@ -184,10 +186,12 @@ function bj.double(src)
     local cid = cidOf(src); if not cid then return nil end
     local s = hands[cid]; if not s then return nil end
     if #s.player ~= 2 or s.doubled then return nil end
-    local bal = chips.remove(cid, s.bet)
-    if not bal then return nil end
-    s.bal     = bal
+    -- Flagged before the yield so a second bjDouble in that window is rejected rather than
+    -- doubling the wager twice; cleared again only when the second stake can't be covered.
     s.doubled = true
+    local bal = chips.remove(cid, s.bet)
+    if not bal then s.doubled = false; return nil end
+    s.bal     = bal
     s.bet     = s.bet * 2
     s.player[#s.player + 1] = draw(s.deck)
     if isBust(s.player) then return resolve(src, cid, false) end

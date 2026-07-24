@@ -166,18 +166,23 @@ function actions.buy(src, payload)
         local cash = store.ensureWallet(cid, ST.StartingCash)
         if cash < totalCost then return { success = false, message = 'Insufficient brokerage cash' } end
 
-        local units    = amount / price
         local existing = store.getHolding(cid, symbol)
-        local oldQty   = existing and tonumber(existing.quantity) or 0
-        local oldAvg   = existing and tonumber(existing.avg_cost) or 0
-        local newQty   = oldQty + units
-        local newAvg   = newQty > 0 and (((oldQty * oldAvg) + amount) / newQty) or price
+
+        -- The order moves the market before it fills, so it buys at the price it created, not the
+        -- one it quoted. Filling pre-impact let a buy/sell round trip pocket its own impact.
+        local fill = engine.applyImpact(symbol, amount, true) or price
+        if fill <= 0 then return { success = false, message = 'No price available' } end
+
+        local units  = amount / fill
+        local oldQty = existing and tonumber(existing.quantity) or 0
+        local oldAvg = existing and tonumber(existing.avg_cost) or 0
+        local newQty = oldQty + units
+        local newAvg = newQty > 0 and (((oldQty * oldAvg) + amount) / newQty) or fill
 
         cash = cash - totalCost
         store.setWallet(cid, cash)
         store.upsertHolding(cid, symbol, newQty, newAvg)
 
-        engine.applyImpact(symbol, amount, true)
         broadcastPrices()
 
         return { success = true, data = { cash = cash, units = newQty, avgCost = newAvg } }
@@ -214,7 +219,12 @@ function actions.sell(src, payload)
         end
         if unitsToSell <= 0 then return { success = false, message = 'Nothing to sell' } end
 
-        local gross = unitsToSell * price
+        -- Same rule as the buy: the sale moves the price down before it fills. The order's own
+        -- notional at the quoted price sizes the impact, exactly as it did when applied afterwards.
+        local fill = engine.applyImpact(symbol, unitsToSell * price, false) or price
+        if fill <= 0 then return { success = false, message = 'No price available' } end
+
+        local gross = unitsToSell * fill
         local fee   = math.floor(gross * (ST.Commission or 0) + 0.5)
         local net   = math.floor(gross - fee + 0.5)
 
@@ -229,7 +239,6 @@ function actions.sell(src, payload)
         local cash = store.ensureWallet(cid, ST.StartingCash) + net
         store.setWallet(cid, cash)
 
-        engine.applyImpact(symbol, gross, false)
         broadcastPrices()
 
         return { success = true, data = { cash = cash, units = remaining } }
