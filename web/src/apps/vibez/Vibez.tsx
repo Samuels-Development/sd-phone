@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { ChevronLeft, Home, Inbox as InboxIcon, Plus, Search, User } from 'lucide-react';
 
+import { AppBadge } from '@/shell/AppBadge';
 import { useStatusBarLight } from '@/shell/useStatusBarLight';
 import { setLaunchIntent } from '@/shell/launchIntent';
 import { useSessionState } from '@/hooks/useSessionState';
@@ -12,7 +13,7 @@ import { AlertDialog } from '@/ui/AlertDialog';
 import { AppAuth } from '@/shared/AppAuth';
 import { MAIL_DOMAIN, accountsConfirmReset, accountsLogin, accountsLogout, accountsMe, accountsRegister, accountsRequestReset, accountsSavePassword, accountsSuggestCode } from '@/core/accountsApi';
 import { t } from '@/i18n';
-import { ACCENT, GRAD_FROM, GRAD_TO, fmt, type VLive, type VPost, type VProfile } from './data';
+import { ACCENT, GRAD_FROM, GRAD_TO, type VLive, type VPost, type VProfile } from './data';
 import {
     apiAddView, apiCounts, apiDeletePost, apiFeed, apiLives, apiPost, apiProfile, apiToggleFollow,
     apiToggleLike, apiToggleSave, type FeedTab,
@@ -196,7 +197,7 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
 
     return (
         <div className={`absolute inset-0 z-10 flex flex-col select-none overflow-hidden bg-black text-white ${justAuthed ? 'animate-swipe-in-left' : ''}`}>
-            <div className="min-h-0 flex-1 overflow-hidden">
+            <div key={tab} className="min-h-0 flex-1 overflow-hidden animate-swipe-in-left">
                 {tab === 'home' && (
                     <Feed
                         posts={posts}
@@ -229,46 +230,37 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
                 )}
             </div>
 
-            <nav className="shrink-0 bg-black px-2 pb-12 pt-2.5">
-                <div className="flex items-end justify-around">
-                    <NavItem label={t('vibez.home', 'Home')} active={tab === 'home'} onClick={() => setTab('home')}>
-                        <Home className="h-[26px] w-[26px]" strokeWidth={tab === 'home' ? 2.4 : 2} fill={tab === 'home' ? 'currentColor' : 'none'} />
-                    </NavItem>
-                    <NavItem label={t('vibez.discover', 'Discover')} active={tab === 'discover'} onClick={() => setTab('discover')}>
-                        <Search className="h-[25px] w-[25px]" strokeWidth={tab === 'discover' ? 2.6 : 2} />
-                    </NavItem>
+            <nav className="flex shrink-0 items-center justify-around border-t border-white/10 bg-black px-2 pb-12 pt-3">
+                <NavItem label={t('vibez.home', 'Home')} active={tab === 'home'} onClick={() => setTab('home')}>
+                    <Home className="h-[31px] w-[31px]" strokeWidth={tab === 'home' ? 2.4 : 1.9} fill={tab === 'home' ? 'currentColor' : 'none'} />
+                </NavItem>
+                <NavItem label={t('vibez.discover', 'Discover')} active={tab === 'discover'} onClick={() => setTab('discover')}>
+                    <Search className="h-[30px] w-[30px]" strokeWidth={tab === 'discover' ? 2.8 : 2} />
+                </NavItem>
 
-                    <button
-                        type="button"
-                        aria-label={t('vibez.create', 'Create')}
-                        onClick={() => setUpload(true)}
-                        className="relative flex h-[32px] w-[46px] items-center justify-center rounded-[11px] active:scale-95 transition-transform"
-                        style={{ background: `linear-gradient(135deg, ${GRAD_FROM}, ${GRAD_TO})`, boxShadow: `0 0 14px ${GRAD_FROM}66` }}
-                    >
-                        <Plus className="h-5 w-5 text-white" strokeWidth={3} />
-                    </button>
+                <button
+                    type="button"
+                    aria-label={t('vibez.create', 'Create')}
+                    onClick={() => setUpload(true)}
+                    className="relative flex h-[34px] w-[50px] items-center justify-center rounded-[12px] active:scale-95 transition-transform"
+                    style={{ background: `linear-gradient(135deg, ${GRAD_FROM}, ${GRAD_TO})`, boxShadow: `0 0 14px ${GRAD_FROM}66` }}
+                >
+                    <Plus className="h-6 w-6 text-white" strokeWidth={2.8} />
+                </button>
 
-                    <NavItem label={t('vibez.inbox', 'Inbox')} active={tab === 'inbox'} onClick={() => setTab('inbox')}>
-                        <span className="relative">
-                            <InboxIcon className="h-[25px] w-[25px]" strokeWidth={tab === 'inbox' ? 2.6 : 2} />
-                            {unread > 0 && (
-                                <span
-                                    className="absolute -right-2 -top-1 flex h-[16px] min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
-                                    style={{ background: GRAD_TO }}
-                                >
-                                    {fmt(unread)}
-                                </span>
-                            )}
-                        </span>
-                    </NavItem>
-                    <NavItem label={t('vibez.profile', 'Profile')} active={tab === 'profile'} onClick={() => setTab('profile')}>
-                        <User className="h-[25px] w-[25px]" strokeWidth={tab === 'profile' ? 2.6 : 2} fill={tab === 'profile' ? 'currentColor' : 'none'} />
-                    </NavItem>
-                </div>
+                <NavItem label={t('vibez.inbox', 'Inbox')} active={tab === 'inbox'} onClick={() => setTab('inbox')}>
+                    <span className="relative">
+                        <InboxIcon className="h-[30px] w-[30px]" strokeWidth={tab === 'inbox' ? 2.6 : 2} />
+                        <AppBadge count={unread} small />
+                    </span>
+                </NavItem>
+                <NavItem label={t('vibez.profile', 'Profile')} active={tab === 'profile'} onClick={() => setTab('profile')}>
+                    <User className="h-[30px] w-[30px]" strokeWidth={tab === 'profile' ? 2.5 : 1.9} fill={tab === 'profile' ? 'currentColor' : 'none'} />
+                </NavItem>
             </nav>
 
             {profileHandle && (
-                <div className="absolute inset-0 z-20 bg-black">
+                <div className="absolute inset-0 z-20 bg-black animate-swipe-in-left">
                     <Profile
                         handle={profileHandle}
                         onBack={() => setProfileHandle(null)}
@@ -279,7 +271,7 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
             )}
 
             {viewer && (
-                <div className="absolute inset-0 z-30 bg-black">
+                <div className="absolute inset-0 z-30 bg-black animate-swipe-in-left">
                     <Feed
                         posts={viewer.posts}
                         myHandle={me?.username}
@@ -363,11 +355,9 @@ function NavItem({ label, active, onClick, children }: {
             type="button"
             aria-label={label}
             onClick={onClick}
-            className="flex w-14 flex-col items-center gap-0.5 active:opacity-70"
-            style={{ color: active ? '#fff' : 'rgba(255,255,255,0.6)' }}
+            className={`flex items-center justify-center active:opacity-50 ${active ? 'text-white' : 'text-white/60'}`}
         >
             {children}
-            <span className="text-[10px] font-medium leading-none">{label}</span>
         </button>
     );
 }
