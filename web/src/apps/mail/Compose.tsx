@@ -51,9 +51,9 @@ export function Compose({ accounts, defaultAccountId, initialTo = '', initialSub
 
     const account = accounts.find(a => a.id === accountId) ?? accounts[0];
     const canSend = to.trim().length > 0 && subject.trim().length > 0 && !!account;
-    // Prefilled content (a resumed draft, a reply quote) doesn't count: only the user's own
-    // edits are worth guarding, so an untouched compose cancels straight out.
-    const dirty = to !== initialTo || subject !== initialSubject || body !== initialBody
+    // Prefilled content (a resumed draft, a reply quote) doesn't count, and neither does the
+    // To field alone: only written work (subject, body, attachments) is worth guarding.
+    const dirty = subject !== initialSubject || body !== initialBody
         || JSON.stringify(attachments) !== JSON.stringify(initialAttachments ?? []);
 
     function addAttachments(added: MailAttachment[]) {
