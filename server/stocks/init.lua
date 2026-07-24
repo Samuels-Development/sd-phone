@@ -6,8 +6,8 @@ local store   = require 'server.stocks.store'
 local engine  = require 'server.stocks.engine'
 ---@type table Authoritative trade handlers (server.stocks.actions): validation + money movement.
 local actions = require 'server.stocks.actions'
----@type table Watcher registry (server.stocks.watchers): shared with the per-trade broadcast.
-local watchers = require 'server.stocks.watchers'
+---@type table Watcher registry (server.watchers): shared with the per-trade broadcast.
+local watchers = require('server.watchers').of('stocks')
 
 ---@type table Stocks config (config.Stocks): tick + save cadence.
 local ST = config.Stocks

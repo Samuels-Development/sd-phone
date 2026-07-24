@@ -2,6 +2,8 @@
 local store = require 'server.pages.store'
 ---@type table Authoritative pages handlers (server.pages.actions).
 local actions = require 'server.pages.actions'
+---@type table Watcher registry (server.watchers): shared with the feed broadcast in actions.
+local watchers = require('server.watchers').of('pages')
 
 -- One-shot boot thread: creates/migrates the pages table.
 CreateThread(function()
@@ -24,4 +26,18 @@ lib.callback.register('sd-phone:server:pages:update', function(src, payload) ret
 lib.callback.register('sd-phone:server:pages:delete', function(src, payload)
     if type(payload) ~= 'table' then payload = {} end
     return actions.delete(src, payload.id)
+end)
+
+---Subscribes or unsubscribes the caller to the live feed push while the app is open.
+---@param src integer player server id
+---@param payload table { on: boolean }
+lib.callback.register('sd-phone:server:pages:watch', function(src, payload)
+    payload = type(payload) == 'table' and payload or {}
+    watchers.watch(src, payload.on == true)
+    return { success = true }
+end)
+
+---Drops a departing watcher's entry.
+AddEventHandler('playerDropped', function()
+    watchers.drop(source)
 end)

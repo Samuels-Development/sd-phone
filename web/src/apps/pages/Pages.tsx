@@ -22,7 +22,7 @@ export function Pages({ onClose: _onClose }: { onClose: () => void }) {
     const [confirmDelete, setConfirmDelete] = useState<Post | null>(null);
     const [openId,   setOpenId]   = useSessionState<string | null>('pages:openPost', null);
     const [posts,    setPosts]    = useClassifiedsFeed<Post>(
-        'sd-phone:pages:list', 'sd-phone:pages:feed', 'posts', isFiveM ? [] : POSTS,
+        'sd-phone:pages:list', 'sd-phone:pages:feed', 'sd-phone:pages:watch', 'posts', isFiveM ? [] : POSTS,
         rid => { setOpenId(cur => (cur === rid ? null : cur)); setEditing(cur => (cur?.id === rid ? null : cur)); },
     );
     const open = posts.find(p => p.id === openId) ?? null;

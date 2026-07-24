@@ -4,6 +4,8 @@ local config = require 'configs.config'
 local store = require 'server.marketplace.store'
 ---@type table Player bridge (bridge.server.player): citizenid/identifier lookup from a server id.
 local player = require 'bridge.server.player'
+---@type table Watcher registry (server.watchers): players with Marketplace open.
+local watchers = require('server.watchers').of('marketplace')
 
 ---@type table Marketplace app config (configs/marketplace.lua): feed limit + field caps.
 local MP = config.Marketplace
@@ -157,17 +159,14 @@ local function parseFields(payload, cid)
     }
 end
 
----Pushes a live feed change to every OTHER player; the author is excluded. Broadcast items are
----built with cid=nil and carry only public feed fields.
+---Pushes a live feed change to the OTHER players with Marketplace open; the author is excluded.
+---Scoped to watchers: the handler only exists while the app is mounted, so pushing to every
+---player serialised a message across the NUI boundary for everyone who would discard it.
+---Anyone opening Marketplace later fetches the list, so a missed push is never a stale feed.
 ---@param exceptSrc integer author server id to skip
 ---@param payload table feed push { type, item? } or { type, id? }
 local function broadcastFeed(exceptSrc, payload)
-    for _, pid in ipairs(GetPlayers()) do
-        local id = tonumber(pid)
-        if id and id ~= exceptSrc then
-            TriggerClientEvent('sd-phone:client:marketplace:feed', id, payload)
-        end
-    end
+    watchers.push('sd-phone:client:marketplace:feed', payload, exceptSrc)
 end
 
 ---Creates a listing. Owner and timestamp are server-authoritative, listings cap at

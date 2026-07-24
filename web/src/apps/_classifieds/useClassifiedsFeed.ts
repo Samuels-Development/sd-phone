@@ -2,13 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 
 import { apiData } from '@/core/api';
-import { isFiveM } from '@/core/nui';
+import { fetchNui, isFiveM } from '@/core/nui';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import type { ClassifiedFeedAction, ClassifiedItem } from './types';
 
 export function useClassifiedsFeed<T extends ClassifiedItem>(
     listEvent: string,
     feedEvent: ClassifiedFeedAction,
+    watchEvent: string,
     listKey: string,
     initial: T[],
     onRemoved?: (id: string) => void,
@@ -23,6 +24,15 @@ export function useClassifiedsFeed<T extends ClassifiedItem>(
             .catch(() => {});
         return () => { alive = false; };
     }, [listEvent, listKey]);
+
+    // Subscribe only while the app is mounted. The server pushes feed patches to watchers, so a
+    // player with the app closed no longer pays to receive and discard one. The list fetch above
+    // runs on every mount, so a push missed while closed can never leave the feed stale.
+    useEffect(() => {
+        if (!isFiveM) return;
+        void fetchNui(watchEvent, { on: true }).catch(() => {});
+        return () => { void fetchNui(watchEvent, { on: false }).catch(() => {}); };
+    }, [watchEvent]);
 
     useNuiEvent(feedEvent, useCallback(data => {
         if (!data) return;

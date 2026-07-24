@@ -22,7 +22,7 @@ export function Marketplace({ onClose: _onClose }: { onClose: () => void }) {
     const [confirmDelete, setConfirmDelete] = useState<Listing | null>(null);
     const [openId,   setOpenId]   = useSessionState<string | null>('marketplace:openListing', null);
     const [listings, setListings] = useClassifiedsFeed<Listing>(
-        'sd-phone:marketplace:list', 'sd-phone:marketplace:feed', 'listings', isFiveM ? [] : LISTINGS,
+        'sd-phone:marketplace:list', 'sd-phone:marketplace:feed', 'sd-phone:marketplace:watch', 'listings', isFiveM ? [] : LISTINGS,
         rid => { setOpenId(cur => (cur === rid ? null : cur)); setEditing(cur => (cur?.id === rid ? null : cur)); },
     );
     const open = listings.find(l => l.id === openId) ?? null;

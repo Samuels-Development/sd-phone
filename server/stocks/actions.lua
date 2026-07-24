@@ -8,8 +8,8 @@ local engine = require 'server.stocks.engine'
 local bank   = require 'bridge.server.banking'
 ---@type table Player bridge (bridge.server.player): citizenid lookups from a server id.
 local player = require 'bridge.server.player'
----@type table Watcher registry (server.stocks.watchers): players with the app open.
-local watchers = require 'server.stocks.watchers'
+---@type table Watcher registry (server.watchers): players with the app open.
+local watchers = require('server.watchers').of('stocks')
 
 ---@type table Stocks config (config.Stocks): fees, trade bounds, market knobs, asset list.
 local ST = config.Stocks
