@@ -21,7 +21,8 @@ export function Search({ me, onOpenProfile, onOpenPost, onToggleLike, onToggleRe
     const [query,       setQuery]       = useSessionState('birdy:searchQuery', '');
     const [results,     setResults]     = useState<BirdyAuthor[]>([]);
     const [postResults, setPostResults] = useState<BirdyPost[]>([]);
-    const [trending,    setTrending]    = useState<TrendingTag[]>([]);
+    // null = not fetched yet, so the empty state never flashes ahead of the data.
+    const [trending,    setTrending]    = useState<TrendingTag[] | null>(null);
     const [pending,     setPending]     = useState(false);
     const trimmedQ  = query.trim();
     const searching = trimmedQ.length > 0;
@@ -134,10 +135,12 @@ export function Search({ me, onOpenProfile, onOpenPost, onToggleLike, onToggleRe
                             <span className="absolute bottom-4 left-4 text-[17px] font-bold text-white">{t('birdy.startSearching', 'Start searching to explore Birdy')}</span>
                         </div>
 
-                        {trending.length > 0 && (
-                            <>
-                                <h2 className="px-4 pb-1.5 pt-4 text-[22px] font-extrabold text-black">{t('birdy.trendingHashtags', 'Trending hashtags')}</h2>
-                                {trending.map((row, i) => (
+                        <h2 className="px-4 pb-1.5 pt-4 text-[22px] font-extrabold text-black">{t('birdy.trendingHashtags', 'Trending hashtags')}</h2>
+                        {trending !== null && (
+                            trending.length === 0 ? (
+                                <div className="px-10 py-10 text-center text-[15px]" style={{ color: META }}>{t('birdy.noTrending', 'No trending hashtags right now.')}</div>
+                            ) : (
+                                trending.map((row, i) => (
                                     <div key={row.tag}>
                                         <button
                                             type="button"
@@ -155,8 +158,8 @@ export function Search({ me, onOpenProfile, onOpenPost, onToggleLike, onToggleRe
                                             <div className="pointer-events-none mx-[6%] h-[0.5px] bg-black/15" />
                                         )}
                                     </div>
-                                ))}
-                            </>
+                                ))
+                            )
                         )}
                     </div>
                 )}
