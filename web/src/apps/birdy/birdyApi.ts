@@ -14,6 +14,7 @@ import {
     MARCUS, CURRENT_USER, TOMMY, newId, SEED_CONVERSATIONS, SEED_NOTIFICATIONS, SEED_POSTS,
     type BirdyAuthor, type BirdyConversation, type BirdyFollowUser, type BirdyMessage, type BirdyNotification, type BirdyPost, type BirdyProfile,
 } from './data';
+import { postHasTag, trendingFromBodies, type TrendingTag } from './hashtags';
 
 
 
@@ -197,6 +198,16 @@ export async function apiSearch(query: string): Promise<BirdyAuthor[]> {
         return [CURRENT_USER, MARCUS, TOMMY].filter(a => a.handle.toLowerCase().includes(q) || a.name.toLowerCase().includes(q));
     }
     return (await call<{ users: BirdyAuthor[] }>('sd-phone:birdy:search', { query }))?.users ?? [];
+}
+
+export async function apiTrending(): Promise<TrendingTag[]> {
+    if (!isFiveM) return trendingFromBodies(SEED_POSTS.map(p => p.body));
+    return (await call<{ tags: TrendingTag[] }>('sd-phone:birdy:trending'))?.tags ?? [];
+}
+
+export async function apiHashtagPosts(tag: string): Promise<BirdyPost[]> {
+    if (!isFiveM) return SEED_POSTS.filter(p => postHasTag(p.body, tag));
+    return (await call<{ posts: BirdyPost[] }>('sd-phone:birdy:hashtag', { tag }))?.posts ?? [];
 }
 
 export async function apiToggleFollow(handle: string): Promise<boolean> {

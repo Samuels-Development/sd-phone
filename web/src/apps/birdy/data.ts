@@ -80,7 +80,7 @@ export const SEED_POSTS: BirdyPost[] = [
     {
         id:        'seed-1',
         author:    CURRENT_USER,
-        body:      'Just got my new phone set up and honestly this thing is slick',
+        body:      'Just got my new phone set up and honestly this thing is slick #LosSantos',
         createdAt: Date.now() - 2 * HOUR,
         replies:   1,
         reposts:   0,
@@ -92,7 +92,7 @@ export const SEED_POSTS: BirdyPost[] = [
     {
         id:        'seed-2',
         author:    MARCUS,
-        body:      'wow, the birdy app really is cool',
+        body:      'wow, the birdy app really is cool #Birdy',
         createdAt: Date.now() - 3 * HOUR,
         replies:   0,
         reposts:   0,
@@ -103,7 +103,7 @@ export const SEED_POSTS: BirdyPost[] = [
     {
         id:        'seed-3',
         author:    CURRENT_USER,
-        body:      'Hello, world!',
+        body:      'Hello, world! #LosSantos',
         createdAt: Date.now() - 5 * HOUR,
         replies:   0,
         reposts:   0,
