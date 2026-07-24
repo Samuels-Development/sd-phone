@@ -522,7 +522,7 @@ function actions.create(source, payload)
                 body = ('%s posted: %s'):format(prof.displayName, preview),
                 time = 'now', quietInApp = true,
             })
-            badges.push(src)
+            badges.pushApp(src, 'birdy')
         end
     end
 
@@ -739,7 +739,7 @@ function actions.notifications(source)
     end
 
     store.markNotificationsSeen(prof.citizenid)
-    badges.push(source)
+    badges.pushApp(source, 'birdy')
 
     return ok({ notifications = items })
 end

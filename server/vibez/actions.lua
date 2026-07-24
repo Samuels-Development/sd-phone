@@ -184,14 +184,14 @@ local function notify(recipient, kind, actor, postId, preview)
             time = 'now', quietInApp = true,
             link = { ['vibez:tab'] = 'inbox' },
         })
-        badges.push(src)
+        badges.pushApp(src, 'vibez')
     end
 end
 
 ---Refreshes the badge for a user's online sources.
 ---@param username string handle
 local function bumpBadge(username)
-    for _, src in ipairs(sourcesFor(username)) do badges.push(src) end
+    for _, src in ipairs(sourcesFor(username)) do badges.pushApp(src, 'vibez') end
 end
 
 ---One http(s) URL clamped to the column width, or nil.

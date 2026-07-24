@@ -24,6 +24,12 @@ RegisterNetEvent('sd-phone:client:badges', function(snap)
     SendNUIMessage({ action = 'sd-phone:badges', data = snap })
 end)
 
+---Server push: one app's count changed; relay it as a patch the store merges over the rest.
+---@param patch table single-entry { [appId] = count }
+RegisterNetEvent('sd-phone:client:badgePatch', function(patch)
+    SendNUIMessage({ action = 'sd-phone:badges:patch', data = patch })
+end)
+
 ---React to server: badge snapshot fetched on phone open, with a zeroed fallback.
 RegisterNUICallback('sd-phone:badges:get', function(_, cb)
     local snap = lib.callback.await('sd-phone:server:badges:get', false)

@@ -40,20 +40,27 @@ local function vibezCount(cid)
     return vibezStore.unseenNotificationCount(acc.username)
 end
 
+---@type table<string, fun(cid: string): number> One count resolver per home-screen app id. The
+---single source of truth for both the full snapshot and a single-app push, so the two can never
+---disagree about which apps carry a badge.
+local counters = {
+    messages  = function(cid) return messageStore.unreadCount(cid) end,
+    phone     = function(cid) return contactStore.unreadMissedCount(cid) end,
+    mail      = function(cid) return mailStore.unreadCount(cid) end,
+    groups    = function(cid) return groupStore.pendingInviteCount(cid) end,
+    photogram = photogramCount,
+    vibez     = vibezCount,
+    birdy     = function(cid) return birdyStore.unseenNotificationCount(cid) end,
+}
+
 ---Per-app unread counts for one character, keyed by home-screen app id, computed straight from
 ---the database on every call.
 ---@param cid string framework per-character id
 ---@return { messages: number, phone: number, mail: number, groups: number, photogram: number, vibez: number, birdy: number }
 function badges.snapshot(cid)
-    return {
-        messages  = messageStore.unreadCount(cid),
-        phone     = contactStore.unreadMissedCount(cid),
-        mail      = mailStore.unreadCount(cid),
-        groups    = groupStore.pendingInviteCount(cid),
-        photogram = photogramCount(cid),
-        vibez     = vibezCount(cid),
-        birdy     = birdyStore.unseenNotificationCount(cid),
-    }
+    local out = {}
+    for app, count in pairs(counters) do out[app] = count(cid) end
+    return out
 end
 
 ---Recomputes a player's badge counts from the DB and pushes the exact numbers to their phone.
@@ -64,6 +71,20 @@ function badges.push(source)
     local cid = player.getIdentifier(source)
     if not cid then return end
     TriggerClientEvent('sd-phone:client:badges', source, badges.snapshot(cid))
+end
+
+---Recomputes ONE app's badge and pushes just that number, merged into whatever the phone already
+---shows. A content fan-out only ever changes its own app's count, and a full snapshot costs seven
+---store reads (one of them an unindexed mail scan) - paid per recipient.
+---@param source number player server id
+---@param app string home-screen app id; an unknown id is a no-op
+function badges.pushApp(source, app)
+    if not source or source <= 0 then return end
+    local count = counters[app]
+    if not count then return end
+    local cid = player.getIdentifier(source)
+    if not cid then return end
+    TriggerClientEvent('sd-phone:client:badgePatch', source, { [app] = count(cid) })
 end
 
 ---Fetched once by the React app on phone open. An unresolvable caller gets all-zero counts.

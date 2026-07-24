@@ -737,6 +737,9 @@ function AppContent() {
     useNuiEvent('sd-phone:badges', useCallback((data) => {
         useBadgeStore.getState().setServer(data ?? {});
     }, []));
+    useNuiEvent('sd-phone:badges:patch', useCallback((data) => {
+        useBadgeStore.getState().patchServer(data ?? {});
+    }, []));
     useEffect(() => {
         if (currentApp === 'phone') void fetchNui('sd-phone:calls:seen');
     }, [currentApp]);

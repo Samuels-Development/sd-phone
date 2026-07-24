@@ -336,6 +336,7 @@ export type NuiMessage =
     | { action: 'wordle:ended';        data: { reason: string } }
     | { action: 'sd-phone:notification';       data: { id?: string; app?: string; image?: string; title: string; body?: string; time?: string; appId?: string; quietInApp?: boolean; otherPhone?: boolean; phoneColor?: string; profileKey?: string } }
     | { action: 'sd-phone:badges';             data: Record<string, number> }
+    | { action: 'sd-phone:badges:patch';       data: Record<string, number> }
     | { action: 'sd-phone:airshare';           data: { id: string; kind: string; fromName: string } }
     | { action: 'sd-phone:maps:friends:update'; data: FriendsUpdatePush }
     | { action: 'sd-phone:maps:location';       data: { x: number; y: number; h: number } }

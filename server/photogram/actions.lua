@@ -264,14 +264,14 @@ local function notify(recipient, kind, actor, postId, preview)
                 ['photogram:viewHandle'] = false, ['photogram:detail'] = false, ['photogram:follows'] = false,
             },
         })
-        badges.push(src)
+        badges.pushApp(src, 'photogram')
     end
 end
 
 ---Refreshes the badge for a user's online sources.
 ---@param username string handle
 local function bumpBadge(username)
-    for _, src in ipairs(sourcesFor(username)) do badges.push(src) end
+    for _, src in ipairs(sourcesFor(username)) do badges.pushApp(src, 'photogram') end
 end
 
 ---Pings a recipient to refetch Activity without adding a notification.
@@ -279,7 +279,7 @@ end
 local function pingActivity(recipient)
     for _, src in ipairs(sourcesFor(recipient)) do
         TriggerClientEvent('sd-phone:client:photogram:notification', src, {})
-        badges.push(src)
+        badges.pushApp(src, 'photogram')
     end
 end
 
