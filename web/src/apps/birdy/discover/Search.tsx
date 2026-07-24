@@ -115,15 +115,15 @@ export function Search({ me, onOpenProfile, onOpenPost, onToggleLike, onToggleRe
                                 key={u.handle}
                                 type="button"
                                 onClick={() => onOpenProfile(u.handle)}
-                                className="flex w-full items-center gap-3.5 px-4 py-3 text-left transition-colors active:bg-black/[0.04]"
+                                className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors active:bg-black/[0.04]"
                             >
-                                <Avatar size={48} src={u.avatar} />
+                                <Avatar size={54} src={u.avatar} />
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-1">
-                                        <span className="truncate text-[17px] font-bold text-black">{u.name}</span>
-                                        {u.verified && <VerifiedBadge size={16} />}
+                                        <span className="truncate text-[18px] font-bold text-black">{u.name}</span>
+                                        {u.verified && <VerifiedBadge size={18} />}
                                     </div>
-                                    <div className="truncate text-[15px]" style={{ color: META }}>@{u.handle}</div>
+                                    <div className="truncate text-[16px]" style={{ color: META }}>@{u.handle}</div>
                                 </div>
                             </button>
                         ))

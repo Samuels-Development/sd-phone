@@ -31,17 +31,17 @@ export function PostCard({ post, isOwn, onToggleLike, onToggleRepost, onOpen, on
         <>
         <article
             onClick={onOpen}
-            className={`flex gap-3.5 border-b border-black/10 px-4 py-4 ${onOpen ? 'cursor-pointer transition-colors hover:bg-black/[0.04]' : ''}`}
+            className={`flex gap-4 border-b border-black/10 px-4 py-[18px] ${onOpen ? 'cursor-pointer transition-colors hover:bg-black/[0.04]' : ''}`}
         >
             <button type="button" onClick={openAuthor} className="h-fit shrink-0">
-                <Avatar size={56} src={post.author.avatar} />
+                <Avatar size={60} src={post.author.avatar} />
             </button>
 
             <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1 text-[18px] leading-tight">
+                <div className="flex items-center gap-1 text-[19px] leading-tight">
                     <button type="button" onClick={openAuthor} className="flex min-w-0 items-center gap-1 text-left">
                         <span className="font-bold text-black">{post.author.name}</span>
-                        {post.author.verified && <VerifiedBadge size={19} />}
+                        {post.author.verified && <VerifiedBadge size={20} />}
                         <span className="truncate" style={{ color: META }}>@{post.author.handle}</span>
                     </button>
                     <span style={{ color: META }}>· {relativeTime(post.createdAt)}</span>
@@ -53,29 +53,29 @@ export function PostCard({ post, isOwn, onToggleLike, onToggleRepost, onOpen, on
                             aria-label={t('birdy.more', 'More')}
                             style={{ color: META }}
                         >
-                            <MoreHorizontal className="h-[21px] w-[21px]" />
+                            <MoreHorizontal className="h-[22px] w-[22px]" />
                         </button>
                     )}
                 </div>
 
                 {post.body && (
-                    <p className="mt-1 whitespace-pre-wrap break-words text-[18px] leading-snug text-black">
+                    <p className="mt-1 whitespace-pre-wrap break-words text-[19px] leading-snug text-black">
                         <RichText text={post.body} />
                     </p>
                 )}
 
                 <PostImages images={post.images} />
 
-                <div className="mt-3.5 flex max-w-[20rem] items-center justify-between">
+                <div className="mt-4 flex max-w-[21rem] items-center justify-between">
                     <ActionButton
                         tone="comment"
-                        icon={<MessageCircle className="h-[25px] w-[25px]" strokeWidth={1.9} />}
+                        icon={<MessageCircle className="h-[27px] w-[27px]" strokeWidth={1.9} />}
                         count={post.replies}
                         onClick={onOpen}
                     />
                     <ActionButton
                         tone="repost"
-                        icon={<Repeat2 className="h-[27px] w-[27px]" strokeWidth={1.9} />}
+                        icon={<Repeat2 className="h-[29px] w-[29px]" strokeWidth={1.9} />}
                         count={repostCount}
                         color={reposted ? REPOST : undefined}
                         onClick={() => setConfirmRepost(true)}
@@ -85,7 +85,7 @@ export function PostCard({ post, isOwn, onToggleLike, onToggleRepost, onOpen, on
                         icon={
                             <HeartBurst liked={post.liked === true}>
                                 <Heart
-                                    className="h-[25px] w-[25px]"
+                                    className="h-[27px] w-[27px]"
                                     strokeWidth={1.9}
                                     fill={post.liked ? LIKE : 'none'}
                                     color={post.liked ? LIKE : 'currentColor'}
@@ -137,10 +137,10 @@ function ActionButton({ icon, count, color, tone, onClick }: {
             className={`group flex items-center gap-1 transition-transform active:scale-90 ${active ? '' : `text-[#657786] ${t.text}`}`}
             style={active ? { color } : undefined}
         >
-            <span className={`-m-1.5 flex h-9 w-9 items-center justify-center rounded-full transition-colors ${t.bg}`}>
+            <span className={`-m-1.5 flex h-10 w-10 items-center justify-center rounded-full transition-colors ${t.bg}`}>
                 {icon}
             </span>
-            <span className="min-w-[1.5rem] text-left text-[15px] tabular-nums">{compactCount(count)}</span>
+            <span className="min-w-[1.5rem] text-left text-[16px] tabular-nums">{compactCount(count)}</span>
         </button>
     );
 }

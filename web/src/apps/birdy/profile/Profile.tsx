@@ -5,7 +5,6 @@ import { BirdyBird } from '../BirdyBird';
 
 import { t } from '@/i18n';
 import { useAsyncData } from '@/hooks/useAsyncData';
-import { useStatusBarLight } from '@/shell/useStatusBarLight';
 import { EmptyState } from '@/ui/EmptyState';
 import { apiProfilePosts } from '../birdyApi';
 import { BG, BLUE, META, type BirdyAuthor, type BirdyProfile } from '../data';
@@ -59,9 +58,7 @@ export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onTog
 
     useEffect(() => { setFollowing(!!profile?.isFollowing); }, [profile?.isFollowing]);
 
-    const [overBanner, setOverBanner] = useState(true);
     const [followView, setFollowView] = useState<'followers' | 'following' | null>(null);
-    useStatusBarLight(followView ? false : overBanner);
 
     function toggleFollow() {
         if (!handle) return;
@@ -77,10 +74,7 @@ export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onTog
 
     return (
         <div className="relative flex h-full flex-col" style={{ background: BG }}>
-            <div
-                className="min-h-0 flex-1 overflow-y-auto no-scrollbar"
-                onScroll={e => setOverBanner(e.currentTarget.scrollTop < 72)}
-            >
+            <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
                 <div className="relative h-[132px] w-full overflow-hidden" style={{ background: BLUE }}>
                     {banner && (
                         <img src={banner} alt="" draggable={false} className="h-full w-full object-cover" />

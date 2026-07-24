@@ -52,13 +52,13 @@ export function PostDetail({ post, me, onBack, onToggleLike, onToggleRepost, onT
             <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
                 <div className="px-4 pt-3">
                     <button type="button" onClick={openAuthor} className="flex items-center gap-3 text-left">
-                        <Avatar size={42} src={post.author.avatar} />
+                        <Avatar size={52} src={post.author.avatar} />
                         <div className="min-w-0 leading-tight">
                             <div className="flex items-center gap-1">
-                                <span className="text-[15px] font-bold text-black">{post.author.name}</span>
-                                {post.author.verified && <VerifiedBadge size={15} />}
+                                <span className="text-[18px] font-bold text-black">{post.author.name}</span>
+                                {post.author.verified && <VerifiedBadge size={18} />}
                             </div>
-                            <div className="text-[14px]" style={{ color: META }}>@{post.author.handle}</div>
+                            <div className="text-[16px]" style={{ color: META }}>@{post.author.handle}</div>
                         </div>
                     </button>
 
@@ -70,42 +70,39 @@ export function PostDetail({ post, me, onBack, onToggleLike, onToggleRepost, onT
 
                     <PostImages images={post.images} />
 
-                    <div className="mt-3 text-[14px]" style={{ color: META }}>
+                    <div className="mt-3 text-[16px]" style={{ color: META }}>
                         {absoluteTime(post.createdAt)} · <span className="font-semibold text-black">{compactCount(post.views ?? 0)}</span> {t('birdy.views', 'views')}
                     </div>
                 </div>
 
-                <div className="mx-4 mt-3 border-t border-black/10 py-3 text-[14px]" style={{ color: META }}>
+                <div className="mx-4 mt-4 text-[16px]" style={{ color: META }}>
                     <span className="font-bold text-black">{compactCount(post.reposts)}</span> {t('birdy.reposts', 'Reposts')}
                     <span className="ml-5 font-bold text-black">{compactCount(post.likes)}</span> {t('birdy.likes', 'Likes')}
                 </div>
 
-                <div className="mx-4 flex items-center justify-around border-y border-black/10 py-2.5" style={{ color: META }}>
-                    <button type="button" aria-label={t('birdy.reply', 'Reply')} onClick={() => inputRef.current?.focus()} className="transition-transform active:scale-90"><MessageCircle className="h-[22px] w-[22px]" strokeWidth={1.8} /></button>
-                    <button type="button" aria-label={t('birdy.repost', 'Repost')} onClick={onToggleRepost} className="transition-transform active:scale-90" style={post.reposted ? { color: REPOST } : undefined}><Repeat2 className="h-[22px] w-[22px]" strokeWidth={1.8} /></button>
+                <div className="mx-4 flex items-center justify-around py-4" style={{ color: META }}>
+                    <button type="button" aria-label={t('birdy.reply', 'Reply')} onClick={() => inputRef.current?.focus()} className="transition-transform active:scale-90"><MessageCircle className="h-[25px] w-[25px]" strokeWidth={1.8} /></button>
+                    <button type="button" aria-label={t('birdy.repost', 'Repost')} onClick={onToggleRepost} className="transition-transform active:scale-90" style={post.reposted ? { color: REPOST } : undefined}><Repeat2 className="h-[25px] w-[25px]" strokeWidth={1.8} /></button>
                     <button type="button" aria-label={t('birdy.like', 'Like')} onClick={onToggleLike} className="transition-transform active:scale-90" style={post.liked ? { color: LIKE } : undefined}>
                         <HeartBurst liked={post.liked === true}>
-                            <Heart className="h-[22px] w-[22px]" strokeWidth={1.8} fill={post.liked ? LIKE : 'none'} color={post.liked ? LIKE : 'currentColor'} />
+                            <Heart className="h-[25px] w-[25px]" strokeWidth={1.8} fill={post.liked ? LIKE : 'none'} color={post.liked ? LIKE : 'currentColor'} />
                         </HeartBurst>
                     </button>
                 </div>
 
                 {(post.thread?.length ?? 0) > 0 && (
-                    <p className="px-4 pt-3 text-[13px] font-semibold uppercase tracking-wide" style={{ color: META }}>
+                    <p className="border-t border-black/10 px-4 pt-3 text-[14px] font-semibold uppercase tracking-wide" style={{ color: META }}>
                         {t('birdy.replies', 'Replies')}
                     </p>
                 )}
                 {post.thread?.map(r => (
-                    <div key={r.id} className="relative">
-                        {/* Thread rail: ties each reply back to the focal post, Twitter-style. */}
-                        <span aria-hidden className="absolute bottom-0 left-[43px] top-0 w-[2px] rounded bg-black/[0.08]" />
-                        <PostCard
-                            post={r}
-                            isOwn={r.author.handle === me.handle}
-                            onToggleLike={() => onToggleReplyLike(r.id)}
-                            onOpenAuthor={onOpenAuthor}
-                        />
-                    </div>
+                    <PostCard
+                        key={r.id}
+                        post={r}
+                        isOwn={r.author.handle === me.handle}
+                        onToggleLike={() => onToggleReplyLike(r.id)}
+                        onOpenAuthor={onOpenAuthor}
+                    />
                 ))}
             </div>
 
@@ -115,7 +112,7 @@ export function PostDetail({ post, me, onBack, onToggleLike, onToggleRepost, onT
                         <div className="flex gap-2 px-3 pt-2">
                             {media.map((url, i) => (
                                 <div key={`${url}-${i}`} className="relative">
-                                    <img src={url} alt="" draggable={false} className="h-14 w-14 rounded-[10px] object-cover" />
+                                    <img src={url} alt="" draggable={false} className="h-16 w-16 rounded-[10px] object-cover" />
                                     <button
                                         type="button"
                                         onClick={() => setMedia(prev => prev.filter((_, idx) => idx !== i))}
@@ -128,24 +125,24 @@ export function PostDetail({ post, me, onBack, onToggleLike, onToggleRepost, onT
                             ))}
                         </div>
                     )}
-                    <div className="flex items-center gap-1 px-3 py-2">
+                    <div className="flex items-center gap-1.5 px-3 py-2.5">
                         <button
                             type="button"
                             aria-label={t('birdy.addImage', 'Add image')}
                             disabled={media.length >= MAX_REPLY_IMAGES}
                             onClick={() => setPicking('photo')}
-                            className="flex h-9 w-8 shrink-0 items-center justify-center rounded-full active:bg-black/5 disabled:opacity-40"
+                            className="flex h-10 w-9 shrink-0 items-center justify-center rounded-full active:bg-black/5 disabled:opacity-40"
                         >
-                            <ImageIcon className="h-[21px] w-[21px]" style={{ color: BLUE }} strokeWidth={2} />
+                            <ImageIcon className="h-[24px] w-[24px]" style={{ color: BLUE }} strokeWidth={2} />
                         </button>
                         <button
                             type="button"
                             aria-label={t('birdy.addGif', 'Add GIF')}
                             disabled={media.length >= MAX_REPLY_IMAGES}
                             onClick={() => setPicking('gif')}
-                            className="mr-1 flex h-9 w-8 shrink-0 items-center justify-center rounded-full active:bg-black/5 disabled:opacity-40"
+                            className="mr-1 flex h-10 w-9 shrink-0 items-center justify-center rounded-full active:bg-black/5 disabled:opacity-40"
                         >
-                            <span className="rounded-[5px] border-[1.5px] px-[3px] py-[1.5px] text-[10px] font-extrabold leading-none" style={{ borderColor: BLUE, color: BLUE }}>GIF</span>
+                            <span className="rounded-[6px] border-[1.5px] px-[4px] py-[2px] text-[12px] font-extrabold leading-none" style={{ borderColor: BLUE, color: BLUE }}>GIF</span>
                         </button>
                         <input
                             ref={inputRef}
@@ -154,14 +151,14 @@ export function PostDetail({ post, me, onBack, onToggleLike, onToggleRepost, onT
                             onKeyDown={e => { if (e.key === 'Enter') sendReply(); }}
                             maxLength={MAX_POST_LENGTH}
                             placeholder={t('birdy.postYourReply', 'Post your reply')}
-                            className="min-w-0 flex-1 rounded-full px-4 py-2 text-[15px] text-black outline-none placeholder:text-[#657786]"
+                            className="min-w-0 flex-1 rounded-full px-4 py-2.5 text-[17px] text-black outline-none placeholder:text-[#657786]"
                             style={{ background: PILL, caretColor: BLUE }}
                         />
                         <button
                             type="button"
                             onClick={sendReply}
                             disabled={!canSend}
-                            className="shrink-0 rounded-full px-4 py-2 text-[14px] font-bold text-white disabled:opacity-50"
+                            className="shrink-0 rounded-full px-5 py-2.5 text-[16px] font-bold text-white disabled:opacity-50"
                             style={{ background: BLUE }}
                         >
                             {t('birdy.reply', 'Reply')}

@@ -2,6 +2,10 @@
 import { t } from '@/i18n';
 import { formatClockTime, formatMediumDate, relTimeCompact } from '@/lib/time';
 import type { MsgKind, Reaction } from '@/shared/chat/data';
+import seedPhoto1 from '@/assets/photos/background7.webp';
+import seedPhoto2 from '@/assets/photos/background12.webp';
+import seedPhoto3 from '@/assets/photos/background15.webp';
+import seedPhoto4 from '@/assets/photos/background20.webp';
 
 export interface BirdyAuthor {
     name:     string;
@@ -110,6 +114,30 @@ export const SEED_POSTS: BirdyPost[] = [
         likes:     0,
         liked:     false,
         views:     3,
+    },
+    {
+        id:        'seed-4',
+        author:    TOMMY,
+        body:      'sunset over the pier tonight, no filter needed',
+        createdAt: Date.now() - 7 * HOUR,
+        replies:   0,
+        reposts:   1,
+        likes:     7,
+        liked:     false,
+        views:     19,
+        images:    [seedPhoto1],
+    },
+    {
+        id:        'seed-5',
+        author:    MARCUS,
+        body:      'little road trip up the coast, camera roll is full',
+        createdAt: Date.now() - 9 * HOUR,
+        replies:   0,
+        reposts:   0,
+        likes:     3,
+        liked:     true,
+        views:     11,
+        images:    [seedPhoto2, seedPhoto3, seedPhoto4],
     },
 ];
 

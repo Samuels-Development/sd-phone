@@ -8,9 +8,9 @@ import { Toggle } from '@/ui/Toggle';
 import { apiDeleteAccount, apiLogout, apiUpdateProfile } from '../birdyApi';
 import { accountsForgetPassword } from '@/core/accountsApi';
 import { ChangePasswordPage } from '@/shared/ChangePasswordPage';
-import { BLUE, META, type BirdyProfile } from '../data';
+import { BG, BLUE, type BirdyProfile } from '../data';
 
-const RED = '#f4212e';
+const RED = '#ff3b30';
 
 export function EditProfile({ profile, onCancel, onSaved, onSignOut, onDeleted }: {
     profile:   BirdyProfile;
@@ -58,8 +58,9 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onDeleted }
 
     return (
         <div
-            className="absolute inset-0 z-40 flex flex-col bg-[#f2f3f5] text-black"
+            className="absolute inset-0 z-40 flex flex-col text-black"
             style={{
+                background: BG,
                 animation: closing
                     ? 'ios-sheet-down 0.34s cubic-bezier(0.4,0,1,1) forwards'
                     : 'ios-sheet-up 0.42s cubic-bezier(0.19,1,0.22,1)',
@@ -68,38 +69,39 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onDeleted }
         >
             <div className="h-[54px] shrink-0" aria-hidden />
             <header className="flex items-center justify-between px-4 py-2.5">
-                <button type="button" onClick={() => dismiss(onCancel)} className="text-[15px]" style={{ color: META }}>{t('birdy.cancel', 'Cancel')}</button>
+                <button type="button" onClick={() => dismiss(onCancel)} className="text-[17px]" style={{ color: BLUE }}>{t('birdy.cancel', 'Cancel')}</button>
                 <div className="text-[18px] font-bold">{t('birdy.editProfile', 'Edit profile')}</div>
-                <button type="button" onClick={save} disabled={busy} className="text-[15px] font-bold disabled:opacity-50" style={{ color: BLUE }}>{t('birdy.save', 'Save')}</button>
+                <button type="button" onClick={save} disabled={busy} className="text-[17px] font-bold disabled:opacity-50" style={{ color: BLUE }}>{t('birdy.save', 'Save')}</button>
             </header>
 
             <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
-                <div className="relative h-28 bg-black/10">
+                <div className="relative h-32 bg-black/10">
                     {banner && <img src={banner} alt="" draggable={false} className="h-full w-full object-cover" />}
-                    <button type="button" onClick={() => setPicking('banner')} aria-label={t('birdy.changeCover', 'Change cover')} className="absolute left-1/2 top-1/2 flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white" style={{ background: 'rgba(0,0,0,0.4)' }}>
-                        <Camera className="h-5 w-5" />
+                    <button type="button" onClick={() => setPicking('banner')} aria-label={t('birdy.changeCover', 'Change cover')} className="absolute left-1/2 top-1/2 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white" style={{ background: 'rgba(0,0,0,0.4)' }}>
+                        <Camera className="h-[22px] w-[22px]" />
                     </button>
-                    <button type="button" onClick={() => setPicking('avatar')} aria-label={t('birdy.changeAvatar', 'Change avatar')} className="absolute -bottom-7 left-4 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-4 text-white" style={{ borderColor: '#f2f3f5', background: '#5b6671' }}>
+                    <button type="button" onClick={() => setPicking('avatar')} aria-label={t('birdy.changeAvatar', 'Change avatar')} className="absolute -bottom-10 left-4 flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-4 text-white" style={{ borderColor: BG, background: '#5b6671' }}>
                         {avatar
                             ? <img src={avatar} alt="" draggable={false} className="h-full w-full object-cover" />
-                            : <Camera className="h-6 w-6" />}
+                            : <Camera className="h-7 w-7" />}
                     </button>
                 </div>
-                <div className="h-9" aria-hidden />
+                <div className="h-14" aria-hidden />
 
-                <div className="bg-white">
+                <div className="mx-4 overflow-hidden rounded-[12px] bg-white">
                     <Row label={t('birdy.name', 'Name')}>
-                        <input value={name} onChange={e => setName(e.target.value)} className="w-full bg-transparent text-right text-[17px] outline-none" style={{ color: BLUE }} />
+                        <input value={name} onChange={e => setName(e.target.value)} className="w-full bg-transparent text-right text-[17px] text-black outline-none" style={{ caretColor: BLUE }} />
                     </Row>
 
-                    <div className="border-b border-black/[0.07] px-4 py-3.5">
+                    <div className="border-b border-black/10 px-4 py-3.5">
                         <div className="text-[17px] font-bold text-black">{t('birdy.bio', 'Bio')}</div>
                         <textarea
                             value={bio}
                             onChange={e => setBio(e.target.value)}
                             rows={3}
-                            className="mt-2 w-full resize-none rounded-xl border border-black/15 bg-white px-3 py-2.5 text-[17px] leading-snug outline-none focus:border-[#1d9bf0]"
-                            style={{ color: BLUE }}
+                            placeholder={t('birdy.bioPlaceholder', 'Tell people about yourself')}
+                            className="mt-1 w-full resize-none bg-transparent text-[17px] leading-snug text-black outline-none placeholder:text-black/35"
+                            style={{ caretColor: BLUE }}
                         />
                     </div>
 
@@ -109,14 +111,14 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onDeleted }
 
                     <div className="flex items-center justify-between px-4 py-3.5">
                         <span className="text-[17px] font-bold">{t('birdy.privateAccount', 'Private account')}</span>
-                        <Toggle on={protect} onChange={setProtect} activeColor={BLUE} scale={0.85} />
+                        <Toggle on={protect} onChange={setProtect} activeColor={BLUE} />
                     </div>
                 </div>
 
-                <div className="flex flex-col gap-3.5 px-4 py-8">
-                    <button type="button" onClick={() => setPwOpen(true)} className="w-full rounded-full bg-black/[0.06] py-4 text-[18px] font-bold text-black active:opacity-70">{t('birdy.changePassword', 'Change Password')}</button>
-                    <button type="button" onClick={() => setConfirmSignOut(true)} className="w-full rounded-full py-4 text-[18px] font-bold text-white" style={{ background: BLUE }}>{t('birdy.signOut', 'Sign Out')}</button>
-                    <button type="button" onClick={() => setConfirmDel(true)} className="w-full rounded-full py-4 text-[18px] font-bold text-white" style={{ background: RED }}>{t('birdy.deleteAccount', 'Delete Account')}</button>
+                <div className="flex flex-col gap-3 px-4 py-6">
+                    <button type="button" onClick={() => setPwOpen(true)} className="w-full rounded-[12px] bg-white py-4 text-[18px] font-semibold active:opacity-70" style={{ color: BLUE }}>{t('birdy.changePassword', 'Change Password')}</button>
+                    <button type="button" onClick={() => setConfirmSignOut(true)} className="w-full rounded-[12px] bg-white py-4 text-[18px] font-semibold active:opacity-70" style={{ color: RED }}>{t('birdy.signOut', 'Sign Out')}</button>
+                    <button type="button" onClick={() => setConfirmDel(true)} className="w-full rounded-[12px] bg-white py-4 text-[18px] font-semibold active:opacity-70" style={{ color: RED }}>{t('birdy.deleteAccount', 'Delete Account')}</button>
                 </div>
             </div>
 
@@ -163,7 +165,7 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onDeleted }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <div className="flex gap-4 border-b border-black/[0.07] px-4 py-3.5">
+        <div className="flex gap-4 border-b border-black/10 px-4 py-3.5">
             <div className="w-24 shrink-0 pt-0.5 text-[17px] font-bold text-black">{label}</div>
             <div className="flex-1">{children}</div>
         </div>

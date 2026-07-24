@@ -3,6 +3,7 @@ import { ArrowLeft, Mail, PenSquare, Search as SearchIcon } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { useAsyncData } from '@/hooks/useAsyncData';
+import { useIosPush } from '@/hooks/useIosPush';
 import { SearchBar } from '@/ui/SearchBar';
 import { EmptyState } from '@/ui/EmptyState';
 import { apiSearch } from '../birdyApi';
@@ -33,10 +34,6 @@ export function MessagesList({ conversations, onOpen, onOpenProfile, onCompose }
     const filtered = q
         ? conversations.filter(c => c.user.name.toLowerCase().includes(q) || c.user.handle.toLowerCase().includes(q))
         : conversations;
-
-    if (composing && onCompose) {
-        return <NewDm onSelect={h => { setComposing(false); onCompose(h); }} onBack={() => setComposing(false)} />;
-    }
 
     return (
         <div className="flex h-full flex-col" style={{ background: BG }}>
@@ -116,19 +113,24 @@ export function MessagesList({ conversations, onOpen, onOpenProfile, onCompose }
                     </div>
                 )}
             </div>
+
+            {composing && onCompose && (
+                <NewDm onSelect={h => { setComposing(false); onCompose(h); }} onBack={() => setComposing(false)} />
+            )}
         </div>
     );
 }
 
 function NewDm({ onSelect, onBack }: { onSelect: (handle: string) => void; onBack: () => void }) {
+    const { goBack, pageStyle } = useIosPush(onBack);
     const [query, setQuery] = useState('');
     const { data } = useAsyncData<BirdyAuthor[]>(() => apiSearch(query), [query]);
     const users = data ?? [];
 
     return (
-        <div className="flex h-full flex-col" style={{ background: BG }}>
+        <div className="absolute inset-0 z-20 flex flex-col" style={{ background: BG, ...pageStyle }}>
             <header className="flex shrink-0 items-center px-2 py-2">
-                <button type="button" onClick={onBack} aria-label={t('birdy.back', 'Back')} className="flex h-11 w-11 items-center justify-center text-black active:opacity-60">
+                <button type="button" onClick={goBack} aria-label={t('birdy.back', 'Back')} className="flex h-11 w-11 items-center justify-center text-black active:opacity-60">
                     <ArrowLeft className="h-6 w-6" strokeWidth={2.2} />
                 </button>
                 <h1 className="flex-1 text-center text-[22px] font-extrabold text-black">{t('birdy.newMessage', 'New message')}</h1>

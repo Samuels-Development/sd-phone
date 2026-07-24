@@ -480,7 +480,7 @@ function NavButton({ active, onClick, children, badge = 0 }: { active: boolean; 
                 {children}
                 {badge > 0 && (
                     <span
-                        className="absolute -top-1.5 -right-2.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] font-bold leading-none text-white"
+                        className="absolute -right-2 -top-2 flex h-[22px] min-w-[22px] items-center justify-center rounded-full px-1.5 text-[13px] font-bold leading-none text-white"
                         style={{ background: BLUE, boxShadow: `0 0 0 2px ${BG}` }}
                     >
                         {badge > 99 ? '99+' : badge}
