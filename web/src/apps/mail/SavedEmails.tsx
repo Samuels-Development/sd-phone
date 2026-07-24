@@ -3,6 +3,8 @@ import { BookUser, ChevronLeft, Plus, Trash2 } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { useIosPush } from '@/hooks/useIosPush';
+import { AlertDialog } from '@/ui/AlertDialog';
+import { EmptyState } from '@/ui/EmptyState';
 import { PromptDialog } from '@/ui/PromptDialog';
 import { Sheet } from '@/ui/Sheet';
 import { isEmailish } from './mailSuggest';
@@ -54,7 +56,8 @@ export function SavedEmailsPage({ emails, onAdd, onRemove, onBack }: {
     onBack:   () => void;
 }) {
     const { goBack, pageStyle } = useIosPush(onBack);
-    const [adding, setAdding] = useState(false);
+    const [adding,        setAdding]        = useState(false);
+    const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
 
     return (
         <div
@@ -88,9 +91,11 @@ export function SavedEmailsPage({ emails, onAdd, onRemove, onBack }: {
 
             <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-10">
                 {emails.length === 0 ? (
-                    <div className="flex items-center justify-center py-16 text-[15px] text-black/40 dark:text-white/40">
-                        {t('mail.noSavedEmails', 'No saved emails yet.')}
-                    </div>
+                    <EmptyState
+                        icon={BookUser}
+                        title={t('mail.noSavedEmailsTitle', 'No Saved Emails')}
+                        subtitle={t('mail.noSavedEmailsSubtitle', 'Addresses you save show up here and autofill when you compose.')}
+                    />
                 ) : (
                     <div className="overflow-hidden rounded-[10px] bg-[#e5e5e5] dark:bg-surface">
                         {emails.map((email, i) => (
@@ -100,7 +105,7 @@ export function SavedEmailsPage({ emails, onAdd, onRemove, onBack }: {
                                     <span className="min-w-0 flex-1 truncate text-[18px]">{email}</span>
                                     <button
                                         type="button"
-                                        onClick={() => onRemove(email)}
+                                        onClick={() => setConfirmRemove(email)}
                                         aria-label={t('mail.removeSavedEmail', 'Remove saved email')}
                                         className="shrink-0 text-[#ff3b30] active:opacity-60"
                                     >
@@ -126,6 +131,18 @@ export function SavedEmailsPage({ emails, onAdd, onRemove, onBack }: {
                     confirmLabel={t('mail.save', 'Save')}
                     onCancel={() => setAdding(false)}
                     onConfirm={v => { onAdd(v.trim().toLowerCase()); setAdding(false); }}
+                />
+            )}
+
+            {confirmRemove && (
+                <AlertDialog
+                    title={t('mail.removeSavedEmailTitle', 'Remove Saved Email')}
+                    message={t('mail.removeSavedEmailConfirm', 'Remove {email} from your saved emails?', { email: confirmRemove })}
+                    confirmLabel={t('mail.remove', 'Remove')}
+                    cancelLabel={t('mail.cancel', 'Cancel')}
+                    destructive
+                    onCancel={() => setConfirmRemove(null)}
+                    onConfirm={() => { onRemove(confirmRemove); setConfirmRemove(null); }}
                 />
             )}
         </div>
