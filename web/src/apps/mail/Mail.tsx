@@ -16,7 +16,7 @@ import {
     signOut, signUp as mailSignUp, toggleFlag,
 } from './data';
 import { isEmailish } from './mailSuggest';
-import { SavedEmailsSheet } from './SavedEmails';
+import { SavedEmailsPage } from './SavedEmails';
 import type { Folder, MailAccount, MailAttachment, MailMessage } from './data';
 import { MailDetail } from './MailDetail';
 import { MailList } from './MailList';
@@ -40,7 +40,7 @@ export function Mail({ onClose }: { onClose: () => void }) {
     const [nav,             setNav]             = useSessionState<Navigation>('mail:nav', { stage: 'mailboxes' });
     const [composeFor,      setComposeFor]      = useSessionState<{ accountId?: string; to?: string; subject?: string; body?: string; draftId?: string; attachments?: MailAttachment[] } | null>('mail:composeFor', null);
     const [savedEmails,     setSavedEmails]     = useState<string[]>([]);
-    const [savedSheetOpen,  setSavedSheetOpen]  = useState(false);
+    const [savedPageOpen,   setSavedPageOpen]   = useState(false);
     const [savePromptQueue, setSavePromptQueue] = useState<string[]>([]);
 
     const refresh = useCallback(async () => {
@@ -325,7 +325,7 @@ export function Mail({ onClose }: { onClose: () => void }) {
                 onLockApp={() => { lockMail('mail'); setLocked(true); }}
                 onDeleteAccount={(id) => void handleDeleteAccount(id)}
                 onChangePassword={() => setPwOpen(true)}
-                onOpenSavedEmails={() => setSavedSheetOpen(true)}
+                onOpenSavedEmails={() => setSavedPageOpen(true)}
             />
 
             {(nav.stage === 'list' || nav.stage === 'detail') && (
@@ -398,13 +398,12 @@ export function Mail({ onClose }: { onClose: () => void }) {
                 />
             )}
 
-            {savedSheetOpen && (
-                <SavedEmailsSheet
+            {savedPageOpen && (
+                <SavedEmailsPage
                     emails={savedEmails}
-                    mode="manage"
                     onAdd={addSavedEmail}
                     onRemove={removeSaved}
-                    onClose={() => setSavedSheetOpen(false)}
+                    onBack={() => setSavedPageOpen(false)}
                 />
             )}
 

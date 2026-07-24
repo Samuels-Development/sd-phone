@@ -235,7 +235,6 @@ export function Compose({ accounts, defaultAccountId, initialTo = '', initialSub
             {savedPicker && (
                 <SavedEmailsSheet
                     emails={savedEmails}
-                    mode="pick"
                     onPick={email => {
                         setTo(prev => {
                             const base = prev.trim();
