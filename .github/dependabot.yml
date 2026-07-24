@@ -11,6 +11,11 @@ updates:
       npm-dependencies:
         patterns:
           - "*"
+    # Majors (React, Tailwind, Vite...) are migration projects, not routine
+    # bumps; they stay manual.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # Marketplace actions used by ci.yml and release.yml.
   - package-ecosystem: github-actions
