@@ -120,6 +120,16 @@ lib.callback.register('sd-phone:server:mail:deleteAccount', function(src, payloa
     return result
 end)
 
+lib.callback.register('sd-phone:server:mail:savedEmails', function(src)
+    return actions.savedEmails(src)
+end)
+lib.callback.register('sd-phone:server:mail:saveEmail', function(src, payload)
+    return actions.saveEmail(src, payload)
+end)
+lib.callback.register('sd-phone:server:mail:removeSavedEmail', function(src, payload)
+    return actions.removeSavedEmail(src, payload)
+end)
+
 ---@type table<string, true> The five real folders getMailbox accepts; 'flagged' is a virtual
 ---view, matching the actions.move whitelist.
 local FOLDERS = { inbox = true, drafts = true, sent = true, spam = true, bin = true }

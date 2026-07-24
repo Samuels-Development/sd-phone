@@ -30,4 +30,7 @@ return {
     -- Display-name constraints (the "Personal" / "Work" label).
     MinNameLength = 1,
     MaxNameLength = 40,
+
+    -- Max saved compose addresses kept per character.
+    MaxSavedEmails = 100,
 }

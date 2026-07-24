@@ -896,4 +896,42 @@ function actions.deleteAccount(source, payload)
     return ok({ email = email })
 end
 
+---A player's saved compose addresses. Read-only.
+---@param source number
+---@return table envelope
+function actions.savedEmails(source)
+    local who = whois(source); if not who then return fail('No player') end
+    return ok({ emails = store.listSavedEmails(who.cid) })
+end
+
+---Saves a compose address for the player. Replays are no-ops; the fresh list is returned.
+---@param source number
+---@param payload { email?: string }|nil
+---@return table envelope
+function actions.saveEmail(source, payload)
+    local who = whois(source); if not who then return fail('No player') end
+    local email = type(payload) == 'table' and trim(payload.email) or nil
+    email = email and email:lower() or nil
+    if not email or #email == 0 or #email > 128 or not looksLikeEmail(email) then
+        return fail('Invalid email address')
+    end
+    if not store.addSavedEmail(who.cid, email, mailCfg.MaxSavedEmails) then
+        return fail('Saved email limit reached')
+    end
+    return ok({ emails = store.listSavedEmails(who.cid) })
+end
+
+---Removes a saved compose address. Idempotent; the fresh list is returned.
+---@param source number
+---@param payload { email?: string }|nil
+---@return table envelope
+function actions.removeSavedEmail(source, payload)
+    local who = whois(source); if not who then return fail('No player') end
+    local email = type(payload) == 'table' and trim(payload.email) or nil
+    email = email and email:lower() or nil
+    if not email or #email == 0 then return fail('Invalid email address') end
+    store.removeSavedEmail(who.cid, email)
+    return ok({ emails = store.listSavedEmails(who.cid) })
+end
+
 return actions
