@@ -89,7 +89,7 @@ function Preview() {
                 </div>
             </div>
 
-            <div className="flex items-stretch justify-around border-t border-white/10 bg-base/80 px-1 pb-2 pt-2 backdrop-blur-xl">
+            <div className="flex items-stretch justify-around border-t border-white/10 bg-base px-1 pb-2 pt-2">
                 <TabIcon icon={<Phone className="h-[19px] w-[19px]" strokeWidth={2} />} label={t('settings.previewTabCalls', 'Calls')} active />
                 <TabIcon icon={<MessageCircle className="h-[19px] w-[19px]" strokeWidth={2} />} label={t('settings.previewTabChats', 'Chats')} />
                 <TabIcon icon={<Star className="h-[19px] w-[19px]" strokeWidth={2} />} label={t('settings.previewTabFaves', 'Faves')} />

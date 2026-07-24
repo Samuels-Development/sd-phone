@@ -39,7 +39,7 @@ const PAGE_APPS = [
 const DOCK_APPS = ['phone', 'messages', 'camera', 'photos'];
 
 export function WallpaperPage({ onBack }: { onBack: () => void }) {
-    const { goBack, pageStyle } = useIosPush(onBack);
+    const { goBack, pageStyle, animating } = useIosPush(onBack);
     const { wallpaperLock, wallpaperHome, blurLock, setBlurLock, blurHome, setBlurHome, lockClock, hour24 } =
         useTheme('wallpaperLock', 'wallpaperHome', 'blurLock', 'setBlurLock', 'blurHome', 'setBlurHome', 'lockClock', 'hour24');
     const [pickerTarget, setPickerTarget] = useState<WallpaperTarget | null>(null);
@@ -75,10 +75,10 @@ export function WallpaperPage({ onBack }: { onBack: () => void }) {
                     <div className="overflow-hidden rounded-[10px] bg-[#e5e5e5] dark:bg-surface">
                         <div className="flex gap-3 p-4 pb-3">
                             <PreviewThumb caption={t('settings.lockScreen', 'Lock Screen')} onPress={() => setPickerTarget('lock')}>
-                                <LockPreview wallpaper={wallpaperLock} blurred={blurLock} time={time} date={date} lockClock={lockClock} />
+                                <LockPreview wallpaper={wallpaperLock} blurred={blurLock} time={time} date={date} lockClock={lockClock} animating={animating} />
                             </PreviewThumb>
                             <PreviewThumb caption={t('settings.homeScreen', 'Home Screen')} onPress={() => setPickerTarget('home')}>
-                                <HomePreview wallpaper={wallpaperHome} blurred={blurHome} />
+                                <HomePreview wallpaper={wallpaperHome} blurred={blurHome} animating={animating} />
                             </PreviewThumb>
                         </div>
                         <p className="pb-3 text-center text-[12px] text-ios-gray">
@@ -164,12 +164,13 @@ function HomeIndicatorBar() {
 }
 
 
-function LockPreview({ wallpaper, blurred, time, date, lockClock }: {
+function LockPreview({ wallpaper, blurred, time, date, lockClock, animating }: {
     wallpaper: string;
     blurred:   boolean;
     time:      string;
     date:      string;
     lockClock: Parameters<typeof Clockface>[0]['config'];
+    animating: boolean;
 }) {
     return (
         <div className="absolute inset-0 overflow-hidden">
@@ -191,8 +192,8 @@ function LockPreview({ wallpaper, blurred, time, date, lockClock }: {
             </div>
 
             <div className="absolute bottom-[46px] left-0 right-0 flex items-center justify-between px-10">
-                <QuickCircle><Flashlight className="h-[29px] w-[29px] text-white" strokeWidth={2.2} /></QuickCircle>
-                <QuickCircle><Camera className="h-[29px] w-[29px] text-white" strokeWidth={2.2} /></QuickCircle>
+                <QuickCircle animating={animating}><Flashlight className="h-[29px] w-[29px] text-white" strokeWidth={2.2} /></QuickCircle>
+                <QuickCircle animating={animating}><Camera className="h-[29px] w-[29px] text-white" strokeWidth={2.2} /></QuickCircle>
             </div>
 
             <DynamicIsland />
@@ -201,10 +202,10 @@ function LockPreview({ wallpaper, blurred, time, date, lockClock }: {
     );
 }
 
-function QuickCircle({ children }: { children: ReactNode }) {
+function QuickCircle({ children, animating }: { children: ReactNode; animating: boolean }) {
     return (
         <div
-            className="flex h-[70px] w-[70px] items-center justify-center rounded-full bg-black/30 ring-1 ring-inset ring-white/[0.12] backdrop-blur-2xl backdrop-saturate-150"
+            className={`flex h-[70px] w-[70px] items-center justify-center rounded-full ring-1 ring-inset ring-white/[0.12] ${animating ? 'bg-black/55' : 'bg-black/30 backdrop-blur-2xl backdrop-saturate-150'}`}
             style={{ boxShadow: '0 2px 10px rgba(0,0,0,0.28)' }}
         >
             {children}
@@ -213,7 +214,7 @@ function QuickCircle({ children }: { children: ReactNode }) {
 }
 
 
-function HomePreview({ wallpaper, blurred }: { wallpaper: string; blurred: boolean }) {
+function HomePreview({ wallpaper, blurred, animating }: { wallpaper: string; blurred: boolean; animating: boolean }) {
     return (
         <div className="absolute inset-0 overflow-hidden">
             <div
@@ -241,14 +242,14 @@ function HomePreview({ wallpaper, blurred }: { wallpaper: string; blurred: boole
             ))}
 
             <div className="absolute bottom-[132px] left-0 right-0 flex justify-center">
-                <div className="flex items-center gap-[7px] rounded-full bg-black/35 px-2.5 py-[7px] shadow-sm backdrop-blur-md">
+                <div className={`flex items-center gap-[7px] rounded-full px-2.5 py-[7px] shadow-sm ${animating ? 'bg-black/55' : 'bg-black/35 backdrop-blur-md'}`}>
                     <div className="h-[7px] w-[7px] rounded-full bg-white" />
                     <div className="h-[7px] w-[7px] rounded-full bg-white opacity-[0.38]" />
                 </div>
             </div>
 
             <div className="absolute bottom-5 left-4 right-4">
-                <div className="flex items-center justify-around rounded-[28px] border border-white/20 bg-white/15 px-4 py-3.5 backdrop-blur-2xl">
+                <div className={`flex items-center justify-around rounded-[28px] border border-white/20 px-4 py-3.5 ${animating ? 'bg-white/30' : 'bg-white/15 backdrop-blur-2xl'}`}>
                     {DOCK_APPS.map(id => <PreviewIcon key={id} icon={id} />)}
                 </div>
             </div>

@@ -17,7 +17,7 @@ export function AlbumDetail({
     onAddPhotos?:   () => void;
     onRemovePhotos?: (ids: string[]) => void;
 }) {
-    const { goBack, pageStyle } = useIosPush(onBack);
+    const { goBack, pageStyle, animating } = useIosPush(onBack);
     const [selectMode, setSelectMode] = useState(false);
     const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -86,7 +86,7 @@ export function AlbumDetail({
             </div>
 
             {isCustom && selectMode && (
-                <div className="flex shrink-0 items-center justify-center gap-2 border-t border-black/10 bg-[#f7f7f7]/95 px-4 pb-7 pt-3 backdrop-blur-xl dark:border-white/10 dark:bg-base/80">
+                <div className={`flex shrink-0 items-center justify-center gap-2 border-t border-black/10 px-4 pb-7 pt-3 dark:border-white/10 ${animating ? 'bg-[#f7f7f7] dark:bg-base' : 'bg-[#f7f7f7]/95 backdrop-blur-xl dark:bg-base/80'}`}>
                     <button
                         type="button"
                         disabled={selected.size === 0}
