@@ -16,7 +16,7 @@ export function SavedEmailsSheet({ emails, onPick, onClose }: {
     onClose: () => void;
 }) {
     return (
-        <Sheet onClose={onClose} fit="content" title={t('mail.savedEmails', 'Saved Emails')}>
+        <Sheet onClose={onClose} fit="content" title={t('mail.savedEmails', 'Saved Emails')} className="bg-[#ececec] dark:bg-surface">
             {({ close }) => (
                 <div className="px-4 pb-2">
                     {emails.length === 0 ? (
@@ -24,7 +24,7 @@ export function SavedEmailsSheet({ emails, onPick, onClose }: {
                             {t('mail.noSavedEmails', 'No saved emails yet.')}
                         </div>
                     ) : (
-                        <div className="overflow-hidden rounded-[12px] bg-[#e5e5e5] dark:bg-surface">
+                        <div className="overflow-hidden rounded-[12px] bg-[#e5e5e5] dark:bg-white/5">
                             {emails.map((email, i) => (
                                 <div key={email}>
                                     <button
