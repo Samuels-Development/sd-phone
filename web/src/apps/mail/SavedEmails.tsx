@@ -24,7 +24,8 @@ export function SavedEmailsSheet({ emails, onPick, onClose }: {
                             {t('mail.noSavedEmails', 'No saved emails yet.')}
                         </div>
                     ) : (
-                        <div className="overflow-hidden rounded-[12px] bg-[#e5e5e5] dark:bg-white/5">
+                        // Capped at five rows; longer lists scroll inside the card.
+                        <div className="max-h-[260px] overflow-y-auto rounded-[12px] bg-[#e5e5e5] no-scrollbar dark:bg-white/5">
                             {emails.map((email, i) => (
                                 <div key={email}>
                                     <button
@@ -36,7 +37,7 @@ export function SavedEmailsSheet({ emails, onPick, onClose }: {
                                         <span className="truncate text-[17px] text-black dark:text-white">{email}</span>
                                     </button>
                                     {i < emails.length - 1 && (
-                                        <div className="ml-[52px] bg-black/[0.12] dark:bg-white/10" style={{ height: '0.5px' }} />
+                                        <div className="bg-black/[0.12] dark:bg-white/10" style={{ height: '0.5px' }} />
                                     )}
                                 </div>
                             ))}
@@ -113,7 +114,7 @@ export function SavedEmailsPage({ emails, onAdd, onRemove, onBack }: {
                                     </button>
                                 </div>
                                 {i < emails.length - 1 && (
-                                    <div className="pointer-events-none bg-black/12 dark:bg-white/10" style={{ marginLeft: 60, height: '0.5px' }} />
+                                    <div className="pointer-events-none bg-black/12 dark:bg-white/10" style={{ height: '0.5px' }} />
                                 )}
                             </div>
                         ))}
