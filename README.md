@@ -4,6 +4,8 @@
 
 **An iOS-themed smartphone for FiveM. 45+ server-backed apps, real app accounts, a live game-view camera, online multiplayer games, and drop-in lb-phone compatibility.**
 
+[![Live demo](https://img.shields.io/badge/Live%20demo-try%20it%20in%20your%20browser-F0E155?style=for-the-badge)](https://fivem.samueldev.shop/phone)
+
 [![Release](https://img.shields.io/github/v/release/Samuels-Development/sd-phone?label=Release&logo=github)](https://github.com/Samuels-Development/sd-phone)
 [![Downloads](https://img.shields.io/github/downloads/Samuels-Development/sd-phone/total?label=Downloads&logo=github&color=94DD0C)](https://github.com/Samuels-Development/sd-phone)
 [![Stars](https://img.shields.io/github/stars/Samuels-Development/sd-phone?label=Stars&logo=github)](https://github.com/Samuels-Development/sd-phone)
@@ -14,7 +16,7 @@
 ![Voice](https://img.shields.io/badge/Voice-pma--voice-3b82f6)
 ![Compatibility](https://img.shields.io/badge/lb--phone-drop--in%20compatible-3b82f6)
 
-[**Documentation**](https://docs.samueldev.shop/resources/phone/) · [**Store**](https://fivem.samueldev.shop) · [**Discord**](https://discord.gg/FzPehMQaBQ)
+[**Live demo**](https://fivem.samueldev.shop/phone) · [**Documentation**](https://docs.samueldev.shop/resources/phone/) · [**Store**](https://fivem.samueldev.shop) · [**Discord**](https://discord.gg/FzPehMQaBQ)
 
 </div>
 
@@ -22,6 +24,14 @@
 Thanks for trying this so early. I'd put the phone at about 90% done as of writing, so expect rough edges and a few gaps. Some apps are still mock-only or not fully wired up yet (Vibez, for example, has no backend at this point and only a mock frontend), and there's a good amount of polish and fixes left across the board
 
 Any issues or PRs are highly appreciated. Ohhh and please ⭐the repo! :)
+
+## Try it first
+
+**[Open the live demo →](https://fivem.samueldev.shop/phone)**
+
+The real phone UI, running in your browser on sample data. No download, no server, no account: unlock it, open apps, install more from the in-phone App Store, send yourself a notification, change the frame colour, run the first-boot setup. It starts with only its base apps installed, exactly like a fresh install in game.
+
+It is the production UI built with `VITE_DEMO=1`, so it runs entirely in your browser and never talks to a server. Your setup choices and installed apps persist in that browser between visits; the demo's Reset button puts it back to a fresh install. Anything genuinely server-backed (real calls, the live game-view camera, player-to-player features) only works in game, so the demo stands in for those with sample data.
 
 ## Preview
 
