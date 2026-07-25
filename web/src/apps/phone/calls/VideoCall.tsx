@@ -73,6 +73,10 @@ export function VideoCall({ peerName, initiator, onEndVideo, onHangup }: {
             peerRef.current = null;
             renderRef.current?.stop();
             setVideoCamera(false);
+            // Walking with the phone open means Esc can close it mid-call, which unmounts this
+            // view; tell the peer or their end sits on a frozen frame. Dropped server-side once
+            // the call is gone, so the ordinary teardown paths are unaffected.
+            stopVideo();
         };
     }, [initiator]);
 

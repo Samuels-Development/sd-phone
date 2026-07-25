@@ -30,6 +30,20 @@ local hidHud   = false
 local hidRadar = false
 ---@type boolean True while the keyboard-control thread is alive.
 local inputLoopRunning = false
+---@type boolean Mirror of the phone's open state (sd-phone:client:openState).
+local phoneOpen = false
+
+AddEventHandler('sd-phone:client:openState', function(open)
+    phoneOpen = open and true or false
+end)
+
+---Records the viewfinder cursor state and announces it, so the movement thread knows whether the
+---mouse is aiming the lens. Call it after SetNuiFocus, so the keep-input re-sync lands last.
+---@param on boolean whether the NUI cursor is showing
+local function setCursorState(on)
+    cursorOn = on
+    TriggerEvent('sd-phone:client:cameraCursor', on)
+end
 
 ---Pushes a key action into the NUI.
 ---@param key string action name (shutter/flip/flash/modePrev/modeNext)
@@ -37,25 +51,28 @@ local function sendKey(key)
     SendNUIMessage({ action = 'sd-phone:camera:key', data = { key = key } })
 end
 
----Runs the viewfinder keyboard loop while the cursor is off: disables each control's default
----action and relays presses into the NUI.
+---Runs the viewfinder keyboard loop: disables each control's default action for as long as the
+---app is up, and relays presses into the NUI while the cursor is off.
 local function startInputLoop()
     if inputLoopRunning then return end
     inputLoopRunning = true
     CreateThread(function()
         while active do
             Wait(0)
-            if not cursorOn then
-                DisableControlAction(0, CTRL_CURSOR, true)
-                DisableControlAction(0, CTRL_FLASH, true)
-                DisableControlAction(0, CTRL_SHOOT, true)
-                DisableControlAction(0, CTRL_FLIP, true)
-                DisableControlAction(0, CTRL_PREV, true)
-                DisableControlAction(0, CTRL_NEXT, true)
+            -- Suppress the game's own action on every viewfinder key for as long as the app is up,
+            -- cursor or not: with movement on the game still reads them, so E would fire interact
+            -- scripts and Alt the character wheel while the player reaches for the flash.
+            DisableControlAction(0, CTRL_CURSOR, true)
+            DisableControlAction(0, CTRL_FLASH, true)
+            DisableControlAction(0, CTRL_SHOOT, true)
+            DisableControlAction(0, CTRL_FLIP, true)
+            DisableControlAction(0, CTRL_PREV, true)
+            DisableControlAction(0, CTRL_NEXT, true)
 
+            if not cursorOn then
                 if IsDisabledControlJustPressed(0, CTRL_CURSOR) then
-                    cursorOn = true
                     SetNuiFocus(true, true)
+                    setCursorState(true)
                 elseif IsDisabledControlJustPressed(0, CTRL_SHOOT) then
                     sendKey('shutter')
                 elseif IsDisabledControlJustPressed(0, CTRL_FLIP) then
@@ -79,9 +96,9 @@ local function enterCameraView()
     if active then return end
     active   = true
     frontCam = false
-    cursorOn = true
+    setCursorState(true)
 
-    TriggerEvent('sd-phone:client:cameraMode', true)
+    TriggerEvent('sd-phone:client:cameraMode', true, 'camera')
 
     CreateMobilePhone(1)
     CellCamActivate(true, true)
@@ -104,13 +121,15 @@ local function exitCameraView()
     CellCamActivate(false, false)
     DestroyMobilePhone()
 
-    TriggerEvent('sd-phone:client:cameraMode', false)
+    TriggerEvent('sd-phone:client:cameraMode', false, 'camera')
 
     if hidHud   then DisplayHud(true);   hidHud   = false end
     if hidRadar then DisplayRadar(true); hidRadar = false end
 
-    cursorOn = true
-    SetNuiFocus(true, true)
+    -- The app unmounts behind the phone's close animation, so this can land after the phone is
+    -- already gone; re-focusing then would strand a cursor on an empty screen.
+    if phoneOpen then SetNuiFocus(true, true) end
+    setCursorState(true)
 end
 
 ---Flips between rear and front (selfie) camera. No-op while the cell cam isn't active.
@@ -168,9 +187,12 @@ end)
 
 ---React -> Lua: cursor toggle requested from the page.
 RegisterNUICallback('sd-phone:camera:cursor', function(data, cb)
+    -- The app stays mounted in the switcher deck once backgrounded, and its Alt listener with it:
+    -- honouring this off the viewfinder would strip the phone's cursor from another app.
+    if not active then cb({ success = false }) return end
     local on = data and data.on and true or false
-    cursorOn = on
     SetNuiFocus(on, on)
+    setCursorState(on)
     cb({ success = true })
 end)
 

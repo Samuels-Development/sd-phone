@@ -94,7 +94,7 @@ local function setVideoCamera(on, front)
     if on then
         if not videoCamActive then
             videoCamActive = true
-            TriggerEvent('sd-phone:client:cameraMode', true)
+            TriggerEvent('sd-phone:client:cameraMode', true, 'video')
             CreateMobilePhone(4)
             CellCamActivate(true, true)
             CreateThread(function()
@@ -109,7 +109,7 @@ local function setVideoCamera(on, front)
         videoCamActive = false
         CellCamActivate(false, false)
         DestroyMobilePhone()
-        TriggerEvent('sd-phone:client:cameraMode', false)
+        TriggerEvent('sd-phone:client:cameraMode', false, 'video')
     end
 end
 

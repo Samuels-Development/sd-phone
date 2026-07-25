@@ -40,6 +40,18 @@ return {
     -- player while the phone is out (the classic behaviour).
     AllowMovement = true,
 
+    -- Keep that movement alive while the Camera app's viewfinder owns the
+    -- screen. The mouse still drives the on-screen controls (shutter, zoom,
+    -- mode strip), so aim the lens by holding LookKeybind, or by pressing Left
+    -- Alt to hand the mouse over until you press it again. Set false to freeze
+    -- the player while framing a shot. Needs AllowMovement.
+    AllowMovementInCamera = true,
+
+    -- The same, for a FaceTime video call. The mouse keeps driving the call
+    -- buttons, so hold LookKeybind to steer while you walk. Set false to freeze
+    -- the player for the length of the video call. Needs AllowMovement.
+    AllowMovementInVideoCall = true,
+
     -- Hold this key/button (while the phone is open) to free the mouse for
     -- camera rotation without closing the phone. Releasing it returns to the
     -- on-screen cursor. Combat stays suppressed, so you can look around but not

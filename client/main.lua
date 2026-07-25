@@ -131,6 +131,10 @@ local remoteProps = {}
 local flashlightOn = false
 ---@type boolean True while the Camera app's native cell-cam owns the pose and controls.
 local cameraActive = false
+---@type string Which surface owns the cell-cam while active: 'camera' or 'video' (FaceTime).
+local cameraSurface = 'camera'
+---@type boolean True while the Camera app has handed the mouse to the game to aim the lens.
+local cameraCursorFree = false
 ---@type boolean True while a UI text field is focused.
 local typingInPhone = false
 ---@type boolean True while the focused field is digit-only (PIN pads, dialers): keep-input
@@ -144,6 +148,16 @@ local lookMode = false
 ---@return boolean
 local function shouldHold()
     return (phoneState.open or flashlightOn) and not cameraActive
+end
+
+---Returns whether the live cell-cam has to freeze the game, i.e. its own surface has movement
+---turned off. An absent config key reads as on, so servers on an older configs/phone.lua still
+---get the fix.
+---@return boolean
+local function cameraFrozen()
+    if not cameraActive then return false end
+    if cameraSurface == 'video' then return config.Phone.AllowMovementInVideoCall == false end
+    return config.Phone.AllowMovementInCamera == false
 end
 
 ---Creates a colour-matched local phone prop, disables its collision, and rigidly welds it to the
@@ -237,9 +251,11 @@ local function startMovementThread()
         while phoneState.open do
             if IsPauseMenuActive() then
                 if ClosePhone then ClosePhone() end
-            elseif (not typingInPhone or typingNumeric) and not cameraActive then
+            elseif (not typingInPhone or typingNumeric) and not cameraFrozen() then
                 DisablePlayerFiring(PlayerId(), true)
-                if not lookMode then
+                -- The Camera app's Alt toggle hands the mouse to the game to aim the lens, so
+                -- leave mouse-look alone while it has: suppressing it makes the lens immovable.
+                if not lookMode and not cameraCursorFree then
                     DisableControlAction(0, 1, true)
                     DisableControlAction(0, 2, true)
                 end
@@ -286,15 +302,16 @@ end
 ---AllowMovement on.
 local function syncKeepInput()
     if phoneState.open and config.Phone.AllowMovement then
-        SetNuiFocusKeepInput((not typingInPhone or typingNumeric) and not cameraActive)
+        SetNuiFocusKeepInput((not typingInPhone or typingNumeric) and not cameraFrozen())
     end
 end
 
 ---Enters look mode: releases the NUI cursor so the mouse rotates the camera while the phone stays
----on screen. Only fires with the phone open in movement mode and not typing or in the camera view.
+---on screen. Only fires with the phone open in movement mode and not typing or in a frozen camera
+---view. This is how a walking player aims the lens during a FaceTime.
 local function enterLookMode()
     if lookMode or not phoneState.open or not config.Phone.AllowMovement then return end
-    if typingInPhone or cameraActive then return end
+    if typingInPhone or cameraFrozen() then return end
     lookMode = true
     SetNuiFocus(false, false)
 end
@@ -303,7 +320,9 @@ end
 local function exitLookMode()
     if not lookMode then return end
     lookMode = false
-    if phoneState.open then
+    -- Never grab the cursor back while the Camera app has deliberately released it, or its own
+    -- cursorOn flag desyncs and the viewfinder's key relays go dead.
+    if phoneState.open and not cameraCursorFree then
         SetNuiFocus(true, true)
         syncKeepInput()
     end
@@ -312,9 +331,20 @@ end
 ---Tracks the Camera app's cell-cam state, then re-syncs the pose and keep-input. Payload coerced
 ---to a strict boolean.
 ---@param on any truthy while the cell-cam view is live
-AddEventHandler('sd-phone:client:cameraMode', function(on)
-    cameraActive = on and true or false
+---@param surface string|nil which surface owns it: 'video' for FaceTime, otherwise the Camera app
+AddEventHandler('sd-phone:client:cameraMode', function(on, surface)
+    cameraActive  = on and true or false
+    cameraSurface = surface == 'video' and 'video' or 'camera'
+    if not cameraActive then cameraCursorFree = false end
     updatePose()
+    syncKeepInput()
+end)
+
+---Tracks whether the Camera app is holding the NUI cursor or has handed the mouse to the game to
+---aim the lens, and re-asserts keep-input since SetNuiFocus is what moved.
+---@param on any truthy while the NUI cursor is showing
+AddEventHandler('sd-phone:client:cameraCursor', function(on)
+    cameraCursorFree = not (on and true or false)
     syncKeepInput()
 end)
 
