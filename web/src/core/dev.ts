@@ -1,9 +1,15 @@
 import type { OpenPayload } from './types';
+import { isDemo } from './demo';
 
 
 export function devInjectMockData(): () => void {
-    document.documentElement.style.setProperty('background', '#0a0a0a', 'important');
-    document.body.style.setProperty('background', '#0a0a0a', 'important');
+    // The dev server needs a dark canvas to see the phone against. The demo
+    // build is embedded in a page that draws its own, so painting one here
+    // would show as a black slab around the device.
+    if (!isDemo) {
+        document.documentElement.style.setProperty('background', '#0a0a0a', 'important');
+        document.body.style.setProperty('background', '#0a0a0a', 'important');
+    }
     document.body.style.minHeight = '100vh';
 
     const payload: OpenPayload = {

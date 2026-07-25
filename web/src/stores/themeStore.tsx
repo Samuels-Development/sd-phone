@@ -6,6 +6,7 @@ import { useShallow } from 'zustand/react/shallow';
 import lockscreenAsset from '@/assets/wallpapers/lockscreen.webp';
 import devDefaultAsset from '@/assets/photos/background5.webp';
 import { fetchNui, isFiveM } from '@/core/nui';
+import { isDemo } from '@/core/demo';
 import { wallpaperKey } from '@/shell/wallpapers';
 import { DEFAULT_LOCK_CLOCK, loadLockClockLocal, saveLockClockLocal, type LockClock } from '@/shell/lockClock';
 import { DEFAULT_NOTIFICATION, DEFAULT_RINGTONE } from '@/apps/settings/tones';
@@ -270,7 +271,9 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     hour24: false,
     reopenLastApp: false,
     ringtone: DEFAULT_RINGTONE,
-    notificationTone: DEFAULT_NOTIFICATION,
+    // The website demo opens on Chime, which carries better than the stock
+    // tone through laptop speakers. In game the default is unchanged.
+    notificationTone: isDemo ? 'chime' : DEFAULT_NOTIFICATION,
     customRingtones: [],
     customNotificationTones: [],
     statusLightOverride: null,
