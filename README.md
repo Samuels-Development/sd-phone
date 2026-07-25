@@ -2,7 +2,9 @@
 
 # sd-phone (THIS IS A BETA RELEASE, WILL HAVE ISSUES)
 
-**An iOS-themed smartphone for FiveM. 45+ server-backed apps, real app accounts, a live game-view camera, online multiplayer games, and drop-in lb-phone compatibility.**
+**An iOS-themed smartphone for FiveM.** 45+ server-backed apps, real app accounts, a live game-view camera and online multiplayer games. Ships eight phone items in eight colours, each tinting the on-screen frame and the in-hand prop it is held with, plus optional unique phones where every handset keeps its own data and numbers ride on SIM card items.
+
+**A drop-in lb-phone replacement.** Scripts and custom apps written against lb-phone's exports and events keep running unmodified, and a first-boot migration carries your players across rather than resetting them: phone numbers and lock passcodes, contacts, call history, blocked numbers, SMS threads including groups, photos and albums, and notes.
 
 [![Live demo](https://img.shields.io/badge/Live%20demo-try%20it%20in%20your%20browser-F0E155?style=for-the-badge)](https://fivem.samueldev.shop/phone)
 
@@ -24,14 +26,6 @@
 Thanks for trying this so early. I'd put the phone at about 90% done as of writing, so expect rough edges and a few gaps. Some apps are still mock-only or not fully wired up yet (Vibez, for example, has no backend at this point and only a mock frontend), and there's a good amount of polish and fixes left across the board
 
 Any issues or PRs are highly appreciated. Ohhh and please ⭐the repo! :)
-
-## Try it first
-
-**[Open the live demo →](https://fivem.samueldev.shop/phone)**
-
-The real phone UI, running in your browser on sample data. No download, no server, no account: unlock it, open apps, install more from the in-phone App Store, send yourself a notification, change the frame colour, run the first-boot setup. It starts with only its base apps installed, exactly like a fresh install in game.
-
-It is the production UI built with `VITE_DEMO=1`, so it runs entirely in your browser and never talks to a server. Your setup choices and installed apps persist in that browser between visits; the demo's Reset button puts it back to a fresh install. Anything genuinely server-backed (real calls, the live game-view camera, player-to-player features) only works in game, so the demo stands in for those with sample data.
 
 ## Preview
 
