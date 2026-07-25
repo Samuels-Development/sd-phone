@@ -84,14 +84,40 @@ export function devInjectMockData(): () => void {
         { id: 'seed-messages', app: 'messages', appId: 'messages', title: 'Tommy V',        body: 'Sure Thing!',                                time: '13:15'  },
         { id: 'seed-garages',  app: 'garages',  appId: 'garages',  title: 'Vehicle Update', body: 'Your vehicle (ABC 123) is ready for pickup', time: '15:14'  },
     ];
-    const seedTimers = seedNotifs.map((n, i) =>
-        window.setTimeout(() => window.postMessage({ action: 'sd-phone:notification', data: n }, '*'), 400 + i * 350),
-    );
+    const seedTimers: number[] = [];
+    function seedNotifications(): void {
+        seedNotifs.forEach((n, i) => seedTimers.push(
+            window.setTimeout(() => window.postMessage({ action: 'sd-phone:notification', data: n }, '*'), 400 + i * 350),
+        ));
+        seedTimers.push(window.setTimeout(
+            () => window.postMessage({ action: 'sd-phone:badges', data: { messages: 2, phone: 3, mail: 5, groups: 1 } }, '*'),
+            400,
+        ));
+    }
 
-    seedTimers.push(window.setTimeout(
-        () => window.postMessage({ action: 'sd-phone:badges', data: { messages: 2, phone: 3, mail: 5, groups: 1 } }, '*'),
-        400,
-    ));
+    // Setup is a full-screen takeover, so a seeded notification lands with no
+    // visible banner but an audible tone. Hold them until the flow is done.
+    // Only reachable outside FiveM, where a player in setup gets no traffic.
+    function setupPending(): boolean {
+        try {
+            const raw = window.localStorage.getItem('sd-phone:setup:v1');
+            return !!raw && (JSON.parse(raw) as { completed?: boolean }).completed === false;
+        } catch {
+            return false;
+        }
+    }
+
+    let setupWatch = 0;
+    if (setupPending()) {
+        setupWatch = window.setInterval(() => {
+            if (setupPending()) return;
+            window.clearInterval(setupWatch);
+            setupWatch = 0;
+            seedNotifications();
+        }, 400);
+    } else {
+        seedNotifications();
+    }
 
     let battery = payload.battery;
     const tick = window.setInterval(() => {
@@ -146,6 +172,7 @@ export function devInjectMockData(): () => void {
         window.clearInterval(tick);
         window.clearInterval(weatherTick);
         window.clearInterval(healthTick);
+        if (setupWatch) window.clearInterval(setupWatch);
         seedTimers.forEach(window.clearTimeout);
     };
 }
