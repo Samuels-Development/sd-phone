@@ -4,6 +4,8 @@ local config = require 'configs.config'
 local bridge = require 'bridge.server.inventory'
 ---@type table Shared server helpers (server.util): digits/formatNumber.
 local util   = require 'server.util'
+---@type table SIM registry (server.sim.store): mints a number for a blank card dropped in a tray.
+local simStore = require 'server.sim.store'
 
 ---@type table Inv module; the table returned at end of file. SIM-feature glue over the bridge's
 ---slot-level API: find phone items, read/write the SIM number on them, and (container mode)
@@ -56,22 +58,37 @@ end
 
 ---The SIM number installed in one phone row from findPhones, honouring the configured attach
 ---mode: container mode reads the sim_card item inside the phone's SIM tray, metadata mode reads
----the number written onto the phone item itself. Read-only.
+---the number written onto the phone item itself.
+---
+---Container mode activates a blank card found in the tray, because dragging one in is the whole
+---interaction there and nothing else would ever stamp it.
 ---@param source number player server id
 ---@param phone { slot: number, metadata: table }
 ---@return string|nil number bare-digit SIM number, nil when no SIM is installed
 function inv.getSimNumber(source, phone)
     if config.Sim.UseContainers and inv.isOx() then
-        if not phone.metadata or not phone.metadata.container then return nil end
+        local containerId = phone.metadata and phone.metadata.container
+        if not containerId then return nil end
         local items = bridge.containerItems(source, phone.slot)
         if type(items) ~= 'table' then return nil end
+
+        local blank
         for _, item in pairs(items) do
-            if item and item.name == config.Sim.SimItem and item.metadata then
-                local digits = util.digits(item.metadata.number)
+            if item and item.name == config.Sim.SimItem then
+                local digits = util.digits(item.metadata and item.metadata.number)
                 if digits ~= '' then return digits end
+                blank = blank or item
             end
         end
-        return nil
+        if not blank or config.Sim.ActivateBlankSims == false then return nil end
+
+        local number = simStore.create({})
+        if not number then return nil end
+        local metadata = type(blank.metadata) == 'table' and blank.metadata or {}
+        metadata.number      = number
+        metadata.description = ('SIM: %s'):format(util.formatNumber(number))
+        local ok = pcall(function() exports[OX]:SetMetadata(containerId, blank.slot, metadata) end)
+        return ok and number or nil
     end
 
     local digits = util.digits(phone.metadata and phone.metadata.simNumber)
