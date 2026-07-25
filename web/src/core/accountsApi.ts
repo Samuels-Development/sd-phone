@@ -1,4 +1,5 @@
 import { fetchNui, isFiveM } from './nui';
+import { useMocks } from './demo';
 import { apiCall, apiData } from '@/core/api';
 
 export let MAIL_DOMAIN = 'lifeinvader.com';
@@ -14,7 +15,7 @@ const devSessions: Record<string, AccountMe | null> = {};
 
 export async function accountsMe(app: string): Promise<{ loggedIn: boolean; me: AccountMe | null }> {
     if (!isFiveM) {
-        const me = devSessions[app] ?? (import.meta.env.DEV ? { username: 'dev', name: 'Dev User' } : null);
+        const me = devSessions[app] ?? (useMocks ? { username: 'dev', name: 'Dev User' } : null);
         return { loggedIn: !!me, me };
     }
     const data = await apiData<{ loggedIn: boolean; me?: AccountMe }>('sd-phone:accounts:me', { app });

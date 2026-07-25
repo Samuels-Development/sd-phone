@@ -1,5 +1,6 @@
 node_modules/
 web/build/
+web/build-demo/
 
 # High-res map tiles — hosted on CDN, not committed (see web HIGH_RES_TILES.md)
 maptiles/

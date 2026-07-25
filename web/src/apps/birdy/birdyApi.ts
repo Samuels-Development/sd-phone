@@ -1,4 +1,5 @@
 import { fetchNui, isFiveM } from '@/core/nui';
+import { useMocks } from '@/core/demo';
 import { apiCall, apiData as call } from '@/core/api';
 import { formatClockTime } from '@/lib/time';
 import type { MessageDraft } from '@/shared/chat/ChatView';
@@ -22,7 +23,7 @@ function clock(): string {
     return formatClockTime(new Date(), true);
 }
 
-let devLoggedIn = import.meta.env.DEV;
+let devLoggedIn = useMocks;
 
 export interface AuthState { loggedIn: boolean; me: BirdyAuthor | null }
 export interface AuthResult { ok: boolean; me?: BirdyAuthor; message?: string }

@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+import { useMocks } from '@/core/demo';
+
 
 interface AuthRecord {
     profile: Record<string, string>;
@@ -48,7 +50,7 @@ function readAuth(appKey: string): AuthRecord | null {
 }
 
 export function isAuthed(appKey: string): boolean {
-    if (import.meta.env.DEV) return true;
+    if (useMocks) return true;
     return readAuth(appKey) !== null;
 }
 

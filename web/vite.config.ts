@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
     plugins: [react()],
     base: './',
     resolve: {
@@ -18,8 +18,10 @@ export default defineConfig({
         target: 'chrome110',
         // Output to `web/build/` so fxmanifest.lua's `ui_page` reference
         // (`web/build/index.html`) resolves both pre-build (vanilla
-        // fallback) and post-build (Vite-rendered React).
-        outDir: 'build',
+        // fallback) and post-build (Vite-rendered React). The website demo
+        // build gets its own folder — it bypasses the account gates, so it
+        // must never end up as the bundle the game serves.
+        outDir: mode === 'demo' ? 'build-demo' : 'build',
         emptyOutDir: true,
         assetsDir: 'assets',
         cssCodeSplit: false,
@@ -37,4 +39,4 @@ export default defineConfig({
             },
         },
     },
-});
+}));

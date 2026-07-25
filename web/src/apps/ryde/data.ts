@@ -1,5 +1,6 @@
 
 import { t } from '@/i18n';
+import { useMocks } from '@/core/demo';
 import { readJson, writeJson } from '@/lib/storage';
 import { newId } from '@/lib/format';
 
@@ -272,7 +273,7 @@ function numifyRide(r: Ride): Ride {
 export function loadRides(): Ride[] {
     const raw = readJson<Ride[]>(RIDES_KEY, p => Array.isArray(p) && p.length > 0);
     if (raw) return raw.map(numifyRide);
-    if (import.meta.env.DEV && !ryDevDataHidden()) { const seed = seedRides(); saveRides(seed); return seed; }
+    if (useMocks && !ryDevDataHidden()) { const seed = seedRides(); saveRides(seed); return seed; }
     return [];
 }
 export function saveRides(r: Ride[]): void { writeJson(RIDES_KEY, r); }
@@ -282,7 +283,7 @@ export const DEFAULT_DRIVER: DriverProfile = { enabled: false, online: false, ca
 export function loadDriver(): DriverProfile {
     const r = readJson<DriverProfile>(DRV_KEY);
     if (r) return r;
-    if (import.meta.env.DEV) {
+    if (useMocks) {
         return { enabled: true, online: false, car: 'Karin Sultan', plate: '12 ABC 34', color: '#111', rating: 4.92, ratingCount: 138, trips: 8, earningsTotal: 0 };
     }
     return { ...DEFAULT_DRIVER };
