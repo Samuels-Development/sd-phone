@@ -79,10 +79,12 @@ export function devInjectMockData(): () => void {
         data:   { startMs: Date.now() - (2 * 3600 + 17 * 60) * 1000 },
     }, '*');
 
+    // Base apps only: these land on a phone that has just been set up, before
+    // anything has been installed from the App Store.
     const seedNotifs = [
-        { id: 'seed-vibez',    app: 'vibez',    appId: 'vibez',    title: 'Marcus',         body: 'hey',                                        time: '11 Jun' },
-        { id: 'seed-messages', app: 'messages', appId: 'messages', title: 'Tommy V',        body: 'Sure Thing!',                                time: '13:15'  },
-        { id: 'seed-garages',  app: 'garages',  appId: 'garages',  title: 'Vehicle Update', body: 'Your vehicle (ABC 123) is ready for pickup', time: '15:14'  },
+        { id: 'seed-mail',     app: 'mail',     appId: 'mail',     title: 'Marcus Baker', body: 'Sent over the paperwork you asked for.', time: '11 Jun' },
+        { id: 'seed-messages', app: 'messages', appId: 'messages', title: 'Tommy V',      body: 'Sure Thing!',                            time: '13:15'  },
+        { id: 'seed-bank',     app: 'bank',     appId: 'bank',     title: 'Maze Bank',    body: 'Payment received: $2,500',               time: '15:14'  },
     ];
     const seedTimers: number[] = [];
     function seedNotifications(): void {
