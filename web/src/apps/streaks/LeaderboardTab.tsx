@@ -14,7 +14,7 @@ const MEDAL: Record<number, string> = {
     3: '#D08A4E',
 };
 
-export function LeaderboardTab({ dark }: { dark: boolean }): JSX.Element {
+export function LeaderboardTab({ dark }: { dark: boolean }) {
     const { data, loading } = useAsyncData(streaksLeaderboard, []);
     const rows = data ?? [];
 

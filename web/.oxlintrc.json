@@ -1,0 +1,12 @@
+{
+    "$schema": "./node_modules/oxlint/configuration_schema.json",
+    "plugins": ["eslint", "typescript", "unicorn", "react", "oxc"],
+    "categories": {},
+    "env": {
+        "builtin": true,
+        "es2020": true,
+        "browser": true
+    },
+    "ignorePatterns": ["build", "node_modules", "src/render/three"],
+    "rules": {}
+}

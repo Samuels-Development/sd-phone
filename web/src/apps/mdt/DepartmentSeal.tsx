@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, type JSX } from 'react';
 
 import { MDT_ACCENT } from './mdtTheme';
 

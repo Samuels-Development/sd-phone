@@ -27,7 +27,7 @@ export function SlideOver({ onClose, animateIn = true, direction = 'x', classNam
     const [exiting, setExiting] = useState(false);
     const exit = useRef<() => void>(onClose);
     const finished = useRef(false);
-    const timer = useRef<number>();
+    const timer = useRef<number | undefined>(undefined);
 
     function finish() {
         if (finished.current) return;

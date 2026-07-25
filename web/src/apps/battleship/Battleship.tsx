@@ -73,7 +73,7 @@ export function Battleship({ onClose: _onClose }: Props) {
     const [lbLoading,   setLbLoading]   = useState(false);
 
     const recorded     = useRef(false);
-    const aiTimer      = useRef<ReturnType<typeof setTimeout>>();
+    const aiTimer      = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const myFleetRef   = useRef(myFleet);    useEffect(() => { myFleetRef.current = myFleet; }, [myFleet]);
     const enemyFleetRef = useRef(enemyFleet); useEffect(() => { enemyFleetRef.current = enemyFleet; }, [enemyFleet]);
     const phaseRef     = useRef(phase);      useEffect(() => { phaseRef.current = phase; }, [phase]);

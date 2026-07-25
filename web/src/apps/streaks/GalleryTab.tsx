@@ -15,7 +15,7 @@ export function GalleryTab({ posts, dark, onLike, onLoadMore, loadingMore, hasMo
     onLoadMore: () => void;
     loadingMore: boolean;
     hasMore: boolean;
-}): JSX.Element {
+}) {
     const [openId, setOpenId] = useState<number | null>(null);
     const isOpen = openId != null && posts.some(p => p.id === openId);
 

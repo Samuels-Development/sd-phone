@@ -17,7 +17,7 @@ export function RewardsView({ state, config, dark, onBack }: {
     config: StreakConfig;
     dark:   boolean;
     onBack: () => void;
-}): JSX.Element {
+}) {
     const { goBack, pageStyle } = useIosPush(onBack);
 
     const current = state.current;

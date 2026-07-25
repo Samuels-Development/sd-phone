@@ -36,7 +36,7 @@ export function GifPickerSheet({ onSelect, onClose, forceDark = false }: {
     const [categories, setCategories] = useState<GifCategory[] | null | undefined>(undefined);
     const [gifs,       setGifs]       = useState<GifItem[]>([]);
     const [loading,    setLoading]    = useState(false);
-    const debounce = useRef<ReturnType<typeof setTimeout>>();
+    const debounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
     useEffect(() => { void fetchGifCategories().then(setCategories); }, []);
 

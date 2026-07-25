@@ -226,7 +226,7 @@ function AppContent() {
     const [frameColor,      setFrameColor]      = useState<string>(DEFAULT_FRAME_COLOR);
     const downloadingIds = useDownloadingIds();
     const downloadQueue = useRef<string[]>([]);
-    const downloadTimer = useRef<number>();
+    const downloadTimer = useRef<number | undefined>(undefined);
 
     const noSim = useNoSim();
     const simEnabled = useSimStore(s => s.enabled);

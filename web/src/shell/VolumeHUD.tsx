@@ -23,8 +23,8 @@ export function VolumeHUD({ suppressed = false }: { suppressed?: boolean }) {
     const prevRingtone  = useRef<number | null>(null);
     const prevCall      = useRef<number | null>(null);
     const prevMedia     = useRef<number | null>(null);
-    const dismissTimer  = useRef<ReturnType<typeof setTimeout>>();
-    const unmountTimer  = useRef<ReturnType<typeof setTimeout>>();
+    const dismissTimer  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    const unmountTimer  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const trackRef      = useRef<HTMLDivElement>(null);
     const dragging      = useRef(false);
 

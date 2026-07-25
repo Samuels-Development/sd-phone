@@ -20,7 +20,7 @@ export function MeTab({ state, config, dark, posting, onPost, onOpenRewards }: {
     posting: boolean;
     onPost:  (caption: string | undefined) => void;
     onOpenRewards: () => void;
-}): JSX.Element {
+}) {
     const [sheetOpen, setSheetOpen] = useState(false);
     const [caption, setCaption]     = useState('');
 
