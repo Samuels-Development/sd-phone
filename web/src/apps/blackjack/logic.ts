@@ -82,3 +82,17 @@ export function statResultFor(outcome: Outcome): 'win' | 'loss' | 'draw' {
     if (outcome === 'push') return 'draw';
     return 'loss';
 }
+
+/** Smallest wager the table accepts. */
+const MIN_BET = 5;
+
+/**
+ * The bet a fresh hand opens on: the player's own last chosen stake, floored at the table minimum
+ * and capped by what they can actually cover. Derived from the CHOSEN stake, never from the
+ * previous hand's wager - doubling raises that wager, and carrying it into the next hand made the
+ * stake climb on its own every time the player doubled.
+ */
+export function openingBet(lastBet: number, chips: number): number {
+    const wanted = Number.isFinite(lastBet) && lastBet > 0 ? Math.floor(lastBet) : 25;
+    return Math.min(Math.max(wanted, MIN_BET), Math.max(0, Math.floor(chips)));
+}

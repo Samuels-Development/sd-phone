@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Card } from './logic';
-import { dealerShouldHit, handValue, isBlackjack, isBust, outcomeVsDealer, payoutFor } from './logic';
+import { dealerShouldHit, handValue, isBlackjack, isBust, openingBet, outcomeVsDealer, payoutFor } from './logic';
 
 // These rules are the oracle the server-authoritative Lua (server/games/blackjack.lua) mirrors.
 // Keep the two in lockstep: any change here must be reflected there.
@@ -74,5 +74,35 @@ describe('payoutFor', () => {
         expect(payoutFor(100, 'win')).toEqual({ credit: 200, net: 100 });
         expect(payoutFor(100, 'push')).toEqual({ credit: 100, net: 0 });
         expect(payoutFor(100, 'lose')).toEqual({ credit: 0, net: -100 });
+    });
+});
+
+describe('openingBet', () => {
+    // The bug this guards: doubling raises the hand's wager, and the next hand used to open on
+    // THAT figure instead of the stake the player chose, so the bet climbed every double.
+    it('opens on the chosen stake, not a doubled wager', () => {
+        expect(openingBet(25, 1000)).toBe(25);
+    });
+
+    it('does not compound across repeated doubles', () => {
+        let chosen = 25;
+        for (let i = 0; i < 5; i++) chosen = openingBet(chosen, 1000);
+        expect(chosen).toBe(25);
+    });
+
+    it('floors a real stake at the table minimum', () => {
+        expect(openingBet(1, 1000)).toBe(5);
+        expect(openingBet(4, 1000)).toBe(5);
+    });
+
+    it('never opens above what the player can cover', () => {
+        expect(openingBet(500, 80)).toBe(80);
+        expect(openingBet(25, 0)).toBe(0);
+    });
+
+    it('falls back to the default stake when the stored value is unusable', () => {
+        expect(openingBet(NaN, 1000)).toBe(25);
+        expect(openingBet(-40, 1000)).toBe(25);
+        expect(openingBet(0, 1000)).toBe(25);
     });
 });

@@ -8,7 +8,7 @@ import { BlackjackIcon } from '@/shell/AppIconSVG';
 import {
     type Card, type Outcome,
     SUIT_GLYPH,
-    fmtChips, handValue, isBlackjack, isBust, isRed, statResultFor,
+    fmtChips, handValue, isBlackjack, isBust, isRed, openingBet, statResultFor,
 } from './logic';
 import { type BjResult, bjDeal, bjDouble, bjHit, bjStand } from './blackjackApi';
 import { isFiveM } from '@/core/nui';
@@ -87,7 +87,7 @@ export function Blackjack({ onClose: _onClose }: Props) {
     function enterSolo() {
         timers.current.forEach(clearTimeout); timers.current = [];
         setPhase('betting'); setPlayer([]); setDealer([]); setHoleUp(false); setDoubled(false); setOutcome(null); setPayout(0);
-        setBet(Math.min(Math.max(lastBet || 25, 5), chipsRef.current) || Math.min(5, chipsRef.current));
+        setBet(openingBet(lastBet, chipsRef.current));
         setScreen('solo');
     }
 
@@ -166,7 +166,9 @@ export function Blackjack({ onClose: _onClose }: Props) {
     }
     function soloNewHand() {
         setPhase('betting'); setPlayer([]); setDealer([]); setHoleUp(false); setDoubled(false); setOutcome(null);
-        setBet(b => Math.min(Math.max(b, 5), chipsRef.current) || Math.min(5, chipsRef.current));
+        // From the chosen stake, not the hand just played: doubling raises that hand's wager, and
+        // carrying it over made the bet climb on its own after every double.
+        setBet(openingBet(lastBet, chipsRef.current));
     }
 
     function openLeaderboard() { setScreen('leaderboard'); setLbLoading(true); void loadLeaderboard(GAME).then(d => { setLeaderboard(d); setLbLoading(false); }); }
@@ -232,6 +234,7 @@ export function Blackjack({ onClose: _onClose }: Props) {
                     <SoloTable
                         phase={phase} bet={bet} chips={chips} player={player} dealer={dealer} holeUp={holeUp} outcome={outcome} payout={payout}
                         canDouble={phase === 'playing' && player.length === 2 && !doubled && chips >= bet}
+                        doubleBlocked={phase === 'playing' && player.length === 2 && !doubled && chips < bet ? 'chips' : null}
                         onAdjust={adjustBet} onMax={setBetMax} onSet={setBetTo} onDeal={deal}
                         onHit={hit} onStand={stand} onDouble={doubleDown} onNewHand={soloNewHand} onCashier={() => setScreen('cashier')}
                     />
@@ -349,8 +352,8 @@ function PayoutRow({ label, sub, result, example, highlight }: { label: string; 
     );
 }
 
-function SoloTable({ phase, bet, chips, player, dealer, holeUp, outcome, payout, canDouble, onAdjust, onMax, onSet, onDeal, onHit, onStand, onDouble, onNewHand, onCashier }: {
-    phase: Phase; bet: number; chips: number; player: Card[]; dealer: Card[]; holeUp: boolean; outcome: Outcome | null; payout: number; canDouble: boolean;
+function SoloTable({ phase, bet, chips, player, dealer, holeUp, outcome, payout, canDouble, doubleBlocked, onAdjust, onMax, onSet, onDeal, onHit, onStand, onDouble, onNewHand, onCashier }: {
+    phase: Phase; bet: number; chips: number; player: Card[]; dealer: Card[]; holeUp: boolean; outcome: Outcome | null; payout: number; canDouble: boolean; doubleBlocked: 'chips' | null;
     onAdjust: (d: number) => void; onMax: () => void; onSet: (n: number) => void; onDeal: () => void;
     onHit: () => void; onStand: () => void; onDouble: () => void; onNewHand: () => void; onCashier: () => void;
 }) {
@@ -379,7 +382,7 @@ function SoloTable({ phase, bet, chips, player, dealer, holeUp, outcome, payout,
                 {phase === 'betting'
                     ? <BetControls bet={bet} chips={chips} onAdjust={onAdjust} onMax={onMax} onSet={onSet} onDeal={onDeal} onCashier={onCashier} />
                     : phase === 'playing'
-                        ? <PlayControls onHit={onHit} onStand={onStand} onDouble={onDouble} canDouble={canDouble} />
+                        ? <PlayControls onHit={onHit} onStand={onStand} onDouble={onDouble} canDouble={canDouble} doubleBlocked={doubleBlocked} />
                         : phase === 'dealer'
                             ? <WaitNote text={t('blackjack.dealerPlaying', 'Dealer is playing…')} />
                             : <ResultControls onNewHand={onNewHand} canPlay={chips > 0} onCashier={onCashier} />}
@@ -515,12 +518,24 @@ function BetControls({ bet, chips, onAdjust, onMax, onSet, onDeal, onCashier }: 
     );
 }
 
-function PlayControls({ onHit, onStand, onDouble, canDouble }: { onHit: () => void; onStand: () => void; onDouble: () => void; canDouble: boolean }) {
+function PlayControls({ onHit, onStand, onDouble, canDouble, doubleBlocked }: {
+    onHit: () => void; onStand: () => void; onDouble: () => void; canDouble: boolean;
+    doubleBlocked: 'chips' | null;
+}) {
     return (
-        <div className="flex items-stretch gap-2.5">
-            <ActionButton label={t('blackjack.hit', 'Hit')} onClick={onHit} tone="light" />
-            <ActionButton label={t('blackjack.stand', 'Stand')} onClick={onStand} tone="gold" />
-            <ActionButton label={t('blackjack.double', 'Double')} onClick={onDouble} tone="dark" disabled={!canDouble} />
+        <div className="flex flex-col gap-1.5">
+            <div className="flex items-stretch gap-2.5">
+                <ActionButton label={t('blackjack.hit', 'Hit')} onClick={onHit} tone="light" />
+                <ActionButton label={t('blackjack.stand', 'Stand')} onClick={onStand} tone="gold" />
+                <ActionButton label={t('blackjack.double', 'Double')} onClick={onDouble} tone="dark" disabled={!canDouble} />
+            </div>
+            {/* Doubling needs a second wager equal to the first, and the first is already on the
+                table - so a large bet silently greys the button out. Say which it is. */}
+            {doubleBlocked === 'chips' && (
+                <div className="text-center text-[12px] text-ios-gray">
+                    {t('blackjack.doubleNeedsChips', 'Not enough chips left to double')}
+                </div>
+            )}
         </div>
     );
 }
