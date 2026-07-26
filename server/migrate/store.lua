@@ -401,6 +401,43 @@ function store.fillSettings(rows)
     ]])
 end
 
+---@return table[]
+function store.lbWallet()
+    return MySQL.query.await(([[
+        SELECT id, phone_number, amount, company, UNIX_TIMESTAMP(`timestamp`) AS ts FROM %s
+    ]]):format(lbt('wallet_transactions'))) or {}
+end
+
+---@param rows any[][] { citizenid, label, amount, category, created_at }
+function store.insertBankTx(rows)
+    insertMulti('INSERT IGNORE INTO phone_bank_transactions (citizenid, label, amount, category, created_at) VALUES', 5, rows)
+end
+
+---@return { message_id: any, phone_number: string, reaction: string }[]
+function store.lbReactions()
+    return MySQL.query.await(
+        ('SELECT message_id, phone_number, reaction FROM %s'):format(lbt('message_reactions'))) or {}
+end
+
+---@param rows any[][] { mid, citizenid, emoji, created_at }
+function store.insertReactions(rows)
+    insertMulti('INSERT IGNORE INTO phone_message_reactions (mid, citizenid, emoji, created_at) VALUES', 4, rows)
+end
+
+---@return table[]
+function store.lbVoiceMemos()
+    return MySQL.query.await(([[
+        SELECT id, phone_number, file_name, file_url, file_length,
+               UNIX_TIMESTAMP(created_at) AS ts
+        FROM %s
+    ]]):format(lbt('voice_memos_recordings'))) or {}
+end
+
+---@param rows any[][] { citizenid, name, url, duration, created_at }
+function store.insertVoiceMemos(rows)
+    insertMulti('INSERT IGNORE INTO phone_voice_memos (citizenid, name, url, duration, created_at) VALUES', 5, rows)
+end
+
 ---@return { address: string, password: string }[]
 function store.lbMailAccounts()
     return MySQL.query.await(('SELECT address, password FROM %s'):format(lbt('mail_accounts'))) or {}

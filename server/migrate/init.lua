@@ -16,11 +16,14 @@ local PORTS = {
     { key = 'blocked',  label = 'blocked',  run = require('server.migrate.port.blocked').run },
     { key = 'calls',    label = 'calls',    run = require('server.migrate.port.calls').run },
     { key = 'messages', label = 'messages', run = require('server.migrate.port.messages').run },
+    { key = 'reactions', label = 'reactions', run = require('server.migrate.port.reactions').run },
     { key = 'photos',   label = 'photos',   run = require('server.migrate.port.photos').run },
     { key = 'notes',    label = 'notes',    run = require('server.migrate.port.notes').run },
     { key = 'settings', label = 'settings', run = require('server.migrate.port.settings').run },
     { key = 'photogram', label = 'photogram', run = require('server.migrate.port.photogram').run },
     { key = 'mail',      label = 'mail',      run = require('server.migrate.port.mail').run },
+    { key = 'wallet',    label = 'wallet',    run = require('server.migrate.port.wallet').run },
+    { key = 'voicememos', label = 'voicememos', run = require('server.migrate.port.voicememos').run },
 }
 
 -- sd-phone tables the porters write into; the migration waits for all of them. Names lb-phone
@@ -36,7 +39,8 @@ local TARGETS = {
     'phone_photogram_likes', 'phone_photogram_comment_likes', 'phone_photogram_follows',
     'phone_photogram_stories', 'phone_photogram_story_views', 'phone_photogram_dms',
     'phone_photogram_notifications', 'phone_app_accounts', 'phone_app_sessions',
-    { 'phone_mail_accounts', 'password_hash' },
+    { 'phone_mail_accounts', 'password_hash' }, { 'phone_message_reactions', 'mid' },
+    'phone_bank_transactions', 'phone_voice_memos',
 }
 
 ---Print a namespaced migration log line.
