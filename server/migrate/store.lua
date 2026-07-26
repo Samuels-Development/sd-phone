@@ -401,6 +401,31 @@ function store.fillSettings(rows)
     ]])
 end
 
+---@return { address: string, password: string }[]
+function store.lbMailAccounts()
+    return MySQL.query.await(('SELECT address, password FROM %s'):format(lbt('mail_accounts'))) or {}
+end
+
+---@return table[]
+function store.lbMailMessages()
+    return MySQL.query.await(([[
+        SELECT id, recipient, sender, subject, content, attachments, actions, `read`,
+               UNIX_TIMESTAMP(`timestamp`) AS ts
+        FROM %s ORDER BY `timestamp` ASC
+    ]]):format(lbt('mail_messages'))) or {}
+end
+
+---@return { phone_number: string, app: string, username: string }[]
+function store.lbLoggedIn()
+    return MySQL.query.await(
+        ('SELECT phone_number, app, username FROM %s'):format(lbt('logged_in_accounts'))) or {}
+end
+
+---@param rows any[][] { email, password_hash, display_name, messages, logged_in_citizens }
+function store.insertMailAccounts(rows)
+    insertMulti('INSERT IGNORE INTO phone_mail_accounts (email, password_hash, display_name, messages, logged_in_citizens) VALUES', 5, rows)
+end
+
 ---Usernames already present in Photogram, so a migrated account never overwrites a live one.
 ---@return table<string, boolean>
 function store.existingPhotogramUsernames()
