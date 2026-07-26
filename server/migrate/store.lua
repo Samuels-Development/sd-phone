@@ -368,6 +368,39 @@ function store.insertNotes(rows)
     insertMulti('INSERT IGNORE INTO phone_notes (citizenid, id, body, sketches, images, created_at, updated_at) VALUES', 7, rows)
 end
 
+---Every lb-phone phone that carries a settings blob. Read-only.
+---@return { phone_number: string, settings: string }[]
+function store.lbPhoneSettings()
+    return MySQL.query.await(
+        ('SELECT phone_number, settings FROM %s WHERE settings IS NOT NULL'):format(lbt('phones'))) or {}
+end
+
+---Fill-only settings merge. rows: { citizenid, wallpaper, blur_lock, blur_home, theme, brightness,
+---phone_scale, hour24, ringtone, notification_tone, ringtone_volume, call_volume, home_layout }.
+---@param rows any[][]
+function store.fillSettings(rows)
+    insertMulti([[
+        INSERT INTO phone_settings
+            (citizenid, wallpaper, blur_lock, blur_home, theme, brightness, phone_scale, hour24,
+             ringtone, notification_tone, ringtone_volume, call_volume, home_layout)
+        VALUES
+    ]], 13, rows, [[
+        ON DUPLICATE KEY UPDATE
+            wallpaper         = IF(wallpaper IS NULL, VALUES(wallpaper), wallpaper),
+            blur_lock         = IF(blur_lock IS NULL, VALUES(blur_lock), blur_lock),
+            blur_home         = IF(blur_home IS NULL, VALUES(blur_home), blur_home),
+            theme             = IF(theme IS NULL, VALUES(theme), theme),
+            brightness        = IF(brightness IS NULL, VALUES(brightness), brightness),
+            phone_scale       = IF(phone_scale IS NULL, VALUES(phone_scale), phone_scale),
+            hour24            = IF(hour24 IS NULL, VALUES(hour24), hour24),
+            ringtone          = IF(ringtone IS NULL, VALUES(ringtone), ringtone),
+            notification_tone = IF(notification_tone IS NULL, VALUES(notification_tone), notification_tone),
+            ringtone_volume   = IF(ringtone_volume IS NULL, VALUES(ringtone_volume), ringtone_volume),
+            call_volume       = IF(call_volume IS NULL, VALUES(call_volume), call_volume),
+            home_layout       = IF(home_layout IS NULL, VALUES(home_layout), home_layout)
+    ]])
+end
+
 ---Decodes a JSON column value; accepts strings or already-decoded tables and returns {} for
 ---anything absent or invalid.
 ---@param value any

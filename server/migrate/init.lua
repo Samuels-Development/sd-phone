@@ -18,6 +18,7 @@ local PORTS = {
     { key = 'messages', label = 'messages', run = require('server.migrate.port.messages').run },
     { key = 'photos',   label = 'photos',   run = require('server.migrate.port.photos').run },
     { key = 'notes',    label = 'notes',    run = require('server.migrate.port.notes').run },
+    { key = 'settings', label = 'settings', run = require('server.migrate.port.settings').run },
 }
 
 -- sd-phone tables the porters write into; the migration waits for all of them. Names lb-phone
