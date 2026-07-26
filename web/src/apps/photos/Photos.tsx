@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Camera as CameraIcon, FolderPlus, Heart, Trash2 } from 'lucide-react';
 
 import { useNuiEvent } from '@/hooks/useNuiEvent';
@@ -9,7 +9,7 @@ import {
     apiAddPhotosToAlbum, apiCreateAlbum, apiDeleteAlbum, apiDeletePhoto,
     apiListAlbumPhotos, apiListAlbums, apiListPhotos, apiListSharedAlbums,
     apiRemovePhotoFromAlbum, apiSavePhotoFromUrl, apiSetFavorite, getCanImportPhotos, mapPhoto,
-    type Album, type AlbumRef, type Photo,
+    type Album, type AlbumRef, type Photo, type PhotoCounts,
 } from '@/core/photosApi';
 import { AlbumDetail } from './AlbumDetail';
 import { AlbumPickerSheet } from './AlbumPickerSheet';
@@ -29,6 +29,13 @@ export function Photos({ onClose }: { onClose: () => void }) {
     const [sharedAlbums, setSharedAlbums] = useState<Album[]>([]);
     const [loading, setLoading] = useState(true);
 
+    // The gallery is paged: `photos` holds what has been fetched so far, `counts` holds the
+    // server-side totals the album tiles need (a page cannot report them).
+    const [nextCursor,  setNextCursor]  = useState<string | null>(null);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [counts,      setCounts]      = useState<PhotoCounts>({ total: 0, favorites: 0, videos: 0 });
+    const fetchingMore = useRef(false);
+
     const [gallerySelect, setGallerySelect] = useState(false);
     const [gallerySelected, setGallerySelected] = useState<Set<string>>(new Set());
 
@@ -47,9 +54,11 @@ export function Photos({ onClose }: { onClose: () => void }) {
     useEffect(() => {
         let cancelled = false;
         (async () => {
-            const [ps, as, shared] = await Promise.all([apiListPhotos(), apiListAlbums(), apiListSharedAlbums()]);
+            const [page, as, shared] = await Promise.all([apiListPhotos(), apiListAlbums(), apiListSharedAlbums()]);
             if (cancelled) return;
-            setPhotos(ps);
+            setPhotos(page.photos);
+            setNextCursor(page.nextCursor);
+            if (page.counts) setCounts(page.counts);
             setAlbums(as);
             setSharedAlbums(shared);
             setCanImport(getCanImportPhotos());
@@ -58,10 +67,29 @@ export function Photos({ onClose }: { onClose: () => void }) {
         return () => { cancelled = true; };
     }, []);
 
+    // Appends the next page. Guarded on a ref rather than `loadingMore` so a burst of scroll
+    // events cannot fire two requests for the same cursor before the first setState lands.
+    const loadMore = useCallback(async () => {
+        if (fetchingMore.current || !nextCursor) return;
+        fetchingMore.current = true;
+        setLoadingMore(true);
+        try {
+            const page = await apiListPhotos(nextCursor);
+            setPhotos(prev => {
+                const seen = new Set(prev.map(p => p.id));
+                return [...prev, ...page.photos.filter(p => !seen.has(p.id))];
+            });
+            setNextCursor(page.nextCursor);
+        } finally {
+            fetchingMore.current = false;
+            setLoadingMore(false);
+        }
+    }, [nextCursor]);
+
     useEffect(() => {
-        if (openAlbum?.kind !== 'custom') return;
+        if (!openAlbum) return;
         let cancelled = false;
-        void apiListAlbumPhotos(openAlbum.id).then(ps => { if (!cancelled) setCustomAlbumPhotos(ps); });
+        void loadAlbumPhotos(openAlbum).then(ps => { if (!cancelled) setCustomAlbumPhotos(ps); });
         return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -73,25 +101,30 @@ export function Photos({ onClose }: { onClose: () => void }) {
         setPhotos(prev => (prev.some(x => x.id === p.id) ? prev : [p, ...prev]));
     }, []));
 
-    const favourites = useMemo(() => photos.filter(p => p.favorite), [photos]);
-
     const refreshAlbums = useCallback(async () => {
         setAlbums(await apiListAlbums());
     }, []);
 
+    // Favourites and Videos are resolved server-side now. Deriving them from `photos` would only
+    // ever see the pages fetched so far, so a favourite further down the library went missing.
+    async function loadAlbumPhotos(ref: AlbumRef): Promise<Photo[]> {
+        if (ref.kind === 'custom')     return apiListAlbumPhotos(ref.id);
+        if (ref.kind === 'favourites') return (await apiListPhotos(null, 'favorites')).photos;
+        if (ref.kind === 'mediaType' && ref.mediaType === 'videos') {
+            return (await apiListPhotos(null, 'videos')).photos;
+        }
+        return [];
+    }
+
     function albumPhotosFor(ref: AlbumRef): Photo[] {
-        if (ref.kind === 'recents')    return photos;
-        if (ref.kind === 'favourites') return favourites;
-        if (ref.kind === 'mediaType')  return ref.mediaType === 'videos' ? photos.filter(p => p.video) : [];
+        if (ref.kind === 'recents') return photos;
         return customAlbumPhotos;
     }
 
     async function openAlbumRef(ref: AlbumRef) {
         setOpenAlbum(ref);
         setCustomAlbumPhotos([]);
-        if (ref.kind === 'custom') {
-            setCustomAlbumPhotos(await apiListAlbumPhotos(ref.id));
-        }
+        setCustomAlbumPhotos(await loadAlbumPhotos(ref));
     }
 
     async function toggleFavorite(photo: Photo) {
@@ -212,10 +245,14 @@ export function Photos({ onClose }: { onClose: () => void }) {
                                 onPhotoTap={openViewerFromGallery}
                                 onToggleSelect={toggleGallerySelect}
                                 onImport={canImport ? () => setImportOpen(true) : undefined}
+                                hasMore={nextCursor !== null}
+                                loadingMore={loadingMore}
+                                onLoadMore={() => void loadMore()}
                             />
                         ) : (
                             <AlbumsTab
                                 photos={photos}
+                                counts={counts}
                                 albums={albums}
                                 sharedAlbums={sharedAlbums}
                                 editMode={albumsEdit}

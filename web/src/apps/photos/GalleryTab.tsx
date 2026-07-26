@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 import { t } from '@/i18n';
 import { groupByDay, type Photo } from '@/core/photosApi';
@@ -6,6 +6,7 @@ import { PhotoTile } from './PhotoTile';
 
 export function GalleryTab({
     photos, selectionMode, selectedIds, onEnterSelect, onCancelSelect, onPhotoTap, onToggleSelect, onImport,
+    hasMore, loadingMore, onLoadMore,
 }: {
     photos:         Photo[];
     selectionMode:  boolean;
@@ -15,8 +16,31 @@ export function GalleryTab({
     onPhotoTap:     (photo: Photo) => void;
     onToggleSelect: (photo: Photo) => void;
     onImport?:      () => void;
+    hasMore:        boolean;
+    loadingMore:    boolean;
+    onLoadMore:     () => void;
 }) {
     const groups = useMemo(() => groupByDay(photos), [photos]);
+
+    const scrollRef   = useRef<HTMLDivElement>(null);
+    const sentinelRef = useRef<HTMLDivElement>(null);
+    const loadMoreRef = useRef(onLoadMore);
+    loadMoreRef.current = onLoadMore;
+
+    // Infinite scroll. The observer root MUST be the scroll container, not the viewport: the
+    // phone renders under a CSS zoom, and a viewport-rooted observer computes the wrong
+    // intersection and either never fires or fires constantly.
+    useEffect(() => {
+        const sentinel = sentinelRef.current;
+        const root     = scrollRef.current;
+        if (!sentinel || !root || !hasMore) return;
+        const io = new IntersectionObserver(
+            entries => { if (entries.some(e => e.isIntersecting)) loadMoreRef.current(); },
+            { root, rootMargin: '600px 0px' },
+        );
+        io.observe(sentinel);
+        return () => io.disconnect();
+    }, [hasMore]);
 
     return (
         <div className="flex h-full flex-col">
@@ -39,7 +63,7 @@ export function GalleryTab({
                 </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto no-scrollbar pb-2">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar pb-2">
                 {groups.map(group => (
                     <section key={group.key} className="mb-3">
                         <h2 className="px-4 pb-2 pt-1 text-[16px] font-bold tracking-tight text-black dark:text-white">
@@ -58,6 +82,16 @@ export function GalleryTab({
                         </div>
                     </section>
                 ))}
+
+                {hasMore && (
+                    <div ref={sentinelRef} className="flex h-12 items-center justify-center">
+                        {loadingMore && (
+                            <span className="text-[13px] text-black/45 dark:text-white/45">
+                                {t('photos.loadingMore', 'Loading more…')}
+                            </span>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

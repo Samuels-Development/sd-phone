@@ -29,18 +29,42 @@ local function shapePhoto(row)
     }
 end
 
----Lists every photo the caller owns, newest first. Read-only.
+---@type integer Photos per page. A library of thousands used to arrive in one callback, which
+---tripped oxmysql's oversized-result warning and mounted every tile at once.
+local PAGE_SIZE <const> = 200
+
+---One page of the caller's photos, newest first. An absent `cursor` means the first page, which
+---also carries the smart-album counts. Read-only.
 ---@param source number player server id
----@return table result { success, data = { photos } }
-function actions.list(source)
+---@param payload { cursor: string|nil, filter: 'favorites'|'videos'|nil }|nil
+---@return table result { success, data = { photos, nextCursor, counts, canImport } }
+function actions.list(source, payload)
     local cid = player.getIdentifier(source)
     if not cid then return fail('Player not found') end
-    local rows = store.listForCitizen(cid)
+
+    payload = type(payload) == 'table' and payload or {}
+    local cursor = type(payload.cursor) == 'string' and payload.cursor ~= '' and payload.cursor or nil
+    local filter = (payload.filter == 'favorites' or payload.filter == 'videos') and payload.filter or nil
+
+    -- One row past the page proves a further page exists; it is trimmed before shaping.
+    local rows = store.listForCitizen(cid, cursor, PAGE_SIZE, filter)
+    local nextCursor
+    if #rows > PAGE_SIZE then
+        local last = rows[PAGE_SIZE]
+        rows[PAGE_SIZE + 1] = nil
+        nextCursor = ('%d:%s'):format(math.floor(tonumber(last.ts) or 0), last.id)
+    end
+
     local out = {}
     for i = 1, #rows do
         out[i] = shapePhoto(rows[i])
     end
-    return ok({ photos = out, canImport = actions.importEnabled() })
+
+    local data = { photos = out, nextCursor = nextCursor, canImport = actions.importEnabled() }
+    -- Counts ride the first page only: the Recents/Favourites/Videos tiles need totals that a
+    -- single page cannot report, and they do not change while paging.
+    if not cursor then data.counts = store.countsFor(cid) end
+    return ok(data)
 end
 
 ---@type integer Longest accepted photo URL in bytes, matching the phone_photos.url VARCHAR(512) column.

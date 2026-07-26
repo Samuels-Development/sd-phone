@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 
 import { t } from '@/i18n';
-import type { Album, AlbumRef, MediaType, Photo } from '@/core/photosApi';
+import type { Album, AlbumRef, MediaType, Photo, PhotoCounts } from '@/core/photosApi';
 
 interface AlbumCard {
     key:           string;
@@ -19,9 +19,11 @@ interface AlbumCard {
 }
 
 export function AlbumsTab({
-    photos, albums, sharedAlbums, editMode, onToggleEdit, onCreateAlbum, onOpenAlbum, onDeleteAlbum,
+    photos, counts, albums, sharedAlbums, editMode, onToggleEdit, onCreateAlbum, onOpenAlbum, onDeleteAlbum,
 }: {
     photos:        Photo[];
+    /** Server-side totals; `photos` only holds the pages fetched so far, so it cannot count. */
+    counts:        PhotoCounts;
     albums:        Album[];
     sharedAlbums:  Album[];
     editMode:      boolean;
@@ -39,15 +41,16 @@ export function AlbumsTab({
     ];
 
     const cards = useMemo<AlbumCard[]>(() => {
-        const favs = photos.filter(p => p.favorite);
+        // Covers come from the loaded pages (newest first, so the first page always has one);
+        // the counts come from the server.
         const standard: AlbumCard[] = [
             {
-                key: 'recents', title: t('photos.recents', 'Recents'), count: photos.length,
+                key: 'recents', title: t('photos.recents', 'Recents'), count: counts.total,
                 cover: photos[0]?.url ?? null, ref: { kind: 'recents', name: t('photos.recents', 'Recents') },
             },
             {
-                key: 'favourites', title: t('photos.favourites', 'Favourites'), count: favs.length,
-                cover: favs[0]?.url ?? null, isFavourites: true,
+                key: 'favourites', title: t('photos.favourites', 'Favourites'), count: counts.favorites,
+                cover: photos.find(p => p.favorite)?.url ?? null, isFavourites: true,
                 ref: { kind: 'favourites', name: t('photos.favourites', 'Favourites') },
             },
         ];
@@ -56,7 +59,7 @@ export function AlbumsTab({
             ref: { kind: 'custom', id: a.id, name: a.name },
         }));
         return [...standard, ...custom];
-    }, [photos, albums]);
+    }, [photos, counts, albums]);
 
     const sharedCards = useMemo<AlbumCard[]>(() => sharedAlbums.map(a => ({
         key: a.id, title: a.name, count: a.count, cover: a.cover, isShared: true,
@@ -64,12 +67,12 @@ export function AlbumsTab({
     })), [sharedAlbums]);
 
     const typeCounts = useMemo<Record<MediaType, number>>(() => ({
-        videos:      photos.filter(p => p.video).length,
+        videos:      counts.videos,
         selfies:     0,
         screenshots: 0,
         imports:     0,
         duplicates:  0,
-    }), [photos]);
+    }), [counts]);
 
     return (
         <div className="flex h-full flex-col">

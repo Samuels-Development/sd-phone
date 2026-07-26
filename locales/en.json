@@ -2063,6 +2063,7 @@
     "imports": "Imports",
     "itemsSelected": "{count} {noun} selected",
     "loading": "Loading…",
+    "loadingMore": "Loading more…",
     "mediaTypes": "Media Types",
     "moreOptions": "More options",
     "mute": "Mute",
