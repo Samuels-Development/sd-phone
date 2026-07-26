@@ -3,6 +3,7 @@ import { Camera as CameraIcon, FolderPlus, Heart, Trash2 } from 'lucide-react';
 
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useSessionState } from '@/hooks/useSessionState';
+import { useDeckActive } from '@/shell/deckActive';
 import { t } from '@/i18n';
 import { PromptDialog } from '@/ui/PromptDialog';
 import {
@@ -72,6 +73,20 @@ export function Photos({ onClose }: { onClose: () => void }) {
         void apiListSharedAlbums().then(s => { if (!cancelled) setSharedAlbums(s); });
         return () => { cancelled = true; };
     }, []);
+
+    // Tile media is held back for the length of the shell's open animation, on mount and on every
+    // subsequent foreground. The grid itself still renders, so the app visibly animates in; only
+    // the full-size decodes wait. Without this the deck was animating a layer holding tens of MB
+    // of decoded bitmap, which is why the FIRST open was smooth (nothing decoded yet) and every
+    // one after it was choppy.
+    const deckActive = useDeckActive();
+    const [settling, setSettling] = useState(true);
+    useEffect(() => {
+        if (!deckActive) return;
+        setSettling(true);
+        const id = window.setTimeout(() => setSettling(false), 420);
+        return () => window.clearTimeout(id);
+    }, [deckActive]);
 
     // Restarts the pane's swipe animation on a tab change. The panes deliberately stay mounted
     // (a key= remount rebuilt every tile), and a CSS animation on an already-mounted element
@@ -276,6 +291,7 @@ export function Photos({ onClose }: { onClose: () => void }) {
                                     hasMore={nextCursor !== null}
                                     loadingMore={loadingMore}
                                     onLoadMore={() => void loadMore()}
+                                    deferMedia={settling}
                                     paused={tab !== 'gallery'}
                                 />
                             )}

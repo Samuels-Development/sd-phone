@@ -6,7 +6,7 @@ import { PhotoTile } from './PhotoTile';
 
 export function GalleryTab({
     photos, selectionMode, selectedIds, onEnterSelect, onCancelSelect, onPhotoTap, onToggleSelect, onImport,
-    hasMore, loadingMore, onLoadMore, paused,
+    hasMore, loadingMore, onLoadMore, paused, deferMedia,
 }: {
     photos:         Photo[];
     selectionMode:  boolean;
@@ -21,6 +21,8 @@ export function GalleryTab({
     onLoadMore:     () => void;
     /** True while the Albums tab is showing. The pane stays mounted, so paging must stop. */
     paused?:        boolean;
+    /** Keep tile media out of the DOM while the app is animating in. See PhotoTile. */
+    deferMedia?:    boolean;
 }) {
     const groups = useMemo(() => groupByDay(photos), [photos]);
 
@@ -88,6 +90,7 @@ export function GalleryTab({
                                     photo={p}
                                     selectable={selectionMode}
                                     selected={selectedIds.has(p.id)}
+                                    defer={deferMedia}
                                     onClick={() => (selectionMode ? onToggleSelect(p) : onPhotoTap(p))}
                                 />
                             ))}
