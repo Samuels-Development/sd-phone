@@ -44,7 +44,7 @@ end
 ---@return { imported: number, skipped: number }
 function M.run(ctx)
     local rows, imported, skipped = {}, 0, 0
-    if not store.tableExists(store.lbTable('phones')) then
+    if not store.lbSource('phones') then
         return { imported = 0, skipped = 0 }
     end
 

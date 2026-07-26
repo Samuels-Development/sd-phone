@@ -11,7 +11,7 @@ local function digits(s) return (tostring(s or ''):gsub('%D', '')) end
 ---@return { imported: number, skipped: number }
 function M.run(ctx)
     local rows, imported, skipped = {}, 0, 0
-    if not store.tableExists(store.lbTable('voice_memos_recordings')) then
+    if not store.lbSource('voice_memos_recordings') then
         return { imported = 0, skipped = 0 }
     end
 
@@ -25,6 +25,7 @@ function M.run(ctx)
                 cid, name:sub(1, 120), url:sub(1, 512),
                 math.floor(tonumber(v.file_length) or 0),
                 math.floor(tonumber(v.ts) or 0),
+                ('lbv%s'):format(v.id),
             }
             imported = imported + 1
         else

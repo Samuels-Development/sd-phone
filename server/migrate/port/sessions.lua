@@ -15,7 +15,7 @@ local function digits(s) return (tostring(s or ''):gsub('%D', '')) end
 ---@return { written: number, deferred: number, skipped: number }
 function M.run(ctx)
     local rows, written, deferred, skipped = {}, 0, 0, 0
-    if not store.tableExists(store.lbTable('logged_in_accounts')) then
+    if not store.lbSource('logged_in_accounts') then
         return { written = 0, deferred = 0, skipped = 0 }
     end
 
@@ -34,8 +34,20 @@ function M.run(ctx)
         end
     end
 
-    if not ctx.dryRun then store.insertPgSessions(rows) end
-    return { written = written, deferred = deferred, skipped = skipped }
+    local orphan, created = 0, 0
+    if not ctx.dryRun then
+        -- Judge on `linked`, not on rows inserted: a re-run finds every session already present and
+        -- inserts nothing, which is success. Only a failure to resolve any account at all means the
+        -- accounts are missing, so raise and leave the domain unmarked to retry rather than record a
+        -- success that signed nobody in.
+        local linked, inserted = store.insertPgSessions(rows)
+        linked, inserted = linked or 0, inserted or 0
+        if linked == 0 and #rows > 0 then
+            error(('no app accounts found to link %d session(s); photogram may have failed'):format(#rows), 0)
+        end
+        orphan, written, created = written - linked, linked, inserted
+    end
+    return { written = written, created = created, deferred = deferred, skipped = skipped, orphan = orphan }
 end
 
 return M

@@ -30,6 +30,25 @@ end
 
 store.lbTable = lbt
 
+---Resolves an lb-phone source table, or nil when this database has no lb data for it.
+---
+---Checking only that `phone_<name>` exists is not enough: for the names lb-phone and sd-phone share
+---(photos, notes, photo_albums, mail_accounts, message_reactions) the bare name is sd-phone's OWN
+---table once the schema bootstrap has run, and querying it with lb-phone's column names throws.
+---`markerColumn` is a column only the lb-phone shape has, so a porter reads the bare table only when
+---it really is lb-phone's.
+---@param name string suffix, e.g. 'mail_accounts'
+---@param markerColumn string|nil column unique to the lb-phone shape
+---@return string|nil table name to read from
+function store.lbSource(name, markerColumn)
+    local full = PREFIX .. name
+    local rescued = full .. '_lb'
+    if store.tableExists(rescued) then return rescued end
+    if not store.tableExists(full) then return nil end
+    if markerColumn and not store.tableHasColumn(full, markerColumn) then return nil end
+    return full
+end
+
 ---True if a base table with this exact name exists in the current schema. Read-only.
 ---@param name string table name
 ---@return boolean
@@ -449,15 +468,36 @@ function store.lbWallet()
     ]]):format(lbt('wallet_transactions'))) or {}
 end
 
----@param rows any[][] { citizenid, label, amount, category, created_at }
+---@param rows any[][] { citizenid, label, amount, category, created_at, src_id }
 function store.insertBankTx(rows)
-    insertMulti('INSERT IGNORE INTO phone_bank_transactions (citizenid, label, amount, category, created_at) VALUES', 5, rows)
+    insertMulti('INSERT IGNORE INTO phone_bank_transactions (citizenid, label, amount, category, created_at, src_id) VALUES', 6, rows)
 end
 
 ---@return { message_id: any, phone_number: string, reaction: string }[]
 function store.lbReactions()
     return MySQL.query.await(
         ('SELECT message_id, phone_number, reaction FROM %s'):format(lbt('message_reactions'))) or {}
+end
+
+---Which of these mids exist in phone_messages, queried in chunks. A reaction whose message was not
+---migrated can never render, so the porter drops it rather than importing junk.
+---@param mids string[]
+---@return table<string, boolean>
+function store.existingMids(mids)
+    local set = {}
+    for i = 1, #mids, 500 do
+        local last = math.min(i + 499, #mids)
+        local holes, params = {}, {}
+        for j = i, last do
+            holes[#holes + 1] = '?'
+            params[#params + 1] = mids[j]
+        end
+        local rows = MySQL.query.await(
+            ('SELECT DISTINCT mid FROM phone_messages WHERE mid IN (%s)'):format(table.concat(holes, ',')),
+            params) or {}
+        for _, r in ipairs(rows) do set[r.mid] = true end
+    end
+    return set
 end
 
 ---@param rows any[][] { mid, citizenid, emoji, created_at }
@@ -474,9 +514,9 @@ function store.lbVoiceMemos()
     ]]):format(lbt('voice_memos_recordings'))) or {}
 end
 
----@param rows any[][] { citizenid, name, url, duration, created_at }
+---@param rows any[][] { citizenid, name, url, duration, created_at, src_id }
 function store.insertVoiceMemos(rows)
-    insertMulti('INSERT IGNORE INTO phone_voice_memos (citizenid, name, url, duration, created_at) VALUES', 5, rows)
+    insertMulti('INSERT IGNORE INTO phone_voice_memos (citizenid, name, url, duration, created_at, src_id) VALUES', 6, rows)
 end
 
 ---@return { address: string, password: string }[]
@@ -562,10 +602,11 @@ function store.lbIgStories()
     ]]):format(lbt('instagram_stories'))) or {}
 end
 
+---The viewer column is `viewer` here, not `username` as on every other instagram table.
 ---@return table[]
 function store.lbIgStoryViews()
     return MySQL.query.await(([[
-        SELECT story_id, username, UNIX_TIMESTAMP(`timestamp`) AS ts FROM %s
+        SELECT story_id, viewer AS username, UNIX_TIMESTAMP(`timestamp`) AS ts FROM %s
     ]]):format(lbt('instagram_stories_views'))) or {}
 end
 
@@ -640,15 +681,26 @@ function store.insertPgAccounts(rows)
     insertMulti('INSERT IGNORE INTO phone_app_accounts (app, username, display_name, password_hash) VALUES', 4, rows)
 end
 
----Sessions for migrated app accounts, resolving account_id by (app, username).
+---Sessions for migrated app accounts. `linked` counts rows whose account exists and now has a
+---session; `inserted` counts only the new ones. They differ on a re-run, where every session is
+---already present and INSERT IGNORE affects no rows: that is success, not failure, so callers must
+---judge on `linked`.
 ---@param rows any[][] { app, citizenid, username }
+---@return integer linked, integer inserted
 function store.insertPgSessions(rows)
+    local linked, inserted = 0, 0
     for _, r in ipairs(rows) do
-        MySQL.query.await([[
-            INSERT IGNORE INTO phone_app_sessions (app, citizenid, account_id)
-            SELECT ?, ?, id FROM phone_app_accounts WHERE app = ? AND username = ?
-        ]], { r[1], r[2], r[1], r[3] })
+        local id = MySQL.scalar.await(
+            'SELECT id FROM phone_app_accounts WHERE app = ? AND username = ? LIMIT 1', { r[1], r[3] })
+        if id then
+            linked = linked + 1
+            local n = MySQL.update.await(
+                'INSERT IGNORE INTO phone_app_sessions (app, citizenid, account_id) VALUES (?, ?, ?)',
+                { r[1], r[2], id })
+            inserted = inserted + (tonumber(n) or 0)
+        end
     end
+    return linked, inserted
 end
 
 ---Decodes a JSON column value; accepts strings or already-decoded tables and returns {} for

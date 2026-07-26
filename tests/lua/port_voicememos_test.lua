@@ -26,6 +26,7 @@ H.eq(r[2], 'Memo 1',      'name')
 H.eq(r[3], 'http://a.mp3','url')
 H.eq(r[4], 12,            'duration')
 H.eq(r[5], 1700000000,    'created_at')
+H.eq(r[6], 'lbv1',        'deterministic source id makes a re-import a no-op')
 H.eq(store.calls.vm[2][2], 'Recording', 'blank name falls back')
 
 local dry = H.newStore()

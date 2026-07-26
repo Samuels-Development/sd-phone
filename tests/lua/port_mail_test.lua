@@ -60,4 +60,17 @@ H.eq(res2.accounts, 2, 'dry run counts accounts')
 H.eq(res2.sessions, 0, 'unresolved owner creates no login')
 H.eq(dry.calls.mail, nil, 'dry run writes nothing')
 
+-- Regression: with no lb data, `phone_mail_accounts` is sd-phone's OWN table. Resolving on the bare
+-- name alone made the porter run `SELECT address, password` against it and crash. Confirmed against
+-- a real database on 2026-07-26.
+local collide = H.newStore()
+collide.foreign['phone_mail_accounts'] = true
+collide.lbMailAccounts = function() error('must not read sd-phone\'s own mail table', 0) end
+collide.insertMailAccounts = function(rows) collide.record('mail', rows) end
+local M3 = H.load('server/migrate/port/mail.lua', collide)
+local ok, res3 = pcall(M3.run, { numberToCid = {}, dryRun = false })
+H.eq(ok, true, 'sd-shaped mail table does not crash the porter')
+H.eq(ok and res3.accounts, 0, 'sd-shaped mail table imports nothing')
+H.eq(collide.calls.mail, nil, 'sd-shaped mail table is never written back to')
+
 return true

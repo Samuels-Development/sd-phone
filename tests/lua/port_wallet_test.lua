@@ -24,6 +24,7 @@ H.eq(r[2], 'Burger Shot', 'company becomes label')
 H.eq(r[3], -250,          'amount preserved with sign')
 H.eq(r[4], 'wallet',      'category')
 H.eq(r[5], 1700000000,    'created_at seconds')
+H.eq(r[6], 'lbw1',        'deterministic source id makes a re-import a no-op')
 
 local dry = H.newStore()
 dry.tables['phone_wallet_transactions'] = true

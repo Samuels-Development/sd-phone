@@ -146,6 +146,10 @@ end
 
 ---Creates the single Mail table idempotently. Run once at boot. lb-phone's mail app uses the
 ---same table name with a different shape; such a table is moved aside first.
+---@type fun(): integer, integer Public alias so the lb-phone importer can rebuild the index right
+---after it writes logged_in_citizens, instead of leaving mail signed out until the next boot.
+store.reconcileSessions = reconcileSessions
+
 function store.ensureSchema()
     util.rescueLegacyTable('phone_mail_accounts', 'password_hash')
 

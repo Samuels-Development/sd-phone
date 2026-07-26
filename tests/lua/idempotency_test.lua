@@ -3,6 +3,14 @@ local H = require 'support.harness'
 ---Runs `build()` twice through a porter and asserts both runs produce the same key columns.
 ---Deterministic ids plus INSERT IGNORE are what make a re-run a no-op, so drifting keys here
 ---would mean the second import duplicates rows instead of ignoring them.
+---
+---LIMITATION, learned the hard way on 2026-07-26: this compares the rows handed to the insert
+---function, NOT rows in a database. It therefore cannot see whether the target table can actually
+---reject a duplicate. phone_bank_transactions and phone_voice_memos have auto-increment primary
+---keys, so INSERT IGNORE had nothing to collide with and a re-import silently doubled both tables
+---while this suite stayed green. The `keys` passed below must name a column set the target really
+---enforces as unique, and DB-level idempotency has to be confirmed by re-running against a real
+---server and diffing row counts.
 ---@param label string
 ---@param path string porter module path
 ---@param build fun(): table store mock, freshly built
@@ -47,7 +55,7 @@ twice('wallet', 'server/migrate/port/wallet.lua', function()
     end
     s.insertBankTx = function(rows) s.record('tx', rows) end
     return s
-end, 'tx', { 1, 2, 3, 5 })
+end, 'tx', { 6 })
 
 -- created_at is stamped at import time and is deliberately excluded: the target primary key is
 -- (mid, citizenid, emoji), so a differing timestamp cannot cause a duplicate.
@@ -58,6 +66,11 @@ twice('reactions', 'server/migrate/port/reactions.lua', function()
         return { { message_id = 42, phone_number = '(555) 010-0001', reaction = 'heart' } }
     end
     s.insertReactions = function(rows) s.record('rx', rows) end
+    s.existingMids = function(mids)
+        local set = {}
+        for _, m in ipairs(mids) do set[m] = true end
+        return set
+    end
     return s
 end, 'rx', { 1, 2, 3 })
 
@@ -70,7 +83,7 @@ twice('voicememos', 'server/migrate/port/voicememos.lua', function()
     end
     s.insertVoiceMemos = function(rows) s.record('vm', rows) end
     return s
-end, 'vm', { 1, 2, 3, 5 })
+end, 'vm', { 6 })
 
 twice('photogram', 'server/migrate/port/photogram.lua', function()
     local s = H.newStore()
@@ -88,7 +101,7 @@ twice('photogram', 'server/migrate/port/photogram.lua', function()
     s.existingPhotogramUsernames = function() return {} end
     for _, k in ipairs({ 'Profiles', 'Posts', 'Comments', 'Likes', 'CommentLikes', 'Follows',
                          'Stories', 'StoryViews', 'Dms', 'Notifications', 'Accounts', 'Sessions' }) do
-        s['insertPg' .. k] = function(rows) s.record(k, rows) end
+        s['insertPg' .. k] = function(rows) s.record(k, rows); return #rows end
     end
     return s
 end, 'Posts', { 1, 2 })
@@ -112,7 +125,7 @@ twice('sessions', 'server/migrate/port/sessions.lua', function()
     s.lbLoggedIn = function()
         return { { phone_number = '(555) 010-0001', app = 'instagram', username = 'jay' } }
     end
-    s.insertPgSessions = function(rows) s.record('sess', rows) end
+    s.insertPgSessions = function(rows) s.record('sess', rows); return #rows, #rows end
     return s
 end, 'sess', { 1, 2, 3 })
 

@@ -15,7 +15,7 @@ function M.run(ctx)
     local photoIds, albumIds = {}, {}
     local photos, albums, links, skipped = 0, 0, 0, 0
 
-    if store.tableExists(store.lbTable('photos')) then
+    if store.lbSource('photos', 'link') then
         for _, p in ipairs(store.lbPhotos()) do
             local cid = ctx.numberToCid[digits(p.phone_number)]
             if cid and p.link and p.link ~= '' then
@@ -34,7 +34,7 @@ function M.run(ctx)
         end
     end
 
-    if store.tableExists(store.lbTable('photo_albums')) then
+    if store.lbSource('photo_albums', 'title') then
         for _, a in ipairs(store.lbAlbums()) do
             local cid = ctx.numberToCid[digits(a.phone_number)]
             if cid then
@@ -48,7 +48,7 @@ function M.run(ctx)
         end
     end
 
-    if store.tableExists(store.lbTable('photo_album_photos')) then
+    if store.lbSource('photo_album_photos') then
         for _, link in ipairs(store.lbAlbumPhotos()) do
             local aid = albumIds[tostring(link.album_id)]
             local pid = photoIds[tostring(link.photo_id)]

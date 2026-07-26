@@ -11,7 +11,7 @@ local function digits(s) return (tostring(s or ''):gsub('%D', '')) end
 ---@param ctx table migration context (numberToCid, dryRun)
 ---@return { migrated: number, skipped: number }
 function M.run(ctx)
-    if not store.tableExists(store.lbTable('notes')) then return { migrated = 0, skipped = 0 } end
+    if not store.lbSource('notes', 'phone_number') then return { migrated = 0, skipped = 0 } end
 
     local rows, migrated, skipped = {}, 0, 0
     for _, n in ipairs(store.lbNotes()) do

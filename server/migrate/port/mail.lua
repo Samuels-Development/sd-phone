@@ -5,6 +5,8 @@ local M = {}
 
 ---@type table Migration data layer (server.migrate.store).
 local store = require 'server.migrate.store'
+---@type table Mail persistence (server.mail.store): its session index reconciler.
+local mailStore = require 'server.mail.store'
 
 local function digits(s) return (tostring(s or ''):gsub('%D', '')) end
 
@@ -20,7 +22,8 @@ end
 ---@return { accounts: number, messages: number, sessions: number, skipped: number }
 function M.run(ctx)
     local out = { accounts = 0, messages = 0, sessions = 0, skipped = 0 }
-    if not store.tableExists(store.lbTable('mail_accounts')) then return out end
+    -- `address` only exists on lb-phone's shape; sd-phone's own table uses `email`.
+    if not store.lbSource('mail_accounts', 'address') then return out end
 
     local inbox, logins = {}, {}
     local accounts = store.lbMailAccounts()
@@ -29,7 +32,7 @@ function M.run(ctx)
         logins[a.address] = {}
     end
 
-    if store.tableExists(store.lbTable('mail_messages')) then
+    if store.lbSource('mail_messages') then
         for _, m in ipairs(store.lbMailMessages()) do
             local box = inbox[m.recipient]
             if box then
@@ -50,7 +53,7 @@ function M.run(ctx)
         end
     end
 
-    if store.tableExists(store.lbTable('logged_in_accounts')) then
+    if store.lbSource('logged_in_accounts') then
         for _, l in ipairs(store.lbLoggedIn()) do
             if l.app == 'mail' then
                 local cid = ctx.numberToCid[digits(l.phone_number)]
@@ -75,7 +78,13 @@ function M.run(ctx)
         out.accounts = out.accounts + 1
     end
 
-    if not ctx.dryRun then store.insertMailAccounts(rows) end
+    if not ctx.dryRun then
+        store.insertMailAccounts(rows)
+        -- The session index is derived from logged_in_citizens and is normally rebuilt at boot,
+        -- which has already happened by the time the import runs. Rebuild it now so migrated
+        -- players are signed into mail immediately rather than after the next restart.
+        if out.sessions > 0 then pcall(mailStore.reconcileSessions) end
+    end
     return out
 end
 

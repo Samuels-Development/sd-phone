@@ -11,7 +11,7 @@ local function digits(s) return (tostring(s or ''):gsub('%D', '')) end
 ---@return { imported: number, skipped: number }
 function M.run(ctx)
     local rows, imported, skipped = {}, 0, 0
-    if not store.tableExists(store.lbTable('wallet_transactions')) then
+    if not store.lbSource('wallet_transactions') then
         return { imported = 0, skipped = 0 }
     end
 
@@ -24,6 +24,7 @@ function M.run(ctx)
                 math.floor(tonumber(t.amount) or 0),
                 'wallet',
                 math.floor(tonumber(t.ts) or 0),
+                ('lbw%s'):format(t.id),
             }
             imported = imported + 1
         else

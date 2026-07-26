@@ -54,7 +54,7 @@ end
 ---@param ctx table migration context (numberToCid, dryRun)
 ---@return { migrated: number, skipped: number, groups: number }
 function M.run(ctx)
-    if not store.tableExists(store.lbTable('message_channels')) then
+    if not store.lbSource('message_channels') then
         return { migrated = 0, skipped = 0, groups = 0 }
     end
 
