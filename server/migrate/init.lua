@@ -114,24 +114,6 @@ local function plural(n, noun)
     end
     return ('%s %s'):format(comma(n), suffixed)
 end
-
----A one-line human summary of what a domain actually brought across, or nil when it brought
----nothing. Reads the counters the porter returned rather than what it was asked to process, so the
----figures are what landed.
----@param key string domain key
----@param res table|nil counts returned by the porter
----@return string|nil
-local function summarise(key, res)
-    if type(res) ~= 'table' then return nil end
-    local parts = {}
-    for _, field in ipairs(SUMMARY_FIELDS[key] or {}) do
-        local n = tonumber(res[field[1]]) or 0
-        if n > 0 then parts[#parts + 1] = plural(n, field[2]) end
-    end
-    if #parts == 0 then return nil end
-    return table.concat(parts, ', ')
-end
-
 ---@type table<string, { [1]: string, [2]: string }[]> What to show per domain in the closing
 ---summary: the counter each porter returns, paired with a human noun. Counters that are zero are
 ---left out, so a server without a given app produces no line for it.
@@ -154,6 +136,24 @@ local SUMMARY_FIELDS = {
     voicememos = { { 'imported', 'voice memo' } },
     sessions   = { { 'written', 'signed-in account' }, { 'deferred', 'login held for Squawk' } },
 }
+
+
+---A one-line human summary of what a domain actually brought across, or nil when it brought
+---nothing. Reads the counters the porter returned rather than what it was asked to process, so the
+---figures are what landed.
+---@param key string domain key
+---@param res table|nil counts returned by the porter
+---@return string|nil
+local function summarise(key, res)
+    if type(res) ~= 'table' then return nil end
+    local parts = {}
+    for _, field in ipairs(SUMMARY_FIELDS[key] or {}) do
+        local n = tonumber(res[field[1]]) or 0
+        if n > 0 then parts[#parts + 1] = plural(n, field[2]) end
+    end
+    if #parts == 0 then return nil end
+    return table.concat(parts, ', ')
+end
 
 ---Print a namespaced migration log line.
 ---@param msg string
@@ -381,8 +381,11 @@ CreateThread(function()
     if not cfg or cfg.enabled == false then return end
     local ok, err = pcall(run, { force = false, dryRun = false })
     if not ok then
+        -- Domains are marked as each one finishes, so a crash here only loses the domains that had
+        -- not run yet; those retry on the next start. Saying otherwise sent me hunting for data
+        -- loss that had not happened.
         log(('^1import crashed:^0 %s'):format(err))
-        log('^1no domain was marked done, so the import retries on the next start.^0')
+        log('^1domains that completed are marked done; the rest retry on the next start.^0')
     end
 end)
 

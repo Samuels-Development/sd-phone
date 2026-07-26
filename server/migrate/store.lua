@@ -725,17 +725,52 @@ end
 function store.grantMigratedLogins(entries)
     if #entries == 0 then return 0 end
     local accounts = require 'server.accounts.store'
-    local granted = 0
-    for _, e in ipairs(entries) do
-        local plain = newPassword()
-        local n = MySQL.update.await(
-            'UPDATE phone_app_accounts SET password_hash = ? WHERE app = ? AND username = ?',
-            { accounts.hashPassword(plain), e.app, e.username })
-        if (tonumber(n) or 0) > 0 then
-            accounts.saveVaultEntry(e.cid, e.app, e.username, plain, e.email, nil)
-            granted = granted + 1
+
+    -- Staged and joined rather than two queries per account: row-by-row took 47s on a full dump.
+    local tmp = '_sdphone_migrate_logins'
+    MySQL.query.await(('DROP TABLE IF EXISTS `%s`'):format(tmp))
+    MySQL.query.await(([[
+        CREATE TABLE `%s` (
+            app VARCHAR(24) NOT NULL, username VARCHAR(64) NOT NULL, citizenid VARCHAR(64) NOT NULL,
+            plain VARCHAR(64) NOT NULL, hash VARCHAR(64) NOT NULL, email VARCHAR(120) NULL,
+            PRIMARY KEY (app, username, citizenid)
+        ) ENGINE=MEMORY DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ]]):format(tmp))
+
+    for i = 1, #entries, 300 do
+        local last = math.min(i + 299, #entries)
+        local groups, params = {}, {}
+        for j = i, last do
+            local e = entries[j]
+            local plain = newPassword()
+            groups[#groups + 1] = '(?,?,?,?,?,?)'
+            params[#params + 1] = e.app
+            params[#params + 1] = e.username
+            params[#params + 1] = e.cid
+            params[#params + 1] = plain
+            params[#params + 1] = accounts.hashPassword(plain)
+            params[#params + 1] = e.email
         end
+        MySQL.query.await(([[
+            INSERT IGNORE INTO `%s` (app, username, citizenid, plain, hash, email) VALUES %s
+        ]]):format(tmp, table.concat(groups, ',')), params)
     end
+
+    -- Only accounts that exist get a password, and only those get a vault entry, so the vault never
+    -- lists a login that cannot be used.
+    local granted = tonumber(MySQL.update.await(([[
+        UPDATE phone_app_accounts a JOIN `%s` t ON t.app = a.app AND t.username = a.username
+        SET a.password_hash = t.hash
+    ]]):format(tmp))) or 0
+
+    MySQL.query.await(([[
+        INSERT INTO phone_passwords (citizenid, app, username, password, email)
+        SELECT t.citizenid, t.app, t.username, t.plain, t.email FROM `%s` t
+        JOIN phone_app_accounts a ON a.app = t.app AND a.username = t.username
+        ON DUPLICATE KEY UPDATE password = VALUES(password), email = VALUES(email)
+    ]]):format(tmp))
+
+    MySQL.query.await(('DROP TABLE IF EXISTS `%s`'):format(tmp))
     return granted
 end
 
@@ -746,18 +781,45 @@ end
 ---@param rows any[][] { app, citizenid, username }
 ---@return integer linked, integer inserted
 function store.insertPgSessions(rows)
-    local linked, inserted = 0, 0
-    for _, r in ipairs(rows) do
-        local id = MySQL.scalar.await(
-            'SELECT id FROM phone_app_accounts WHERE app = ? AND username = ? LIMIT 1', { r[1], r[3] })
-        if id then
-            linked = linked + 1
-            local n = MySQL.update.await(
-                'INSERT IGNORE INTO phone_app_sessions (app, citizenid, account_id) VALUES (?, ?, ?)',
-                { r[1], r[2], id })
-            inserted = inserted + (tonumber(n) or 0)
+    if #rows == 0 then return 0, 0 end
+
+    -- Set-based, not row-by-row: the previous loop ran two queries per session and took 23s on a
+    -- full dump. Staging the pairs and joining once turns that into a handful of statements.
+    local tmp = '_sdphone_migrate_sessions'
+    MySQL.query.await(('DROP TABLE IF EXISTS `%s`'):format(tmp))
+    MySQL.query.await(([[
+        CREATE TABLE `%s` (
+            app VARCHAR(24) NOT NULL, citizenid VARCHAR(64) NOT NULL, username VARCHAR(64) NOT NULL,
+            PRIMARY KEY (app, citizenid, username)
+        ) ENGINE=MEMORY DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ]]):format(tmp))
+
+    for i = 1, #rows, 300 do
+        local last = math.min(i + 299, #rows)
+        local groups, params = {}, {}
+        for j = i, last do
+            groups[#groups + 1] = '(?,?,?)'
+            params[#params + 1] = rows[j][1]
+            params[#params + 1] = rows[j][2]
+            params[#params + 1] = rows[j][3]
         end
+        MySQL.query.await(
+            ('INSERT IGNORE INTO `%s` (app, citizenid, username) VALUES %s'):format(tmp, table.concat(groups, ',')),
+            params)
     end
+
+    local linked = tonumber(MySQL.scalar.await(([[
+        SELECT COUNT(*) FROM `%s` t
+        JOIN phone_app_accounts a ON a.app = t.app AND a.username = t.username
+    ]]):format(tmp))) or 0
+
+    local inserted = tonumber(MySQL.update.await(([[
+        INSERT IGNORE INTO phone_app_sessions (app, citizenid, account_id)
+        SELECT t.app, t.citizenid, a.id FROM `%s` t
+        JOIN phone_app_accounts a ON a.app = t.app AND a.username = t.username
+    ]]):format(tmp))) or 0
+
+    MySQL.query.await(('DROP TABLE IF EXISTS `%s`'):format(tmp))
     return linked, inserted
 end
 

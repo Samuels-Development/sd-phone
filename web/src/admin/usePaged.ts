@@ -22,17 +22,30 @@ export function usePaged<T, C>(
         const gen = ++generation.current;
         setLoading(true);
         if (reset) setError(null);
-        const res = await fetchPage(reset ? null : cursor);
+
+        // `loading` gates loadMore, so it has to be cleared on every exit. A throw from fetchPage,
+        // or an early return, used to leave it stuck true: the Load more button kept rendering but
+        // every click was a no-op, which reads as pagination silently running out.
+        let res: PagedResult<T, C> | null = null;
+        let failed = false;
+        try {
+            res = await fetchPage(reset ? null : cursor);
+        } catch {
+            failed = true;
+        } finally {
+            if (gen === generation.current) setLoading(false);
+        }
         if (gen !== generation.current) return;
-        setLoading(false);
-        if (!res) {
+
+        if (failed || !res) {
             setError('Request failed');
             if (reset) { setItems([]); setHasMore(false); }
             return;
         }
-        setItems(prev => reset ? res.items : [...prev, ...res.items]);
-        setCursor(res.nextCursor ?? null);
-        setHasMore(res.nextCursor != null);
+        const page = res;
+        setItems(prev => reset ? page.items : [...prev, ...page.items]);
+        setCursor(page.nextCursor ?? null);
+        setHasMore(page.nextCursor != null);
     }, [fetchPage, cursor]);
 
     useEffect(() => {
