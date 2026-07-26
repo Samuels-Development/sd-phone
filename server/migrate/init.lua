@@ -77,7 +77,7 @@ local DOMAIN_SOURCES = {
 
 ---@type integer Rows per second the import sustains, measured against a production dump. Only ever
 ---used to set expectations before a long run, never to make a decision.
-local ROWS_PER_SECOND = 12000
+local ROWS_PER_SECOND = 8000
 
 ---A rough human duration for a row count.
 ---@param rows integer
@@ -102,8 +102,9 @@ end
 ---@param n integer
 ---@param noun string singular form
 ---@return string
-local function plural(n, noun)
+local function plural(n, noun, pluralForm)
     if n == 1 then return ('%s %s'):format(comma(n), noun) end
+    if pluralForm then return ('%s %s'):format(comma(n), pluralForm) end
     local suffixed
     if noun:match('[^aeiou]y$') then
         suffixed = noun:sub(1, -2) .. 'ies'
@@ -114,6 +115,7 @@ local function plural(n, noun)
     end
     return ('%s %s'):format(comma(n), suffixed)
 end
+
 ---@type table<string, { [1]: string, [2]: string }[]> What to show per domain in the closing
 ---summary: the counter each porter returns, paired with a human noun. Counters that are zero are
 ---left out, so a server without a given app produces no line for it.
@@ -134,7 +136,12 @@ local SUMMARY_FIELDS = {
     mail       = { { 'accounts', 'mailbox' }, { 'messages', 'email' } },
     wallet     = { { 'imported', 'wallet transaction' } },
     voicememos = { { 'imported', 'voice memo' } },
-    sessions   = { { 'written', 'signed-in account' }, { 'deferred', 'login held for Squawk' } },
+    -- A third element supplies the plural outright, for phrases where the head noun is not the last
+    -- word: "login held for Squawk" pluralises at the front, not the end.
+    sessions   = {
+        { 'written', 'signed-in account' },
+        { 'deferred', 'login held for Squawk', 'logins held for Squawk' },
+    },
 }
 
 
@@ -149,7 +156,7 @@ local function summarise(key, res)
     local parts = {}
     for _, field in ipairs(SUMMARY_FIELDS[key] or {}) do
         local n = tonumber(res[field[1]]) or 0
-        if n > 0 then parts[#parts + 1] = plural(n, field[2]) end
+        if n > 0 then parts[#parts + 1] = plural(n, field[2], field[3]) end
     end
     if #parts == 0 then return nil end
     return table.concat(parts, ', ')
@@ -308,7 +315,14 @@ local function run(opts)
             okCount = okCount + 1
             results[port.key] = res
             log((' -> %-11s %s (%s, %d%%)'):format(port.label, describe(res), elapsed(at), pct))
-            if not dryRun then store.recordDomain(port.key, res) end
+            -- A porter can report that it has work it could not finish yet. Marking it done would
+            -- retire it permanently: the sessions porter holds Twitter logins until Squawk's porter
+            -- exists, and recording it complete would strand them for good.
+            if type(res) == 'table' and res.retry then
+                log(('    %s left pending; it runs again next start.'):format(port.label))
+            elseif not dryRun then
+                store.recordDomain(port.key, res)
+            end
         else
             failed[#failed + 1] = port.key
             log((' -> %-11s ^1FAILED:^0 %s'):format(port.label, tostring(res)))
