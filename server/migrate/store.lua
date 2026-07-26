@@ -401,6 +401,153 @@ function store.fillSettings(rows)
     ]])
 end
 
+---Usernames already present in Photogram, so a migrated account never overwrites a live one.
+---@return table<string, boolean>
+function store.existingPhotogramUsernames()
+    local rows = MySQL.query.await('SELECT username FROM phone_photogram_profiles') or {}
+    local set = {}
+    for _, r in ipairs(rows) do set[r.username] = true end
+    return set
+end
+
+---@return table[]
+function store.lbIgAccounts()
+    return MySQL.query.await(([[
+        SELECT username, display_name, password, bio, profile_image, private, verified,
+               phone_number, UNIX_TIMESTAMP(date_joined) AS ts
+        FROM %s
+    ]]):format(lbt('instagram_accounts'))) or {}
+end
+
+---@return table[]
+function store.lbIgPosts()
+    return MySQL.query.await(([[
+        SELECT id, username, media, caption, location, UNIX_TIMESTAMP(`timestamp`) AS ts FROM %s
+    ]]):format(lbt('instagram_posts'))) or {}
+end
+
+---@return table[]
+function store.lbIgComments()
+    return MySQL.query.await(([[
+        SELECT id, post_id, username, comment, UNIX_TIMESTAMP(`timestamp`) AS ts FROM %s
+    ]]):format(lbt('instagram_comments'))) or {}
+end
+
+---@return table[]
+function store.lbIgLikes()
+    return MySQL.query.await(
+        ('SELECT id, username, is_comment FROM %s'):format(lbt('instagram_likes'))) or {}
+end
+
+---@return table[]
+function store.lbIgFollows()
+    return MySQL.query.await(
+        ('SELECT followed, follower FROM %s'):format(lbt('instagram_follows'))) or {}
+end
+
+---@return table[]
+function store.lbIgRequests()
+    return MySQL.query.await(([[
+        SELECT requester, requestee, UNIX_TIMESTAMP(`timestamp`) AS ts FROM %s
+    ]]):format(lbt('instagram_follow_requests'))) or {}
+end
+
+---@return table[]
+function store.lbIgStories()
+    return MySQL.query.await(([[
+        SELECT id, username, image, UNIX_TIMESTAMP(`timestamp`) AS ts FROM %s
+    ]]):format(lbt('instagram_stories'))) or {}
+end
+
+---@return table[]
+function store.lbIgStoryViews()
+    return MySQL.query.await(([[
+        SELECT story_id, username, UNIX_TIMESTAMP(`timestamp`) AS ts FROM %s
+    ]]):format(lbt('instagram_stories_views'))) or {}
+end
+
+---@return table[]
+function store.lbIgMessages()
+    return MySQL.query.await(([[
+        SELECT id, sender, recipient, content, attachments, UNIX_TIMESTAMP(`timestamp`) AS ts FROM %s
+    ]]):format(lbt('instagram_messages'))) or {}
+end
+
+---@return table[]
+function store.lbIgNotifications()
+    return MySQL.query.await(([[
+        SELECT id, username, `from` AS from_user, `type`, post_id, UNIX_TIMESTAMP(`timestamp`) AS ts
+        FROM %s
+    ]]):format(lbt('instagram_notifications'))) or {}
+end
+
+---@param rows any[][] { username, display_name, bio, avatar, is_private, verified, created_at }
+function store.insertPgProfiles(rows)
+    insertMulti('INSERT IGNORE INTO phone_photogram_profiles (username, display_name, bio, avatar, is_private, verified, created_at) VALUES', 7, rows)
+end
+
+---@param rows any[][] { id, author, images, caption, location, created_at }
+function store.insertPgPosts(rows)
+    insertMulti('INSERT IGNORE INTO phone_photogram_posts (id, author, images, caption, location, created_at) VALUES', 6, rows)
+end
+
+---@param rows any[][] { id, post_id, author, body, gif_url, created_at }
+function store.insertPgComments(rows)
+    insertMulti('INSERT IGNORE INTO phone_photogram_comments (id, post_id, author, body, gif_url, created_at) VALUES', 6, rows)
+end
+
+---@param rows any[][] { post_id, username, created_at }
+function store.insertPgLikes(rows)
+    insertMulti('INSERT IGNORE INTO phone_photogram_likes (post_id, username, created_at) VALUES', 3, rows)
+end
+
+---@param rows any[][] { comment_id, username, created_at }
+function store.insertPgCommentLikes(rows)
+    insertMulti('INSERT IGNORE INTO phone_photogram_comment_likes (comment_id, username, created_at) VALUES', 3, rows)
+end
+
+---@param rows any[][] { follower, target, status, created_at }
+function store.insertPgFollows(rows)
+    insertMulti('INSERT IGNORE INTO phone_photogram_follows (follower, target, status, created_at) VALUES', 4, rows)
+end
+
+---@param rows any[][] { id, author, image, created_at }
+function store.insertPgStories(rows)
+    insertMulti('INSERT IGNORE INTO phone_photogram_stories (id, author, image, created_at) VALUES', 4, rows)
+end
+
+---@param rows any[][] { story_id, username, created_at }
+function store.insertPgStoryViews(rows)
+    insertMulti('INSERT IGNORE INTO phone_photogram_story_views (story_id, username, created_at) VALUES', 3, rows)
+end
+
+---@param rows any[][] { id, from_user, to_user, body, kind, meta, reactions, read_flag, created_at }
+function store.insertPgDms(rows)
+    insertMulti('INSERT IGNORE INTO phone_photogram_dms (id, from_user, to_user, body, kind, meta, reactions, read_flag, created_at) VALUES', 9, rows)
+end
+
+---@param rows any[][] { id, recipient, kind, actor, post_id, seen, created_at }
+function store.insertPgNotifications(rows)
+    insertMulti('INSERT IGNORE INTO phone_photogram_notifications (id, recipient, kind, actor, post_id, seen, created_at) VALUES', 7, rows)
+end
+
+---Accounts-engine rows for migrated app accounts.
+---@param rows any[][] { app, username, display_name, password_hash }
+function store.insertPgAccounts(rows)
+    insertMulti('INSERT IGNORE INTO phone_app_accounts (app, username, display_name, password_hash) VALUES', 4, rows)
+end
+
+---Sessions for migrated app accounts, resolving account_id by (app, username).
+---@param rows any[][] { app, citizenid, username }
+function store.insertPgSessions(rows)
+    for _, r in ipairs(rows) do
+        MySQL.query.await([[
+            INSERT IGNORE INTO phone_app_sessions (app, citizenid, account_id)
+            SELECT ?, ?, id FROM phone_app_accounts WHERE app = ? AND username = ?
+        ]], { r[1], r[2], r[1], r[3] })
+    end
+end
+
 ---Decodes a JSON column value; accepts strings or already-decoded tables and returns {} for
 ---anything absent or invalid.
 ---@param value any

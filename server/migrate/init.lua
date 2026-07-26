@@ -19,6 +19,7 @@ local PORTS = {
     { key = 'photos',   label = 'photos',   run = require('server.migrate.port.photos').run },
     { key = 'notes',    label = 'notes',    run = require('server.migrate.port.notes').run },
     { key = 'settings', label = 'settings', run = require('server.migrate.port.settings').run },
+    { key = 'photogram', label = 'photogram', run = require('server.migrate.port.photogram').run },
 }
 
 -- sd-phone tables the porters write into; the migration waits for all of them. Names lb-phone
@@ -30,6 +31,10 @@ local TARGETS = {
     { 'phone_messages', 'citizenid' }, 'phone_message_groups', 'phone_message_group_members',
     { 'phone_photos', 'citizenid' }, { 'phone_photo_albums', 'citizenid' },
     'phone_photo_album_items', { 'phone_notes', 'citizenid' },
+    'phone_photogram_profiles', 'phone_photogram_posts', 'phone_photogram_comments',
+    'phone_photogram_likes', 'phone_photogram_comment_likes', 'phone_photogram_follows',
+    'phone_photogram_stories', 'phone_photogram_story_views', 'phone_photogram_dms',
+    'phone_photogram_notifications', 'phone_app_accounts', 'phone_app_sessions',
 }
 
 ---Print a namespaced migration log line.
