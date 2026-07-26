@@ -6,8 +6,17 @@ local M = {}
 ---@type table Migration data layer (server.migrate.store).
 local store = require 'server.migrate.store'
 
----@type table<string, string> lb app name -> sd app name.
+---@type table<string, string> lb app name -> sd app name, keyed lowercase. lb-phone stores these
+---capitalised ('Instagram', 'Twitter'), so the lookup lowercases first; matching the raw value
+---silently skipped every login row and signed nobody in.
 local APPS = { instagram = 'photogram', twitter = 'birdy' }
+
+---The sd-phone app a migrated login belongs to, or nil when sd-phone has no counterpart.
+---@param app any lb app name, any casing
+---@return string|nil
+local function appFor(app)
+    return APPS[tostring(app or ''):lower()]
+end
 
 local function digits(s) return (tostring(s or ''):gsub('%D', '')) end
 
@@ -20,7 +29,7 @@ function M.run(ctx)
     end
 
     for _, l in ipairs(store.lbLoggedIn()) do
-        local app = APPS[l.app]
+        local app = appFor(l.app)
         local cid = ctx.numberToCid[digits(l.phone_number)]
         if not app or not cid then
             skipped = skipped + 1

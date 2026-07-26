@@ -66,9 +66,17 @@ function M.run(ctx)
             local hour24
             if clock.twelveHourClock ~= nil then hour24 = clock.twelveHourClock and 0 or 1 end
 
+            -- Only a custom wallpaper (a URL) carries over. lb-phone's built-in names (`cloud8`,
+            -- `background10.jpg`) refer to images it ships and sd-phone does not, so importing one
+            -- leaves the player on a blank background instead of their own.
+            local wallpaper = str(wall.background, 512)
+            if wallpaper and not wallpaper:match('^https?://') and not wallpaper:match('^nui://') then
+                wallpaper = nil
+            end
+
             rows[#rows + 1] = {
                 cid,
-                str(wall.background, 512),
+                wallpaper,
                 blur, blur,
                 str(display.theme, 8),
                 pct(display.brightness),

@@ -52,6 +52,109 @@ local TARGETS = {
     'phone_bank_transactions', 'phone_voice_memos',
 }
 
+---@type table<string, string[]> Source tables each domain reads, for the pre-flight row count. A
+---domain missing here simply reports no estimate.
+local DOMAIN_SOURCES = {
+    numbers    = { 'phones' },
+    contacts   = { 'phone_contacts' },
+    blocked    = { 'phone_blocked_numbers' },
+    calls      = { 'phone_calls' },
+    messages   = { 'message_channels', 'message_members', 'message_messages' },
+    reactions  = { 'message_reactions' },
+    photos     = { 'photos', 'photo_albums', 'photo_album_photos' },
+    notes      = { 'notes' },
+    settings   = { 'phones' },
+    photogram  = {
+        'instagram_accounts', 'instagram_posts', 'instagram_comments', 'instagram_likes',
+        'instagram_follows', 'instagram_follow_requests', 'instagram_stories',
+        'instagram_stories_views', 'instagram_messages', 'instagram_notifications',
+    },
+    mail       = { 'mail_accounts', 'mail_messages' },
+    wallet     = { 'wallet_transactions' },
+    voicememos = { 'voice_memos_recordings' },
+    sessions   = { 'logged_in_accounts' },
+}
+
+---@type integer Rows per second the import sustains, measured against a production dump. Only ever
+---used to set expectations before a long run, never to make a decision.
+local ROWS_PER_SECOND = 12000
+
+---A rough human duration for a row count.
+---@param rows integer
+---@return string
+local function estimate(rows)
+    local secs = rows / ROWS_PER_SECOND
+    if secs < 90 then return ('~%ds'):format(math.max(1, math.floor(secs + 0.5))) end
+    return ('~%dm'):format(math.max(1, math.floor(secs / 60 + 0.5)))
+end
+
+---Thousands-separated, so six and seven figure counts stay readable in a console.
+---@param n integer
+---@return string
+local function comma(n)
+    local s = tostring(math.floor(n))
+    local out = s:reverse():gsub('(%d%d%d)', '%1,'):reverse()
+    return (out:gsub('^,', ''))
+end
+
+---`3 contacts` / `1 contact`. Nouns ending in a consonant + y, or in a sibilant, do not take a
+---bare `s`, which produced "storys" and "mailboxs".
+---@param n integer
+---@param noun string singular form
+---@return string
+local function plural(n, noun)
+    if n == 1 then return ('%s %s'):format(comma(n), noun) end
+    local suffixed
+    if noun:match('[^aeiou]y$') then
+        suffixed = noun:sub(1, -2) .. 'ies'
+    elseif noun:match('([sxz])$') or noun:match('([cs]h)$') then
+        suffixed = noun .. 'es'
+    else
+        suffixed = noun .. 's'
+    end
+    return ('%s %s'):format(comma(n), suffixed)
+end
+
+---A one-line human summary of what a domain actually brought across, or nil when it brought
+---nothing. Reads the counters the porter returned rather than what it was asked to process, so the
+---figures are what landed.
+---@param key string domain key
+---@param res table|nil counts returned by the porter
+---@return string|nil
+local function summarise(key, res)
+    if type(res) ~= 'table' then return nil end
+    local parts = {}
+    for _, field in ipairs(SUMMARY_FIELDS[key] or {}) do
+        local n = tonumber(res[field[1]]) or 0
+        if n > 0 then parts[#parts + 1] = plural(n, field[2]) end
+    end
+    if #parts == 0 then return nil end
+    return table.concat(parts, ', ')
+end
+
+---@type table<string, { [1]: string, [2]: string }[]> What to show per domain in the closing
+---summary: the counter each porter returns, paired with a human noun. Counters that are zero are
+---left out, so a server without a given app produces no line for it.
+local SUMMARY_FIELDS = {
+    numbers    = { { 'set', 'phone number' } },
+    contacts   = { { 'migrated', 'contact' } },
+    blocked    = { { 'migrated', 'blocked number' } },
+    calls      = { { 'migrated', 'call' } },
+    messages   = { { 'migrated', 'message' }, { 'groups', 'group chat' } },
+    reactions  = { { 'imported', 'reaction' } },
+    photos     = { { 'photos', 'photo' }, { 'albums', 'album' }, { 'links', 'album photo' } },
+    notes      = { { 'migrated', 'note' } },
+    settings   = { { 'imported', 'settings profile' } },
+    photogram  = {
+        { 'profiles', 'Photogram account' }, { 'posts', 'post' }, { 'comments', 'comment' },
+        { 'stories', 'story' }, { 'dms', 'direct message' }, { 'follows', 'follow' },
+    },
+    mail       = { { 'accounts', 'mailbox' }, { 'messages', 'email' } },
+    wallet     = { { 'imported', 'wallet transaction' } },
+    voicememos = { { 'imported', 'voice memo' } },
+    sessions   = { { 'written', 'signed-in account' }, { 'deferred', 'login held for Squawk' } },
+}
+
 ---Print a namespaced migration log line.
 ---@param msg string
 local function log(msg) print(('^5[sd-phone:migrate]^0 %s'):format(msg)) end
@@ -166,19 +269,73 @@ local function run(opts)
         return
     end
 
-    local okCount, failed = 0, {}
+    -- Hand the resolved numbers to the readers so they filter in SQL. Without it every porter pulls
+    -- its whole source table across the bridge and discards the vast majority in Lua.
+    local owned = {}
+    for _, p in ipairs(ctx.resolvedPhones) do
+        if p.number and p.number ~= '' then owned[#owned + 1] = p.number end
+    end
+    store.publishOwnedNumbers(owned)
+
+    -- Pre-flight sizing. A production lb-phone database runs to millions of rows and the import
+    -- can take many minutes, so the size is reported up front rather than leaving an operator
+    -- staring at a console wondering whether it has hung.
+    local sizes, totalRows = {}, 0
+    for _, port in ipairs(queue) do
+        local sources = DOMAIN_SOURCES[port.key]
+        local n = sources and store.lbRowCount(sources) or 0
+        sizes[port.key] = n
+        totalRows = totalRows + n
+    end
+    if totalRows > 0 then
+        log(('%s source row(s) to process, %s at this scale.'):format(comma(totalRows), estimate(totalRows)))
+        if totalRows > 250000 then
+            log('^3large database: the server will be busy until this finishes. It runs once.^0')
+        end
+    end
+
+    local okCount, failed, doneRows, results = 0, {}, 0, {}
     for _, port in ipairs(queue) do
         local at = GetGameTimer()
+        local n = sizes[port.key] or 0
+        if n > 50000 then
+            log((' .. %-11s reading %s rows, %s'):format(port.label, comma(n), estimate(n)))
+        end
         local ok, res = pcall(port.run, ctx)
+        doneRows = doneRows + n
+        local pct = totalRows > 0 and math.floor(doneRows / totalRows * 100) or 100
         if ok then
             okCount = okCount + 1
-            log((' -> %-11s %s (%s)'):format(port.label, describe(res), elapsed(at)))
+            results[port.key] = res
+            log((' -> %-11s %s (%s, %d%%)'):format(port.label, describe(res), elapsed(at), pct))
             if not dryRun then store.recordDomain(port.key, res) end
         else
             failed[#failed + 1] = port.key
             log((' -> %-11s ^1FAILED:^0 %s'):format(port.label, tostring(res)))
         end
     end
+
+    store.clearOwnedNumbers()
+
+    -- The UI hydrates its per-player visuals a few seconds into boot, which on a first import is
+    -- before this has written phone_settings. Tell anyone already connected to pull again, or their
+    -- wallpaper and tones stay stock until the resource is restarted a second time.
+    if not dryRun and okCount > 0 then
+        TriggerClientEvent('sd-phone:client:rehydrate', -1)
+    end
+
+    -- Closing overview. The per-domain lines above scroll past during a long run, so what actually
+    -- came across is restated once, in plain terms, at the end.
+    log('======================= imported ========================')
+    local any = false
+    for _, port in ipairs(queue) do
+        local line = summarise(port.key, results[port.key])
+        if line then
+            any = true
+            log(('  %-11s %s'):format(port.label, line))
+        end
+    end
+    if not any then log('  nothing: no lb-phone data matched a character on this server.') end
 
     log('=========================================================')
     log(('import finished in %s: %d ok, %d failed.'):format(elapsed(startedAt), okCount, #failed))
@@ -209,17 +366,9 @@ RegisterCommand('sdphone:wipedata', function(source, args)
         local owned = require 'server.admin.tables'
         log('==================== wiping sd-phone ====================')
 
-        local dropped, kept = 0, 0
-        MySQL.query.await('SET FOREIGN_KEY_CHECKS = 0')
-        for _, tbl in ipairs(owned) do
-            if store.tableExists(tbl) then
-                local ok = pcall(MySQL.query.await, ('DROP TABLE IF EXISTS `%s`'):format(tbl))
-                if ok then dropped = dropped + 1 else kept = kept + 1 end
-            end
-        end
-        MySQL.query.await('SET FOREIGN_KEY_CHECKS = 1')
+        local dropped, kept = store.dropOwnedTables(owned)
 
-        log(('%d table(s) dropped%s.'):format(dropped, kept > 0 and (', %d failed'):format(kept) or ''))
+        log(('%d table(s) dropped%s.'):format(dropped, kept > 0 and (', %d left alone'):format(kept) or ''))
         log('lb-phone source tables were left untouched, so the import can run again.')
         log('restart the resource to rebuild the schema and re-import.')
         log('=========================================================')

@@ -122,7 +122,8 @@ function M.run(ctx)
     local grants = {}
     if store.lbSource('logged_in_accounts') then
         for _, l in ipairs(store.lbLoggedIn()) do
-            if l.app == 'mail' then
+            -- lb-phone capitalises these ('Mail'), so compare case-insensitively.
+            if tostring(l.app or ''):lower() == 'mail' then
                 local cid = ctx.numberToCid[digits(l.phone_number)]
                 local addr = addressOf[l.username]
                 local box = addr and logins[addr]

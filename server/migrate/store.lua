@@ -30,6 +30,12 @@ end
 
 store.lbTable = lbt
 
+---@type string Session-scoped table holding the phone numbers that resolved to a character, so the
+---readers can filter in SQL instead of hauling whole tables into Lua and discarding them.
+---Declared here, above every reader: a local defined later in the file is not in scope for functions
+---defined earlier, and they would silently see a nil global instead.
+local OWNED = '_sdphone_migrate_owned'
+
 ---Resolves an lb-phone source table, or nil when this database has no lb data for it.
 ---
 ---Checking only that `phone_<name>` exists is not enough: for the names lb-phone and sd-phone share
@@ -207,9 +213,10 @@ end
 ---@return table[]
 function store.lbContacts()
     return MySQL.query.await(([[
-        SELECT contact_phone_number, firstname, lastname, profile_image, email, address, favourite, phone_number
-        FROM %s
-    ]]):format(lbt('phone_contacts'))) or {}
+        SELECT c.contact_phone_number, c.firstname, c.lastname, c.profile_image, c.email, c.address,
+               c.favourite, c.phone_number
+        FROM %s c JOIN `%s` o ON o.number = c.phone_number
+    ]]):format(lbt('phone_contacts'), OWNED)) or {}
 end
 
 ---Every lb-phone blocked-number pair (owner number -> blocked number). Read-only.
@@ -224,9 +231,10 @@ end
 ---@return { id: any, caller: string, callee: string, duration: number, answered: any, ts: number }[]
 function store.lbCalls()
     return MySQL.query.await(([[
-        SELECT id, caller, callee, duration, answered, UNIX_TIMESTAMP(timestamp) AS ts
-        FROM %s
-    ]]):format(lbt('phone_calls'))) or {}
+        SELECT c.id, c.caller, c.callee, c.duration, c.answered, UNIX_TIMESTAMP(c.timestamp) AS ts
+        FROM %s c
+        WHERE EXISTS (SELECT 1 FROM `%s` o WHERE o.number = c.caller OR o.number = c.callee)
+    ]]):format(lbt('phone_calls'), OWNED)) or {}
 end
 
 ---Every lb-phone message channel, newest-activity epoch as `created_at` (seconds). Read-only.
@@ -248,12 +256,17 @@ end
 ---Every lb-phone message, oldest-first within each channel, timestamp as a unix epoch in seconds.
 ---Loaded in one pass and grouped by channel in Lua. Read-only.
 ---@return { id: any, channel_id: any, sender: string, content: string|nil, attachments: string|nil, ts: number }[]
+---Only messages in channels an owned number belongs to; the rest can never be attributed.
 function store.lbMessages()
     return MySQL.query.await(([[
-        SELECT id, channel_id, sender, content, attachments, UNIX_TIMESTAMP(timestamp) AS ts
-        FROM %s
-        ORDER BY channel_id ASC, timestamp ASC
-    ]]):format(lbt('message_messages'))) or {}
+        SELECT m.id, m.channel_id, m.sender, m.content, m.attachments,
+               UNIX_TIMESTAMP(m.timestamp) AS ts
+        FROM %s m
+        WHERE m.channel_id IN (
+            SELECT mm.channel_id FROM %s mm JOIN `%s` o ON o.number = mm.phone_number
+        )
+        ORDER BY m.channel_id ASC, m.timestamp ASC
+    ]]):format(lbt('message_messages'), lbt('message_members'), OWNED)) or {}
 end
 
 ---Every lb-phone photo; `created_at` is kept as the raw datetime string. Read-only.
@@ -263,9 +276,9 @@ function store.lbPhotos()
     -- millisecond numbers, which a TIMESTAMP insert then coerces to a zero date. The porter
     -- formats these seconds back into a DATETIME literal.
     return MySQL.query.await(([[
-        SELECT id, phone_number, link, is_favourite, UNIX_TIMESTAMP(`timestamp`) AS created_ts
-        FROM %s
-    ]]):format(lbt('photos'))) or {}
+        SELECT p.id, p.phone_number, p.link, p.is_favourite, UNIX_TIMESTAMP(p.`timestamp`) AS created_ts
+        FROM %s p JOIN `%s` o ON o.number = p.phone_number
+    ]]):format(lbt('photos'), OWNED)) or {}
 end
 
 ---Every lb-phone photo album. Read-only.
@@ -463,8 +476,9 @@ end
 ---@return table[]
 function store.lbWallet()
     return MySQL.query.await(([[
-        SELECT id, phone_number, amount, company, UNIX_TIMESTAMP(`timestamp`) AS ts FROM %s
-    ]]):format(lbt('wallet_transactions'))) or {}
+        SELECT w.id, w.phone_number, w.amount, w.company, UNIX_TIMESTAMP(w.`timestamp`) AS ts
+        FROM %s w JOIN `%s` o ON o.number = w.phone_number
+    ]]):format(lbt('wallet_transactions'), OWNED)) or {}
 end
 
 ---@param rows any[][] { citizenid, label, amount, category, created_at, src_id }
@@ -474,8 +488,10 @@ end
 
 ---@return { message_id: any, phone_number: string, reaction: string }[]
 function store.lbReactions()
-    return MySQL.query.await(
-        ('SELECT message_id, phone_number, reaction FROM %s'):format(lbt('message_reactions'))) or {}
+    return MySQL.query.await(([[
+        SELECT r.message_id, r.phone_number, r.reaction
+        FROM %s r JOIN `%s` o ON o.number = r.phone_number
+    ]]):format(lbt('message_reactions'), OWNED)) or {}
 end
 
 ---Which of these mids exist in phone_messages, queried in chunks. A reaction whose message was not
@@ -743,6 +759,98 @@ function store.insertPgSessions(rows)
         end
     end
     return linked, inserted
+end
+
+---@type table<string, string> Names sd-phone and lb-phone both use, mapped to a column only the
+---sd-phone shape has. Before the schema bootstrap has run, the bare name still holds lb-phone's
+---table, and dropping it would destroy the importer's source. Mirrors util.rescueLegacyTable.
+local SHARED_NAMES = {
+    phone_photos            = 'citizenid',
+    phone_notes             = 'citizenid',
+    phone_photo_albums      = 'citizenid',
+    phone_messages          = 'citizenid',
+    phone_documents         = 'citizenid',
+    phone_document_folders  = 'citizenid',
+    phone_mail_accounts     = 'password_hash',
+    phone_message_reactions = 'mid',
+}
+
+---Drops the tables sd-phone owns, leaving lb-phone's alone so a re-import still has a source.
+---
+---A name both systems use is only dropped once it carries sd-phone's marker column: on a database
+---that has not booted sd-phone yet, that name still belongs to lb-phone.
+---@param owned string[] table names from server.admin.tables
+---@return integer dropped, integer skipped
+function store.dropOwnedTables(owned)
+    local dropped, skipped = 0, 0
+    MySQL.query.await('SET FOREIGN_KEY_CHECKS = 0')
+    for _, tbl in ipairs(owned) do
+        if store.tableExists(tbl) then
+            local marker = SHARED_NAMES[tbl]
+            if marker and not store.tableHasColumn(tbl, marker) then
+                skipped = skipped + 1
+            elseif pcall(MySQL.query.await, ('DROP TABLE IF EXISTS `%s`'):format(tbl)) then
+                dropped = dropped + 1
+            else
+                skipped = skipped + 1
+            end
+        end
+    end
+    MySQL.query.await('SET FOREIGN_KEY_CHECKS = 1')
+    return dropped, skipped
+end
+
+---Publishes the resolved numbers for the readers to join against.
+---
+---Without this each porter selected an entire lb table and dropped 99% of it in Lua: 1.3M call rows
+---to keep 11k, over a bridge that serialises every row. Filtering in SQL keeps the reads
+---proportional to what is actually imported, and lets MySQL use its indexes.
+---@param numbers string[] bare-digit phone numbers
+function store.publishOwnedNumbers(numbers)
+    MySQL.query.await(('DROP TABLE IF EXISTS `%s`'):format(OWNED))
+    MySQL.query.await(([[
+        CREATE TABLE `%s` (
+            number VARCHAR(15) NOT NULL,
+            PRIMARY KEY (number)
+        ) ENGINE=MEMORY DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ]]):format(OWNED))
+    if #numbers == 0 then return end
+
+    for i = 1, #numbers, 500 do
+        local last = math.min(i + 499, #numbers)
+        local holes, params = {}, {}
+        for j = i, last do
+            holes[#holes + 1] = '(?)'
+            params[#params + 1] = numbers[j]
+        end
+        MySQL.query.await(
+            ('INSERT IGNORE INTO `%s` (number) VALUES %s'):format(OWNED, table.concat(holes, ',')),
+            params)
+    end
+end
+
+---The owned-numbers table name, for readers that join against it.
+---@return string
+function store.ownedTable() return OWNED end
+
+---Drops the owned-numbers table once the import is done.
+function store.clearOwnedNumbers()
+    MySQL.query.await(('DROP TABLE IF EXISTS `%s`'):format(OWNED))
+end
+
+---Rows waiting in a set of lb-phone source tables. Absent tables count zero, so a partial lb
+---database is not an error.
+---@param names string[] lb table suffixes, e.g. { 'phone_contacts' }
+---@return integer rows
+function store.lbRowCount(names)
+    local total = 0
+    for _, name in ipairs(names) do
+        local tbl = store.lbSource(name)
+        if tbl then
+            total = total + (tonumber(MySQL.scalar.await(('SELECT COUNT(*) FROM `%s`'):format(tbl))) or 0)
+        end
+    end
+    return total
 end
 
 ---Decodes a JSON column value; accepts strings or already-decoded tables and returns {} for

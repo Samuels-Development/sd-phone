@@ -3,6 +3,7 @@ import { MapPin, Pause, Play, Reply, Smile } from 'lucide-react';
 
 import { projectPct, styleMaxZoom, tileUrl } from '@/apps/maps/data';
 import { decodeWaypoint } from '@/lib/waypointCode';
+import { isVideoUrl } from '@/core/photosApi';
 import type { Message } from './data';
 import { t } from '@/i18n';
 
@@ -170,6 +171,17 @@ export const MessageBubble = memo(function MessageBubble({
 
                 {customBubble ? customBubble : msg.kind === 'gif' && msg.gifUrl ? (
                     <img src={msg.gifUrl} alt={t('messages.gifAlt', 'GIF')} className="max-w-[260px] active:opacity-80" style={{ borderRadius: radius }} />
+                ) : msg.kind === 'image' && msg.gifUrl && isVideoUrl(msg.gifUrl) ? (
+                    // A clip shares the image kind, so it is told apart by extension the same way
+                    // Photogram does. An <img> pointed at a .mov renders as a broken tile.
+                    <video
+                        src={msg.gifUrl}
+                        controls
+                        playsInline
+                        preload="metadata"
+                        className="max-w-[260px] object-cover"
+                        style={{ borderRadius: radius, maxHeight: 320 }}
+                    />
                 ) : msg.kind === 'image' && msg.gifUrl ? (
                     <img
                         src={msg.gifUrl}
