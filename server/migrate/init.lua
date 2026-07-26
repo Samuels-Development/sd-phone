@@ -192,6 +192,40 @@ local function run(opts)
     log('=========================================================')
 end
 
+-- Drops every table sd-phone owns and forgets the import markers, so the next start rebuilds the
+-- schema from scratch and re-imports. Server console only, and requires the confirm word: this
+-- destroys every player's phone. lb-phone's own tables are left alone, or there would be nothing
+-- left to import from.
+RegisterCommand('sdphone:wipedata', function(source, args)
+    if source ~= 0 then return end
+    if (args[1] or '') ~= 'CONFIRM' then
+        log('^1this deletes every phone in the database, and cannot be undone.^0')
+        log('run `sdphone:wipedata CONFIRM` if that is really what you want.')
+        return
+    end
+
+    CreateThread(function()
+        ---@type string[] Tables sd-phone creates (server.admin.tables).
+        local owned = require 'server.admin.tables'
+        log('==================== wiping sd-phone ====================')
+
+        local dropped, kept = 0, 0
+        MySQL.query.await('SET FOREIGN_KEY_CHECKS = 0')
+        for _, tbl in ipairs(owned) do
+            if store.tableExists(tbl) then
+                local ok = pcall(MySQL.query.await, ('DROP TABLE IF EXISTS `%s`'):format(tbl))
+                if ok then dropped = dropped + 1 else kept = kept + 1 end
+            end
+        end
+        MySQL.query.await('SET FOREIGN_KEY_CHECKS = 1')
+
+        log(('%d table(s) dropped%s.'):format(dropped, kept > 0 and (', %d failed'):format(kept) or ''))
+        log('lb-phone source tables were left untouched, so the import can run again.')
+        log('restart the resource to rebuild the schema and re-import.')
+        log('=========================================================')
+    end)
+end, true)
+
 -- Boot: imports any domain not yet marked done. Adding a porter later means only that porter runs.
 CreateThread(function()
     local cfg = config.Migrate
