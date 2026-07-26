@@ -318,8 +318,8 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                     { key: 'username', label: t('birdy.username', 'Username') },
                     { key: 'name',     label: t('birdy.name', 'Name') },
                     { key: 'password', label: t('birdy.password', 'Password'), type: 'password' },
-                    { key: 'email',    label: t('birdy.email', 'Email'), suffix: `@${MAIL_DOMAIN}`, createOnly: true },
-                    { key: 'phone',    label: t('birdy.phone', 'Phone'), type: 'tel',   createOnly: true },
+                    { key: 'email',    label: t('birdy.email', 'Email'), suffix: `@${MAIL_DOMAIN}`, createOnly: true, optional: true },
+                    { key: 'phone',    label: t('birdy.phone', 'Phone'), type: 'tel',   createOnly: true, optional: true },
                     { key: 'bio',      label: t('birdy.bio', 'Bio'), createOnly: true, optional: true },
                 ]}
                 onSubmit={async (mode, vals) => {

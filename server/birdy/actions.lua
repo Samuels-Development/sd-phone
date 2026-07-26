@@ -242,8 +242,15 @@ function actions.register(source, payload)
     local bio = trimmed(payload.bio) or ''
     if #bio > birdyCfg.MaxBioLength then return fail('Bio is too long') end
 
-    if not trimmed(payload.email) or trimmed(payload.email) == '' then
-        return fail('Email is required so you can recover the account')
+    -- Recovery contact. The accounts engine needs an email OR a phone; when the player supplies
+    -- neither, fall back to their own number so signup only asks for username/name/password.
+    local email = trimmed(payload.email)
+    local phone = trimmed(payload.phone)
+    if (not email or email == '') and (not phone or phone == '') then
+        phone = settings.getPhoneNumber(cid)
+        if not phone or phone == '' then
+            return fail('No phone number yet - add an email so you can recover the account')
+        end
     end
 
     if store.getProfileByHandle(handle) or acctStore.getAccount('birdy', handle) then
@@ -255,7 +262,7 @@ function actions.register(source, payload)
 
     local acctRes = acctActions.createAccount('birdy', {
         username = handle, password = password, name = name,
-        email = payload.email, phone = payload.phone,
+        email = email, phone = phone,
     })
     if not acctRes.success then return acctRes end
 
