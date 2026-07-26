@@ -9,7 +9,8 @@ import {
     apiAddPhotosToAlbum, apiCreateAlbum, apiDeleteAlbum, apiDeletePhoto,
     apiListAlbumPhotos, apiListAlbums, apiListPhotos, apiListSharedAlbums,
     apiRemovePhotoFromAlbum, apiSavePhotoFromUrl, apiSetFavorite, getCanImportPhotos, mapPhoto,
-    FIRST_PAGE_SIZE, type Album, type AlbumRef, type Photo, type PhotoCounts,
+    FIRST_PAGE_SIZE, getCachedFirstPhotoPage,
+    type Album, type AlbumRef, type Photo, type PhotoCounts,
 } from '@/core/photosApi';
 import { AlbumDetail } from './AlbumDetail';
 import { AlbumPickerSheet } from './AlbumPickerSheet';
@@ -24,16 +25,20 @@ interface CreateState { addIds: string[] }
 
 export function Photos({ onClose }: { onClose: () => void }) {
     const [tab,     setTab]     = useSessionState<PhotosTab>('photos:tab', 'gallery');
-    const [photos,  setPhotos]  = useState<Photo[]>([]);
+    // Seeded from the last first page so a reopen has tiles on frame one and the open animation
+    // has something to animate. A fresh fetch still runs underneath and replaces it.
+    const cached = getCachedFirstPhotoPage();
+    const [photos,  setPhotos]  = useState<Photo[]>(cached?.photos ?? []);
     const [albums,  setAlbums]  = useState<Album[]>([]);
     const [sharedAlbums, setSharedAlbums] = useState<Album[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(!cached);
 
     // The gallery is paged: `photos` holds what has been fetched so far, `counts` holds the
     // server-side totals the album tiles need (a page cannot report them).
-    const [nextCursor,  setNextCursor]  = useState<string | null>(null);
+    const [nextCursor,  setNextCursor]  = useState<string | null>(cached?.nextCursor ?? null);
     const [loadingMore, setLoadingMore] = useState(false);
-    const [counts,      setCounts]      = useState<PhotoCounts>({ total: 0, favorites: 0, videos: 0 });
+    const [counts,      setCounts]      = useState<PhotoCounts>(
+        cached?.counts ?? { total: 0, favorites: 0, videos: 0 });
     const fetchingMore = useRef(false);
 
     const [gallerySelect, setGallerySelect] = useState(false);
@@ -68,14 +73,18 @@ export function Photos({ onClose }: { onClose: () => void }) {
         return () => { cancelled = true; };
     }, []);
 
-    // The shell's ios-app-open runs 0.38s (shell/AppDeck.tsx). Committing the grid inside that
-    // window competes with the animation and it visibly drops, so the tiles wait for it to
-    // finish. A timer, not rAF: rAF is starved in CEF in-game.
-    const [entered, setEntered] = useState(false);
+    // Restarts the pane's swipe animation on a tab change. The panes deliberately stay mounted
+    // (a key= remount rebuilt every tile), and a CSS animation on an already-mounted element
+    // will not replay on its own, so it is cleared and reassigned around a forced reflow. Reading
+    // offsetHeight is what flushes it; rAF is starved in CEF, so the double-rAF trick is out.
+    const paneRefs = useRef<Record<PhotosTab, HTMLDivElement | null>>({ gallery: null, albums: null });
     useEffect(() => {
-        const id = window.setTimeout(() => setEntered(true), 400);
-        return () => window.clearTimeout(id);
-    }, []);
+        const el = paneRefs.current[tab];
+        if (!el) return;
+        el.style.animation = 'none';
+        void el.offsetHeight;
+        el.style.animation = '';
+    }, [tab]);
 
     // Appends the next page. Guarded on a ref rather than `loadingMore` so a burst of scroll
     // events cannot fire two requests for the same cursor before the first setState lands.
@@ -237,12 +246,9 @@ export function Photos({ onClose }: { onClose: () => void }) {
             <div className="h-[54px] shrink-0" aria-hidden />
 
             <div className="relative flex-1 min-h-0">
-                {!entered || loading ? (
-                    // Blank while the app is still flying in: flashing "Loading…" for the 400ms
-                    // of the open animation reads worse than an empty pane. The label only
-                    // appears if the fetch is genuinely still outstanding once we have landed.
+                {loading ? (
                     <div className="flex h-full items-center justify-center text-[13px] text-black/45 dark:text-white/45">
-                        {entered && loading ? t('photos.loading','Loading…') : null}
+                        {t('photos.loading','Loading…')}
                     </div>
                 ) : (
                     // NO key={tab} here. The usual house pattern remounts the pane to replay the
@@ -251,7 +257,10 @@ export function Photos({ onClose }: { onClose: () => void }) {
                     // rebuilt it. Both panes stay mounted and the inactive one is just hidden,
                     // so switching is a visibility toggle rather than a full remount.
                     <div className="flex h-full min-h-0 flex-col">
-                        <div className={`flex h-full min-h-0 flex-col ${tab === 'gallery' ? '' : 'hidden'}`}>
+                        <div
+                            ref={el => { paneRefs.current.gallery = el; }}
+                            className={`flex h-full min-h-0 flex-col ${tab === 'gallery' ? 'animate-swipe-in-left' : 'hidden'}`}
+                        >
                             {isEmpty ? (
                                 <EmptyState />
                             ) : (
@@ -271,7 +280,10 @@ export function Photos({ onClose }: { onClose: () => void }) {
                                 />
                             )}
                         </div>
-                        <div className={`flex h-full min-h-0 flex-col ${tab === 'albums' ? 'animate-swipe-in-left' : 'hidden'}`}>
+                        <div
+                            ref={el => { paneRefs.current.albums = el; }}
+                            className={`flex h-full min-h-0 flex-col ${tab === 'albums' ? 'animate-swipe-in-left' : 'hidden'}`}
+                        >
                             <AlbumsTab
                                 photos={photos}
                                 counts={counts}

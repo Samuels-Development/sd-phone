@@ -94,6 +94,15 @@ export interface PhotoPage {
  */
 export const FIRST_PAGE_SIZE = 60;
 
+/**
+ * Last unfiltered first page. Photos seeds its state from this synchronously, so reopening the
+ * app paints real tiles on the first frame instead of an empty pane that fills in once the
+ * round trip lands, which read as the open animation not playing at all.
+ */
+let firstPageCache: PhotoPage | null = null;
+
+export function getCachedFirstPhotoPage(): PhotoPage | null { return firstPageCache; }
+
 /** One page of the gallery. Omit `cursor` for the first page, then pass `nextCursor` back. */
 export async function apiListPhotos(cursor?: string | null, filter?: PhotoFilter, limit?: number): Promise<PhotoPage> {
     if (!isFiveM) {
@@ -114,11 +123,14 @@ export async function apiListPhotos(cursor?: string | null, filter?: PhotoFilter
         photos: ServerPhoto[]; nextCursor?: string | null; counts?: PhotoCounts; canImport?: boolean;
     }>('sd-phone:photos:list', { cursor: cursor ?? null, filter: filter ?? null, limit: limit ?? null });
     if (!cursor) canImportPhotos = data?.canImport === true;
-    return {
+    const page: PhotoPage = {
         photos:     data?.photos?.map(mapPhoto) ?? [],
         nextCursor: data?.nextCursor ?? null,
         counts:     data?.counts,
     };
+    // Cache only the plain first page: a filtered or later page is not what the app opens on.
+    if (!cursor && !filter) firstPageCache = page;
+    return page;
 }
 
 /**
