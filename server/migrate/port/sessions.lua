@@ -56,7 +56,13 @@ function M.run(ctx)
         end
         orphan, written, created = written - linked, linked, inserted
     end
-    return { written = written, created = created, deferred = deferred, skipped = skipped, orphan = orphan }
+    -- Deferred rows are Twitter logins with no Squawk account to attach to yet. Staying unmarked
+    -- means this runs again after Squawk's porter lands and picks them up; marked done, those
+    -- players would silently never be signed in.
+    return {
+        written = written, created = created, deferred = deferred,
+        skipped = skipped, orphan = orphan, retry = deferred > 0 or nil,
+    }
 end
 
 return M
