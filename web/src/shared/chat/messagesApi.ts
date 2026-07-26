@@ -77,6 +77,26 @@ export async function loadMessages(): Promise<MessagesState> {
     return { conversations: [], contacts: [], myNumber: '', myName: '' };
 }
 
+/**
+ * Last successful list result. Messages seeds its state from this so reopening the app paints
+ * the thread list on frame one instead of showing an empty pane that fills in a moment later.
+ */
+let listCache: MessagesState | null = null;
+
+export function getCachedMessages(): MessagesState | null { return listCache; }
+
+export function cacheMessages(state: MessagesState): void { listCache = state; }
+
+/**
+ * Full history for one conversation. The list only carries each thread's last line, so this runs
+ * when a thread is opened. Returns null when the fetch fails, leaving the preview in place.
+ */
+export async function loadThread(id: string): Promise<Conversation | null> {
+    if (!isFiveM) return CONVERSATIONS.map(cloneConv).find(c => c.id === id) ?? null;
+    const res = await apiData<{ conversation: Conversation }>('sd-phone:messages:thread', { id });
+    return res?.conversation ?? null;
+}
+
 export interface SendResult { data: Message | null; error?: string }
 
 export async function sendMessageApi(input: SendInput): Promise<SendResult> {

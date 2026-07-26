@@ -13,7 +13,7 @@ import { useDidEnter } from '@/hooks/useDidEnter';
 import type { MessagesIncomingPush } from '@/core/types';
 import { unreadCount, type Contact, type Conversation, type Message } from '@/shared/chat/data';
 import {
-    loadMessages, sendMessageApi, createGroupApi, addGroupMemberApi, updateGroupApi,
+    loadMessages, loadThread, getCachedMessages, cacheMessages, sendMessageApi, createGroupApi, addGroupMemberApi, updateGroupApi,
     removeGroupMemberApi, markReadApi,
     upsertConversation, appendMessage, replaceMessage, markConversationRead,
     deleteConversationApi, contactFromNumber, reactMessageApi, toggleReactionLocal,
@@ -29,8 +29,11 @@ import type { Contact as PhoneContact } from '@/apps/phone/data';
 type Draft = Omit<SendInput, 'conversation'>;
 
 export function Messages({ onClose }: { onClose: () => void }) {
-    const [conversations, setConversations] = useState<Conversation[]>([]);
-    const [contacts,      setContacts]      = useState<Contact[]>([]);
+    // Seeded from the last list result so a reopen paints the thread list immediately instead of
+    // an empty pane that fills in once the round trip lands. A fresh fetch replaces it below.
+    const cachedState = getCachedMessages();
+    const [conversations, setConversations] = useState<Conversation[]>(cachedState?.conversations ?? []);
+    const [contacts,      setContacts]      = useState<Contact[]>(cachedState?.contacts ?? []);
     const [openId,        setOpenId]        = useSessionState<string | null>('messages:openConvoId', null);
     const [composing,     setComposing]     = useSessionState('messages:composing', false);
     const [sendError,     setSendError]     = useState<string | null>(null);
@@ -51,6 +54,7 @@ export function Messages({ onClose }: { onClose: () => void }) {
         let active = true;
         void loadMessages().then(state => {
             if (!active) return;
+            cacheMessages(state);
             setConversations(state.conversations);
             setContacts(state.contacts);
 
@@ -122,6 +126,14 @@ export function Messages({ onClose }: { onClose: () => void }) {
         setOpenId(id);
         markReadApi(id);
         setConversations(prev => markConversationRead(prev, id));
+        // The list row only carries the last line, so pull the real history now. The preview
+        // stays on screen meanwhile, and a failed fetch simply leaves it in place.
+        void loadThread(id).then(full => {
+            if (!full) return;
+            setConversations(prev => prev.map(c => (c.id === id
+                ? { ...c, messages: full.messages, participants: full.participants, unread: 0, partial: false }
+                : c)));
+        });
     }, []);
 
     const sendMessage = useCallback(async (conversationId: string, draft: Draft) => {

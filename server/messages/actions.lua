@@ -219,10 +219,15 @@ end
 ---@param rows table[] message rows (chronological)
 ---@param contactMap table<string, table>
 ---@return table
-local function buildConversation(viewerCid, viewerNumber, conversation, rows, contactMap)
-    local mids = {}
-    for i = 1, #rows do mids[i] = rows[i].mid end
-    local reactionsByMid = store.reactionsForMids(mids)
+---@param preview? boolean Skip the reaction lookup. The list only renders each thread's last
+---line, and one reaction query per conversation was a second N+1 alongside the message fetch.
+local function buildConversation(viewerCid, viewerNumber, conversation, rows, contactMap, preview)
+    local reactionsByMid = {}
+    if not preview then
+        local mids = {}
+        for i = 1, #rows do mids[i] = rows[i].mid end
+        reactionsByMid = store.reactionsForMids(mids)
+    end
     local messages = {}
     for i = 1, #rows do messages[i] = serializeMessage(rows[i], viewerNumber, viewerCid, reactionsByMid) end
 
@@ -350,10 +355,16 @@ function actions.list(source)
     local contactMap = contactMapFor(cid)
 
     local conversations, seen = {}, {}
-    for _, t in ipairs(store.threadKeys(cid)) do
-        seen[t.conversation] = true
-        local rows = store.threadMessages(cid, t.conversation, cfg.MessagesPerThread)
-        conversations[#conversations + 1] = buildConversation(cid, myNumber, t.conversation, rows, contactMap)
+    -- Previews only, from a single query. This used to fetch every thread in full (a query per
+    -- conversation, plus a reaction query each) before the app could paint anything: on a mailbox
+    -- with 550 threads that is ~1,100 round trips for a list that shows one line per row. The full
+    -- history is fetched by actions.thread when a conversation is actually opened.
+    for _, row in ipairs(store.threadPreviews(cid)) do
+        seen[row.conversation] = true
+        local conv = buildConversation(cid, myNumber, row.conversation, { row }, contactMap, true)
+        conv.unread  = math.floor(tonumber(row.unread) or 0)
+        conv.partial = true
+        conversations[#conversations + 1] = conv
     end
 
     for _, g in ipairs(store.groupsForMember(cid)) do
@@ -369,6 +380,26 @@ function actions.list(source)
         myNumber      = myNumber,
         myName        = player.getName(source),
     })
+end
+
+---Full history for one conversation, with reactions. Fetched when the player opens a thread,
+---since actions.list only carries each thread's last line. Read-only.
+---@param source number
+---@param payload { id: string }|nil
+---@return table result { success, data = { conversation } }
+function actions.thread(source, payload)
+    local cid = player.getIdentifier(source)
+    if not cid then return fail('Player not found') end
+
+    payload = type(payload) == 'table' and payload or {}
+    local conversation = type(payload.id) == 'string' and payload.id or ''
+    if conversation == '' then return fail('Missing conversation') end
+
+    local myNumber   = digits(settings.ensurePhoneNumber(cid) or '')
+    local contactMap = contactMapFor(cid)
+    local rows       = store.threadMessages(cid, conversation, cfg.MessagesPerThread)
+
+    return ok({ conversation = buildConversation(cid, myNumber, conversation, rows, contactMap) })
 end
 
 ---@type integer Store-and-forward cap per number; past this the carrier drops new texts silently.
