@@ -1,6 +1,11 @@
 ---@type table Settings porter (server.migrate.port.settings). Copies each lb-phone phone's
 ---settings blob onto its owner's sd-phone settings row. Fill-only: a value the player has already
 ---chosen is never overwritten.
+---
+---The home-screen layout is deliberately NOT imported. lb-phone stores pages of apps (an array of
+---arrays) named in PascalCase, while sd-phone stores a flat slot list of lowercase app ids, and each
+---has apps the other does not. There is no faithful mapping, and the wrong shape crashes the phone
+---during render.
 local M = {}
 
 ---@type table Migration data layer (server.migrate.store).
@@ -73,7 +78,6 @@ function M.run(ctx)
                 str(sound.texttone, 64),
                 pct(sound.volume),
                 pct(sound.callVolume),
-                type(s.apps) == 'table' and store.encodeJson(s.apps) or nil,
             }
             imported = imported + 1
         else

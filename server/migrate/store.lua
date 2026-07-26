@@ -436,15 +436,15 @@ function store.lbPhoneSettings()
 end
 
 ---Fill-only settings merge. rows: { citizenid, wallpaper, blur_lock, blur_home, theme, brightness,
----phone_scale, hour24, ringtone, notification_tone, ringtone_volume, call_volume, home_layout }.
+---phone_scale, hour24, ringtone, notification_tone, ringtone_volume, call_volume }.
 ---@param rows any[][]
 function store.fillSettings(rows)
     insertMulti([[
         INSERT INTO phone_settings
             (citizenid, wallpaper, blur_lock, blur_home, theme, brightness, phone_scale, hour24,
-             ringtone, notification_tone, ringtone_volume, call_volume, home_layout)
+             ringtone, notification_tone, ringtone_volume, call_volume)
         VALUES
-    ]], 13, rows, [[
+    ]], 12, rows, [[
         ON DUPLICATE KEY UPDATE
             wallpaper         = IF(wallpaper IS NULL, VALUES(wallpaper), wallpaper),
             blur_lock         = IF(blur_lock IS NULL, VALUES(blur_lock), blur_lock),
@@ -456,8 +456,7 @@ function store.fillSettings(rows)
             ringtone          = IF(ringtone IS NULL, VALUES(ringtone), ringtone),
             notification_tone = IF(notification_tone IS NULL, VALUES(notification_tone), notification_tone),
             ringtone_volume   = IF(ringtone_volume IS NULL, VALUES(ringtone_volume), ringtone_volume),
-            call_volume       = IF(call_volume IS NULL, VALUES(call_volume), call_volume),
-            home_layout       = IF(home_layout IS NULL, VALUES(home_layout), home_layout)
+            call_volume       = IF(call_volume IS NULL, VALUES(call_volume), call_volume)
     ]])
 end
 
