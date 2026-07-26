@@ -108,6 +108,47 @@ function store.recordMigration(name, stats)
     )
 end
 
+---@type string Marker-row prefix for a single completed domain.
+local DOMAIN_MARKER = 'lbphone:'
+
+---The set of domain keys already imported. Gating per domain (rather than one marker for the whole
+---import) is what lets a server that ran an earlier version pick up only the domains added since.
+---@return table<string, boolean>
+function store.completedDomains()
+    local rows = MySQL.query.await(
+        'SELECT name FROM phone_migrations WHERE name LIKE ?', { DOMAIN_MARKER .. '%' }) or {}
+    local set = {}
+    for _, r in ipairs(rows) do
+        local key = tostring(r.name):sub(#DOMAIN_MARKER + 1)
+        if key ~= '' then set[key] = true end
+    end
+    return set
+end
+
+---Marks one domain as imported, stamping its counts. Idempotent (INSERT IGNORE).
+---@param key string domain key
+---@param stats table counts returned by the porter
+function store.recordDomain(key, stats)
+    MySQL.query.await(
+        'INSERT IGNORE INTO phone_migrations (name, stats) VALUES (?, ?)',
+        { DOMAIN_MARKER .. key, json.encode(stats or {}) }
+    )
+end
+
+---Backfills domain markers for an install that completed the pre-domain-marker import, so those
+---domains are not needlessly re-run. Returns true when the legacy marker was found.
+---@param legacyName string old whole-import marker name
+---@param keys string[] domain keys that marker covered
+---@return boolean backfilled
+function store.backfillLegacyDomains(legacyName, keys)
+    if not store.migrationDone(legacyName) then return false end
+    local done = store.completedDomains()
+    for _, key in ipairs(keys) do
+        if not done[key] then store.recordDomain(key, { backfilled = true }) end
+    end
+    return true
+end
+
 ---Loads the framework's persistent character roster: qb/QBox reads `players` (citizenid + license),
 ---ESX reads `users` (identifier). A non-standard schema degrades to empty maps.
 ---@param frameworkName 'qb'|'esx'
