@@ -30,13 +30,34 @@ return {
 
     -- Per-domain switches, if you want to import only some of it. `numbers` must stay on: every
     -- other domain is keyed off the number -> citizenid resolution it establishes.
+    --
+    -- `reactions` needs `messages` (it attaches to the messages that porter writes) and
+    -- `sessions` needs `photogram` (it links to the accounts that porter creates).
+    --
+    -- lb-phone passwords are bcrypt hashed and cannot be converted to sd-phone's hasher, so
+    -- migrated accounts rely on the pre-seeded sessions to stay signed in. Anyone who logs out
+    -- recovers through the normal in-app password reset.
     domains = {
-        numbers  = true,
-        contacts = true,
-        blocked  = true,
-        calls    = true,
-        messages = true,
-        photos   = true,
-        notes    = true,
+        numbers    = true,
+        contacts   = true,
+        blocked    = true,
+        calls      = true,
+        messages   = true,
+        photos     = true,
+        notes      = true,
+        -- wallpaper, theme, clock format, ringtones, volumes, home-screen layout
+        settings   = true,
+        -- message reactions; needs `messages`
+        reactions  = true,
+        -- Instagram accounts, posts, comments, likes, follows, stories and DMs
+        photogram  = true,
+        -- mail accounts and their received messages
+        mail       = true,
+        -- wallet transaction history
+        wallet     = true,
+        -- voice memo recordings
+        voicememos = true,
+        -- keeps players signed into their migrated accounts; needs `photogram`, runs last
+        sessions   = true,
     },
 }

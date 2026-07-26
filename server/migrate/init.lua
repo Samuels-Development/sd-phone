@@ -11,21 +11,22 @@ local MIGRATION = 'lbphone-import-v2'
 
 ---@type { key: string, label: string, run: fun(ctx: table): table }[] Domains, in run order.
 local PORTS = {
-    { key = 'numbers',  label = 'numbers',  run = require('server.migrate.port.numbers').run },
-    { key = 'contacts', label = 'contacts', run = require('server.migrate.port.contacts').run },
-    { key = 'blocked',  label = 'blocked',  run = require('server.migrate.port.blocked').run },
-    { key = 'calls',    label = 'calls',    run = require('server.migrate.port.calls').run },
-    { key = 'messages', label = 'messages', run = require('server.migrate.port.messages').run },
-    { key = 'reactions', label = 'reactions', run = require('server.migrate.port.reactions').run },
-    { key = 'photos',   label = 'photos',   run = require('server.migrate.port.photos').run },
-    { key = 'notes',    label = 'notes',    run = require('server.migrate.port.notes').run },
-    { key = 'settings', label = 'settings', run = require('server.migrate.port.settings').run },
-    { key = 'photogram', label = 'photogram', run = require('server.migrate.port.photogram').run },
-    { key = 'mail',      label = 'mail',      run = require('server.migrate.port.mail').run },
-    { key = 'wallet',    label = 'wallet',    run = require('server.migrate.port.wallet').run },
+    { key = 'numbers',    label = 'numbers',    run = require('server.migrate.port.numbers').run },
+    { key = 'contacts',   label = 'contacts',   run = require('server.migrate.port.contacts').run },
+    { key = 'blocked',    label = 'blocked',    run = require('server.migrate.port.blocked').run },
+    { key = 'calls',      label = 'calls',      run = require('server.migrate.port.calls').run },
+    { key = 'messages',   label = 'messages',   run = require('server.migrate.port.messages').run },
+    -- After messages: joins on the `m<id>` mid values that porter writes.
+    { key = 'reactions',  label = 'reactions',  run = require('server.migrate.port.reactions').run },
+    { key = 'photos',     label = 'photos',     run = require('server.migrate.port.photos').run },
+    { key = 'notes',      label = 'notes',      run = require('server.migrate.port.notes').run },
+    { key = 'settings',   label = 'settings',   run = require('server.migrate.port.settings').run },
+    { key = 'photogram',  label = 'photogram',  run = require('server.migrate.port.photogram').run },
+    { key = 'mail',       label = 'mail',       run = require('server.migrate.port.mail').run },
+    { key = 'wallet',     label = 'wallet',     run = require('server.migrate.port.wallet').run },
     { key = 'voicememos', label = 'voicememos', run = require('server.migrate.port.voicememos').run },
     -- Last: links sessions to the accounts the photogram porter created.
-    { key = 'sessions',  label = 'sessions',  run = require('server.migrate.port.sessions').run },
+    { key = 'sessions',   label = 'sessions',   run = require('server.migrate.port.sessions').run },
 }
 
 -- sd-phone tables the porters write into; the migration waits for all of them. Names lb-phone

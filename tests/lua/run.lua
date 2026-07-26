@@ -9,6 +9,7 @@ local suites = {
     'port_reactions_test',
     'port_voicememos_test',
     'port_sessions_test',
+    'idempotency_test',
 }
 
 for _, name in ipairs(suites) do
