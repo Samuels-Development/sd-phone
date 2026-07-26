@@ -36,7 +36,7 @@ local PAGE_SIZE <const> = 200
 ---One page of the caller's photos, newest first. An absent `cursor` means the first page, which
 ---also carries the smart-album counts. Read-only.
 ---@param source number player server id
----@param payload { cursor: string|nil, filter: 'favorites'|'videos'|nil }|nil
+---@param payload { cursor: string|nil, filter: 'favorites'|'videos'|nil, limit: number|nil }|nil
 ---@return table result { success, data = { photos, nextCursor, counts, canImport } }
 function actions.list(source, payload)
     local cid = player.getIdentifier(source)
@@ -46,12 +46,17 @@ function actions.list(source, payload)
     local cursor = type(payload.cursor) == 'string' and payload.cursor ~= '' and payload.cursor or nil
     local filter = (payload.filter == 'favorites' or payload.filter == 'videos') and payload.filter or nil
 
+    -- The client asks for a short first page so the opening animation is not competing with a
+    -- few hundred tiles mounting, then full pages while scrolling. Clamped either way.
+    local limit = math.floor(tonumber(payload.limit) or PAGE_SIZE)
+    if limit < 1 then limit = 1 elseif limit > PAGE_SIZE then limit = PAGE_SIZE end
+
     -- One row past the page proves a further page exists; it is trimmed before shaping.
-    local rows = store.listForCitizen(cid, cursor, PAGE_SIZE, filter)
+    local rows = store.listForCitizen(cid, cursor, limit, filter)
     local nextCursor
-    if #rows > PAGE_SIZE then
-        local last = rows[PAGE_SIZE]
-        rows[PAGE_SIZE + 1] = nil
+    if #rows > limit then
+        local last = rows[limit]
+        rows[limit + 1] = nil
         nextCursor = ('%d:%s'):format(math.floor(tonumber(last.ts) or 0), last.id)
     end
 

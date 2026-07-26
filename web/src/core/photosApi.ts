@@ -88,8 +88,14 @@ export interface PhotoPage {
     counts?:    PhotoCounts;
 }
 
+/**
+ * Tiles fetched for the first page. Deliberately smaller than a scroll page: this batch mounts
+ * while the app's open animation is still running, and a few hundred tiles there stalls it.
+ */
+export const FIRST_PAGE_SIZE = 60;
+
 /** One page of the gallery. Omit `cursor` for the first page, then pass `nextCursor` back. */
-export async function apiListPhotos(cursor?: string | null, filter?: PhotoFilter): Promise<PhotoPage> {
+export async function apiListPhotos(cursor?: string | null, filter?: PhotoFilter, limit?: number): Promise<PhotoPage> {
     if (!isFiveM) {
         const photos = filter === 'favorites' ? DEV_PHOTOS.filter(p => p.favorite)
                      : filter === 'videos'    ? DEV_PHOTOS.filter(p => p.video)
@@ -106,7 +112,7 @@ export async function apiListPhotos(cursor?: string | null, filter?: PhotoFilter
     }
     const data = await apiData<{
         photos: ServerPhoto[]; nextCursor?: string | null; counts?: PhotoCounts; canImport?: boolean;
-    }>('sd-phone:photos:list', { cursor: cursor ?? null, filter: filter ?? null });
+    }>('sd-phone:photos:list', { cursor: cursor ?? null, filter: filter ?? null, limit: limit ?? null });
     if (!cursor) canImportPhotos = data?.canImport === true;
     return {
         photos:     data?.photos?.map(mapPhoto) ?? [],

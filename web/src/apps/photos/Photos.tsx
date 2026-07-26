@@ -9,7 +9,7 @@ import {
     apiAddPhotosToAlbum, apiCreateAlbum, apiDeleteAlbum, apiDeletePhoto,
     apiListAlbumPhotos, apiListAlbums, apiListPhotos, apiListSharedAlbums,
     apiRemovePhotoFromAlbum, apiSavePhotoFromUrl, apiSetFavorite, getCanImportPhotos, mapPhoto,
-    type Album, type AlbumRef, type Photo, type PhotoCounts,
+    FIRST_PAGE_SIZE, type Album, type AlbumRef, type Photo, type PhotoCounts,
 } from '@/core/photosApi';
 import { AlbumDetail } from './AlbumDetail';
 import { AlbumPickerSheet } from './AlbumPickerSheet';
@@ -51,20 +51,30 @@ export function Photos({ onClose }: { onClose: () => void }) {
     const [photoPicker, setPhotoPicker] = useState(false);
     const [createState, setCreateState] = useState<CreateState | null>(null);
 
+    // The gallery waits only on its own page. The two album reads used to be awaited together
+    // with it, so the default tab sat on "Loading…" for three round trips instead of one.
     useEffect(() => {
         let cancelled = false;
-        (async () => {
-            const [page, as, shared] = await Promise.all([apiListPhotos(), apiListAlbums(), apiListSharedAlbums()]);
+        void apiListPhotos(null, undefined, FIRST_PAGE_SIZE).then(page => {
             if (cancelled) return;
             setPhotos(page.photos);
             setNextCursor(page.nextCursor);
             if (page.counts) setCounts(page.counts);
-            setAlbums(as);
-            setSharedAlbums(shared);
             setCanImport(getCanImportPhotos());
             setLoading(false);
-        })();
+        });
+        void apiListAlbums().then(as => { if (!cancelled) setAlbums(as); });
+        void apiListSharedAlbums().then(s => { if (!cancelled) setSharedAlbums(s); });
         return () => { cancelled = true; };
+    }, []);
+
+    // The shell's ios-app-open runs 0.38s (shell/AppDeck.tsx). Committing the grid inside that
+    // window competes with the animation and it visibly drops, so the tiles wait for it to
+    // finish. A timer, not rAF: rAF is starved in CEF in-game.
+    const [entered, setEntered] = useState(false);
+    useEffect(() => {
+        const id = window.setTimeout(() => setEntered(true), 400);
+        return () => window.clearTimeout(id);
     }, []);
 
     // Appends the next page. Guarded on a ref rather than `loadingMore` so a burst of scroll
@@ -227,9 +237,12 @@ export function Photos({ onClose }: { onClose: () => void }) {
             <div className="h-[54px] shrink-0" aria-hidden />
 
             <div className="relative flex-1 min-h-0">
-                {loading ? (
+                {!entered || loading ? (
+                    // Blank while the app is still flying in: flashing "Loading…" for the 400ms
+                    // of the open animation reads worse than an empty pane. The label only
+                    // appears if the fetch is genuinely still outstanding once we have landed.
                     <div className="flex h-full items-center justify-center text-[13px] text-black/45 dark:text-white/45">
-                        {t('photos.loading','Loading…')}
+                        {entered && loading ? t('photos.loading','Loading…') : null}
                     </div>
                 ) : (
                     <div key={tab} className="flex h-full min-h-0 flex-col animate-swipe-in-left">

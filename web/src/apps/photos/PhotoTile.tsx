@@ -32,6 +32,9 @@ export function PhotoTile({ photo, selectable, selected, onClick }: {
                     src={photo.url}
                     alt=""
                     loading="lazy"
+                    // Off the main thread: a synchronous decode per tile is what makes a grid of
+                    // freshly fetched photos hitch as they arrive.
+                    decoding="async"
                     draggable={false}
                     onLoad={() => setLoaded(true)}
                     ref={el => { if (el?.complete) setLoaded(true); }}
