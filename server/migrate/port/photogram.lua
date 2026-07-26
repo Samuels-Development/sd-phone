@@ -11,6 +11,7 @@ local util  = require 'server.util'
 ---@type string Id prefix, keeping migrated ids clear of natively generated 7-char base36 ids.
 local P = 'i'
 
+local function digits(s) return (tostring(s or ''):gsub('%D', '')) end
 local function id(v) return P .. tostring(v) end
 local function ts(v) return math.floor(tonumber(v) or 0) end
 local function bit(v) return util.truthy(v) and 1 or 0 end
@@ -26,16 +27,19 @@ local function str(v, len)
     return s:sub(1, len)
 end
 
----Needs no identity resolution: content is username-keyed on both sides, so it imports whole even
----when an owner cannot be matched to a character.
----@param ctx table migration context (dryRun)
+---Content needs no identity resolution: it is username-keyed on both sides, so it imports whole even
+---when an owner cannot be matched to a character. Ownership is only consulted to hand the owner a
+---usable password for the account.
+---@param ctx table migration context (numberToCid, dryRun)
 ---@return table counts
 function M.run(ctx)
     local out = {
         profiles = 0, posts = 0, comments = 0, likes = 0, commentLikes = 0, follows = 0,
         stories = 0, views = 0, dms = 0, notifications = 0, accounts = 0, skipped = 0, orphan = 0,
+        logins = 0,
     }
     local profiles, accounts = {}, {}
+    local grants = {}
     local posts, comments, likes, commentLikes = {}, {}, {}, {}
     local follows, stories, views, dms, notifs = {}, {}, {}, {}, {}
 
@@ -74,6 +78,11 @@ function M.run(ctx)
                     'photogram', user, str(a.display_name, 50) or user, str(a.password, 64) or '',
                 }
                 out.accounts = out.accounts + 1
+
+                -- lb's hash is bcrypt and unusable here, so the owner needs a password they can
+                -- actually read and type. Granted after the insert below.
+                local cid = ctx.numberToCid[digits(a.phone_number)]
+                if cid then grants[#grants + 1] = { app = 'photogram', username = user, cid = cid } end
             else
                 out.skipped = out.skipped + 1
             end
@@ -199,6 +208,7 @@ function M.run(ctx)
         store.insertPgStoryViews(views)
         store.insertPgDms(dms)
         store.insertPgNotifications(notifs)
+        out.logins = store.grantMigratedLogins(grants)
     end
     return out
 end

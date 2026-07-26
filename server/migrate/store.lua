@@ -680,6 +680,49 @@ function store.insertPgAccounts(rows)
     insertMulti('INSERT IGNORE INTO phone_app_accounts (app, username, display_name, password_hash) VALUES', 4, rows)
 end
 
+---@type string Alphabet for generated passwords; no look-alike characters, so a player can read one
+---off the Passwords app and type it without ambiguity.
+local PW_CHARS = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+
+---A fresh readable password.
+---@return string
+local function newPassword()
+    local out = {}
+    for i = 1, 12 do
+        local n = math.random(1, #PW_CHARS)
+        out[i] = PW_CHARS:sub(n, n)
+    end
+    return table.concat(out)
+end
+
+---Gives migrated accounts a login their owner can actually use.
+---
+---lb-phone hashes passwords with bcrypt, which sd-phone cannot verify and cannot reverse, so a
+---migrated account is unreachable the moment its owner signs out. Each account with a resolved
+---owner therefore gets a freshly generated password: stored as the engine hash on the account, and
+---written to that owner's vault so it shows up in the Passwords app.
+---
+---Accounts with no resolved owner keep whatever hash they came with. Nobody can sign into them, but
+---there is also no one to hand a password to.
+---@param entries { app: string, username: string, cid: string, email: string|nil }[]
+---@return integer granted
+function store.grantMigratedLogins(entries)
+    if #entries == 0 then return 0 end
+    local accounts = require 'server.accounts.store'
+    local granted = 0
+    for _, e in ipairs(entries) do
+        local plain = newPassword()
+        local n = MySQL.update.await(
+            'UPDATE phone_app_accounts SET password_hash = ? WHERE app = ? AND username = ?',
+            { accounts.hashPassword(plain), e.app, e.username })
+        if (tonumber(n) or 0) > 0 then
+            accounts.saveVaultEntry(e.cid, e.app, e.username, plain, e.email, nil)
+            granted = granted + 1
+        end
+    end
+    return granted
+end
+
 ---Sessions for migrated app accounts. `linked` counts rows whose account exists and now has a
 ---session; `inserted` counts only the new ones. They differ on a re-run, where every session is
 ---already present and INSERT IGNORE affects no rows: that is success, not failure, so callers must
