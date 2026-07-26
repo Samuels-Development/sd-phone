@@ -79,9 +79,14 @@ RegisterNetEvent('sd-phone:client:call:ended', function(data)
     pushCall('sd-phone:call:ended', data)
 end)
 
----Flips the active cell-cam between the rear and front (selfie) lens, invoking the native by hash.
+---Flips the active cell-cam between the rear and front (selfie) lens.
+---The old raw hash (0x2491A93618B7D838) is stale on current builds ("invalid native") -
+---the named native lets FiveM cross-map it, and a missing native no-ops quietly.
 ---@param on boolean true for the front (selfie) lens
-local CellFrontCamActivate = function(on) Citizen.InvokeNative(0x2491A93618B7D838, on) end
+local CellFrontCamActivate = function(on)
+    local fn = CellCamActivateSelfieMode
+    if fn then pcall(fn, on) end
+end
 
 ---@type boolean Whether the native cell-cam currently owns the local view (video call active).
 local videoCamActive = false

@@ -1,7 +1,13 @@
----Flips the active cellphone camera between rear and front (selfie), invoking the native by hash.
+---Flips the active cellphone camera between rear and front (selfie).
+---The old gcphone-era raw hash (0x2491A93618B7D838) is no longer a valid native on
+---current game builds - invoking it threw "invalid native" and killed the whole
+---open/close NUI callback. The NAMED native lets FiveM cross-map the correct hash for
+---the running build; the guard turns a missing native into a silent no-op (no selfie
+---flip) instead of breaking the camera flow.
 ---@param activate boolean true = front (selfie) camera
 local function CellFrontCamActivate(activate)
-    Citizen.InvokeNative(0x2491A93618B7D838, activate)
+    local fn = CellCamActivateSelfieMode
+    if fn then pcall(fn, activate) end
 end
 
 -- Keyboard controls for the viewfinder (control group 0).
