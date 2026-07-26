@@ -120,7 +120,18 @@ function AppResumeStage({ hasApp }: { hasApp: boolean }) {
     return (
         <div
             className="absolute inset-0 z-10"
-            style={{ pointerEvents: 'none', animation: fxRef.current ? 'app-resume-in 0.34s cubic-bezier(0.3,0.9,0.4,1) both' : undefined }}
+            data-pull-surface="app"
+            // overflow + will-change live here PERMANENTLY: the bottom-edge pull writes
+            // transform/border-radius to this node on the first pointer move, and if the
+            // compositing layer + clip had to be created at that moment, CEF re-rasters
+            // the whole app subtree mid-gesture - a visible one-frame blink right as the
+            // swipe starts. Pre-promoted, the pull is pure compositor work.
+            style={{
+                pointerEvents: 'none',
+                overflow:      'hidden',
+                willChange:    'transform',
+                animation:     fxRef.current ? 'app-resume-in 0.34s cubic-bezier(0.3,0.9,0.4,1) both' : undefined,
+            }}
         >
             <FullscreenStage />
         </div>
@@ -266,12 +277,11 @@ function AppContent() {
         window.setTimeout(() => setFinishingSetup(false), 520);
     }
 
-    useEffect(() => {
-        if (switcherOpen && recentApps.length === 0) {
-            setSwitcherOpen(false);
-            setSwitcherClosing(false);
-        }
-    }, [recentApps, switcherOpen]);
+    // NOTE: an empty switcher is deliberately allowed to stay mounted - iOS shows just
+    // the blurred/dimmed depth layer for a beat and the AppSwitcher then dismisses
+    // itself back to the home screen (see its empty-recents auto-return effect). A
+    // hard `recents empty -> setSwitcherOpen(false)` guard here would yank the overlay
+    // out with no animation.
 
     // Unique phones: a phone whose SIM differs from the last seen one is a DIFFERENT phone -
     // drop every trace of the previous profile from the UI (kept-alive apps, cached app
@@ -512,6 +522,27 @@ function AppContent() {
         // this path (nor deferred to idle, which still blocks the same thread a beat later) - the
         // synchronous rasterize is what froze the phone and left the collapsed speck stuck on screen.
         // Snapshots are taken only when swiping up into the switcher, masked by its cover animation.
+        //
+        // iOS collapses an app into ITS ICON on the home grid, not into wherever it was launched
+        // from (a switcher card, a notification, Control Center). The homescreen stays mounted
+        // behind the app, so re-anchor the collapse (and the home zoom-back, which shares
+        // launchOrigin) on the icon's live position; launches that never had a visible icon
+        // (folder page swapped, camera) keep the existing origin as the fallback.
+        const id = currentAppRef.current;
+        if (id) {
+            const icon   = document.querySelector(`[data-app-icon="${CSS.escape(id)}"]`);
+            const screen = document.querySelector('[data-phone-screen]');
+            if (icon && screen) {
+                const ir = icon.getBoundingClientRect();
+                const sr = screen.getBoundingClientRect();
+                if (sr.width > 0 && ir.width > 0) {
+                    setLaunchOrigin({
+                        x: Math.max(0, Math.min(1, (ir.left + ir.width  / 2 - sr.left) / sr.width)),
+                        y: Math.max(0, Math.min(1, (ir.top  + ir.height / 2 - sr.top)  / sr.height)),
+                    });
+                }
+            }
+        }
         setIsClosing(true);
     }, []);
 
@@ -539,7 +570,16 @@ function AppContent() {
         setSwitcherOpen(prev => (prev ? prev : true));
     }, []);
 
-    const handleSwitcherDismiss  = useCallback(() => setSwitcherClosing(true), []);
+    const handleSwitcherDismiss  = useCallback(() => {
+        // iOS: leaving the switcher without picking a card lands on the HOME SCREEN,
+        // not back in the app you came from. That app is already hidden behind the
+        // switcher blur, so it is dropped without a close animation - the home screen
+        // is what the switcher-out fade reveals.
+        setSwitcherClosing(true);
+        setCurrentApp(null);
+        setIsClosing(false);
+        setLaunchOrigin(null);
+    }, []);
     const handleSwitcherReady    = useCallback(() => setSwitcherReady(true), []);
     const handleSwitcherDone     = useCallback(() => {
         if (!switcherClosing) return;
@@ -555,11 +595,17 @@ function AppContent() {
     const handleOpenFromSwitcher = useCallback((id: AppId, origin: { x: number; y: number }) => {
         // Opening from an OPEN switcher card grows the app out of that near-fullscreen
         // preview (ios-app-expand); notification / deeplink opens (switcher closed) keep
-        // the normal home-launch pop.
+        // the normal home-launch pop. From the switcher the overlay is NOT unmounted
+        // instantly - it plays switcher-out beneath the expanding app (the deck already
+        // re-parents the chosen app fullscreen the moment switcherClosing flips).
         const fromSwitcher = switcherOpen;
-        setSwitcherOpen(false);
-        setSwitcherClosing(false);
-        setSwitcherReady(false);
+        if (fromSwitcher) {
+            setSwitcherClosing(true);
+        } else {
+            setSwitcherOpen(false);
+            setSwitcherClosing(false);
+            setSwitcherReady(false);
+        }
         foreground(id, origin, fromSwitcher);
     }, [foreground, switcherOpen]);
 
@@ -631,9 +677,9 @@ function AppContent() {
         setCurrentApp(null);
         setIsClosing(false);
         setLaunchOrigin(null);
-        setSwitcherOpen(false);
-        setSwitcherClosing(false);
-        setSwitcherReady(false);
+        // Fade the overlay out instead of yanking it - Close All lands on the home
+        // screen through the same switcher-out animation as a plain dismiss.
+        setSwitcherClosing(true);
         clearDeck();
     }, [clearDeck]);
 
@@ -1136,6 +1182,7 @@ function AppContent() {
                 deckIds={deckIds}
                 activeId={deckActiveId}
                 switcherOpen={switcherOpen}
+                switcherClosing={switcherClosing}
                 switcherReady={switcherReady}
                 closing={isClosing}
                 foregroundKeys={foregroundKeys}
@@ -1297,18 +1344,56 @@ function AppContent() {
                         onOpenCamera={openCameraFromLock}
                     />
                 ) : (
-                    !cameraMode && appsReady && (
-                        <Homescreen
-                            apps={effectiveApps}
-                            dock={view.dock}
-                            wallpaper={homeWallpaper}
-                            onLaunchApp={launchApp}
-                            onUninstall={handleUninstallApp}
-                            savedLayout={savedLayout}
-                            onLayoutChange={handleSaveLayout}
-                            onEditingChange={setHomeEditing}
-                            bloomOnMount={currentApp === null}
-                        />
+                    (!cameraMode || switcherOpen) && appsReady && (
+                        /* iOS depth cue: the home grid dives away (scale up + fade) behind an
+                           opening app and zooms back while the app collapses, both anchored on
+                           the tapped icon. app-anim-flatten drops the dock's backdrop blur for
+                           the duration so the zoom stays a single composited layer.
+                           While the switcher is up the home screen is REVEALED again behind the
+                           overlay (slightly zoomed) - the switcher's gaussian blur needs real
+                           wallpaper content to sample, otherwise it reads as a black flash. On
+                           dismiss the transition zooms home back to 100% (iOS return-to-home). */
+                        <div
+                            className={(currentApp || switcherOpen) ? 'absolute inset-0 app-anim-flatten' : 'absolute inset-0'}
+                            data-pull-surface="home"
+                            style={{
+                                transformOrigin: launchOrigin
+                                    ? `${(launchOrigin.x * 100).toFixed(1)}% ${(launchOrigin.y * 100).toFixed(1)}%`
+                                    : '50% 50%',
+                                // The depth pose (scale 1.06, shown) is keyed off "switcher up
+                                // AND not closing": the moment the dismissal starts, home begins
+                                // its 0.3s zoom back to 100% WHILE the overlay fades above it -
+                                // one simultaneous phase, not "overlay gone, then home pops".
+                                animation: (switcherOpen && !switcherClosing)
+                                    ? 'none'
+                                    : currentApp
+                                        ? (isClosing
+                                            ? 'ios-home-in 0.32s cubic-bezier(0.32,0.72,0,1) both'
+                                            : 'ios-home-out 0.42s cubic-bezier(0.32,0.72,0,1) both')
+                                        : undefined,
+                                transform:  (switcherOpen && !switcherClosing) ? 'scale(1.06)' : undefined,
+                                opacity:    (switcherOpen && !switcherClosing) ? 1 : undefined,
+                                transition: 'transform 0.3s cubic-bezier(0.32,0.72,0,1), opacity 0.3s ease',
+                                pointerEvents: (currentApp || switcherOpen) ? 'none' : undefined,
+                                // Permanent: the bottom-edge pull (from home) and the switcher
+                                // depth pose both animate this wrapper - creating its layer at
+                                // gesture time re-rasters the grid mid-swipe (one-frame blink).
+                                willChange: 'transform, opacity',
+                            }}
+                        >
+                            <Homescreen
+                                apps={effectiveApps}
+                                dock={view.dock}
+                                wallpaper={homeWallpaper}
+                                onLaunchApp={launchApp}
+                                onUninstall={handleUninstallApp}
+                                savedLayout={savedLayout}
+                                onLayoutChange={handleSaveLayout}
+                                onEditingChange={setHomeEditing}
+                                bloomOnMount={currentApp === null}
+                                closingApp={isClosing ? currentApp : null}
+                            />
+                        </div>
                     )
                 )}
 
@@ -1337,13 +1422,19 @@ function AppContent() {
 
                 {!showSetup && !locked && (
                     <SwipeHomeZone
-                        hasOpenApp={!!currentApp}
-                        onGoHome={handleCloseApp}
-                        onShowSwitcher={canShowSwitcher ? handleShowSwitcher : undefined}
+                        hasOpenApp={!!currentApp && !switcherOpen}
+                        // With the switcher up, ANY bottom-edge gesture (flick or hold)
+                        // dismisses it to the home screen, like iOS. The switcher also
+                        // opens with zero running apps: it shows just the blur/dim depth
+                        // layer and returns home by itself.
+                        onGoHome={switcherOpen ? handleSwitcherDismiss : handleCloseApp}
+                        onShowSwitcher={switcherOpen ? handleSwitcherDismiss : handleShowSwitcher}
+                        onFlickNoApp={switcherOpen ? handleSwitcherDismiss : undefined}
+                        pullTarget={switcherOpen ? null : (currentApp && !isClosing ? 'app' : !currentApp ? 'home' : null)}
                     />
                 )}
 
-                {!onHomescreen && !showSetup && !hideHomeIndicator && (
+                {!onHomescreen && !showSetup && !hideHomeIndicator && !switcherOpen && (
                     <HomeIndicator
                         onGoHome={
                             locked        ? () => setUnlockTrigger(n => n + 1)
@@ -1427,39 +1518,238 @@ interface SwipeHomeZoneProps {
     hasOpenApp:     boolean;
     onGoHome:       () => void;
     onShowSwitcher: (() => void) | undefined;
+    /** What a released flick does when NO app is open. iOS: nothing from the home
+        screen (only swipe-and-HOLD opens the switcher there); dismiss-to-home while
+        the switcher is up. */
+    onFlickNoApp:   (() => void) | undefined;
+    /** Which surface follows the finger during the pull ('app' | 'home'), or null to
+        disable tracking (e.g. while the switcher is already up). */
+    pullTarget:     'app' | 'home' | null;
 }
 
-function SwipeHomeZone({ hasOpenApp, onGoHome, onShowSwitcher }: SwipeHomeZoneProps) {
-    const startY = useRef(0);
-    const startT = useRef(0);
-    const fired  = useRef(false);
+// System-level bottom-edge gesture, iOS grammar. Sits ABOVE the HomeIndicator pill
+// (z-60 > z-55) so a drag that starts on the pill itself is owned by this zone - that
+// was why the switcher gesture "only worked on the home screen": inside an app the pill
+// swallowed every swipe that began at the very bottom edge. The grammar, everywhere
+// (home screen or any app):
+//   - swipe up and HOLD (pause mid-drag, finger/button still down) -> App Switcher
+//   - swipe up and release (a flick)  -> home when in an app, switcher from home
+//   - a short pull, released          -> spring back, nothing happens (gesture cancel)
+//   - plain click on the pill area    -> home (mouse-friendly stand-in for the pill tap)
+//
+// While the finger is down, the visible surface (the open app, or the home grid)
+// scales back and rounds its corners FOLLOWING the drag - live, not a canned
+// animation. This is done imperatively on the [data-pull-surface] node so it never
+// re-renders the React tree per pointer move.
+function SwipeHomeZone({ hasOpenApp, onGoHome, onShowSwitcher, onFlickNoApp, pullTarget }: SwipeHomeZoneProps) {
+    const startY    = useRef(0);
+    const startT    = useRef(0);
+    const lastY     = useRef(0);
+    const fired     = useRef(false);
+    const holdTimer = useRef<number | undefined>(undefined);
+    const surface   = useRef<HTMLElement | null>(null);
+    const pulled    = useRef(false);
+    // React only re-patches inline styles when their rendered value CHANGES, so the
+    // surface's own animation / transform-origin must be put back exactly as found -
+    // clearing them to '' would leave e.g. a launch transform-origin lost until the
+    // next time React happens to render a different value.
+    const savedStyle = useRef<{ animation: string; origin: string; transition: string; overflow: string } | null>(null);
+    // While pulling an APP up, the home screen behind it fades in with the drag so the
+    // reveal is wallpaper, not black (iOS shows home depth behind the shrinking app).
+    const bgSurface  = useRef<HTMLElement | null>(null);
+    const bgSaved    = useRef<{ animation: string; opacity: string; transition: string } | null>(null);
+
+    const clearHold = () => {
+        if (holdTimer.current !== undefined) {
+            window.clearTimeout(holdTimer.current);
+            holdTimer.current = undefined;
+        }
+    };
+
+    // Live finger-tracking: progress 0..1 over ~170px of pull drives scale + corner
+    // radius on the surface. The surface may carry a finished fill-mode animation
+    // (resume zoom / home counter-zoom) whose fill would override inline styles, so the
+    // animation is nulled for the duration of the pull and restored on reset.
+    const trackPull = (dy: number) => {
+        if (!pullTarget) return;
+        if (!surface.current) surface.current = document.querySelector<HTMLElement>(`[data-pull-surface="${pullTarget}"]`);
+        const el = surface.current;
+        if (!el) return;
+        const p = Math.max(0, Math.min(1, (dy - 8) / 170));
+        // A plain CLICK on the pill almost always carries 1-2px of pointer jitter -
+        // do not engage the pull machinery (style snapshots, home reveal) for it, or
+        // its deferred restore races the close animation the click is about to start.
+        if (!pulled.current && p <= 0) return;
+        if (!pulled.current) {
+            // A fresh pull owns the surface: stop any pending deferred cleanup from a
+            // previous handoff so it cannot clobber this drag mid-flight.
+            clearCleanups();
+            savedStyle.current = { animation: el.style.animation, origin: el.style.transformOrigin, transition: el.style.transition, overflow: el.style.overflow };
+        }
+        pulled.current = true;
+        el.style.animation       = 'none';
+        el.style.transition      = 'none';
+        el.style.transformOrigin = '50% 58%';
+        el.style.transform       = `scale(${1 - (pullTarget === 'app' ? 0.12 : 0.07) * p})`;
+        el.style.borderRadius    = `${Math.round(46 * p)}px`;
+        el.style.overflow        = 'hidden';
+
+        // Pulling an app: fade the home screen in behind it, tracking the same progress.
+        if (pullTarget === 'app') {
+            if (!bgSurface.current) bgSurface.current = document.querySelector<HTMLElement>('[data-pull-surface="home"]');
+            const bg = bgSurface.current;
+            if (bg) {
+                if (!bgSaved.current) bgSaved.current = { animation: bg.style.animation, opacity: bg.style.opacity, transition: bg.style.transition };
+                bg.style.animation  = 'none';
+                bg.style.transition = 'none';
+                bg.style.opacity    = String(0.9 * p);
+            }
+        }
+    };
+
+    // spring=true animates the surface back to rest (gesture cancel / flick handoff);
+    // spring=false snaps it clean instantly (the switcher overlay is taking over).
+    const cleanupTimers = useRef<number[]>([]);
+    const clearCleanups = () => {
+        for (const t of cleanupTimers.current) window.clearTimeout(t);
+        cleanupTimers.current = [];
+    };
+
+    const resetPull = (mode: 'spring' | 'handoff' | 'home') => {
+        const el = surface.current;
+        surface.current = null;
+        if (!el || !pulled.current) return;
+        pulled.current = false;
+        const saved = savedStyle.current;
+        savedStyle.current = null;
+        const bg      = bgSurface.current;
+        const bgSave  = bgSaved.current;
+        bgSurface.current = null;
+        bgSaved.current   = null;
+        const restoreSurface = () => {
+            el.style.transition = saved?.transition ?? ''; el.style.overflow = saved?.overflow ?? '';
+            // Never re-apply the one-shot resume zoom - putting the same animation
+            // string back after 'none' restarts it, replaying the zoom on every
+            // cancelled pull. 'none' is safe: the stage remounts fresh next phone-open.
+            el.style.animation = saved?.animation.includes('app-resume-in') ? 'none' : (saved?.animation ?? '');
+            el.style.transformOrigin = saved?.origin ?? '';
+        };
+
+        if (mode === 'handoff') {
+            // The switcher takes over THIS frame. The pulled pose is left exactly as
+            // it is: snapping it back paints one frame of the app restored fullscreen
+            // (and the wallpaper hidden again) before React commits the overlay - the
+            // flicker. The deck empties the stage in that same commit, so the pose is
+            // cleaned invisibly a beat later, with a gentle transition for the
+            // non-preview apps (camera) that stay fullscreen behind the blur.
+            if (bg && bgSave) bg.style.transition = bgSave.transition; // React's opacity->1 patch ramps smoothly
+            cleanupTimers.current.push(window.setTimeout(() => {
+                el.style.transition   = 'transform 0.3s ease, border-radius 0.3s ease';
+                el.style.transform    = '';
+                el.style.borderRadius = '';
+                cleanupTimers.current.push(window.setTimeout(restoreSurface, 320));
+            }, 380));
+            return;
+        }
+
+        if (mode === 'home') {
+            // Home navigation follows in this same event flush (flick / pill click).
+            // The background is handed straight back to React NOW: ios-home-in will
+            // drive it before the next paint. Leaving our inline opacity in place and
+            // restoring it on a timer blacked the screen out for the window between
+            // the close animation ending (~0.2s) and the deferred restore (~0.36s).
+            if (bg && bgSave) {
+                // The "is it still OUR 'none'" check must use the longhand: the
+                // shorthand serialises as "auto ease 0s ... none", never "none...".
+                if (bg.style.animationName === 'none') bg.style.animation = bgSave.animation;
+                bg.style.opacity    = bgSave.opacity;
+                bg.style.transition = bgSave.transition;
+            }
+            el.style.transition = 'transform 0.34s cubic-bezier(0.32,0.72,0,1), border-radius 0.34s cubic-bezier(0.32,0.72,0,1)';
+            el.style.transform  = '';
+            el.style.borderRadius = '';
+            cleanupTimers.current.push(window.setTimeout(restoreSurface, 360));
+            return;
+        }
+
+        // Gesture cancel: spring the surface back to rest while the revealed home
+        // fades back out underneath it (transition, not a deferred snap).
+        el.style.transition = 'transform 0.34s cubic-bezier(0.32,0.72,0,1), border-radius 0.34s cubic-bezier(0.32,0.72,0,1)';
+        el.style.transform  = '';
+        el.style.borderRadius = '';
+        if (bg && bgSave) {
+            bg.style.transition = bgSave.transition;
+            bg.style.opacity    = '0';
+        }
+        cleanupTimers.current.push(window.setTimeout(() => {
+            restoreSurface();
+            if (bg && bgSave) {
+                // Only put back what WE set: if React already swapped the animation
+                // (e.g. the switcher open pins 'none'), the stale saved value must
+                // not clobber it. Longhand check - the shorthand never reads "none...".
+                if (bg.style.animationName === 'none') bg.style.animation = bgSave.animation;
+                bg.style.opacity    = bgSave.opacity;
+                bg.style.transition = bgSave.transition;
+            }
+        }, 360));
+    };
 
     return (
         <div
-            className="absolute inset-x-0 bottom-0 z-50"
+            className="absolute inset-x-0 bottom-0 z-[60]"
             style={{ height: 44, touchAction: 'none' }}
             onPointerDown={e => {
                 startY.current = e.clientY;
                 startT.current = Date.now();
+                lastY.current  = e.clientY;
                 fired.current  = false;
+                surface.current = null;
+                clearHold();
                 (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
             }}
             onPointerMove={e => {
                 if (fired.current) return;
-                const dy = startY.current - e.clientY;
-                if (dy < 55) return;
-
-                fired.current = true;
-                const elapsed = Date.now() - startT.current;
-
-                if (hasOpenApp && elapsed < 200) {
-                    onGoHome();
-                } else if (onShowSwitcher) {
-                    onShowSwitcher();
-                } else {
-                    onGoHome();
+                const dy    = startY.current - e.clientY;
+                const moved = Math.abs(e.clientY - lastY.current);
+                lastY.current = e.clientY;
+                trackPull(dy);
+                if (dy < 55) { clearHold(); return; }
+                // Past the commit distance while still held: a pause (no meaningful
+                // movement for a beat) is the "swipe up and hold" -> App Switcher.
+                if (moved > 4) clearHold();
+                if (holdTimer.current === undefined && onShowSwitcher) {
+                    holdTimer.current = window.setTimeout(() => {
+                        holdTimer.current = undefined;
+                        if (!fired.current) {
+                            fired.current = true;
+                            resetPull('handoff');
+                            onShowSwitcher();
+                        }
+                    }, 160);
                 }
             }}
+            onPointerUp={e => {
+                clearHold();
+                if (fired.current) return;
+                fired.current = true;
+                const dy      = startY.current - e.clientY;
+                const elapsed = Date.now() - startT.current;
+                if (dy >= 55) {
+                    // Released without pausing: a flick. From an app it goes home; with
+                    // no app it does whatever onFlickNoApp says - NOTHING on the home
+                    // screen (iOS only opens the switcher on swipe-and-HOLD there),
+                    // dismiss-to-home while the switcher is up.
+                    if (hasOpenApp) { resetPull('home'); onGoHome(); }
+                    else            { resetPull('spring'); onFlickNoApp?.(); }
+                } else if (dy < 10 && elapsed < 350 && hasOpenApp) {
+                    resetPull('home');
+                    onGoHome();
+                } else {
+                    // dy in 10..55: gesture cancel - spring back, nothing happens.
+                    resetPull('spring');
+                }
+            }}
+            onPointerCancel={() => { clearHold(); fired.current = true; resetPull('spring'); }}
         />
     );
 }

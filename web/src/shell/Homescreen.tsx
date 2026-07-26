@@ -82,9 +82,11 @@ export interface HomescreenProps {
     onEditingChange?: (editing: boolean) => void;
     /** Play the icon bloom on mount; false when the phone is revealed with an app on top. */
     bloomOnMount?: boolean;
+    /** Id of the app currently collapsing to home: its icon plays the close pop. */
+    closingApp?: string | null;
 }
 
-export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, savedLayout, onLayoutChange, onEditingChange, bloomOnMount = true }: HomescreenProps) {
+export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, savedLayout, onLayoutChange, onEditingChange, bloomOnMount = true, closingApp = null }: HomescreenProps) {
     const { blurHome } = useTheme('blurHome');
     const badges = useBadges();
     // The homescreen mounts exactly when the phone content is revealed (open without a lock,
@@ -480,13 +482,14 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
                                 if (folder ? !def : !app) return null;
 
                                 if (!editing) {
+                                    const closingIcon = !folder && id === closingApp;
                                     return (
-                                        <div key={id} style={{ position: 'absolute', left: 0, top: 0, width: ICON, transform: `translate(${s.x}px, ${s.y}px)` }}>
+                                        <div key={id} style={{ position: 'absolute', left: 0, top: 0, width: ICON, transform: `translate(${s.x}px, ${s.y}px)`, zIndex: closingIcon ? 30 : undefined }}>
                                             {/* Scale/opacity live on this inner div so the positioned parent's translate is untouched. */}
                                             <div style={bloom ? { animation: 'home-icon-in 0.38s cubic-bezier(0.34,1.3,0.64,1) both', animationDelay: `${li * 20}ms` } : undefined}>
                                                 {folder
                                                     ? <FolderTile label={def!.name} apps={folderApps(fkey)} badge={folderBadge(fkey)} onOpen={() => setOpenFolder(fkey)} />
-                                                    : <AppIcon app={app!} onOpen={launch} badge={badges?.[app!.id]} />}
+                                                    : <AppIcon app={app!} onOpen={launch} badge={badges?.[app!.id]} closing={closingIcon} />}
                                             </div>
                                         </div>
                                     );
@@ -563,9 +566,12 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
                             className={editing ? 'animate-app-jiggle' : ''}
                             style={editing
                                 ? { animationDelay: `${jiggleDelay(app.id)}ms` }
-                                : (bloom ? { animation: 'home-icon-in 0.38s cubic-bezier(0.34,1.3,0.64,1) both', animationDelay: `${140 + di * 25}ms` } : undefined)}
+                                : {
+                                    ...(bloom ? { animation: 'home-icon-in 0.38s cubic-bezier(0.34,1.3,0.64,1) both', animationDelay: `${140 + di * 25}ms` } : null),
+                                    ...(app.id === closingApp ? { position: 'relative' as const, zIndex: 30 } : null),
+                                }}
                         >
-                            <AppIcon app={app} label={false} onOpen={launch} badge={badges?.[app.id]} />
+                            <AppIcon app={app} label={false} onOpen={launch} badge={badges?.[app.id]} closing={app.id === closingApp} />
                         </div>
                     ))}
                 </div>

@@ -294,14 +294,55 @@ input[type='number'] {
     cursor: pointer;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.30), 0 0.5px 1.5px rgba(0, 0, 0, 0.20);
 }
+/* App launch: materialise out of the tapped icon - grow from roughly icon size
+   (78/440 ~ 0.18) while fading in over the first third, like iOS. The wrapper is
+   corner-rounded while this runs (see AppDeck's AppHost) so the small app reads as a
+   rounded card, and only transform/opacity animate so it stays on the compositor. */
 @keyframes ios-app-open {
-    from { transform: scale(0.01); }
-    to   { transform: scale(1);    }
+    0%   { transform: scale(0.18); opacity: 0; }
+    32%  { opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
 }
 
+/* Close: the app window itself does NOT shrink - it only fades away fast. The visible
+   "closing" motion is carried entirely by the app's own home-screen icon popping back
+   into its slot (ios-icon-close below) plus the home grid zooming back (ios-home-in).
+   The window holds solid for the first third: the home grid underneath needs those
+   frames to reach full opacity (see ios-home-in), otherwise both layers are mid-fade
+   at once and the black phone background blinks through. */
 @keyframes ios-app-close {
-    from { transform: scale(1);    }
-    to   { transform: scale(0.01); }
+    0%   { opacity: 1; }
+    35%  { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+/* The tapped app's icon IS the close animation: it zooms from large back down into its
+   grid/dock slot while the app window fades out above it. */
+@keyframes ios-icon-close {
+    0%   { transform: scale(3); opacity: 0; }
+    25%  { opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes ios-icon-label-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+/* Homescreen counter-zoom (the depth cue iOS has): the home grid dives away behind an
+   opening app and surfaces back while the app collapses, both about the tapped icon
+   (transform-origin is set inline from the launch origin). */
+@keyframes ios-home-out {
+    from { transform: scale(1);    opacity: 1; }
+    to   { transform: scale(1.12); opacity: 0; }
+}
+
+/* Opacity lands at 1 within the first ~30% (while the closing app still holds solid
+   above - see ios-app-close) so the two fades always overlap and no black shows. */
+@keyframes ios-home-in {
+    0%   { transform: scale(1.12); opacity: 0; }
+    30%  { opacity: 1; }
+    100% { transform: scale(1);    opacity: 1; }
 }
 
 /* Opening from the app switcher: the card is already a ~0.82-scale near-fullscreen
@@ -322,14 +363,35 @@ input[type='number'] {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
 }
+/* Switcher overlay: the backdrop (gaussian blur + dim, the iOS depth layer) only FADES;
+   the motion lives on the individual cards (switcher-card-in below), which is what makes
+   the entrance read as cards zooming into a blurred space instead of a flat panel pop. */
 @keyframes switcher-in {
-    from { opacity: 0; transform: scale(0.94) translateY(18px); }
-    to   { opacity: 1; transform: scale(1)    translateY(0);    }
+    from { opacity: 0; }
+    to   { opacity: 1; }
 }
 
+/* Exit to home: cards visibly shrink and drop away while the whole layer (including
+   the blur/dim backdrop child) fades - runs simultaneously with the home screen's own
+   0.3s zoom back from scale(1.06) to 100%, so the return reads as one continuous
+   motion instead of "overlay vanishes, then home appears". */
 @keyframes switcher-out {
     from { opacity: 1; transform: scale(1)    translateY(0);    }
-    to   { opacity: 0; transform: scale(0.94) translateY(18px); }
+    to   { opacity: 0; transform: scale(0.92) translateY(26px); }
+}
+
+/* Card entrances: the focused card settles DOWN from slightly larger (the app you came
+   from shrinking into its card), neighbours rise from below with a small cascade.
+   The focused card deliberately has NO opacity ramp: it carries the live app view, and
+   any fade would read as the app blinking out and back in during the handoff. */
+@keyframes switcher-card-in-focus {
+    from { transform: translateY(-8px) scale(1.1); }
+    to   { transform: translateY(0)    scale(1);   }
+}
+
+@keyframes switcher-card-in {
+    from { transform: translateY(36px) scale(0.88); opacity: 0; }
+    to   { transform: translateY(0)    scale(1);    opacity: 1; }
 }
 @keyframes ios-sheet-up {
     from { transform: translateY(100%); }

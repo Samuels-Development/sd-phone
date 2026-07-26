@@ -99,6 +99,18 @@ export function getAppEntry(id: AppId): AppEntry {
     return APP_REGISTRY[id];
 }
 
+// Warm an app's lazy chunk before the open actually happens (hover / pointer-down on its
+// icon). Without this the chunk only starts fetching + parsing AFTER the click, so the
+// open animation runs over a white Suspense fallback and the mount jank lands mid-zoom.
+const preloaded = new Set<string>();
+export function preloadApp(id: string): void {
+    if (preloaded.has(id)) return;
+    const e = (APP_REGISTRY as Record<string, AppEntry | undefined>)[id];
+    if (!e) return;
+    preloaded.add(id);
+    void Promise.resolve(e.load()).catch(() => preloaded.delete(id));
+}
+
 // Apps show a real frozen "where you left off" card by DEFAULT. Backgrounded apps are
 // SUSPENDED (see web/src/shell/deckActive.ts): a boolean plumbed down each app's subtree
 // flips to false when it is not the interactive foreground instance, and the shared

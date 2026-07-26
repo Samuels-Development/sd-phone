@@ -2,6 +2,7 @@ import { useRef } from 'react';
 
 import type { AppDef } from '@/core/types';
 import { useDownloadProgress } from '@/stores/downloadStore';
+import { preloadApp } from './appRegistry';
 import { AppIconSVG } from './AppIconSVG';
 import { AppBadge } from './AppBadge';
 import { CircularProgress } from '@/ui/CircularProgress';
@@ -11,9 +12,11 @@ export interface AppIconProps {
     label?: boolean;
     onOpen: (app: AppDef, origin: { x: number; y: number }) => void;
     badge?: number;
+    /** The app is collapsing to home: play the iOS close pop (icon zooms from large back into its slot). */
+    closing?: boolean;
 }
 
-export function AppIcon({ app, label = true, onOpen, badge }: AppIconProps) {
+export function AppIcon({ app, label = true, onOpen, badge, closing = false }: AppIconProps) {
     const btnRef = useRef<HTMLButtonElement>(null);
     const downloadProgress = useDownloadProgress(app.id);
     const downloading = downloadProgress !== undefined;
@@ -45,10 +48,18 @@ export function AppIcon({ app, label = true, onOpen, badge }: AppIconProps) {
         <button
             ref={btnRef}
             type="button"
+            data-app-icon={app.id}
             onClick={handleClick}
+            onPointerEnter={() => preloadApp(app.id)}
+            onPointerDown={() => preloadApp(app.id)}
             className="group flex w-full flex-col items-center gap-[7px]"
         >
-            <div className="relative">
+            <div
+                className="relative"
+                style={closing
+                    ? { animation: 'ios-icon-close 0.35s cubic-bezier(0.32,0.72,0,1) both', willChange: 'transform, opacity' }
+                    : undefined}
+            >
                 <div
                     className={`relative h-[78px] w-[78px] overflow-hidden transition-transform duration-150 ease-out ${downloading ? '' : 'group-active:scale-[0.96]'}`}
                     style={{
@@ -95,7 +106,10 @@ export function AppIcon({ app, label = true, onOpen, badge }: AppIconProps) {
             {label && (
                 <span
                     className="w-full truncate text-center font-sf text-[13px] font-semibold tracking-[0.01em] text-white"
-                    style={{ textShadow: '0 0 2px rgba(0,0,0,0.9), 0 1px 3px rgba(0,0,0,0.95), 0 2px 6px rgba(0,0,0,0.5)' }}
+                    style={{
+                        textShadow: '0 0 2px rgba(0,0,0,0.9), 0 1px 3px rgba(0,0,0,0.95), 0 2px 6px rgba(0,0,0,0.5)',
+                        ...(closing ? { animation: 'ios-icon-label-in 0.35s ease both' } : null),
+                    }}
                 >
                     {app.label}
                 </span>

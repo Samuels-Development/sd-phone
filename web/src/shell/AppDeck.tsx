@@ -43,6 +43,10 @@ interface AppDeckProps {
     deckIds:        AppId[];
     activeId:       AppId | null;
     switcherOpen:   boolean;
+    /** The switcher is playing its exit animation. The ACTIVE app re-parents to
+        fullscreen immediately so an open-from-card expand plays at screen size while
+        the overlay fades beneath it; non-active cards keep their live views. */
+    switcherClosing: boolean;
     switcherReady:  boolean;
     closing:        boolean;
     foregroundKeys: Record<string, number>;
@@ -93,27 +97,61 @@ const AppHost = memo(function AppHost({ id, ctx, active, openKey, origin, expand
         setPhase('open');
     }, [openKey]);
 
-    useEffect(() => { if (closing) setPhase('close'); }, [closing]);
+    // Only the ACTIVE closing host may sit in 'close'. If the closing prop drops while
+    // this host is still in 'close' (e.g. another app was foregrounded mid-collapse, or
+    // the host was demoted to the pool), snap to 'rest' so a stale close animation can
+    // never replay from the pool or fire a late onCloseDone that would kill the newly
+    // opened app.
+    useEffect(() => {
+        if (closing) setPhase('close');
+        else setPhase(p => (p === 'close' ? 'rest' : p));
+    }, [closing]);
+
+    // Watchdog: animationend can be silently dropped (occluded CEF tab, dev hot-reload
+    // swapping styles mid-flight, the element being re-parented at the wrong moment).
+    // Without it the phone wedges mid-phase forever - a lost close leaves the collapsed
+    // mini-app stuck over its icon; a lost open leaves the app flattened (no backdrop
+    // blur). If the animation (<=0.42s) hasn't reported done shortly after it must have
+    // finished, force-complete the phase.
+    useEffect(() => {
+        if (phase === 'rest') return;
+        const t = window.setTimeout(() => {
+            if (phase === 'close' && closing) onCloseDone();
+            setPhase('rest');
+        }, 550);
+        return () => window.clearTimeout(t);
+    }, [phase, closing, onCloseDone]);
 
     const ox = origin ? `${(origin.x * 100).toFixed(1)}%` : '50%';
     const oy = origin ? `${(origin.y * 100).toFixed(1)}%` : '80%';
 
     const animation = phase === 'open'
         ? (expandOpen
-            ? 'ios-app-expand 0.32s cubic-bezier(0.22,1,0.36,1) forwards'
-            : 'ios-app-open 0.38s cubic-bezier(0.22,1,0.36,1) forwards')
+            ? 'ios-app-expand 0.32s cubic-bezier(0.32,0.72,0,1) forwards'
+            : 'ios-app-open 0.42s cubic-bezier(0.32,0.72,0,1) forwards')
         : phase === 'close'
-            ? 'ios-app-close 0.28s cubic-bezier(0.25,0.46,0.45,0.94) forwards'
+            // The window never shrinks on close - it only fades out fast; the app's icon
+            // on the home grid carries the visible close motion (ios-icon-close).
+            ? 'ios-app-close 0.2s ease-out forwards'
             : undefined;
+
+    // While the open scale runs the wrapper is clipped to the screen's own corner
+    // radius (PhoneShell SR = 46): shrunken it reads as a rounded iOS card, and at scale 1
+    // it coincides with the screen mask, so dropping it on settle is invisible. The radius
+    // is deliberately static - animating border-radius would repaint every frame. Close is
+    // a pure fade, so it needs no clip.
+    const rounding = phase === 'open' ? { borderRadius: 46, overflow: 'hidden' as const } : undefined;
 
     return (
         <div
             data-app-screen="1"
             className={phase === 'rest' ? 'absolute inset-0' : 'absolute inset-0 app-anim-flatten'}
-            style={{ transformOrigin: `${ox} ${oy}`, animation, willChange: 'transform' }}
+            style={{ transformOrigin: `${ox} ${oy}`, animation, willChange: 'transform, opacity', ...rounding }}
             onAnimationEnd={e => {
                 if (e.target !== e.currentTarget) return;
-                if (phase === 'close') onCloseDone();
+                // Gate on the live closing prop as well as the phase: a host whose close
+                // was superseded must not report close-done for the app that replaced it.
+                if (phase === 'close' && closing) onCloseDone();
                 setPhase('rest');
             }}
         >
@@ -125,7 +163,7 @@ const AppHost = memo(function AppHost({ id, ctx, active, openKey, origin, expand
 });
 
 export function AppDeck({
-    deckIds, activeId, switcherOpen, switcherReady, closing, foregroundKeys, launchOrigin, launchExpand, ctx, onCloseDone,
+    deckIds, activeId, switcherOpen, switcherClosing, switcherReady, closing, foregroundKeys, launchOrigin, launchExpand, ctx, onCloseDone,
 }: AppDeckProps) {
     const hostsRef = useRef<Map<AppId, HTMLDivElement>>(new Map());
     const poolRef  = useRef<HTMLDivElement>(null);
@@ -172,7 +210,11 @@ export function AppDeck({
 
             let slot: HTMLElement | null;
             let interactive = false;
-            if (switcherOpen) {
+            // While the switcher plays its exit animation the app being foregrounded
+            // must already be fullscreen (its ios-app-expand runs at screen size, not
+            // inside a 0.82-scale card stage); everyone else keeps their card alive.
+            const inSwitcher = switcherOpen && !(id === activeId && switcherClosing);
+            if (inSwitcher) {
                 if (previewable) {
                     slot = getCardStage(id) ?? poolRef.current;
                 } else if (id === activeId && !previewable) {
@@ -195,7 +237,7 @@ export function AppDeck({
             if (interactive) host.removeAttribute('inert');
             else host.setAttribute('inert', '');
         }
-    }, [deckIds, activeId, switcherOpen, switcherReady, stageVersion]);
+    }, [deckIds, activeId, switcherOpen, switcherClosing, switcherReady, stageVersion]);
 
     return (
         <>
