@@ -7,7 +7,7 @@ local store     = require 'server.migrate.store'
 local identity  = require 'server.migrate.identity'
 
 ---@type string Marker name.
-local MIGRATION = 'lbphone-import-v1'
+local MIGRATION = 'lbphone-import-v2'
 
 ---@type { key: string, label: string, run: fun(ctx: table): table }[] Domains, in run order.
 local PORTS = {

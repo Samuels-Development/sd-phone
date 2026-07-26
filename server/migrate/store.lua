@@ -234,10 +234,12 @@ end
 
 ---Runs a chunked multi-row INSERT IGNORE. `prefixSql` ends at the word VALUES; one placeholder
 ---group is appended per row, nil columns emit a literal NULL, and an empty batch is a no-op.
+---`suffixSql` is appended after the groups, for an ON DUPLICATE KEY UPDATE tail.
 ---@param prefixSql string 'INSERT IGNORE INTO ... (cols) VALUES'
 ---@param cols integer columns per row
 ---@param rows any[][] one parameter array per row
-local function insertMulti(prefixSql, cols, rows)
+---@param suffixSql string|nil trailing clause appended after the value groups
+local function insertMulti(prefixSql, cols, rows, suffixSql)
     if type(rows) ~= 'table' or #rows == 0 then return end
     local total = #rows
     for i = 1, total, 300 do
@@ -258,9 +260,14 @@ local function insertMulti(prefixSql, cols, rows)
             end
             groups[#groups + 1] = '(' .. table.concat(cells, ',') .. ')'
         end
-        MySQL.query.await(prefixSql .. ' ' .. table.concat(groups, ','), params)
+        local sql = prefixSql .. ' ' .. table.concat(groups, ',')
+        if suffixSql then sql = sql .. ' ' .. suffixSql end
+        MySQL.query.await(sql, params)
     end
 end
+
+---@type fun(prefixSql: string, cols: integer, rows: any[][], suffixSql?: string) Public alias for porters.
+store.insertMulti = insertMulti
 
 ---Adopts a player's lb-phone number (and lock passcode) as their sd-phone number. Returns 'set'
 ---when it wrote, 'skip' when already onboarded, 'conflict' when the number belongs to someone else.
@@ -359,6 +366,28 @@ end
 ---@param rows any[][]
 function store.insertNotes(rows)
     insertMulti('INSERT IGNORE INTO phone_notes (citizenid, id, body, sketches, images, created_at, updated_at) VALUES', 7, rows)
+end
+
+---Decodes a JSON column value; accepts strings or already-decoded tables and returns {} for
+---anything absent or invalid.
+---@param value any
+---@return table
+function store.decodeJson(value)
+    if value == nil then return {} end
+    if type(value) == 'table' then return value end
+    if type(value) == 'string' then
+        local ok, decoded = pcall(json.decode, value)
+        if ok and type(decoded) == 'table' then return decoded end
+    end
+    return {}
+end
+
+---Encodes a table for a JSON column; empty or absent tables map to nil.
+---@param tbl table|nil
+---@return string|nil
+function store.encodeJson(tbl)
+    if not tbl or next(tbl) == nil then return nil end
+    return json.encode(tbl)
 end
 
 return store
