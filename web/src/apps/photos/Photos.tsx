@@ -245,24 +245,33 @@ export function Photos({ onClose }: { onClose: () => void }) {
                         {entered && loading ? t('photos.loading','Loading…') : null}
                     </div>
                 ) : (
-                    <div key={tab} className="flex h-full min-h-0 flex-col animate-swipe-in-left">
-                        {tab === 'gallery' && isEmpty ? (
-                            <EmptyState />
-                        ) : tab === 'gallery' ? (
-                            <GalleryTab
-                                photos={photos}
-                                selectionMode={gallerySelect}
-                                selectedIds={gallerySelected}
-                                onEnterSelect={() => setGallerySelect(true)}
-                                onCancelSelect={exitGallerySelect}
-                                onPhotoTap={openViewerFromGallery}
-                                onToggleSelect={toggleGallerySelect}
-                                onImport={canImport ? () => setImportOpen(true) : undefined}
-                                hasMore={nextCursor !== null}
-                                loadingMore={loadingMore}
-                                onLoadMore={() => void loadMore()}
-                            />
-                        ) : (
+                    // NO key={tab} here. The usual house pattern remounts the pane to replay the
+                    // swipe animation, which is free for a list of rows but not for a grid of
+                    // hundreds of image tiles: every tab switch tore the whole gallery down and
+                    // rebuilt it. Both panes stay mounted and the inactive one is just hidden,
+                    // so switching is a visibility toggle rather than a full remount.
+                    <div className="flex h-full min-h-0 flex-col">
+                        <div className={`flex h-full min-h-0 flex-col ${tab === 'gallery' ? '' : 'hidden'}`}>
+                            {isEmpty ? (
+                                <EmptyState />
+                            ) : (
+                                <GalleryTab
+                                    photos={photos}
+                                    selectionMode={gallerySelect}
+                                    selectedIds={gallerySelected}
+                                    onEnterSelect={() => setGallerySelect(true)}
+                                    onCancelSelect={exitGallerySelect}
+                                    onPhotoTap={openViewerFromGallery}
+                                    onToggleSelect={toggleGallerySelect}
+                                    onImport={canImport ? () => setImportOpen(true) : undefined}
+                                    hasMore={nextCursor !== null}
+                                    loadingMore={loadingMore}
+                                    onLoadMore={() => void loadMore()}
+                                    paused={tab !== 'gallery'}
+                                />
+                            )}
+                        </div>
+                        <div className={`flex h-full min-h-0 flex-col ${tab === 'albums' ? 'animate-swipe-in-left' : 'hidden'}`}>
                             <AlbumsTab
                                 photos={photos}
                                 counts={counts}
@@ -274,7 +283,7 @@ export function Photos({ onClose }: { onClose: () => void }) {
                                 onOpenAlbum={openAlbumRef}
                                 onDeleteAlbum={async (a) => { if (await apiDeleteAlbum(a.id)) setAlbums(prev => prev.filter(x => x.id !== a.id)); }}
                             />
-                        )}
+                        </div>
                     </div>
                 )}
             </div>
