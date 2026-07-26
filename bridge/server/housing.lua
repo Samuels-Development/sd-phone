@@ -150,7 +150,7 @@ end
 --   rtx_housing  export GetPlayerOwnedProperties / GetPropertyData(.enter.coords) / Get|SetPropertyLockStatus
 --   bcs_housing  export GetOwnedHomes / GetHome(.properties.entry) / LockHome / isLocked / Add|RemoveKeyHolder / GetKeyHolders
 --   tk_housing   export getPropertiesByIdentifier (list only - no coords/lock/keys public)
---   rx_housing   export GetOwnedProperties / GetProperty / AddKeyholder / RemoveKeyholder / GetPropertyKeyholders
+--   RxHousing   export GetOwnedProperties / GetProperty / AddKeyholder / RemoveKeyholder / GetPropertyKeyholders
 --   loaf_housing export GetPlayerHouses | DB `loaf_houses`.entrance (coords only; keys need an undocumented keyId)
 --   origen_housing exports getPlayerHouses(.entryCoords) / toggleDoor / getHouseDoor / addKeyHolder / removeKeyHolder
 ---@type table<string, fun(source: number, id: string): table[]> Per-system property-list adapters.
@@ -324,11 +324,11 @@ ADAPTERS['tk_housing'] = function(_source, id)
     return out
 end
 
----rx_housing: export namespace is `RxHousing`; coords probed across common field names.
+---RxHousing: export namespace is `RxHousing`; coords probed across common field names.
 ---@param _source number caller server id (unused - the export keys by identifier)
 ---@param id string caller identifier
 ---@return table[] homes
-ADAPTERS['rx_housing'] = function(_source, id)
+ADAPTERS['RxHousing'] = function(_source, id)
     local props
     local ok, res = pcall(function() return exports['RxHousing']:GetOwnedProperties(id) end)
     if ok and type(res) == 'table' then props = res end
@@ -455,7 +455,7 @@ local CAPS = {
     ['rtx_housing']    = { lock = true,  keyList = false, keyManage = false },
     ['tk_housing']     = { lock = false, keyList = false, keyManage = false },
     ['origen_housing'] = { lock = true,  keyList = false, keyManage = true  },
-    ['rx_housing']     = { lock = false, keyList = true,  keyManage = true  },
+    ['RxHousing']      = { lock = false, keyList = true,  keyManage = true  },
     ['qs-housing']     = { lock = false, keyList = true,  keyManage = false },
     ['vms_housing']    = { lock = false, keyList = false, keyManage = true  },
     ['loaf_housing']   = { lock = false, keyList = false, keyManage = false },
@@ -602,7 +602,7 @@ function housing.keyHolders(src, id)
             out[#out + 1] = { id = tostring(k.identifier or k.id or ''), name = s(k.name) or 'Resident' }
         end
         return out
-    elseif ACTIVE == 'rx_housing' then
+    elseif ACTIVE == 'RxHousing' then
         local ok, list = pcall(function() return exports['RxHousing']:GetPropertyKeyholders(p) end)
         return ok and resolveCids(list) or {}
     elseif ACTIVE == 'qs-housing' then
@@ -640,7 +640,7 @@ function housing.giveKey(src, id, targetSrc)
         local ok = pcall(function() exports.bcs_housing:AddKeyHolder(p, targetSrc, bcsDefaultKey(p)) end)
         if ok then refreshHomes(src, targetSrc) end
         return ok
-    elseif ACTIVE == 'rx_housing' then
+    elseif ACTIVE == 'RxHousing' then
         local cid = player.getIdentifier(targetSrc)
         if not cid then return false end
         local ok, res = pcall(function() return exports['RxHousing']:AddKeyholder(p, cid) end)
@@ -680,7 +680,7 @@ function housing.removeKey(src, id, holderId)
         local ok = pcall(function() exports.bcs_housing:RemoveKeyHolder(p, holderId) end)
         if ok then refreshHomes(src, holderId) end
         return ok
-    elseif ACTIVE == 'rx_housing' then
+    elseif ACTIVE == 'RxHousing' then
         local ok = pcall(function() exports['RxHousing']:RemoveKeyholder(p, holderId) end)
         if ok then refreshHomes(src, holderId) end
         return ok
