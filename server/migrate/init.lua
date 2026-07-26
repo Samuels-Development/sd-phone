@@ -24,6 +24,8 @@ local PORTS = {
     { key = 'mail',      label = 'mail',      run = require('server.migrate.port.mail').run },
     { key = 'wallet',    label = 'wallet',    run = require('server.migrate.port.wallet').run },
     { key = 'voicememos', label = 'voicememos', run = require('server.migrate.port.voicememos').run },
+    -- Last: links sessions to the accounts the photogram porter created.
+    { key = 'sessions',  label = 'sessions',  run = require('server.migrate.port.sessions').run },
 }
 
 -- sd-phone tables the porters write into; the migration waits for all of them. Names lb-phone
