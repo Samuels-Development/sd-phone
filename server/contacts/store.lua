@@ -3,6 +3,8 @@ local store = {}
 
 
 local util = require 'server.util'
+---@type table sd-phone config root (configs/config.lua); read for the per-player contacts cap.
+local config = require 'configs.config'
 local function newId() return util.newId(7) end
 
 store.newId = newId
@@ -177,7 +179,12 @@ end
 
 ---@type integer Hard ceiling on one read of a player's address book. A migrated book can run to
 ---four figures, which trips oxmysql's oversized-result warning and ships the lot over the bridge.
-local CONTACTS_CAP <const> = 500
+---
+---Tracks the configured per-player cap rather than standing as a second number: a player can
+---never legitimately hold more than that, and actions.lua walks this list to detect duplicates,
+---so a ceiling BELOW the cap would silently stop catching them past the ceiling.
+local CONTACTS_CAP <const> = math.max(1,
+    math.floor(tonumber(config.Contacts and config.Contacts.MaxContactsPerPlayer) or 500))
 
 ---List a player's contacts, alphabetised server-side, capped. Read-only.
 ---@param citizenid string

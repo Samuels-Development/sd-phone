@@ -39,9 +39,11 @@ local MAX_PENDING = 5
 ---biggest legitimate share and lands around 1 MB; anything past this is not a real share.
 local MAX_PAYLOAD_BYTES = 4 * 1024 * 1024
 
----Registers the delivery handler for a share kind (e.g. 'contact', 'voice').
+---Registers the delivery handler for a share kind (e.g. 'contact', 'voice'). A handler may return
+---a second value: a recipient-facing reason for the refusal, shown to them verbatim. Handlers
+---that return a bare boolean still work and fall back to a generic message.
 ---@param kind string share kind
----@param fn fun(targetSrc: number, payload: table): boolean delivery function, true on success
+---@param fn fun(targetSrc: number, payload: table): boolean, string? true on success, else a reason
 function core.registerHandler(kind, fn) handlers[kind] = fn end
 
 ---Human noun for a share kind, used in the sender-facing accept/decline notifications. Falls
@@ -136,14 +138,30 @@ function core.respond(src, id, accept)
     end
 
     local handler = handlers[req.kind]
-    local ok = (handler and handler(src, req.payload)) == true
-    if ok then
+    local delivered, reason
+    if handler then delivered, reason = handler(src, req.payload) end
+
+    if delivered == true then
         TriggerClientEvent('sd-phone:client:notify', req.fromSrc, {
             app = 'phone', title = 'AirShare',
             body = ('%s accepted your %s.'):format(player.getName(src), kindLabel(req.kind)),
         })
+        return { success = true }
     end
-    return { success = ok }
+
+    -- Refused AFTER an accept (recipient's contacts full, duplicate, ...). Both sides otherwise
+    -- just watch the prompt disappear: the recipient's client fires the respond callback and
+    -- drops the card without reading the result, and the sender was only ever told on success.
+    -- The recipient gets the handler's specific reason; the sender only needs to know it missed.
+    TriggerClientEvent('sd-phone:client:notify', src, {
+        app = 'phone', title = 'AirShare',
+        body = reason or ('That %s could not be saved.'):format(kindLabel(req.kind)),
+    })
+    TriggerClientEvent('sd-phone:client:notify', req.fromSrc, {
+        app = 'phone', title = 'AirShare',
+        body = ('%s could not save your %s.'):format(player.getName(src), kindLabel(req.kind)),
+    })
+    return { success = false, message = reason }
 end
 
 ---Forgets a departing player: their open flag and every pending request they sent or were

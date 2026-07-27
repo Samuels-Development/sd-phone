@@ -4,7 +4,7 @@
 return {
     -- Per-player cap on saved contacts. Blocks new inserts past this many
     -- (existing contacts are never auto-removed).
-    MaxContactsPerPlayer = 200,
+    MaxContactsPerPlayer = 500,
 
     -- Hard cap on call-log (Recents) rows per player. Once exceeded, the
     -- oldest calls are pruned so the log stays bounded.

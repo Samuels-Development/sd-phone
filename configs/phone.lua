@@ -41,6 +41,11 @@ return {
         -- already in circulation still read properly next to the new ones.
         Formats = {
             [10] = '(XXX) XXX-XXXX',
+
+            -- An 11-digit entry sits alongside it quite happily, which is what
+            -- keeps numbers readable either side of a Length change. This one
+            -- renders 12075550123 as +1 (207) 555-0123.
+            -- [11] = '+X (XXX) XXX-XXXX',
         },
     },
 
