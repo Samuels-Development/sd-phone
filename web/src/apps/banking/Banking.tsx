@@ -47,8 +47,15 @@ export function Banking({ onClose: _onClose }: { onClose: () => void }) {
     const deckActive = useDeckActive();
     const wasActive  = useRef(deckActive);
     useEffect(() => {
-        if (deckActive && !wasActive.current) { refresh(); refetchReceived(); }
+        const rising = deckActive && !wasActive.current;
         wasActive.current = deckActive;
+        if (!rising) return;
+        // Held until the shell's 0.38s open animation has landed. Each refetch flips loading
+        // true then false, and nothing in this app is memoised, so firing two of them on the
+        // rising edge meant several full re-renders of the Banking tree inside the animation
+        // window. Bank renders 8 rows, so its jolt was never DOM size - it was this.
+        const id = window.setTimeout(() => { refresh(); refetchReceived(); }, 420);
+        return () => window.clearTimeout(id);
     }, [deckActive, refresh, refetchReceived]);
 
     const txs    = overview?.transactions ?? [];
