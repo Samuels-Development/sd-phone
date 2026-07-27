@@ -1,3 +1,4 @@
+import { isFiveM } from '@/core/nui';
 import { ContactActions } from './ContactActions';
 import { fmtPrice, type ClassifiedItem } from './types';
 
@@ -19,7 +20,9 @@ export function ListingCard({ item, subject, onOpen, onMessage, onCall, onEmail,
             role={onOpen ? 'button' : undefined}
             tabIndex={onOpen ? 0 : undefined}
             onClick={onOpen}
-            onKeyDown={onOpen ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } } : undefined}
+            // Space is the jump key in game, and this card activates itself rather than relying on
+            // the native button behaviour App.tsx cancels, so it has to ignore Space for itself.
+            onKeyDown={onOpen ? (e) => { if (e.key === 'Enter' || (e.key === ' ' && !isFiveM)) { e.preventDefault(); onOpen(); } } : undefined}
             className={`rounded-[16px] bg-[#e5e5e5] px-5 py-4 shadow-[0_1px_3px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.04] dark:bg-surface dark:shadow-none dark:ring-white/[0.06] ${onOpen ? 'cursor-pointer transition-colors duration-150 hover:bg-[#dadada] active:bg-[#d2d2d2] dark:hover:bg-[#262628] dark:active:bg-[#2e2e30]' : ''}`}
         >
             <div className="block w-full text-left">
