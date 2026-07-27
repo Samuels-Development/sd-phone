@@ -153,6 +153,16 @@ Ready-made ox_inventory definitions live in the [installation docs](https://docs
 
 Players can also open the phone with a keybind (<kbd>F1</kbd> by default), which still requires owning one of these items.
 
+Running unique phones with physical SIM trays (`SimTray` in `configs/uniqueandsim.lua`, ox_inventory only)? Give every phone item a `buttons` entry so players can open its tray:
+
+```lua
+buttons = {
+    { label = 'SIM Tray', action = function(slot) exports['sd-phone']:openSimTray(slot) end },
+},
+```
+
+Using the phone item opens the phone itself, so the tray needs its own button. Skip this in metadata mode, where SIMs are installed by using the `sim_card` item.
+
 ### 3. Add your API keys
 
 In `configs/server/apikeys.lua`:

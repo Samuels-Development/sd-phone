@@ -5,7 +5,7 @@
 return {
     ---@type boolean True while unique-phones/SIM indirection is fully enabled this session.
     active = false,
-    ---@type 'container'|'metadata'|nil How SIMs attach to phones; nil while inactive.
+    ---@type 'tray'|'metadata'|nil How SIMs attach to phones; nil while inactive.
     mode = nil,
     ---@type boolean True in DEVICE-identity mode (config.Sim.DeviceIdentity): the phone item
     ---owns the data and a SIM only lends a number. False = LEGACY, where the SIM is the identity.

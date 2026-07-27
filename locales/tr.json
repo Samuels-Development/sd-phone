@@ -2539,7 +2539,6 @@
     "simEjectConfirm": "Çıkar",
     "simEjectMessage": "SIM kart envanterinize döner ve tekrar bir SIM kart takılana kadar bu telefon kapsama alanı dışında kalır.",
     "simEjectTitle": "SIM Kart Çıkarılsın mı?",
-    "simFooterContainer": "Numaranız bu telefondaki SIM kartta tanımlıdır. SIM kartı değiştirmek için envanterinizdeki telefonu açın.",
     "simFooterMetadata": "Numaranız bu telefona takılı olan SIM kartta tanımlıdır. Takmak için bir SIM kart eşyası kullanın.",
     "simInstalled": "Takılı",
     "simNone": "SIM Yok",

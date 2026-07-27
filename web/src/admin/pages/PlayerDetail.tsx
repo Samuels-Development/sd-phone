@@ -310,7 +310,7 @@ function SimCard({ ov, toast, reload }: {
                 </div>
             }
         >
-            <InfoRow label="Mode">{sim.mode === 'container' ? 'SIM tray (containers)' : 'Item metadata'}</InfoRow>
+            <InfoRow label="Mode">{sim.mode === 'tray' ? 'SIM tray' : 'Item metadata'}</InfoRow>
             <InfoRow label="Active number">
                 {ov.online
                     ? (sim.activeNumber ? fmtPhone(sim.activeNumber) : <Badge tone="amber">No SIM / no phone</Badge>)

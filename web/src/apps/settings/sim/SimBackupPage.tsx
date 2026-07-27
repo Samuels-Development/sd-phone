@@ -25,7 +25,7 @@ interface BackupProfile {
 }
 
 interface SimInfo {
-    mode: 'container' | 'metadata';
+    mode: 'tray' | 'metadata';
     builtin: boolean;
     hasSim: boolean;
     /** Physical card in the active phone; hasSim = has service (character mode satisfies it
@@ -188,8 +188,8 @@ export function SimBackupPage({ onBack }: { onBack: () => void }) {
             <SubPage title={t('settings.simBackup', 'SIM & Backup')} onBack={onBack}>
                 <ListGroup footer={info?.builtin
                     ? t('settings.simFooterBuiltin', 'This phone\'s SIM is built in. Its number was assigned the first time the phone was used and stays with the phone.')
-                    : info?.mode === 'container'
-                        ? t('settings.simFooterContainer', 'Your number lives on the SIM card in this phone. Open the phone in your inventory to swap the SIM.')
+                    : info?.mode === 'tray'
+                        ? t('settings.simFooterTray', 'Your number lives on the SIM card in this phone. Right-click the phone in your inventory and pick SIM Tray to swap it.')
                         : t('settings.simFooterMetadata', 'Your number lives on the SIM card installed in this phone. Use a SIM card item to install it.')}>
                     <ListRow
                         label={t('settings.simStatus', 'SIM Status')}

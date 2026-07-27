@@ -68,7 +68,7 @@ export interface AdminOverview {
     downloadable: { id: string; label: string }[];
     /** Unique-phones footprint; absent while the SIM feature is off. */
     sim?: {
-        mode: 'container' | 'metadata';
+        mode: 'tray' | 'metadata';
         sims: AdminSimRow[];
         backup?: { profiles: number; enabled: boolean; hasPassword: boolean } | null;
         /** Only while the player is online. */

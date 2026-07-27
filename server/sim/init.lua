@@ -13,6 +13,9 @@ if not config.Sim or not config.Sim.Enabled then return {} end
 local simStore = require 'server.sim.store'
 ---@type table Slot-level inventory access for SIMs (server.sim.inv).
 local siminv   = require 'server.sim.inv'
+---@type table SIM tray (server.sim.tray): per-phone stash, its access hooks and the legacy
+---container migration.
+local tray     = require 'server.sim.tray'
 ---@type table SIM session resolution (server.sim.session): source -> acting identity.
 local session  = require 'server.sim.session'
 ---@type table Cloud-backup restore engine (server.sim.backup).
@@ -94,7 +97,8 @@ end
 
 ---ox_inventory only: watch SIM/phone item moves so a pulled SIM cuts service within a swap, not
 ---a cache TTL. Any matching move flushes the whole session cache (rare event, cheap rescan) and
----pushes fresh state to the player who moved it.
+---pushes fresh state to the player who moved it. Tray mode adds two guards ox gave containers for
+---free: only the phone's holder may open its tray, and only a SIM may go in it.
 local function registerHooks()
     local watched = { [config.Sim.SimItem] = true }
     for item in pairs(siminv.phoneColors) do watched[item] = true end
@@ -107,6 +111,26 @@ local function registerHooks()
                 if src then session.push(src) end
             end)
         end, {})
+    end)
+
+    if state.mode ~= 'tray' then return end
+
+    -- A tray id ships to the client inside the phone's own metadata, and a stash id alone is
+    -- enough to open a stash from anywhere. Containers were gated on holding the item; a stash
+    -- is not, so without this anyone who ever held the phone could lift its SIM remotely.
+    pcall(function()
+        exports.ox_inventory:registerHook('openInventory', function(payload)
+            local src = tonumber(payload.source)
+            if not src or not tray.holderSlot(src, payload.inventoryId) then return false end
+        end, { inventoryFilter = { '^simtray:' } })
+    end)
+
+    -- Stashes have no whitelist property, which the container did.
+    pcall(function()
+        exports.ox_inventory:registerHook('swapItems', function(payload)
+            local moved = payload.fromSlot and payload.fromSlot.name
+            if moved and moved ~= config.Sim.SimItem then return false end
+        end, { inventoryFilter = { '^simtray:' } })
     end)
 end
 
@@ -142,9 +166,8 @@ CreateThread(function()
     state.device    = owner == 'device'
     state.character = owner == 'character'
     -- Attach mode is always metadata without SIM items (nothing to drag into a tray).
-    state.mode   = (not state.builtin and config.Sim.UseContainers and siminv.isOx()) and 'container' or 'metadata'
+    state.mode   = (not state.builtin and tray.configured and siminv.isOx()) and 'tray' or 'metadata'
     state.active = true
-    if state.mode == 'container' then siminv.registerContainers() end
     if siminv.isOx() then registerHooks() end
     print(('^2[sd-phone:sim]^0 unique phones active (%s mode, %s identity%s, %s backend)')
         :format(state.mode, owner, state.builtin and ', built-in numbers' or '', siminv.backendName()))
@@ -194,7 +217,7 @@ inv.registerUsable(config.Sim.SimItem, function(source, itemArg, _invArg, slotAr
         return
     end
 
-    if state.mode == 'container' then
+    if state.mode == 'tray' then
         if blank then
             -- Swap the blank item for one stamped with the freshly registered number.
             number = simStore.create({})
@@ -253,6 +276,18 @@ inv.registerUsable(config.Sim.SimItem, function(source, itemArg, _invArg, slotAr
         or 'SIM installed - your number is %s.'):format(util.formatNumber(number)), 'success')
 end)
 end
+
+---The phone item's inventory button: opens that exact phone's SIM tray. Fire-and-forget, because
+---the slot is the only input and the server re-derives everything else from it - a hand-crafted
+---event can still only open a tray belonging to a phone the sender actually carries.
+---@param slot number inventory slot holding the phone
+RegisterNetEvent('sd-phone:server:sim:openTray', function(slot)
+    local source = source
+    if state.mode ~= 'tray' then return end
+    if not tray.open(source, slot) then
+        toast(source, 'That phone has no SIM tray.', 'error')
+    end
+end)
 
 ---@type table<number, number> Last requestPush per source (GetGameTimer ms); floods are dropped.
 local lastRequestPush = {}

@@ -6,6 +6,8 @@ local bridge = require 'bridge.server.inventory'
 local util   = require 'server.util'
 ---@type table SIM registry (server.sim.store): mints a number for a blank card dropped in a tray.
 local simStore = require 'server.sim.store'
+---@type table SIM tray (server.sim.tray): the per-phone 1-slot stash a SIM is dragged into.
+local tray     = require 'server.sim.tray'
 
 ---@type table Inv module; the table returned at end of file. SIM-feature glue over the bridge's
 ---slot-level API: find phone items, read/write the SIM number on them, and (container mode)
@@ -53,23 +55,28 @@ function inv.findPhones(source)
             }
         end
     end
+    -- Every phone lookup funnels through here, so it is also where a phone still carrying a
+    -- legacy ox container gets spotted and converted (deferred, debounced).
+    if inv.isOx() then tray.sweepLegacy(source, out) end
     return out
 end
 
 ---The SIM number installed in one phone row from findPhones, honouring the configured attach
----mode: container mode reads the sim_card item inside the phone's SIM tray, metadata mode reads
----the number written onto the phone item itself.
+---mode: tray mode reads the sim_card item inside the phone's SIM tray, metadata mode reads the
+---number written onto the phone item itself.
 ---
----Container mode activates a blank card found in the tray, because dragging one in is the whole
+---Tray mode activates a blank card found in the tray, because dragging one in is the whole
 ---interaction there and nothing else would ever stamp it.
 ---@param source number player server id
 ---@param phone { slot: number, metadata: table }
 ---@return string|nil number bare-digit SIM number, nil when no SIM is installed
 function inv.getSimNumber(source, phone)
-    if config.Sim.UseContainers and inv.isOx() then
-        local containerId = phone.metadata and phone.metadata.container
-        if not containerId then return nil end
-        local items = bridge.containerItems(source, phone.slot)
+    if tray.configured and inv.isOx() then
+        -- No tray id means this phone's tray has never been opened, so it holds no SIM. Minting
+        -- one here would write metadata on every read for no gain.
+        local trayId = phone.metadata and phone.metadata.simTray
+        if not tray.isTrayId(trayId) then return nil end
+        local items = tray.items(trayId)
         if type(items) ~= 'table' then return nil end
 
         local blank
@@ -87,7 +94,7 @@ function inv.getSimNumber(source, phone)
         local metadata = type(blank.metadata) == 'table' and blank.metadata or {}
         metadata.number      = number
         metadata.description = ('SIM: %s'):format(util.formatNumber(number))
-        local ok = pcall(function() exports[OX]:SetMetadata(containerId, blank.slot, metadata) end)
+        local ok = pcall(function() exports[OX]:SetMetadata(trayId, blank.slot, metadata) end)
         return ok and number or nil
     end
 
@@ -167,45 +174,29 @@ function inv.giveSimItem(source, number)
 end
 
 ---Rewrites the number on the SIM inside a phone: metadata mode updates the phone item itself,
----container mode updates the sim_card item inside the phone's tray (ox SetMetadata on the
----container inventory). Used by the setSimNumber export.
+---tray mode updates the sim_card item inside the phone's tray (ox SetMetadata on the tray
+---inventory). Used by the setSimNumber export.
 ---@param source number player server id
 ---@param phone { slot: number, metadata: table }
 ---@param number string new bare-digit number
 ---@return boolean ok
 function inv.rewriteSimNumber(source, phone, number)
-    if config.Sim.UseContainers and inv.isOx() then
-        local containerId = phone.metadata and phone.metadata.container
-        if not containerId then return false end
-        local items = bridge.containerItems(source, phone.slot)
+    if tray.configured and inv.isOx() then
+        local trayId = phone.metadata and phone.metadata.simTray
+        local items = tray.isTrayId(trayId) and tray.items(trayId)
         if type(items) ~= 'table' then return false end
         for _, item in pairs(items) do
             if item and item.name == config.Sim.SimItem then
                 local metadata = type(item.metadata) == 'table' and item.metadata or {}
                 metadata.number      = number
                 metadata.description = ('SIM: %s'):format(util.formatNumber(number))
-                local ok = pcall(function() exports[OX]:SetMetadata(containerId, item.slot, metadata) end)
+                local ok = pcall(function() exports[OX]:SetMetadata(trayId, item.slot, metadata) end)
                 return ok
             end
         end
         return false
     end
     return inv.setPhoneSim(source, phone.slot, number)
-end
-
----Registers every configured phone item as a 1-slot ox container whitelisted to the SIM item.
----Container mode boot step; a no-op off ox.
-function inv.registerContainers()
-    if not inv.isOx() then return end
-    for _, entry in ipairs(config.Phone.Items or {}) do
-        pcall(function()
-            exports[OX]:setContainerProperties(entry.item, {
-                slots     = 1,
-                maxWeight = 1000,
-                whitelist = { config.Sim.SimItem },
-            })
-        end)
-    end
 end
 
 ---@type table<string, string> Public copy of the phone item -> colour map.
