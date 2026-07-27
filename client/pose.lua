@@ -19,7 +19,8 @@ local FRAME_FLAGS <const> = 2 | 8 | 16 | 32 | 1048576
 ---@type table<string, table<string, { dict: string, anim: string, blendIn: number, blendOut: number, flags: integer }>>
 ---Held clip per action, split by whether the player is in a vehicle. The framing pose uses selfie
 ---rather than selfie_in because the latter animates raising the phone from the hip, which replays
----as a stow and redraw every time the clip is re-asserted on a phone already in hand.
+---as a stow and redraw every time the clip is re-asserted on a phone already in hand. The landscape
+---pose turns the wrist so the phone lies on its side, which is why it is wrong for portrait.
 local CLIPS = {
     default = {
         onFoot = { dict = 'cellphone@',          anim = 'cellphone_text_read_base', blendIn = 8.0,    blendOut = -8.0,    flags = READ_FLAGS },
@@ -28,6 +29,10 @@ local CLIPS = {
     camera = {
         onFoot = { dict = 'cellphone@self',      anim = 'selfie',                   blendIn = 8.0,    blendOut = -8.0,    flags = FRAME_FLAGS },
         inCar  = { dict = 'cellphone@self',      anim = 'selfie',                   blendIn = 8.0,    blendOut = -8.0,    flags = FRAME_FLAGS },
+    },
+    landscape = {
+        onFoot = { dict = 'cellphone@',          anim = 'cellphone_photo_idle',     blendIn = 8.0,    blendOut = -8.0,    flags = FRAME_FLAGS },
+        inCar  = { dict = 'cellphone@',          anim = 'cellphone_photo_idle',     blendIn = 8.0,    blendOut = -8.0,    flags = FRAME_FLAGS },
     },
 }
 
@@ -67,7 +72,11 @@ end
 local function currentClip()
     -- One camera pose covers both lenses, as lb-phone's animations.lua does. The native cell cam
     -- swapped pose on flip, but no outward-facing clip outside that native is verified to exist.
-    local action = (cameraOn and phonecam.active()) and 'camera' or 'default'
+    -- Landscape is the exception: it turns the phone on its side, so it gets its own clip.
+    local action = 'default'
+    if cameraOn and phonecam.active() then
+        action = landscape and 'landscape' or 'camera'
+    end
     return CLIPS[action][IsPedInAnyVehicle(PlayerPedId(), true) and 'inCar' or 'onFoot']
 end
 
@@ -167,13 +176,15 @@ function pose.reweld()
     attachProp(PlayerPedId())
 end
 
----Lays the prop on its side for the landscape viewfinder, or stands it back up.
+---Turns the phone on its side for the landscape viewfinder, or stands it back up. Swaps the held
+---clip as well as the grip, and puts the new pose up at once rather than waiting on the watchdog.
 ---@param wide any truthy for landscape
 function pose.setLandscape(wide)
     wide = wide and true or false
     if landscape == wide then return end
     landscape = wide
     pose.reweld()
+    if pose.shouldHold() then play() end
 end
 
 -- Keeps the holder out of their own rear shot. The framing pose raises the phone right in front of

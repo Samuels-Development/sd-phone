@@ -81,12 +81,13 @@ return {
     PropOffset = vec3(0.0, 0.0, 0.0),
     PropRot    = vec3(0.0, 0.0, 0.0),
 
-    -- Where the prop sits while the Camera app is in LANDSCAPE mode: the phone
-    -- lies on its side for the wide viewfinder, so the grip rolls 90 degrees
-    -- off the portrait transform above. Set either to nil to keep the portrait
-    -- grip in landscape too.
+    -- Where the prop sits while the Camera app is in LANDSCAPE mode. Landscape
+    -- plays its own clip, which turns the wrist so the phone already lies on its
+    -- side, so these match the portrait transform above: rolling the prop as well
+    -- would turn it twice. Nudge them only if a custom model sits off the grip in
+    -- that pose.
     PropLandscapeOffset = vec3(0.0, 0.0, 0.0),
-    PropLandscapeRot    = vec3(0.0, 90.0, 0.0),
+    PropLandscapeRot    = vec3(0.0, 0.0, 0.0),
 
     -- Let other players see the phone in your hand. When true, your ped broadcasts a replicated
     -- statebag while the phone is out and every nearby client spawns its own LOCAL welded copy of
