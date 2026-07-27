@@ -242,13 +242,73 @@ end)
 eventCookies[#eventCookies + 1] = RegisterNetEvent('lb-phone:itemAdded', function() end)
 eventCookies[#eventCookies + 1] = RegisterNetEvent('lb-phone:itemRemoved', function() end)
 
+---Converts an sd-phone 0-100 slider to the 0-1 fraction lb-phone published. nil stays nil.
+---@param v number|nil
+---@return number|nil
+local function slider01(v)
+    local n = tonumber(v)
+    if not n then return nil end
+    return n / 100
+end
+
+---Projects an sd-phone settings snapshot onto lb-phone's settings object. Shape and ranges follow
+---lb-phone's config/defaultSettings.json; settings it never published are left out.
+---@param s table snapshot from sd-phone:server:settings:get
+---@return table settings
+local function lbSettings(s)
+    return {
+        display = {
+            theme      = s.theme,
+            brightness = slider01(s.brightness),
+            size       = slider01(s.phoneScale),
+        },
+        sound = {
+            ringtone   = s.ringtone,
+            texttone   = s.notificationTone,
+            volume     = slider01(s.ringtoneVol),
+            callVolume = slider01(s.callVol),
+        },
+        wallpaper = {
+            background = s.wallpaper,
+            blur       = s.blurLock,
+        },
+        time = {
+            twelveHourClock = not s.hour24,
+        },
+    }
+end
+
+---@type table|nil Last known lb-phone-shaped settings. Cached so GetSettings answers without yielding.
+local settingsCache
+
+---Re-reads the snapshot into settingsCache. Yields, so never called from the export.
+---@return table|nil settings nil when the read failed
+local function refreshSettings()
+    local res = lib.callback.await('sd-phone:server:settings:get', false)
+    if type(res) ~= 'table' or res.success ~= true or type(res.data) ~= 'table' then return nil end
+    settingsCache = lbSettings(res.data)
+    return settingsCache
+end
+
+-- Primed at load; not retried, since every accepted write refreshes it below.
+CreateThread(refreshSettings)
+
+---Mirrors an accepted sd-phone settings write as lb-phone's settingsUpdated.
+eventCookies[#eventCookies + 1] = AddEventHandler('sd-phone:client:settingsUpdated', function()
+    local settings = refreshSettings()
+    if settings then TriggerEvent('lb-phone:settingsUpdated', settings) end
+end)
+
 -- Stubs: the rest of lb-phone's client surface, grouped by family; each warns once and returns
 -- a safe default.
 
 -- Config and settings readers.
 stubLbExport('GetConfig', {})
 stubLbExport('GetCellTowers', {})
-stubLbExport('GetSettings', nil)
+---GetSettings() -> table|nil, from the cache refreshed alongside lb-phone:settingsUpdated.
+registerLbExport('GetSettings', function()
+    return settingsCache
+end)
 stubLbExport('GetStreamerMode', false)
 
 -- Airplane mode reads as off.
