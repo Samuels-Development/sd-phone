@@ -447,6 +447,38 @@ ADAPTERS['LNS_Housing'] = function(source, id)
     return out
 end
 
+---nolag_properties: TeamsGG Properties. Uses documented server exports (GetAllProperties,
+---ToggleDoorlock, GetKeyHolders, AddKey, RemoveKey). Property list by owner citizenid.
+---@param source number caller server id
+---@param id string caller identifier (citizenid)
+---@return table[] homes
+ADAPTERS['nolag_properties'] = function(source, id)
+    local props
+    local ok, res = pcall(function() return exports.nolag_properties:GetAllProperties(id, 'user', true) end)
+    if ok and type(res) == 'table' then props = res end
+    if not props then return {} end
+    local out = {}
+    for _, p in pairs(props) do
+        local coords = asXY(p.coords)
+        local area = ''
+        if coords then
+            local zone = clientExec(source, 'zone', coords)
+            if type(zone) == 'string' then area = zone end
+        end
+        out[#out + 1] = home{
+            id      = p.id,
+            address = s(p.label),
+            type    = s(p.type),
+            area    = area,
+            value   = p.price,
+            status  = 'owned',
+            coords  = coords,
+            locked  = p.doorLocked,
+        }
+    end
+    return out
+end
+
 -- Capability map: which detail-view actions each system supports.
 ---@type table<string, { lock: boolean, keyList: boolean, keyManage: boolean }> Per-system action support.
 local CAPS = {
@@ -460,6 +492,7 @@ local CAPS = {
     ['vms_housing']    = { lock = false, keyList = false, keyManage = true  },
     ['loaf_housing']   = { lock = false, keyList = false, keyManage = false },
     ['LNS_Housing']    = { lock = true,  keyList = true,  keyManage = true  },
+    ['nolag_properties'] = { lock = true,  keyList = true,  keyManage = true  },
 }
 
 ---Capability flags for the active system, all-false when none is detected.
@@ -582,6 +615,12 @@ function housing.lock(src, id, want)
         end
         refreshHomes(src)
         return want
+    elseif ACTIVE == 'nolag_properties' then
+        local okT, res = pcall(function() return exports.nolag_properties:ToggleDoorlock(src, p, want) end)
+        if okT and res then
+            refreshHomes(src)
+            return want
+        end
     end
     return nil
 end
@@ -621,6 +660,14 @@ function housing.keyHolders(src, id)
         if not okProp or type(prop) ~= 'table' then return {} end
         local entry = prop.permissions and prop.permissions.entry
         return resolveCids(entry)
+    elseif ACTIVE == 'nolag_properties' then
+        local okH, holders = pcall(function() return exports.nolag_properties:GetKeyHolders(p) end)
+        if not okH or type(holders) ~= 'table' then return {} end
+        local cids = {}
+        for cid, _ in pairs(holders) do
+            cids[#cids + 1] = cid
+        end
+        return resolveCids(cids)
     end
     return {}
 end
@@ -662,6 +709,14 @@ function housing.giveKey(src, id, targetSrc)
             refreshHomes(src, targetSrc)
             return true
         end
+    elseif ACTIVE == 'nolag_properties' then
+        local cid = player.getIdentifier(targetSrc)
+        if not cid then return false end
+        local ok, res = pcall(function() return exports.nolag_properties:AddKey(src, p, cid) end)
+        if ok and res then
+            refreshHomes(src, targetSrc)
+            return true
+        end
     end
     return false
 end
@@ -695,6 +750,12 @@ function housing.removeKey(src, id, holderId)
         if not okPerm or not allowed then return false end
         local ok, res = pcall(function() return exports.LNS_Housing:RemoveKey(p, tostring(holderId)) end)
         if ok and res ~= false then
+            refreshHomes(src, holderId)
+            return true
+        end
+    elseif ACTIVE == 'nolag_properties' then
+        local ok, res = pcall(function() return exports.nolag_properties:RemoveKey(src, p, tostring(holderId)) end)
+        if ok and res then
             refreshHomes(src, holderId)
             return true
         end

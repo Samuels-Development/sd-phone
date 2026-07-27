@@ -1,5 +1,8 @@
 ---@type fun(nuiAction: string, serverEvent: string) NUI->server pass-through registrar (client.nui).
 local proxyCallback = require 'client.nui'
+---@type table Scripted phone camera (client.phonecam): owns the view whenever the video call is
+---allowed to keep the player moving, since the native cell cam pins the ped at engine level.
+local phonecam = require 'client.phonecam'
 
 -- Thin delegates: each call action proxies straight into its server callback.
 proxyCallback('sd-phone:call:dial',    'sd-phone:server:call:dial')
@@ -88,20 +91,27 @@ local CellFrontCamActivate = function(on)
     if fn then pcall(fn, on) end
 end
 
----@type boolean Whether the native cell-cam currently owns the local view (video call active).
+---@type boolean Whether a camera currently owns the local view (video call active).
 local videoCamActive = false
 
----Toggles the native cell-cam takeover for a video call: yields the hold pose, activates the
----cell-cam, and hides the HUD per frame while active. Idempotent per direction.
+---Toggles the camera takeover for a video call and hides the HUD per frame while active. The
+---scripted cam frames it wherever movement is allowed, the native cell cam otherwise. Idempotent
+---per direction.
 ---@param on boolean|nil activate (truthy) or deactivate
 ---@param front boolean|nil front lens (default true); false switches to the rear lens
 local function setVideoCamera(on, front)
     if on then
         if not videoCamActive then
             videoCamActive = true
-            TriggerEvent('sd-phone:client:cameraMode', true)
-            CreateMobilePhone(4)
-            CellCamActivate(true, true)
+            -- Take the view BEFORE announcing the mode: the pose handler asks phonecam.active()
+            -- which lens is framing, and the scripted cam animates no pose of its own.
+            if phonecam.movementAllowed('video') then
+                phonecam.start()
+            else
+                CreateMobilePhone(4)
+                CellCamActivate(true, true)
+            end
+            TriggerEvent('sd-phone:client:cameraMode', true, 'video')
             CreateThread(function()
                 while videoCamActive do
                     Wait(0)
@@ -109,12 +119,20 @@ local function setVideoCamera(on, front)
                 end
             end)
         end
-        CellFrontCamActivate(front ~= false)
+        if phonecam.active() then
+            phonecam.setSelfie(front ~= false)
+        else
+            CellFrontCamActivate(front ~= false)
+        end
     elseif videoCamActive then
         videoCamActive = false
-        CellCamActivate(false, false)
-        DestroyMobilePhone()
-        TriggerEvent('sd-phone:client:cameraMode', false)
+        if phonecam.active() then
+            phonecam.stop()
+        else
+            CellCamActivate(false, false)
+            DestroyMobilePhone()
+        end
+        TriggerEvent('sd-phone:client:cameraMode', false, 'video')
     end
 end
 

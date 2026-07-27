@@ -49,7 +49,18 @@ interface Photo {
     createdAt: string;
 }
 
-const ZOOM_OPTIONS = ['0.5', '1×', '2', '5'] as const;
+const ZOOM_PRESETS = [1, 2, 5] as const;
+const ZOOM_MIN = ZOOM_PRESETS[0];
+const ZOOM_MAX = ZOOM_PRESETS[ZOOM_PRESETS.length - 1];
+// Wheel zoom is multiplicative so a notch changes the framing by the same proportion at every
+// magnification; a fixed step crawls at 5× and lurches at 0.5×.
+const ZOOM_WHEEL_RATE = 0.0015;
+const ZOOM_KEY_STEP   = 1.15;
+
+const clampZoom = (z: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
+
+// Labels drop the trailing zero the way iOS does: 1× not 1.0×, but 1.5× keeps its decimal.
+const zoomLabel = (z: number) => `${Number.isInteger(z) ? z : z.toFixed(1)}×`;
 const MODE_OPTIONS = ['VIDEO', 'PHOTO', 'LANDSCAPE'] as const;
 
 const CAPTURE_TIMEOUT_MS = 8000;
@@ -75,7 +86,7 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
 }) {
     const [photos,  setPhotos]  = useState<Photo[]>([]);
     const [pending, setPending] = useState(false);
-    const [zoom,    setZoom]    = useState<typeof ZOOM_OPTIONS[number]>('1×');
+    const [zoom,    setZoom]    = useState<number>(1);
     const [mode,    setMode]    = useState<typeof MODE_OPTIONS[number]>('PHOTO');
     const [feedReady, setFeedReady] = useState(false);
     const [showGrid,  setShowGrid]  = useState(false);
@@ -84,6 +95,9 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
     const [recSecs,   setRecSecs]   = useState(0);
     const [flash,     setFlash]     = useState(false);
     const [selfie,    setSelfie]    = useState(false);
+    // True only when the native cell cam took the view, i.e. the server froze the player while
+    // framing. Decides whether the selfie crop bias applies.
+    const [nativeCam, setNativeCam] = useState(false);
 
     const { setHideHomeIndicator } = useTheme('setHideHomeIndicator');
 
@@ -169,7 +183,9 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
     useEffect(() => {
         if (!deckActive) return;
         let stopped = false;
-        void fetchNui('sd-phone:camera:open');
+        void fetchNui<{ walkable?: boolean }>('sd-phone:camera:open').then((res) => {
+            if (!stopped) setNativeCam(res?.walkable === false);
+        });
 
         void getGameRender().then((render) => {
             if (stopped || !render || !canvasRef.current) return;
@@ -197,11 +213,16 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
 
     useEffect(() => {
         if (!feedReady) return;
-        renderRef.current?.setZoom(parseFloat(zoom));
-    }, [zoom, feedReady]);
+        // The scripted cam zooms optically, so the game renders the tighter view at full resolution
+        // and the crop stays at its base framing. The native cell cam has no FOV we can set, so
+        // that path still magnifies the rendered frame and softens as it goes.
+        renderRef.current?.setZoom(nativeCam ? zoom : 1);
+        void fetchNui('sd-phone:camera:zoom', { zoom });
+    }, [zoom, nativeCam, feedReady]);
 
     useEffect(() => {
         onLandscapeChange?.(landscape);
+        void fetchNui('sd-phone:camera:landscape', { on: landscape });
     }, [landscape, onLandscapeChange]);
 
     useEffect(() => {
@@ -209,13 +230,18 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
         renderRef.current?.setOrientation(landscape ? 'landscape' : 'portrait');
     }, [landscape, feedReady]);
 
-    // Front camera frames the ped off-centre; bias the viewfinder crop to re-centre them.
+    // Only the NATIVE front camera frames the ped off-centre, so only it needs the re-centring
+    // crop bias. The scripted cam points itself at the head, and biasing that pushes the player
+    // off to the right by the same amount it was meant to correct.
     useEffect(() => {
         if (!feedReady) return;
-        renderRef.current?.setSelfie(selfie);
-    }, [selfie, feedReady]);
+        renderRef.current?.setSelfie(selfie && nativeCam);
+    }, [selfie, nativeCam, feedReady]);
 
-    useEffect(() => () => onLandscapeChange?.(false), [onLandscapeChange]);
+    useEffect(() => () => {
+        onLandscapeChange?.(false);
+        void fetchNui('sd-phone:camera:landscape', { on: false });
+    }, [onLandscapeChange]);
 
     useEffect(() => {
         void fetchNui('sd-phone:camera:flash', { on: recording && flash });
@@ -242,6 +268,10 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
                 break;
             }
             case 'flash':    setFlash(f => !f); break;
+            // Relayed from Lua only while the viewfinder has handed the mouse to the game, where
+            // the page sees no wheel events of its own.
+            case 'zoomIn':   setZoom(z => clampZoom(z * ZOOM_KEY_STEP)); break;
+            case 'zoomOut':  setZoom(z => clampZoom(z / ZOOM_KEY_STEP)); break;
             case 'modePrev': if (!photoOnly) setMode(m => MODE_OPTIONS[(MODE_OPTIONS.indexOf(m) + MODE_OPTIONS.length - 1) % MODE_OPTIONS.length]); break;
             case 'modeNext': if (!photoOnly) setMode(m => MODE_OPTIONS[(MODE_OPTIONS.indexOf(m) + 1) % MODE_OPTIONS.length]); break;
         }
@@ -499,7 +529,15 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
                 </div>
             </div>
 
-            <div ref={viewportRef} className="relative flex-1 min-h-0 overflow-hidden bg-black">
+            <div
+                ref={viewportRef}
+                className="relative flex-1 min-h-0 overflow-hidden bg-black"
+                onWheel={(e) => {
+                    // deltaY is negative scrolling up, which reads as zooming in. Exponential so a
+                    // notch is the same proportional change at 0.5× as at 5×.
+                    setZoom(z => clampZoom(z * Math.exp(-e.deltaY * ZOOM_WHEEL_RATE)));
+                }}
+            >
                 <canvas
                     ref={canvasRef}
                     className="absolute"
@@ -547,8 +585,12 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
                 )}
 
                 <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/60 px-2 py-1.5 backdrop-blur">
-                    {ZOOM_OPTIONS.map(z => {
-                        const isActive = z === zoom;
+                    {ZOOM_PRESETS.map(z => {
+                        // Scrolling lands between presets, so the nearest one carries the highlight
+                        // and shows the live figure; that pill is the readout as well as the button.
+                        const isActive = ZOOM_PRESETS.reduce(
+                            (best, p) => (Math.abs(p - zoom) < Math.abs(best - zoom) ? p : best),
+                        ) === z;
                         return (
                             <button
                                 key={z}
@@ -561,7 +603,7 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
                                         : 'text-white/85 hover:text-white',
                                 ].join(' ')}
                             >
-                                {z}
+                                {isActive ? zoomLabel(zoom) : zoomLabel(z)}
                             </button>
                         );
                     })}
