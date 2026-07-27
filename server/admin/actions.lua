@@ -233,7 +233,11 @@ function actions.setNumber(source, payload)
     local cid = cleanCid(payload and payload.cid)
     if not cid then return fail('Missing player') end
     local digits = util.digits(payload and payload.number)
-    if #digits ~= 10 then return fail('Phone numbers are exactly 10 digits') end
+    -- Any length this server recognises, not just the one it generates, so a number issued
+    -- before config.Phone.Number.Length changed can still be corrected.
+    if not util.validNumberLength(digits) then
+        return fail(('Phone numbers are %s digits'):format(table.concat(util.numberLengths, ' or ')))
+    end
 
     if simState.active then
         local target = sourceByRealCid(cid)

@@ -1,3 +1,6 @@
+---@type table sd-phone config root (configs/config.lua); read for the number format + length.
+local config = require 'configs.config'
+
 ---@type table Shared server helpers; the table returned at end of file.
 local util = {}
 
@@ -72,14 +75,87 @@ function util.initialsFor(name)
     return out ~= '' and out or '#'
 end
 
----Format raw digits as a US-style "(XXX) XXX-XXXX" phone number; anything that isn't exactly 10
----digits (short codes, partials) passes through as bare digits.
+---@type table Number settings (config.Phone.Number), defaulted so a config written before this
+---section existed keeps the original US shape.
+local NUMBER = (type(config.Phone) == 'table' and type(config.Phone.Number) == 'table')
+    and config.Phone.Number or {}
+
+---@type table<number, string> Display pattern per digit count, from config.
+local FORMATS = type(NUMBER.Formats) == 'table' and NUMBER.Formats or { [10] = '(XXX) XXX-XXXX' }
+
+---@type integer Digits in a newly generated number.
+local LENGTH = math.floor(tonumber(NUMBER.Length) or 10)
+if LENGTH < 3 then LENGTH = 3 end
+if LENGTH > 15 then LENGTH = 15 end
+
+---Renders digits into a display pattern: every X takes the next digit, every other character is
+---literal. Digits past the pattern's last X are appended so nothing is ever silently dropped.
+---@param pattern string
+---@param d string bare digits
+---@return string
+local function applyPattern(pattern, d)
+    local out, i = {}, 1
+    for c in pattern:gmatch('.') do
+        if c == 'X' then
+            if i > #d then break end
+            out[#out + 1] = d:sub(i, i)
+            i = i + 1
+        else
+            out[#out + 1] = c
+        end
+    end
+    if i <= #d then out[#out + 1] = d:sub(i) end
+    return table.concat(out)
+end
+
+---Formats raw digits for display using config.Phone.Number.Formats. A digit count with no
+---configured pattern (short codes, a length the server has since changed away from) passes
+---through as bare digits rather than being forced into the wrong shape.
 ---@param number any
 ---@return string
 function util.formatNumber(number)
     local d = util.digits(number)
-    if #d == 10 then return ('(%s) %s-%s'):format(d:sub(1, 3), d:sub(4, 6), d:sub(7)) end
-    return d
+    local pattern = FORMATS[#d]
+    if type(pattern) ~= 'string' or pattern == '' then return d end
+    return applyPattern(pattern, d)
+end
+
+---A random phone number as bare digits, at the configured length. The leading digit avoids 0 and
+---1 so numbers still read like real ones (and so the digit count never shrinks through a
+---tonumber round-trip somewhere downstream).
+---@return string number bare digits, `config.Phone.Number.Length` of them
+function util.randomNumber()
+    local out = { tostring(math.random(2, 9)) }
+    for i = 2, LENGTH do out[i] = tostring(math.random(0, 9)) end
+    return table.concat(out)
+end
+
+---@type integer Digits a newly generated number gets; exposed for callers that report it.
+util.numberLength = LENGTH
+
+---@type integer[] Digit counts that count as a real number: the generated length plus every
+---length with a display format, so numbers minted before a Length change stay valid. Ascending.
+util.numberLengths = (function()
+    local seen, out = { [LENGTH] = true }, { LENGTH }
+    for length in pairs(FORMATS) do
+        local n = tonumber(length)
+        if n and n > 0 and not seen[n] then
+            seen[n] = true
+            out[#out + 1] = n
+        end
+    end
+    table.sort(out)
+    return out
+end)()
+
+---True when `digits` is a length this server accepts.
+---@param digits string bare digits
+---@return boolean
+function util.validNumberLength(digits)
+    for _, n in ipairs(util.numberLengths) do
+        if #digits == n then return true end
+    end
+    return false
 end
 
 ---@type string[] iOS system-colour palette, mirrored from the frontend.

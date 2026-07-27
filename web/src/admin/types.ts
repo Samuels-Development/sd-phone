@@ -1,5 +1,7 @@
 // Shapes returned by the server admin module (server/admin/actions.lua).
 
+import { formatPhone } from '@/lib/phone';
+
 export interface AdminPlayerHit {
     citizenid:    string;
     name?:        string;
@@ -206,6 +208,6 @@ export function fmtTime(epoch?: number | null): string {
 
 export function fmtPhone(number?: string | null): string {
     const d = (number ?? '').replace(/\D/g, '');
-    if (d.length !== 10) return d || '—';
-    return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+    if (!d) return '—';
+    return formatPhone(d);
 }

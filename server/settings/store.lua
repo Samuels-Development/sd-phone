@@ -18,11 +18,8 @@ local function stripCol(col)
     return ("REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(%s,'-',''),' ',''),'(',''),')',''),'+',''),'.','')"):format(col)
 end
 
----Generates a random 10-digit phone number as raw digits, with the first block starting at 200.
----@return string number ten raw digits
-local function genNumber()
-    return ('%03d%03d%04d'):format(math.random(200, 989), math.random(100, 999), math.random(0, 9999))
-end
+---@type fun(): string Random number candidate at config.Phone.Number.Length (server.util).
+local genNumber = util.randomNumber
 
 ---Returns a varchar column's declared character cap, or nil when the column is missing or not
 ---length-bounded (information_schema probe).
