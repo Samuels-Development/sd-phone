@@ -2,9 +2,12 @@
 ---response envelope unchanged, falling back to a uniform failure when the server never answers.
 ---@param nuiAction string NUI action name the React app fetches
 ---@param serverEvent string server callback name to await
-local function proxy(nuiAction, serverEvent)
+---@param onAccepted? fun() ran only when the server accepted the write, never on a rejection
+local function proxy(nuiAction, serverEvent, onAccepted)
     RegisterNUICallback(nuiAction, function(payload, cb)
-        cb(lib.callback.await(serverEvent, false, payload) or { success = false, message = 'No response from server' })
+        local res = lib.callback.await(serverEvent, false, payload)
+        if onAccepted and type(res) == 'table' and res.success == true then onAccepted() end
+        cb(res or { success = false, message = 'No response from server' })
     end)
 end
 

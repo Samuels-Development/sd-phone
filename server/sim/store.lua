@@ -5,12 +5,8 @@ local util = require 'server.util'
 ---(number -> data identity) and the per-character cloud-backup pointers.
 local store = {}
 
----Generates a random 10-digit phone number as raw digits, with the first block starting at 200
----(mirrors server.settings.store's generator).
----@return string number ten raw digits
-local function genNumber()
-    return ('%03d%03d%04d'):format(math.random(200, 989), math.random(100, 999), math.random(0, 9999))
-end
+---@type fun(): string Random number candidate at config.Phone.Number.Length (server.util).
+local genNumber = util.randomNumber
 
 ---Creates the SIM registry and cloud-backup tables.
 function store.ensureSchema()
@@ -132,7 +128,7 @@ end
 
 ---Generates a phone number that is free in both the SIM registry and phone_settings; tries 20
 ---random candidates, then accepts an unchecked one.
----@return string number ten raw digits
+---@return string number raw digits, at config.Phone.Number.Length
 function store.generateNumber()
     for _ = 1, 20 do
         local candidate = genNumber()

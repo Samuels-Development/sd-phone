@@ -20,6 +20,11 @@ export interface OpenPayload {
     installedApps?: string[];
     homeLayout?: string;
     mailDomain?: string;
+    /** Phone-number display config (config.Phone.Number); formats are keyed by digit count. */
+    number?: {
+        formats?: Record<string, string>;
+        length?: number;
+    };
     wallpaper: {
         lock: string;
         home: string;

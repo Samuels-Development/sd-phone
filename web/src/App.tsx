@@ -34,6 +34,7 @@ import { fetchNui, isFiveM } from '@/core/nui';
 import { usePhoneReset } from '@/core/phoneReset';
 import { resetAuth } from '@/stores/authStore';
 import { setMailDomain } from '@/core/accountsApi';
+import { setNumberFormat } from '@/lib/phone';
 import { voiceHub, setLocalTalking } from '@/media/nearbyVoice';
 import { useMusicLibrary } from '@/stores/musicLibraryStore';
 import { DEFAULT_FRAME_COLOR } from '@/shell/frameColors';
@@ -364,6 +365,7 @@ function AppContent() {
         if (!data) return;
         if (data.locale) useLocaleStore.getState().applyServerDefault(data.locale);   // server default, unless the player already picked their own
         if (data.mailDomain) setMailDomain(data.mailDomain);
+        if (data.number) setNumberFormat(data.number.formats, data.number.length);
         useSimStore.getState().apply(data.sim);
         applySimProfile(data.sim?.enabled, data.sim?.hasSim, data.sim?.number, data.sim?.device, data.sim?.profile);
         syncSimNumber(data.sim);

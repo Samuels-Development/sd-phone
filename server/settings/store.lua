@@ -18,11 +18,8 @@ local function stripCol(col)
     return ("REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(%s,'-',''),' ',''),'(',''),')',''),'+',''),'.','')"):format(col)
 end
 
----Generates a random 10-digit phone number as raw digits, with the first block starting at 200.
----@return string number ten raw digits
-local function genNumber()
-    return ('%03d%03d%04d'):format(math.random(200, 989), math.random(100, 999), math.random(0, 9999))
-end
+---@type fun(): string Random number candidate at config.Phone.Number.Length (server.util).
+local genNumber = util.randomNumber
 
 ---Returns a varchar column's declared character cap, or nil when the column is missing or not
 ---length-bounded (information_schema probe).
@@ -1117,9 +1114,15 @@ function store.snapshot(citizenid)
     end
 
     local pin = row and sanitizePin(row.passcode) or nil
-    local hour24 = (row and row.hour24 ~= nil)
-        and (row.hour24 == true or tonumber(row.hour24) == 1)
-        or defaultHour24()
+    -- Explicit if, not `cond and value or default`: hour24 is a BOOLEAN, so an explicitly stored
+    -- false collapses through the `or` and silently reports the configured default instead of the
+    -- player's choice. store.getHour24 above already spells it out this way.
+    local hour24
+    if row and row.hour24 ~= nil then
+        hour24 = row.hour24 == true or tonumber(row.hour24) == 1
+    else
+        hour24 = defaultHour24()
+    end
     local dark = row and row.dark_theme
     if dark ~= 'graphite' and dark ~= 'black' and dark ~= 'warm' then dark = 'graphite' end
 

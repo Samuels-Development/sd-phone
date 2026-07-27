@@ -227,21 +227,28 @@ function actions.requestShare(source, target, payload)
 end
 
 ---Delivers an accepted contact share into the recipient's contacts, re-applying add's guards
----for the recipient. Returns a bare boolean.
+---for the recipient. The refusals a player can act on carry a reason, which AirShare shows them.
 ---@param targetSrc number
 ---@param fields table validated contact fields
 ---@return boolean delivered
+---@return string? reason recipient-facing refusal, nil when delivered or not worth explaining
 function actions.deliverShare(targetSrc, fields)
     local tcid = player.getIdentifier(targetSrc)
     if not tcid then return false end
-    if store.countContacts(tcid) >= cfg.MaxContactsPerPlayer then return false end
+    if store.countContacts(tcid) >= cfg.MaxContactsPerPlayer then
+        return false, ('Your contacts are full. You can save %d.'):format(cfg.MaxContactsPerPlayer)
+    end
 
     local newDigits = (tostring(fields.phone):gsub('%D', ''))
     if newDigits == '' or not settings.getCitizenByNumber(newDigits) then return false end
     local ownNumber = settings.getPhoneNumber(tcid)
-    if ownNumber and (tostring(ownNumber):gsub('%D', '')) == newDigits then return false end
+    if ownNumber and (tostring(ownNumber):gsub('%D', '')) == newDigits then
+        return false, 'That is your own number.'
+    end
     for _, row in ipairs(store.listContacts(tcid)) do
-        if (tostring(row.phone):gsub('%D', '')) == newDigits then return false end
+        if (tostring(row.phone):gsub('%D', '')) == newDigits then
+            return false, 'You already have that contact saved.'
+        end
     end
 
     local id = store.newId()

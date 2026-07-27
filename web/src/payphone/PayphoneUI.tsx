@@ -403,7 +403,7 @@ export function PayphoneUI() {
         : phase === 'calling'   ? t('payphone.calling', 'CALLING…')
         : phase === 'connected' ? fmtClock(elapsed)
         : phase === 'ended'     ? t('payphone.callEnded', 'CALL ENDED')
-        : digits ? (digits.length === 10 ? formatPhone(digits) : digits)
+        : digits ? formatPhone(digits)
         : needsCoin ? t('payphone.insertCoin', 'INSERT COIN')
         : booth.anonymous ? t('payphone.withheld', 'NO CALLER ID') : formatPhone(booth.number);
 

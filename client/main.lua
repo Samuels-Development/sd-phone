@@ -21,6 +21,20 @@ do
         if ids[id] then ENABLED_DOCK[#ENABLED_DOCK + 1] = id end
     end
 end
+-- Number display config for the NUI. Format keys are stringified deliberately: a Lua table whose
+-- integer keys run contiguously from 1 encodes as a JSON ARRAY, which would land in the UI
+-- off-by-one, so this guarantees an object either way.
+---@type { formats: table<string, string>, length: integer }
+local NUMBER_FORMAT = {}
+do
+    local cfg = type(config.Phone.Number) == 'table' and config.Phone.Number or {}
+    local formats = {}
+    for length, pattern in pairs(type(cfg.Formats) == 'table' and cfg.Formats or {}) do
+        if type(pattern) == 'string' and pattern ~= '' then formats[tostring(length)] = pattern end
+    end
+    NUMBER_FORMAT = { formats = formats, length = math.floor(tonumber(cfg.Length) or 10) }
+end
+
 ---@type table Weather bridge (bridge.client.weather): live weather + synced world-time reads.
 local weatherBridge = require 'bridge.client.weather'
 ---@type table Custom third-party app registry (client.customapps): add/remove/message + lifecycle.
@@ -349,6 +363,7 @@ local function OpenPhone()
             dock      = ENABLED_DOCK,
             apps      = ENABLED_APPS,
             mailDomain = config.Mail.Domain,
+            number    = NUMBER_FORMAT,
             wallpaper = {
                 lock = config.Lockscreen.Wallpaper,
                 home = config.Apps.Wallpaper,
