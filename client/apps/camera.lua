@@ -1,3 +1,9 @@
+---@type table Scripted phone camera (client.phonecam): owns the view whenever this surface is
+---allowed to keep the player moving, since the native cell cam pins the ped at engine level.
+local phonecam = require 'client.phonecam'
+---@type table Hold pose and hand prop (client.pose): the landscape grip is a prop transform.
+local pose = require 'client.pose'
+
 ---Flips the active cellphone camera between rear and front (selfie), invoking the native by hash.
 ---@param activate boolean true = front (selfie) camera
 local function CellFrontCamActivate(activate)
@@ -90,19 +96,27 @@ local function startInputLoop()
     end)
 end
 
----Activates GTA's native cellphone camera, yields the hold pose, and hides the HUD/radar when
----they were not hidden already. Idempotent while already active.
+---Takes the viewfinder view and hides the HUD/radar when they were not hidden already. The
+---scripted cam frames it wherever movement is allowed, the native cell cam otherwise. Idempotent
+---while already active.
 local function enterCameraView()
     if active then return end
     active   = true
     frontCam = false
     setCursorState(true)
 
-    TriggerEvent('sd-phone:client:cameraMode', true, 'camera')
+    -- Take the view BEFORE announcing the mode: the pose handler asks phonecam.active() which lens
+    -- is framing, so announcing first would have it read the native path and stand the pose down
+    -- for a camera that animates nothing.
+    if phonecam.movementAllowed('camera') then
+        phonecam.start()
+    else
+        CreateMobilePhone(1)
+        CellCamActivate(true, true)
+        CellFrontCamActivate(false)
+    end
 
-    CreateMobilePhone(1)
-    CellCamActivate(true, true)
-    CellFrontCamActivate(false)
+    TriggerEvent('sd-phone:client:cameraMode', true, 'camera')
 
     if not IsHudHidden()   then hidHud   = true; DisplayHud(false)   end
     if not IsRadarHidden() then hidRadar = true; DisplayRadar(false) end
@@ -110,16 +124,20 @@ local function enterCameraView()
     startInputLoop()
 end
 
----Deactivates the cell-cam, hands the pose back, re-shows the HUD/radar this module hid, and
+---Hands the view back to whichever camera took it, re-shows the HUD/radar this module hid, and
 ---re-focuses the NUI. Idempotent while already inactive.
 local function exitCameraView()
     if not active then return end
     active   = false
     frontCam = false
 
-    CellFrontCamActivate(false)
-    CellCamActivate(false, false)
-    DestroyMobilePhone()
+    if phonecam.active() then
+        phonecam.stop()
+    else
+        CellFrontCamActivate(false)
+        CellCamActivate(false, false)
+        DestroyMobilePhone()
+    end
 
     TriggerEvent('sd-phone:client:cameraMode', false, 'camera')
 
@@ -132,12 +150,17 @@ local function exitCameraView()
     setCursorState(true)
 end
 
----Flips between rear and front (selfie) camera. No-op while the cell cam isn't active.
+---Flips between rear and front (selfie) camera, through whichever camera owns the view. No-op
+---while the viewfinder isn't active.
 ---@param on boolean|nil truthy = front camera
 local function setSelfie(on)
     if not active then return end
     frontCam = on and true or false
-    CellFrontCamActivate(frontCam)
+    if phonecam.active() then
+        phonecam.setSelfie(frontCam)
+    else
+        CellFrontCamActivate(frontCam)
+    end
 end
 
 -- Flash: a point light drawn just in front of the final rendered camera.
@@ -196,10 +219,18 @@ RegisterNUICallback('sd-phone:camera:cursor', function(data, cb)
     cb({ success = true })
 end)
 
----React -> Lua: the Camera app mounted - enter the native cell-cam view.
+---React -> Lua: landscape mode toggled - lays the hand prop on its side to match the wide
+---viewfinder. Honoured off the viewfinder too, so unmounting can stand the prop back up.
+RegisterNUICallback('sd-phone:camera:landscape', function(data, cb)
+    pose.setLandscape(data and data.on)
+    cb({ success = true })
+end)
+
+---React -> Lua: the Camera app mounted - take the viewfinder view. Reports which camera took it,
+---because the viewfinder's selfie crop bias only compensates the native one.
 RegisterNUICallback('sd-phone:camera:open', function(_, cb)
     enterCameraView()
-    cb({ success = true })
+    cb({ success = true, walkable = phonecam.active() })
 end)
 
 ---React -> Lua: the Camera app unmounted - kill the flash and restore the normal view.

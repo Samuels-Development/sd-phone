@@ -84,6 +84,9 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
     const [recSecs,   setRecSecs]   = useState(0);
     const [flash,     setFlash]     = useState(false);
     const [selfie,    setSelfie]    = useState(false);
+    // True only when the native cell cam took the view, i.e. the server froze the player while
+    // framing. Decides whether the selfie crop bias applies.
+    const [nativeCam, setNativeCam] = useState(false);
 
     const { setHideHomeIndicator } = useTheme('setHideHomeIndicator');
 
@@ -169,7 +172,9 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
     useEffect(() => {
         if (!deckActive) return;
         let stopped = false;
-        void fetchNui('sd-phone:camera:open');
+        void fetchNui<{ walkable?: boolean }>('sd-phone:camera:open').then((res) => {
+            if (!stopped) setNativeCam(res?.walkable === false);
+        });
 
         void getGameRender().then((render) => {
             if (stopped || !render || !canvasRef.current) return;
@@ -202,6 +207,7 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
 
     useEffect(() => {
         onLandscapeChange?.(landscape);
+        void fetchNui('sd-phone:camera:landscape', { on: landscape });
     }, [landscape, onLandscapeChange]);
 
     useEffect(() => {
@@ -209,13 +215,18 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
         renderRef.current?.setOrientation(landscape ? 'landscape' : 'portrait');
     }, [landscape, feedReady]);
 
-    // Front camera frames the ped off-centre; bias the viewfinder crop to re-centre them.
+    // Only the NATIVE front camera frames the ped off-centre, so only it needs the re-centring
+    // crop bias. The scripted cam points itself at the head, and biasing that pushes the player
+    // off to the right by the same amount it was meant to correct.
     useEffect(() => {
         if (!feedReady) return;
-        renderRef.current?.setSelfie(selfie);
-    }, [selfie, feedReady]);
+        renderRef.current?.setSelfie(selfie && nativeCam);
+    }, [selfie, nativeCam, feedReady]);
 
-    useEffect(() => () => onLandscapeChange?.(false), [onLandscapeChange]);
+    useEffect(() => () => {
+        onLandscapeChange?.(false);
+        void fetchNui('sd-phone:camera:landscape', { on: false });
+    }, [onLandscapeChange]);
 
     useEffect(() => {
         void fetchNui('sd-phone:camera:flash', { on: recording && flash });

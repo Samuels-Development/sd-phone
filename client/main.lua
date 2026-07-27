@@ -25,6 +25,8 @@ end
 local weatherBridge = require 'bridge.client.weather'
 ---@type table Custom third-party app registry (client.customapps): add/remove/message + lifecycle.
 local customApps = require 'client.customapps'
+---@type table Hold pose and hand prop (client.pose): owns which clip is held and re-asserts it.
+local pose = require 'client.pose'
 
 -- Loaded for side effects: each app module registers its own NUI callbacks, net events and
 -- server proxies.
@@ -122,8 +124,6 @@ local pushWeather
 ---@type fun()|nil Phone close (assigned further down).
 local ClosePhone
 
----@type integer|nil Handle of the attached phone prop, nil while stowed.
-local phoneProp
 ---@type table<integer, {obj: integer, color: string}> Server id -> local phone-prop copy welded
 ---onto that remote holder's ped.
 local remoteProps = {}
@@ -143,13 +143,6 @@ local typingNumeric = false
 ---@type boolean True while the hold-to-look keybind has released the cursor for camera control.
 local lookMode = false
 
----Returns whether the hold pose should apply: phone open or flashlight on, and the Camera app
----not live.
----@return boolean
-local function shouldHold()
-    return (phoneState.open or flashlightOn) and not cameraActive
-end
-
 ---Returns whether the live cell-cam has to freeze the game, i.e. its own surface has movement
 ---turned off. An absent config key reads as on, so servers on an older configs/phone.lua still
 ---get the fix.
@@ -160,82 +153,23 @@ local function cameraFrozen()
     return config.Phone.AllowMovementInCamera == false
 end
 
----Creates a colour-matched local phone prop, disables its collision, and rigidly welds it to the
----ped's hand bone.
----@param ped integer ped to attach the prop to
----@param color string frame colour; must be a key of FRAME_COLORS
----@return integer? prop the welded prop entity, or nil if the model wouldn't stream
-local function createHandProp(ped, color)
-    local model = joaat(config.Phone.PropPrefix .. color)
-    RequestModel(model)
-    local started = GetGameTimer()
-    while not HasModelLoaded(model) and GetGameTimer() - started < 1000 do Wait(0) end
-    if not HasModelLoaded(model) then return nil end
-    local coords = GetEntityCoords(ped)
-    local prop = CreateObject(model, coords.x, coords.y, coords.z, false, true, true)
-    SetEntityCollision(prop, false, false)
-    local off, rot = config.Phone.PropOffset, config.Phone.PropRot
-    AttachEntityToEntity(prop, ped, GetPedBoneIndex(ped, config.Phone.PropBone),
-        off.x, off.y, off.z, rot.x, rot.y, rot.z, false, false, false, false, 2, true)
-    SetModelAsNoLongerNeeded(model)
-    return prop
-end
-
----Attaches our own hand prop in the current frame colour. No-op if one is already attached or
----the model won't stream.
----@param ped integer player ped handle
-local function attachPhoneProp(ped)
-    if phoneProp and DoesEntityExist(phoneProp) then return end
-    phoneProp = createHandProp(ped, currentFrameColor)
-end
-
----Delete the attached phone prop, if any. Idempotent.
-local function removePhoneProp()
-    if phoneProp and DoesEntityExist(phoneProp) then DeleteObject(phoneProp) end
-    phoneProp = nil
-end
-
----Plays the looping upper-body hold anim and attaches the prop. No-op when
----config.Phone.HoldAnimation is off.
-local function startPose()
-    if not config.Phone.HoldAnimation then return end
-    -- Load the dict and play the pose on its own thread: the anim is cosmetic and must never
-    -- gate the phone opening. Blocking here (up to 1s waiting on the dict) used to stall the
-    -- NUI reveal since OpenPhone runs this synchronously before focusing the UI.
-    CreateThread(function()
-        RequestAnimDict(config.Phone.AnimDict)
-        local started = GetGameTimer()
-        while not HasAnimDictLoaded(config.Phone.AnimDict) and GetGameTimer() - started < 1000 do Wait(0) end
-        -- The player may have closed the phone (or the camera took the pose) during the load.
-        if not shouldHold() then return end
-        local ped = PlayerPedId()
-        if not IsEntityPlayingAnim(ped, config.Phone.AnimDict, config.Phone.AnimName, 3) then
-            TaskPlayAnim(ped, config.Phone.AnimDict, config.Phone.AnimName, 6.0, -1.0, -1, 49, 0.0, false, false, false)
-        end
-        attachPhoneProp(ped)
-    end)
-end
-
----Stop the hold anim (only when it's actually our clip playing) and remove the prop.
-local function stopPose()
-    local ped = PlayerPedId()
-    if config.Phone.HoldAnimation and IsEntityPlayingAnim(ped, config.Phone.AnimDict, config.Phone.AnimName, 3) then
-        StopAnimTask(ped, config.Phone.AnimDict, config.Phone.AnimName, 1.0)
-    end
-    removePhoneProp()
-end
-
 ---Broadcasts the hold state via the replicated `sdPhone` player statebag: frame colour while
 ---holding, false otherwise. No-op when cross-player visibility is off.
 local function broadcastHoldState()
     if not config.Phone.PropVisibleToOthers then return end
-    local color = (config.Phone.HoldAnimation and shouldHold()) and currentFrameColor or false
+    local color = pose.shouldHold() and currentFrameColor or false
     LocalPlayer.state:set('sdPhone', color, true)
 end
 
----Starts or stops the pose per current state and broadcasts it.
+---Pushes the current state into the pose module, which starts or stops the held clip to match,
+---then broadcasts the result.
 local function updatePose()
-    if shouldHold() then startPose() else stopPose() end
+    pose.refresh({
+        open   = phoneState.open,
+        torch  = flashlightOn,
+        camera = cameraActive,
+        color  = currentFrameColor,
+    })
     broadcastHoldState()
 end
 
@@ -554,11 +488,10 @@ RegisterNetEvent('sd-phone:client:simState', function(state)
     if state.color and FRAME_COLORS[state.color] then
         if state.color ~= currentFrameColor then
             currentFrameColor = state.color
-            if shouldHold() then
-                removePhoneProp()
-                attachPhoneProp(PlayerPedId())
-                broadcastHoldState()
-            end
+            -- Push the colour first, then re-weld: a prop already in hand keeps the old model
+            -- otherwise, since attaching no-ops while one exists.
+            updatePose()
+            pose.reweld()
         end
         -- ALWAYS forwarded (even while closed, even when the client already believed this
         -- colour): the NUI boots with its own default and has no other pre-open sync point,
@@ -724,19 +657,6 @@ CreateThread(function()
     end
 end)
 
--- Re-applies the hold pose on a 500ms poll if the game clears it.
-CreateThread(function()
-    while true do
-        if shouldHold() then
-            local ped = PlayerPedId()
-            if config.Phone.HoldAnimation and not IsEntityPlayingAnim(ped, config.Phone.AnimDict, config.Phone.AnimName, 3) then
-                startPose()
-            end
-        end
-        Wait(500)
-    end
-end)
-
 ---Deletes a remote holder's welded prop copy, if any. Idempotent.
 ---@param source integer server id of the remote holder
 local function removeRemoteProp(source)
@@ -771,7 +691,7 @@ if config.Phone.PropVisibleToOthers then
         local entry = remoteProps[source]
         if entry and entry.color == value and DoesEntityExist(entry.obj) then return end
         removeRemoteProp(source)
-        local obj = createHandProp(ped, value)
+        local obj = pose.createProp(ped, value)
         if obj then remoteProps[source] = { obj = obj, color = value } end
         debugPrint(('remote prop for %s -> %s'):format(source, value))
     end)
@@ -887,13 +807,9 @@ end)
 AddEventHandler('onResourceStop', function(resource)
     if resource ~= GetCurrentResourceName() then return end
     if phoneState.open then SetNuiFocus(false, false) end
-    removePhoneProp()
+    pose.stop()
     if config.Phone.PropVisibleToOthers then LocalPlayer.state:set('sdPhone', false, true) end
     for source in pairs(remoteProps) do removeRemoteProp(source) end
-    local ped = PlayerPedId()
-    if config.Phone.HoldAnimation and IsEntityPlayingAnim(ped, config.Phone.AnimDict, config.Phone.AnimName, 3) then
-        StopAnimTask(ped, config.Phone.AnimDict, config.Phone.AnimName, 1.0)
-    end
 end)
 
 require 'client.compat.lbphone'

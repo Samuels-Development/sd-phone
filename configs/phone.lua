@@ -81,6 +81,13 @@ return {
     PropOffset = vec3(0.0, 0.0, 0.0),
     PropRot    = vec3(0.0, 0.0, 0.0),
 
+    -- Where the prop sits while the Camera app is in LANDSCAPE mode: the phone
+    -- lies on its side for the wide viewfinder, so the grip rolls 90 degrees
+    -- off the portrait transform above. Set either to nil to keep the portrait
+    -- grip in landscape too.
+    PropLandscapeOffset = vec3(0.0, 0.0, 0.0),
+    PropLandscapeRot    = vec3(0.0, 90.0, 0.0),
+
     -- Let other players see the phone in your hand. When true, your ped broadcasts a replicated
     -- statebag while the phone is out and every nearby client spawns its own LOCAL welded copy of
     -- the prop on your ped (the hold animation already replicates on its own). This is lb-phone's
