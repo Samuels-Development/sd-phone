@@ -88,12 +88,21 @@ const AppHost = memo(function AppHost({ id, ctx, active, openKey, origin, expand
     const [phase, setPhase] = useState<'open' | 'close' | 'rest'>('open');
     const firstRef = useRef(true);
 
-    useEffect(() => {
+    // LAYOUT effects, not passive ones. A retained app re-renders at phase 'rest' (no animation)
+    // and is re-parented into the fullscreen slot by the layout effect below. If the phase flip
+    // is passive it lands AFTER that paint, so the app appears instantly at full size and only
+    // then does the animation start, snapping back to its `from` keyframe and replaying. That is
+    // the "instant open, then it flicks and animates" report, and it is a race: the heavier the
+    // app's commit, the wider the gap between paint and effect, which is why it showed up most on
+    // the apps with big lists and only occasionally on light ones. A layout effect is flushed
+    // before paint, so the animation is in place on the first painted frame - which is why the
+    // FIRST open was always correct: useState('open') has it there from the initial commit.
+    useLayoutEffect(() => {
         if (firstRef.current) { firstRef.current = false; return; }
         setPhase('open');
     }, [openKey]);
 
-    useEffect(() => { if (closing) setPhase('close'); }, [closing]);
+    useLayoutEffect(() => { if (closing) setPhase('close'); }, [closing]);
 
     const ox = origin ? `${(origin.x * 100).toFixed(1)}%` : '50%';
     const oy = origin ? `${(origin.y * 100).toFixed(1)}%` : '80%';
