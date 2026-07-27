@@ -1085,6 +1085,18 @@ function AppContent() {
         };
     }, []);
 
+    useEffect(() => {
+        if (!isFiveM) return;
+        function blockSpace(e: KeyboardEvent) {
+            if (e.key !== ' ') return;
+            const el = e.target as HTMLElement | null;
+            if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+            e.preventDefault();
+        }
+        window.addEventListener('keydown', blockSpace, true);
+        return () => window.removeEventListener('keydown', blockSpace, true);
+    }, []);
+
     const resetNonce = usePhoneReset(s => s.nonce);
     useEffect(() => {
         if (!resetNonce) return;

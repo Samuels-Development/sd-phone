@@ -110,7 +110,7 @@ export function Lockscreen({ use24h, showDate, wallpaper, unlockTrigger, onUnloc
     useEffect(() => {
         function onKey(e: KeyboardEvent) {
             if ((e.key === 'h' || e.key === 'H') && !isFiveM) latest.current.forceUnlock();
-            else if (e.key === 'Enter' || e.key === ' ') latest.current.commitUnlock();
+            else if (e.key === 'Enter' || (e.key === ' ' && !isFiveM)) latest.current.commitUnlock();
         }
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
