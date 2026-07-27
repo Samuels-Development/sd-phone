@@ -1,3 +1,6 @@
+---@type table Shared server helpers (server.util): schema back-fill helpers.
+local util = require 'server.util'
+
 ---@type table Store module; the table returned at end of file.
 local store = {}
 
@@ -17,6 +20,13 @@ function store.ensureSchema()
             KEY `created_at` (`created_at`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ]])
+
+    -- The primary key is an auto-increment, so INSERT IGNORE has nothing to collide with and a
+    -- repeated lb-phone import would duplicate every row. `src_id` carries the source row's
+    -- identity and is unique; rows created in-game leave it NULL, and a unique index permits
+    -- any number of NULLs.
+    util.ensureColumns('phone_bank_transactions', { src_id = 'src_id VARCHAR(32) NULL' })
+    util.ensureUniqueIndex('phone_bank_transactions', 'uq_bank_tx_src', '(src_id)')
 end
 
 ---Appends one transaction row. `amount` is a signed whole-currency value: negative = outflow,

@@ -35,14 +35,19 @@ function store.ensureSchema()
     end
 end
 
----All of a player's notes, newest-edited first. Read-only.
+---@type integer Ceiling on one read of a player's notes. Each row carries a body plus sketch and
+---image JSON, so an uncapped read is heavy per row as well as unbounded in count.
+local NOTES_CAP <const> = 300
+
+---A player's notes, newest-edited first, capped. Read-only.
 ---@param cid string owner citizenid
 ---@return table[] rows note rows, empty when none
 function store.forPlayer(cid)
-    return MySQL.query.await([[
+    return MySQL.query.await(([[
         SELECT id, body, sketches, images, created_at, updated_at
         FROM `phone_notes` WHERE citizenid = ? ORDER BY updated_at DESC
-    ]], { cid }) or {}
+        LIMIT %d
+    ]]):format(NOTES_CAP), { cid }) or {}
 end
 
 ---Inserts or updates a note. `created_at` is only set on first insert.

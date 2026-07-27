@@ -98,16 +98,72 @@ function store.hasUrl(citizenid, url)
         'SELECT 1 FROM phone_photos WHERE citizenid = ? AND url = ? LIMIT 1', { citizenid, url }) ~= nil
 end
 
----One player's photos, newest first. Read-only.
+---@type string Video-URL test, mirroring isVideoUrl() in web/src/core/photosApi.ts.
+local VIDEO_RE <const> = '\\.(mp4|webm|mov|m4v|ogg)([?#]|$)'
+
+---Splits an opaque "ts:id" cursor. nil/'' means the first page.
+---@param cursor string|nil
+---@return integer|nil ts, string|nil id
+local function splitCursor(cursor)
+    if type(cursor) ~= 'string' or cursor == '' then return nil, nil end
+    local ts, id = cursor:match('^(%d+):(.+)$')
+    return tonumber(ts), id
+end
+
+---One page of a player's photos, newest first. Returns up to `limit + 1` rows so the caller can
+---tell whether a further page exists without a second COUNT. Read-only.
 ---@param citizenid string owner's framework per-character id
----@return { id: string, url: string, favorite: any, created_at: number }[] rows
-function store.listForCitizen(citizenid)
-    return MySQL.query.await([[
-        SELECT id, url, favorite, created_at
+---@param cursor string|nil opaque "ts:id" cursor from the previous page
+---@param limit integer page size
+---@param filter 'favorites'|'videos'|nil smart-album narrowing
+---@return { id: string, url: string, favorite: any, created_at: number, ts: integer }[] rows
+function store.listForCitizen(citizenid, cursor, limit, filter)
+    local ts, id = splitCursor(cursor)
+    local where, params = { 'citizenid = ?' }, { citizenid }
+
+    if filter == 'favorites' then
+        where[#where + 1] = 'favorite = 1'
+    elseif filter == 'videos' then
+        where[#where + 1] = 'url REGEXP ?'
+        params[#params + 1] = VIDEO_RE
+    end
+
+    if ts then
+        -- created_at stays bare on the left of the comparison so idx_phone_photos_owner
+        -- (citizenid, created_at) can still range-scan; wrapping it in UNIX_TIMESTAMP() here
+        -- would force a full scan of the player's rows on every page.
+        where[#where + 1] = '(created_at < FROM_UNIXTIME(?) OR (created_at = FROM_UNIXTIME(?) AND id < ?))'
+        params[#params + 1] = ts
+        params[#params + 1] = ts
+        params[#params + 1] = id
+    end
+    params[#params + 1] = limit + 1
+
+    return MySQL.query.await(([[
+        SELECT id, url, favorite, created_at, UNIX_TIMESTAMP(created_at) AS ts
+        FROM phone_photos
+        WHERE %s
+        ORDER BY created_at DESC, id DESC
+        LIMIT ?
+    ]]):format(table.concat(where, ' AND ')), params) or {}
+end
+
+---Totals behind the Recents / Favourites / Videos tiles, which a single page cannot report.
+---@param citizenid string owner's framework per-character id
+---@return { total: integer, favorites: integer, videos: integer }
+function store.countsFor(citizenid)
+    local row = MySQL.single.await([[
+        SELECT COUNT(*) AS total,
+               SUM(favorite = 1) AS favorites,
+               SUM(url REGEXP ?) AS videos
         FROM phone_photos
         WHERE citizenid = ?
-        ORDER BY created_at DESC, id DESC
-    ]], { citizenid }) or {}
+    ]], { VIDEO_RE, citizenid })
+    return {
+        total     = math.floor(tonumber(row and row.total) or 0),
+        favorites = math.floor(tonumber(row and row.favorites) or 0),
+        videos    = math.floor(tonumber(row and row.videos) or 0),
+    }
 end
 
 ---Sets the favourite flag on a photo the caller owns; a foreign photo id matches zero rows and

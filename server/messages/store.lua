@@ -173,6 +173,36 @@ function store.threadKeys(citizenid)
     ]], { citizenid }) or {}
 end
 
+---@type integer Ceiling on the thread list. A migrated mailbox runs to hundreds of threads and
+---the list is ordered by recency, so anything past this is not reachable by scrolling to it.
+local THREADS_CAP <const> = 200
+
+---Every conversation's newest message plus its unread tally, in ONE query. The list view only
+---renders a preview row and a badge per thread, and fetching a whole thread each just to show
+---its last line meant a query per conversation (550 of them on a migrated mailbox) before the
+---app could paint. Withheld rows are excluded. Read-only.
+---@param citizenid string
+---@return { conversation: string, id: string, mid: string, sender: string, direction: string, kind: string, body: string, meta: string, is_read: any, created_at: number, unread: number }[]
+function store.threadPreviews(citizenid)
+    return MySQL.query.await(([[
+        SELECT m.conversation, m.id, m.mid, m.sender, m.direction, m.kind, m.body, m.meta,
+               m.is_read, m.created_at, u.unread
+        FROM phone_messages m
+        INNER JOIN (
+            SELECT conversation,
+                   MAX(created_at) AS last_at,
+                   SUM(direction = 'in' AND is_read = 0) AS unread
+            FROM phone_messages
+            WHERE citizenid = ? AND withheld = 0
+            GROUP BY conversation
+        ) u ON u.conversation = m.conversation AND u.last_at = m.created_at
+        WHERE m.citizenid = ? AND m.withheld = 0
+        GROUP BY m.conversation
+        ORDER BY m.created_at DESC
+        LIMIT %d
+    ]]):format(THREADS_CAP), { citizenid, citizenid }) or {}
+end
+
 ---True when the player's mailbox already holds at least one copy in this thread. An index dive
 ---on idx_phone_messages_thread, so it is cheap enough to run before every 1:1 send. Read-only.
 ---@param citizenid string

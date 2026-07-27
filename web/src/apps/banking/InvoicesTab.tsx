@@ -42,8 +42,13 @@ export function InvoicesTab({ received, receivedLoading, onRefetchReceived, onPa
     const deckActive = useDeckActive();
     const wasActive  = useRef(deckActive);
     useEffect(() => {
-        if (deckActive && !wasActive.current) refetchSent();
+        const rising = deckActive && !wasActive.current;
         wasActive.current = deckActive;
+        if (!rising) return;
+        // Deferred past the open animation for the same reason as Banking.tsx: this is the third
+        // round trip fired on a single foreground, and each one re-renders the tree.
+        const id = window.setTimeout(refetchSent, 420);
+        return () => window.clearTimeout(id);
     }, [deckActive, refetchSent]);
 
     // Live contact resolution for the sent rows: a saved card shows its avatar/initials, an

@@ -76,17 +76,76 @@ let canImportPhotos = !isFiveM;
 /** Whether the server allows URL import; valid after the first apiListPhotos() resolves. */
 export function getCanImportPhotos(): boolean { return canImportPhotos; }
 
-export async function apiListPhotos(): Promise<Photo[]> {
-    if (!isFiveM) return DEV_PHOTOS;
-    const data = await apiData<{ photos: ServerPhoto[]; canImport?: boolean }>('sd-phone:photos:list');
-    canImportPhotos = data?.canImport === true;
-    return data?.photos.map(mapPhoto) ?? [];
+/** Smart-album narrowing applied server-side, so a filtered view still pages. */
+export type PhotoFilter = 'favorites' | 'videos';
+
+export interface PhotoCounts { total: number; favorites: number; videos: number }
+
+export interface PhotoPage {
+    photos:     Photo[];
+    nextCursor: string | null;
+    /** Present on the first page only; the tile totals do not change while paging. */
+    counts?:    PhotoCounts;
 }
+
+/**
+ * Tiles fetched for the first page. Deliberately smaller than a scroll page: this batch mounts
+ * while the app's open animation is still running, and a few hundred tiles there stalls it.
+ */
+export const FIRST_PAGE_SIZE = 60;
+
+/**
+ * Last unfiltered first page. Photos seeds its state from this synchronously, so reopening the
+ * app paints real tiles on the first frame instead of an empty pane that fills in once the
+ * round trip lands, which read as the open animation not playing at all.
+ */
+let firstPageCache: PhotoPage | null = null;
+
+export function getCachedFirstPhotoPage(): PhotoPage | null { return firstPageCache; }
+
+/** One page of the gallery. Omit `cursor` for the first page, then pass `nextCursor` back. */
+export async function apiListPhotos(cursor?: string | null, filter?: PhotoFilter, limit?: number): Promise<PhotoPage> {
+    if (!isFiveM) {
+        const photos = filter === 'favorites' ? DEV_PHOTOS.filter(p => p.favorite)
+                     : filter === 'videos'    ? DEV_PHOTOS.filter(p => p.video)
+                     : DEV_PHOTOS;
+        return {
+            photos,
+            nextCursor: null,
+            counts: cursor ? undefined : {
+                total:     DEV_PHOTOS.length,
+                favorites: DEV_PHOTOS.filter(p => p.favorite).length,
+                videos:    DEV_PHOTOS.filter(p => p.video).length,
+            },
+        };
+    }
+    const data = await apiData<{
+        photos: ServerPhoto[]; nextCursor?: string | null; counts?: PhotoCounts; canImport?: boolean;
+    }>('sd-phone:photos:list', { cursor: cursor ?? null, filter: filter ?? null, limit: limit ?? null });
+    if (!cursor) canImportPhotos = data?.canImport === true;
+    const page: PhotoPage = {
+        photos:     data?.photos?.map(mapPhoto) ?? [],
+        nextCursor: data?.nextCursor ?? null,
+        counts:     data?.counts,
+    };
+    // Cache only the plain first page: a filtered or later page is not what the app opens on.
+    if (!cursor && !filter) firstPageCache = page;
+    return page;
+}
+
+/**
+ * Number of gallery images decoded ahead of time by warmPhotos(). Enough to fill the picker's
+ * first screen; the rest load through the tiles' own `loading="lazy"`.
+ */
+const WARM_IMAGE_COUNT = 24;
 
 export function warmPhotos(): void {
     if (!isFiveM) return;
-    void apiListPhotos().then(photos => {
-        for (const p of photos) {
+    // Only the first page, and only the first screenful of it, gets decoded up front. This used
+    // to pull the WHOLE library and construct an Image() per row from six different chat
+    // composers, which on a large gallery meant thousands of CDN fetches on opening a DM.
+    void apiListPhotos().then(page => {
+        for (const p of page.photos.slice(0, WARM_IMAGE_COUNT)) {
             if (p.url && !p.video) { const img = new Image(); img.src = p.url; }
         }
     });

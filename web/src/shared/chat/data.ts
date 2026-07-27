@@ -35,6 +35,10 @@ export interface Conversation {
     messages:   Message[];
     pinned:     boolean;
     muted:      boolean;
+    /** Server-side unread tally. Present on list rows, which carry only the last message. */
+    unread?:    number;
+    /** True while `messages` holds just the preview line; the full thread loads on open. */
+    partial?:   boolean;
 }
 
 export interface Contact {
@@ -155,6 +159,10 @@ export function hasUnread(c: Conversation): boolean {
 }
 
 export function unreadCount(c: Conversation): number {
+    // A list row carries only its last message, so counting locally would under-report. The
+    // server tally wins whenever it is present; the local count still covers dev data and
+    // conversations built client-side before any fetch.
+    if (typeof c.unread === 'number') return c.unread;
     return c.messages.filter(m => m.from !== 'me' && !m.read).length;
 }
 

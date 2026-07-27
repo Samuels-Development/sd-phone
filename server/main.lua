@@ -40,6 +40,9 @@ require 'server.voicememos.init'
 require 'server.music.init'
 require 'server.share.init'
 require 'server.devseed'
+-- Optional local-only helpers; absent on every install but a developer's, so a missing file is
+-- expected rather than an error.
+pcall(require, 'server.devswap')
 require 'server.notifications.init'
 require 'server.notes.init'
 require 'server.documents.init'

@@ -3,10 +3,18 @@ import { Check, Play } from 'lucide-react';
 
 import type { Photo } from '@/core/photosApi';
 
-export function PhotoTile({ photo, selectable, selected, onClick }: {
+export function PhotoTile({ photo, selectable, selected, defer, onClick }: {
     photo:       Photo;
     selectable?: boolean;
     selected?:   boolean;
+    /**
+     * Hold the media out of the DOM entirely. A tile shows a 130px square but the source is a
+     * full-size capture (measured: 810x1080, a 3.3MB bitmap once decoded, ~52x the pixels the
+     * tile can use). A screenful of those is tens of MB the compositor must rasterize, which is
+     * what stalls the app's open animation. The grid still lays out, so the app visibly animates
+     * in; only the decode waits for it to land.
+     */
+    defer?:      boolean;
     onClick:     () => void;
 }) {
     const [loaded, setLoaded] = useState(false);
@@ -18,7 +26,7 @@ export function PhotoTile({ photo, selectable, selected, onClick }: {
             onClick={onClick}
             className="relative aspect-square overflow-hidden bg-black/10 active:opacity-80 dark:bg-white/10"
         >
-            {photo.video ? (
+            {defer ? null : photo.video ? (
                 <video
                     src={photo.url}
                     muted
@@ -32,6 +40,9 @@ export function PhotoTile({ photo, selectable, selected, onClick }: {
                     src={photo.url}
                     alt=""
                     loading="lazy"
+                    // Off the main thread: a synchronous decode per tile is what makes a grid of
+                    // freshly fetched photos hitch as they arrive.
+                    decoding="async"
                     draggable={false}
                     onLoad={() => setLoaded(true)}
                     ref={el => { if (el?.complete) setLoaded(true); }}

@@ -30,6 +30,31 @@ end
 
 store.lbTable = lbt
 
+---@type string Session-scoped table holding the phone numbers that resolved to a character, so the
+---readers can filter in SQL instead of hauling whole tables into Lua and discarding them.
+---Declared here, above every reader: a local defined later in the file is not in scope for functions
+---defined earlier, and they would silently see a nil global instead.
+local OWNED = '_sdphone_migrate_owned'
+
+---Resolves an lb-phone source table, or nil when this database has no lb data for it.
+---
+---Checking only that `phone_<name>` exists is not enough: for the names lb-phone and sd-phone share
+---(photos, notes, photo_albums, mail_accounts, message_reactions) the bare name is sd-phone's OWN
+---table once the schema bootstrap has run, and querying it with lb-phone's column names throws.
+---`markerColumn` is a column only the lb-phone shape has, so a porter reads the bare table only when
+---it really is lb-phone's.
+---@param name string suffix, e.g. 'mail_accounts'
+---@param markerColumn string|nil column unique to the lb-phone shape
+---@return string|nil table name to read from
+function store.lbSource(name, markerColumn)
+    local full = PREFIX .. name
+    local rescued = full .. '_lb'
+    if store.tableExists(rescued) then return rescued end
+    if not store.tableExists(full) then return nil end
+    if markerColumn and not store.tableHasColumn(full, markerColumn) then return nil end
+    return full
+end
+
 ---True if a base table with this exact name exists in the current schema. Read-only.
 ---@param name string table name
 ---@return boolean
@@ -108,6 +133,47 @@ function store.recordMigration(name, stats)
     )
 end
 
+---@type string Marker-row prefix for a single completed domain.
+local DOMAIN_MARKER = 'lbphone:'
+
+---The set of domain keys already imported. Gating per domain (rather than one marker for the whole
+---import) is what lets a server that ran an earlier version pick up only the domains added since.
+---@return table<string, boolean>
+function store.completedDomains()
+    local rows = MySQL.query.await(
+        'SELECT name FROM phone_migrations WHERE name LIKE ?', { DOMAIN_MARKER .. '%' }) or {}
+    local set = {}
+    for _, r in ipairs(rows) do
+        local key = tostring(r.name):sub(#DOMAIN_MARKER + 1)
+        if key ~= '' then set[key] = true end
+    end
+    return set
+end
+
+---Marks one domain as imported, stamping its counts. Idempotent (INSERT IGNORE).
+---@param key string domain key
+---@param stats table counts returned by the porter
+function store.recordDomain(key, stats)
+    MySQL.query.await(
+        'INSERT IGNORE INTO phone_migrations (name, stats) VALUES (?, ?)',
+        { DOMAIN_MARKER .. key, json.encode(stats or {}) }
+    )
+end
+
+---Backfills domain markers for an install that completed the pre-domain-marker import, so those
+---domains are not needlessly re-run. Returns true when the legacy marker was found.
+---@param legacyName string old whole-import marker name
+---@param keys string[] domain keys that marker covered
+---@return boolean backfilled
+function store.backfillLegacyDomains(legacyName, keys)
+    if not store.migrationDone(legacyName) then return false end
+    local done = store.completedDomains()
+    for _, key in ipairs(keys) do
+        if not done[key] then store.recordDomain(key, { backfilled = true }) end
+    end
+    return true
+end
+
 ---Loads the framework's persistent character roster: qb/QBox reads `players` (citizenid + license),
 ---ESX reads `users` (identifier). A non-standard schema degrades to empty maps.
 ---@param frameworkName 'qb'|'esx'
@@ -147,9 +213,10 @@ end
 ---@return table[]
 function store.lbContacts()
     return MySQL.query.await(([[
-        SELECT contact_phone_number, firstname, lastname, profile_image, email, address, favourite, phone_number
-        FROM %s
-    ]]):format(lbt('phone_contacts'))) or {}
+        SELECT c.contact_phone_number, c.firstname, c.lastname, c.profile_image, c.email, c.address,
+               c.favourite, c.phone_number
+        FROM %s c JOIN `%s` o ON o.number = c.phone_number
+    ]]):format(lbt('phone_contacts'), OWNED)) or {}
 end
 
 ---Every lb-phone blocked-number pair (owner number -> blocked number). Read-only.
@@ -164,9 +231,10 @@ end
 ---@return { id: any, caller: string, callee: string, duration: number, answered: any, ts: number }[]
 function store.lbCalls()
     return MySQL.query.await(([[
-        SELECT id, caller, callee, duration, answered, UNIX_TIMESTAMP(timestamp) AS ts
-        FROM %s
-    ]]):format(lbt('phone_calls'))) or {}
+        SELECT c.id, c.caller, c.callee, c.duration, c.answered, UNIX_TIMESTAMP(c.timestamp) AS ts
+        FROM %s c
+        WHERE EXISTS (SELECT 1 FROM `%s` o WHERE o.number = c.caller OR o.number = c.callee)
+    ]]):format(lbt('phone_calls'), OWNED)) or {}
 end
 
 ---Every lb-phone message channel, newest-activity epoch as `created_at` (seconds). Read-only.
@@ -188,12 +256,17 @@ end
 ---Every lb-phone message, oldest-first within each channel, timestamp as a unix epoch in seconds.
 ---Loaded in one pass and grouped by channel in Lua. Read-only.
 ---@return { id: any, channel_id: any, sender: string, content: string|nil, attachments: string|nil, ts: number }[]
+---Only messages in channels an owned number belongs to; the rest can never be attributed.
 function store.lbMessages()
     return MySQL.query.await(([[
-        SELECT id, channel_id, sender, content, attachments, UNIX_TIMESTAMP(timestamp) AS ts
-        FROM %s
-        ORDER BY channel_id ASC, timestamp ASC
-    ]]):format(lbt('message_messages'))) or {}
+        SELECT m.id, m.channel_id, m.sender, m.content, m.attachments,
+               UNIX_TIMESTAMP(m.timestamp) AS ts
+        FROM %s m
+        WHERE m.channel_id IN (
+            SELECT mm.channel_id FROM %s mm JOIN `%s` o ON o.number = mm.phone_number
+        )
+        ORDER BY m.channel_id ASC, m.timestamp ASC
+    ]]):format(lbt('message_messages'), lbt('message_members'), OWNED)) or {}
 end
 
 ---Every lb-phone photo; `created_at` is kept as the raw datetime string. Read-only.
@@ -203,9 +276,9 @@ function store.lbPhotos()
     -- millisecond numbers, which a TIMESTAMP insert then coerces to a zero date. The porter
     -- formats these seconds back into a DATETIME literal.
     return MySQL.query.await(([[
-        SELECT id, phone_number, link, is_favourite, UNIX_TIMESTAMP(`timestamp`) AS created_ts
-        FROM %s
-    ]]):format(lbt('photos'))) or {}
+        SELECT p.id, p.phone_number, p.link, p.is_favourite, UNIX_TIMESTAMP(p.`timestamp`) AS created_ts
+        FROM %s p JOIN `%s` o ON o.number = p.phone_number
+    ]]):format(lbt('photos'), OWNED)) or {}
 end
 
 ---Every lb-phone photo album. Read-only.
@@ -234,10 +307,12 @@ end
 
 ---Runs a chunked multi-row INSERT IGNORE. `prefixSql` ends at the word VALUES; one placeholder
 ---group is appended per row, nil columns emit a literal NULL, and an empty batch is a no-op.
+---`suffixSql` is appended after the groups, for an ON DUPLICATE KEY UPDATE tail.
 ---@param prefixSql string 'INSERT IGNORE INTO ... (cols) VALUES'
 ---@param cols integer columns per row
 ---@param rows any[][] one parameter array per row
-local function insertMulti(prefixSql, cols, rows)
+---@param suffixSql string|nil trailing clause appended after the value groups
+local function insertMulti(prefixSql, cols, rows, suffixSql)
     if type(rows) ~= 'table' or #rows == 0 then return end
     local total = #rows
     for i = 1, total, 300 do
@@ -258,9 +333,14 @@ local function insertMulti(prefixSql, cols, rows)
             end
             groups[#groups + 1] = '(' .. table.concat(cells, ',') .. ')'
         end
-        MySQL.query.await(prefixSql .. ' ' .. table.concat(groups, ','), params)
+        local sql = prefixSql .. ' ' .. table.concat(groups, ',')
+        if suffixSql then sql = sql .. ' ' .. suffixSql end
+        MySQL.query.await(sql, params)
     end
 end
+
+---@type fun(prefixSql: string, cols: integer, rows: any[][], suffixSql?: string) Public alias for porters.
+store.insertMulti = insertMulti
 
 ---Adopts a player's lb-phone number (and lock passcode) as their sd-phone number. Returns 'set'
 ---when it wrote, 'skip' when already onboarded, 'conflict' when the number belongs to someone else.
@@ -359,6 +439,502 @@ end
 ---@param rows any[][]
 function store.insertNotes(rows)
     insertMulti('INSERT IGNORE INTO phone_notes (citizenid, id, body, sketches, images, created_at, updated_at) VALUES', 7, rows)
+end
+
+---Every lb-phone phone that carries a settings blob. Read-only.
+---@return { phone_number: string, settings: string }[]
+function store.lbPhoneSettings()
+    return MySQL.query.await(
+        ('SELECT phone_number, settings FROM %s WHERE settings IS NOT NULL'):format(lbt('phones'))) or {}
+end
+
+---Fill-only settings merge. rows: { citizenid, wallpaper, blur_lock, blur_home, theme, brightness,
+---phone_scale, hour24, ringtone, notification_tone, ringtone_volume, call_volume }.
+---@param rows any[][]
+function store.fillSettings(rows)
+    insertMulti([[
+        INSERT INTO phone_settings
+            (citizenid, wallpaper, blur_lock, blur_home, theme, brightness, phone_scale, hour24,
+             ringtone, notification_tone, ringtone_volume, call_volume)
+        VALUES
+    ]], 12, rows, [[
+        ON DUPLICATE KEY UPDATE
+            wallpaper         = IF(wallpaper IS NULL, VALUES(wallpaper), wallpaper),
+            blur_lock         = IF(blur_lock IS NULL, VALUES(blur_lock), blur_lock),
+            blur_home         = IF(blur_home IS NULL, VALUES(blur_home), blur_home),
+            theme             = IF(theme IS NULL, VALUES(theme), theme),
+            brightness        = IF(brightness IS NULL, VALUES(brightness), brightness),
+            phone_scale       = IF(phone_scale IS NULL, VALUES(phone_scale), phone_scale),
+            hour24            = IF(hour24 IS NULL, VALUES(hour24), hour24),
+            ringtone          = IF(ringtone IS NULL, VALUES(ringtone), ringtone),
+            notification_tone = IF(notification_tone IS NULL, VALUES(notification_tone), notification_tone),
+            ringtone_volume   = IF(ringtone_volume IS NULL, VALUES(ringtone_volume), ringtone_volume),
+            call_volume       = IF(call_volume IS NULL, VALUES(call_volume), call_volume)
+    ]])
+end
+
+---@return table[]
+function store.lbWallet()
+    return MySQL.query.await(([[
+        SELECT w.id, w.phone_number, w.amount, w.company, UNIX_TIMESTAMP(w.`timestamp`) AS ts
+        FROM %s w JOIN `%s` o ON o.number = w.phone_number
+    ]]):format(lbt('wallet_transactions'), OWNED)) or {}
+end
+
+---@param rows any[][] { citizenid, label, amount, category, created_at, src_id }
+function store.insertBankTx(rows)
+    insertMulti('INSERT IGNORE INTO phone_bank_transactions (citizenid, label, amount, category, created_at, src_id) VALUES', 6, rows)
+end
+
+---@return { message_id: any, phone_number: string, reaction: string }[]
+function store.lbReactions()
+    return MySQL.query.await(([[
+        SELECT r.message_id, r.phone_number, r.reaction
+        FROM %s r JOIN `%s` o ON o.number = r.phone_number
+    ]]):format(lbt('message_reactions'), OWNED)) or {}
+end
+
+---Which of these mids exist in phone_messages, queried in chunks. A reaction whose message was not
+---migrated can never render, so the porter drops it rather than importing junk.
+---@param mids string[]
+---@return table<string, boolean>
+function store.existingMids(mids)
+    local set = {}
+    for i = 1, #mids, 500 do
+        local last = math.min(i + 499, #mids)
+        local holes, params = {}, {}
+        for j = i, last do
+            holes[#holes + 1] = '?'
+            params[#params + 1] = mids[j]
+        end
+        local rows = MySQL.query.await(
+            ('SELECT DISTINCT mid FROM phone_messages WHERE mid IN (%s)'):format(table.concat(holes, ',')),
+            params) or {}
+        for _, r in ipairs(rows) do set[r.mid] = true end
+    end
+    return set
+end
+
+---@param rows any[][] { mid, citizenid, emoji, created_at }
+function store.insertReactions(rows)
+    insertMulti('INSERT IGNORE INTO phone_message_reactions (mid, citizenid, emoji, created_at) VALUES', 4, rows)
+end
+
+---@return table[]
+function store.lbVoiceMemos()
+    return MySQL.query.await(([[
+        SELECT id, phone_number, file_name, file_url, file_length,
+               UNIX_TIMESTAMP(created_at) AS ts
+        FROM %s
+    ]]):format(lbt('voice_memos_recordings'))) or {}
+end
+
+---@param rows any[][] { citizenid, name, url, duration, created_at, src_id }
+function store.insertVoiceMemos(rows)
+    insertMulti('INSERT IGNORE INTO phone_voice_memos (citizenid, name, url, duration, created_at, src_id) VALUES', 6, rows)
+end
+
+---@return { address: string, password: string }[]
+function store.lbMailAccounts()
+    return MySQL.query.await(('SELECT address, password FROM %s'):format(lbt('mail_accounts'))) or {}
+end
+
+---@return table[]
+function store.lbMailMessages()
+    return MySQL.query.await(([[
+        SELECT id, recipient, sender, subject, content, attachments, actions, `read`,
+               UNIX_TIMESTAMP(`timestamp`) AS ts
+        FROM %s ORDER BY `timestamp` ASC
+    ]]):format(lbt('mail_messages'))) or {}
+end
+
+---@return { phone_number: string, app: string, username: string }[]
+function store.lbLoggedIn()
+    return MySQL.query.await(
+        ('SELECT phone_number, app, username FROM %s'):format(lbt('logged_in_accounts'))) or {}
+end
+
+---@param rows any[][] { email, password_hash, display_name, messages, logged_in_citizens }
+function store.insertMailAccounts(rows)
+    insertMulti('INSERT IGNORE INTO phone_mail_accounts (email, password_hash, display_name, messages, logged_in_citizens) VALUES', 5, rows)
+end
+
+---Usernames already present in Photogram, so a migrated account never overwrites a live one.
+---@return table<string, boolean>
+function store.existingPhotogramUsernames()
+    local rows = MySQL.query.await('SELECT username FROM phone_photogram_profiles') or {}
+    local set = {}
+    for _, r in ipairs(rows) do set[r.username] = true end
+    return set
+end
+
+---@return table[]
+function store.lbIgAccounts()
+    return MySQL.query.await(([[
+        SELECT username, display_name, password, bio, profile_image, private, verified,
+               phone_number, UNIX_TIMESTAMP(date_joined) AS ts
+        FROM %s
+    ]]):format(lbt('instagram_accounts'))) or {}
+end
+
+---@return table[]
+function store.lbIgPosts()
+    return MySQL.query.await(([[
+        SELECT id, username, media, caption, location, UNIX_TIMESTAMP(`timestamp`) AS ts FROM %s
+    ]]):format(lbt('instagram_posts'))) or {}
+end
+
+---@return table[]
+function store.lbIgComments()
+    return MySQL.query.await(([[
+        SELECT id, post_id, username, comment, UNIX_TIMESTAMP(`timestamp`) AS ts FROM %s
+    ]]):format(lbt('instagram_comments'))) or {}
+end
+
+---@return table[]
+function store.lbIgLikes()
+    return MySQL.query.await(
+        ('SELECT id, username, is_comment FROM %s'):format(lbt('instagram_likes'))) or {}
+end
+
+---@return table[]
+function store.lbIgFollows()
+    return MySQL.query.await(
+        ('SELECT followed, follower FROM %s'):format(lbt('instagram_follows'))) or {}
+end
+
+---@return table[]
+function store.lbIgRequests()
+    return MySQL.query.await(([[
+        SELECT requester, requestee, UNIX_TIMESTAMP(`timestamp`) AS ts FROM %s
+    ]]):format(lbt('instagram_follow_requests'))) or {}
+end
+
+---@return table[]
+function store.lbIgStories()
+    return MySQL.query.await(([[
+        SELECT id, username, image, UNIX_TIMESTAMP(`timestamp`) AS ts FROM %s
+    ]]):format(lbt('instagram_stories'))) or {}
+end
+
+---The viewer column is `viewer` here, not `username` as on every other instagram table.
+---@return table[]
+function store.lbIgStoryViews()
+    return MySQL.query.await(([[
+        SELECT story_id, viewer AS username, UNIX_TIMESTAMP(`timestamp`) AS ts FROM %s
+    ]]):format(lbt('instagram_stories_views'))) or {}
+end
+
+---@return table[]
+function store.lbIgMessages()
+    return MySQL.query.await(([[
+        SELECT id, sender, recipient, content, attachments, UNIX_TIMESTAMP(`timestamp`) AS ts FROM %s
+    ]]):format(lbt('instagram_messages'))) or {}
+end
+
+---@return table[]
+function store.lbIgNotifications()
+    return MySQL.query.await(([[
+        SELECT id, username, `from` AS from_user, `type`, post_id, UNIX_TIMESTAMP(`timestamp`) AS ts
+        FROM %s
+    ]]):format(lbt('instagram_notifications'))) or {}
+end
+
+---@param rows any[][] { username, display_name, bio, avatar, is_private, verified, created_at }
+function store.insertPgProfiles(rows)
+    insertMulti('INSERT IGNORE INTO phone_photogram_profiles (username, display_name, bio, avatar, is_private, verified, created_at) VALUES', 7, rows)
+end
+
+---@param rows any[][] { id, author, images, caption, location, created_at }
+function store.insertPgPosts(rows)
+    insertMulti('INSERT IGNORE INTO phone_photogram_posts (id, author, images, caption, location, created_at) VALUES', 6, rows)
+end
+
+---@param rows any[][] { id, post_id, author, body, gif_url, created_at }
+function store.insertPgComments(rows)
+    insertMulti('INSERT IGNORE INTO phone_photogram_comments (id, post_id, author, body, gif_url, created_at) VALUES', 6, rows)
+end
+
+---@param rows any[][] { post_id, username, created_at }
+function store.insertPgLikes(rows)
+    insertMulti('INSERT IGNORE INTO phone_photogram_likes (post_id, username, created_at) VALUES', 3, rows)
+end
+
+---@param rows any[][] { comment_id, username, created_at }
+function store.insertPgCommentLikes(rows)
+    insertMulti('INSERT IGNORE INTO phone_photogram_comment_likes (comment_id, username, created_at) VALUES', 3, rows)
+end
+
+---@param rows any[][] { follower, target, status, created_at }
+function store.insertPgFollows(rows)
+    insertMulti('INSERT IGNORE INTO phone_photogram_follows (follower, target, status, created_at) VALUES', 4, rows)
+end
+
+---@param rows any[][] { id, author, image, created_at }
+function store.insertPgStories(rows)
+    insertMulti('INSERT IGNORE INTO phone_photogram_stories (id, author, image, created_at) VALUES', 4, rows)
+end
+
+---@param rows any[][] { story_id, username, created_at }
+function store.insertPgStoryViews(rows)
+    insertMulti('INSERT IGNORE INTO phone_photogram_story_views (story_id, username, created_at) VALUES', 3, rows)
+end
+
+---@param rows any[][] { id, from_user, to_user, body, kind, meta, reactions, read_flag, created_at }
+function store.insertPgDms(rows)
+    insertMulti('INSERT IGNORE INTO phone_photogram_dms (id, from_user, to_user, body, kind, meta, reactions, read_flag, created_at) VALUES', 9, rows)
+end
+
+---@param rows any[][] { id, recipient, kind, actor, post_id, seen, created_at }
+function store.insertPgNotifications(rows)
+    insertMulti('INSERT IGNORE INTO phone_photogram_notifications (id, recipient, kind, actor, post_id, seen, created_at) VALUES', 7, rows)
+end
+
+---Accounts-engine rows for migrated app accounts.
+---@param rows any[][] { app, username, display_name, password_hash }
+function store.insertPgAccounts(rows)
+    insertMulti('INSERT IGNORE INTO phone_app_accounts (app, username, display_name, password_hash) VALUES', 4, rows)
+end
+
+---@type string Alphabet for generated passwords; no look-alike characters, so a player can read one
+---off the Passwords app and type it without ambiguity.
+local PW_CHARS = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+
+---A fresh readable password.
+---@return string
+local function newPassword()
+    local out = {}
+    for i = 1, 12 do
+        local n = math.random(1, #PW_CHARS)
+        out[i] = PW_CHARS:sub(n, n)
+    end
+    return table.concat(out)
+end
+
+---Gives migrated accounts a login their owner can actually use.
+---
+---lb-phone hashes passwords with bcrypt, which sd-phone cannot verify and cannot reverse, so a
+---migrated account is unreachable the moment its owner signs out. Each account with a resolved
+---owner therefore gets a freshly generated password: stored as the engine hash on the account, and
+---written to that owner's vault so it shows up in the Passwords app.
+---
+---Accounts with no resolved owner keep whatever hash they came with. Nobody can sign into them, but
+---there is also no one to hand a password to.
+---@param entries { app: string, username: string, cid: string, email: string|nil }[]
+---@return integer granted
+function store.grantMigratedLogins(entries)
+    if #entries == 0 then return 0 end
+    local accounts = require 'server.accounts.store'
+
+    -- Staged and joined rather than two queries per account: row-by-row took 47s on a full dump.
+    local tmp = '_sdphone_migrate_logins'
+    MySQL.query.await(('DROP TABLE IF EXISTS `%s`'):format(tmp))
+    MySQL.query.await(([[
+        CREATE TABLE `%s` (
+            app VARCHAR(24) NOT NULL, username VARCHAR(64) NOT NULL, citizenid VARCHAR(64) NOT NULL,
+            plain VARCHAR(64) NOT NULL, hash VARCHAR(64) NOT NULL, email VARCHAR(120) NULL,
+            PRIMARY KEY (app, username, citizenid)
+        ) ENGINE=MEMORY DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ]]):format(tmp))
+
+    for i = 1, #entries, 300 do
+        local last = math.min(i + 299, #entries)
+        local groups, params = {}, {}
+        for j = i, last do
+            local e = entries[j]
+            local plain = newPassword()
+            groups[#groups + 1] = '(?,?,?,?,?,?)'
+            params[#params + 1] = e.app
+            params[#params + 1] = e.username
+            params[#params + 1] = e.cid
+            params[#params + 1] = plain
+            params[#params + 1] = accounts.hashPassword(plain)
+            params[#params + 1] = e.email
+        end
+        MySQL.query.await(([[
+            INSERT IGNORE INTO `%s` (app, username, citizenid, plain, hash, email) VALUES %s
+        ]]):format(tmp, table.concat(groups, ',')), params)
+    end
+
+    -- Only accounts that exist get a password, and only those get a vault entry, so the vault never
+    -- lists a login that cannot be used.
+    local granted = tonumber(MySQL.update.await(([[
+        UPDATE phone_app_accounts a JOIN `%s` t ON t.app = a.app AND t.username = a.username
+        SET a.password_hash = t.hash
+    ]]):format(tmp))) or 0
+
+    MySQL.query.await(([[
+        INSERT INTO phone_passwords (citizenid, app, username, password, email)
+        SELECT t.citizenid, t.app, t.username, t.plain, t.email FROM `%s` t
+        JOIN phone_app_accounts a ON a.app = t.app AND a.username = t.username
+        ON DUPLICATE KEY UPDATE password = VALUES(password), email = VALUES(email)
+    ]]):format(tmp))
+
+    MySQL.query.await(('DROP TABLE IF EXISTS `%s`'):format(tmp))
+    return granted
+end
+
+---Sessions for migrated app accounts. `linked` counts rows whose account exists and now has a
+---session; `inserted` counts only the new ones. They differ on a re-run, where every session is
+---already present and INSERT IGNORE affects no rows: that is success, not failure, so callers must
+---judge on `linked`.
+---@param rows any[][] { app, citizenid, username }
+---@return integer linked, integer inserted
+function store.insertPgSessions(rows)
+    if #rows == 0 then return 0, 0 end
+
+    -- Set-based, not row-by-row: the previous loop ran two queries per session and took 23s on a
+    -- full dump. Staging the pairs and joining once turns that into a handful of statements.
+    local tmp = '_sdphone_migrate_sessions'
+    MySQL.query.await(('DROP TABLE IF EXISTS `%s`'):format(tmp))
+    MySQL.query.await(([[
+        CREATE TABLE `%s` (
+            app VARCHAR(24) NOT NULL, citizenid VARCHAR(64) NOT NULL, username VARCHAR(64) NOT NULL,
+            PRIMARY KEY (app, citizenid, username)
+        ) ENGINE=MEMORY DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ]]):format(tmp))
+
+    for i = 1, #rows, 300 do
+        local last = math.min(i + 299, #rows)
+        local groups, params = {}, {}
+        for j = i, last do
+            groups[#groups + 1] = '(?,?,?)'
+            params[#params + 1] = rows[j][1]
+            params[#params + 1] = rows[j][2]
+            params[#params + 1] = rows[j][3]
+        end
+        MySQL.query.await(
+            ('INSERT IGNORE INTO `%s` (app, citizenid, username) VALUES %s'):format(tmp, table.concat(groups, ',')),
+            params)
+    end
+
+    local linked = tonumber(MySQL.scalar.await(([[
+        SELECT COUNT(*) FROM `%s` t
+        JOIN phone_app_accounts a ON a.app = t.app AND a.username = t.username
+    ]]):format(tmp))) or 0
+
+    local inserted = tonumber(MySQL.update.await(([[
+        INSERT IGNORE INTO phone_app_sessions (app, citizenid, account_id)
+        SELECT t.app, t.citizenid, a.id FROM `%s` t
+        JOIN phone_app_accounts a ON a.app = t.app AND a.username = t.username
+    ]]):format(tmp))) or 0
+
+    MySQL.query.await(('DROP TABLE IF EXISTS `%s`'):format(tmp))
+    return linked, inserted
+end
+
+---@type table<string, string> Names sd-phone and lb-phone both use, mapped to a column only the
+---sd-phone shape has. Before the schema bootstrap has run, the bare name still holds lb-phone's
+---table, and dropping it would destroy the importer's source. Mirrors util.rescueLegacyTable.
+local SHARED_NAMES = {
+    phone_photos            = 'citizenid',
+    phone_notes             = 'citizenid',
+    phone_photo_albums      = 'citizenid',
+    phone_messages          = 'citizenid',
+    phone_documents         = 'citizenid',
+    phone_document_folders  = 'citizenid',
+    phone_mail_accounts     = 'password_hash',
+    phone_message_reactions = 'mid',
+}
+
+---Drops the tables sd-phone owns, leaving lb-phone's alone so a re-import still has a source.
+---
+---A name both systems use is only dropped once it carries sd-phone's marker column: on a database
+---that has not booted sd-phone yet, that name still belongs to lb-phone.
+---@param owned string[] table names from server.admin.tables
+---@return integer dropped, integer skipped
+function store.dropOwnedTables(owned)
+    local dropped, skipped = 0, 0
+    MySQL.query.await('SET FOREIGN_KEY_CHECKS = 0')
+    for _, tbl in ipairs(owned) do
+        if store.tableExists(tbl) then
+            local marker = SHARED_NAMES[tbl]
+            if marker and not store.tableHasColumn(tbl, marker) then
+                skipped = skipped + 1
+            elseif pcall(MySQL.query.await, ('DROP TABLE IF EXISTS `%s`'):format(tbl)) then
+                dropped = dropped + 1
+            else
+                skipped = skipped + 1
+            end
+        end
+    end
+    MySQL.query.await('SET FOREIGN_KEY_CHECKS = 1')
+    return dropped, skipped
+end
+
+---Publishes the resolved numbers for the readers to join against.
+---
+---Without this each porter selected an entire lb table and dropped 99% of it in Lua: 1.3M call rows
+---to keep 11k, over a bridge that serialises every row. Filtering in SQL keeps the reads
+---proportional to what is actually imported, and lets MySQL use its indexes.
+---@param numbers string[] bare-digit phone numbers
+function store.publishOwnedNumbers(numbers)
+    MySQL.query.await(('DROP TABLE IF EXISTS `%s`'):format(OWNED))
+    MySQL.query.await(([[
+        CREATE TABLE `%s` (
+            number VARCHAR(15) NOT NULL,
+            PRIMARY KEY (number)
+        ) ENGINE=MEMORY DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ]]):format(OWNED))
+    if #numbers == 0 then return end
+
+    for i = 1, #numbers, 500 do
+        local last = math.min(i + 499, #numbers)
+        local holes, params = {}, {}
+        for j = i, last do
+            holes[#holes + 1] = '(?)'
+            params[#params + 1] = numbers[j]
+        end
+        MySQL.query.await(
+            ('INSERT IGNORE INTO `%s` (number) VALUES %s'):format(OWNED, table.concat(holes, ',')),
+            params)
+    end
+end
+
+---The owned-numbers table name, for readers that join against it.
+---@return string
+function store.ownedTable() return OWNED end
+
+---Drops the owned-numbers table once the import is done.
+function store.clearOwnedNumbers()
+    MySQL.query.await(('DROP TABLE IF EXISTS `%s`'):format(OWNED))
+end
+
+---Rows waiting in a set of lb-phone source tables. Absent tables count zero, so a partial lb
+---database is not an error.
+---@param names string[] lb table suffixes, e.g. { 'phone_contacts' }
+---@return integer rows
+function store.lbRowCount(names)
+    local total = 0
+    for _, name in ipairs(names) do
+        local tbl = store.lbSource(name)
+        if tbl then
+            total = total + (tonumber(MySQL.scalar.await(('SELECT COUNT(*) FROM `%s`'):format(tbl))) or 0)
+        end
+    end
+    return total
+end
+
+---Decodes a JSON column value; accepts strings or already-decoded tables and returns {} for
+---anything absent or invalid.
+---@param value any
+---@return table
+function store.decodeJson(value)
+    if value == nil then return {} end
+    if type(value) == 'table' then return value end
+    if type(value) == 'string' then
+        local ok, decoded = pcall(json.decode, value)
+        if ok and type(decoded) == 'table' then return decoded end
+    end
+    return {}
+end
+
+---Encodes a table for a JSON column; empty or absent tables map to nil.
+---@param tbl table|nil
+---@return string|nil
+function store.encodeJson(tbl)
+    if not tbl or next(tbl) == nil then return nil end
+    return json.encode(tbl)
 end
 
 return store

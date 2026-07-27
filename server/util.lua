@@ -124,6 +124,26 @@ function util.ensureIndex(tableName, indexName, columnsDDL)
     end
 end
 
+---Adds a UNIQUE index if absent. Distinct from ensureIndex because a unique index is a constraint,
+---not just a lookup aid: it is what makes INSERT IGNORE actually ignore. Existing duplicate rows
+---make the ALTER fail, so it is logged and skipped rather than fatal.
+---@param tableName string
+---@param indexName string
+---@param columnsDDL string column list incl. parens, e.g. "(src_id)"
+function util.ensureUniqueIndex(tableName, indexName, columnsDDL)
+    local present = MySQL.scalar.await([[
+        SELECT COUNT(*) FROM information_schema.statistics
+        WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?
+    ]], { tableName, indexName })
+    if (tonumber(present) or 0) > 0 then return end
+
+    local ok, err = pcall(MySQL.query.await,
+        ('ALTER TABLE `%s` ADD UNIQUE INDEX %s %s'):format(tableName, indexName, columnsDDL))
+    if not ok then
+        print(('^3[sd-phone]^0 could not add unique index %s on %s: %s'):format(indexName, tableName, err))
+    end
+end
+
 ---True when a table already exists. Call BEFORE the CREATE TABLE so a module can tell a fresh
 ---install from an upgrade: on a fresh install the CREATE already declares every column, so the
 ---backfills below can be skipped entirely rather than probed for.

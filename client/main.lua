@@ -792,6 +792,12 @@ end
 RegisterNetEvent('QBCore:Client:OnPlayerLoaded', pushCharacterLoaded)
 RegisterNetEvent('esx:playerLoaded', pushCharacterLoaded)
 
+---Server-side settings appeared after the UI had already hydrated, so pull them again. The
+---lb-phone import writes phone_settings partway through boot, long after the resource-start
+---hydrate below has run - without this the player's wallpaper, theme and tones stay stock until
+---the resource is restarted a second time.
+RegisterNetEvent('sd-phone:client:rehydrate', pushCharacterLoaded)
+
 ---Resource restart with the character already in: the framework load events above won't
 ---re-fire, but the freshly reloaded NUI still needs the character signal and a SIM snapshot
 ---(closed-shell frame colour before the first open). On a fresh join this fires before any

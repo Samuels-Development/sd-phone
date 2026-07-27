@@ -21,7 +21,7 @@ end
 ---@param ctx table migration context (numberToCid, dryRun)
 ---@return { migrated: number, skipped: number }
 function M.run(ctx)
-    if not store.tableExists(store.lbTable('phone_contacts')) then return { migrated = 0, skipped = 0 } end
+    if not store.lbSource('phone_contacts') then return { migrated = 0, skipped = 0 } end
 
     local seen = store.existingContactKeys()
     local rows, migrated, skipped = {}, 0, 0

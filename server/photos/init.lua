@@ -25,8 +25,8 @@ CreateThread(function()
 end)
 
 -- Authoritative gallery-read callback: thin delegate into server.photos.actions.
-lib.callback.register('sd-phone:server:photos:list', function(src)
-    return actions.list(src)
+lib.callback.register('sd-phone:server:photos:list', function(src, payload)
+    return actions.list(src, payload)
 end)
 
 -- Hard payload ceilings for the capture upload.

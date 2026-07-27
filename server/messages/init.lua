@@ -26,6 +26,7 @@ end)
 
 -- Authoritative NUI callbacks: thin delegates into server.messages.actions.
 lib.callback.register('sd-phone:server:messages:list', function(src) return actions.list(src) end)
+lib.callback.register('sd-phone:server:messages:thread', function(src, payload) return actions.thread(src, payload) end)
 lib.callback.register('sd-phone:server:messages:send', function(src, payload) return actions.send(src, payload) end)
 lib.callback.register('sd-phone:server:messages:uploadVoice', function(src, payload) return actions.uploadVoice(src, payload) end)
 lib.callback.register('sd-phone:server:messages:createGroup', function(src, payload) return actions.createGroup(src, payload) end)

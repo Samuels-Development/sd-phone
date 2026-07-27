@@ -18,7 +18,8 @@ export function WriteReview({ business, onCancel, onSubmit }: {
     const [photos,  setPhotos]  = useState<Photo[]>([]);
 
     useEffect(() => {
-        if (picking && photos.length === 0) void apiListPhotos().then(setPhotos);
+        // First page only: this is an attachment picker, not the gallery.
+        if (picking && photos.length === 0) void apiListPhotos().then(page => setPhotos(page.photos));
     }, [picking, photos.length]);
 
     const canSubmit = rating > 0 && body.trim().length > 0;

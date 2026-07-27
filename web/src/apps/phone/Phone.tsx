@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ContactsTab } from './contacts/ContactsTab';
 import { RecentsTab } from './recents/RecentsTab';
@@ -21,6 +21,20 @@ interface CallTarget { number: string; name?: string }
 
 export function Phone({ onClose: _onClose }: { onClose: () => void }) {
     const [tab,        setTab]        = useSessionState<PhoneTab>('phone:tab', 'contacts');
+
+    // Replays the pane slide on a real tab change only. The element never unmounts now, and a
+    // CSS animation will not restart on its own, so it is cleared and reassigned around a forced
+    // reflow. offsetHeight is what flushes it; rAF is starved in CEF so double-rAF is out.
+    const paneRef = useRef<HTMLDivElement>(null);
+    const firstPane = useRef(true);
+    useEffect(() => {
+        const el = paneRef.current;
+        if (!el) return;
+        if (firstPane.current) { firstPane.current = false; return; }
+        el.style.animation = 'none';
+        void el.offsetHeight;
+        el.style.animation = '';
+    }, [tab]);
     const { contacts, recents: recentsRaw, myNumber, myName, card } =
         useContacts('contacts', 'recents', 'myNumber', 'myName', 'card');
     const [callTarget, setCallTarget] = useState<CallTarget | null>(null);
@@ -78,7 +92,12 @@ export function Phone({ onClose: _onClose }: { onClose: () => void }) {
             <div className="h-[61px] shrink-0" aria-hidden />
 
             <div className="flex flex-1 flex-col overflow-hidden">
-                <div key={tab} className="flex min-h-0 flex-1 flex-col animate-swipe-in-left">
+                {/* No key={tab} and no permanent animation class. key= remounted the whole
+                    500-row ContactsTab on every tab switch, and a class-borne animation replays
+                    whenever the deck re-parents the app, so a 0.45s opacity+translate slide was
+                    starting on every open and outliving the shell's 0.38s scale. The slide is now
+                    triggered only on a real tab change, in the effect above. */}
+                <div ref={paneRef} className="flex min-h-0 flex-1 flex-col animate-swipe-in-left">
                     {tab === 'contacts' ? (
                         <ContactsTab
                             contacts={contacts}

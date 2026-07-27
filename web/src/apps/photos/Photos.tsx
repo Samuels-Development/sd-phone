@@ -1,15 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Camera as CameraIcon, FolderPlus, Heart, Trash2 } from 'lucide-react';
 
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useSessionState } from '@/hooks/useSessionState';
+import { useDeckActive } from '@/shell/deckActive';
 import { t } from '@/i18n';
 import { PromptDialog } from '@/ui/PromptDialog';
 import {
     apiAddPhotosToAlbum, apiCreateAlbum, apiDeleteAlbum, apiDeletePhoto,
     apiListAlbumPhotos, apiListAlbums, apiListPhotos, apiListSharedAlbums,
     apiRemovePhotoFromAlbum, apiSavePhotoFromUrl, apiSetFavorite, getCanImportPhotos, mapPhoto,
-    type Album, type AlbumRef, type Photo,
+    FIRST_PAGE_SIZE, getCachedFirstPhotoPage,
+    type Album, type AlbumRef, type Photo, type PhotoCounts,
 } from '@/core/photosApi';
 import { AlbumDetail } from './AlbumDetail';
 import { AlbumPickerSheet } from './AlbumPickerSheet';
@@ -24,10 +26,21 @@ interface CreateState { addIds: string[] }
 
 export function Photos({ onClose }: { onClose: () => void }) {
     const [tab,     setTab]     = useSessionState<PhotosTab>('photos:tab', 'gallery');
-    const [photos,  setPhotos]  = useState<Photo[]>([]);
+    // Seeded from the last first page so a reopen has tiles on frame one and the open animation
+    // has something to animate. A fresh fetch still runs underneath and replaces it.
+    const cached = getCachedFirstPhotoPage();
+    const [photos,  setPhotos]  = useState<Photo[]>(cached?.photos ?? []);
     const [albums,  setAlbums]  = useState<Album[]>([]);
     const [sharedAlbums, setSharedAlbums] = useState<Album[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(!cached);
+
+    // The gallery is paged: `photos` holds what has been fetched so far, `counts` holds the
+    // server-side totals the album tiles need (a page cannot report them).
+    const [nextCursor,  setNextCursor]  = useState<string | null>(cached?.nextCursor ?? null);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [counts,      setCounts]      = useState<PhotoCounts>(
+        cached?.counts ?? { total: 0, favorites: 0, videos: 0 });
+    const fetchingMore = useRef(false);
 
     const [gallerySelect, setGallerySelect] = useState(false);
     const [gallerySelected, setGallerySelected] = useState<Set<string>>(new Set());
@@ -44,24 +57,73 @@ export function Photos({ onClose }: { onClose: () => void }) {
     const [photoPicker, setPhotoPicker] = useState(false);
     const [createState, setCreateState] = useState<CreateState | null>(null);
 
+    // The gallery waits only on its own page. The two album reads used to be awaited together
+    // with it, so the default tab sat on "Loading…" for three round trips instead of one.
     useEffect(() => {
         let cancelled = false;
-        (async () => {
-            const [ps, as, shared] = await Promise.all([apiListPhotos(), apiListAlbums(), apiListSharedAlbums()]);
+        void apiListPhotos(null, undefined, FIRST_PAGE_SIZE).then(page => {
             if (cancelled) return;
-            setPhotos(ps);
-            setAlbums(as);
-            setSharedAlbums(shared);
+            setPhotos(page.photos);
+            setNextCursor(page.nextCursor);
+            if (page.counts) setCounts(page.counts);
             setCanImport(getCanImportPhotos());
             setLoading(false);
-        })();
+        });
+        void apiListAlbums().then(as => { if (!cancelled) setAlbums(as); });
+        void apiListSharedAlbums().then(s => { if (!cancelled) setSharedAlbums(s); });
         return () => { cancelled = true; };
     }, []);
 
+    // Tile media is held back for the length of the shell's open animation, on mount and on every
+    // subsequent foreground. The grid itself still renders, so the app visibly animates in; only
+    // the full-size decodes wait. Without this the deck was animating a layer holding tens of MB
+    // of decoded bitmap, which is why the FIRST open was smooth (nothing decoded yet) and every
+    // one after it was choppy.
+    const deckActive = useDeckActive();
+    const [settling, setSettling] = useState(true);
     useEffect(() => {
-        if (openAlbum?.kind !== 'custom') return;
+        if (!deckActive) return;
+        setSettling(true);
+        const id = window.setTimeout(() => setSettling(false), 420);
+        return () => window.clearTimeout(id);
+    }, [deckActive]);
+
+    // Restarts the pane's swipe animation on a tab change. The panes deliberately stay mounted
+    // (a key= remount rebuilt every tile), and a CSS animation on an already-mounted element
+    // will not replay on its own, so it is cleared and reassigned around a forced reflow. Reading
+    // offsetHeight is what flushes it; rAF is starved in CEF, so the double-rAF trick is out.
+    const paneRefs = useRef<Record<PhotosTab, HTMLDivElement | null>>({ gallery: null, albums: null });
+    useEffect(() => {
+        const el = paneRefs.current[tab];
+        if (!el) return;
+        el.style.animation = 'none';
+        void el.offsetHeight;
+        el.style.animation = '';
+    }, [tab]);
+
+    // Appends the next page. Guarded on a ref rather than `loadingMore` so a burst of scroll
+    // events cannot fire two requests for the same cursor before the first setState lands.
+    const loadMore = useCallback(async () => {
+        if (fetchingMore.current || !nextCursor) return;
+        fetchingMore.current = true;
+        setLoadingMore(true);
+        try {
+            const page = await apiListPhotos(nextCursor);
+            setPhotos(prev => {
+                const seen = new Set(prev.map(p => p.id));
+                return [...prev, ...page.photos.filter(p => !seen.has(p.id))];
+            });
+            setNextCursor(page.nextCursor);
+        } finally {
+            fetchingMore.current = false;
+            setLoadingMore(false);
+        }
+    }, [nextCursor]);
+
+    useEffect(() => {
+        if (!openAlbum) return;
         let cancelled = false;
-        void apiListAlbumPhotos(openAlbum.id).then(ps => { if (!cancelled) setCustomAlbumPhotos(ps); });
+        void loadAlbumPhotos(openAlbum).then(ps => { if (!cancelled) setCustomAlbumPhotos(ps); });
         return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -73,25 +135,30 @@ export function Photos({ onClose }: { onClose: () => void }) {
         setPhotos(prev => (prev.some(x => x.id === p.id) ? prev : [p, ...prev]));
     }, []));
 
-    const favourites = useMemo(() => photos.filter(p => p.favorite), [photos]);
-
     const refreshAlbums = useCallback(async () => {
         setAlbums(await apiListAlbums());
     }, []);
 
+    // Favourites and Videos are resolved server-side now. Deriving them from `photos` would only
+    // ever see the pages fetched so far, so a favourite further down the library went missing.
+    async function loadAlbumPhotos(ref: AlbumRef): Promise<Photo[]> {
+        if (ref.kind === 'custom')     return apiListAlbumPhotos(ref.id);
+        if (ref.kind === 'favourites') return (await apiListPhotos(null, 'favorites')).photos;
+        if (ref.kind === 'mediaType' && ref.mediaType === 'videos') {
+            return (await apiListPhotos(null, 'videos')).photos;
+        }
+        return [];
+    }
+
     function albumPhotosFor(ref: AlbumRef): Photo[] {
-        if (ref.kind === 'recents')    return photos;
-        if (ref.kind === 'favourites') return favourites;
-        if (ref.kind === 'mediaType')  return ref.mediaType === 'videos' ? photos.filter(p => p.video) : [];
+        if (ref.kind === 'recents') return photos;
         return customAlbumPhotos;
     }
 
     async function openAlbumRef(ref: AlbumRef) {
         setOpenAlbum(ref);
         setCustomAlbumPhotos([]);
-        if (ref.kind === 'custom') {
-            setCustomAlbumPhotos(await apiListAlbumPhotos(ref.id));
-        }
+        setCustomAlbumPhotos(await loadAlbumPhotos(ref));
     }
 
     async function toggleFavorite(photo: Photo) {
@@ -199,23 +266,43 @@ export function Photos({ onClose }: { onClose: () => void }) {
                         {t('photos.loading','Loading…')}
                     </div>
                 ) : (
-                    <div key={tab} className="flex h-full min-h-0 flex-col animate-swipe-in-left">
-                        {tab === 'gallery' && isEmpty ? (
-                            <EmptyState />
-                        ) : tab === 'gallery' ? (
-                            <GalleryTab
-                                photos={photos}
-                                selectionMode={gallerySelect}
-                                selectedIds={gallerySelected}
-                                onEnterSelect={() => setGallerySelect(true)}
-                                onCancelSelect={exitGallerySelect}
-                                onPhotoTap={openViewerFromGallery}
-                                onToggleSelect={toggleGallerySelect}
-                                onImport={canImport ? () => setImportOpen(true) : undefined}
-                            />
-                        ) : (
+                    // NO key={tab} here. The usual house pattern remounts the pane to replay the
+                    // swipe animation, which is free for a list of rows but not for a grid of
+                    // hundreds of image tiles: every tab switch tore the whole gallery down and
+                    // rebuilt it. Both panes stay mounted and the inactive one is just hidden,
+                    // so switching is a visibility toggle rather than a full remount.
+                    <div className="flex h-full min-h-0 flex-col">
+                        <div
+                            ref={el => { paneRefs.current.gallery = el; }}
+                            className={`flex h-full min-h-0 flex-col ${tab === 'gallery' ? 'animate-swipe-in-left' : 'hidden'}`}
+                        >
+                            {isEmpty ? (
+                                <EmptyState />
+                            ) : (
+                                <GalleryTab
+                                    photos={photos}
+                                    selectionMode={gallerySelect}
+                                    selectedIds={gallerySelected}
+                                    onEnterSelect={() => setGallerySelect(true)}
+                                    onCancelSelect={exitGallerySelect}
+                                    onPhotoTap={openViewerFromGallery}
+                                    onToggleSelect={toggleGallerySelect}
+                                    onImport={canImport ? () => setImportOpen(true) : undefined}
+                                    hasMore={nextCursor !== null}
+                                    loadingMore={loadingMore}
+                                    onLoadMore={() => void loadMore()}
+                                    deferMedia={settling}
+                                    paused={tab !== 'gallery'}
+                                />
+                            )}
+                        </div>
+                        <div
+                            ref={el => { paneRefs.current.albums = el; }}
+                            className={`flex h-full min-h-0 flex-col ${tab === 'albums' ? 'animate-swipe-in-left' : 'hidden'}`}
+                        >
                             <AlbumsTab
                                 photos={photos}
+                                counts={counts}
                                 albums={albums}
                                 sharedAlbums={sharedAlbums}
                                 editMode={albumsEdit}
@@ -224,7 +311,7 @@ export function Photos({ onClose }: { onClose: () => void }) {
                                 onOpenAlbum={openAlbumRef}
                                 onDeleteAlbum={async (a) => { if (await apiDeleteAlbum(a.id)) setAlbums(prev => prev.filter(x => x.id !== a.id)); }}
                             />
-                        )}
+                        </div>
                     </div>
                 )}
             </div>

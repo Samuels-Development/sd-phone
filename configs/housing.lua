@@ -12,6 +12,7 @@ return {
     -- Checked in priority order when System = 'auto'; first `started` wins.
     Resources = {
         'qs-housing', 'ps-housing', 'vms_housing', 'rtx_housing',
-        'origen_housing', 'bcs_housing', 'loaf_housing', 'tk_housing', 'rx_housing', 'LNS_Housing',
+        'origen_housing', 'bcs_housing', 'loaf_housing', 'tk_housing', 'RxHousing', 'LNS_Housing',
+        'nolag_properties',
     },
 }

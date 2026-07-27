@@ -33,12 +33,25 @@ const LAYOUT_KEY = 'sd-phone:home-layout';
 interface FolderDef { key: string; name: string; appIds: string[] }
 export interface SavedLayout { slots: (string | null)[]; folders: FolderDef[] }
 
+/** Every slot must be an app id or an empty slot; anything else cannot be rendered. */
+function isSlotArray(v: unknown): v is (string | null)[] {
+    return Array.isArray(v) && v.every(s => s === null || typeof s === 'string');
+}
+
+/**
+ * A stored layout, or null when it cannot be trusted.
+ *
+ * Validates rather than casts. A layout reaching render with a non-string slot throws inside
+ * `icon.startsWith(...)`, which unmounts the phone mid-render and leaves NUI focus held, stranding
+ * the player's mouse. lb-phone's layout is an array of PAGES, so it satisfies `Array.isArray` while
+ * being the wrong shape entirely.
+ */
 export function parseLayout(raw: string | null | undefined): SavedLayout | null {
     if (!raw) return null;
     try {
         const v = JSON.parse(raw) as unknown;
-        if (Array.isArray(v)) return { slots: v as (string | null)[], folders: [] };
-        if (v && typeof v === 'object' && Array.isArray((v as SavedLayout).slots)) {
+        if (isSlotArray(v)) return { slots: v, folders: [] };
+        if (v && typeof v === 'object' && isSlotArray((v as SavedLayout).slots)) {
             const o = v as SavedLayout;
             return { slots: o.slots, folders: Array.isArray(o.folders) ? o.folders : [] };
         }

@@ -1,3 +1,6 @@
+---@type table Shared server helpers (server.util): schema back-fill helpers.
+local util = require 'server.util'
+
 ---@type table Store module; the table returned at end of file.
 local store = {}
 
@@ -16,6 +19,11 @@ function store.ensureSchema()
             KEY `created_at` (`created_at`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ]])
+
+    -- Auto-increment primary key, so INSERT IGNORE cannot detect a repeated lb-phone import.
+    -- `src_id` carries the source row's identity and is unique; in-game recordings leave it NULL.
+    util.ensureColumns('phone_voice_memos', { src_id = 'src_id VARCHAR(32) NULL' })
+    util.ensureUniqueIndex('phone_voice_memos', 'uq_voice_memos_src', '(src_id)')
 end
 
 ---Inserts one memo row (name and duration already sanitized by the actions layer).

@@ -4,7 +4,7 @@
 
 **An iOS-themed smartphone for FiveM.** 45+ server-backed apps, real app accounts, a live game-view camera and online multiplayer games. Ships its own custom phone props: eight phone items in eight colours, each tinting both the on-screen frame and the custom prop model held in hand. A unique phone system as well as sim cards can be enabled!
 
-**A drop-in lb-phone replacement.** Scripts and custom apps written against lb-phone's exports and events keep running unmodified, and a first-boot migration carries your players across rather than resetting them: phone numbers and lock passcodes, contacts, call history, blocked numbers, SMS threads including groups, photos and albums, and notes.
+**A drop-in lb-phone replacement.** Scripts and custom apps written against lb-phone's exports and events keep running unmodified, and a first-boot migration carries your players across rather than resetting them: phone numbers and lock passcodes, contacts, blocked numbers, call history, SMS threads including groups and reactions, photos and albums, notes, phone settings, mail accounts with their inboxes, wallet transaction history, voice memos, Photogram and Birdy accounts with their posts, stories, DMs and followers, and the app logins themselves, so players open the phone already signed in.
 
 If sd-phone is useful to you, please ⭐ the repo. Issues and pull requests are always welcome.
 
@@ -26,6 +26,12 @@ If sd-phone is useful to you, please ⭐ the repo. Issues and pull requests are 
 
 ---
 
+> [!IMPORTANT]
+> **Coming from lb-phone? Give the first boot time to finish.**
+> sd-phone imports your lb-phone data on its first-ever startup. On a large database that is not instant: a production import of **3.8 million rows took roughly 8 minutes**, and the server stays busy until it completes. The console prints the row count, a time estimate and per-domain progress, so you can tell it is working rather than hung. Let it run to the end.
+>
+> This only happens once. Every later restart skips the domains that are already imported, so normal startups are unaffected.
+
 ## Preview
 
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/c1300d66-6530-47d4-ad02-676646b96fc7" />
@@ -35,12 +41,6 @@ If sd-phone is useful to you, please ⭐ the repo. Issues and pull requests are 
 <img width="1920" height="1080" alt="THIS" src="https://github.com/user-attachments/assets/7c9ee63d-a5d6-42ee-8664-a62e06838741" />
 
 <img width="1920" height="1080" alt="mb3" src="https://github.com/user-attachments/assets/896f0a95-2077-405f-b494-17ffbc13684e" />
-
-## Overview
-
-sd-phone is a complete smartphone experience: lockscreen with passcode and Face Unlock, customizable homescreen with a real app switcher, notification banners with persistent server-authoritative unread badges, and a full catalog of apps backed by their own server modules. The UI is a React app rendered inside a real iPhone bezel; the phone is held as an in-hand prop, tints to the colour of the phone item you used, and keeps working while you walk.
-
-Everything player-facing is translatable, apps resume where you left them, and the phone auto-detects your framework, inventory, banking, housing, garage, and voice resources with zero config flags.
 
 ## Powered by Fivemanage
 
