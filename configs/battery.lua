@@ -9,13 +9,13 @@
 -- with exports['sd-phone']:chargePhone(source, amount) and :toggleCharging(source, true).
 return {
     -- Master switch. Off = the phone has no battery at all.
-    Enabled = false,
+    Enabled = true,
 
     -- Level a phone that has never been seen before starts at.
     StartLevel = 100,
 
-    DrainSeconds       = { 50, 60 },   -- phone open
-    DrainClosedSeconds = { 80, 120 },  -- phone closed
+    DrainSeconds       = { 30, 60 },   -- phone open
+    DrainClosedSeconds = { 30, 60 },  -- phone closed
     ChargeSeconds      = { 5, 10 },
 
     -- Drain at all while the phone is closed?
@@ -43,6 +43,13 @@ return {
     -- 'dead'      = the phone will not open, calls and notifications are refused
     -- 'noservice' = the phone opens with no service (the No SIM path); offline apps still work
     DeadBehaviour = 'dead',
+
+    -- Boot sequence played when a flat phone charges back above 0% while you are looking at it,
+    -- so it powers on rather than snapping straight to the lockscreen.
+    BootAnimation = {
+        Enabled = true,
+        Seconds = 4,
+    },
 
     -- Let a flat phone still dial the numbers below. Only reachable under DeadBehaviour
     -- 'noservice': under 'dead' the phone will not open at all, so there is no dialler to use.

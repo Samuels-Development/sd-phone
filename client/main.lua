@@ -322,12 +322,6 @@ local function OpenPhone()
         notify.show({ description = 'You can\'t use your phone while swimming.', type = 'error' })
         return
     end
-    -- 'noservice' still opens: the No SIM path refuses the networked apps instead.
-    if battery.isDead() and config.Battery.DeadBehaviour == 'dead' then
-        notify.show({ description = 'Your phone is out of battery.', type = 'error' })
-        return
-    end
-
     phoneState.open   = true
     phoneState.locked = true
     battery.setOpen(true)

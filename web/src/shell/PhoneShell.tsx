@@ -16,6 +16,7 @@ import { t } from '@/i18n';
 import { useBatteryStore } from '@/stores/batteryStore';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { DeadScreen } from './DeadScreen';
+import { BootScreen } from './BootScreen';
 
 
 const B  = 9;
@@ -291,8 +292,9 @@ function MusicIsland({ track, playing, expanded, closing, onToggle, onPlayPause,
 
 export function PhoneShell({ children, cameraActive = false, entering = false, leaving = false, landscape = false, peek, onClose, radioIsland, alarmIsland, frameColor = DEFAULT_FRAME_COLOR }: PhoneShellProps) {
     const rail = frameStops(frameColor);
-    const batteryDead = useBatteryStore(s => s.enabled && s.level <= 0);
+    const batteryDead = useBatteryStore(s => s.enabled && s.level <= 0 && s.deadBehaviour === 'dead');
     const batteryWarn = useBatteryStore(s => s.warnAt);
+    const bootSeconds = useBatteryStore(s => s.bootSeconds);
     const { brightness, phoneScale, phoneAlign, ringtoneVol, setRingtoneVol } = useTheme('brightness', 'phoneScale', 'phoneAlign', 'ringtoneVol', 'setRingtoneVol');
     const { current: nowPlaying, playing: musicPlaying, volume: musicVolume, setVolume: setMusicVolume, requestOpen: openMusic, toggle: toggleMusic, next: nextMusic, prev: prevMusic } = useMusic();
 
@@ -426,6 +428,8 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                     {children}
 
                     {batteryDead && <DeadScreen />}
+
+                    {bootSeconds !== null && <BootScreen seconds={bootSeconds} />}
 
                     {batteryWarn !== null && !batteryDead && (
                         <AlertDialog

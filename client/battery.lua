@@ -17,15 +17,17 @@ local function enabled()
     return config.Battery ~= nil and config.Battery.Enabled == true
 end
 
----Mirrors the current state into the React app.
+---Mirrors the current state into the React app. deadBehaviour rides along so the UI knows whether
+---a flat phone should be covered by the dead screen or fall through to the no-service path.
 local function push()
     SendNUIMessage({
         action = 'sd-phone:battery',
         data   = {
-            level    = state.level,
-            charging = state.charging,
-            lowPower = state.lowPower,
-            enabled  = enabled(),
+            level         = state.level,
+            charging      = state.charging,
+            lowPower      = state.lowPower,
+            enabled       = enabled(),
+            deadBehaviour = config.Battery and config.Battery.DeadBehaviour or 'dead',
         },
     })
 end
@@ -63,6 +65,25 @@ function battery.isCharging() return enabled() and state.charging or false end
 ---@return boolean
 function battery.isDead() return enabled() and state.level <= 0 or false end
 
+---Announces a level transition across zero. Death fires the lb event; waking plays the boot
+---sequence, but only while the phone is open, since a phone that revived in your pocket has
+---already booted by the time you look at it.
+---@param prev integer level before the change
+---@param next integer level after the change
+local function announceCrossing(prev, next)
+    if next <= 0 and prev > 0 then
+        TriggerEvent('lb-phone:phoneDied')
+        return
+    end
+
+    if prev <= 0 and next > 0 then
+        local boot = config.Battery.BootAnimation
+        if state.open and boot and boot.Enabled ~= false then
+            SendNUIMessage({ action = 'sd-phone:battery:boot', data = boot.Seconds or 4 })
+        end
+    end
+end
+
 ---Tracks phone visibility so the tick can pick the open or closed drain rate.
 ---@param open boolean
 function battery.setOpen(open)
@@ -80,8 +101,7 @@ function battery.setLevel(pct)
     state.level = next
     push()
     checkpoint()
-
-    if next <= 0 and prev > 0 then TriggerEvent('lb-phone:phoneDied') end
+    announceCrossing(prev, next)
 end
 
 ---@param charging boolean
@@ -156,9 +176,9 @@ CreateThread(function()
                         checkpoint()
                         SendNUIMessage({ action = 'sd-phone:battery:warn', data = threshold })
                     end
-                    if state.level <= 0 and prev > 0 then
+                    if (state.level <= 0 and prev > 0) or (prev <= 0 and state.level > 0) then
                         checkpoint()
-                        TriggerEvent('lb-phone:phoneDied')
+                        announceCrossing(prev, state.level)
                     end
                     if state.level >= 100 and prev < 100 then checkpoint() end
                 end

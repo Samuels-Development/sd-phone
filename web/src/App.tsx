@@ -718,6 +718,11 @@ function AppContent() {
         if (typeof threshold === 'number') useBatteryStore.getState().setWarn(threshold);
     }, []));
 
+    useNuiEvent('sd-phone:battery:boot', useCallback((seconds) => {
+        useBatteryStore.getState().setWarn(null);
+        useBatteryStore.getState().setBooting(typeof seconds === 'number' ? seconds : 4);
+    }, []));
+
     useNuiEvent('sd-phone:session', useCallback((data) => {
         if (data && typeof data.startMs === 'number') useSessionStore.getState().setStartMs(data.startMs);
     }, []));
