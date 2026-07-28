@@ -1,5 +1,6 @@
 import { formatClockTime, useClock } from '@/hooks/useClock';
 import { t } from '@/i18n';
+import { useBatteryStore } from '@/stores/batteryStore';
 
 export interface StatusBarProps {
     use24h: boolean;
@@ -85,14 +86,16 @@ function Airplane({ size }: { size: number }) {
 }
 
 function Battery({ size, pct }: { size: number; pct: number }) {
+    const charging = useBatteryStore(s => s.charging);
     const value = Math.max(0, Math.min(100, Math.round(pct)));
     const fillW = (292.63 * value) / 100;
-    const fill  = value <= 20 ? '#ff453a' : 'currentColor';
+    const fill  = charging ? '#34c759' : value <= 20 ? '#ff453a' : 'currentColor';
     return (
         <svg width={size} height={size} viewBox="0 0 512 512" fill="none" aria-hidden>
             <rect x="32" y="144" width="400" height="224" rx="45.7" ry="45.7" stroke="currentColor" strokeLinecap="square" strokeMiterlimit="10" strokeWidth="32" />
             <path d="M480 218.67v74.66" stroke="currentColor" strokeLinecap="round" strokeMiterlimit="10" strokeWidth="32" />
             {value > 0 && <rect x="85.69" y="198.93" width={fillW} height="114.14" rx="8" ry="8" fill={fill} />}
+            {charging && <path d="M262 178l-74 100h56l-24 74 82-104h-60z" fill="#ffffff" stroke="#000000" strokeWidth="10" strokeLinejoin="round" />}
         </svg>
     );
 }

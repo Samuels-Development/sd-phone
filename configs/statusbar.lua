@@ -4,5 +4,5 @@ return {
     Carrier      = 'LifeInvader',
     SignalBars   = 4,        -- 0..4
     ShowWifi     = true,
-    BatteryStart = 100,      -- 0..100, ticks down while phone is open
+    BatteryStart = 100,      -- 0..100; superseded by configs/battery.lua StartLevel, still read as its fallback
 }

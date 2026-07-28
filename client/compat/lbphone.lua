@@ -29,6 +29,9 @@ local config = require 'configs.config'
 ---@type table Custom third-party app registry (client.customapps): identifier resolution + forwards.
 local customApps = require 'client.customapps'
 
+---@type table Battery runtime (client.battery): backs the lb battery export family.
+local battery = require 'client.battery'
+
 ---@type any[] AddEventHandler cookies for every registered export handler.
 local exportCookies = {}
 
@@ -354,12 +357,12 @@ stubLbExport('EndCustomCall', false)
 stubLbExport('AddCheck', 0, 'is unsupported; use exports["sd-phone"]:setDisabled(true) instead')
 stubLbExport('RemoveCheck', false, 'is unsupported; use exports["sd-phone"]:setDisabled(false) instead')
 
--- Battery family reads as a healthy phone.
-stubLbExport('GetBattery', 100)
-stubLbExport('SetBattery', nil)
-stubLbExport('IsCharging', false)
-stubLbExport('ToggleCharging', nil)
-stubLbExport('IsPhoneDead', false)
+-- Battery family: real once configs/battery.lua is enabled, healthy defaults while it is off.
+registerLbExport('GetBattery',     function() return battery.level() end)
+registerLbExport('SetBattery',     function(level) battery.setLevel(level) end)
+registerLbExport('IsCharging',     function() return battery.isCharging() end)
+registerLbExport('ToggleCharging', function(charging) battery.setCharging(charging) end)
+registerLbExport('IsPhoneDead',    function() return battery.isDead() end)
 
 -- Appearance and shell tweaks with no sd-phone counterpart.
 stubLbExport('SetPhoneVariation', nil)

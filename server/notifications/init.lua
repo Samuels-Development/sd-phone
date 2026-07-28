@@ -14,6 +14,8 @@ local notifications = {}
 local function relay(source, data)
     if type(source) ~= 'number' then return false end
     if type(data) ~= 'table' or type(data.title) ~= 'string' then return false end
+    -- A flat phone does not light up. Dropped, not queued: it is a missed notification.
+    if require('server.battery.actions').isDead(source) then return false end
     TriggerClientEvent('sd-phone:client:notify', source, data)
     return true
 end
