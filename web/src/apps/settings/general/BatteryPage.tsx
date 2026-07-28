@@ -1,13 +1,22 @@
 import { BatteryCharging } from 'lucide-react';
 
+import { fetchNui } from '@/core/nui';
 import { t } from '@/i18n';
 import { useBatteryStore } from '@/stores/batteryStore';
-import { GroupCard, ListGroup, ListRow, ToggleRow } from '@/ui/ListGroup';
+import { GroupCard, ListGroup, ToggleRow } from '@/ui/ListGroup';
 import { SubPage } from '../SettingsSubPage';
 
 export function BatteryPage({ onBack }: { onBack: () => void }) {
-    const level = useBatteryStore(s => s.level);
-    const low = level <= 20;
+    const level    = useBatteryStore(s => s.level);
+    const charging = useBatteryStore(s => s.charging);
+    const lowPower = useBatteryStore(s => s.lowPower);
+    const low = level <= 20 && !charging;
+
+    const toggleLowPower = () => {
+        const next = !useBatteryStore.getState().lowPower;
+        useBatteryStore.getState().patch({ lowPower: next });
+        void fetchNui('sd-phone:battery:lowPower', { enabled: next }).catch(() => {});
+    };
 
     return (
         <SubPage title={t('settings.battery', 'Battery')} backLabel={t('settings.settings', 'Settings')} onBack={onBack}>
@@ -20,23 +29,24 @@ export function BatteryPage({ onBack }: { onBack: () => void }) {
                 </div>
                 <div className="my-2 h-[18px] w-full overflow-hidden rounded-full bg-ios-gray5 dark:bg-control">
                     <div
-                        className="h-full rounded-full"
+                        className="h-full rounded-full transition-all duration-500"
                         style={{ width: `${level}%`, background: low ? '#ff3b30' : '#34c759' }}
                     />
                 </div>
                 <div className="flex items-center gap-1.5 text-[12px] text-ios-gray">
                     <BatteryCharging className="h-[14px] w-[14px]" strokeWidth={2} />
-                    {t('settings.batteryDrainNote', 'Battery drains while the phone is in use and recharges automatically over time.')}
+                    {charging
+                        ? t('settings.batteryCharging', 'Charging')
+                        : t('settings.batteryDrainNote', 'Battery drains while your phone is in use. Plug in to recharge.')}
                 </div>
             </GroupCard>
 
-            <ListGroup footer={t('settings.lowPowerFooter', 'Low Power Mode reduces background activity until your phone recharges.')}>
-                <ToggleRow label={t('settings.lowPowerMode', 'Low Power Mode')} />
-            </ListGroup>
-
-            <ListGroup header={t('settings.batteryHealth', 'Battery health')}>
-                <ListRow label={t('settings.maximumCapacity', 'Maximum Capacity')} value="100%" chevron={false} divider />
-                <ListRow label={t('settings.peakPerformance', 'Peak Performance')} value={t('settings.performanceNormal', 'Normal')} chevron={false} />
+            <ListGroup footer={t('settings.lowPowerFooter', 'Low Power Mode slows battery drain until your phone is charged.')}>
+                <ToggleRow
+                    label={t('settings.lowPowerMode', 'Low Power Mode')}
+                    on={lowPower}
+                    onToggle={toggleLowPower}
+                />
             </ListGroup>
         </SubPage>
     );

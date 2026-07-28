@@ -707,8 +707,15 @@ function AppContent() {
         if (downloadTimer.current !== undefined) clearInterval(downloadTimer.current);
     }, []);
 
-    useNuiEvent('sd-phone:battery', useCallback((pct) => {
-        if (typeof pct === 'number') { setBattery(pct); useBatteryStore.getState().setLevel(pct); }
+    useNuiEvent('sd-phone:battery', useCallback((data) => {
+        if (typeof data === 'number') { setBattery(data); useBatteryStore.getState().patch({ level: data }); return; }
+        if (!data || typeof data !== 'object') return;
+        if (typeof data.level === 'number') setBattery(data.level);
+        useBatteryStore.getState().patch(data);
+    }, []));
+
+    useNuiEvent('sd-phone:battery:warn', useCallback((threshold) => {
+        if (typeof threshold === 'number') useBatteryStore.getState().setWarn(threshold);
     }, []));
 
     useNuiEvent('sd-phone:session', useCallback((data) => {

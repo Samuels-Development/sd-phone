@@ -207,7 +207,8 @@ export type NuiMessage =
     | { action: 'sd-phone:profileReset' }
     | { action: 'sd-phone:client:characterLoaded' }
     | { action: 'sd-phone:launchApp'; data: { id: string; link?: Record<string, unknown> } }
-    | { action: 'sd-phone:battery'; data: number }
+    | { action: 'sd-phone:battery'; data: number | { level?: number; charging?: boolean; lowPower?: boolean; enabled?: boolean } }
+    | { action: 'sd-phone:battery:warn'; data: number }
     | { action: 'sd-phone:weather'; data: WeatherPayload }
     | { action: 'sd-phone:session'; data: SessionPayload }
     | { action: 'sd-phone:health';  data: HealthPayload }
