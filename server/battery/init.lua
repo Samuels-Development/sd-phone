@@ -5,6 +5,8 @@ local actions = require 'server.battery.actions'
 ---@type table Battery persistence (server.battery.store).
 local store = require 'server.battery.store'
 
+require 'server.battery.items'
+
 ---True while the feature is switched on.
 ---@return boolean
 local function on()

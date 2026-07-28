@@ -94,6 +94,7 @@ require 'client.payphone'
 
 ---@type table Battery runtime (client.battery): level, charging and the drain simulation.
 local battery = require 'client.battery'
+require 'client.chargers'
 
 ---@type table Phone visibility state: open/locked flags.
 local phoneState = {
