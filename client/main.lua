@@ -92,11 +92,13 @@ require 'client.apps.sim'
 require 'client.admin'
 require 'client.payphone'
 
----@type table Phone visibility state: open/locked flags + cosmetic battery percentage.
+---@type table Battery runtime (client.battery): level, charging and the drain simulation.
+local battery = require 'client.battery'
+
+---@type table Phone visibility state: open/locked flags.
 local phoneState = {
     open       = false,  -- true while the NUI is focused on the phone
     locked     = true,   -- true while the lockscreen is shown
-    battery    = config.StatusBar.BatteryStart, -- cosmetic, ticks down while open
 }
 
 ---@type boolean True while another resource has disabled the phone.
@@ -322,6 +324,7 @@ local function OpenPhone()
 
     phoneState.open   = true
     phoneState.locked = true
+    battery.setOpen(true)
 
     CreateThread(function()
         while phoneState.open do
@@ -353,7 +356,7 @@ local function OpenPhone()
         data   = {
             locale    = config.Locale,
             locked    = phoneState.locked,
-            battery   = phoneState.battery,
+            battery   = battery.level(),
             frameColor = currentFrameColor,
             carrier   = config.StatusBar.Carrier,
             signal    = config.StatusBar.SignalBars,
@@ -414,6 +417,7 @@ function ClosePhone()
     if not phoneState.open then return end
 
     phoneState.open = false
+    battery.setOpen(false)
     TriggerEvent('sd-phone:client:openState', false)
     TriggerServerEvent('sd-phone:server:phone:setOpen', false)
     SetNuiFocus(false, false)
@@ -662,17 +666,6 @@ end)
 ---@param cb fun(result: table) NUI response (weather snapshot)
 RegisterNUICallback('sd-phone:weather:get', function(_data, cb)
     cb(weatherBridge.read())
-end)
-
--- Cosmetic battery drain: one percent every 30s while the phone is open, pushed to the React app.
-CreateThread(function()
-    while true do
-        Wait(30000)
-        if phoneState.open and phoneState.battery > 0 then
-            phoneState.battery = phoneState.battery - 1
-            SendNUIMessage({ action = 'sd-phone:battery', data = phoneState.battery })
-        end
-    end
 end)
 
 -- Draws a spotlight from the hand bone in the ped's facing direction each frame while the
