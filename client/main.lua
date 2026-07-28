@@ -594,6 +594,11 @@ RegisterNUICallback('sd-phone:unlock', function(_, cb)
     cb({ ok = true })
 end)
 
+-- A phone that charged back above 0% powers on into the lockscreen, so the flag re-arms.
+AddEventHandler('sd-phone:client:battery:booting', function()
+    phoneState.locked = true
+end)
+
 ---React to Lua: the closed-shell peek's call island was tapped; reopen the phone onto the
 ---live call.
 ---@param cb fun(result: table) NUI response

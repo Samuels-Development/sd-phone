@@ -721,6 +721,11 @@ function AppContent() {
     useNuiEvent('sd-phone:battery:boot', useCallback((seconds) => {
         useBatteryStore.getState().setWarn(null);
         useBatteryStore.getState().setBooting(typeof seconds === 'number' ? seconds : 4);
+        setLocked(true);
+        setCurrentApp(null);
+        setSwitcherOpen(false);
+        setSwitcherClosing(false);
+        setCcOpen(false);
     }, []));
 
     useNuiEvent('sd-phone:session', useCallback((data) => {

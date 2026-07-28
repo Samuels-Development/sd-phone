@@ -80,6 +80,8 @@ local function announceCrossing(prev, next)
         local boot = config.Battery.BootAnimation
         if state.open and boot and boot.Enabled ~= false then
             SendNUIMessage({ action = 'sd-phone:battery:boot', data = boot.Seconds or 4 })
+            -- Powering on lands on the lockscreen; main.lua mirrors the flag so isLocked agrees.
+            TriggerEvent('sd-phone:client:battery:booting')
         end
     end
 end
