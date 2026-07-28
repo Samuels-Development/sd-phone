@@ -52,10 +52,37 @@ registerLbExport('ResetSecurity', function(number)
     if cid then settings.setSecurity(cid, nil, false) end
 end)
 
--- Battery family: sd-phone has no battery system; silent no-ops.
-registerLbExport('IsPhoneDead', function() return false end)
-registerLbExport('SaveBattery', function() end)
-registerLbExport('SaveAllBatteries', function() end)
+-- Battery family: real once configs/battery.lua is enabled, healthy defaults while it is off.
+
+---@type table Battery policy (server.battery.actions).
+local batteryActions = require 'server.battery.actions'
+
+---Resolves a phone number to a connected server id, nil when unassigned or offline.
+---@param number string|number
+---@return number|nil source
+local function sourceFromNumber(number)
+    local cid = settings.getCitizenByNumber(number)
+    return cid and player.getSourceByIdentifier(cid) or nil
+end
+
+---IsPhoneDead(number): true when the number's owner is out of battery. An unassigned or offline
+---number reads as false.
+registerLbExport('IsPhoneDead', function(number)
+    local src = sourceFromNumber(number)
+    if not src then return false end
+    return batteryActions.isDead(src)
+end)
+
+---SaveBattery(number): forces a checkpoint flush for that number's owner.
+registerLbExport('SaveBattery', function(number)
+    local src = sourceFromNumber(number)
+    if src then batteryActions.flush(src) end
+end)
+
+---SaveAllBatteries(): flushes every live battery session.
+registerLbExport('SaveAllBatteries', function()
+    batteryActions.flushAll()
+end)
 
 -- Phone/user surfaces with no sd-phone equivalent.
 stubLbExport('GetSettings', nil)

@@ -12,6 +12,8 @@ local badges   = require 'server.badges.init'
 local moderation = require 'server.admin.moderation'
 ---@type table Payphone persistence (server.payphone.store): booth number -> location lookups.
 local payphones = require 'server.payphone.store'
+---@type table Battery policy (server.battery.actions): a flat phone does not ring.
+local battery = require 'server.battery.actions'
 
 ---@type table Actions module; the table returned at end of file.
 local actions = {}
@@ -21,6 +23,7 @@ local actions = {}
 ---@param src number player server id
 ---@return boolean
 local function reachable(src)
+    if battery.isDead(src) then return false end
     if #(config.Phone.Items or {}) == 0 then return true end
     return exports['sd-phone']:hasPhone(src) ~= nil
 end
@@ -44,6 +47,18 @@ local boothRings = {}
 
 local util = require 'server.util'
 local ok, fail, digits = util.ok, util.fail, util.digits
+
+---True when `dialed` is one of the configured emergency numbers a flat phone may still call.
+---@param dialed string bare-digit number
+---@return boolean
+local function isEmergency(dialed)
+    local cfg = config.Battery
+    if not cfg or cfg.AllowEmergencyCalls == false then return false end
+    for _, number in ipairs(cfg.EmergencyNumbers or {}) do
+        if digits(number) == dialed then return true end
+    end
+    return false
+end
 
 
 
@@ -372,6 +387,7 @@ function actions.dial(source, payload)
     if sessionForSource(source) or ringForSource(source) or boothRingForSource(source) then return fail('You are already on a call') end
     if not util.rateLimit(cid, 'call:dial', DIAL_WINDOW, DIAL_PER_WINDOW) then return fail('Slow down') end
     if settings.isAirplane(cid) then return fail('Airplane Mode is on') end
+    if battery.isDead(source) and not isEmergency(dialed) then return fail('Your phone is out of battery') end
     local muted = moderation.guard(cid, 'calls'); if muted then return muted end
 
     local myNumber = settings.ensurePhoneNumber(cid)

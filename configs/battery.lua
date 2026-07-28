@@ -44,8 +44,10 @@ return {
     -- 'noservice' = the phone opens with no service (the No SIM path); offline apps still work
     DeadBehaviour = 'dead',
 
-    -- Emergency numbers still dial on a dead phone.
+    -- Let a flat phone still dial the numbers below. Only reachable under DeadBehaviour
+    -- 'noservice': under 'dead' the phone will not open at all, so there is no dialler to use.
     AllowEmergencyCalls = true,
+    EmergencyNumbers    = { '911' },
 
     -- Charges on use. Add the item to your inventory before enabling.
     PowerBank = {
