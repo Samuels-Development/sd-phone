@@ -163,6 +163,44 @@ buttons = {
 
 Using the phone item opens the phone itself, so the tray needs its own button. Skip this in metadata mode, where SIMs are installed by using the `sim_card` item.
 
+### Battery (optional)
+
+Off by default. Turn it on in `configs/battery.lua`:
+
+```lua
+Enabled = true,
+```
+
+Rates are **seconds per one percent**, given as a `{ min, max }` range that is re-rolled every step so drain is not metronomic. With the defaults a full charge lasts about 1h30 with the phone open, 2h45 closed, and recharges in about 12 minutes.
+
+| Key | What it does |
+| --- | --- |
+| `DrainSeconds` / `DrainClosedSeconds` | Drain rate with the phone open / closed |
+| `ChargeSeconds` | Charge rate |
+| `DrainWhenClosed` | Drain at all while the phone is shut |
+| `DrainWhileOffline` | Count time spent disconnected. Charging always accrues offline |
+| `LowPowerMode` | Halves drain. Never slows charging |
+| `WarnAt` | Levels that warn when crossed downward |
+| `DeadBehaviour` | `'dead'` (phone will not open) or `'noservice'` (opens, offline apps only) |
+
+The charge belongs to whatever already owns the phone data: the device or SIM profile under unique phones, the character otherwise. Steal a charged phone in `device` mode and you steal the charge.
+
+**Charging.** Three affordances ship, each independently switchable: a `phone_powerbank` item that charges on use, a `phone_cable` item plus ox_target props and radius zones, and automatic charging while seated in a vehicle. Add the two items to your inventory before enabling them. You can also drive charging yourself:
+
+```lua
+exports['sd-phone']:chargePhone(source, 25)        -- add 25%
+exports['sd-phone']:toggleCharging(source, true)   -- latch charging on
+exports['sd-phone']:setBattery(source, 100)
+exports['sd-phone']:getBattery(source)             -- 0-100
+exports['sd-phone']:isCharging(source)
+exports['sd-phone']:isPhoneDead(source)
+exports['sd-phone']:saveBattery(source)            -- force a checkpoint
+```
+
+The same five reads exist client-side without a `source`. Events `sd-phone:server:battery:died` and `:charged` fire on transition.
+
+**Coming from lb-phone?** All eight lb battery exports are implemented rather than stubbed, plus the `lb-phone:phoneDied` client event, so a resource written against lb keeps working. Three deliberate differences: Low Power Mode does not slow charging (lb's does), warnings fire on threshold *crossing* rather than exact equality so `SetBattery(25 → 15)` still warns, and the level is checkpointed on state changes instead of written once per percent.
+
 ### 3. Add your API keys
 
 In `configs/server/apikeys.lua`:
