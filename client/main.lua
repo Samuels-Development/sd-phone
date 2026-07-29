@@ -45,6 +45,8 @@ local pose = require 'client.pose'
 local phonecam = require 'client.phonecam'
 ---@type table Cell service (client.service): live signal level, bars + capability gating.
 local service = require 'client.service'
+---@type table Wi-Fi (client.wifi): joined network, nearby scan + capability gating.
+local wifiClient = require 'client.wifi'
 
 -- Loaded for side effects: each app module registers its own NUI callbacks, net events and
 -- server proxies.
@@ -798,6 +800,18 @@ exports('getCellTowers', function() return service.towers() end)
 exports('hasService', function(capability)
     return service.allows(capability or 'data')
 end)
+
+---Whether the phone is on a Wi-Fi network right now.
+exports('isOnWifi', function() return wifiClient.connected() end)
+
+---The joined network's id as configs/wifi.lua names it, or nil while off Wi-Fi.
+exports('getWifi', function()
+    local c = wifiClient.current()
+    return c and c.id or nil
+end)
+
+---The joined network as { id, ssid, strength, bars }, or nil while off Wi-Fi.
+exports('getWifiNetwork', function() return wifiClient.current() end)
 
 ---Registers a third-party app - exports['sd-phone']:addCustomApp(data). Attribution is the calling
 ---resource; re-registering an identifier is only allowed from that same resource.

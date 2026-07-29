@@ -2,6 +2,8 @@
 local config = require 'configs.config'
 ---@type table Cell service (client.service): live level + capability gating.
 local service = require 'client.service'
+---@type table Wi-Fi (client.wifi): joined network + capability gating.
+local wifiClient = require 'client.wifi'
 
 ---@type table Cell tower settings (configs/celltowers.lua).
 local towerCfg = type(config.CellTowers) == 'table' and config.CellTowers or {}
@@ -18,6 +20,13 @@ for _, name in ipairs(towerCfg.Gated or {}) do
     GATED[tostring(name)] = true
 end
 
+---Whether the phone has a data path right now, over either radio. Named against Wi-Fi explicitly
+---rather than leaning on service.allows folding it in, so the gate cannot lose it by refactor.
+---@return boolean
+local function hasData()
+    return wifiClient.provides('data') or service.allows('data')
+end
+
 ---Whether a server callback may be reached right now. Every app talks to the server through
 ---this file, so one check covers the whole phone; namespaces in Offline are device-local, RF or
 ---landline and keep working in a dead zone, bar the individual actions listed in Gated.
@@ -27,9 +36,9 @@ local function reachable(serverEvent)
     if not service.active() then return true end
     local action = serverEvent:match('^sd%-phone:server:(.+)$')
     if not action then return true end
-    if GATED[action] then return service.allows('data') end
+    if GATED[action] then return hasData() end
     if OFFLINE_OK[action:match('^([^:]+)')] then return true end
-    return service.allows('data')
+    return hasData()
 end
 
 ---@type table<string, boolean> Reads whose last good answer survives a dead zone.

@@ -2,6 +2,9 @@
 local config = require 'configs.config'
 ---@type table Pure cell-tower maths (shared.celltowers): level / bars / capability thresholds.
 local celltowers = require 'shared.celltowers'
+---@type table Wi-Fi (client.wifi): a joined network can carry what the masts will not. The
+---dependency is one-way, so client.wifi must never require this file back.
+local wifiClient = require 'client.wifi'
 
 ---@type table Cell tower settings (configs/celltowers.lua): towers, thresholds, bar cutoffs.
 local cfg = config.CellTowers or {}
@@ -52,9 +55,12 @@ function service.bars()
     return barsOverride or currentBars
 end
 
+---Whether a capability is possible right now, over either radio. A joined Wi-Fi network carrying
+---it is enough on its own, so a dead zone with a router in it still works.
 ---@param capability string 'text' | 'call' | 'data'
 ---@return boolean
 function service.allows(capability)
+    if wifiClient.provides(capability) then return true end
     return celltowers.allows(currentLevel, capability, THRESHOLDS)
 end
 
