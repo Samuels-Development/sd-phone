@@ -857,8 +857,12 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
 
                 {pillAt && (
                     <div
-                        className="pointer-events-none absolute left-0 top-0 z-[60] whitespace-nowrap rounded-full bg-black/70 px-2.5 py-[5px] font-sf text-[12px] font-semibold text-white backdrop-blur-md"
-                        style={{ transform: `translate(${pillAt.x}px, ${pillAt.y}px) translateX(-50%)`, border: '0.5px solid rgba(255,255,255,0.22)' }}
+                        className="pointer-events-none absolute left-0 top-0 z-[60] whitespace-nowrap rounded-full bg-black/85 px-3.5 py-2 font-sf text-[14px] font-semibold leading-none tracking-[-0.01em] text-white backdrop-blur-xl"
+                        style={{
+                            transform: `translate(${pillAt.x}px, ${pillAt.y}px) translateX(-50%)`,
+                            border: '0.5px solid rgba(255,255,255,0.28)',
+                            boxShadow: '0 6px 20px rgba(0,0,0,0.45)',
+                        }}
                     >
                         {reflowNote.count === 1
                             ? t('home.widgetMovesApp', '1 app moves to page {page}', { page: reflowNote.page + 1 })
