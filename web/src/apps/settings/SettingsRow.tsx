@@ -66,7 +66,7 @@ export function SettingsRow({ row, divider, onPress }: { row: SettingsRowDef; di
             ) : (
                 <>
                     {row.status && (
-                        <span className="shrink-0 text-[16px] font-normal text-ios-gray">
+                        <span className="max-w-[120px] shrink-0 truncate text-[16px] font-normal text-ios-gray">
                             {row.status}
                         </span>
                     )}
