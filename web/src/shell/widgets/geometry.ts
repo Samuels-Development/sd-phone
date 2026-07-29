@@ -68,6 +68,49 @@ export function firstFit(
     return null;
 }
 
+type Placed = Pick<WidgetPlacement, 'size' | 'col' | 'row'>;
+
+function fitsGrid(w: Placed): boolean {
+    const { w: sw, h: sh } = SPAN[w.size];
+    return w.col >= 0 && w.row >= 0 && w.col + sw <= COLS && w.row + sh <= ROWS;
+}
+
+function overlaps(a: Placed, b: Placed): boolean {
+    const cells = new Set(coveredCells(a));
+    return coveredCells(b).some(c => cells.has(c));
+}
+
+export function trySwap(
+    widgets: WidgetPlacement[],
+    draggedUid: string,
+    target: { page: number; col: number; row: number },
+): WidgetPlacement[] | null {
+    const dragged = widgets.find(w => w.uid === draggedUid);
+    if (!dragged) return null;
+
+    const landing: Placed = { size: dragged.size, col: target.col, row: target.row };
+    const hit = widgets.filter(o => o.uid !== draggedUid && o.page === target.page && overlaps(o, landing));
+    if (hit.length !== 1) return null;
+
+    const partner = hit[0];
+    const nextDragged = { ...dragged, page: target.page, col: target.col, row: target.row };
+    const nextPartner = { ...partner, page: dragged.page, col: dragged.col, row: dragged.row };
+    if (!fitsGrid(nextDragged) || !fitsGrid(nextPartner)) return null;
+    if (nextDragged.page === nextPartner.page && overlaps(nextDragged, nextPartner)) return null;
+
+    for (const o of widgets) {
+        if (o.uid === draggedUid || o.uid === partner.uid) continue;
+        if (o.page === nextDragged.page && overlaps(o, nextDragged)) return null;
+        if (o.page === nextPartner.page && overlaps(o, nextPartner)) return null;
+    }
+
+    return widgets.map(w => {
+        if (w.uid === draggedUid) return nextDragged;
+        if (w.uid === partner.uid) return nextPartner;
+        return w;
+    });
+}
+
 export function pageMoves(
     before: (string | null)[],
     after: (string | null)[],

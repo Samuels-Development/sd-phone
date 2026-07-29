@@ -11,7 +11,7 @@ import { AppBadge } from './AppBadge';
 import { useBadges } from '@/stores/badgeStore';
 import { AlertDialog } from '@/ui/AlertDialog';
 import type { SavedLayout, WidgetAlign, WidgetPlacement, WidgetSize, WidgetTheme } from '@/apps/appstore/appsApi';
-import { SPAN, coveredCells, firstFit, jiggleDeg, pageMoves, reflowAround, widgetPx } from './widgets/geometry';
+import { SPAN, coveredCells, firstFit, jiggleDeg, pageMoves, reflowAround, trySwap, widgetPx } from './widgets/geometry';
 import { widgetByKind } from './widgets/registry';
 import { launchOriginFrom } from './launchOrigin';
 import { WidgetGallery } from './widgets/WidgetGallery';
@@ -70,10 +70,22 @@ function jiggleDelay(id: string): number {
     for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
     return -(h % 180);
 }
+function bloomDelay(id: string): number {
+    return Math.abs(jiggleDelay(id));
+}
 
 function widgetClash(widgets: WidgetPlacement[], uid: string | undefined, size: WidgetSize, page: number, col: number, row: number): boolean {
     const target = new Set(coveredCells({ size, col, row }));
     return widgets.some(o => o.uid !== uid && o.page === page && coveredCells(o).some(c => target.has(c)));
+}
+
+function widgetsAfterDrop(widgets: WidgetPlacement[], uid: string | undefined, page: number, col: number, row: number): WidgetPlacement[] | null {
+    const held = widgets.find(w => w.uid === uid);
+    if (!held) return null;
+    if (!widgetClash(widgets, uid, held.size, page, col, row)) {
+        return widgets.map(o => (o.uid === uid ? { ...o, page, col, row } : o));
+    }
+    return trySwap(widgets, held.uid, { page, col, row });
 }
 
 function pillSpot(x: number, y: number, size: WidgetSize): { x: number; y: number } {
@@ -330,10 +342,8 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
             setDropPreview(null);
             if (!spot) return;
 
-            // Only other WIDGETS block a move.
-            if (widgetClash(widgetsRef.current, uid, dragSizeRef.current, toPage, spot.col, spot.row)) return;
-
-            const next = widgetsRef.current.map(o => (o.uid === uid ? { ...o, page: toPage, col: spot.col, row: spot.row } : o));
+            const next = widgetsAfterDrop(widgetsRef.current, uid, toPage, spot.col, spot.row);
+            if (!next) return;
             setWidgets(next);
             setSlots(prev => normalize(reflowAround(prev, next, ITEMS_PER_PAGE)));
         }
@@ -356,10 +366,7 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
         const held = widgets.find(w => w.uid === uid);
         if (!held) return widgets;
         if (held.page === dropPreview.page && held.col === dropPreview.col && held.row === dropPreview.row) return widgets;
-        if (widgetClash(widgets, uid, held.size, dropPreview.page, dropPreview.col, dropPreview.row)) return widgets;
-        return widgets.map(w => (w.uid === uid
-            ? { ...w, page: dropPreview.page, col: dropPreview.col, row: dropPreview.row }
-            : w));
+        return widgetsAfterDrop(widgets, uid, dropPreview.page, dropPreview.col, dropPreview.row) ?? widgets;
     }, [widgets, dragW?.uid, dropPreview]);
 
     const previewSlots = useMemo(
@@ -713,7 +720,7 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
                             {/* A widget being dragged renders on whatever page is SHOWING, not the
                                 one it started on, so it can be carried across an edge flip and
                                 stay under the finger. */}
-                            {widgets.filter(w => (dragW?.uid === w.uid ? pi === page : w.page === pi)).map(w => {
+                            {previewWidgets.filter(w => (dragW?.uid === w.uid ? pi === page : w.page === pi)).map(w => {
                                 const def = widgetByKind(w.kind);
                                 if (!def) return null;
                                 const pos = slot(w.row * COLS + w.col);
@@ -758,7 +765,9 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
                                             // 4x4 does not swing five times as far as an icon.
                                             style={editing && !dragging
                                                 ? { animationDelay: `${jiggleDelay(w.uid)}ms`, '--jiggle': `${jiggleDeg(w.size)}deg` } as CSSProperties
-                                                : undefined}
+                                                : (bloom && !editing
+                                                    ? { animation: 'home-widget-in 0.38s cubic-bezier(0.34,1.3,0.64,1) both', animationDelay: `${bloomDelay(w.uid)}ms` }
+                                                    : undefined)}
                                             onClick={e => {
                                                 if (editing) return;
                                                 const a = appMap.get(def.appId);
