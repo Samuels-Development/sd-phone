@@ -5,7 +5,7 @@ import { LayoutGrid, Minus, Plus } from 'lucide-react';
 import type { AppDef } from '@/core/types';
 import { useTheme } from '@/stores/themeStore';
 import { resolveWallpaper } from './wallpapers';
-import { AppIcon } from './AppIcon';
+import { AppIcon, TILE_SHADOW, radiusPct } from './AppIcon';
 import { AppIconSVG } from './AppIconSVG';
 import { AppGlyph } from './AppGlyphs';
 import { AppBadge } from './AppBadge';
@@ -143,7 +143,6 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     const appMap   = useMemo(() => new Map(apps.map(a => [a.id, a])), [apps]);
-    const showAppNames = useShowAppNames();
 
     const [dockIds, setDockIds] = useState<string[]>(() => savedLayout?.dock ?? dock);
     const dockApps = useMemo(
@@ -923,7 +922,7 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
                                             <div style={bloom ? { animation: 'home-icon-in 0.38s cubic-bezier(0.34,1.3,0.64,1) both', animationDelay: `${li * 20}ms` } : undefined}>
                                                 {folder
                                                     ? <FolderTile label={def!.name} apps={folderApps(fkey)} badge={folderBadge(fkey)} onOpen={() => setOpenFolder(fkey)} />
-                                                    : <AppIcon app={app!} label={showAppNames} onOpen={launch} badge={badges?.[app!.id]} />}
+                                                    : <AppIcon app={app!} onOpen={launch} badge={badges?.[app!.id]} />}
                                             </div>
                                         </div>
                                     );
@@ -1118,20 +1117,27 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
 
 function EditTile({ app, dragging, swapTarget, plopping, removable, merging, badge, onRemove }: { app: AppDef; dragging: boolean; swapTarget: boolean; plopping: boolean; removable: boolean; merging: boolean; badge?: number; onRemove: () => void }): ReactNode {
     const showNames = useShowAppNames();
-    const { background, glyph, art } = useIconAppearance(app.id, app.accent);
+    const {
+        background, glyph, art, radius, glyphSize, glyphWeight, boxShadow,
+        labelColor, labelWeight, labelShow, icon: glyphOverride,
+    } = useIconAppearance(app.id, app.accent);
+    const showLabel = labelShow ?? showNames;
     return (
         <div className={dragging ? '' : 'animate-app-jiggle'} style={{ animationDelay: `${jiggleDelay(app.id)}ms` }}>
             <div className="relative">
                 {merging && <div className="pointer-events-none absolute -inset-[8px] rounded-[30%] bg-white/25 backdrop-blur-sm" />}
-                <div className={`relative h-[78px] w-[78px] overflow-hidden transition-[box-shadow,transform] duration-150 ${plopping ? 'animate-plop' : ''}`} style={{ borderRadius: '27.6%', boxShadow: swapTarget ? '0 2px 12px rgba(0,0,0,0.42), 0 0 0 3.5px rgba(255,255,255,0.92)' : '0 2px 10px rgba(0,0,0,0.38), 0 0 0 0.5px rgba(0,0,0,0.12)', transform: dragging || merging ? 'scale(1.12)' : undefined }}>
+                <div className={`relative h-[78px] w-[78px] overflow-hidden transition-[box-shadow,transform] duration-150 ${plopping ? 'animate-plop' : ''}`} style={{ borderRadius: radiusPct(radius), boxShadow: [swapTarget ? '0 2px 12px rgba(0,0,0,0.42), 0 0 0 3.5px rgba(255,255,255,0.92)' : TILE_SHADOW, boxShadow].filter(Boolean).join(', '), transform: dragging || merging ? 'scale(1.12)' : undefined }}>
                     {art === 'native' ? (
                         <div style={{ width: 60, height: 60, transform: 'scale(1.3)', transformOrigin: '0 0' }}>
                             <AppIconSVG icon={app.icon} />
                         </div>
                     ) : (
                         <div className="flex h-full w-full items-center justify-center" style={{ background }}>
-                            <AppGlyph icon={app.icon} label={app.label} color={glyph} size={40} />
+                            <AppGlyph icon={app.icon} override={glyphOverride} label={app.label} color={glyph} size={glyphSize} strokeWidth={glyphWeight} />
                         </div>
+                    )}
+                    {boxShadow !== '' && (
+                        <div className="pointer-events-none absolute inset-0" style={{ borderRadius: radiusPct(radius), boxShadow }} />
                     )}
                 </div>
                 {!dragging && <AppBadge count={badge} />}
@@ -1141,22 +1147,34 @@ function EditTile({ app, dragging, swapTarget, plopping, removable, merging, bad
                     </button>
                 )}
             </div>
-            {showNames && <span className="mt-[7px] block w-full truncate text-center font-sf text-[13px] font-semibold tracking-[0.01em] text-white" style={{ textShadow: '0 0 2px rgba(0,0,0,0.9), 0 1px 3px rgba(0,0,0,0.95), 0 2px 6px rgba(0,0,0,0.5)' }}>{app.label}</span>}
+            {showLabel && <span className="mt-[7px] block w-full truncate text-center font-sf text-[13px] font-semibold tracking-[0.01em] text-white" style={{ textShadow: '0 0 2px rgba(0,0,0,0.9), 0 1px 3px rgba(0,0,0,0.95), 0 2px 6px rgba(0,0,0,0.5)', color: labelColor, fontWeight: labelWeight }}>{app.label}</span>}
         </div>
     );
 }
 
+const TILE_RADIUS = 0.276;
+const MINI_RADIUS = 0.30;
+const TILE_GLYPH  = 40;
+const MINI_GLYPH  = 10;
+
 function FolderMini({ app }: { app: AppDef }): ReactNode {
-    const { background, glyph, art } = useIconAppearance(app.id, app.accent);
+    const { background, glyph, art, radius, glyphSize, glyphWeight, icon: glyphOverride } = useIconAppearance(app.id, app.accent);
     return (
-        <div className="overflow-hidden" style={{ borderRadius: '30%' }}>
+        <div className="overflow-hidden" style={{ borderRadius: radiusPct(radius * (MINI_RADIUS / TILE_RADIUS)) }}>
             {art === 'native' ? (
                 <div style={{ width: 60, height: 60, transform: 'scale(0.3)', transformOrigin: '0 0' }}>
                     <AppIconSVG icon={app.icon} />
                 </div>
             ) : (
                 <div className="flex h-full w-full items-center justify-center" style={{ background }}>
-                    <AppGlyph icon={app.icon} label={app.label} color={glyph} size={10} />
+                    <AppGlyph
+                        icon={app.icon}
+                        override={glyphOverride}
+                        label={app.label}
+                        color={glyph}
+                        size={Math.round(glyphSize * (MINI_GLYPH / TILE_GLYPH))}
+                        strokeWidth={glyphWeight}
+                    />
                 </div>
             )}
         </div>
@@ -1202,7 +1220,6 @@ function FolderOverlay({ name, apps, badges, editing: homeEditing, autoEdit, wal
     onClose: () => void;
 }): ReactNode {
     const panelRef = useRef<HTMLDivElement>(null);
-    const showNames = useShowAppNames();
     const [localEdit, setLocalEdit] = useState(false);
     const editing = homeEditing || localEdit;
     const editingRef = useRef(editing);
@@ -1372,7 +1389,7 @@ function FolderOverlay({ name, apps, badges, editing: homeEditing, autoEdit, wal
                                     className={plopIds.has(a.id) ? 'animate-plop' : (jiggle ? 'animate-app-jiggle' : '')}
                                     style={jiggle ? { animationDelay: `${jiggleDelay(a.id)}ms` } : undefined}
                                 >
-                                    <AppIcon app={a} label={showNames} badge={badges?.[a.id]} onOpen={() => { /* launch handled by the cell gesture */ }} />
+                                    <AppIcon app={a} badge={badges?.[a.id]} onOpen={() => { /* launch handled by the cell gesture */ }} />
                                 </div>
                                 {editing && (
                                     <button

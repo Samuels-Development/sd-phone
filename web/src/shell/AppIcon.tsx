@@ -2,12 +2,18 @@ import { useRef } from 'react';
 
 import type { AppDef } from '@/core/types';
 import { useDownloadProgress } from '@/stores/downloadStore';
-import { useIconAppearance } from '@/stores/iconThemeStore';
+import { useIconAppearance, useShowAppNames } from '@/stores/iconThemeStore';
 import { AppIconSVG } from './AppIconSVG';
 import { AppGlyph } from './AppGlyphs';
 import { AppBadge } from './AppBadge';
 import { launchOriginFrom } from './launchOrigin';
 import { CircularProgress } from '@/ui/CircularProgress';
+
+export const TILE_SHADOW = '0 2px 10px rgba(0,0,0,0.38), 0 0 0 0.5px rgba(0,0,0,0.12)';
+
+export function radiusPct(fraction: number): string {
+    return `${Math.round(fraction * 1000) / 10}%`;
+}
 
 export interface AppIconProps {
     app:    AppDef;
@@ -18,7 +24,12 @@ export interface AppIconProps {
 
 export function AppIcon({ app, label = true, onOpen, badge }: AppIconProps) {
     const btnRef = useRef<HTMLButtonElement>(null);
-    const { background, glyph, art } = useIconAppearance(app.id, app.accent);
+    const {
+        background, glyph, art, radius, glyphSize, glyphWeight, boxShadow,
+        labelColor, labelWeight, labelShow, icon: glyphOverride,
+    } = useIconAppearance(app.id, app.accent);
+    const showAppNames = useShowAppNames();
+    const showLabel = label && (labelShow ?? showAppNames);
     const downloadProgress = useDownloadProgress(app.id);
     const downloading = downloadProgress !== undefined;
     const queued = downloading && downloadProgress < 0;
@@ -39,10 +50,8 @@ export function AppIcon({ app, label = true, onOpen, badge }: AppIconProps) {
                 <div
                     className={`relative h-[78px] w-[78px] overflow-hidden transition-transform duration-150 ease-out ${downloading ? '' : 'group-active:scale-[0.96]'}`}
                     style={{
-                        borderRadius: '27.6%',
-                        boxShadow:
-                            '0 2px 10px rgba(0,0,0,0.38), ' +
-                            '0 0 0 0.5px rgba(0,0,0,0.12)',
+                        borderRadius: radiusPct(radius),
+                        boxShadow:    [TILE_SHADOW, boxShadow].filter(Boolean).join(', '),
                     }}
                 >
                     {art === 'native' ? (
@@ -58,8 +67,22 @@ export function AppIcon({ app, label = true, onOpen, badge }: AppIconProps) {
                         </div>
                     ) : (
                         <div className="flex h-full w-full items-center justify-center" style={{ background }}>
-                            <AppGlyph icon={app.icon} label={app.label} color={glyph} size={40} />
+                            <AppGlyph
+                                icon={app.icon}
+                                override={glyphOverride}
+                                label={app.label}
+                                color={glyph}
+                                size={glyphSize}
+                                strokeWidth={glyphWeight}
+                            />
                         </div>
+                    )}
+
+                    {boxShadow !== '' && (
+                        <div
+                            className="pointer-events-none absolute inset-0"
+                            style={{ borderRadius: radiusPct(radius), boxShadow }}
+                        />
                     )}
 
                     {/* Hover/press dim as a background-color overlay rather than filter: brightness.
@@ -85,10 +108,14 @@ export function AppIcon({ app, label = true, onOpen, badge }: AppIconProps) {
                 {!downloading && <AppBadge count={badge} />}
             </div>
 
-            {label && (
+            {showLabel && (
                 <span
                     className="w-full truncate text-center font-sf text-[13px] font-semibold tracking-[0.01em] text-white"
-                    style={{ textShadow: '0 0 2px rgba(0,0,0,0.9), 0 1px 3px rgba(0,0,0,0.95), 0 2px 6px rgba(0,0,0,0.5)' }}
+                    style={{
+                        textShadow: '0 0 2px rgba(0,0,0,0.9), 0 1px 3px rgba(0,0,0,0.95), 0 2px 6px rgba(0,0,0,0.5)',
+                        color:      labelColor,
+                        fontWeight: labelWeight,
+                    }}
                 >
                     {app.label}
                 </span>

@@ -68,9 +68,16 @@ function initials(label: string): string {
     return (words[0][0] + words[1][0]).toUpperCase();
 }
 
-export function AppGlyph({ icon, label, color, size }: { icon: string; label: string; color: string; size: number }) {
-    const Glyph = APP_GLYPHS[icon];
-    if (Glyph) return <Glyph size={size} color={color} strokeWidth={1.9} aria-hidden />;
+export function AppGlyph({ icon, override, label, color, size = 40, strokeWidth = 1.9 }: {
+    icon:         string;
+    override?:    string;
+    label:        string;
+    color:        string;
+    size?:        number;
+    strokeWidth?: number;
+}) {
+    const Glyph = (override ? APP_GLYPHS[override] : undefined) ?? APP_GLYPHS[icon];
+    if (Glyph) return <Glyph size={size} color={color} strokeWidth={strokeWidth} aria-hidden />;
     return (
         <span
             style={{
