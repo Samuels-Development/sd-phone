@@ -11,12 +11,14 @@ local registry = {}
 ---@type string[] Identifiers in registration order, so the pushed list is stable.
 local order = {}
 
----@type table<string, string> Optional def fields and the Lua type each must have.
+---@type table<string, string> Optional def fields and the Lua type each must have. `wifi` is a
+---network id from configs/wifi.lua the phone must be on before the app can be downloaded.
 local FIELD_TYPES = {
     description = 'string',
     developer   = 'string',
     icon        = 'string',
     ui          = 'string',
+    wifi        = 'string',
     size        = 'number',
     price       = 'number',
     defaultApp  = 'boolean',

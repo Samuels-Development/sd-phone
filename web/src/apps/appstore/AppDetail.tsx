@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Lock } from 'lucide-react';
 
 import { AppIconSVG } from '@/shell/AppIconSVG';
 import { CircularProgress } from '@/ui/CircularProgress';
@@ -19,15 +19,18 @@ function appSize(id: string): string {
     return t('appstore.appSize', '{size} MB', { size: mb.toFixed(1) });
 }
 
-export function AppDetail({ app, desc, installed, downloadProgress, onBack, onInstall, canDownload = true, onOpen }: {
+export function AppDetail({ app, desc, installed, downloadProgress, onBack, onInstall, canDownload = true, wifiLocked, onOpen }: {
     app:               AppDef;
     desc:              string;
     installed:         boolean;
     downloadProgress?: number;
     onBack:            () => void;
     onInstall:         (id: string) => void;
-    /** False in a dead zone: the Get button dims, and onInstall raises the No Service dialog. */
+    /** False in a dead zone, or off the app's own Wi-Fi network: the Get button dims, and
+     *  onInstall raises whichever dialog explains the refusal. */
     canDownload?:      boolean;
+    /** True when the app only downloads on a Wi-Fi network this phone is not joined to. */
+    wifiLocked?:       boolean;
     onOpen:            (id: string) => void;
 }) {
     const [shown, setShown] = useState(false);
@@ -69,7 +72,10 @@ export function AppDetail({ app, desc, installed, downloadProgress, onBack, onIn
                         </div>
                     </div>
                     <div className="min-w-0 flex-1">
-                        <div className="truncate text-[24px] font-semibold leading-tight text-black dark:text-white">{app.label}</div>
+                        <div className="flex items-center gap-1.5">
+                            <span className="min-w-0 truncate text-[24px] font-semibold leading-tight text-black dark:text-white">{app.label}</span>
+                            {wifiLocked && !installed && <Lock className="h-[16px] w-[16px] shrink-0 text-black/45 dark:text-white/45" role="img" aria-label={t('appstore.wifiOnly', 'Wi-Fi only')} />}
+                        </div>
                         <div className="mt-0.5 line-clamp-2 text-[15px] leading-snug text-black/65 dark:text-white/65">{desc}</div>
                         <div className="mt-3">
                             {downloading ? (

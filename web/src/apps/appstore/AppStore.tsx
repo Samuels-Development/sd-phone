@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { Lock } from 'lucide-react';
 
 import { useSessionState } from '@/hooks/useSessionState';
 import { useDownloads } from '@/stores/downloadStore';
 import { useHasData } from '@/stores/serviceStore';
+import { useWifiConnected, useWifiNetworks } from '@/stores/wifiStore';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { AppIconSVG } from '@/shell/AppIconSVG';
 import { SearchBar } from '@/ui/SearchBar';
@@ -70,11 +72,30 @@ export function AppStore({ onClose: _onClose, apps, installed, onInstall, onOpen
     onOpenApp: (id: string) => void;
 }) {
     const downloading = useDownloads();
-    // Downloading an app needs a real connection. Both Get buttons go through installGuarded, so
-    // the dead-zone case is handled once rather than at each button.
+    // Downloading an app needs a real connection, and a `wifi` app needs one named network. Both
+    // Get buttons go through installGuarded, so every refusal is decided in one place.
     const hasData = useHasData();
+    const wifiConnected = useWifiConnected();
+    const wifiNetworks = useWifiNetworks();
     const [noServiceOpen, setNoServiceOpen] = useState(false);
+    const [wifiLockId, setWifiLockId] = useState<string | null>(null);
+
+    // Built-in apps carry `wifi` on the def; a third-party app carries it on its registration.
+    const wifiIdOf = (app: AppDef) => app.wifi ?? getCustomApp(app.id)?.wifi;
+    // The network the app wants and the phone is not on, or null when it may be downloaded.
+    const lockedNetwork = (app: AppDef): string | null => {
+        const id = wifiIdOf(app);
+        if (!id || wifiConnected?.id === id) return null;
+        return id;
+    };
+    // Only a network in range reports its ssid, so an out-of-reach one is named by its raw id.
+    const ssidOf = (id: string) =>
+        (wifiConnected?.id === id ? wifiConnected.ssid : wifiNetworks.find(n => n.id === id)?.ssid) ?? id;
+
     const installGuarded = (id: string) => {
+        const app = apps.find(a => a.id === id);
+        const locked = app ? lockedNetwork(app) : null;
+        if (locked) { setWifiLockId(locked); return; }
         if (!hasData) { setNoServiceOpen(true); return; }
         onInstall(id);
     };
@@ -123,6 +144,7 @@ export function AppStore({ onClose: _onClose, apps, installed, onInstall, onOpen
                             const dl = downloading[a.id];
                             const isDownloading = dl !== undefined;
                             const isQueued = isDownloading && dl < 0;
+                            const locked = !isInstalled && lockedNetwork(a) !== null;
                             return (
                                 <div key={a.id} className={`flex items-center gap-3.5 py-2.5 pl-3.5 ${i < list.length - 1 ? 'border-b border-black/10 dark:border-white/10' : ''}`}>
                                     <button type="button" onClick={() => setSelectedId(a.id)} aria-label={t('appstore.appDetails', '{label} details', { label: a.label })} className="shrink-0 active:opacity-60">
@@ -130,7 +152,10 @@ export function AppStore({ onClose: _onClose, apps, installed, onInstall, onOpen
                                     </button>
                                     <div className="flex min-w-0 flex-1 items-center gap-3 pr-3.5">
                                         <button type="button" onClick={() => setSelectedId(a.id)} className="min-w-0 flex-1 text-left active:opacity-60">
-                                            <div className="truncate text-[23px] font-medium leading-tight text-black dark:text-white">{a.label}</div>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="min-w-0 truncate text-[23px] font-medium leading-tight text-black dark:text-white">{a.label}</span>
+                                                {locked && <Lock className="h-[15px] w-[15px] shrink-0 text-black/45 dark:text-white/45" role="img" aria-label={t('appstore.wifiOnly', 'Wi-Fi only')} />}
+                                            </div>
                                             <div className="truncate text-[15px] leading-snug text-black/65 dark:text-white/65">{descOf(a.id)}</div>
                                         </button>
                                         {isDownloading ? (
@@ -142,7 +167,7 @@ export function AppStore({ onClose: _onClose, apps, installed, onInstall, onOpen
                                             <button
                                                 type="button"
                                                 onClick={() => (isInstalled ? onOpenApp(a.id) : installGuarded(a.id))}
-                                                className={`shrink-0 rounded-full bg-black/[0.08] px-5 py-2 text-[15px] font-bold uppercase tracking-wide text-ios-blue dark:bg-white/15 active:opacity-60 ${!isInstalled && !hasData ? 'opacity-40' : ''}`}
+                                                className={`shrink-0 rounded-full bg-black/[0.08] px-5 py-2 text-[15px] font-bold uppercase tracking-wide text-ios-blue dark:bg-white/15 active:opacity-60 ${!isInstalled && (!hasData || locked) ? 'opacity-40' : ''}`}
                                             >
                                                 {isInstalled ? t('appstore.open', 'Open') : t('appstore.get', 'Get')}
                                             </button>
@@ -165,8 +190,20 @@ export function AppStore({ onClose: _onClose, apps, installed, onInstall, onOpen
                     downloadProgress={downloading[selected.id]}
                     onBack={() => setSelectedId(null)}
                     onInstall={installGuarded}
-                    canDownload={hasData}
+                    canDownload={hasData && lockedNetwork(selected) === null}
+                    wifiLocked={lockedNetwork(selected) !== null}
                     onOpen={onOpenApp}
+                />
+            )}
+
+            {wifiLockId && (
+                <AlertDialog
+                    title={t('appstore.wifiOnlyTitle', 'Wi-Fi Required')}
+                    message={t('appstore.wifiOnlyBody', 'This app is only available on {ssid}. Connect to that network to download it.', { ssid: ssidOf(wifiLockId) })}
+                    confirmLabel={t('appstore.ok', 'OK')}
+                    hideCancel
+                    onCancel={() => setWifiLockId(null)}
+                    onConfirm={() => setWifiLockId(null)}
                 />
             )}
 

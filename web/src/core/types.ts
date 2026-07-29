@@ -75,6 +75,8 @@ export interface AppDef {
     route: string;
     accent: string;
     base?: boolean;
+    /** Wi-Fi network id (configs/wifi.lua) the phone must be joined to before this app downloads. */
+    wifi?: string;
 }
 
 export interface CustomAppDef {
@@ -92,6 +94,8 @@ export interface CustomAppDef {
     fixBlur?:    boolean;
     keepOpen?:   boolean;
     landscape?:  boolean;
+    /** Wi-Fi network id (configs/wifi.lua) the phone must be joined to before this app downloads. */
+    wifi?:       string;
     resource:    string;
 }
 

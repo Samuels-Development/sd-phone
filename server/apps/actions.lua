@@ -21,6 +21,25 @@ for _, app in ipairs(config.Apps.Apps or {}) do
     if app.id and app.base ~= true and app.enabled ~= false then DOWNLOADABLE[app.id] = true end
 end
 
+-- Apps pinned to one Wi-Fi network by `wifi` in configs/apps.lua. The ssid is resolved once here
+-- so a refusal can name the network the way the player reads it on screen.
+---@type table<string, { id: string, ssid: string }> App id -> required network id + ssid.
+local WIFI_GATED = {}
+do
+    local wifiCfg = type(config.Wifi) == 'table' and config.Wifi or {}
+    local ssids = {}
+    for _, net in ipairs(type(wifiCfg.Networks) == 'table' and wifiCfg.Networks or {}) do
+        if type(net.id) == 'string' then
+            ssids[net.id] = type(net.ssid) == 'string' and net.ssid or net.id
+        end
+    end
+    for _, app in ipairs(config.Apps.Apps or {}) do
+        if app.id and type(app.wifi) == 'string' and app.wifi ~= '' then
+            WIFI_GATED[app.id] = { id = app.wifi, ssid = ssids[app.wifi] or app.wifi }
+        end
+    end
+end
+
 ---Drops ids that aren't currently valid downloadables and de-dupes, preserving order. Runs on
 ---every read of the stored list.
 ---@param ids string[] stored app ids
@@ -49,8 +68,8 @@ function actions.list(source)
     })
 end
 
----Installs one downloadable app for the caller. The id is whitelist-checked against DOWNLOADABLE
----and the stored list re-sanitized before the append. Idempotent.
+---Installs one downloadable app for the caller: whitelist-checked against DOWNLOADABLE, and
+---refused for a `wifi` app unless the server itself puts the player on that network. Idempotent.
 ---@param source number player server id
 ---@param payload { id?: string } client payload
 ---@return table result { success, data = { installed } }
@@ -62,6 +81,13 @@ function actions.install(source, payload)
     local id = payload.id
     if type(id) ~= 'string' or not DOWNLOADABLE[id] then
         return fail('That app can\'t be downloaded')
+    end
+
+    -- hasWifiAccess re-verifies the connection against the server's own coords, so a client that
+    -- lies about where it is (or skips the UI entirely) still cannot reach a gated app.
+    local gate = WIFI_GATED[id]
+    if gate and not exports['sd-phone']:hasWifiAccess(source, gate.id) then
+        return fail(('Only available on %s'):format(gate.ssid))
     end
 
     local installed = sanitize(settings.getInstalledApps(cid))
