@@ -332,6 +332,7 @@ eventCookies[#eventCookies + 1] = AddEventHandler('sd-phone:client:settingsUpdat
 
 -- Config and settings readers.
 stubLbExport('GetConfig', {})
+
 ---GetCellTowers() -> vector3[]. lb-phone's config is a bare coordinate list, so the per-tower
 ---`range` sd-phone adds is dropped here; read it via exports['sd-phone']:getServiceLevel().
 registerLbExport('GetCellTowers', function()
@@ -341,6 +342,7 @@ registerLbExport('GetCellTowers', function()
     end
     return out
 end)
+
 ---GetSettings() -> table|nil, from the cache refreshed alongside lb-phone:settingsUpdated.
 registerLbExport('GetSettings', function()
     return settingsCache
