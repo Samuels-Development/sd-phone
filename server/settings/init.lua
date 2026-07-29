@@ -350,6 +350,26 @@ lib.callback.register('sd-phone:server:settings:setDarkTheme', function(source, 
     return { success = true }
 end)
 
+---Persists the caller's home-screen icon theme (default/mono/pastel/tinted).
+lib.callback.register('sd-phone:server:settings:setIconTheme', function(source, payload)
+    local cid = player.getIdentifier(source)
+    if not cid then return { success = false, message = 'Player not found' } end
+    if not writeAllowed(cid, 'iconTheme') then return BUSY end
+    payload = type(payload) == 'table' and payload or {}
+    store.setIconTheme(cid, payload.iconTheme)
+    return { success = true }
+end)
+
+---Persists whether the caller wants app names under their home-screen icons.
+lib.callback.register('sd-phone:server:settings:setShowAppNames', function(source, payload)
+    local cid = player.getIdentifier(source)
+    if not cid then return { success = false, message = 'Player not found' } end
+    if not writeAllowed(cid, 'showAppNames') then return BUSY end
+    payload = type(payload) == 'table' and payload or {}
+    store.setShowAppNames(cid, payload.on == true)
+    return { success = true }
+end)
+
 ---Persists the caller's tone selections; a missing or invalid field is left unchanged.
 lib.callback.register('sd-phone:server:settings:setTones', function(source, payload)
     local cid = player.getIdentifier(source)

@@ -25,6 +25,8 @@ writeCallback('sd-phone:settings:setReopenApp', 'sd-phone:server:settings:setReo
 writeCallback('sd-phone:settings:setSetupDone', 'sd-phone:server:settings:setSetupDone')
 writeCallback('sd-phone:settings:setTheme',     'sd-phone:server:settings:setTheme')
 writeCallback('sd-phone:settings:setDarkTheme', 'sd-phone:server:settings:setDarkTheme')
+writeCallback('sd-phone:settings:setIconTheme',    'sd-phone:server:settings:setIconTheme')
+writeCallback('sd-phone:settings:setShowAppNames', 'sd-phone:server:settings:setShowAppNames')
 writeCallback('sd-phone:settings:setLockClock', 'sd-phone:server:settings:setLockClock')
 writeCallback('sd-phone:settings:setSecurity',  'sd-phone:server:settings:setSecurity')
 writeCallback('sd-phone:settings:setWallpaper', 'sd-phone:server:settings:setWallpaper')

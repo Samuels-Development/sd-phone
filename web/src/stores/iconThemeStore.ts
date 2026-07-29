@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 
+import { fetchNui, isFiveM } from '@/core/nui';
 import { t } from '@/i18n';
 import { customAccent } from '@/stores/customAppsStore';
 
@@ -156,20 +157,31 @@ interface IconThemeState {
     setIconTheme:    (id: IconThemeId) => void;
     showAppNames:    boolean;
     setShowAppNames: (v: boolean) => void;
+    hydrate:         (data: { iconTheme?: unknown; showAppNames?: unknown }) => void;
 }
 
 export const useIconThemeStore = create<IconThemeState>(set => ({
-    iconTheme:    loadIconThemeLocal(),
-    showAppNames: loadShowAppNamesLocal(),
+    iconTheme:    isFiveM ? 'default' : loadIconThemeLocal(),
+    showAppNames: isFiveM ? true : loadShowAppNamesLocal(),
 
     setIconTheme: (id) => {
         set({ iconTheme: id });
-        saveIconThemeLocal(id);
+        if (isFiveM) void fetchNui('sd-phone:settings:setIconTheme', { iconTheme: id }).catch(() => {});
+        else saveIconThemeLocal(id);
     },
 
     setShowAppNames: (v) => {
         set({ showAppNames: v });
-        saveShowAppNamesLocal(v);
+        if (isFiveM) void fetchNui('sd-phone:settings:setShowAppNames', { on: v }).catch(() => {});
+        else saveShowAppNamesLocal(v);
+    },
+
+    hydrate: (data) => {
+        const stored = data.iconTheme;
+        set({
+            iconTheme:    typeof stored === 'string' && stored in BY_ID ? stored as IconThemeId : 'default',
+            showAppNames: typeof data.showAppNames === 'boolean' ? data.showAppNames : true,
+        });
     },
 }));
 

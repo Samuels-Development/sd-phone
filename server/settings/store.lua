@@ -80,6 +80,8 @@ function store.ensureSchema()
             setup_done         TINYINT(1)   NULL,
             theme              VARCHAR(8)   NULL,
             dark_theme         VARCHAR(16)  NULL,
+            icon_theme         VARCHAR(16)  NULL,
+            show_app_names     TINYINT(1)   NULL,
             ringtone_volume    TINYINT UNSIGNED NULL,
             call_volume        TINYINT UNSIGNED NULL,
             locale             VARCHAR(8)   NULL,
@@ -1002,6 +1004,59 @@ function store.setDarkTheme(citizenid, theme)
     ]], { citizenid, theme })
 end
 
+-- Mirrors the IconThemeId union in web/src/stores/iconThemeStore.ts.
+---@type table<string, boolean> Whitelist of storable home-screen icon themes.
+local ICON_THEMES = {
+    default = true, mono = true, pastel = true, tinted = true,
+}
+
+---Returns a player's home-screen icon theme, defaulting to 'default'. Read-only.
+---@param citizenid string framework per-character id
+---@return string iconTheme 'default' | 'mono' | 'pastel' | 'tinted'
+function store.getIconTheme(citizenid)
+    if not citizenid or citizenid == '' then return 'default' end
+    local row = MySQL.single.await('SELECT icon_theme FROM phone_settings WHERE citizenid = ?', { citizenid })
+    local v = row and row.icon_theme
+    if type(v) == 'string' and ICON_THEMES[v] then return v end
+    return 'default'
+end
+
+---Persists a player's home-screen icon theme (upsert), whitelisted to the known values.
+---@param citizenid string framework per-character id
+---@param theme any client-supplied icon theme id
+function store.setIconTheme(citizenid, theme)
+    if not citizenid or citizenid == '' then return end
+    if type(theme) ~= 'string' or not ICON_THEMES[theme] then return end
+    MySQL.update.await([[
+        INSERT INTO phone_settings (citizenid, icon_theme) VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE icon_theme = VALUES(icon_theme)
+    ]], { citizenid, theme })
+end
+
+---Returns true if a player wants app names printed under their home-screen icons, defaulting to
+---true when the show_app_names column is NULL. Read-only.
+---@param citizenid string framework per-character id
+---@return boolean showAppNames
+function store.getShowAppNames(citizenid)
+    if not citizenid or citizenid == '' then return true end
+    local row = MySQL.single.await('SELECT show_app_names FROM phone_settings WHERE citizenid = ?', { citizenid })
+    if row and row.show_app_names ~= nil then
+        return isTruthy(row.show_app_names)
+    end
+    return true
+end
+
+---Persists a player's show-app-names preference (upsert), coerced to a strict boolean.
+---@param citizenid string framework per-character id
+---@param on boolean print app names under the home-screen icons
+function store.setShowAppNames(citizenid, on)
+    if not citizenid or citizenid == '' then return end
+    MySQL.update.await([[
+        INSERT INTO phone_settings (citizenid, show_app_names) VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE show_app_names = VALUES(show_app_names)
+    ]], { citizenid, on == true and 1 or 0 })
+end
+
 ---Persists a player's tone selections, leaving any other settings intact; a nil or invalid
 ---field is left unchanged.
 ---@param citizenid string framework per-character id
@@ -1125,6 +1180,14 @@ function store.snapshot(citizenid)
     end
     local dark = row and row.dark_theme
     if dark ~= 'graphite' and dark ~= 'black' and dark ~= 'warm' then dark = 'graphite' end
+    local icons = row and row.icon_theme
+    if type(icons) ~= 'string' or not ICON_THEMES[icons] then icons = 'default' end
+    local showAppNames
+    if row and row.show_app_names ~= nil then
+        showAppNames = isTruthy(row.show_app_names)
+    else
+        showAppNames = true
+    end
 
     return {
         ringtone         = row and row.ringtone or nil,
@@ -1135,6 +1198,8 @@ function store.snapshot(citizenid)
         setupDone        = row ~= nil and (row.setup_done == true or tonumber(row.setup_done) == 1),
         theme            = (row and row.theme == 'dark') and 'dark' or 'light',
         darkTheme        = dark,
+        iconTheme        = icons,
+        showAppNames     = showAppNames,
         lockClock        = row and decodeColumn(row.lock_clock, nil) or nil,
         wallpaper        = (row and row.wallpaper ~= '') and row.wallpaper or nil,
         wallpaperHome    = (row and row.wallpaper_home ~= '') and row.wallpaper_home or nil,

@@ -8,6 +8,7 @@ import devDefaultAsset from '@/assets/photos/background5.webp';
 import { fetchNui, isFiveM } from '@/core/nui';
 import { isDemo } from '@/core/demo';
 import { wallpaperKey } from '@/shell/wallpapers';
+import { useIconThemeStore } from '@/stores/iconThemeStore';
 import { DEFAULT_LOCK_CLOCK, loadLockClockLocal, saveLockClockLocal, type LockClock } from '@/shell/lockClock';
 import { DEFAULT_NOTIFICATION, DEFAULT_RINGTONE } from '@/apps/settings/tones';
 import type { CustomTone, ToneKind } from '@/apps/settings/tones';
@@ -504,7 +505,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
             }
         };
         const keyAtRequest = wallpaperProfileKey;
-        void fetchNui<{ data?: { ringtone?: string; notificationTone?: string; customRingtones?: CustomTone[]; customNotificationTones?: CustomTone[]; airplaneMode?: boolean; hour24?: boolean; reopenApp?: boolean; setupDone?: boolean; lockClock?: Partial<LockClock>; passcode?: string | null; faceId?: boolean; wallpaper?: string; wallpaperHome?: string; blurLock?: boolean; blurHome?: boolean; customWallpapers?: string[]; chatTextScale?: number; phoneScale?: number; brightness?: number; phoneAlign?: string; ringtoneVol?: number; callVol?: number; theme?: string; darkTheme?: string } }>('sd-phone:settings:get')
+        void fetchNui<{ data?: { ringtone?: string; notificationTone?: string; customRingtones?: CustomTone[]; customNotificationTones?: CustomTone[]; airplaneMode?: boolean; hour24?: boolean; reopenApp?: boolean; setupDone?: boolean; lockClock?: Partial<LockClock>; passcode?: string | null; faceId?: boolean; wallpaper?: string; wallpaperHome?: string; blurLock?: boolean; blurHome?: boolean; customWallpapers?: string[]; chatTextScale?: number; phoneScale?: number; brightness?: number; phoneAlign?: string; ringtoneVol?: number; callVol?: number; theme?: string; darkTheme?: string; iconTheme?: string; showAppNames?: boolean } }>('sd-phone:settings:get')
             .then(res => {
                 if (!res?.data) { retry(); return; }
                 const d = res.data;
@@ -549,6 +550,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
                 patch.customRingtones         = ring;
                 patch.customNotificationTones = notif;
                 set(patch);
+                useIconThemeStore.getState().hydrate(d);
                 // Freshest server answer becomes the profile's cached wallpapers - unless the
                 // acting profile changed while this request was in flight.
                 if (isFiveM && keyAtRequest === wallpaperProfileKey) {
