@@ -72,23 +72,18 @@ export function AppStore({ onClose: _onClose, apps, installed, onInstall, onOpen
     onOpenApp: (id: string) => void;
 }) {
     const downloading = useDownloads();
-    // Downloading an app needs a real connection, and a `wifi` app needs one named network. Both
-    // Get buttons go through installGuarded, so every refusal is decided in one place.
     const hasData = useHasData();
     const wifiConnected = useWifiConnected();
     const wifiNetworks = useWifiNetworks();
     const [noServiceOpen, setNoServiceOpen] = useState(false);
     const [wifiLockId, setWifiLockId] = useState<string | null>(null);
 
-    // Built-in apps carry `wifi` on the def; a third-party app carries it on its registration.
     const wifiIdOf = (app: AppDef) => app.wifi ?? getCustomApp(app.id)?.wifi;
-    // The network the app wants and the phone is not on, or null when it may be downloaded.
     const lockedNetwork = (app: AppDef): string | null => {
         const id = wifiIdOf(app);
         if (!id || wifiConnected?.id === id) return null;
         return id;
     };
-    // Only a network in range reports its ssid, so an out-of-reach one is named by its raw id.
     const ssidOf = (id: string) =>
         (wifiConnected?.id === id ? wifiConnected.ssid : wifiNetworks.find(n => n.id === id)?.ssid) ?? id;
 

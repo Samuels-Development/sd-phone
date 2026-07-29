@@ -232,7 +232,6 @@ function AppContent() {
     // status bar shows "No Service" and only number-dependent actions (call/text) are refused
     // server-side. (In legacy mode useNoSim drives the full-screen wall instead.)
     const noService = useNoService();
-    // A configured dead zone reads as No Service too, from location rather than a missing SIM.
     const noServiceArea = useNoServiceArea();
     // A pulled SIM drops the phone straight back to the (blocked) lock state: no app stays
     // foregrounded and the switcher/control-center close.
@@ -808,15 +807,9 @@ function AppContent() {
     ringingAlarmRef.current = ringingAlarm;
     const [ringingSince, setRingingSince] = useState(0);
     const lastViewRef  = useRef<ViewState | null>(null);
-    // Live bars from the cell tower push, falling back to the static value the open payload
-    // carried. Both status bars sit past an early return, so these hooks are read here instead.
     const peekBars = useServiceBars(lastViewRef.current?.signal ?? 4);
     const liveBars = useServiceBars(view?.signal ?? 4);
-    // Bars of the joined Wi-Fi network, or null for the plain icon. Read past the same early
-    // return as the cellular bars, and suppressed by the toggles that already own the radio.
     const wifiNetwork = useWifiConnected();
-    // Once a server runs Wi-Fi networks, the corner is driven purely by whether one is joined.
-    // The legacy static ShowWifi flag would otherwise paint an icon for a radio that is off.
     const wifiConfigured = useWifiStore(s => s.configured);
     const wifiUsable  = !(airplaneMode || noSim || !ccWifi);
     const wifiBars = wifiUsable ? (wifiNetwork?.bars ?? null) : null;

@@ -1,6 +1,5 @@
--- Wi-Fi - local networks that carry data where the cell towers cannot, or will not. Turn Enabled
--- off and the whole system is inert: nothing is scanned, nothing connects, and the phone falls
--- back to cell service alone.
+-- Wi-Fi - local networks that carry data where the cell towers cannot, or will not. Enabled off
+-- leaves the whole system inert and the phone falls back to cell service alone.
 return {
     Enabled = true,
 

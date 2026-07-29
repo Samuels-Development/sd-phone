@@ -26,10 +26,7 @@ export function AppDetail({ app, desc, installed, downloadProgress, onBack, onIn
     downloadProgress?: number;
     onBack:            () => void;
     onInstall:         (id: string) => void;
-    /** False in a dead zone, or off the app's own Wi-Fi network: the Get button dims, and
-     *  onInstall raises whichever dialog explains the refusal. */
     canDownload?:      boolean;
-    /** True when the app only downloads on a Wi-Fi network this phone is not joined to. */
     wifiLocked?:       boolean;
     onOpen:            (id: string) => void;
 }) {

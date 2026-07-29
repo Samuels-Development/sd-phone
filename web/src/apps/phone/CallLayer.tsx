@@ -37,7 +37,6 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
     const [keypadOpen, setKeypadOpen]     = useState(false);
     const [contactsOpen, setContactsOpen] = useState(false);
     const [dtmfDialed, setDtmfDialed]     = useState('');
-    // null while there is nothing to report; true when this player's own signal was the one lost.
     const [droppedLost, setDroppedLost]   = useState<boolean | null>(null);
     const [now, setNow]         = useState(() => Date.now());
     const [videoPhase, setVideoPhase]         = useState<'off' | 'requesting' | 'incoming' | 'active'>('off');
@@ -71,8 +70,6 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
         resetControls();
     }, [resetControls]));
 
-    // Coverage went mid-call. `lost` is true for whoever's own signal dropped, false for the
-    // other side, which is the only difference between the two messages.
     useNuiEvent('sd-phone:call:dropped', useCallback((data) => {
         setDroppedLost(data?.lost === true);
     }, []));
@@ -104,8 +101,6 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
         return () => window.clearInterval(id);
     }, [phase]);
 
-    // Rendered past the phase guard below: a dropped call has already cleared the call UI by the
-    // time this lands, so the dialog is the only thing left on screen.
     const dropNotice = droppedLost === null ? null : (
         <AlertDialog
             title={t('phone.callDropped','Call Dropped')}

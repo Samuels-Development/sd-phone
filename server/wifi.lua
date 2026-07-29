@@ -79,21 +79,15 @@ function wifiServer.connectionOf(source)
     local net = wifi.find(id, NETWORKS)
     if not net then
         connections[source] = nil
-        -- The network was edited out of the config under a live connection. A consumer gating on
-        -- it has to hear an ending, not just stop being told about the id.
         announceDisconnect(source, id)
         return nil
     end
 
-    -- An unresolvable player (offline, mid-spawn) is no proof they left, so the connection stands;
-    -- it just carries nothing until their position can be read again.
     local pos = coordsOf(source)
     if not pos then return nil end
 
     if wifi.strength(pos.x, pos.y, pos.z, net) <= DROP_BELOW then
         connections[source] = nil
-        -- The player walked out of range. This is where that is noticed at all, so it is also the
-        -- only place it can be announced from.
         announceDisconnect(source, id)
         return nil
     end
@@ -124,15 +118,12 @@ function wifiServer.networks()
     local out = {}
     for i = 1, #NETWORKS do
         local net = NETWORKS[i]
-        -- An id is what the exports and the gating refer to, so an entry without one could never
-        -- be joined and is dropped here exactly as the scan drops it.
         if type(net) == 'table' and type(net.id) == 'string' and net.id ~= '' then
             out[#out + 1] = {
                 id      = net.id,
                 ssid    = tostring(net.ssid or net.id),
                 coords  = net.coords,
                 range   = tonumber(net.range) or 0.0,
-                -- The only thing about a password a caller ever learns: whether there is one.
                 secured = wifi.secured(net),
             }
         end
@@ -161,8 +152,6 @@ lib.callback.register('sd-phone:server:wifi:connect', function(source, payload)
 
     local cid = player.getIdentifier(source)
 
-    -- Spent before the network is even resolved, so every attempt costs the same whether it is
-    -- refused for a bad id, for distance, or for the password.
     if not util.rateLimit(cid, 'wifi:connect', CONNECT_WINDOW, CONNECT_PER_WINDOW) then
         return util.fail('Too many attempts, wait a moment')
     end
@@ -181,17 +170,11 @@ lib.callback.register('sd-phone:server:wifi:connect', function(source, payload)
     end
 
     connections[source] = net.id
-    -- Remembered from the config's own password, never the string the client sent: the only thing
-    -- a client can do here is fail the check above, so nothing it types can reach `known`. A DB
-    -- hiccup must not turn a good join into a refusal, so the write is pcall'd.
     if cid then
         pcall(store.remember, cid, net.id, wifi.secured(net) and net.password or nil)
-        -- Joining by hand undoes an earlier Disconnect: the player is asking for it back.
         pcall(store.setDeclined, cid, net.id, false)
     end
 
-    -- Server-local lifecycle event, fired once the join is recorded: a consumer gating a door or a
-    -- terminal on this network opens it from here.
     TriggerEvent('sd-phone:server:wifi:connected', source, net.id)
     return util.ok()
 end)
@@ -237,14 +220,11 @@ RegisterNetEvent('sd-phone:server:wifi:disconnect', function(payload)
     local was = connections[source]
     connections[source] = nil
 
-    -- Leaving on purpose is remembered, so the network is never rejoined on its own again. Only
-    -- joining it by hand clears that, which is the player asking for it back.
     if was and type(payload) == 'table' and payload.explicit == true then
         local cid = player.getIdentifier(source)
         if cid then pcall(store.setDeclined, cid, was, true) end
     end
 
-    -- Asking twice is harmless, so only a request that ended a live connection announces one.
     if was then announceDisconnect(source, was) end
 end)
 

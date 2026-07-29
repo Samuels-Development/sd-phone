@@ -1,6 +1,5 @@
--- Cell towers - degradable cellular service by location. Turn Enabled off and the whole system
--- is inert: every phone always has full service and StatusBar.SignalBars keeps drawing the
--- static bar count, exactly as before, without you having to delete your tower list.
+-- Cell towers - degradable cellular service by location. Enabled off leaves every phone on full
+-- service, with StatusBar.SignalBars still drawing its static bar count.
 return {
     -- Master switch. False leaves every phone on full service no matter where its owner stands,
     -- so a server can keep the mast list below intact while the system is parked. An empty

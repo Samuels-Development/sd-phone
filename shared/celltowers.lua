@@ -3,7 +3,7 @@
 local celltowers = {}
 
 ---Best service level across every tower, 0 (nothing) to 1 (standing on a mast). Distance is
----horizontal: `range` is a flat radius and a tower's Z is documentation, not maths.
+---horizontal, and a list with no usable tower fails open at 1.0 rather than killing every phone.
 ---@param x number player world X
 ---@param y number player world Y
 ---@param towers table[]|nil { tower = vector3, range = number }
@@ -26,8 +26,6 @@ function celltowers.level(x, y, towers)
         end
     end
 
-    -- No usable entry means the feature is not configured (or is misconfigured). Fail open: a
-    -- typo in one server's config must never leave every phone on it dead.
     if valid == 0 then return 1.0 end
     return best
 end

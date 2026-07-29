@@ -6,7 +6,6 @@ export interface StatusBarProps {
     use24h: boolean;
     signal: number;
     showWifi: boolean;
-    /** Bars (0..3) of the joined Wi-Fi network. null when nothing is joined, so `showWifi` decides. */
     wifiBars?: number | null;
     battery: number;
     airplane?: boolean;
@@ -38,9 +37,6 @@ export function StatusBar({ use24h, signal, showWifi, wifiBars = null, battery, 
                 ) : noSim ? (
                     <span className="font-sf text-[13px] font-semibold leading-none opacity-80">No SIM</span>
                 ) : noService ? (
-                    // Wi-Fi survives the No Service label rather than being replaced by it, the
-                    // way a real phone shows it. A router in a cell dead zone is the whole point
-                    // of having Wi-Fi, so hiding the one icon proving it works reads as broken.
                     <>
                         <span className="font-sf text-[13px] font-semibold leading-none opacity-80">{t('shell.noService', 'No Service')}</span>
                         <WifiGlyph bars={wifiBars} showWifi={false} />
@@ -84,24 +80,14 @@ function Cellular({ size, bars }: { size: number; bars: number }) {
     );
 }
 
-/** The Wi-Fi arcs, innermost first, so arc N lights up at strength N. */
 const WIFI_ARC_PATHS = [
     'M346.65 304.3a136 136 0 00-180.71 0 21 21 0 1027.91 31.38 94 94 0 01124.89 0 21 21 0 0027.91-31.4z',
     'M256.28 183.7a221.47 221.47 0 00-151.8 59.92 21 21 0 1028.68 30.67 180.28 180.28 0 01246.24 0 21 21 0 1028.68-30.67 221.47 221.47 0 00-151.8-59.92z',
     'M462 175.86a309 309 0 00-411.44 0 21 21 0 1028 31.29 267 267 0 01355.43 0 21 21 0 0028-31.31z',
 ];
 
-/** Opacity of an arc the connection does not reach, matching the dimmed cellular bars. */
 const WIFI_DIM = 0.28;
 
-/**
- * The Wi-Fi corner, kept in one place so both status bars agree.
- *
- * The icon appears only while a network is actually joined, arcs filled to its signal. A radio
- * that is switched on but has joined nothing shows NOTHING, which is what a real phone does: the
- * glyph means "connected", so drawing it while idle claims a connection that does not exist.
- * `showWifi` is the legacy static flag and only applies where no Wi-Fi networks are configured.
- */
 function WifiGlyph({ bars, showWifi }: { bars?: number | null; showWifi?: boolean }) {
     if (bars !== null && bars !== undefined) return <Wifi size={21} bars={bars} />;
     if (showWifi) return <Wifi size={21} />;

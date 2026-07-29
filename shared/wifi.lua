@@ -74,8 +74,6 @@ function wifi.scan(x, y, z, networks, floor)
         end
     end
 
-    -- Strongest first, and by id where two are equal so the list never reorders under the
-    -- player's finger while they stand still.
     table.sort(out, function(a, b)
         if a.strength == b.strength then return a.id < b.id end
         return a.strength > b.strength

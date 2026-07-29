@@ -9,8 +9,8 @@ local MAX_ID = 64
 ---@type table Store module; the table returned at end of file.
 local store = {}
 
----Creates phone_wifi: one row per character, holding the radio switch and every network that
----character has joined.
+---Creates phone_wifi: one row per character, holding the radio switch, every network that character
+---has joined and the ones they declined. `declined` shipped later, so it is added separately too.
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_wifi (
@@ -24,8 +24,6 @@ function store.ensureSchema()
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
 
-    -- `declined` arrived after the table shipped, so an install from before it needs the column
-    -- adding rather than the CREATE above, which does nothing on an existing table.
     pcall(MySQL.query.await, 'ALTER TABLE phone_wifi ADD COLUMN IF NOT EXISTS declined LONGTEXT NULL AFTER known')
 end
 
@@ -59,8 +57,6 @@ function store.get(citizenid)
         local ok, decoded = pcall(json.decode, row.known)
         if ok and type(decoded) == 'table' then
             for id, saved in pairs(decoded) do
-                -- A password is handed back verbatim so an auto-rejoin can replay it; anything
-                -- else stored under an id means the network was open and collapses to true.
                 if type(id) == 'string' and saved ~= nil then
                     known[id] = type(saved) == 'string' and saved or true
                 end
@@ -78,8 +74,6 @@ function store.get(citizenid)
         end
     end
 
-    -- oxmysql hands a TINYINT(1) back as a Lua boolean, so tonumber() would read every stored
-    -- switch as nil and report the radio as always-on.
     return { enabled = isTruthy(row.enabled), known = known, declined = declined }
 end
 

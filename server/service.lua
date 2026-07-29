@@ -59,30 +59,24 @@ function service.allows(source, capability)
 end
 
 ---A client reporting it crossed the coverage boundary: `{ lost = true }` for the falling edge, no
----payload for the rising edge and for the sync a phone sends when it opens.
+---payload for the rising edge and the open sync. Re-derived server-side, so a forged report does nothing.
 RegisterNetEvent('sd-phone:server:service:report', function(payload)
     local source = source
     local reported = not (type(payload) == 'table' and payload.lost == true)
     local hasService = service.allows(source, 'text')
 
-    -- The report only says which edge to look for. The level is re-derived from the server's own
-    -- coords, so a forged report releases nothing and announces nothing.
     if reported ~= hasService then return end
 
-    -- A repeat loss announces nothing. The regain side stays unguarded because the report a phone
-    -- sends on open is the only thing that releases texts withheld while it was holstered.
     if not hasService and announced[source] == false then return end
 
     local cid = player.getIdentifier(source)
     if not cid then return end
 
-    -- One budget for both edges, so a player sitting on a threshold cannot flap the pair at
-    -- listeners. A throttled report leaves the announced state alone, so the next one re-announces.
     if not util.rateLimit(cid, 'service:report', REPORT_WINDOW, REPORTS_PER_WINDOW) then return end
 
     announced[source] = hasService
     if hasService then
-        ---Pre-existing, not new in this change: a verified back-in-range report.
+        ---A verified return to service, for scripts that release work withheld in a dead zone.
         ---@param source number player server id
         TriggerEvent('sd-phone:server:service:regained', source)
     else

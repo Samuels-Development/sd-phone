@@ -11,15 +11,13 @@ local radiusCfg = type(blipCfg.Radius) == 'table' and blipCfg.Radius or {}
 ---@type integer[] Handles for every blip drawn here, kept so a resource stop can clear them.
 local created = {}
 
----Draws a marker on each mast plus its coverage circle. The tower list is static config, so this
----runs once rather than on a tick.
+---Draws a marker on each mast plus a coverage circle sized from that mast's own range, so the map
+---can never disagree with the service the maths hands out. The tower list is static, so this runs once.
 local function drawTowerBlips()
     for _, entry in ipairs(type(cfg.Towers) == 'table' and cfg.Towers or {}) do
         local pos   = type(entry) == 'table' and entry.tower or nil
         local range = tonumber(type(entry) == 'table' and entry.range or nil)
         if pos and range and range > 0 then
-            -- Sized from the tower's own range rather than a separate setting, so what the map
-            -- shows can never disagree with the service the maths hands out.
             if radiusCfg.Enabled ~= false then
                 local circle = AddBlipForRadius(pos.x, pos.y, pos.z, range + 0.0)
                 SetBlipHighDetail(circle, true)

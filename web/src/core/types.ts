@@ -64,11 +64,6 @@ export interface WifiState {
     configured?: boolean;
     connected: WifiNetwork | null;
     networks: WifiNetwork[];
-    /**
-     * Whether the joined network carries data. The cell push cannot answer this: its own `data`
-     * flag is computed from the masts alone, so without this the UI would refuse a download the
-     * gate would have allowed. Optional on the wire, where a missing flag reads as no data.
-     */
     providesData?: boolean;
 }
 

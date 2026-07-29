@@ -24,7 +24,6 @@ interface Props {
     initialValue?:   string;
     maxLength?:      number;
     inputMode?:      Mode;
-    /** Mask what is typed, for passwords. Uses a real password input rather than styling. */
     secure?:         boolean;
     sanitize?:       (v: string) => string;
     secondField?:  FieldConfig;

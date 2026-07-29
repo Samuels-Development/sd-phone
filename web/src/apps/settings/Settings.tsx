@@ -28,13 +28,9 @@ export function Settings({ onClose }: { onClose: () => void }) {
     const simEnabled = useSimStore(s => s.enabled);
     const wifi = useWifiConnected();
 
-    // The SIM & Backup row only exists while the server runs unique phones, and the Wi-Fi row
-    // carries the network the phone is on, the way iOS names it in the list.
+    // The SIM & Backup row only exists while the server runs unique phones.
     const settingsGroups = getSettingsGroups()
         .map(g => simEnabled ? g : { ...g, rows: g.rows.filter(r => r.id !== 'sim') })
-        // The Wi-Fi row keeps its subtitle and gains the network name on the right. The subtitle is
-        // deliberately short: a long one next to an SSID crowds the row, which is what made this
-        // look wrong when it carried the full sentence its neighbours use.
         .map(g => ({
             ...g,
             rows: g.rows.map(r => (r.id === 'wifi'

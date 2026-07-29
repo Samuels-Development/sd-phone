@@ -12,18 +12,14 @@ import { ListGroup, ListRow, ToggleRow } from '@/ui/ListGroup';
 import { PromptDialog } from '@/ui/PromptDialog';
 import { SubPage } from '../SettingsSubPage';
 
-// The three arcs of the status bar's Wi-Fi glyph, innermost first, so a network's bars can fill
-// them the way the cellular icon fills its bars.
 const ARC_PATHS = [
     'M346.65 304.3a136 136 0 00-180.71 0 21 21 0 1027.91 31.38 94 94 0 01124.89 0 21 21 0 0027.91-31.4z',
     'M256.28 183.7a221.47 221.47 0 00-151.8 59.92 21 21 0 1028.68 30.67 180.28 180.28 0 01246.24 0 21 21 0 1028.68-30.67 221.47 221.47 0 00-151.8-59.92z',
     'M462 175.86a309 309 0 00-411.44 0 21 21 0 1028 31.29 267 267 0 01355.43 0 21 21 0 0028-31.31z',
 ];
 
-/** Opacity of an arc the signal does not reach. Dimmed rather than hidden, as iOS draws it. */
 const DIM = 0.28;
 
-/** Networks the dev server has no Lua to scan for; in-game the store carries the real ones. */
 const DEV_STATE: WifiState = {
     enabled: true,
     connected: null,
@@ -35,7 +31,6 @@ const DEV_STATE: WifiState = {
     ],
 };
 
-/** The status bar's Wi-Fi glyph at list size, its arcs filled to `bars` and the rest dimmed. */
 function WifiGlyph({ bars, size = 20 }: { bars: number; size?: number }) {
     const level = Number.isFinite(bars) ? Math.max(0, Math.min(ARC_PATHS.length, Math.round(bars))) : 0;
     return (
@@ -46,7 +41,6 @@ function WifiGlyph({ bars, size = 20 }: { bars: number; size?: number }) {
     );
 }
 
-/** Trailing side of a network row: a padlock while it is secured, then its strength. */
 function NetworkMeta({ net, busy = false }: { net: WifiNetwork; busy?: boolean }) {
     return (
         <span className="flex items-center gap-2">
@@ -60,7 +54,6 @@ function NetworkMeta({ net, busy = false }: { net: WifiNetwork; busy?: boolean }
     );
 }
 
-/** Settings -> Wi-Fi: the network this phone is on, and everything else within reach of it. */
 export function WifiPage({ onBack }: { onBack: () => void }) {
     const storeEnabled   = useWifiStore(s => s.enabled);
     const storeData      = useWifiStore(s => s.providesData);
@@ -79,12 +72,9 @@ export function WifiPage({ onBack }: { onBack: () => void }) {
     const inRange   = isFiveM ? storeNetworks  : dev.networks;
     const carrying  = isFiveM ? storeData      : dev.providesData;
 
-    // The scan carries the live reading for the joined network, so prefer it over the snapshot the
-    // connection was made from: bars move as the player walks, and the padlock only appears here.
     const joined = connected ? inRange.find(n => n.id === connected.id) ?? connected : null;
     const others = inRange.filter(n => n.id !== connected?.id);
 
-    // The store is push-fed while the phone is on screen; this seeds it for the first paint.
     const refresh = useCallback(async () => {
         if (!isFiveM) return;
         const data = await apiData<WifiState>('sd-phone:wifi:list');
@@ -94,14 +84,12 @@ export function WifiPage({ onBack }: { onBack: () => void }) {
 
     useEffect(() => { void refresh(); }, [refresh]);
 
-    /** The Wi-Fi switch. Turning it off drops whatever is joined, which the client handles. */
     const setRadio = useCallback(async (on: boolean) => {
         if (!isFiveM) { setDev(s => ({ ...s, enabled: on, connected: on ? s.connected : null })); return; }
         await apiCall<void>('sd-phone:wifi:setEnabled', { on });
         await refresh();
     }, [refresh]);
 
-    /** Returns the failure message, or null once the phone is on the network. */
     const join = useCallback(async (net: WifiNetwork, password?: string): Promise<string | null> => {
         if (!isFiveM) { setDev(s => ({ ...s, connected: net })); return null; }
         setBusyId(net.id);
@@ -114,8 +102,6 @@ export function WifiPage({ onBack }: { onBack: () => void }) {
 
     function press(net: WifiNetwork) {
         if (busyId) return;
-        // A network this character already knows rejoins on the stored password. Only something
-        // secured AND unknown is worth asking about; Forget is what makes it ask again.
         if (net.secured && !net.known) { setAsking(net); return; }
         void join(net).then(err => { if (err) setNotice(err); });
     }

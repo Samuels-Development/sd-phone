@@ -83,8 +83,6 @@ function actions.install(source, payload)
         return fail('That app can\'t be downloaded')
     end
 
-    -- hasWifiAccess re-verifies the connection against the server's own coords, so a client that
-    -- lies about where it is (or skips the UI entirely) still cannot reach a gated app.
     local gate = WIFI_GATED[id]
     if gate and not exports['sd-phone']:hasWifiAccess(source, gate.id) then
         return fail(('Only available on %s'):format(gate.ssid))

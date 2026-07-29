@@ -99,10 +99,6 @@ local function refresh(force)
         data   = { bars = service.bars(), level = level, data = data },
     })
 
-    -- Crossing the coverage boundary either way is the client's cue to tell the server, which
-    -- re-derives the level from its own coords before honouring it, so a forged report drains
-    -- nothing and announces nothing. No payload still means the rising edge, which is also the
-    -- shape the sync on open sends.
     if lost then
         TriggerServerEvent('sd-phone:server:service:report', { lost = true })
     elseif regained or force then

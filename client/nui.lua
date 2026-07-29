@@ -99,9 +99,6 @@ local function proxy(nuiAction, serverEvent, onAccepted)
         local key = cacheable and cacheKey(action, payload) or nil
 
         if not reachable(serverEvent) then
-            -- Out of coverage: hand back what this read last returned, so the app still shows the
-            -- feed the player already had rather than an empty screen. `cached` marks it as the
-            -- old answer for any UI that wants to say so.
             local kept = key and lastGood[key]
             if kept then
                 local copy = {}

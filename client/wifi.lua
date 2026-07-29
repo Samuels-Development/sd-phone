@@ -12,8 +12,6 @@ do
     local list = (cfg.Enabled == true and type(cfg.Networks) == 'table') and cfg.Networks or {}
     for i = 1, #list do
         local net = list[i]
-        -- An id is what the exports, the gating and a player's remembered networks all refer to,
-        -- so an entry without one could never be joined and is dropped here rather than later.
         if type(net) == 'table' and type(net.id) == 'string' and net.id ~= '' then
             NETWORKS[#NETWORKS + 1] = net
         end
@@ -88,8 +86,6 @@ function wifiClient.setEnabled(on)
         wifiClient.disconnect()
         scanned = {}
     end
-    -- Written through rather than awaited inline: the switch has already taken locally, and the
-    -- pane must not sit on a round trip to say so.
     CreateThread(function()
         lib.callback.await('sd-phone:server:wifi:setEnabled', false, { on = want })
     end)
@@ -140,7 +136,6 @@ function wifiClient.networks()
             ssid    = tostring(net.ssid or net.id),
             coords  = net.coords,
             range   = tonumber(net.range) or 0.0,
-            -- The only thing about a password a caller ever learns: whether there is one.
             secured = wifi.secured(net),
         }
     end
@@ -159,28 +154,21 @@ function wifiClient.nearby()
             secured  = entry.secured,
             strength = entry.strength,
             bars     = entry.bars,
-            -- Already joined once by this character, so rejoining needs no password. The UI uses
-            -- this to tap straight through instead of asking again for something it knows.
             known    = remembered[entry.id] ~= nil,
         }
     end
     return out
 end
 
----The whole Wi-Fi picture the NUI renders: the joined network plus everything in reach.
----@return { enabled: boolean, connected: table|nil, networks: table[] }
+---The whole Wi-Fi picture the NUI renders: the joined network plus everything in reach. `configured`
+---is whether this server runs Wi-Fi at all, which `enabled` cannot say on its own.
+---@return { enabled: boolean, configured: boolean, connected: table|nil, networks: table[], providesData: boolean }
 local function snapshot()
     return {
         enabled   = wifiClient.enabled(),
-        -- Whether this server runs Wi-Fi at all, which `enabled` cannot say on its own: a
-        -- switched-off radio and a server with no networks both read as false there. The status
-        -- bar needs the difference to know whether the legacy static icon still applies.
         configured = #NETWORKS > 0,
         connected = wifiClient.current(),
         networks  = wifiClient.nearby(),
-        -- Whether this connection carries data, which the cell push cannot answer: its own `data`
-        -- flag is computed from the masts alone. Without this the UI would grey out a download
-        -- the gate would actually have allowed.
         providesData = wifiClient.provides('data'),
     }
 end
@@ -212,8 +200,6 @@ function wifiClient.connect(id, password)
     local net = wifi.find(id, NETWORKS)
     if not net then return false, 'Unknown network' end
 
-    -- Rejoining a network this character already knows reuses the password that worked, so the
-    -- phone never asks twice for the same network. Forgetting it is what clears that.
     local supplied = (type(password) == 'string' and password ~= '') and password or nil
     if not supplied and type(remembered[id]) == 'string' then supplied = remembered[id] end
 
@@ -223,13 +209,9 @@ function wifiClient.connect(id, password)
     end
 
     joined = net
-    -- Joining by hand undoes an earlier Disconnect, so the network auto-rejoins again from here.
     declined[net.id] = nil
     local pos = GetEntityCoords(PlayerPedId())
     joinedStrength = wifi.strength(pos.x, pos.y, pos.z, net)
-    -- The password that worked is kept beside the id so an auto-rejoin can hand it back and let
-    -- the server check it again, rather than the player being asked a second time. The durable
-    -- copy is written server-side off the same join, from the config's password rather than this.
     remembered[net.id] = supplied or true
     push(true)
     return true, nil
@@ -239,9 +221,6 @@ end
 ---@param explicit boolean|nil true when the player pressed Disconnect themselves
 function wifiClient.disconnect(explicit)
     if not joined then return end
-    -- Leaving on purpose stops the auto-rejoin picking the network straight back up, which would
-    -- make the button look broken. The network stays remembered, so tapping it joins again with no
-    -- password; walking out of range clears this so returning later behaves normally.
     if explicit then declined[joined.id] = true end
     TriggerServerEvent('sd-phone:server:wifi:disconnect', { explicit = explicit == true })
     joined, joinedStrength = nil, 0.0
@@ -255,8 +234,6 @@ function wifiClient.forget(id)
     if type(id) ~= 'string' then return end
     remembered[id] = nil
     TriggerServerEvent('sd-phone:server:wifi:forget', id)
-    -- Forgetting the network you are on leaves it too, which is what the button says on a real
-    -- phone. Staying joined to something the phone has been told to forget reads as a bug.
     if joined and joined.id == id then wifiClient.disconnect() end
 end
 
@@ -264,8 +241,6 @@ end
 ---remembered network in reach when nothing is connected.
 ---@param force boolean|nil push even when nothing changed (used on open)
 function refresh(force)
-    -- A switched-off radio scans nothing and holds nothing, so the page shows an empty list
-    -- rather than networks it would refuse to join.
     if not radioOn then
         scanned = {}
         push(force)
@@ -290,8 +265,6 @@ function refresh(force)
         end
     end
 
-    -- Walking back into a network joined earlier rejoins it silently. The server re-checks the
-    -- password it is handed, so a remembered id on its own opens nothing.
     if REMEMBER and not joined and not rejoining then
         for i = 1, #scanned do
             local saved = remembered[scanned[i].id]
@@ -321,8 +294,6 @@ local function hydrate()
         local res = lib.callback.await('sd-phone:server:wifi:state', false)
         if mine ~= epoch then return end
         hydrating = false
-        -- A refusal means the character is not resolvable yet (mid-spawn, multichar pick), so the
-        -- flag stays down and the next open tries again rather than locking in stock state.
         if type(res) ~= 'table' or res.success ~= true or type(res.data) ~= 'table' then return end
 
         hydrated = true
@@ -341,8 +312,6 @@ local function hydrate()
             if type(id) == 'string' and on then declined[id] = true end
         end
 
-        -- A stored-off radio has to drop anything the scan got in first with, or the phone keeps
-        -- carrying data behind a switch it has just read as off.
         if not radioOn then
             wifiClient.disconnect()
             scanned = {}
