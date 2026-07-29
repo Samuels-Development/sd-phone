@@ -44,6 +44,13 @@ AddEventHandler('sd-phone:server:airplane:released', function(source)
     actions.releaseWithheld(source)
 end)
 
+---Delivers everything held back while the player was outside tower coverage, when the service
+---module verifies a client's back-in-range report.
+---@param source number player server id
+AddEventHandler('sd-phone:server:service:regained', function(source)
+    actions.releaseWithheld(source)
+end)
+
 ---Delivers texts queued while a number was out of service, when the SIM session attaches the
 ---number to an identity (SIM installed or moved). Threaded: the attach fires mid-resolve.
 ---@param source number player server id

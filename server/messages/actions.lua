@@ -18,6 +18,8 @@ local store         = require 'server.messages.store'
 local badges        = require 'server.badges.init'
 ---@type table Admin mute registry (server.admin.moderation): scope guards for sending texts.
 local moderation    = require 'server.admin.moderation'
+---@type table Cell service (server.service): authoritative signal level per player.
+local service       = require 'server.service'
 
 ---@type table Messages knobs (configs/messages.lua): body / thread / group caps.
 local cfg = config.Messages
@@ -452,12 +454,12 @@ local function sendDirect(source, cid, myNumber, target, kind, body, meta, ts, m
     if not targetCid then
         queueForNumber(target, mid, myNumber, kind, body, meta, ts)
     elseif targetCid ~= cid and not contactsStore.isBlocked(targetCid, myNumber) then
-        withheld = settings.isAirplane(targetCid)
+        targetSrc = player.getSourceByIdentifier(targetCid)
+        withheld = settings.isAirplane(targetCid) or not service.allows(targetSrc, 'text')
         inId = store.newId()
         store.insertMessage(inId, mid, targetCid, myNumber, myNumber, 'incoming', kind, body, meta, false, ts, withheld)
         store.pruneThread(targetCid, myNumber, cfg.MessagesPerThread)
 
-        targetSrc = player.getSourceByIdentifier(targetCid)
         if targetSrc and not withheld then
             -- No character-name fallback: an unsaved sender shows as their number, matching
             -- the buildConversation reload path (and not leaking identities).
@@ -603,11 +605,11 @@ function actions.systemText(senderNumber, senderName, targetNumber, body, opts)
     local ts   = os.time()
     local mid  = store.newId()
     local inId = store.newId()
-    local withheld = settings.isAirplane(targetCid)
+    local targetSrc = player.getSourceByIdentifier(targetCid)
+    local withheld = settings.isAirplane(targetCid) or not service.allows(targetSrc, 'text')
     store.insertMessage(inId, mid, targetCid, senderNumber, senderNumber, 'incoming', kind, body, meta, false, ts, withheld)
     store.pruneThread(targetCid, senderNumber, cfg.MessagesPerThread)
 
-    local targetSrc = player.getSourceByIdentifier(targetCid)
     if targetSrc and not withheld then
         local participant = resolveParticipant(senderNumber, nil, senderName)
         local msg = buildMessage(inId, senderNumber, kind, body, meta, ts, false, digits(settings.getPhoneNumber(targetCid)))
@@ -741,6 +743,7 @@ function actions.send(source, payload)
         return fail('Slow down')
     end
     if settings.isAirplane(cid) then return fail('Airplane Mode is on') end
+    if not service.allows(source, 'text') then return fail('No Service') end
     local muted = moderation.guard(cid, 'sms'); if muted then return muted end
 
     local conversation = tostring(payload.conversation or '')
