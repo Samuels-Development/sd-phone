@@ -12,6 +12,8 @@ local badges   = require 'server.badges.init'
 local moderation = require 'server.admin.moderation'
 ---@type table Payphone persistence (server.payphone.store): booth number -> location lookups.
 local payphones = require 'server.payphone.store'
+---@type table Cell service (server.service): authoritative signal level per player.
+local service  = require 'server.service'
 
 ---@type table Actions module; the table returned at end of file.
 local actions = {}
@@ -372,6 +374,7 @@ function actions.dial(source, payload)
     if sessionForSource(source) or ringForSource(source) or boothRingForSource(source) then return fail('You are already on a call') end
     if not util.rateLimit(cid, 'call:dial', DIAL_WINDOW, DIAL_PER_WINDOW) then return fail('Slow down') end
     if settings.isAirplane(cid) then return fail('Airplane Mode is on') end
+    if not service.allows(source, 'call') then return fail('No Service') end
     local muted = moderation.guard(cid, 'calls'); if muted then return muted end
 
     local myNumber = settings.ensurePhoneNumber(cid)
@@ -423,6 +426,7 @@ function actions.dial(source, payload)
     if not targetSrc then return fail('This number is currently unavailable') end
     if not reachable(targetSrc) then return fail('This number is currently unavailable') end
     if settings.isAirplane(targetCid) then return fail('This number is currently unavailable') end
+    if not service.allows(targetSrc, 'call') then return fail('This number is currently unavailable') end
     if contacts.isBlocked(targetCid, digits(myNumber)) then return fail('This number is currently unavailable') end
     if sessionForSource(targetSrc) or ringForSource(targetSrc) then return fail('Line busy') end
 
@@ -483,6 +487,7 @@ function actions.dialPayphone(source, payload)
     if not targetSrc then return fail('This number is currently unavailable') end
     if not reachable(targetSrc) then return fail('This number is currently unavailable') end
     if settings.isAirplane(targetCid) then return fail('This number is currently unavailable') end
+    if not service.allows(targetSrc, 'call') then return fail('This number is currently unavailable') end
     if callerNumber ~= '' and contacts.isBlocked(targetCid, callerNumber) then return fail('This number is currently unavailable') end
     if sessionForSource(targetSrc) or ringForSource(targetSrc) then return fail('Line busy') end
 
@@ -557,6 +562,7 @@ function actions.callGroup(source, targets, displayName, displayNumber)
     if not cid then return fail('Player not found') end
     if sessionForSource(source) or ringForSource(source) then return fail('You are already on a call') end
     if settings.isAirplane(cid) then return fail('Airplane Mode is on') end
+    if not service.allows(source, 'call') then return fail('No Service') end
 
     local myNumber = digits(settings.ensurePhoneNumber(cid))
 
@@ -564,7 +570,8 @@ function actions.callGroup(source, targets, displayName, displayNumber)
     for _, t in ipairs(targets) do
         if t.src and t.src ~= source
             and not sessionForSource(t.src) and not ringForSource(t.src)
-            and not settings.isAirplane(t.cid) and reachable(t.src) then
+            and not settings.isAirplane(t.cid) and reachable(t.src)
+            and service.allows(t.src, 'call') then
             ringTargets[t.src] = {
                 src    = t.src,
                 cid    = t.cid,

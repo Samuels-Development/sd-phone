@@ -1,0 +1,58 @@
+---@type table sd-phone config root (configs/config.lua).
+local config = require 'configs.config'
+---@type table Pure cell-tower maths (shared.celltowers): level + capability thresholds.
+local celltowers = require 'shared.celltowers'
+---@type table Shared server helpers (server.util): rate limiting for the reported edge.
+local util = require 'server.util'
+---@type table Player bridge (bridge.server.player): citizenid lookup for the rate-limit key.
+local player = require 'bridge.server.player'
+
+---@type table Cell tower settings (configs/celltowers.lua).
+local cfg = config.CellTowers or {}
+---@type table[] Configured masts; empty leaves every reading full.
+local TOWERS = type(cfg.Towers) == 'table' and cfg.Towers or {}
+---@type table Minimum level per capability.
+local THRESHOLDS = type(cfg.Thresholds) == 'table' and cfg.Thresholds or {}
+---@type integer Milliseconds a player must wait between honoured back-in-range reports.
+local REPORT_WINDOW = 10000
+---@type integer Reports honoured per window.
+local REPORTS_PER_WINDOW = 1
+
+---@type table Service module; the table returned at end of file.
+local service = {}
+
+---Authoritative service level for a player, from the server's own view of where they are. An
+---unresolvable player reads as full service so an offline or mid-spawn target is never treated
+---as being in a dead zone.
+---@param source number|nil player server id
+---@return number level 0..1
+function service.levelFor(source)
+    if #TOWERS == 0 or not source then return 1.0 end
+    local ped = GetPlayerPed(source)
+    if not ped or ped == 0 then return 1.0 end
+    local pos = GetEntityCoords(ped)
+    if not pos then return 1.0 end
+    return celltowers.level(pos.x, pos.y, TOWERS)
+end
+
+---@param source number|nil player server id
+---@param capability string 'text' | 'call' | 'data'
+---@return boolean
+function service.allows(source, capability)
+    if #TOWERS == 0 then return true end
+    return celltowers.allows(service.levelFor(source), capability, THRESHOLDS)
+end
+
+---A client reporting it walked back into coverage. The level is re-derived here before anything
+---acts on it, so a forged report releases nothing; the rate limit keeps a spamming client from
+---driving repeated drains.
+RegisterNetEvent('sd-phone:server:service:report', function()
+    local source = source
+    if not service.allows(source, 'text') then return end
+    local cid = player.getIdentifier(source)
+    if not cid then return end
+    if not util.rateLimit(cid, 'service:report', REPORT_WINDOW, REPORTS_PER_WINDOW) then return end
+    TriggerEvent('sd-phone:server:service:regained', source)
+end)
+
+return service

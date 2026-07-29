@@ -16,6 +16,7 @@ local inv       = require 'bridge.server.inventory'
 -- clarity - the wrapper must also be live before the boot-time registrations below).
 require 'server.sim.init'
 require 'server.settings.init'
+require 'server.service'
 require 'server.apps.init'
 require 'server.groups.init'
 require 'server.mail.init'
