@@ -11,7 +11,7 @@ import { AppBadge } from './AppBadge';
 import { useBadges } from '@/stores/badgeStore';
 import { AlertDialog } from '@/ui/AlertDialog';
 import type { SavedLayout, WidgetAlign, WidgetPlacement, WidgetSize, WidgetTheme } from '@/apps/appstore/appsApi';
-import { SPAN, coveredCells, firstFit, jiggleDeg, widgetPx } from './widgets/geometry';
+import { SPAN, coveredCells, firstFit, jiggleDeg, reflowAround, widgetPx } from './widgets/geometry';
 import { widgetByKind } from './widgets/registry';
 import { launchOriginFrom } from './launchOrigin';
 import { WidgetGallery } from './widgets/WidgetGallery';
@@ -221,11 +221,13 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
     const addWidget = useCallback((kind: string, size: WidgetSize, align: WidgetAlign, theme: WidgetTheme, picks?: string[]): boolean => {
         const spot = firstFit(size, pageRef.current, slots, widgets, ITEMS_PER_PAGE);
         if (!spot) return false;
-        setWidgets(prev => [...prev, {
+        const next: WidgetPlacement[] = [...widgets, {
             uid: `w${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`,
             kind, size, align, theme, page: pageRef.current, col: spot.col, row: spot.row,
             ...(picks?.length ? { picks } : {}),
-        }]);
+        }];
+        setWidgets(next);
+        setSlots(prev => normalize(reflowAround(prev, next, ITEMS_PER_PAGE)));
         setGalleryOpen(false);
         return true;
     }, [slots, widgets]);
@@ -324,14 +326,15 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
             setDropPreview(null);
             if (!spot) return;
 
-            // Only other WIDGETS block a move. Icons underneath are hidden by coveredByPage, the
-            // same as when a widget is first placed, so they do not need to be considered here.
+            // Only other WIDGETS block a move.
             const target = new Set(coveredCells({ size: dragSizeRef.current, col: spot.col, row: spot.row }));
             const clash = widgetsRef.current.some(o => o.uid !== uid && o.page === toPage
                 && coveredCells(o).some(c => target.has(c)));
             if (clash) return;
 
-            setWidgets(prev => prev.map(o => (o.uid === uid ? { ...o, page: toPage, col: spot.col, row: spot.row } : o)));
+            const next = widgetsRef.current.map(o => (o.uid === uid ? { ...o, page: toPage, col: spot.col, row: spot.row } : o));
+            setWidgets(next);
+            setSlots(prev => normalize(reflowAround(prev, next, ITEMS_PER_PAGE)));
         }
 
         window.addEventListener('pointermove', move);

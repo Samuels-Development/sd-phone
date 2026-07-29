@@ -67,3 +67,28 @@ export function firstFit(
     }
     return null;
 }
+
+export function reflowAround(
+    slots: (string | null)[],
+    widgets: WidgetPlacement[],
+    itemsPerPage: number,
+): (string | null)[] {
+    const covered = new Map<number, Set<number>>();
+    for (const w of widgets) {
+        const set = covered.get(w.page) ?? new Set<number>();
+        for (const c of coveredCells(w)) set.add(c);
+        covered.set(w.page, set);
+    }
+
+    const out: (string | null)[] = slots.map(() => null);
+    let cell = 0;
+    for (const id of slots) {
+        if (id === null) continue;
+        while (covered.get(Math.floor(cell / itemsPerPage))?.has(cell % itemsPerPage)) cell++;
+        while (out.length <= cell) out.push(null);
+        out[cell] = id;
+        cell++;
+    }
+    while (out.length % itemsPerPage !== 0) out.push(null);
+    return out;
+}
