@@ -1,5 +1,9 @@
+import { useState } from 'react';
+
 import { useSessionState } from '@/hooks/useSessionState';
 import { useDownloads } from '@/stores/downloadStore';
+import { useHasData } from '@/stores/serviceStore';
+import { AlertDialog } from '@/ui/AlertDialog';
 import { AppIconSVG } from '@/shell/AppIconSVG';
 import { SearchBar } from '@/ui/SearchBar';
 import { SegmentedControl } from '@/ui/SegmentedControl';
@@ -66,6 +70,14 @@ export function AppStore({ onClose: _onClose, apps, installed, onInstall, onOpen
     onOpenApp: (id: string) => void;
 }) {
     const downloading = useDownloads();
+    // Downloading an app needs a real connection. Both Get buttons go through installGuarded, so
+    // the dead-zone case is handled once rather than at each button.
+    const hasData = useHasData();
+    const [noServiceOpen, setNoServiceOpen] = useState(false);
+    const installGuarded = (id: string) => {
+        if (!hasData) { setNoServiceOpen(true); return; }
+        onInstall(id);
+    };
     const [q, setQ] = useSessionState('appstore:search', '');
     const [filter, setFilter] = useSessionState<'all' | 'notInstalled'>('appstore:filter', 'all');
     const [selectedId, setSelectedId] = useSessionState<string | null>('appstore:selected', null);
@@ -129,8 +141,8 @@ export function AppStore({ onClose: _onClose, apps, installed, onInstall, onOpen
                                         ) : (
                                             <button
                                                 type="button"
-                                                onClick={() => (isInstalled ? onOpenApp(a.id) : onInstall(a.id))}
-                                                className="shrink-0 rounded-full bg-black/[0.08] px-5 py-2 text-[15px] font-bold uppercase tracking-wide text-ios-blue dark:bg-white/15 active:opacity-60"
+                                                onClick={() => (isInstalled ? onOpenApp(a.id) : installGuarded(a.id))}
+                                                className={`shrink-0 rounded-full bg-black/[0.08] px-5 py-2 text-[15px] font-bold uppercase tracking-wide text-ios-blue dark:bg-white/15 active:opacity-60 ${!isInstalled && !hasData ? 'opacity-40' : ''}`}
                                             >
                                                 {isInstalled ? t('appstore.open', 'Open') : t('appstore.get', 'Get')}
                                             </button>
@@ -152,8 +164,20 @@ export function AppStore({ onClose: _onClose, apps, installed, onInstall, onOpen
                     installed={!!selected.base || installed.has(selected.id)}
                     downloadProgress={downloading[selected.id]}
                     onBack={() => setSelectedId(null)}
-                    onInstall={onInstall}
+                    onInstall={installGuarded}
+                    canDownload={hasData}
                     onOpen={onOpenApp}
+                />
+            )}
+
+            {noServiceOpen && (
+                <AlertDialog
+                    title={t('appstore.noServiceTitle', 'No Service')}
+                    message={t('appstore.noServiceBody', 'You need a signal to download apps. Try again once you are back in coverage.')}
+                    confirmLabel={t('appstore.ok', 'OK')}
+                    hideCancel
+                    onCancel={() => setNoServiceOpen(false)}
+                    onConfirm={() => setNoServiceOpen(false)}
                 />
             )}
         </div>

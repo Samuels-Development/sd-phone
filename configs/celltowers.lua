@@ -100,4 +100,14 @@ return {
         'contacts', 'call', 'calls', 'messages', 'payphone', 'share', 'airshare',
         'radio', 'cookie',
     },
+
+    -- Single actions that need Thresholds.Data even though the app around them is offline-safe,
+    -- written as '<app>:<action>'. These win over the Offline list above.
+    --
+    -- Downloading an app really is a download, while the rest of the App Store is the phone's own
+    -- state: the catalogue, the home layout and deleting something already on the device all keep
+    -- working with no signal, which is how a real phone behaves.
+    Gated = {
+        'apps:install',
+    },
 }

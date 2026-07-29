@@ -33,6 +33,11 @@ export function useServiceBars(fallback: number): number {
     return useServiceStore(s => (s.active ? s.bars : fallback));
 }
 
+/** True when data-backed features can reach the server: app downloads, social apps, and the like. */
+export function useHasData(): boolean {
+    return useServiceStore(s => s.data);
+}
+
 /** True when the player is inside a configured dead zone (no bars from any tower). */
 export function useNoServiceArea(): boolean {
     return useServiceStore(s => s.active && s.bars === 0);

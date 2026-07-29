@@ -3,21 +3,32 @@ local config = require 'configs.config'
 ---@type table Cell service (client.service): live level + capability gating.
 local service = require 'client.service'
 
----@type table<string, boolean> App namespaces that work with no signal (configs/celltowers.lua).
+---@type table Cell tower settings (configs/celltowers.lua).
+local towerCfg = type(config.CellTowers) == 'table' and config.CellTowers or {}
+
+---@type table<string, boolean> App namespaces that work with no signal.
 local OFFLINE_OK = {}
-for _, name in ipairs(type(config.CellTowers) == 'table' and config.CellTowers.Offline or {}) do
+for _, name in ipairs(towerCfg.Offline or {}) do
     OFFLINE_OK[tostring(name)] = true
+end
+
+---@type table<string, boolean> '<app>:<action>' pairs that need data despite an offline namespace.
+local GATED = {}
+for _, name in ipairs(towerCfg.Gated or {}) do
+    GATED[tostring(name)] = true
 end
 
 ---Whether a server callback may be reached right now. Every app talks to the server through
 ---this file, so one check covers the whole phone; namespaces in Offline are device-local, RF or
----landline and keep working in a dead zone.
+---landline and keep working in a dead zone, bar the individual actions listed in Gated.
 ---@param serverEvent string 'sd-phone:server:<namespace>:<action>'
 ---@return boolean
 local function reachable(serverEvent)
     if not service.active() then return true end
-    local namespace = serverEvent:match('^sd%-phone:server:([^:]+):')
-    if not namespace or OFFLINE_OK[namespace] then return true end
+    local action = serverEvent:match('^sd%-phone:server:(.+)$')
+    if not action then return true end
+    if GATED[action] then return service.allows('data') end
+    if OFFLINE_OK[action:match('^([^:]+)')] then return true end
     return service.allows('data')
 end
 

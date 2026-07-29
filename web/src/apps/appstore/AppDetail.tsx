@@ -19,13 +19,15 @@ function appSize(id: string): string {
     return t('appstore.appSize', '{size} MB', { size: mb.toFixed(1) });
 }
 
-export function AppDetail({ app, desc, installed, downloadProgress, onBack, onInstall, onOpen }: {
+export function AppDetail({ app, desc, installed, downloadProgress, onBack, onInstall, canDownload = true, onOpen }: {
     app:               AppDef;
     desc:              string;
     installed:         boolean;
     downloadProgress?: number;
     onBack:            () => void;
     onInstall:         (id: string) => void;
+    /** False in a dead zone: the Get button dims, and onInstall raises the No Service dialog. */
+    canDownload?:      boolean;
     onOpen:            (id: string) => void;
 }) {
     const [shown, setShown] = useState(false);
@@ -79,7 +81,7 @@ export function AppDetail({ app, desc, installed, downloadProgress, onBack, onIn
                                 <button
                                     type="button"
                                     onClick={() => (installed ? onOpen(app.id) : onInstall(app.id))}
-                                    className="rounded-full bg-ios-blue px-7 py-1.5 text-[15px] font-bold uppercase tracking-wide text-white active:opacity-70"
+                                    className={`rounded-full bg-ios-blue px-7 py-1.5 text-[15px] font-bold uppercase tracking-wide text-white active:opacity-70 ${!installed && !canDownload ? 'opacity-40' : ''}`}
                                 >
                                     {installed ? t('appstore.open', 'Open') : t('appstore.get', 'Get')}
                                 </button>
