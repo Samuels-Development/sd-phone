@@ -7,7 +7,7 @@ import { SegmentedControl } from '@/ui/SegmentedControl';
 import { Sheet } from '@/ui/Sheet';
 import { resolveWallpaper } from '../wallpapers';
 import { SPAN, widgetPx } from './geometry';
-import { WIDGETS } from './registry';
+import { useWidgetCatalog } from './registry';
 
 const SIZE_LABEL: Record<WidgetSize, string> = { sm: 'Small', md: 'Medium', lg: 'Large' };
 const ALIGN_LABEL: Record<WidgetAlign, string> = { left: 'Left', center: 'Centre', right: 'Right' };
@@ -26,6 +26,7 @@ export function WidgetGallery({
     onClose: () => void;
     wallpaper: string;
 }) {
+    const catalog = useWidgetCatalog();
     const [pick, setPick] = useState<Record<string, WidgetSize>>({});
     const [alignPick, setAlignPick] = useState<Record<string, WidgetAlign>>({});
     const [themePick, setThemePick] = useState<Record<string, WidgetTheme>>({});
@@ -50,8 +51,9 @@ export function WidgetGallery({
                     {t('widgets.blurb', 'Widgets show information from your apps at a glance. Pick a size, then add it to your Home Screen.')}
                 </p>
 
-                {WIDGETS.map(def => {
-                    const size = pick[def.kind] ?? def.sizes[0];
+                {catalog.map(def => {
+                    const picked = pick[def.kind];
+                    const size = picked && def.sizes.includes(picked) ? picked : def.sizes[0];
                     const { width: fullW,    height: fullH }    = widgetPx(size);
                     const { width: previewW, height: previewH } = widgetPx(size, PREVIEW_SCALE);
                     const align = alignPick[def.kind] ?? 'left';

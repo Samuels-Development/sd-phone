@@ -78,6 +78,13 @@ export interface AppDef {
     wifi?: string;
 }
 
+export interface CustomWidgetDef {
+    id:    string;
+    name:  string;
+    ui:    string;
+    sizes: ('sm' | 'md' | 'lg')[];
+}
+
 export interface CustomAppDef {
     id:          string;
     name:        string;
@@ -95,6 +102,7 @@ export interface CustomAppDef {
     landscape?:  boolean;
     /** Wi-Fi network id (configs/wifi.lua) the phone must be joined to before this app downloads. */
     wifi?:       string;
+    widgets?:    CustomWidgetDef[];
     resource:    string;
 }
 

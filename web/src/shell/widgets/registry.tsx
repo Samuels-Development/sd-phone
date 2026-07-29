@@ -1,7 +1,11 @@
+import { useMemo } from 'react';
 import type { ReactNode } from 'react';
 
 import type { WidgetAlign, WidgetSize, WidgetTheme } from '@/apps/appstore/appsApi';
+import type { CustomAppDef, CustomWidgetDef } from '@/core/types';
 import { t } from '@/i18n';
+import { useCustomApps } from '@/stores/customAppsStore';
+import { CustomWidgetFrame, customWidgetKind, parseCustomWidgetKind } from './CustomWidgetFrame';
 import { ActivityWidget } from './ActivityWidget';
 import { ClockWidget } from './ClockWidget';
 import { ContactsWidget } from './ContactsWidget';
@@ -34,7 +38,7 @@ export interface WidgetDef {
     render: (o: WidgetRender) => ReactNode;
 }
 
-export const WIDGETS: WidgetDef[] = [
+const WIDGETS: WidgetDef[] = [
     {
         kind: 'weather',
         label: () => t('widgets.weather', 'Weather'),
@@ -127,4 +131,47 @@ export const WIDGETS: WidgetDef[] = [
     },
 ];
 
-export const widgetByKind = (kind: string): WidgetDef | undefined => WIDGETS.find(w => w.kind === kind);
+function thirdPartyDef(app: CustomAppDef, widget: CustomWidgetDef): WidgetDef {
+    const kind = customWidgetKind(app.id, widget.id);
+    return {
+        kind,
+        label:  () => widget.name,
+        sizes:  widget.sizes,
+        appId:  app.id,
+        render: o => <CustomWidgetFrame kind={kind} size={o.size} width={o.width} height={o.height} />,
+    };
+}
+
+export function useWidgetCatalog(): WidgetDef[] {
+    const apps = useCustomApps();
+    return useMemo(() => {
+        const extra: WidgetDef[] = [];
+        for (const app of apps) {
+            for (const widget of app.widgets ?? []) extra.push(thirdPartyDef(app, widget));
+        }
+        return extra.length ? [...WIDGETS, ...extra] : WIDGETS;
+    }, [apps]);
+}
+
+const framed = new Map<string, WidgetDef>();
+
+function framedDef(kind: string, appId: string): WidgetDef {
+    const cached = framed.get(kind);
+    if (cached) return cached;
+    const def: WidgetDef = {
+        kind,
+        label:  () => t('widgets.thirdParty', 'Widget'),
+        sizes:  ['sm', 'md', 'lg'],
+        appId,
+        render: o => <CustomWidgetFrame kind={kind} size={o.size} width={o.width} height={o.height} />,
+    };
+    framed.set(kind, def);
+    return def;
+}
+
+export function widgetByKind(kind: string): WidgetDef | undefined {
+    const builtIn = WIDGETS.find(w => w.kind === kind);
+    if (builtIn) return builtIn;
+    const parsed = parseCustomWidgetKind(kind);
+    return parsed ? framedDef(kind, parsed.appId) : undefined;
+}

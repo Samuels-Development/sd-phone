@@ -28,6 +28,24 @@ local FIELD_TYPES = {
     landscape   = 'boolean',
 }
 
+---@type table<string, string> Fields of one entry in a def's optional `widgets` array, and the Lua
+---type each must have. `ui` is the page the home screen frames; `id` defaults to a slug of `name`.
+local WIDGET_FIELD_TYPES = {
+    id   = 'string',
+    name = 'string',
+    ui   = 'string',
+}
+
+---@type table<string, true> Sizes a declared widget may claim, matching the home screen's grid.
+local WIDGET_SIZES = { sm = true, md = true, lg = true }
+
+---@type string[] Sizes a widget is offered at when it declares none.
+local WIDGET_SIZES_DEFAULT = { 'sm', 'md', 'lg' }
+
+---@type string This resource, which no widget may point its frame at: a page served from the
+---phone's own origin would be same-origin with the shell, and framing the shell nests it in a tile.
+local PHONE_RESOURCE = GetCurrentResourceName():lower()
+
 ---@type table Public module surface; the table returned at end of file.
 local M = {}
 
@@ -37,6 +55,102 @@ local function debugPrint(...)
     if config.Debug then
         print('[sd-phone:client]', ...)
     end
+end
+
+---Reduces a widget name to an identifier the saved home-screen layout can key a placement on.
+---@param value string
+---@return string
+local function slug(value)
+    return (value:lower():gsub('%s+', '_'):gsub('[^%w_%-]', ''))
+end
+
+---The resource a widget's ui is served from, or nil for an outside url. A cfx-nui host is read back
+---to its resource so the absolute form of a local page cannot dodge the checks below.
+---@param ui string
+---@return string?
+local function uiResource(ui)
+    local path = (ui:lower():gsub('^nui://', ''))
+    local host = path:match('^https?://([^/]+)')
+    if host then return (host:gsub(':%d+$', '')):match('^cfx%-nui%-(.+)') end
+    if path:find('http') then return nil end
+    return path:gsub('^/', ''):match('^[^/]+')
+end
+
+---Sanitizes one declared widget, or refuses it with the reason. Refusing an entry never refuses
+---the app: the caller drops this widget and keeps the rest.
+---@param entry any
+---@param index integer position in the declared array, used when the entry has no usable name
+---@return table? widget, string? err
+local function readWidget(entry, index)
+    if type(entry) ~= 'table' then
+        return nil, ('widget #%d must be a table'):format(index)
+    end
+
+    local widget = {}
+    for field, expected in pairs(WIDGET_FIELD_TYPES) do
+        if type(entry[field]) == expected then widget[field] = entry[field] end
+    end
+    if not widget.name or widget.name == '' then
+        return nil, ('widget #%d needs a non-empty name'):format(index)
+    end
+    if not widget.ui or widget.ui == '' then
+        return nil, ('widget %s needs a ui to render'):format(widget.name)
+    end
+    if uiResource(widget.ui) == PHONE_RESOURCE then
+        return nil, ('widget %s cannot frame %s itself'):format(widget.name, PHONE_RESOURCE)
+    end
+
+    widget.id = slug(widget.id or widget.name)
+    if widget.id == '' then
+        return nil, ('widget %s needs an id of letters, numbers, - or _'):format(widget.name)
+    end
+
+    local sizes = {}
+    if entry.sizes == nil then
+        for i = 1, #WIDGET_SIZES_DEFAULT do sizes[i] = WIDGET_SIZES_DEFAULT[i] end
+    elseif type(entry.sizes) == 'table' then
+        local seen = {}
+        for _, size in ipairs(entry.sizes) do
+            if WIDGET_SIZES[size] and not seen[size] then
+                seen[size] = true
+                sizes[#sizes + 1] = size
+            end
+        end
+    end
+    if #sizes == 0 then
+        return nil, ('widget %s declares no usable size'):format(widget.name)
+    end
+    widget.sizes = sizes
+
+    return widget
+end
+
+---Reads a def's optional `widgets` array, keeping every entry that validates and reporting the
+---rest. Returns an empty list when nothing was declared or nothing survived.
+---@param list any
+---@param identifier string owning app, named in refusal reasons
+---@return table[] widgets
+local function readWidgets(list, identifier)
+    local widgets = {}
+    if list == nil then return widgets end
+    if type(list) ~= 'table' then
+        debugPrint(('%s: widgets must be an array, ignoring it'):format(identifier))
+        return widgets
+    end
+
+    local claimed = {}
+    for index = 1, #list do
+        local widget, err = readWidget(list[index], index)
+        if not widget then
+            debugPrint(('%s: %s'):format(identifier, err))
+        elseif claimed[widget.id] then
+            debugPrint(('%s: widget id %s is declared twice'):format(identifier, widget.id))
+        else
+            claimed[widget.id] = true
+            widgets[#widgets + 1] = widget
+        end
+    end
+    return widgets
 end
 
 ---Records an identifier in the order list once.
@@ -123,6 +237,8 @@ function M.add(data, resource)
         end
         def.images = images
     end
+    local widgets = readWidgets(data.widgets, identifier)
+    if #widgets > 0 then def.widgets = widgets end
 
     local onOpen = data.onOpen
     if type(onOpen) ~= 'function' then onOpen = data.onUse end

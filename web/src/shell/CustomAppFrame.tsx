@@ -17,6 +17,7 @@ import { ContactPickerSheet } from '@/shared/ContactPickerSheet';
 import { formatPhone } from '@/apps/phone/data';
 import { AppIconSVG } from './AppIconSVG';
 import { useDeckActive } from './deckActive';
+import { resolveCustomUi } from './widgets/customUrl';
 import type { Contact } from '@/apps/phone/data';
 
 const COMPONENTS_URL = 'https://cfx-nui-sd-phone/web/build/components.js';
@@ -378,11 +379,7 @@ export function CustomAppFrame({ appId }: { appId: string; onClose: () => void }
 
     if (!def) return null;
 
-    const src = def.ui
-        ? (def.ui.startsWith('nui://')
-            ? `https://cfx-nui-${def.ui.slice(6)}`
-            : def.ui.includes('http') ? def.ui : `https://cfx-nui-${def.ui.replace(/^\//, '')}`)
-        : '';
+    const src = resolveCustomUi(def.ui);
 
     return (
         <div className="absolute inset-0 overflow-hidden bg-white dark:bg-base">
