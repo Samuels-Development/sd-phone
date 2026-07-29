@@ -1007,12 +1007,14 @@ end
 -- Mirrors the IconThemeId union in web/src/stores/iconThemeStore.ts.
 ---@type table<string, boolean> Whitelist of storable home-screen icon themes.
 local ICON_THEMES = {
-    default = true, mono = true, pastel = true, tinted = true,
+    default = true, glass  = true, flat = true, light = true, pastel   = true,
+    sand    = true, slate  = true, tinted = true, noir = true, mono    = true,
+    contrast = true,
 }
 
 ---Returns a player's home-screen icon theme, defaulting to 'default'. Read-only.
 ---@param citizenid string framework per-character id
----@return string iconTheme 'default' | 'mono' | 'pastel' | 'tinted'
+---@return string iconTheme one of the ICON_THEMES keys
 function store.getIconTheme(citizenid)
     if not citizenid or citizenid == '' then return 'default' end
     local row = MySQL.single.await('SELECT icon_theme FROM phone_settings WHERE citizenid = ?', { citizenid })

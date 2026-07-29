@@ -4,7 +4,9 @@ import { fetchNui, isFiveM } from '@/core/nui';
 import { t } from '@/i18n';
 import { customAccent } from '@/stores/customAppsStore';
 
-export type IconThemeId = 'default' | 'mono' | 'pastel' | 'tinted';
+export type IconThemeId =
+    | 'default' | 'glass' | 'flat' | 'light' | 'pastel' | 'sand'
+    | 'slate' | 'tinted' | 'noir' | 'mono' | 'contrast';
 
 type IconArt = 'native' | 'glyph';
 
@@ -20,9 +22,13 @@ export interface IconThemeDef {
     art:        IconArt;
     background: ColorRecipe;
     glyph:      ColorRecipe;
-    label:      () => string;
-    hint:       () => string;
+    depth?:       boolean;
+    minContrast?: number;
+    label:        () => string;
+    hint:         () => string;
 }
+
+const WHITE_ON_COLOUR = 1.55;
 
 export const ICON_THEMES: IconThemeDef[] = [
     {
@@ -34,12 +40,31 @@ export const ICON_THEMES: IconThemeDef[] = [
         hint:       () => t('settings.iconThemeDefaultHint', 'Original app artwork'),
     },
     {
-        id:         'mono',
+        id:          'glass',
+        art:         'glyph',
+        background:  { from: 'accent' },
+        glyph:       { from: 'fixed', color: '#ffffff' },
+        depth:       true,
+        minContrast: WHITE_ON_COLOUR,
+        label:      () => t('settings.iconThemeGlass', 'Glass'),
+        hint:       () => t('settings.iconThemeGlassHint', 'Lit, glossy tiles in each app colour'),
+    },
+    {
+        id:          'flat',
+        art:         'glyph',
+        background:  { from: 'accent' },
+        glyph:       { from: 'fixed', color: '#ffffff' },
+        minContrast: WHITE_ON_COLOUR,
+        label:      () => t('settings.iconThemeFlat', 'Flat'),
+        hint:       () => t('settings.iconThemeFlatHint', 'Matching glyphs on full app colour'),
+    },
+    {
+        id:         'light',
         art:        'glyph',
-        background: { from: 'fixed', color: '#26262a' },
-        glyph:      { from: 'fixed', color: '#f5f5f7' },
-        label:      () => t('settings.iconThemeMono', 'Monochrome'),
-        hint:       () => t('settings.iconThemeMonoHint', 'One graphite tile for every app'),
+        background: { from: 'fixed', color: '#f4f4f6' },
+        glyph:      { from: 'accent', toward: '#1b1b1f', amount: 0.32 },
+        label:      () => t('settings.iconThemeLight', 'Light'),
+        hint:       () => t('settings.iconThemeLightHint', 'Off-white tiles, app-coloured glyphs'),
     },
     {
         id:         'pastel',
@@ -50,12 +75,52 @@ export const ICON_THEMES: IconThemeDef[] = [
         hint:       () => t('settings.iconThemePastelHint', 'Softened, pale app colours'),
     },
     {
+        id:         'sand',
+        art:        'glyph',
+        background: { from: 'accent', toward: '#e8dcc4', amount: 0.80 },
+        glyph:      { from: 'accent', toward: '#4a3a24', amount: 0.62 },
+        label:      () => t('settings.iconThemeSand', 'Sand'),
+        hint:       () => t('settings.iconThemeSandHint', 'Warm cream tiles with earthy glyphs'),
+    },
+    {
+        id:         'slate',
+        art:        'glyph',
+        background: { from: 'accent', toward: '#39414f', amount: 0.86 },
+        glyph:      { from: 'accent', toward: '#ffffff', amount: 0.72 },
+        label:      () => t('settings.iconThemeSlate', 'Slate'),
+        hint:       () => t('settings.iconThemeSlateHint', 'Cool grey tiles, barely tinted'),
+    },
+    {
         id:         'tinted',
         art:        'glyph',
         background: { from: 'accent', toward: '#0c0c0f', amount: 0.78 },
         glyph:      { from: 'accent', toward: '#ffffff', amount: 0.45 },
         label:      () => t('settings.iconThemeTinted', 'Tinted'),
         hint:       () => t('settings.iconThemeTintedHint', 'Dark tiles with a colour wash'),
+    },
+    {
+        id:         'noir',
+        art:        'glyph',
+        background: { from: 'fixed', color: '#0a0a0c' },
+        glyph:      { from: 'accent', toward: '#ffffff', amount: 0.22 },
+        label:      () => t('settings.iconThemeNoir', 'Noir'),
+        hint:       () => t('settings.iconThemeNoirHint', 'Black tiles that let the colour glow'),
+    },
+    {
+        id:         'mono',
+        art:        'glyph',
+        background: { from: 'fixed', color: '#26262a' },
+        glyph:      { from: 'fixed', color: '#f5f5f7' },
+        label:      () => t('settings.iconThemeMono', 'Monochrome'),
+        hint:       () => t('settings.iconThemeMonoHint', 'One graphite tile for every app'),
+    },
+    {
+        id:         'contrast',
+        art:        'glyph',
+        background: { from: 'fixed', color: '#000000' },
+        glyph:      { from: 'fixed', color: '#ffffff' },
+        label:      () => t('settings.iconThemeContrast', 'High Contrast'),
+        hint:       () => t('settings.iconThemeContrastHint', 'Pure black and white for legibility'),
     },
 ];
 
@@ -116,19 +181,66 @@ function resolveColor(recipe: ColorRecipe, accent: string): string {
     return mixColor(base, recipe.toward, recipe.amount);
 }
 
+const MIN_CONTRAST = 3;
+
+function luminance(rgb: [number, number, number]): number {
+    const [r, g, b] = rgb.map(v => {
+        const s = v / 255;
+        return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrast(a: string, b: string): number {
+    const x = toRgb(a);
+    const y = toRgb(b);
+    if (!x || !y) return MIN_CONTRAST;
+    const [hi, lo] = [luminance(x), luminance(y)].sort((p, q) => q - p);
+    return (hi + 0.05) / (lo + 0.05);
+}
+
+function legible(glyph: string, tile: string[], floor: number): string {
+    const clears = (c: string) => tile.every(shade => contrast(c, shade) >= floor);
+    if (clears(glyph)) return glyph;
+    const bg = toRgb(tile[0]);
+    const target = bg && luminance(bg) > 0.4 ? '#000000' : '#ffffff';
+    for (let step = 1; step <= 10; step++) {
+        const lifted = mixColor(glyph, target, step / 10);
+        if (clears(lifted)) return lifted;
+    }
+    return target;
+}
+
 interface IconAppearance {
     background: string;
     glyph:      string;
     art:        IconArt;
 }
 
+function litTile(solid: string): { css: string; shade: string } {
+    const top   = mixColor(solid, '#ffffff', 0.34);
+    const mid   = mixColor(solid, '#ffffff', 0);
+    const shade = mixColor(solid, '#000000', 0.34);
+    const css = [
+        'radial-gradient(115% 78% at 30% -14%, rgba(255,255,255,0.46) 0%, rgba(255,255,255,0.06) 54%, rgba(255,255,255,0) 72%)',
+        'radial-gradient(130% 62% at 50% 116%, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 62%)',
+        `linear-gradient(166deg, ${top} 0%, ${mid} 46%, ${shade} 100%)`,
+    ].join(', ');
+    return { css, shade };
+}
+
 export function resolveIconAppearance(theme: IconThemeId, appId: string, accent: string): IconAppearance {
     const def = BY_ID[theme] ?? BY_ID.default;
     const base = toRgb(accent) ? accent : customAccent(appId);
+    const solid = resolveColor(def.background, base);
+    const glyph = resolveColor(def.glyph, base);
+    const lit = def.depth ? litTile(solid) : null;
     return {
         art:        def.art,
-        background: resolveColor(def.background, base),
-        glyph:      resolveColor(def.glyph, base),
+        background: lit ? lit.css : solid,
+        glyph:      def.art === 'native'
+            ? glyph
+            : legible(glyph, lit ? [solid, lit.shade] : [solid], def.minContrast ?? MIN_CONTRAST),
     };
 }
 

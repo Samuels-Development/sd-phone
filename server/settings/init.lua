@@ -350,7 +350,7 @@ lib.callback.register('sd-phone:server:settings:setDarkTheme', function(source, 
     return { success = true }
 end)
 
----Persists the caller's home-screen icon theme (default/mono/pastel/tinted).
+---Persists the caller's home-screen icon theme, whitelisted by the store.
 lib.callback.register('sd-phone:server:settings:setIconTheme', function(source, payload)
     local cid = player.getIdentifier(source)
     if not cid then return { success = false, message = 'Player not found' } end
