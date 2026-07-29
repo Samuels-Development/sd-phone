@@ -7,6 +7,8 @@ import type { WifiNetwork, WifiState } from '@/core/types';
  * than merged, so a snapshot that drops a network or a connection is the whole truth.
  */
 interface WifiStoreState extends WifiState {
+    /** Narrowed from the wire type: `apply` always resolves it to a real boolean. */
+    providesData: boolean;
     apply: (push?: WifiPush | null) => void;
 }
 

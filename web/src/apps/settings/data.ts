@@ -38,6 +38,7 @@ export function getSettingsGroups(): SettingsGroup[] {
             id: 'toggles',
             rows: [
                 { id: 'airplane', icon: 'Plane',  iconBg: '#ff9f0a', label: t('settings.airplaneMode', 'Airplane Mode'),  subtitle: t('settings.airplaneModeSub', 'Turn off calls, data and connectivity'), toggle: false },
+                { id: 'wifi',     icon: 'Wifi',   iconBg: '#0a84ff', label: t('settings.wifi', 'Wi-Fi'),                subtitle: t('settings.wifiSub', 'Join nearby networks for data') },
                 { id: 'streamer', icon: 'Video',  iconBg: '#5e5ce6', label: t('settings.streamerMode', 'Streamer Mode'),  subtitle: t('settings.streamerModeSub', 'Hides balances and card numbers'),         toggle: false },
             ],
         },

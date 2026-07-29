@@ -38,7 +38,13 @@ export function StatusBar({ use24h, signal, showWifi, wifiBars = null, battery, 
                 ) : noSim ? (
                     <span className="font-sf text-[13px] font-semibold leading-none opacity-80">No SIM</span>
                 ) : noService ? (
-                    <span className="font-sf text-[13px] font-semibold leading-none opacity-80">{t('shell.noService', 'No Service')}</span>
+                    // Wi-Fi survives the No Service label rather than being replaced by it, the
+                    // way a real phone shows it. A router in a cell dead zone is the whole point
+                    // of having Wi-Fi, so hiding the one icon proving it works reads as broken.
+                    <>
+                        <span className="font-sf text-[13px] font-semibold leading-none opacity-80">{t('shell.noService', 'No Service')}</span>
+                        {wifiBars !== null && <Wifi size={21} bars={wifiBars} />}
+                    </>
                 ) : (
                     <>
                         {signal > 0 && <Cellular size={21} bars={signal} />}
