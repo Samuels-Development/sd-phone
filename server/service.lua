@@ -6,6 +6,9 @@ local celltowers = require 'shared.celltowers'
 local util = require 'server.util'
 ---@type table Player bridge (bridge.server.player): citizenid lookup for the rate-limit key.
 local player = require 'bridge.server.player'
+---@type table Wi-Fi authority (server.wifi): a connection can carry what the masts will not. The
+---dependency is one-way, server.wifi never requires this module back.
+local wifiServer = require 'server.wifi'
 
 ---@type table Cell tower settings (configs/celltowers.lua).
 local cfg = config.CellTowers or {}
@@ -48,7 +51,8 @@ end
 ---@return boolean
 function service.allows(source, capability)
     if #TOWERS == 0 then return true end
-    return celltowers.allows(service.levelFor(source), capability, THRESHOLDS)
+    if celltowers.allows(service.levelFor(source), capability, THRESHOLDS) then return true end
+    return wifiServer.provides(source, capability)
 end
 
 ---A client reporting it walked back into coverage. The level is re-derived here before anything
