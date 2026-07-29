@@ -352,6 +352,94 @@ end
 
 actions.endCall = endCall
 
+---@type table Phone notifications (server.notifications.init): the dropped-call banner.
+local notifications = require 'server.notifications.init'
+
+---@type number|false Seconds a live call tolerates a signal too weak to hold it, false to never drop.
+local DROP_AFTER = (function()
+    local cfg = config.CellTowers
+    local n = cfg and cfg.DropCallsAfter
+    if n == false or n == nil then return false end
+    return math.max(0, tonumber(n) or 0)
+end)()
+
+---@type integer Milliseconds between coverage sweeps while at least one call is live.
+local COVERAGE_MS = 2000
+---@type integer Milliseconds between sweeps while nothing is connected.
+local COVERAGE_IDLE_MS = 5000
+
+---@type table<number, number> Channel -> os.time() a participant first fell below call signal.
+local losingSignal = {}
+
+---Whether one leg of a call still has the signal to hold it. A payphone leg is a landline, so it
+---always does; an unresolvable player is left alone rather than cut off.
+---@param party table session side, { src, cid, ... }
+---@param isPayphone boolean
+---@return boolean
+local function legHasSignal(party, isPayphone)
+    if isPayphone then return true end
+    if not party or not party.src then return true end
+    return service.allows(party.src, 'call')
+end
+
+---Ends a call because coverage went, and tells each side what happened from their own point of
+---view: the one who walked out of range lost service, the other simply lost the call.
+---@param channel number
+---@param s table live session
+---@param callerOk boolean caller still had signal
+---@param calleeOk boolean callee still had signal
+local function dropForNoService(channel, s, callerOk, calleeOk)
+    local caller, callee = s.caller, s.callee
+    endCall(channel, 'noservice')
+
+    local function tell(party, lostIt)
+        if not party or not party.cid then return end
+        notifications.notifyCid(party.cid, {
+            app   = 'Phone',
+            appId = 'phone',
+            title = 'Call Dropped',
+            body  = lostIt and 'You lost service.' or 'The other caller lost service.',
+        })
+    end
+
+    tell(caller, not callerOk)
+    tell(callee, not calleeOk)
+end
+
+-- Coverage watch. There is no event for "player walked out of range", so a live call has to be
+-- looked at; the sweep is bounded by the number of connected calls rather than players, and idles
+-- when nothing is up. Ringing calls are left alone: an unanswered ring ends on its own.
+CreateThread(function()
+    if DROP_AFTER == false then return end
+    while true do
+        if next(sessions) == nil then
+            losingSignal = {}
+            Wait(COVERAGE_IDLE_MS)
+        else
+            local now = os.time()
+            for channel, s in pairs(sessions) do
+                if s.state ~= 'active' then
+                    losingSignal[channel] = nil
+                else
+                    local callerOk = legHasSignal(s.caller, s.payphoneSide == 'caller')
+                    local calleeOk = legHasSignal(s.callee, s.payphoneSide == 'callee')
+                    if callerOk and calleeOk then
+                        losingSignal[channel] = nil
+                    else
+                        local since = losingSignal[channel] or now
+                        losingSignal[channel] = since
+                        if now - since >= DROP_AFTER then
+                            losingSignal[channel] = nil
+                            dropForNoService(channel, s, callerOk, calleeOk)
+                        end
+                    end
+                end
+            end
+            Wait(COVERAGE_MS)
+        end
+    end
+end)
+
 ---@type integer Dial budget window in ms.
 local DIAL_WINDOW = 30000
 ---@type integer Dials allowed per window, counted even when the dial fails. Redialling a busy

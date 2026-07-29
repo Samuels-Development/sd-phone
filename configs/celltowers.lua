@@ -61,6 +61,13 @@ return {
         },
     },
 
+    -- Seconds a caller may hold a live call without call-grade signal before it drops, with both
+    -- sides told they lost service. The grace period stops a call dying because someone clipped
+    -- the edge of a dead zone for a moment, and the countdown resets the instant signal returns.
+    -- Set 0 to cut the moment coverage goes, or false to let a connected call survive anywhere.
+    -- A payphone leg is never dropped: a booth is a landline and has no cell signal to lose.
+    DropCallsAfter = 6,
+
     -- Minimum level each capability needs. Texts get through on a signal too weak to hold a
     -- call, and data-backed apps need the most - the same order a real phone degrades in.
     Thresholds = {
