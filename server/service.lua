@@ -17,10 +17,13 @@ local cfg = config.CellTowers or {}
 local TOWERS = (cfg.Enabled == true and type(cfg.Towers) == 'table') and cfg.Towers or {}
 ---@type table Minimum level per capability.
 local THRESHOLDS = type(cfg.Thresholds) == 'table' and cfg.Thresholds or {}
----@type integer Milliseconds a player must wait between honoured back-in-range reports.
+---@type integer Milliseconds a player must wait between honoured coverage reports.
 local REPORT_WINDOW = 10000
 ---@type integer Reports honoured per window.
 local REPORTS_PER_WINDOW = 1
+
+---@type table<number, boolean> Coverage state last announced per player, nil until the first one.
+local announced = {}
 
 ---@type table Service module; the table returned at end of file.
 local service = {}
@@ -55,16 +58,44 @@ function service.allows(source, capability)
     return wifiServer.provides(source, capability)
 end
 
----A client reporting it walked back into coverage. The level is re-derived here before anything
----acts on it, so a forged report releases nothing; the rate limit keeps a spamming client from
----driving repeated drains.
-RegisterNetEvent('sd-phone:server:service:report', function()
+---A client reporting it crossed the coverage boundary: `{ lost = true }` for the falling edge, no
+---payload for the rising edge and for the sync a phone sends when it opens.
+RegisterNetEvent('sd-phone:server:service:report', function(payload)
     local source = source
-    if not service.allows(source, 'text') then return end
+    local reported = not (type(payload) == 'table' and payload.lost == true)
+    local hasService = service.allows(source, 'text')
+
+    -- The report only says which edge to look for. The level is re-derived from the server's own
+    -- coords, so a forged report releases nothing and announces nothing.
+    if reported ~= hasService then return end
+
+    -- A repeat loss announces nothing. The regain side stays unguarded because the report a phone
+    -- sends on open is the only thing that releases texts withheld while it was holstered.
+    if not hasService and announced[source] == false then return end
+
     local cid = player.getIdentifier(source)
     if not cid then return end
+
+    -- One budget for both edges, so a player sitting on a threshold cannot flap the pair at
+    -- listeners. A throttled report leaves the announced state alone, so the next one re-announces.
     if not util.rateLimit(cid, 'service:report', REPORT_WINDOW, REPORTS_PER_WINDOW) then return end
-    TriggerEvent('sd-phone:server:service:regained', source)
+
+    announced[source] = hasService
+    if hasService then
+        ---Pre-existing, not new in this change: a verified back-in-range report.
+        ---@param source number player server id
+        TriggerEvent('sd-phone:server:service:regained', source)
+    else
+        ---A verified loss of service, for scripts that react to a dead zone instead of polling.
+        ---@param source number player server id
+        TriggerEvent('sd-phone:server:service:lost', source)
+    end
+end)
+
+---A departing player takes their announced state with them, so a recycled server id never
+---inherits it.
+AddEventHandler('playerDropped', function()
+    announced[source] = nil
 end)
 
 ---Authoritative service level for a player, 0..1.
