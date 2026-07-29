@@ -4,13 +4,17 @@ import { fetchNui, isFiveM } from '@/core/nui';
 import { t } from '@/i18n';
 import { customAccent } from '@/stores/customAppsStore';
 
-export type IconThemeId =
+export type BuiltinIconThemeId =
     | 'default' | 'glass' | 'flat' | 'light' | 'pastel' | 'sand'
     | 'slate' | 'tinted' | 'noir' | 'mono' | 'contrast';
 
+export type CustomIconThemeId = `custom:${string}`;
+
+export type IconThemeId = BuiltinIconThemeId | CustomIconThemeId;
+
 type IconArt = 'native' | 'glyph';
 
-interface ColorRecipe {
+export interface ColorRecipe {
     from:    'accent' | 'fixed';
     color?:  string;
     toward?: string;
@@ -28,7 +32,16 @@ export interface IconThemeDef {
     hint:         () => string;
 }
 
+export interface CustomIconTheme {
+    id:         CustomIconThemeId;
+    name:       string;
+    background: ColorRecipe;
+    glyph:      ColorRecipe;
+    depth?:     boolean;
+}
+
 const WHITE_ON_COLOUR = 1.55;
+const CUSTOM_CONTRAST = WHITE_ON_COLOUR;
 
 export const ICON_THEMES: IconThemeDef[] = [
     {
@@ -124,7 +137,97 @@ export const ICON_THEMES: IconThemeDef[] = [
     },
 ];
 
-const BY_ID = Object.fromEntries(ICON_THEMES.map(d => [d.id, d])) as Record<IconThemeId, IconThemeDef>;
+const BY_ID = new Map<string, IconThemeDef>(ICON_THEMES.map(d => [d.id, d]));
+const DEFAULT_DEF = BY_ID.get('default') as IconThemeDef;
+
+export const MAX_CUSTOM_ICON_THEMES = 12;
+
+const CUSTOM_ID = /^custom:[a-z0-9]{4,8}$/;
+const HEX = /^#[0-9a-f]{6}$/i;
+const ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789';
+
+const CUSTOM_BY_ID = new Map<string, IconThemeDef>();
+
+export function newCustomIconThemeId(): CustomIconThemeId {
+    let slug = '';
+    for (let i = 0; i < 6; i++) slug += ID_CHARS[Math.floor(Math.random() * ID_CHARS.length)];
+    return `custom:${slug}`;
+}
+
+function sanitizeRecipe(value: unknown): ColorRecipe | null {
+    if (!value || typeof value !== 'object') return null;
+    const raw = value as Record<string, unknown>;
+    if (raw.from !== 'accent' && raw.from !== 'fixed') return null;
+    const clean: ColorRecipe = { from: raw.from };
+    if (raw.color !== undefined) {
+        if (typeof raw.color !== 'string' || !HEX.test(raw.color)) return null;
+        clean.color = raw.color.toLowerCase();
+    } else if (raw.from === 'fixed') {
+        return null;
+    }
+    const hasToward = raw.toward !== undefined;
+    const hasAmount = raw.amount !== undefined;
+    if (hasToward !== hasAmount) return null;
+    if (hasToward) {
+        if (typeof raw.toward !== 'string' || !HEX.test(raw.toward)) return null;
+        if (typeof raw.amount !== 'number' || !Number.isFinite(raw.amount)) return null;
+        if (raw.amount < 0 || raw.amount > 1) return null;
+        clean.toward = raw.toward.toLowerCase();
+        clean.amount = raw.amount;
+    }
+    return clean;
+}
+
+export function sanitizeCustomIconTheme(value: unknown): CustomIconTheme | null {
+    if (!value || typeof value !== 'object') return null;
+    const raw = value as Record<string, unknown>;
+    if (typeof raw.id !== 'string' || !CUSTOM_ID.test(raw.id)) return null;
+    if (typeof raw.name !== 'string') return null;
+    const name = raw.name.trim();
+    if (name.length < 1 || name.length > 24) return null;
+    if (raw.depth !== undefined && typeof raw.depth !== 'boolean') return null;
+    const background = sanitizeRecipe(raw.background);
+    const glyph      = sanitizeRecipe(raw.glyph);
+    if (!background || !glyph) return null;
+    const clean: CustomIconTheme = { id: raw.id as CustomIconThemeId, name, background, glyph };
+    if (raw.depth === true) clean.depth = true;
+    return clean;
+}
+
+function sanitizeCustomList(value: unknown): CustomIconTheme[] {
+    if (!Array.isArray(value)) return [];
+    const out: CustomIconTheme[] = [];
+    for (const entry of value) {
+        if (out.length >= MAX_CUSTOM_ICON_THEMES) break;
+        const clean = sanitizeCustomIconTheme(entry);
+        if (clean && !out.some(x => x.id === clean.id)) out.push(clean);
+    }
+    return out;
+}
+
+function customDef(theme: CustomIconTheme): IconThemeDef {
+    return {
+        id:          theme.id,
+        art:         'glyph',
+        background:  theme.background,
+        glyph:       theme.glyph,
+        depth:       theme.depth === true,
+        minContrast: CUSTOM_CONTRAST,
+        label:       () => theme.name,
+        hint:        () => t('settings.iconThemeCustomHint', 'Your own tile and symbol colours'),
+    };
+}
+
+function syncCustomRegistry(list: CustomIconTheme[]) {
+    CUSTOM_BY_ID.clear();
+    for (const theme of list) CUSTOM_BY_ID.set(theme.id, customDef(theme));
+}
+
+function knownThemeId(value: unknown): IconThemeId | null {
+    if (typeof value !== 'string') return null;
+    if (BY_ID.has(value)) return value as BuiltinIconThemeId;
+    return CUSTOM_ID.test(value) ? value as CustomIconThemeId : null;
+}
 
 function clampByte(n: number): number {
     return Math.max(0, Math.min(255, Math.round(n)));
@@ -229,8 +332,7 @@ function litTile(solid: string): { css: string; shade: string } {
     return { css, shade };
 }
 
-export function resolveIconAppearance(theme: IconThemeId, appId: string, accent: string): IconAppearance {
-    const def = BY_ID[theme] ?? BY_ID.default;
+function appearanceOf(def: IconThemeDef, appId: string, accent: string): IconAppearance {
     const base = toRgb(accent) ? accent : customAccent(appId);
     const solid = resolveColor(def.background, base);
     const glyph = resolveColor(def.glyph, base);
@@ -244,13 +346,25 @@ export function resolveIconAppearance(theme: IconThemeId, appId: string, accent:
     };
 }
 
+export function resolveIconAppearance(theme: IconThemeId, appId: string, accent: string): IconAppearance {
+    return appearanceOf(BY_ID.get(theme) ?? CUSTOM_BY_ID.get(theme) ?? DEFAULT_DEF, appId, accent);
+}
+
+export function resolveDraftAppearance(
+    draft: { background: ColorRecipe; glyph: ColorRecipe; depth?: boolean },
+    appId: string,
+    accent: string,
+): IconAppearance {
+    return appearanceOf(customDef({ id: 'custom:draft', name: '', ...draft }), appId, accent);
+}
+
 const ICON_THEME_KEY = 'sd-phone:iconTheme';
 const APP_NAMES_KEY  = 'sd-phone:showAppNames';
+const CUSTOM_KEY     = 'sd-phone:iconCustom';
 
 function loadIconThemeLocal(): IconThemeId {
     try {
-        const v = window.localStorage.getItem(ICON_THEME_KEY);
-        return v && v in BY_ID ? v as IconThemeId : 'default';
+        return knownThemeId(window.localStorage.getItem(ICON_THEME_KEY)) ?? 'default';
     } catch { return 'default'; }
 }
 function saveIconThemeLocal(v: IconThemeId) {
@@ -264,17 +378,33 @@ function saveShowAppNamesLocal(v: boolean) {
     try { window.localStorage.setItem(APP_NAMES_KEY, v ? '1' : '0'); } catch {}
 }
 
+function loadCustomLocal(): CustomIconTheme[] {
+    try {
+        return sanitizeCustomList(JSON.parse(window.localStorage.getItem(CUSTOM_KEY) ?? '[]'));
+    } catch { return []; }
+}
+function saveCustomLocal(v: CustomIconTheme[]) {
+    try { window.localStorage.setItem(CUSTOM_KEY, JSON.stringify(v)); } catch {}
+}
+
 interface IconThemeState {
     iconTheme:       IconThemeId;
     setIconTheme:    (id: IconThemeId) => void;
     showAppNames:    boolean;
     setShowAppNames: (v: boolean) => void;
-    hydrate:         (data: { iconTheme?: unknown; showAppNames?: unknown }) => void;
+    customIconThemes:      CustomIconTheme[];
+    saveCustomIconTheme:   (theme: CustomIconTheme) => Promise<string | null>;
+    deleteCustomIconTheme: (id: CustomIconThemeId) => void;
+    hydrate:         (data: { iconTheme?: unknown; showAppNames?: unknown; customIconThemes?: unknown }) => void;
 }
 
-export const useIconThemeStore = create<IconThemeState>(set => ({
-    iconTheme:    isFiveM ? 'default' : loadIconThemeLocal(),
-    showAppNames: isFiveM ? true : loadShowAppNamesLocal(),
+const initialCustom = isFiveM ? [] : loadCustomLocal();
+syncCustomRegistry(initialCustom);
+
+export const useIconThemeStore = create<IconThemeState>((set, get) => ({
+    iconTheme:        isFiveM ? 'default' : loadIconThemeLocal(),
+    showAppNames:     isFiveM ? true : loadShowAppNamesLocal(),
+    customIconThemes: initialCustom,
 
     setIconTheme: (id) => {
         set({ iconTheme: id });
@@ -288,11 +418,41 @@ export const useIconThemeStore = create<IconThemeState>(set => ({
         else saveShowAppNamesLocal(v);
     },
 
+    saveCustomIconTheme: async (theme) => {
+        const clean = sanitizeCustomIconTheme(theme);
+        if (!clean) return t('settings.iconThemeSaveFailed', 'Could not save that icon theme.');
+        const list = get().customIconThemes;
+        const known = list.some(x => x.id === clean.id);
+        if (!known && list.length >= MAX_CUSTOM_ICON_THEMES) {
+            return t('settings.iconThemeFull', 'You can keep up to {n} of your own themes.', { n: MAX_CUSTOM_ICON_THEMES });
+        }
+        if (isFiveM) {
+            const res = await fetchNui<{ success?: boolean; message?: string }>('sd-phone:settings:saveCustomIconTheme', { theme: clean });
+            if (!res?.success) return res?.message ?? t('settings.iconThemeSaveFailed', 'Could not save that icon theme.');
+        }
+        const next = known ? list.map(x => x.id === clean.id ? clean : x) : [...list, clean];
+        set({ customIconThemes: next });
+        syncCustomRegistry(next);
+        if (!isFiveM) saveCustomLocal(next);
+        return null;
+    },
+
+    deleteCustomIconTheme: (id) => {
+        const next = get().customIconThemes.filter(x => x.id !== id);
+        set({ customIconThemes: next });
+        syncCustomRegistry(next);
+        if (isFiveM) void fetchNui('sd-phone:settings:deleteCustomIconTheme', { id }).catch(() => {});
+        else saveCustomLocal(next);
+        if (get().iconTheme === id) get().setIconTheme('default');
+    },
+
     hydrate: (data) => {
-        const stored = data.iconTheme;
+        const custom = sanitizeCustomList(data.customIconThemes);
+        syncCustomRegistry(custom);
         set({
-            iconTheme:    typeof stored === 'string' && stored in BY_ID ? stored as IconThemeId : 'default',
-            showAppNames: typeof data.showAppNames === 'boolean' ? data.showAppNames : true,
+            iconTheme:        knownThemeId(data.iconTheme) ?? 'default',
+            showAppNames:     typeof data.showAppNames === 'boolean' ? data.showAppNames : true,
+            customIconThemes: custom,
         });
     },
 }));
@@ -303,6 +463,10 @@ export function useIconTheme(): IconThemeId {
 
 export function useShowAppNames(): boolean {
     return useIconThemeStore(s => s.showAppNames);
+}
+
+export function useCustomIconThemes(): CustomIconTheme[] {
+    return useIconThemeStore(s => s.customIconThemes);
 }
 
 export function useIconAppearance(appId: string, accent: string): IconAppearance {

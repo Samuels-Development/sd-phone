@@ -81,6 +81,7 @@ function store.ensureSchema()
             theme              VARCHAR(8)   NULL,
             dark_theme         VARCHAR(16)  NULL,
             icon_theme         VARCHAR(16)  NULL,
+            icon_custom        LONGTEXT     NULL,
             show_app_names     TINYINT(1)   NULL,
             ringtone_volume    TINYINT UNSIGNED NULL,
             call_volume        TINYINT UNSIGNED NULL,
@@ -1012,27 +1013,184 @@ local ICON_THEMES = {
     contrast = true,
 }
 
+-- Mirrors CUSTOM_ID / MAX_CUSTOM_ICON_THEMES in web/src/stores/iconThemeStore.ts.
+---@type integer Bounds on the slug after the 'custom:' prefix. 8 keeps the longest id at 15
+---characters, which is what lets a player-designed theme share icon_theme VARCHAR(16).
+local CUSTOM_ICON_MIN, CUSTOM_ICON_MAX = 4, 8
+---@type integer Cap on player-designed icon themes per character.
+local MAX_CUSTOM_ICON_THEMES = 12
+---@type integer Cap on a player-designed theme's display name, in characters.
+local CUSTOM_ICON_NAME_MAX = 24
+---@type table|nil Lua 5.4 utf8 library, so a name is bounded in characters rather than bytes.
+local utf8lib = _G.utf8
+
+---True for a well-formed player-designed icon theme id, whether or not that theme exists. The
+---UI applies before it saves, so an id is accepted here and falls back to Default at render.
+---@param v any client-supplied icon theme id
+---@return boolean
+local function isCustomIconId(v)
+    if type(v) ~= 'string' or not v:match('^custom:[a-z0-9]+$') then return false end
+    local slug = #v - #'custom:'
+    return slug >= CUSTOM_ICON_MIN and slug <= CUSTOM_ICON_MAX
+end
+
+---True for any icon theme id this server will store: a built-in, or a well-formed custom one.
+---@param v any client-supplied icon theme id
+---@return boolean
+local function isStorableIconTheme(v)
+    return (type(v) == 'string' and ICON_THEMES[v] == true) or isCustomIconId(v)
+end
+
 ---Returns a player's home-screen icon theme, defaulting to 'default'. Read-only.
 ---@param citizenid string framework per-character id
----@return string iconTheme one of the ICON_THEMES keys
+---@return string iconTheme a built-in id or a 'custom:' one
 function store.getIconTheme(citizenid)
     if not citizenid or citizenid == '' then return 'default' end
     local row = MySQL.single.await('SELECT icon_theme FROM phone_settings WHERE citizenid = ?', { citizenid })
     local v = row and row.icon_theme
-    if type(v) == 'string' and ICON_THEMES[v] then return v end
+    if isStorableIconTheme(v) then return v end
     return 'default'
 end
 
----Persists a player's home-screen icon theme (upsert), whitelisted to the known values.
+---Persists a player's home-screen icon theme (upsert), whitelisted to the built-ins plus any
+---well-formed custom id.
 ---@param citizenid string framework per-character id
 ---@param theme any client-supplied icon theme id
 function store.setIconTheme(citizenid, theme)
     if not citizenid or citizenid == '' then return end
-    if type(theme) ~= 'string' or not ICON_THEMES[theme] then return end
+    if not isStorableIconTheme(theme) then return end
     MySQL.update.await([[
         INSERT INTO phone_settings (citizenid, icon_theme) VALUES (?, ?)
         ON DUPLICATE KEY UPDATE icon_theme = VALUES(icon_theme)
     ]], { citizenid, theme })
+end
+
+---A trimmed name's length in characters, or nil when the string is not valid UTF-8.
+---@param s string trimmed display name
+---@return integer|nil chars
+local function nameLength(s)
+    if utf8lib then return utf8lib.len(s) end
+    return #s
+end
+
+---Validates one colour recipe: the source, the base colour a 'fixed' source needs, and the
+---optional toward/amount mix pair, which is all-or-nothing. Nil for anything malformed.
+---@param v any client-supplied recipe
+---@return table|nil recipe { from: string, color: string|nil, toward: string|nil, amount: number|nil }
+local function sanitizeRecipe(v)
+    if type(v) ~= 'table' then return nil end
+    if v.from ~= 'accent' and v.from ~= 'fixed' then return nil end
+    local clean = { from = v.from }
+    if v.color ~= nil then
+        local hex = sanitizeHex(v.color)
+        if not hex then return nil end
+        clean.color = hex
+    elseif v.from == 'fixed' then
+        return nil
+    end
+    if (v.toward ~= nil) ~= (v.amount ~= nil) then return nil end
+    if v.toward ~= nil then
+        local hex = sanitizeHex(v.toward)
+        if not hex then return nil end
+        if type(v.amount) ~= 'number' or v.amount ~= v.amount then return nil end
+        if v.amount < 0 or v.amount > 1 then return nil end
+        clean.toward = hex
+        clean.amount = v.amount
+    end
+    return clean
+end
+
+---Validates one player-designed icon theme, rebuilding it from only the sanitised fields so no
+---client JSON is ever stored verbatim. Nil when any field is malformed.
+---@param v any client-supplied theme
+---@return table|nil theme { id: string, name: string, background: table, glyph: table, depth: boolean|nil }
+local function sanitizeCustomIconTheme(v)
+    if type(v) ~= 'table' or not isCustomIconId(v.id) then return nil end
+    if type(v.name) ~= 'string' then return nil end
+    local name = (v.name:gsub('^%s+', ''):gsub('%s+$', ''))
+    local chars = nameLength(name)
+    if not chars or chars < 1 or chars > CUSTOM_ICON_NAME_MAX then return nil end
+    if v.depth ~= nil and type(v.depth) ~= 'boolean' then return nil end
+    local background = sanitizeRecipe(v.background)
+    local glyph      = sanitizeRecipe(v.glyph)
+    if not background or not glyph then return nil end
+    local clean = { id = v.id, name = name, background = background, glyph = glyph }
+    if v.depth == true then clean.depth = true end
+    return clean
+end
+
+---Decodes an icon_custom column into validated themes; an unparseable column, a malformed entry
+---or a duplicate id is dropped rather than served.
+---@param raw any stored column value
+---@return table[] themes
+local function decodeCustomIconThemes(raw)
+    if not raw or raw == '' then return {} end
+    local ok, decoded = pcall(json.decode, raw)
+    if not ok or type(decoded) ~= 'table' then return {} end
+    local out, seen = {}, {}
+    for i = 1, #decoded do
+        local clean = sanitizeCustomIconTheme(decoded[i])
+        if clean and not seen[clean.id] and #out < MAX_CUSTOM_ICON_THEMES then
+            seen[clean.id] = true
+            out[#out + 1] = clean
+        end
+    end
+    return out
+end
+
+---Reads a player's player-designed icon themes (JSON array column); an unparseable column or a
+---malformed entry yields nothing for that entry. Read-only.
+---@param citizenid string framework per-character id
+---@return table[] themes
+function store.getCustomIconThemes(citizenid)
+    if not citizenid or citizenid == '' then return {} end
+    local row = MySQL.single.await('SELECT icon_custom FROM phone_settings WHERE citizenid = ?', { citizenid })
+    if not row then return {} end
+    return decodeCustomIconThemes(row.icon_custom)
+end
+
+---Upserts one player-designed icon theme by id, capped at MAX_CUSTOM_ICON_THEMES per character.
+---@param citizenid string framework per-character id
+---@param theme any client-supplied theme definition
+---@return boolean ok, string|nil reason 'invalid' or 'limit' when refused
+function store.saveCustomIconTheme(citizenid, theme)
+    if not citizenid or citizenid == '' then return false, 'invalid' end
+    local clean = sanitizeCustomIconTheme(theme)
+    if not clean then return false, 'invalid' end
+    local list = store.getCustomIconThemes(citizenid)
+    local at
+    for i = 1, #list do
+        if list[i].id == clean.id then at = i break end
+    end
+    if not at and #list >= MAX_CUSTOM_ICON_THEMES then return false, 'limit' end
+    list[at or (#list + 1)] = clean
+    MySQL.update.await([[
+        INSERT INTO phone_settings (citizenid, icon_custom) VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE icon_custom = VALUES(icon_custom)
+    ]], { citizenid, json.encode(list) })
+    return true, nil
+end
+
+---Removes one player-designed icon theme; a character using it falls back to Default in the same
+---statement, so no row is ever left pointing at a theme that no longer exists.
+---@param citizenid string framework per-character id
+---@param id any theme id to remove
+---@return boolean removed
+function store.deleteCustomIconTheme(citizenid, id)
+    if not citizenid or citizenid == '' or not isCustomIconId(id) then return false end
+    local list = store.getCustomIconThemes(citizenid)
+    local kept, removed = {}, false
+    for i = 1, #list do
+        if list[i].id == id then removed = true else kept[#kept + 1] = list[i] end
+    end
+    if not removed then return false end
+    MySQL.update.await([[
+        UPDATE phone_settings
+        SET icon_custom = ?,
+            icon_theme  = CASE WHEN icon_theme = ? THEN 'default' ELSE icon_theme END
+        WHERE citizenid = ?
+    ]], { json.encode(kept), id, citizenid })
+    return true
 end
 
 ---Returns true if a player wants app names printed under their home-screen icons, defaulting to
@@ -1183,7 +1341,7 @@ function store.snapshot(citizenid)
     local dark = row and row.dark_theme
     if dark ~= 'graphite' and dark ~= 'black' and dark ~= 'warm' then dark = 'graphite' end
     local icons = row and row.icon_theme
-    if type(icons) ~= 'string' or not ICON_THEMES[icons] then icons = 'default' end
+    if not isStorableIconTheme(icons) then icons = 'default' end
     local showAppNames
     if row and row.show_app_names ~= nil then
         showAppNames = isTruthy(row.show_app_names)
@@ -1201,6 +1359,7 @@ function store.snapshot(citizenid)
         theme            = (row and row.theme == 'dark') and 'dark' or 'light',
         darkTheme        = dark,
         iconTheme        = icons,
+        customIconThemes = row and decodeCustomIconThemes(row.icon_custom) or {},
         showAppNames     = showAppNames,
         lockClock        = row and decodeColumn(row.lock_clock, nil) or nil,
         wallpaper        = (row and row.wallpaper ~= '') and row.wallpaper or nil,

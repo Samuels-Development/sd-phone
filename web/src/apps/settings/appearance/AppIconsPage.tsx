@@ -1,11 +1,18 @@
+import { Plus } from 'lucide-react';
+
 import { t } from '@/i18n';
+import { useSessionState } from '@/hooks/useSessionState';
 import { AppGlyph } from '@/shell/AppGlyphs';
 import { AppIconSVG } from '@/shell/AppIconSVG';
-import { ICON_THEMES, resolveIconAppearance, useIconTheme, useIconThemeStore, useShowAppNames } from '@/stores/iconThemeStore';
-import type { IconThemeDef, IconThemeId } from '@/stores/iconThemeStore';
+import {
+    ICON_THEMES, MAX_CUSTOM_ICON_THEMES, resolveIconAppearance,
+    useCustomIconThemes, useIconTheme, useIconThemeStore, useShowAppNames,
+} from '@/stores/iconThemeStore';
+import type { CustomIconTheme, IconThemeDef, IconThemeId } from '@/stores/iconThemeStore';
 import { ListGroup, ListRow } from '@/ui/ListGroup';
 import { Toggle } from '@/ui/Toggle';
 import { SubPage } from '../SettingsSubPage';
+import { IconThemeEditorPage } from './IconThemeEditorPage';
 
 interface PreviewApp {
     id:     string;
@@ -26,14 +33,25 @@ const SWATCH_APPS = PREVIEW_APPS.slice(0, 3);
 export function AppIconsPage({ onBack }: { onBack: () => void }) {
     const theme           = useIconTheme();
     const showAppNames    = useShowAppNames();
+    const custom          = useCustomIconThemes();
     const setIconTheme    = useIconThemeStore(s => s.setIconTheme);
     const setShowAppNames = useIconThemeStore(s => s.setShowAppNames);
+    const [editing, setEditing] = useSessionState<string | null>('settings:iconThemeEditor', null);
+
+    const editTarget = editing === null ? null : custom.find(c => c.id === editing) ?? null;
 
     return (
         <SubPage
             title={t('settings.appIcons', 'App Icons')}
             backLabel={t('settings.settings', 'Settings')}
             onBack={onBack}
+            sub={editing !== null ? (
+                <IconThemeEditorPage
+                    key={editing}
+                    existing={editTarget}
+                    onBack={() => setEditing(null)}
+                />
+            ) : null}
         >
 
             <div className="mx-4">
@@ -74,6 +92,31 @@ export function AppIconsPage({ onBack }: { onBack: () => void }) {
                 ))}
             </ListGroup>
 
+            <ListGroup
+                header={t('settings.iconThemeMine', 'My Themes')}
+                footer={t('settings.iconThemeMineHint', 'Design your own tile and symbol colours.')}
+            >
+                {custom.map(def => (
+                    <CustomRow
+                        key={def.id}
+                        def={def}
+                        selected={def.id === theme}
+                        onSelect={() => setIconTheme(def.id)}
+                        onEdit={() => setEditing(def.id)}
+                    />
+                ))}
+                <ListRow
+                    label={t('settings.iconThemeCreate', 'Create Icon Theme')}
+                    sub={t('settings.iconThemeCount', '{used} of {max} used', { used: custom.length, max: MAX_CUSTOM_ICON_THEMES })}
+                    left={(
+                        <span className="flex h-[24px] w-[24px] items-center justify-center rounded-[7px] bg-ios-blue">
+                            <Plus className="h-[15px] w-[15px] text-white" strokeWidth={3} />
+                        </span>
+                    )}
+                    onPress={() => { if (custom.length < MAX_CUSTOM_ICON_THEMES) setEditing('new'); }}
+                />
+            </ListGroup>
+
             <ListGroup>
                 <ListRow
                     label={t('settings.appNames', 'App Names')}
@@ -107,6 +150,42 @@ function ThemeRow({ def, selected, divider, onSelect }: {
             )}
             onPress={onSelect}
         />
+    );
+}
+
+function CustomRow({ def, selected, onSelect, onEdit }: {
+    def:      CustomIconTheme;
+    selected: boolean;
+    onSelect: () => void;
+    onEdit:   () => void;
+}) {
+    return (
+        <div className="relative flex items-center pr-4">
+            <ListRow
+                label={def.name}
+                sub={selected
+                    ? t('settings.iconThemeInUse', 'In use')
+                    : t('settings.iconThemeTapToUse', 'Tap to use')}
+                selected={selected}
+                left={(
+                    <span className="flex gap-[3px]">
+                        {SWATCH_APPS.map(app => <Tile key={app.id} theme={def.id} app={app} size={24} />)}
+                    </span>
+                )}
+                onPress={onSelect}
+            />
+            <button
+                type="button"
+                onClick={onEdit}
+                className="shrink-0 pl-3 text-[15px] font-normal text-ios-blue active:opacity-60"
+            >
+                {t('common.edit', 'Edit')}
+            </button>
+            <div
+                className="pointer-events-none absolute inset-x-0 bottom-0 bg-ios-gray4 dark:bg-control"
+                style={{ height: '0.5px' }}
+            />
+        </div>
     );
 }
 

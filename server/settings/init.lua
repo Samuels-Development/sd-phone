@@ -360,6 +360,31 @@ lib.callback.register('sd-phone:server:settings:setIconTheme', function(source, 
     return { success = true }
 end)
 
+---Saves one of the caller's own icon themes, keyed by its id; the store validates every field
+---and refuses past the per-character cap.
+lib.callback.register('sd-phone:server:settings:saveCustomIconTheme', function(source, payload)
+    local cid = player.getIdentifier(source)
+    if not cid then return { success = false, message = 'Player not found' } end
+    if not writeAllowed(cid, 'iconThemeSave') then return BUSY end
+    payload = type(payload) == 'table' and payload or {}
+    local ok, reason = store.saveCustomIconTheme(cid, payload.theme)
+    if ok then return { success = true } end
+    if reason == 'limit' then
+        return { success = false, message = 'You have saved as many icon themes as this phone holds' }
+    end
+    return { success = false, message = 'Could not save that icon theme' }
+end)
+
+---Removes one of the caller's own icon themes; a caller using it falls back to Default.
+lib.callback.register('sd-phone:server:settings:deleteCustomIconTheme', function(source, payload)
+    local cid = player.getIdentifier(source)
+    if not cid then return { success = false, message = 'Player not found' } end
+    if not writeAllowed(cid, 'iconThemeDelete') then return BUSY end
+    payload = type(payload) == 'table' and payload or {}
+    store.deleteCustomIconTheme(cid, payload.id)
+    return { success = true }
+end)
+
 ---Persists whether the caller wants app names under their home-screen icons.
 lib.callback.register('sd-phone:server:settings:setShowAppNames', function(source, payload)
     local cid = player.getIdentifier(source)
