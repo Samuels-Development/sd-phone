@@ -32,7 +32,15 @@ export function Settings({ onClose }: { onClose: () => void }) {
     // carries the network the phone is on, the way iOS names it in the list.
     const settingsGroups = getSettingsGroups()
         .map(g => simEnabled ? g : { ...g, rows: g.rows.filter(r => r.id !== 'sim') })
-        .map(g => (wifi ? { ...g, rows: g.rows.map(r => (r.id === 'wifi' ? { ...r, status: wifi.ssid } : r)) } : g))
+        // The network name replaces the Wi-Fi row's subtitle rather than sitting beside it: a
+        // status and a subtitle together make the row two lines with the SSID floating off the
+        // first, where iOS just names the network on the right.
+        .map(g => ({
+            ...g,
+            rows: g.rows.map(r => (r.id === 'wifi'
+                ? { ...r, subtitle: undefined, status: wifi ? wifi.ssid : t('settings.wifiNotConnected', 'Not Connected') }
+                : r)),
+        }))
         .filter(g => g.rows.length > 0);
     const allRows = settingsGroups.flatMap(g => g.rows);
     const searchResults = query.trim()

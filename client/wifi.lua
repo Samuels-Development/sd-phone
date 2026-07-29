@@ -136,6 +136,9 @@ function wifiClient.nearby()
             secured  = entry.secured,
             strength = entry.strength,
             bars     = entry.bars,
+            -- Already joined once by this character, so rejoining needs no password. The UI uses
+            -- this to tap straight through instead of asking again for something it knows.
+            known    = remembered[entry.id] ~= nil,
         }
     end
     return out
@@ -186,7 +189,12 @@ function wifiClient.connect(id, password)
     local net = wifi.find(id, NETWORKS)
     if not net then return false, 'Unknown network' end
 
-    local res = lib.callback.await('sd-phone:server:wifi:connect', false, { id = id, password = password })
+    -- Rejoining a network this character already knows reuses the password that worked, so the
+    -- phone never asks twice for the same network. Forgetting it is what clears that.
+    local supplied = (type(password) == 'string' and password ~= '') and password or nil
+    if not supplied and type(remembered[id]) == 'string' then supplied = remembered[id] end
+
+    local res = lib.callback.await('sd-phone:server:wifi:connect', false, { id = id, password = supplied })
     if type(res) ~= 'table' or res.success ~= true then
         return false, (type(res) == 'table' and res.message) or 'Could not connect'
     end
@@ -197,7 +205,7 @@ function wifiClient.connect(id, password)
     -- The password that worked is kept beside the id so an auto-rejoin can hand it back and let
     -- the server check it again, rather than the player being asked a second time. The durable
     -- copy is written server-side off the same join, from the config's password rather than this.
-    remembered[net.id] = (type(password) == 'string' and password ~= '') and password or true
+    remembered[net.id] = supplied or true
     push(true)
     return true, nil
 end

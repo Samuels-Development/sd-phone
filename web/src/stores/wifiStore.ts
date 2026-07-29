@@ -40,6 +40,7 @@ function toNetwork(raw: unknown): WifiNetwork | null {
         id:       id || ssid,
         ssid:     ssid || id,
         secured:  r.secured === true,
+        known:    r.known === true,
         strength: clamp(finite(r.strength), 0, 1),
         bars:     clamp(Math.round(finite(r.bars)), 0, MAX_BARS),
     };

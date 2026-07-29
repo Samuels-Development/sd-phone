@@ -114,7 +114,9 @@ export function WifiPage({ onBack }: { onBack: () => void }) {
 
     function press(net: WifiNetwork) {
         if (busyId) return;
-        if (net.secured) { setAsking(net); return; }
+        // A network this character already knows rejoins on the stored password. Only something
+        // secured AND unknown is worth asking about; Forget is what makes it ask again.
+        if (net.secured && !net.known) { setAsking(net); return; }
         void join(net).then(err => { if (err) setNotice(err); });
     }
 

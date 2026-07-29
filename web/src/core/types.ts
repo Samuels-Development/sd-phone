@@ -49,6 +49,8 @@ export interface SimStatePush {
 export interface WifiNetwork {
     id: string;
     ssid: string;
+    /** Already joined once by this character, so rejoining needs no password. */
+    known?: boolean;
     /** Password protected. The client omits it on the connected network, where it normalizes to false. */
     secured: boolean;
     strength: number;
