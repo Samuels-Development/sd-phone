@@ -67,7 +67,7 @@ export interface WidgetPlacement {
  * of pages, which passes Array.isArray while being the wrong shape). A separate optional key
  * leaves that guard intact and lets an older build ignore widgets instead of choking on them.
  */
-export interface SavedLayout { slots: (string | null)[]; folders: FolderDef[]; widgets?: WidgetPlacement[] }
+export interface SavedLayout { slots: (string | null)[]; folders: FolderDef[]; widgets?: WidgetPlacement[]; dock?: string[] }
 
 /** Every slot must be an app id or an empty slot; anything else cannot be rendered. */
 function isSlotArray(v: unknown): v is (string | null)[] {
@@ -134,6 +134,7 @@ export function parseLayout(raw: string | null | undefined): SavedLayout | null 
                 slots: o.slots,
                 folders: Array.isArray(o.folders) ? o.folders : [],
                 ...(widgets.length ? { widgets } : {}),
+                ...(Array.isArray(o.dock) ? { dock: o.dock.filter((x): x is string => typeof x === 'string') } : {}),
             };
         }
     } catch { /* ignore */ }
