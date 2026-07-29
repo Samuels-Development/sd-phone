@@ -82,6 +82,13 @@ RegisterNetEvent('sd-phone:client:call:ended', function(data)
     pushCall('sd-phone:call:ended', data)
 end)
 
+---A call torn down because tower coverage went. `lost` marks whether it was this player's own
+---signal that dropped; the phone raises a dialog either way.
+---@param data { lost: boolean }
+RegisterNetEvent('sd-phone:client:call:dropped', function(data)
+    pushCall('sd-phone:call:dropped', data)
+end)
+
 ---Flips the active cell-cam between the rear and front (selfie) lens.
 ---The old raw hash (0x2491A93618B7D838) is stale on current builds and threw "invalid native";
 ---the name lets FiveM cross-map it, and a missing native no-ops quietly.

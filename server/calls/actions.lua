@@ -352,9 +352,6 @@ end
 
 actions.endCall = endCall
 
----@type table Phone notifications (server.notifications.init): the dropped-call banner.
-local notifications = require 'server.notifications.init'
-
 ---@type number|false Seconds a live call tolerates a signal too weak to hold it, false to never drop.
 local DROP_AFTER = (function()
     local cfg = config.CellTowers
@@ -382,8 +379,9 @@ local function legHasSignal(party, isPayphone)
     return service.allows(party.src, 'call')
 end
 
----Ends a call because coverage went, and tells each side what happened from their own point of
----view: the one who walked out of range lost service, the other simply lost the call.
+---Ends a call because coverage went and tells each side whose signal was the one that went, so
+---the phone can raise the dialog. Only that fact travels: the wording and its translation are the
+---NUI's business.
 ---@param channel number
 ---@param s table live session
 ---@param callerOk boolean caller still had signal
@@ -392,18 +390,12 @@ local function dropForNoService(channel, s, callerOk, calleeOk)
     local caller, callee = s.caller, s.callee
     endCall(channel, 'noservice')
 
-    local function tell(party, lostIt)
-        if not party or not party.cid then return end
-        notifications.notifyCid(party.cid, {
-            app   = 'Phone',
-            appId = 'phone',
-            title = 'Call Dropped',
-            body  = lostIt and 'You lost service.' or 'The other caller lost service.',
-        })
+    if caller and caller.src then
+        TriggerClientEvent('sd-phone:client:call:dropped', caller.src, { lost = not callerOk })
     end
-
-    tell(caller, not callerOk)
-    tell(callee, not calleeOk)
+    if callee and callee.src then
+        TriggerClientEvent('sd-phone:client:call:dropped', callee.src, { lost = not calleeOk })
+    end
 end
 
 -- Coverage watch. There is no event for "player walked out of range", so a live call has to be
