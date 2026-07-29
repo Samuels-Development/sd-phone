@@ -1021,6 +1021,11 @@ local CUSTOM_ICON_MIN, CUSTOM_ICON_MAX = 4, 8
 local MAX_CUSTOM_ICON_THEMES = 12
 ---@type integer Cap on a player-designed theme's display name, in characters.
 local CUSTOM_ICON_NAME_MAX = 24
+-- Mirrors IconTexture in web/src/stores/iconThemeStore.ts.
+---@type table<string, boolean> Whitelist of tile textures a theme may name.
+local ICON_TEXTURES = { none = true, noise = true, dots = true, stripes = true }
+---@type integer Cap on per-app overrides inside one theme.
+local MAX_ICON_OVERRIDES = 40
 ---@type table|nil Lua 5.4 utf8 library, so a name is bounded in characters rather than bytes.
 local utf8lib = _G.utf8
 
@@ -1100,10 +1105,200 @@ local function sanitizeRecipe(v)
     return clean
 end
 
+---A finite number inside [lo, hi], or nil. The type test drops NaN, and both infinities fall out
+---of the bounds compare.
+---@param v any client-supplied number
+---@param lo number inclusive lower bound
+---@param hi number inclusive upper bound
+---@return number|nil value
+local function boundedNumber(v, lo, hi)
+    if type(v) ~= 'number' or v ~= v then return nil end
+    if v < lo or v > hi then return nil end
+    return v
+end
+
+---True for a plausible app or glyph id: at most 32 characters of [a-z0-9_-] behind an
+---alphanumeric first one, which is also what keeps '__proto__' out of the overrides map.
+---@param v any client-supplied id
+---@return boolean
+local function isAppId(v)
+    if type(v) ~= 'string' or #v > 32 then return false end
+    return v:match('^[a-z0-9][a-z0-9_%-]*$') ~= nil
+end
+
+---Validates a theme's per-app overrides, capped at MAX_ICON_OVERRIDES entries. An empty table is
+---a legal no-op; nil refuses the whole theme.
+---@param v any client-supplied override map
+---@return table|nil overrides appId -> { background: table|nil, glyph: table|nil, icon: string|nil }
+local function sanitizeIconOverrides(v)
+    if type(v) ~= 'table' then return nil end
+    local out, count = {}, 0
+    for key, entry in pairs(v) do
+        if not isAppId(key) or type(entry) ~= 'table' then return nil end
+        local clean, fields = {}, 0
+        if entry.background ~= nil then
+            clean.background = sanitizeRecipe(entry.background)
+            if not clean.background then return nil end
+            fields = fields + 1
+        end
+        if entry.glyph ~= nil then
+            clean.glyph = sanitizeRecipe(entry.glyph)
+            if not clean.glyph then return nil end
+            fields = fields + 1
+        end
+        if entry.icon ~= nil then
+            if not isAppId(entry.icon) then return nil end
+            clean.icon = entry.icon
+            fields = fields + 1
+        end
+        if fields == 0 then return nil end
+        count = count + 1
+        if count > MAX_ICON_OVERRIDES then return nil end
+        out[key] = clean
+    end
+    return out
+end
+
+---Validates one label style block: colour recipe, CSS font weight and the show flag.
+---@param v any client-supplied label block
+---@return table|nil label { color: table|nil, weight: number|nil, show: boolean|nil }
+local function sanitizeIconLabel(v)
+    if type(v) ~= 'table' then return nil end
+    local clean = {}
+    if v.color ~= nil then
+        clean.color = sanitizeRecipe(v.color)
+        if not clean.color then return nil end
+    end
+    if v.weight ~= nil then
+        clean.weight = boundedNumber(v.weight, 100, 900)
+        if not clean.weight then return nil end
+    end
+    if v.show ~= nil then
+        if type(v.show) ~= 'boolean' then return nil end
+        clean.show = v.show
+    end
+    return clean
+end
+
+---Validates a tile border: the colour recipe is required, the width is 0-4 pixels.
+---@param v any client-supplied border block
+---@return table|nil border { color: table, width: number }
+local function sanitizeIconBorder(v)
+    if type(v) ~= 'table' then return nil end
+    local color = sanitizeRecipe(v.color)
+    local width = boundedNumber(v.width, 0, 4)
+    if not color or not width then return nil end
+    return { color = color, width = width }
+end
+
+---Validates a theme's wallpaper exactly as the wallpaper setting does, but refusing anything
+---sanitizeWallpaper would have had to rewrite: a theme is stored whole or not at all.
+---@param v any client-supplied wallpaper key or URL
+---@return string|nil wallpaper
+local function sanitizeThemeWallpaper(v)
+    local clean = sanitizeWallpaper(v)
+    if clean ~= v then return nil end
+    return clean
+end
+
+---Writes the optional look fields a theme shares with its dark variant onto `clean`. False when a
+---field that IS present is malformed, which drops the whole theme.
+---@param v table client-supplied theme or variant
+---@param clean table destination, mutated in place
+---@return boolean ok
+local function applyIconTraits(v, clean)
+    if v.radius ~= nil then
+        clean.radius = boundedNumber(v.radius, 0, 0.5)
+        if not clean.radius then return false end
+    end
+    if v.background2 ~= nil then
+        clean.background2 = sanitizeRecipe(v.background2)
+        if not clean.background2 then return false end
+    end
+    if v.angle ~= nil then
+        clean.angle = boundedNumber(v.angle, 0, 360)
+        if not clean.angle then return false end
+    end
+    if v.gloss ~= nil then
+        clean.gloss = boundedNumber(v.gloss, 0, 1)
+        if not clean.gloss then return false end
+    end
+    if v.texture ~= nil then
+        if type(v.texture) ~= 'string' or not ICON_TEXTURES[v.texture] then return false end
+        clean.texture = v.texture
+    end
+    if v.glyphScale ~= nil then
+        clean.glyphScale = boundedNumber(v.glyphScale, 0.6, 1.4)
+        if not clean.glyphScale then return false end
+    end
+    if v.glyphWeight ~= nil then
+        clean.glyphWeight = boundedNumber(v.glyphWeight, 1, 3)
+        if not clean.glyphWeight then return false end
+    end
+    if v.hue ~= nil then
+        clean.hue = boundedNumber(v.hue, -180, 180)
+        if not clean.hue then return false end
+    end
+    if v.saturation ~= nil then
+        clean.saturation = boundedNumber(v.saturation, 0, 2)
+        if not clean.saturation then return false end
+    end
+    if v.border ~= nil then
+        clean.border = sanitizeIconBorder(v.border)
+        if not clean.border then return false end
+    end
+    if v.bevel ~= nil then
+        if type(v.bevel) ~= 'boolean' then return false end
+        if v.bevel then clean.bevel = true end
+    end
+    if v.glow ~= nil then
+        clean.glow = boundedNumber(v.glow, 0, 1)
+        if not clean.glow then return false end
+    end
+    if v.label ~= nil then
+        local label = sanitizeIconLabel(v.label)
+        if not label then return false end
+        if next(label) ~= nil then clean.label = label end
+    end
+    if v.overrides ~= nil then
+        local overrides = sanitizeIconOverrides(v.overrides)
+        if not overrides then return false end
+        if next(overrides) ~= nil then clean.overrides = overrides end
+    end
+    if v.wallpaper ~= nil then
+        clean.wallpaper = sanitizeThemeWallpaper(v.wallpaper)
+        if not clean.wallpaper then return false end
+    end
+    return true
+end
+
+---Validates a theme's dark-mode variant: every field the theme itself carries, minus a nested
+---variant of its own.
+---@param v any client-supplied variant
+---@return table|nil variant
+local function sanitizeIconVariant(v)
+    if type(v) ~= 'table' or v.dark ~= nil then return nil end
+    local clean = {}
+    if v.background ~= nil then
+        clean.background = sanitizeRecipe(v.background)
+        if not clean.background then return nil end
+    end
+    if v.glyph ~= nil then
+        clean.glyph = sanitizeRecipe(v.glyph)
+        if not clean.glyph then return nil end
+    end
+    if v.depth ~= nil then
+        if type(v.depth) ~= 'boolean' then return nil end
+        if v.depth then clean.depth = true end
+    end
+    if not applyIconTraits(v, clean) then return nil end
+    return clean
+end
+
 ---Validates one player-designed icon theme, rebuilding it from only the sanitised fields so no
 ---client JSON is ever stored verbatim. Nil when any field is malformed.
 ---@param v any client-supplied theme
----@return table|nil theme { id: string, name: string, background: table, glyph: table, depth: boolean|nil }
+---@return table|nil theme { id: string, name: string, background: table, glyph: table, ... }
 local function sanitizeCustomIconTheme(v)
     if type(v) ~= 'table' or not isCustomIconId(v.id) then return nil end
     if type(v.name) ~= 'string' then return nil end
@@ -1116,6 +1311,12 @@ local function sanitizeCustomIconTheme(v)
     if not background or not glyph then return nil end
     local clean = { id = v.id, name = name, background = background, glyph = glyph }
     if v.depth == true then clean.depth = true end
+    if not applyIconTraits(v, clean) then return nil end
+    if v.dark ~= nil then
+        local dark = sanitizeIconVariant(v.dark)
+        if not dark then return nil end
+        if next(dark) ~= nil then clean.dark = dark end
+    end
     return clean
 end
 
