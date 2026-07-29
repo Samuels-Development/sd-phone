@@ -110,4 +110,32 @@ return {
     Gated = {
         'apps:install',
     },
+
+    -- Reads whose last good answer is kept, so a data app in a dead zone shows what it was
+    -- showing before the signal went instead of an empty "nothing here yet" screen. The cache is
+    -- per phone session and is replaced by the real answer the moment coverage returns.
+    --
+    -- ONLY EVER LIST READS HERE. An action that changes something must not be cached: replaying
+    -- its old success would tell the player their post went out when it never left the phone.
+    -- Posting, liking, sending and buying all still fail in a dead zone, which is correct.
+    Cached = {
+        -- Squawk
+        'birdy:me', 'birdy:feed', 'birdy:profile', 'birdy:profilePosts', 'birdy:notifications',
+        'birdy:notificationCount', 'birdy:trending', 'birdy:hashtag', 'birdy:followList',
+        'birdy:dmList', 'birdy:dmThread',
+        -- Photogram
+        'photogram:feed', 'photogram:explore', 'photogram:profile', 'photogram:profilePosts',
+        'photogram:saved', 'photogram:comments', 'photogram:stories', 'photogram:activity',
+        'photogram:counts', 'photogram:followList', 'photogram:followRequests',
+        'photogram:dmList', 'photogram:dmThread',
+        -- Vibez
+        'vibez:feed', 'vibez:discover', 'vibez:profile', 'vibez:profilePosts', 'vibez:likedPosts',
+        'vibez:savedPosts', 'vibez:comments', 'vibez:activity', 'vibez:counts', 'vibez:followList',
+        -- Everything else that opens onto a list
+        'mail:list', 'mail:savedEmails', 'darkchat:rooms', 'darkchat:notifications',
+        'cherry:state', 'cherry:thread', 'marketplace:list', 'pages:list', 'review:list',
+        'review:business', 'weazelnews:feed', 'weazelnews:view', 'stocks:market',
+        'banking:overview', 'garages:list', 'homes:list', 'services:directory', 'services:inbox',
+        'ryde:history', 'ryde:leaderboard',
+    },
 }

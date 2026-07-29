@@ -32,19 +32,82 @@ local function reachable(serverEvent)
     return service.allows('data')
 end
 
+---@type table<string, boolean> Reads whose last good answer survives a dead zone.
+local CACHED = {}
+for _, name in ipairs(towerCfg.Cached or {}) do
+    CACHED[tostring(name)] = true
+end
+
+---@type integer Most remembered answers before the oldest is dropped.
+local CACHE_MAX = 80
+
+---@type table<string, table> Last good envelope, keyed by action plus the arguments it was for.
+local lastGood = {}
+---@type string[] Cache keys in insertion order, so the oldest can be evicted.
+local cacheOrder = {}
+
+---Key for one read. The arguments are part of it: a profile page and a DM thread are the same
+---action with different payloads, and handing one back for the other would show the wrong data.
+---@param action string '<app>:<action>'
+---@param payload any arguments the NUI sent
+---@return string
+local function cacheKey(action, payload)
+    local ok, encoded = pcall(json.encode, payload)
+    return action .. '|' .. ((ok and encoded) or tostring(payload))
+end
+
+---Remembers a successful read. Re-reading something moves it to the back of the queue, so a feed
+---the player keeps opening is not evicted ahead of a profile they looked at once.
+---@param key string
+---@param res table envelope
+local function remember(key, res)
+    if lastGood[key] ~= nil then
+        for i = 1, #cacheOrder do
+            if cacheOrder[i] == key then table.remove(cacheOrder, i) break end
+        end
+    end
+
+    cacheOrder[#cacheOrder + 1] = key
+    if #cacheOrder > CACHE_MAX then
+        local oldest = table.remove(cacheOrder, 1)
+        lastGood[oldest] = nil
+    end
+    lastGood[key] = res
+end
+
 ---Binds a NUI callback that forwards its payload to the matching server callback and returns the
 ---response envelope unchanged, falling back to a uniform failure when the server never answers.
 ---@param nuiAction string NUI action name the React app fetches
 ---@param serverEvent string server callback name to await
 ---@param onAccepted? fun() ran only when the server accepted the write, never on a rejection
 local function proxy(nuiAction, serverEvent, onAccepted)
+    ---@type string|nil '<app>:<action>', nil for anything not shaped like one
+    local action = serverEvent:match('^sd%-phone:server:(.+)$')
+    ---@type boolean Whether this action's answers are worth keeping.
+    local cacheable = action ~= nil and CACHED[action] == true
+
     RegisterNUICallback(nuiAction, function(payload, cb)
+        local key = cacheable and cacheKey(action, payload) or nil
+
         if not reachable(serverEvent) then
+            -- Out of coverage: hand back what this read last returned, so the app still shows the
+            -- feed the player already had rather than an empty screen. `cached` marks it as the
+            -- old answer for any UI that wants to say so.
+            local kept = key and lastGood[key]
+            if kept then
+                local copy = {}
+                for k, v in pairs(kept) do copy[k] = v end
+                copy.cached = true
+                cb(copy)
+                return
+            end
             cb({ success = false, message = 'No Service' })
             return
         end
+
         local res = lib.callback.await(serverEvent, false, payload)
         if onAccepted and type(res) == 'table' and res.success == true then onAccepted() end
+        if key and type(res) == 'table' and res.success == true then remember(key, res) end
         cb(res or { success = false, message = 'No response from server' })
     end)
 end
