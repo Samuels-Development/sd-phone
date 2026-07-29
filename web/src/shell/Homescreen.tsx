@@ -655,7 +655,10 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
 
     const tx = -(page * SCREEN_W) + dragX;
 
-    const dragWidget = dragW ? widgets.find(w => w.uid === dragW.uid) : undefined;
+    const dragWidget = dragW ? previewWidgets.find(w => w.uid === dragW.uid) : undefined;
+    const dragWidgetDef = dragWidget ? widgetByKind(dragWidget.kind) : undefined;
+    const dragWidgetBox = dragWidget ? widgetPx(dragWidget.size) : null;
+    const dragWidgetPos = dragWidget ? slot(dragWidget.row * COLS + dragWidget.col) : null;
     const pillAt = dragW && dragWidget && reflowNote.count > 0 ? pillSpot(dragW.x, dragW.y, dragWidget.size) : null;
 
 
@@ -717,37 +720,31 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
                                     style={{ left: 0, top: 0, width: ICON, height: ICON, transform: `translate(${slot(overCell).x}px, ${slot(overCell).y}px)` }}
                                 />
                             )}
-                            {/* A widget being dragged renders on whatever page is SHOWING, not the
-                                one it started on, so it can be carried across an edge flip and
-                                stay under the finger. */}
-                            {previewWidgets.filter(w => (dragW?.uid === w.uid ? pi === page : w.page === pi)).map(w => {
+                            {/* Landing pad under the dragged widget, so the snap target is visible. */}
+                            {dragW && dropPreview && dragWidgetBox && pi === page && (
+                                <div
+                                    className="pointer-events-none absolute rounded-[22px] border border-white/40 bg-white/10"
+                                    style={{
+                                        left: 0, top: 0, width: dragWidgetBox.width, height: dragWidgetBox.height,
+                                        transform: `translate(${slot(dropPreview.row * COLS + dropPreview.col).x}px, ${slot(dropPreview.row * COLS + dropPreview.col).y}px)`,
+                                    }}
+                                />
+                            )}
+                            {previewWidgets.filter(w => w.uid !== dragW?.uid && w.page === pi).map(w => {
                                 const def = widgetByKind(w.kind);
                                 if (!def) return null;
                                 const pos = slot(w.row * COLS + w.col);
                                 const { width, height } = widgetPx(w.size);
-                                const dragging = dragW?.uid === w.uid;
-                                const at = dragging ? { x: dragW.x, y: dragW.y } : pos;
                                 return (
                                     <div key={w.uid}>
-                                        {/* Landing pad under the dragged widget, so the snap target is visible. */}
-                                        {dragging && dropPreview && (
-                                            <div
-                                                className="pointer-events-none absolute rounded-[22px] border border-white/40 bg-white/10"
-                                                style={{
-                                                    left: 0, top: 0, width, height,
-                                                    transform: `translate(${slot(dropPreview.row * COLS + dropPreview.col).x}px, ${slot(dropPreview.row * COLS + dropPreview.col).y}px)`,
-                                                }}
-                                            />
-                                        )}
                                     <div
                                         onPointerDown={e => onWidgetDown(e, w)}
                                         style={{
                                             position: 'absolute', left: 0, top: 0,
-                                            transform: `translate(${at.x}px, ${at.y}px)${dragging ? ' scale(1.06)' : ''}`,
-                                            transition: dragging ? 'none' : 'transform 0.26s cubic-bezier(0.2,0.8,0.3,1)',
-                                            zIndex: dragging ? 3 : 1,
+                                            transform: `translate(${pos.x}px, ${pos.y}px)`,
+                                            transition: 'transform 0.26s cubic-bezier(0.2,0.8,0.3,1)',
+                                            zIndex: 1,
                                             touchAction: 'none',
-                                            filter: dragging ? 'drop-shadow(0 12px 22px rgba(0,0,0,0.45))' : undefined,
                                             // Where this tile sits on the SCREEN, so a glass widget can crop its own
                                             // copy of the wallpaper to match the one behind it. Page index is absent
                                             // deliberately: the wallpaper does not scroll with the pages, so the same
@@ -760,12 +757,12 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
                                         } as CSSProperties}
                                     >
                                         <div
-                                            className={editing && !dragging ? 'animate-app-jiggle' : ''}
+                                            className={editing ? 'animate-app-jiggle' : ''}
                                             // --jiggle scales the wobble down for bigger tiles so a
                                             // 4x4 does not swing five times as far as an icon.
-                                            style={editing && !dragging
+                                            style={editing
                                                 ? { animationDelay: `${jiggleDelay(w.uid)}ms`, '--jiggle': `${jiggleDeg(w.size)}deg` } as CSSProperties
-                                                : (bloom && !editing
+                                                : (bloom
                                                     ? { animation: 'home-icon-in 0.38s cubic-bezier(0.34,1.3,0.64,1) both', animationDelay: `${bloomDelay(w.uid)}ms` }
                                                     : undefined)}
                                             onClick={e => {
@@ -887,6 +884,39 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
                     </div>
                 )}
             </div>
+
+            {dragW && dragWidget && dragWidgetDef && dragWidgetBox && dragWidgetPos && (
+                <div
+                    className="absolute left-0 top-0 z-[60]"
+                    style={{
+                        transform: `translate(${dragW.x}px, ${stripTop + dragW.y}px) scale(1.06)`,
+                        touchAction: 'none',
+                        filter: 'drop-shadow(0 12px 22px rgba(0,0,0,0.45))',
+                        '--glass-img': `url(${resolveWallpaper(wallpaper)})`,
+                        '--glass-w': `${SCREEN_W}px`,
+                        '--glass-h': `${SCREEN_H}px`,
+                        '--glass-x': `${-dragWidgetPos.x}px`,
+                        '--glass-y': `${-(stripTop + dragWidgetPos.y)}px`,
+                    } as CSSProperties}
+                >
+                    <div>
+                        {dragWidgetDef.render({ size: dragWidget.size, width: dragWidgetBox.width, height: dragWidgetBox.height, align: dragWidget.align ?? 'left', theme: dragWidget.theme ?? 'dark', picks: dragWidget.picks,
+                            onPicks: ids => setWidgets(prev => prev.map(o => (o.uid === dragWidget.uid ? { ...o, picks: ids.length ? ids : undefined } : o))) })}
+                    </div>
+                    {editing && (
+                        <button
+                            type="button"
+                            aria-label={t('widgets.remove', 'Remove widget')}
+                            onPointerDown={e => e.stopPropagation()}
+                            onClick={e => { e.stopPropagation(); removeWidget(dragWidget.uid); }}
+                            className="absolute -left-1.5 -top-1.5 flex h-[24px] w-[24px] items-center justify-center rounded-full bg-[#1c1c1e] text-white shadow-lg"
+                            style={{ border: '0.5px solid rgba(255,255,255,0.25)' }}
+                        >
+                            <Minus className="h-[15px] w-[15px]" strokeWidth={3} />
+                        </button>
+                    )}
+                </div>
+            )}
 
             <div className="absolute bottom-[132px] left-0 right-0 z-10 flex justify-center">
                 {visiblePages > 1 && (
