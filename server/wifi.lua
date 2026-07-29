@@ -147,7 +147,11 @@ lib.callback.register('sd-phone:server:wifi:connect', function(source, payload)
     -- Remembered from the config's own password, never the string the client sent: the only thing
     -- a client can do here is fail the check above, so nothing it types can reach `known`. A DB
     -- hiccup must not turn a good join into a refusal, so the write is pcall'd.
-    if cid then pcall(store.remember, cid, net.id, wifi.secured(net) and net.password or nil) end
+    if cid then
+        pcall(store.remember, cid, net.id, wifi.secured(net) and net.password or nil)
+        -- Joining by hand undoes an earlier Disconnect: the player is asking for it back.
+        pcall(store.setDeclined, cid, net.id, false)
+    end
     return util.ok()
 end)
 
@@ -187,9 +191,17 @@ end)
 
 ---A client leaving the network it is on. Nothing to validate: dropping your own connection is
 ---always allowed, and asking twice is harmless.
-RegisterNetEvent('sd-phone:server:wifi:disconnect', function()
+RegisterNetEvent('sd-phone:server:wifi:disconnect', function(payload)
     local source = source
+    local was = connections[source]
     connections[source] = nil
+
+    -- Leaving on purpose is remembered, so the network is never rejoined on its own again. Only
+    -- joining it by hand clears that, which is the player asking for it back.
+    if was and type(payload) == 'table' and payload.explicit == true then
+        local cid = player.getIdentifier(source)
+        if cid then pcall(store.setDeclined, cid, was, true) end
+    end
 end)
 
 ---A departing player takes their connection with them, so a recycled server id never inherits it.

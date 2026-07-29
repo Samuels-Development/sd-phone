@@ -17,11 +17,16 @@ function store.ensureSchema()
             citizenid  VARCHAR(64) NOT NULL,
             enabled    TINYINT(1)  NOT NULL DEFAULT 1,
             known      LONGTEXT    NULL,
+            declined   LONGTEXT    NULL,
             updated_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
                 ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (citizenid)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
+
+    -- `declined` arrived after the table shipped, so an install from before it needs the column
+    -- adding rather than the CREATE above, which does nothing on an existing table.
+    pcall(MySQL.query.await, 'ALTER TABLE phone_wifi ADD COLUMN IF NOT EXISTS declined LONGTEXT NULL AFTER known')
 end
 
 ---Clamps a network id to a storable string; nil for empty / non-string input.
@@ -43,11 +48,11 @@ end
 ---Reads a character's Wi-Fi state. A character with no row yet gets a switched-on radio and
 ---nothing remembered, which is the same state a fresh session has always started in.
 ---@param citizenid string framework per-character id
----@return { enabled: boolean, known: table<string, string|boolean> }
+---@return { enabled: boolean, known: table<string, string|boolean>, declined: table<string, boolean> }
 function store.get(citizenid)
-    if not citizenid or citizenid == '' then return { enabled = true, known = {} } end
-    local row = MySQL.single.await('SELECT enabled, known FROM phone_wifi WHERE citizenid = ?', { citizenid })
-    if not row then return { enabled = true, known = {} } end
+    if not citizenid or citizenid == '' then return { enabled = true, known = {}, declined = {} } end
+    local row = MySQL.single.await('SELECT enabled, known, declined FROM phone_wifi WHERE citizenid = ?', { citizenid })
+    if not row then return { enabled = true, known = {}, declined = {} } end
 
     local known = {}
     if row.known and row.known ~= '' then
@@ -63,9 +68,19 @@ function store.get(citizenid)
         end
     end
 
+    local declined = {}
+    if row.declined and row.declined ~= '' then
+        local ok, decoded = pcall(json.decode, row.declined)
+        if ok and type(decoded) == 'table' then
+            for id, off in pairs(decoded) do
+                if type(id) == 'string' and off then declined[id] = true end
+            end
+        end
+    end
+
     -- oxmysql hands a TINYINT(1) back as a Lua boolean, so tonumber() would read every stored
     -- switch as nil and report the radio as always-on.
-    return { enabled = isTruthy(row.enabled), known = known }
+    return { enabled = isTruthy(row.enabled), known = known, declined = declined }
 end
 
 ---Persists a character's radio switch, leaving their remembered networks intact.
@@ -106,6 +121,30 @@ function store.forget(citizenid, id)
     if not clean then return end
     MySQL.update.await(
         "UPDATE phone_wifi SET known = JSON_REMOVE(COALESCE(known, '{}'), ?) WHERE citizenid = ?",
+        { pathFor(clean), citizenid }
+    )
+end
+
+---Records that the player left a network on purpose, so it is never rejoined on its own again.
+---Cleared only by joining it by hand, which is the player asking for it back.
+---@param citizenid string framework per-character id
+---@param id string network id
+---@param on boolean true to decline, false to clear
+function store.setDeclined(citizenid, id, on)
+    if not citizenid or citizenid == '' then return end
+    local clean = sanitizeId(id)
+    if not clean then return end
+
+    if on then
+        MySQL.update.await([[
+            INSERT INTO phone_wifi (citizenid, declined) VALUES (?, ?)
+            ON DUPLICATE KEY UPDATE declined = JSON_MERGE_PATCH(COALESCE(declined, '{}'), VALUES(declined))
+        ]], { citizenid, json.encode({ [clean] = true }) })
+        return
+    end
+
+    MySQL.update.await(
+        "UPDATE phone_wifi SET declined = JSON_REMOVE(COALESCE(declined, '{}'), ?) WHERE citizenid = ?",
         { pathFor(clean), citizenid }
     )
 end

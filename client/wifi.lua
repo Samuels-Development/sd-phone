@@ -58,8 +58,9 @@ local hydrating = false
 local epoch = 0
 ---@type boolean True while the phone is on screen; gates the scan entirely.
 local phoneOpen = false
----@type table<string, boolean> Networks the player left on purpose. Auto-rejoin skips these until
----they drop out of range or are joined again by hand, so Disconnect is not undone a tick later.
+---@type table<string, boolean> Networks the player left on purpose. Auto-rejoin skips these for
+---good: only joining one by hand clears it, so Disconnect means stay off rather than stay off for
+---a while. Persisted per character, so walking away and coming back tomorrow still respects it.
 local declined = {}
 ---@type boolean True while an auto-rejoin is in flight, so a scan cannot stack a second one.
 local rejoining = false
@@ -223,7 +224,7 @@ function wifiClient.disconnect(explicit)
     -- make the button look broken. The network stays remembered, so tapping it joins again with no
     -- password; walking out of range clears this so returning later behaves normally.
     if explicit then declined[joined.id] = true end
-    TriggerServerEvent('sd-phone:server:wifi:disconnect')
+    TriggerServerEvent('sd-phone:server:wifi:disconnect', { explicit = explicit == true })
     joined, joinedStrength = nil, 0.0
     push(true)
 end
@@ -260,11 +261,6 @@ function refresh(force)
         inReach[scanned[i].id] = true
     end
 
-    -- Walking out of a network the player left on purpose clears the refusal, so coming back later
-    -- rejoins the way it always did. Only leaving the area resets it, not the passage of time.
-    for id in pairs(declined) do
-        if not inReach[id] then declined[id] = nil end
-    end
 
     if joined then
         local strength = wifi.strength(pos.x, pos.y, pos.z, joined)
@@ -320,6 +316,12 @@ local function hydrate()
             end
         end
 
+        declined = {}
+        local off = type(res.data.declined) == 'table' and res.data.declined or {}
+        for id, on in pairs(off) do
+            if type(id) == 'string' and on then declined[id] = true end
+        end
+
         -- A stored-off radio has to drop anything the scan got in first with, or the phone keeps
         -- carrying data behind a switch it has just read as off.
         if not radioOn then
@@ -336,7 +338,7 @@ end
 local function resetForCharacter()
     epoch = epoch + 1
     wifiClient.disconnect()
-    hydrated, hydrating, remembered, radioOn, scanned = false, false, {}, true, {}
+    hydrated, hydrating, remembered, declined, radioOn, scanned = false, false, {}, {}, true, {}
     hydrate()
 end
 
