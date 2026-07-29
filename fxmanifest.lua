@@ -45,6 +45,9 @@ ui_page 'web/build/index.html'
 -- exposed.
 files {
     'bridge/**.lua',
+    -- Pure maths shared by both sides (cell tower service levels); the client computes its own
+    -- bars from it, so it has to be fetchable.
+    'shared/**.lua',
     -- Only the flat client-shared configs ship (configs/*.lua). configs/server/ is deliberately
     -- excluded so configs/server/apikeys.lua (GIPHY + Fivemanage keys) never reaches a client -
     -- do NOT widen this to configs/**.lua.
