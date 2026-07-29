@@ -1,3 +1,91 @@
+import {
+    Aperture, BookOpen, Bird, Blocks, Briefcase, Calculator, CalendarDays, Camera,
+    Car, Clock, CloudSun, Compass, Cookie, Crown, Flame, Folder, Gamepad2, Globe,
+    Heart, HeartPulse, House, Image as ImageIcon, KeyRound, Landmark, LayoutGrid,
+    Mail, Map, MessageCircle, MessagesSquare, Mic, Mountain, Music, Newspaper,
+    Phone, Radar, Radio, Settings, Ship, ShoppingBag, Spade, Star, StickyNote,
+    Store, TrainFront, TrendingUp, Users, Video, Wallet, Warehouse,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+
+const APP_GLYPHS: Record<string, LucideIcon> = {
+    phone:       Phone,
+    messages:    MessageCircle,
+    services:    Briefcase,
+    pages:       BookOpen,
+    review:      Star,
+    marketplace: Store,
+    radio:       Radio,
+    mail:        Mail,
+    safari:      Globe,
+    compass:     Compass,
+    maps:        Map,
+    findfriends: Radar,
+    stocks:      TrendingUp,
+    ryde:        Car,
+    camera:      Camera,
+    photos:      ImageIcon,
+    music:       Music,
+    wallet:      Wallet,
+    weather:     CloudSun,
+    clock:       Clock,
+    calendar:    CalendarDays,
+    notes:       StickyNote,
+    documents:   Folder,
+    voicememos:  Mic,
+    bank:        Landmark,
+    settings:    Settings,
+    appstore:    ShoppingBag,
+    health:      HeartPulse,
+    groups:      Users,
+    calculator:  Calculator,
+    birdy:       Bird,
+    darkchat:    MessagesSquare,
+    cherry:      Heart,
+    photogram:   Aperture,
+    garages:     Warehouse,
+    homes:       House,
+    cookie:      Cookie,
+    passwords:   KeyRound,
+    wordle:      LayoutGrid,
+    flappy:      Gamepad2,
+    blocks:      Blocks,
+    blackjack:   Spade,
+    climber:     Mountain,
+    railrunner:  TrainFront,
+    connectfour: Gamepad2,
+    chess:       Crown,
+    battleship:  Ship,
+    vibez:       Video,
+    weazelnews:  Newspaper,
+    streaks:     Flame,
+};
+
+function initials(label: string): string {
+    const words = label.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+    if (words.length === 0) return '?';
+    if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+    return (words[0][0] + words[1][0]).toUpperCase();
+}
+
+export function AppGlyph({ icon, label, color, size }: { icon: string; label: string; color: string; size: number }) {
+    const Glyph = APP_GLYPHS[icon];
+    if (Glyph) return <Glyph size={size} color={color} strokeWidth={1.9} aria-hidden />;
+    return (
+        <span
+            style={{
+                color,
+                fontFamily:    'var(--font-sf, system-ui, sans-serif)',
+                fontWeight:    700,
+                fontSize:      size * 0.62,
+                letterSpacing: '-0.03em',
+                lineHeight:    1,
+            }}
+        >
+            {initials(label)}
+        </span>
+    );
+}
 
 interface GlyphProps {
     className?: string;

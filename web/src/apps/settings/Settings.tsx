@@ -1,5 +1,6 @@
 import { t } from '@/i18n';
 import { useSessionState } from '@/hooks/useSessionState';
+import { AppIconsPage } from './appearance/AppIconsPage';
 import { DisplayBrightnessPage } from './appearance/DisplayBrightnessPage';
 import { FaceUnlockPage } from './security/FaceUnlockPage';
 import { BatteryPage } from './general/BatteryPage';
@@ -20,7 +21,7 @@ import { useSimStore } from '@/stores/simStore';
 import { WifiPage } from './wifi/WifiPage';
 import { useWifiConnected } from '@/stores/wifiStore';
 
-type SubPage = 'general' | 'display' | 'wallpaper' | 'notifications' | 'sound-haptics' | 'face-unlock' | 'phone' | 'battery' | 'privacy' | 'sim' | 'wifi' | null;
+type SubPage = 'general' | 'display' | 'wallpaper' | 'app-icons' | 'notifications' | 'sound-haptics' | 'face-unlock' | 'phone' | 'battery' | 'privacy' | 'sim' | 'wifi' | null;
 
 export function Settings({ onClose }: { onClose: () => void }) {
     const [subPage, setSubPage] = useSessionState<SubPage>('settings:subPage', null);
@@ -53,6 +54,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
         if (id === 'general')       setSubPage('general');
         if (id === 'display')       setSubPage('display');
         if (id === 'wallpaper')     setSubPage('wallpaper');
+        if (id === 'app-icons')     setSubPage('app-icons');
         if (id === 'notifications') setSubPage('notifications');
         if (id === 'sound-haptics') setSubPage('sound-haptics');
         if (id === 'face-unlock')   setSubPage('face-unlock');
@@ -67,6 +69,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
         subPage === 'general'         ? <GeneralPage           onBack={handleBack} />
         : subPage === 'display'       ? <DisplayBrightnessPage onBack={handleBack} />
         : subPage === 'wallpaper'     ? <WallpaperPage         onBack={handleBack} />
+        : subPage === 'app-icons'     ? <AppIconsPage          onBack={handleBack} />
         : subPage === 'notifications' ? <NotificationsPage     onBack={handleBack} />
         : subPage === 'sound-haptics' ? <SoundHapticsPage      onBack={handleBack} />
         : subPage === 'face-unlock'   ? <FaceUnlockPage        onBack={handleBack} />

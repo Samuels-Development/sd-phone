@@ -2,7 +2,9 @@ import { useRef } from 'react';
 
 import type { AppDef } from '@/core/types';
 import { useDownloadProgress } from '@/stores/downloadStore';
+import { useIconAppearance } from '@/stores/iconThemeStore';
 import { AppIconSVG } from './AppIconSVG';
+import { AppGlyph } from './AppGlyphs';
 import { AppBadge } from './AppBadge';
 import { launchOriginFrom } from './launchOrigin';
 import { CircularProgress } from '@/ui/CircularProgress';
@@ -16,6 +18,7 @@ export interface AppIconProps {
 
 export function AppIcon({ app, label = true, onOpen, badge }: AppIconProps) {
     const btnRef = useRef<HTMLButtonElement>(null);
+    const { background, glyph, art } = useIconAppearance(app.id, app.accent);
     const downloadProgress = useDownloadProgress(app.id);
     const downloading = downloadProgress !== undefined;
     const queued = downloading && downloadProgress < 0;
@@ -42,16 +45,22 @@ export function AppIcon({ app, label = true, onOpen, badge }: AppIconProps) {
                             '0 0 0 0.5px rgba(0,0,0,0.12)',
                     }}
                 >
-                    <div
-                        style={{
-                            width:           60,
-                            height:          60,
-                            transform:       'scale(1.3)',
-                            transformOrigin: '0 0',
-                        }}
-                    >
-                        <AppIconSVG icon={app.icon} />
-                    </div>
+                    {art === 'native' ? (
+                        <div
+                            style={{
+                                width:           60,
+                                height:          60,
+                                transform:       'scale(1.3)',
+                                transformOrigin: '0 0',
+                            }}
+                        >
+                            <AppIconSVG icon={app.icon} />
+                        </div>
+                    ) : (
+                        <div className="flex h-full w-full items-center justify-center" style={{ background }}>
+                            <AppGlyph icon={app.icon} label={app.label} color={glyph} size={40} />
+                        </div>
+                    )}
 
                     {/* Hover/press dim as a background-color overlay rather than filter: brightness.
                         A filter promotes/demotes the icon's compositing layer on hover, which forces
