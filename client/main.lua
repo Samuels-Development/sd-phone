@@ -813,6 +813,14 @@ end)
 ---The joined network as { id, ssid, strength, bars }, or nil while off Wi-Fi.
 exports('getWifiNetwork', function() return wifiClient.current() end)
 
+---Every configured network as { id, ssid, coords, range, secured }, mirroring configs/wifi.lua.
+---Empty while the system is off. A network's password is never part of this.
+exports('getWifiNetworks', function() return wifiClient.networks() end)
+
+---The networks in reach as of the last scan, strongest first, as { id, ssid, secured, strength,
+---bars, known }. Empty while the radio is off or nothing is in range.
+exports('getNearbyWifi', function() return wifiClient.nearby() end)
+
 ---Registers a third-party app - exports['sd-phone']:addCustomApp(data). Attribution is the calling
 ---resource; re-registering an identifier is only allowed from that same resource.
 ---@param data table lb-phone-shaped app definition

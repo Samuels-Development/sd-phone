@@ -128,6 +128,25 @@ function wifiClient.provides(capability)
     return key ~= nil and PROVIDES[key] == true
 end
 
+---Every configured network as fresh tables, so a caller mutating the result cannot reach into the
+---running config. Empty while the system is switched off; a password never leaves this module.
+---@return table[] networks { id, ssid, coords, range, secured }
+function wifiClient.networks()
+    local out = {}
+    for i = 1, #NETWORKS do
+        local net = NETWORKS[i]
+        out[i] = {
+            id      = net.id,
+            ssid    = tostring(net.ssid or net.id),
+            coords  = net.coords,
+            range   = tonumber(net.range) or 0.0,
+            -- The only thing about a password a caller ever learns: whether there is one.
+            secured = wifi.secured(net),
+        }
+    end
+    return out
+end
+
 ---Every network in reach as of the last scan, strongest first, as fresh tables.
 ---@return table[] networks { id, ssid, secured, strength, bars }
 function wifiClient.nearby()

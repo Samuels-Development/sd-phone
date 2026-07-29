@@ -60,6 +60,14 @@ local function coordsOf(source)
     return GetEntityCoords(ped)
 end
 
+---Server-local lifecycle event for a connection that has just ended, fired once per ending. Every
+---path that clears `connections` calls this, so none of them can end a connection silently.
+---@param src number player server id
+---@param id string network id the player was on, read before the connection was cleared
+local function announceDisconnect(src, id)
+    TriggerEvent('sd-phone:server:wifi:disconnected', src, id)
+end
+
 ---The network a player is on, re-verified against where the server says they are. Walking out of
 ---range clears the connection here rather than waiting for a client to admit it.
 ---@param source number|nil player server id
@@ -71,6 +79,9 @@ function wifiServer.connectionOf(source)
     local net = wifi.find(id, NETWORKS)
     if not net then
         connections[source] = nil
+        -- The network was edited out of the config under a live connection. A consumer gating on
+        -- it has to hear an ending, not just stop being told about the id.
+        announceDisconnect(source, id)
         return nil
     end
 
@@ -81,6 +92,9 @@ function wifiServer.connectionOf(source)
 
     if wifi.strength(pos.x, pos.y, pos.z, net) <= DROP_BELOW then
         connections[source] = nil
+        -- The player walked out of range. This is where that is noticed at all, so it is also the
+        -- only place it can be announced from.
+        announceDisconnect(source, id)
         return nil
     end
     return id
@@ -101,6 +115,29 @@ function wifiServer.provides(source, capability)
     if #NETWORKS == 0 then return false end
     if not PROVIDES[type(capability) == 'string' and capability:lower() or ''] then return false end
     return wifiServer.connectionOf(source) ~= nil
+end
+
+---Every configured network as a fresh table, so a caller mutating the result cannot reach into the
+---running config. Empty while the system is switched off; a password never leaves this module.
+---@return table[] networks { id, ssid, coords, range, secured }
+function wifiServer.networks()
+    local out = {}
+    for i = 1, #NETWORKS do
+        local net = NETWORKS[i]
+        -- An id is what the exports and the gating refer to, so an entry without one could never
+        -- be joined and is dropped here exactly as the scan drops it.
+        if type(net) == 'table' and type(net.id) == 'string' and net.id ~= '' then
+            out[#out + 1] = {
+                id      = net.id,
+                ssid    = tostring(net.ssid or net.id),
+                coords  = net.coords,
+                range   = tonumber(net.range) or 0.0,
+                -- The only thing about a password a caller ever learns: whether there is one.
+                secured = wifi.secured(net),
+            }
+        end
+    end
+    return out
 end
 
 ---Networks in reach of a player, strongest first, scanned from the server's own coords. Passwords
@@ -152,6 +189,10 @@ lib.callback.register('sd-phone:server:wifi:connect', function(source, payload)
         -- Joining by hand undoes an earlier Disconnect: the player is asking for it back.
         pcall(store.setDeclined, cid, net.id, false)
     end
+
+    -- Server-local lifecycle event, fired once the join is recorded: a consumer gating a door or a
+    -- terminal on this network opens it from here.
+    TriggerEvent('sd-phone:server:wifi:connected', source, net.id)
     return util.ok()
 end)
 
@@ -202,11 +243,16 @@ RegisterNetEvent('sd-phone:server:wifi:disconnect', function(payload)
         local cid = player.getIdentifier(source)
         if cid then pcall(store.setDeclined, cid, was, true) end
     end
+
+    -- Asking twice is harmless, so only a request that ended a live connection announces one.
+    if was then announceDisconnect(source, was) end
 end)
 
 ---A departing player takes their connection with them, so a recycled server id never inherits it.
 AddEventHandler('playerDropped', function()
+    local was = connections[source]
     connections[source] = nil
+    if was then announceDisconnect(source, was) end
 end)
 
 ---Whether a player is on Wi-Fi right now, re-verified against their position.
@@ -225,5 +271,9 @@ exports('hasWifiAccess', function(source, id)
     if type(id) ~= 'string' or id == '' then return false end
     return wifiServer.connectionOf(source) == id
 end)
+
+---Every configured network as { id, ssid, coords, range, secured }, mirroring configs/wifi.lua.
+---Empty while the system is off. A network's password is never part of this.
+exports('getWifiNetworks', function() return wifiServer.networks() end)
 
 return wifiServer
