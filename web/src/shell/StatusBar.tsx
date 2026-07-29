@@ -1,5 +1,6 @@
 import { formatClockTime, useClock } from '@/hooks/useClock';
 import { t } from '@/i18n';
+import { signalBarOpacities } from '@/lib/signal';
 
 export interface StatusBarProps {
     use24h: boolean;
@@ -38,7 +39,7 @@ export function StatusBar({ use24h, signal, showWifi, battery, airplane = false,
                     <span className="font-sf text-[13px] font-semibold leading-none opacity-80">{t('shell.noService', 'No Service')}</span>
                 ) : (
                     <>
-                        {signal > 0 && <Cellular size={21} />}
+                        {signal > 0 && <Cellular size={21} bars={signal} />}
                         {showWifi && <Wifi size={21} />}
                     </>
                 )}
@@ -57,10 +58,20 @@ export function StatusBar({ use24h, signal, showWifi, battery, airplane = false,
 }
 
 
-function Cellular({ size }: { size: number }) {
+const BAR_PATHS = [
+    'M88 432H40a24 24 0 01-24-24v-96a24 24 0 0124-24h48a24 24 0 0124 24v96a24 24 0 01-24 24z',
+    'M216 432h-48a24 24 0 01-24-24V248a24 24 0 0124-24h48a24 24 0 0124 24v160a24 24 0 01-24 24z',
+    'M344 432h-48a24 24 0 01-24-24V184a24 24 0 0124-24h48a24 24 0 0124 24v224a24 24 0 01-24 24z',
+    'M472 432h-48a24 24 0 01-24-24V104a24 24 0 0124-24h48a24 24 0 0124 24v304a24 24 0 01-24 24z',
+];
+
+function Cellular({ size, bars }: { size: number; bars: number }) {
+    const opacities = signalBarOpacities(bars);
     return (
         <svg width={size} height={size} viewBox="0 0 512 512" fill="currentColor" aria-hidden>
-            <path d="M472 432h-48a24 24 0 01-24-24V104a24 24 0 0124-24h48a24 24 0 0124 24v304a24 24 0 01-24 24zM344 432h-48a24 24 0 01-24-24V184a24 24 0 0124-24h48a24 24 0 0124 24v224a24 24 0 01-24 24zM216 432h-48a24 24 0 01-24-24V248a24 24 0 0124-24h48a24 24 0 0124 24v160a24 24 0 01-24 24zM88 432H40a24 24 0 01-24-24v-96a24 24 0 0124-24h48a24 24 0 0124 24v96a24 24 0 01-24 24z" />
+            {BAR_PATHS.map((d, i) => (
+                <path key={d} d={d} opacity={opacities[i]} />
+            ))}
         </svg>
     );
 }

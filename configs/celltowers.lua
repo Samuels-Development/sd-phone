@@ -40,7 +40,7 @@ return {
     -- deliberately independent of the Enabled switch above, so a network can be laid out and
     -- looked at before the system is ever switched on.
     Blips = {
-        Enabled = false,
+        Enabled = true,
 
         -- The marker sitting on the mast itself. Sprite and colour are GTA's own ids; the full
         -- lists live at https://docs.fivem.net/docs/game-references/blips/ Markers are drawn
