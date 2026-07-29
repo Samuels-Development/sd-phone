@@ -68,6 +68,31 @@ export function firstFit(
     return null;
 }
 
+export function pageMoves(
+    before: (string | null)[],
+    after: (string | null)[],
+    itemsPerPage: number,
+): { count: number; page: number } {
+    const was = new Map<string, number>();
+    before.forEach((id, i) => {
+        if (id !== null) was.set(id, Math.floor(i / itemsPerPage));
+    });
+
+    let count = 0;
+    let page = 0;
+    after.forEach((id, i) => {
+        if (id === null) return;
+        const from = was.get(id);
+        if (from === undefined) return;
+        const to = Math.floor(i / itemsPerPage);
+        if (to === from) return;
+        count++;
+        if (to > page) page = to;
+    });
+
+    return count ? { count, page } : { count: 0, page: 0 };
+}
+
 export function reflowAround(
     slots: (string | null)[],
     widgets: WidgetPlacement[],

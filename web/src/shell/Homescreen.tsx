@@ -11,7 +11,7 @@ import { AppBadge } from './AppBadge';
 import { useBadges } from '@/stores/badgeStore';
 import { AlertDialog } from '@/ui/AlertDialog';
 import type { SavedLayout, WidgetAlign, WidgetPlacement, WidgetSize, WidgetTheme } from '@/apps/appstore/appsApi';
-import { SPAN, coveredCells, firstFit, jiggleDeg, reflowAround, widgetPx } from './widgets/geometry';
+import { SPAN, coveredCells, firstFit, jiggleDeg, pageMoves, reflowAround, widgetPx } from './widgets/geometry';
 import { widgetByKind } from './widgets/registry';
 import { launchOriginFrom } from './launchOrigin';
 import { WidgetGallery } from './widgets/WidgetGallery';
@@ -69,6 +69,21 @@ function jiggleDelay(id: string): number {
     let h = 0;
     for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
     return -(h % 180);
+}
+
+function widgetClash(widgets: WidgetPlacement[], uid: string | undefined, size: WidgetSize, page: number, col: number, row: number): boolean {
+    const target = new Set(coveredCells({ size, col, row }));
+    return widgets.some(o => o.uid !== uid && o.page === page && coveredCells(o).some(c => target.has(c)));
+}
+
+function pillSpot(x: number, y: number, size: WidgetSize): { x: number; y: number } {
+    const { width, height } = widgetPx(size);
+    const gridH = ROWS * ROW_STRIDE + ROW_Y0;
+    const below = y + height + 10;
+    return {
+        x: Math.max(96, Math.min(SCREEN_W - 96, x + width / 2)),
+        y: below + 32 > gridH ? Math.max(0, y - 38) : below,
+    };
 }
 
 const FOLDER_PREFIX = 'folder:';
@@ -202,18 +217,6 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
         (folders[key]?.appIds ?? []).map(id => appMap.get(id)).filter((a): a is AppDef => !!a);
     const folderBadge = (key: string): number =>
         (folders[key]?.appIds ?? []).reduce((n, id) => n + (badges?.[id] ?? 0), 0);
-    const pages = useMemo(() => chunk(slots, ITEMS_PER_PAGE), [slots]);
-
-    /** page -> cells hidden beneath a widget, so an icon is never drawn under one. */
-    const coveredByPage = useMemo(() => {
-        const m = new Map<number, Set<number>>();
-        for (const w of widgets) {
-            const set = m.get(w.page) ?? new Set<number>();
-            coveredCells(w).forEach(c => set.add(c));
-            m.set(w.page, set);
-        }
-        return m;
-    }, [widgets]);
 
     const [galleryOpen, setGalleryOpen] = useState(false);
 
@@ -242,7 +245,7 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
     const [dragW, setDragW] = useState<{ uid: string; x: number; y: number } | null>(null);
     const dragWStart = useRef({ px: 0, py: 0, x: 0, y: 0, zoom: 1 });
     const dropSpot   = useRef<{ col: number; row: number } | null>(null);
-    const [dropPreview, setDropPreview] = useState<{ col: number; row: number } | null>(null);
+    const [dropPreview, setDropPreview] = useState<{ page: number; col: number; row: number } | null>(null);
 
     /** Nearest legal top-left cell for a widget dragged to (x, y), clamped inside the grid. */
     const cellFor = useCallback((size: WidgetSize, x: number, y: number) => {
@@ -264,7 +267,7 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
         dropSpot.current = { col: w.col, row: w.row };
         dropPageRef.current = w.page;
         dragSizeRef.current = w.size;
-        setDropPreview({ col: w.col, row: w.row });
+        setDropPreview({ page: w.page, col: w.col, row: w.row });
         setDragW({ uid: w.uid, x: s.x, y: s.y });
         // No setPointerCapture: the dragged tile is re-parented into whichever page is showing,
         // and capture does not survive that. The window listeners below own the gesture instead.
@@ -289,7 +292,9 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
             setDragW(d => (d && d.uid === uid ? { uid, x, y } : d));
             const spot = cellFor(dragSizeRef.current, x, y);
             dropSpot.current = spot;
-            setDropPreview(spot);
+            setDropPreview(p => (p && p.page === dropPageRef.current && p.col === spot.col && p.row === spot.row
+                ? p
+                : { page: dropPageRef.current, col: spot.col, row: spot.row }));
 
             // Same edge-hold as the icon drag, so carrying a widget between pages feels identical
             // to carrying an icon: hover near an edge and the page turns under you.
@@ -305,11 +310,10 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
                     clearEdge();
                     edgeDir.current = dir;
                     edgeTimer.current = window.setTimeout(() => {
-                        setPage(p => {
-                            const next = Math.max(0, Math.min(visiblePagesRef.current - 1, p + (dir === 'l' ? -1 : 1)));
-                            dropPageRef.current = next;
-                            return next;
-                        });
+                        const next = Math.max(0, Math.min(visiblePagesRef.current - 1, pageRef.current + (dir === 'l' ? -1 : 1)));
+                        dropPageRef.current = next;
+                        setPage(next);
+                        setDropPreview(p => (p && p.page !== next ? { ...p, page: next } : p));
                         edgeDir.current = null; edgeTimer.current = null;
                     }, 600);
                 }
@@ -327,10 +331,7 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
             if (!spot) return;
 
             // Only other WIDGETS block a move.
-            const target = new Set(coveredCells({ size: dragSizeRef.current, col: spot.col, row: spot.row }));
-            const clash = widgetsRef.current.some(o => o.uid !== uid && o.page === toPage
-                && coveredCells(o).some(c => target.has(c)));
-            if (clash) return;
+            if (widgetClash(widgetsRef.current, uid, dragSizeRef.current, toPage, spot.col, spot.row)) return;
 
             const next = widgetsRef.current.map(o => (o.uid === uid ? { ...o, page: toPage, col: spot.col, row: spot.row } : o));
             setWidgets(next);
@@ -348,6 +349,37 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
         // Only the identity of the dragged widget matters; everything else is read from refs so
         // the listeners are attached once per drag rather than re-bound on every pointer move.
     }, [dragW?.uid, cellFor]);
+
+    const previewWidgets = useMemo(() => {
+        const uid = dragW?.uid;
+        if (!uid || !dropPreview) return widgets;
+        const held = widgets.find(w => w.uid === uid);
+        if (!held) return widgets;
+        if (held.page === dropPreview.page && held.col === dropPreview.col && held.row === dropPreview.row) return widgets;
+        if (widgetClash(widgets, uid, held.size, dropPreview.page, dropPreview.col, dropPreview.row)) return widgets;
+        return widgets.map(w => (w.uid === uid
+            ? { ...w, page: dropPreview.page, col: dropPreview.col, row: dropPreview.row }
+            : w));
+    }, [widgets, dragW?.uid, dropPreview]);
+
+    const previewSlots = useMemo(
+        () => (previewWidgets === widgets ? slots : reflowAround(slots, previewWidgets, ITEMS_PER_PAGE)),
+        [slots, widgets, previewWidgets],
+    );
+
+    const pages = useMemo(() => chunk(previewSlots, ITEMS_PER_PAGE), [previewSlots]);
+    const reflowNote = useMemo(() => pageMoves(slots, previewSlots, ITEMS_PER_PAGE), [slots, previewSlots]);
+
+    /** page -> cells hidden beneath a widget, so an icon is never drawn under one. */
+    const coveredByPage = useMemo(() => {
+        const m = new Map<number, Set<number>>();
+        for (const w of previewWidgets) {
+            const set = m.get(w.page) ?? new Set<number>();
+            coveredCells(w).forEach(c => set.add(c));
+            m.set(w.page, set);
+        }
+        return m;
+    }, [previewWidgets]);
 
     const [page, setPage]   = useState(0);
     const [dragX, setDragX] = useState(0);
@@ -616,6 +648,9 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
 
     const tx = -(page * SCREEN_W) + dragX;
 
+    const dragWidget = dragW ? widgets.find(w => w.uid === dragW.uid) : undefined;
+    const pillAt = dragW && dragWidget && reflowNote.count > 0 ? pillSpot(dragW.x, dragW.y, dragWidget.size) : null;
+
 
     return (
         <div className="absolute inset-0 select-none">
@@ -819,6 +854,17 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
                         </div>
                     ))}
                 </div>
+
+                {pillAt && (
+                    <div
+                        className="pointer-events-none absolute left-0 top-0 z-[60] whitespace-nowrap rounded-full bg-black/70 px-2.5 py-[5px] font-sf text-[12px] font-semibold text-white backdrop-blur-md"
+                        style={{ transform: `translate(${pillAt.x}px, ${pillAt.y}px) translateX(-50%)`, border: '0.5px solid rgba(255,255,255,0.22)' }}
+                    >
+                        {reflowNote.count === 1
+                            ? t('home.widgetMovesApp', '1 app moves to page {page}', { page: reflowNote.page + 1 })
+                            : t('home.widgetMovesApps', '{count} apps move to page {page}', { count: reflowNote.count, page: reflowNote.page + 1 })}
+                    </div>
+                )}
 
                 {editing && dragId && (
                     <div className="pointer-events-none absolute left-0 top-0 z-[60]" style={{ width: ICON, transform: `translate(${dragPos.x}px, ${dragPos.y}px)` }}>
