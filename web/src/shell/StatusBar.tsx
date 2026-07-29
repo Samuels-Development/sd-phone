@@ -8,6 +8,8 @@ export interface StatusBarProps {
     showWifi: boolean;
     /** Bars (0..3) of the joined Wi-Fi network. null when nothing is joined, so `showWifi` decides. */
     wifiBars?: number | null;
+    /** Radio on but joined to nothing: draws the outline with every arc dimmed. */
+    wifiIdle?: boolean;
     battery: number;
     airplane?: boolean;
     noSim?: boolean;
@@ -17,7 +19,7 @@ export interface StatusBarProps {
     editing?: boolean;
 }
 
-export function StatusBar({ use24h, signal, showWifi, wifiBars = null, battery, airplane = false, noSim = false, noService = false, light = true, controlHint = false, editing = false }: StatusBarProps) {
+export function StatusBar({ use24h, signal, showWifi, wifiBars = null, wifiIdle = false, battery, airplane = false, noSim = false, noService = false, light = true, controlHint = false, editing = false }: StatusBarProps) {
     const time  = formatClockTime(useClock(), use24h);
     const color = light ? '#ffffff' : '#000000';
 
@@ -43,12 +45,12 @@ export function StatusBar({ use24h, signal, showWifi, wifiBars = null, battery, 
                     // of having Wi-Fi, so hiding the one icon proving it works reads as broken.
                     <>
                         <span className="font-sf text-[13px] font-semibold leading-none opacity-80">{t('shell.noService', 'No Service')}</span>
-                        {wifiBars !== null && <Wifi size={21} bars={wifiBars} />}
+                        <WifiGlyph bars={wifiBars} idle={wifiIdle} showWifi={false} />
                     </>
                 ) : (
                     <>
                         {signal > 0 && <Cellular size={21} bars={signal} />}
-                        {wifiBars !== null ? <Wifi size={21} bars={wifiBars} /> : showWifi && <Wifi size={21} />}
+                        <WifiGlyph bars={wifiBars} idle={wifiIdle} showWifi={showWifi} />
                     </>
                 )}
                 <Battery size={28} pct={battery} />
@@ -95,9 +97,20 @@ const WIFI_ARC_PATHS = [
 const WIFI_DIM = 0.28;
 
 /**
- * Wi-Fi glyph. With no `bars` it is the plain full-strength icon the status bar has always drawn;
- * with `bars` (0..3) the unreached arcs dim, while the dot stays solid to mark the connection.
+ * The three states the Wi-Fi corner can be in, kept in one place so both status bars agree.
+ *
+ * Joined draws arcs to signal. Switched on but joined to nothing draws the outline with every arc
+ * dimmed, which is how a phone says the radio is listening and has found nothing: showing full
+ * arcs there, as this used to, claimed a connection that did not exist. `showWifi` is the legacy
+ * static flag and only applies on a server running no Wi-Fi networks at all.
  */
+function WifiGlyph({ bars, idle, showWifi }: { bars?: number | null; idle?: boolean; showWifi?: boolean }) {
+    if (bars !== null && bars !== undefined) return <Wifi size={21} bars={bars} />;
+    if (idle) return <Wifi size={21} bars={0} />;
+    if (showWifi) return <Wifi size={21} />;
+    return null;
+}
+
 function Wifi({ size, bars }: { size: number; bars?: number | null }) {
     const lit = bars === null || bars === undefined
         ? WIFI_ARC_PATHS.length
