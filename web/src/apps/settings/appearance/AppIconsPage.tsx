@@ -1,34 +1,28 @@
+import { useState } from 'react';
 import { Plus } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { useSessionState } from '@/hooks/useSessionState';
-import { AppGlyph } from '@/shell/AppGlyphs';
 import { AppIconSVG } from '@/shell/AppIconSVG';
+import { resolveWallpaper } from '@/shell/wallpapers';
+import { useTheme } from '@/stores/themeStore';
 import {
-    ICON_THEMES, MAX_CUSTOM_ICON_THEMES, resolveIconAppearance,
+    ICON_THEMES, iconThemeWallpaper, MAX_CUSTOM_ICON_THEMES, resolveIconAppearance,
     useCustomIconThemes, useIconTheme, useIconThemeStore, useShowAppNames,
 } from '@/stores/iconThemeStore';
 import type { CustomIconTheme, IconThemeDef, IconThemeId } from '@/stores/iconThemeStore';
+import { AlertDialog } from '@/ui/AlertDialog';
 import { ListGroup, ListRow } from '@/ui/ListGroup';
 import { Toggle } from '@/ui/Toggle';
 import { SubPage } from '../SettingsSubPage';
+import { PREVIEW_APPS, SWATCH_PREVIEW_APPS } from './iconThemeCatalog';
+import type { ThemeApp } from './iconThemeCatalog';
+import type { DraftState } from './iconThemeDraft';
+import { ThemeTile, ThemeTileLabel } from './IconThemePreview';
 import { IconThemeEditorPage } from './IconThemeEditorPage';
+import { IconThemeStartPage } from './IconThemeStartPage';
 
-interface PreviewApp {
-    id:     string;
-    icon:   string;
-    label:  string;
-    accent: string;
-}
-
-const PREVIEW_APPS: PreviewApp[] = [
-    { id: 'phone',   icon: 'phone',   label: 'Phone',   accent: '#34c759' },
-    { id: 'maps',    icon: 'maps',    label: 'Maps',    accent: '#f0c43a' },
-    { id: 'music',   icon: 'music',   label: 'Music',   accent: '#fa233b' },
-    { id: 'weather', icon: 'weather', label: 'Weather', accent: '#5ac8fa' },
-];
-
-const SWATCH_APPS = PREVIEW_APPS.slice(0, 3);
+const STRIP_APPS = PREVIEW_APPS.slice(0, 4);
 
 export function AppIconsPage({ onBack }: { onBack: () => void }) {
     const theme           = useIconTheme();
@@ -36,22 +30,45 @@ export function AppIconsPage({ onBack }: { onBack: () => void }) {
     const custom          = useCustomIconThemes();
     const setIconTheme    = useIconThemeStore(s => s.setIconTheme);
     const setShowAppNames = useIconThemeStore(s => s.setShowAppNames);
+    const { wallpaperHome, setWallpaper } = useTheme('wallpaperHome', 'setWallpaper');
+
     const [editing, setEditing] = useSessionState<string | null>('settings:iconThemeEditor', null);
+    const [seed,    setSeed]    = useSessionState<DraftState | null>('settings:iconThemeSeed', null);
+    const [pairing, setPairing] = useState<string | null>(null);
 
     const editTarget = editing === null ? null : custom.find(c => c.id === editing) ?? null;
+
+    function choose(id: IconThemeId) {
+        setIconTheme(id);
+        const paired = iconThemeWallpaper(id);
+        if (paired && resolveWallpaper(paired) !== resolveWallpaper(wallpaperHome)) setPairing(paired);
+    }
+
+    function closeEditor() {
+        setSeed(null);
+        setEditing(null);
+    }
+
+    const sub =
+        seed !== null ? (
+            <IconThemeEditorPage existing={null} seed={seed} onBack={closeEditor} />
+        ) : editing === 'new' ? (
+            <IconThemeStartPage onStart={setSeed} onBack={() => setEditing(null)} />
+        ) : editing !== null ? (
+            <IconThemeEditorPage
+                key={editing}
+                existing={editTarget}
+                seed={null}
+                onBack={() => setEditing(null)}
+            />
+        ) : null;
 
     return (
         <SubPage
             title={t('settings.appIcons', 'App Icons')}
             backLabel={t('settings.settings', 'Settings')}
             onBack={onBack}
-            sub={editing !== null ? (
-                <IconThemeEditorPage
-                    key={editing}
-                    existing={editTarget}
-                    onBack={() => setEditing(null)}
-                />
-            ) : null}
+            sub={sub}
         >
 
             <div className="mx-4">
@@ -60,17 +77,10 @@ export function AppIconsPage({ onBack }: { onBack: () => void }) {
                     style={{ background: 'linear-gradient(165deg, #40404a 0%, #17171a 100%)' }}
                 >
                     <div className="flex items-start justify-between">
-                        {PREVIEW_APPS.map(app => (
+                        {STRIP_APPS.map(app => (
                             <div key={app.id} className="flex flex-col items-center gap-[6px]" style={{ width: 62 }}>
                                 <Tile theme={theme} app={app} size={62} />
-                                {showAppNames && (
-                                    <span
-                                        className="w-full truncate text-center font-sf text-[11px] font-semibold tracking-[0.01em] text-white"
-                                        style={{ textShadow: '0 1px 3px rgba(0,0,0,0.95)' }}
-                                    >
-                                        {app.label}
-                                    </span>
-                                )}
+                                <StripLabel theme={theme} app={app} showAppNames={showAppNames} />
                             </div>
                         ))}
                     </div>
@@ -87,21 +97,21 @@ export function AppIconsPage({ onBack }: { onBack: () => void }) {
                         def={def}
                         selected={def.id === theme}
                         divider={i < ICON_THEMES.length - 1}
-                        onSelect={() => setIconTheme(def.id)}
+                        onSelect={() => choose(def.id)}
                     />
                 ))}
             </ListGroup>
 
             <ListGroup
                 header={t('settings.iconThemeMine', 'My Themes')}
-                footer={t('settings.iconThemeMineHint', 'Design your own tile and symbol colours.')}
+                footer={t('settings.iconThemeMineHint', 'Build a theme from a starting point, a built-in theme or a code someone shared.')}
             >
                 {custom.map(def => (
                     <CustomRow
                         key={def.id}
                         def={def}
                         selected={def.id === theme}
-                        onSelect={() => setIconTheme(def.id)}
+                        onSelect={() => choose(def.id)}
                         onEdit={() => setEditing(def.id)}
                     />
                 ))}
@@ -127,6 +137,21 @@ export function AppIconsPage({ onBack }: { onBack: () => void }) {
                 />
             </ListGroup>
 
+            {pairing !== null && (
+                <AlertDialog
+                    title={t('settings.iconThemePairTitle', 'Use the Paired Wallpaper?')}
+                    message={t('settings.iconThemePairBody', 'This theme comes with a wallpaper. Your Home Screen can change to match it.')}
+                    confirmLabel={t('settings.iconThemePairConfirm', 'Use It')}
+                    cancelLabel={t('settings.iconThemePairSkip', 'Keep Mine')}
+                    onCancel={() => setPairing(null)}
+                    onConfirm={() => {
+                        const paired = pairing;
+                        setPairing(null);
+                        if (paired) setWallpaper(resolveWallpaper(paired), 'home');
+                    }}
+                />
+            )}
+
         </SubPage>
     );
 }
@@ -145,7 +170,7 @@ function ThemeRow({ def, selected, divider, onSelect }: {
             divider={divider}
             left={(
                 <span className="flex gap-[3px]">
-                    {SWATCH_APPS.map(app => <Tile key={app.id} theme={def.id} app={app} size={24} />)}
+                    {SWATCH_PREVIEW_APPS.map(app => <Tile key={app.id} theme={def.id} app={app} size={24} />)}
                 </span>
             )}
             onPress={onSelect}
@@ -159,21 +184,32 @@ function CustomRow({ def, selected, onSelect, onEdit }: {
     onSelect: () => void;
     onEdit:   () => void;
 }) {
+    const notes: string[] = [];
+    if (def.dark) notes.push(t('settings.iconThemeHasDark', 'Dark design'));
+    if (def.wallpaper) notes.push(t('settings.iconThemeHasWallpaper', 'Wallpaper'));
+    if (def.overrides) notes.push(t('settings.iconThemeHasOverrides', 'Custom app icons'));
+
+    const sub = notes.length > 0
+        ? notes.join(', ')
+        : selected
+            ? t('settings.iconThemeInUse', 'In use')
+            : t('settings.iconThemeTapToUse', 'Tap to use');
+
     return (
         <div className="relative flex items-center pr-4">
-            <ListRow
-                label={def.name}
-                sub={selected
-                    ? t('settings.iconThemeInUse', 'In use')
-                    : t('settings.iconThemeTapToUse', 'Tap to use')}
-                selected={selected}
-                left={(
-                    <span className="flex gap-[3px]">
-                        {SWATCH_APPS.map(app => <Tile key={app.id} theme={def.id} app={app} size={24} />)}
-                    </span>
-                )}
-                onPress={onSelect}
-            />
+            <div className="min-w-0 flex-1">
+                <ListRow
+                    label={def.name}
+                    sub={sub}
+                    selected={selected}
+                    left={(
+                        <span className="flex gap-[3px]">
+                            {SWATCH_PREVIEW_APPS.map(app => <Tile key={app.id} theme={def.id} app={app} size={24} />)}
+                        </span>
+                    )}
+                    onPress={onSelect}
+                />
+            </div>
             <button
                 type="button"
                 onClick={onEdit}
@@ -189,25 +225,27 @@ function CustomRow({ def, selected, onSelect, onEdit }: {
     );
 }
 
-function Tile({ theme, app, size }: { theme: IconThemeId; app: PreviewApp; size: number }) {
-    const { background, glyph, art } = resolveIconAppearance(theme, app.id, app.accent);
-    return (
-        <span
-            className="relative block shrink-0 overflow-hidden"
-            style={{
-                width:        size,
-                height:       size,
-                borderRadius: '27.6%',
-                boxShadow:    '0 1px 4px rgba(0,0,0,0.28), inset 0 0 0 0.5px rgba(255,255,255,0.12)',
-            }}
-        >
-            {art === 'native' ? (
+function Tile({ theme, app, size }: { theme: IconThemeId; app: ThemeApp; size: number }) {
+    const look = resolveIconAppearance(theme, app.id, app.accent);
+    if (look.art === 'native') {
+        return (
+            <span
+                className="relative block shrink-0 overflow-hidden"
+                style={{
+                    width:        size,
+                    height:       size,
+                    borderRadius: `${look.radius * 100}%`,
+                    boxShadow:    '0 1px 4px rgba(0,0,0,0.28), inset 0 0 0 0.5px rgba(255,255,255,0.12)',
+                }}
+            >
                 <AppIconSVG icon={app.icon} size={size} />
-            ) : (
-                <span className="flex h-full w-full items-center justify-center" style={{ background }}>
-                    <AppGlyph icon={app.icon} label={app.label} color={glyph} size={Math.round(size * 0.52)} />
-                </span>
-            )}
-        </span>
-    );
+            </span>
+        );
+    }
+    return <ThemeTile look={look} icon={look.icon ?? app.icon} label={app.label} size={size} />;
+}
+
+function StripLabel({ theme, app, showAppNames }: { theme: IconThemeId; app: ThemeApp; showAppNames: boolean }) {
+    const look = resolveIconAppearance(theme, app.id, app.accent);
+    return <ThemeTileLabel look={look} label={app.label} fallbackShow={showAppNames} />;
 }
