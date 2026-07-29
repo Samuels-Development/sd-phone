@@ -40,6 +40,13 @@ function service.level()
     return currentLevel
 end
 
+---The masts currently shaping service, as a fresh table. Empty while the system is switched off,
+---which matches the full service every phone then has.
+---@return table[] masts { tower: vector3, range: number }
+function service.towers()
+    return celltowers.list(TOWERS)
+end
+
 ---@return integer bars 0..4
 function service.bars()
     return barsOverride or currentBars

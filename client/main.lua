@@ -788,6 +788,11 @@ exports('getServiceLevel', function() return service.level() end)
 ---Current status bar bars, 0..4.
 exports('getServiceBars', function() return service.bars() end)
 
+---The configured masts as { tower = vector3, range = number }, mirroring configs/celltowers.lua.
+---Empty while the system is off. The lb-phone GetCellTowers export drops the ranges to match
+---their shape; this one keeps them.
+exports('getCellTowers', function() return service.towers() end)
+
 ---Whether a capability is currently possible: 'text', 'call' or 'data' (default 'data').
 ---@param capability string|nil
 exports('hasService', function(capability)

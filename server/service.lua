@@ -36,6 +36,13 @@ function service.levelFor(source)
     return celltowers.level(pos.x, pos.y, TOWERS)
 end
 
+---The masts currently shaping service, as a fresh table. Empty while the system is switched off,
+---which matches the full service every phone then has.
+---@return table[] masts { tower: vector3, range: number }
+function service.towers()
+    return celltowers.list(TOWERS)
+end
+
 ---@param source number|nil player server id
 ---@param capability string 'text' | 'call' | 'data'
 ---@return boolean
@@ -59,6 +66,11 @@ end)
 ---Authoritative service level for a player, 0..1.
 ---@param source number player server id
 exports('getServiceLevel', function(source) return service.levelFor(source) end)
+
+---The configured masts as { tower = vector3, range = number }, mirroring configs/celltowers.lua.
+---Empty while the system is off. The lb-phone GetCellTowers export drops the ranges to match
+---their shape; this one keeps them.
+exports('getCellTowers', function() return service.towers() end)
 
 ---Whether a player can currently use a capability: 'text', 'call' or 'data' (default 'data').
 ---@param source number player server id

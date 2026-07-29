@@ -6,8 +6,8 @@ local banking = require 'server.banking.actions'
 local settings = require 'server.settings.store'
 ---@type table Shared server helpers (server.util): digit/trim/finite guards at the shim boundary.
 local util = require 'server.util'
----@type table sd-phone config root (configs/config.lua): the configured cell towers.
-local config = require 'configs.config'
+---@type table Cell service (server.service): the configured masts behind GetCellTowers.
+local service = require 'server.service'
 
 local registerLbExport, stubLbExport = shim.registerLbExport, shim.stubLbExport
 
@@ -47,12 +47,8 @@ stubLbExport('GetConfig', {})
 ---per-tower `range` is dropped; read it via exports['sd-phone']:getServiceLevel(source). A
 ---switched-off system reports no masts, matching the full service every phone actually has.
 registerLbExport('GetCellTowers', function()
-    local cfg = config.CellTowers
-    if not cfg or cfg.Enabled ~= true then return {} end
     local out = {}
-    for _, entry in ipairs(type(cfg.Towers) == 'table' and cfg.Towers or {}) do
-        if entry and entry.tower then out[#out + 1] = entry.tower end
-    end
+    for _, mast in ipairs(service.towers()) do out[#out + 1] = mast.tower end
     return out
 end)
 

@@ -32,6 +32,24 @@ function celltowers.level(x, y, towers)
     return best
 end
 
+---The usable masts as a fresh table, so an export handing this out cannot be used to reach into
+---the running config. Malformed entries are dropped, matching what the level maths counts.
+---@param towers table[]|nil
+---@return table[] masts { tower: vector3, range: number }
+function celltowers.list(towers)
+    local out = {}
+    if type(towers) ~= 'table' then return out end
+    for i = 1, #towers do
+        local entry = towers[i]
+        local pos   = type(entry) == 'table' and entry.tower or nil
+        local range = tonumber(type(entry) == 'table' and entry.range or nil)
+        if pos and range and range > 0 then
+            out[#out + 1] = { tower = pos, range = range }
+        end
+    end
+    return out
+end
+
 ---Status bar bars for a level: how many ascending cutoffs it meets or exceeds.
 ---@param level number 0..1
 ---@param cutoffs number[] ascending
