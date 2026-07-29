@@ -48,6 +48,7 @@ import { resolveWallpaper } from '@/shell/wallpapers';
 import { NoSimScreen } from '@/shell/NoSimScreen';
 import { useNoService, useNoSim, useSimStore } from '@/stores/simStore';
 import { useNoServiceArea, useServiceBars, useServiceStore } from '@/stores/serviceStore';
+import { useWifiConnected, useWifiStore } from '@/stores/wifiStore';
 import { resetContacts, syncSimNumber } from '@/stores/contactsStore';
 import { playOnce } from '@/apps/settings/tonePlayer';
 import { resolveTone, toneUrl } from '@/apps/settings/tones';
@@ -719,6 +720,10 @@ function AppContent() {
         useServiceStore.getState().apply(data);
     }, []));
 
+    useNuiEvent('sd-phone:wifi', useCallback((data) => {
+        useWifiStore.getState().apply(data);
+    }, []));
+
     // Home screen widgets render while their app is closed, so the pushes those apps listen for
     // are mirrored into a store here, the same way the battery level is above.
     useNuiEvent('sd-phone:weather', useCallback((data) => {
@@ -807,6 +812,10 @@ function AppContent() {
     // carried. Both status bars sit past an early return, so these hooks are read here instead.
     const peekBars = useServiceBars(lastViewRef.current?.signal ?? 4);
     const liveBars = useServiceBars(view?.signal ?? 4);
+    // Bars of the joined Wi-Fi network, or null for the plain icon. Read past the same early
+    // return as the cellular bars, and suppressed by the toggles that already own the radio.
+    const wifiNetwork = useWifiConnected();
+    const wifiBars = (airplaneMode || noSim || !ccWifi) ? null : (wifiNetwork?.bars ?? null);
     const phoneOpenRef = useRef(false);
     phoneOpenRef.current = !!view;
     const lockedRef = useRef(locked);
@@ -1251,6 +1260,7 @@ function AppContent() {
                             use24h={hour24}
                             signal={(airplaneMode || noSim || noService) ? 0 : peekBars}
                             showWifi={(airplaneMode || noSim) ? false : ((lv?.showWifi ?? true) && ccWifi)}
+                            wifiBars={wifiBars}
                             battery={battery}
                             airplane={airplaneMode}
                             noSim={noSim}
@@ -1354,6 +1364,7 @@ function AppContent() {
                         use24h={hour24}
                         signal={(airplaneMode || noSim || noService) ? 0 : liveBars}
                         showWifi={(airplaneMode || noSim) ? false : (view.showWifi && ccWifi)}
+                        wifiBars={wifiBars}
                         battery={battery}
                         airplane={airplaneMode}
                         noSim={noSim}

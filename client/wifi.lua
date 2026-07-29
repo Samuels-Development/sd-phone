@@ -110,6 +110,10 @@ local function snapshot()
         enabled   = wifiClient.enabled(),
         connected = wifiClient.current(),
         networks  = wifiClient.nearby(),
+        -- Whether this connection carries data, which the cell push cannot answer: its own `data`
+        -- flag is computed from the masts alone. Without this the UI would grey out a download
+        -- the gate would actually have allowed.
+        providesData = wifiClient.provides('data'),
     }
 end
 
@@ -168,6 +172,9 @@ end
 function wifiClient.forget(id)
     if type(id) ~= 'string' then return end
     remembered[id] = nil
+    -- Forgetting the network you are on leaves it too, which is what the button says on a real
+    -- phone. Staying joined to something the phone has been told to forget reads as a bug.
+    if joined and joined.id == id then wifiClient.disconnect() end
 end
 
 ---Rescans from the player's position, drops a connection that has faded out, and rejoins a

@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+import { useWifiData } from './wifiStore';
+
 /**
  * Live cellular service, fed by the `sd-phone:service` push. `active` stays false until the
  * first push arrives, which is what keeps a server with no towers configured on its static
@@ -33,9 +35,15 @@ export function useServiceBars(fallback: number): number {
     return useServiceStore(s => (s.active ? s.bars : fallback));
 }
 
-/** True when data-backed features can reach the server: app downloads, social apps, and the like. */
+/**
+ * True when data-backed features can reach the server: app downloads, social apps, and the like.
+ * Answers for both radios, matching the Lua gate, so a phone on Wi-Fi in a cell dead zone is not
+ * told it is offline.
+ */
 export function useHasData(): boolean {
-    return useServiceStore(s => s.data);
+    const cell = useServiceStore(s => s.data);
+    const wifi = useWifiData();
+    return cell || wifi;
 }
 
 /** True when the player is inside a configured dead zone (no bars from any tower). */

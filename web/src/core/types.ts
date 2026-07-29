@@ -45,6 +45,29 @@ export interface SimStatePush {
     profile?: string;
 }
 
+/** One Wi-Fi network the phone can see. `strength` is 0..1 raw, `bars` the 0..3 the icon draws. */
+export interface WifiNetwork {
+    id: string;
+    ssid: string;
+    /** Password protected. The client omits it on the connected network, where it normalizes to false. */
+    secured: boolean;
+    strength: number;
+    bars: number;
+}
+
+/** Live Wi-Fi snapshot: enabled=false means the radio is off, so there is nothing to join. */
+export interface WifiState {
+    enabled: boolean;
+    connected: WifiNetwork | null;
+    networks: WifiNetwork[];
+    /**
+     * Whether the joined network carries data. The cell push cannot answer this: its own `data`
+     * flag is computed from the masts alone, so without this the UI would refuse a download the
+     * gate would have allowed.
+     */
+    providesData: boolean;
+}
+
 export interface AppDef {
     id: string;
     label: string;
@@ -209,6 +232,7 @@ export type NuiMessage =
     | { action: 'sd-phone:launchApp'; data: { id: string; link?: Record<string, unknown> } }
     | { action: 'sd-phone:battery'; data: number }
     | { action: 'sd-phone:service'; data: { bars: number; level: number; data: boolean } }
+    | { action: 'sd-phone:wifi'; data: WifiState }
     | { action: 'sd-phone:weather'; data: WeatherPayload }
     | { action: 'sd-phone:session'; data: SessionPayload }
     | { action: 'sd-phone:health';  data: HealthPayload }

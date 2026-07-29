@@ -6,6 +6,8 @@ export interface StatusBarProps {
     use24h: boolean;
     signal: number;
     showWifi: boolean;
+    /** Bars (0..3) of the joined Wi-Fi network. null when nothing is joined, so `showWifi` decides. */
+    wifiBars?: number | null;
     battery: number;
     airplane?: boolean;
     noSim?: boolean;
@@ -15,7 +17,7 @@ export interface StatusBarProps {
     editing?: boolean;
 }
 
-export function StatusBar({ use24h, signal, showWifi, battery, airplane = false, noSim = false, noService = false, light = true, controlHint = false, editing = false }: StatusBarProps) {
+export function StatusBar({ use24h, signal, showWifi, wifiBars = null, battery, airplane = false, noSim = false, noService = false, light = true, controlHint = false, editing = false }: StatusBarProps) {
     const time  = formatClockTime(useClock(), use24h);
     const color = light ? '#ffffff' : '#000000';
 
@@ -40,7 +42,7 @@ export function StatusBar({ use24h, signal, showWifi, battery, airplane = false,
                 ) : (
                     <>
                         {signal > 0 && <Cellular size={21} bars={signal} />}
-                        {showWifi && <Wifi size={21} />}
+                        {wifiBars !== null ? <Wifi size={21} bars={wifiBars} /> : showWifi && <Wifi size={21} />}
                     </>
                 )}
                 <Battery size={28} pct={battery} />
@@ -76,12 +78,29 @@ function Cellular({ size, bars }: { size: number; bars: number }) {
     );
 }
 
-function Wifi({ size }: { size: number }) {
+/** The Wi-Fi arcs, innermost first, so arc N lights up at strength N. */
+const WIFI_ARC_PATHS = [
+    'M346.65 304.3a136 136 0 00-180.71 0 21 21 0 1027.91 31.38 94 94 0 01124.89 0 21 21 0 0027.91-31.4z',
+    'M256.28 183.7a221.47 221.47 0 00-151.8 59.92 21 21 0 1028.68 30.67 180.28 180.28 0 01246.24 0 21 21 0 1028.68-30.67 221.47 221.47 0 00-151.8-59.92z',
+    'M462 175.86a309 309 0 00-411.44 0 21 21 0 1028 31.29 267 267 0 01355.43 0 21 21 0 0028-31.31z',
+];
+
+/** Opacity of an arc the connection does not reach, matching the dimmed cellular bars. */
+const WIFI_DIM = 0.28;
+
+/**
+ * Wi-Fi glyph. With no `bars` it is the plain full-strength icon the status bar has always drawn;
+ * with `bars` (0..3) the unreached arcs dim, while the dot stays solid to mark the connection.
+ */
+function Wifi({ size, bars }: { size: number; bars?: number | null }) {
+    const lit = bars === null || bars === undefined
+        ? WIFI_ARC_PATHS.length
+        : Math.max(0, Math.min(WIFI_ARC_PATHS.length, Math.round(bars)));
     return (
         <svg width={size} height={size} viewBox="0 0 512 512" fill="currentColor" aria-hidden>
-            <path d="M346.65 304.3a136 136 0 00-180.71 0 21 21 0 1027.91 31.38 94 94 0 01124.89 0 21 21 0 0027.91-31.4z" />
-            <path d="M256.28 183.7a221.47 221.47 0 00-151.8 59.92 21 21 0 1028.68 30.67 180.28 180.28 0 01246.24 0 21 21 0 1028.68-30.67 221.47 221.47 0 00-151.8-59.92z" />
-            <path d="M462 175.86a309 309 0 00-411.44 0 21 21 0 1028 31.29 267 267 0 01355.43 0 21 21 0 0028-31.31z" />
+            {WIFI_ARC_PATHS.map((d, i) => (
+                <path key={d} d={d} opacity={i < lit ? 1 : WIFI_DIM} />
+            ))}
             <circle cx="256.28" cy="393.41" r="32" />
         </svg>
     );
