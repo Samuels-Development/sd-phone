@@ -58,6 +58,9 @@ local hydrating = false
 local epoch = 0
 ---@type boolean True while the phone is on screen; gates the scan entirely.
 local phoneOpen = false
+---@type table<string, boolean> Networks the player left on purpose. Auto-rejoin skips these until
+---they drop out of range or are joined again by hand, so Disconnect is not undone a tick later.
+local declined = {}
 ---@type boolean True while an auto-rejoin is in flight, so a scan cannot stack a second one.
 local rejoining = false
 ---@type string Last pushed connection signature, '<id>:<bars>' or empty while off Wi-Fi.
@@ -200,6 +203,8 @@ function wifiClient.connect(id, password)
     end
 
     joined = net
+    -- Joining by hand undoes an earlier Disconnect, so the network auto-rejoins again from here.
+    declined[net.id] = nil
     local pos = GetEntityCoords(PlayerPedId())
     joinedStrength = wifi.strength(pos.x, pos.y, pos.z, net)
     -- The password that worked is kept beside the id so an auto-rejoin can hand it back and let
@@ -211,8 +216,13 @@ function wifiClient.connect(id, password)
 end
 
 ---Leaves the joined network and tells the server. No-op while already off Wi-Fi.
-function wifiClient.disconnect()
+---@param explicit boolean|nil true when the player pressed Disconnect themselves
+function wifiClient.disconnect(explicit)
     if not joined then return end
+    -- Leaving on purpose stops the auto-rejoin picking the network straight back up, which would
+    -- make the button look broken. The network stays remembered, so tapping it joins again with no
+    -- password; walking out of range clears this so returning later behaves normally.
+    if explicit then declined[joined.id] = true end
     TriggerServerEvent('sd-phone:server:wifi:disconnect')
     joined, joinedStrength = nil, 0.0
     push(true)
@@ -244,8 +254,16 @@ function refresh(force)
 
     local pos = GetEntityCoords(PlayerPedId())
     scanned = wifi.scan(pos.x, pos.y, pos.z, NETWORKS, DROP_BELOW)
+    local inReach = {}
     for i = 1, #scanned do
         scanned[i].bars = wifi.bars(scanned[i].strength)
+        inReach[scanned[i].id] = true
+    end
+
+    -- Walking out of a network the player left on purpose clears the refusal, so coming back later
+    -- rejoins the way it always did. Only leaving the area resets it, not the passage of time.
+    for id in pairs(declined) do
+        if not inReach[id] then declined[id] = nil end
     end
 
     if joined then
@@ -262,7 +280,7 @@ function refresh(force)
     if REMEMBER and not joined and not rejoining then
         for i = 1, #scanned do
             local saved = remembered[scanned[i].id]
-            if saved ~= nil then
+            if saved ~= nil and not declined[scanned[i].id] then
                 local id = scanned[i].id
                 rejoining = true
                 CreateThread(function()
@@ -342,7 +360,7 @@ end)
 ---@param _ table|nil unused payload
 ---@param cb fun(result: table) NUI response
 RegisterNUICallback('sd-phone:wifi:disconnect', function(_, cb)
-    wifiClient.disconnect()
+    wifiClient.disconnect(true)
     cb({ success = true })
 end)
 
