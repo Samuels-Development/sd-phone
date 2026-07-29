@@ -6,7 +6,7 @@ return {
     -- so a server can keep the mast list below intact while the system is parked. An empty
     -- Towers list does the same thing on its own, as does a list where every entry is malformed:
     -- a typo must never leave a whole server without phones.
-    Enabled = false,
+    Enabled = true,
 
     -- Each entry is a mast position and the flat radius it covers. Service at a point is the
     -- BEST reading across every tower: 1 - distance / range. So a player 200 units from a
@@ -32,6 +32,33 @@ return {
         { tower = vec3(  280.00,  2900.00,  44.00), range = 1800.0 },  -- Harmony, Route 68
         { tower = vec3( 1858.30,  3694.04,  37.91), range = 1700.0 },  -- Sandy Shores and the Alamo Sea
         { tower = vec3( -180.00,  6350.00,  31.00), range = 1600.0 },  -- Paleto Bay and the north coast
+    },
+
+    -- Map blips for the masts. This is a setup and debugging aid rather than something to run on
+    -- a live server: drawing the coverage circles is how you see where masts overlap and where
+    -- the gaps actually fall, which is hard to judge from coordinates alone. Off by default, and
+    -- deliberately independent of the Enabled switch above, so a network can be laid out and
+    -- looked at before the system is ever switched on.
+    Blips = {
+        Enabled = false,
+
+        -- The marker sitting on the mast itself. Sprite and colour are GTA's own ids; the full
+        -- lists live at https://docs.fivem.net/docs/game-references/blips/ Markers are drawn
+        -- short-range so eight of them do not crowd the minimap; open the pause map to see the
+        -- whole network and its circles at once.
+        Sprite = 1,
+        Color  = 3,
+        Scale  = 0.8,
+        Label  = 'Cell Tower',
+
+        -- The translucent circle showing what that mast reaches. Its size is always the tower's
+        -- own range, never a separate number, so the picture on the map cannot drift out of step
+        -- with the service the maths actually gives you. Alpha is 0 to 255.
+        Radius = {
+            Enabled = true,
+            Color   = 3,
+            Alpha   = 80,
+        },
     },
 
     -- Minimum level each capability needs. Texts get through on a signal too weak to hold a
