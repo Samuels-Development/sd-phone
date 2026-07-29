@@ -46,6 +46,7 @@ local config = {
     Migrate     = require 'configs.migrate',         -- one-time lb-phone -> sd-phone data import
     Sim         = require 'configs.uniqueandsim',    -- unique phones + SIM cards (see its pick-your-setup header)
     CellTowers  = require 'configs.celltowers',   -- degradable service by distance to a mast
+    Wifi        = require 'configs.wifi',          -- local networks that carry data off the towers
 }
 
 -- Server-only secrets: third-party API keys live in configs/server/apikeys.lua, which is NOT in
