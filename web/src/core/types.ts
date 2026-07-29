@@ -58,6 +58,8 @@ export interface WifiNetwork {
 /** Live Wi-Fi snapshot: enabled=false means the radio is off, so there is nothing to join. */
 export interface WifiState {
     enabled: boolean;
+    /** This server runs Wi-Fi at all. Distinguishes a switched-off radio from no networks. */
+    configured?: boolean;
     connected: WifiNetwork | null;
     networks: WifiNetwork[];
     /**

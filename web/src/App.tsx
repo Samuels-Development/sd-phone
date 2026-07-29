@@ -815,6 +815,9 @@ function AppContent() {
     // Bars of the joined Wi-Fi network, or null for the plain icon. Read past the same early
     // return as the cellular bars, and suppressed by the toggles that already own the radio.
     const wifiNetwork = useWifiConnected();
+    // Once a server runs Wi-Fi networks, the corner is driven purely by whether one is joined.
+    // The legacy static ShowWifi flag would otherwise paint an icon for a radio that is off.
+    const wifiConfigured = useWifiStore(s => s.configured);
     const wifiUsable  = !(airplaneMode || noSim || !ccWifi);
     const wifiBars = wifiUsable ? (wifiNetwork?.bars ?? null) : null;
     const phoneOpenRef = useRef(false);
@@ -1260,7 +1263,7 @@ function AppContent() {
                         <StatusBar
                             use24h={hour24}
                             signal={(airplaneMode || noSim || noService) ? 0 : peekBars}
-                            showWifi={(airplaneMode || noSim) ? false : ((lv?.showWifi ?? true) && ccWifi)}
+                            showWifi={(airplaneMode || noSim || wifiConfigured) ? false : ((lv?.showWifi ?? true) && ccWifi)}
                             wifiBars={wifiBars}
                             battery={battery}
                             airplane={airplaneMode}
@@ -1364,7 +1367,7 @@ function AppContent() {
                     <StatusBar
                         use24h={hour24}
                         signal={(airplaneMode || noSim || noService) ? 0 : liveBars}
-                        showWifi={(airplaneMode || noSim) ? false : (view.showWifi && ccWifi)}
+                        showWifi={(airplaneMode || noSim || wifiConfigured) ? false : (view.showWifi && ccWifi)}
                         wifiBars={wifiBars}
                         battery={battery}
                         airplane={airplaneMode}

@@ -7,8 +7,9 @@ import type { WifiNetwork, WifiState } from '@/core/types';
  * than merged, so a snapshot that drops a network or a connection is the whole truth.
  */
 interface WifiStoreState extends WifiState {
-    /** Narrowed from the wire type: `apply` always resolves it to a real boolean. */
+    /** Narrowed from the wire type: `apply` always resolves these to real booleans. */
     providesData: boolean;
+    configured: boolean;
     apply: (push?: WifiPush | null) => void;
 }
 
@@ -17,6 +18,7 @@ interface WifiPush {
     enabled?: unknown;
     connected?: unknown;
     networks?: unknown;
+    configured?: unknown;
     providesData?: unknown;
 }
 
@@ -48,12 +50,14 @@ export const useWifiStore = create<WifiStoreState>()(set => ({
     connected: null,
     networks: [],
     providesData: false,
+    configured: false,
     apply: push => {
         const raw  = push?.networks;
         const list: unknown[] = Array.isArray(raw) ? raw : [];
         const connected = toNetwork(push?.connected);
         set({
             enabled:   push?.enabled === true,
+            configured: push?.configured === true,
             connected,
             networks:  list.map(toNetwork).filter((n): n is WifiNetwork => n !== null),
             // Only ever true alongside a live connection, so a stale flag cannot keep the UI
