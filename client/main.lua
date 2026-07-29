@@ -43,6 +43,8 @@ local customApps = require 'client.customapps'
 local pose = require 'client.pose'
 ---@type table Scripted phone camera (client.phonecam): owns the frame-a-shot movement lock.
 local phonecam = require 'client.phonecam'
+---@type table Cell service (client.service): live signal level, bars + capability gating.
+local service = require 'client.service'
 
 -- Loaded for side effects: each app module registers its own NUI callbacks, net events and
 -- server proxies.
@@ -356,7 +358,7 @@ local function OpenPhone()
             battery   = phoneState.battery,
             frameColor = currentFrameColor,
             carrier   = config.StatusBar.Carrier,
-            signal    = config.StatusBar.SignalBars,
+            signal    = service.active() and service.bars() or config.StatusBar.SignalBars,
             showWifi  = config.StatusBar.ShowWifi,
             use24h    = config.Lockscreen.Use24Hour,
             showDate  = config.Lockscreen.ShowDate,
