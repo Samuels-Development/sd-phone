@@ -815,12 +815,8 @@ function AppContent() {
     // Bars of the joined Wi-Fi network, or null for the plain icon. Read past the same early
     // return as the cellular bars, and suppressed by the toggles that already own the radio.
     const wifiNetwork = useWifiConnected();
-    const wifiOn      = useWifiStore(s => s.enabled);
     const wifiUsable  = !(airplaneMode || noSim || !ccWifi);
     const wifiBars = wifiUsable ? (wifiNetwork?.bars ?? null) : null;
-    // Radio on with nothing joined. Drawn as a dimmed outline rather than nothing at all, so the
-    // corner distinguishes "listening, found nothing" from "Wi-Fi is off".
-    const wifiIdle = wifiUsable && wifiOn && !wifiNetwork;
     const phoneOpenRef = useRef(false);
     phoneOpenRef.current = !!view;
     const lockedRef = useRef(locked);
@@ -1266,7 +1262,6 @@ function AppContent() {
                             signal={(airplaneMode || noSim || noService) ? 0 : peekBars}
                             showWifi={(airplaneMode || noSim) ? false : ((lv?.showWifi ?? true) && ccWifi)}
                             wifiBars={wifiBars}
-                            wifiIdle={wifiIdle}
                             battery={battery}
                             airplane={airplaneMode}
                             noSim={noSim}
@@ -1371,7 +1366,6 @@ function AppContent() {
                         signal={(airplaneMode || noSim || noService) ? 0 : liveBars}
                         showWifi={(airplaneMode || noSim) ? false : (view.showWifi && ccWifi)}
                         wifiBars={wifiBars}
-                        wifiIdle={wifiIdle}
                         battery={battery}
                         airplane={airplaneMode}
                         noSim={noSim}

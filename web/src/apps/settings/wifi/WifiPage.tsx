@@ -8,7 +8,7 @@ import type { WifiNetwork, WifiState } from '@/core/types';
 import { useWifiConnected, useWifiNetworks, useWifiStore } from '@/stores/wifiStore';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { EmptyState } from '@/ui/EmptyState';
-import { ListGroup, ListRow } from '@/ui/ListGroup';
+import { ListGroup, ListRow, ToggleRow } from '@/ui/ListGroup';
 import { PromptDialog } from '@/ui/PromptDialog';
 import { SubPage } from '../SettingsSubPage';
 
@@ -94,6 +94,13 @@ export function WifiPage({ onBack }: { onBack: () => void }) {
 
     useEffect(() => { void refresh(); }, [refresh]);
 
+    /** The Wi-Fi switch. Turning it off drops whatever is joined, which the client handles. */
+    const setRadio = useCallback(async (on: boolean) => {
+        if (!isFiveM) { setDev(s => ({ ...s, enabled: on, connected: on ? s.connected : null })); return; }
+        await apiCall<void>('sd-phone:wifi:setEnabled', { on });
+        await refresh();
+    }, [refresh]);
+
     /** Returns the failure message, or null once the phone is on the network. */
     const join = useCallback(async (net: WifiNetwork, password?: string): Promise<string | null> => {
         if (!isFiveM) { setDev(s => ({ ...s, connected: net })); return null; }
@@ -139,10 +146,10 @@ export function WifiPage({ onBack }: { onBack: () => void }) {
                 <ListGroup footer={enabled
                     ? t('settings.wifiFooter', 'Wi-Fi carries data where the towers will not. Your phone stays on a network for as long as you are inside its range.')
                     : undefined}>
-                    <ListRow
+                    <ToggleRow
                         label={t('settings.wifi', 'Wi-Fi')}
-                        value={enabled ? t('settings.wifiOn', 'On') : t('settings.wifiOff', 'Off')}
-                        chevron={false}
+                        on={enabled}
+                        onToggle={() => void setRadio(!enabled)}
                     />
                 </ListGroup>
 

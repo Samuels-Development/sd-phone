@@ -34,6 +34,11 @@ local TICK_MS = math.max(250, math.floor((tonumber(cfg.ScanSeconds) or 2) * 1000
 ---@type table Wi-Fi module; the table returned at end of file.
 local wifiClient = {}
 
+---@type boolean The radio switch the player owns, separate from whether the server configured any
+---networks at all. Off means nothing is scanned, joined or carried.
+local radioOn = true
+---@type fun(force: boolean|nil) Forward declaration: setEnabled pushes through it before it is defined.
+local refresh
 ---@type table|nil The joined network as configs/wifi.lua defines it, nil while off Wi-Fi.
 local joined = nil
 ---@type number Strength of the joined network as of the last scan, 0..1.
@@ -56,7 +61,27 @@ local lastNearby = ''
 ---the phone falls back to cell service alone.
 ---@return boolean
 function wifiClient.enabled()
-    return #NETWORKS > 0
+    return radioOn and #NETWORKS > 0
+end
+
+---Switches the radio. Turning it off leaves whatever is joined and stops the scan answering, so
+---nothing keeps carrying data behind a switch the player has set to off.
+---@param on boolean
+function wifiClient.setEnabled(on)
+    local want = on == true
+    if want == radioOn then return end
+    radioOn = want
+
+    if not radioOn then
+        wifiClient.disconnect()
+        scanned = {}
+    end
+    refresh(true)
+end
+
+---@return boolean
+function wifiClient.radioEnabled()
+    return radioOn
 end
 
 ---The joined network as the UI shows it, or nil while off Wi-Fi.
@@ -180,7 +205,15 @@ end
 ---Rescans from the player's position, drops a connection that has faded out, and rejoins a
 ---remembered network in reach when nothing is connected.
 ---@param force boolean|nil push even when nothing changed (used on open)
-local function refresh(force)
+function refresh(force)
+    -- A switched-off radio scans nothing and holds nothing, so the page shows an empty list
+    -- rather than networks it would refuse to join.
+    if not radioOn then
+        scanned = {}
+        push(force)
+        return
+    end
+
     local pos = GetEntityCoords(PlayerPedId())
     scanned = wifi.scan(pos.x, pos.y, pos.z, NETWORKS, DROP_BELOW)
     for i = 1, #scanned do
@@ -246,6 +279,13 @@ end)
 RegisterNUICallback('sd-phone:wifi:forget', function(payload, cb)
     wifiClient.forget(type(payload) == 'table' and payload.id or nil)
     cb({ success = true })
+end)
+
+---The Wi-Fi switch in Settings. Answers with the state that actually took, so a server with no
+---networks configured cannot be switched on into a radio that would find nothing.
+RegisterNUICallback('sd-phone:wifi:setEnabled', function(payload, cb)
+    wifiClient.setEnabled(type(payload) == 'table' and payload.on == true)
+    cb({ success = true, data = { enabled = wifiClient.enabled() } })
 end)
 
 -- Only scans while the phone is on screen: a holstered phone costs nothing at all.
