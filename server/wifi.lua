@@ -6,6 +6,11 @@ local wifi = require 'shared.wifi'
 local util = require 'server.util'
 ---@type table Player bridge (bridge.server.player): citizenid lookup for the rate-limit key.
 local player = require 'bridge.server.player'
+---@type table Boot reporter (server.boot): one console summary instead of per-module prints.
+local boot = require 'server.boot'
+---@type table Wi-Fi persistence layer (server.wifi.store): the radio switch and the networks a
+---character has already joined, keyed by citizenid.
+local store = require 'server.wifi.store'
 
 ---@type table Wi-Fi settings (configs/wifi.lua).
 local cfg = config.Wifi or {}
@@ -34,6 +39,16 @@ local connections = {}
 
 ---@type table Wi-Fi module; the table returned at end of file.
 local wifiServer = {}
+
+-- Schema bootstrap.
+CreateThread(function()
+    local success, err = pcall(store.ensureSchema)
+    if not success then
+        boot.schemaFailed('wifi', err)
+        return
+    end
+    boot.schemaReady()
+end)
 
 ---The server's own view of where a player is, or nil when they cannot be resolved.
 ---@param source number|nil player server id
@@ -107,9 +122,11 @@ end
 lib.callback.register('sd-phone:server:wifi:connect', function(source, payload)
     if #NETWORKS == 0 then return util.fail('Wi-Fi is unavailable') end
 
+    local cid = player.getIdentifier(source)
+
     -- Spent before the network is even resolved, so every attempt costs the same whether it is
     -- refused for a bad id, for distance, or for the password.
-    if not util.rateLimit(player.getIdentifier(source), 'wifi:connect', CONNECT_WINDOW, CONNECT_PER_WINDOW) then
+    if not util.rateLimit(cid, 'wifi:connect', CONNECT_WINDOW, CONNECT_PER_WINDOW) then
         return util.fail('Too many attempts, wait a moment')
     end
 
@@ -127,7 +144,45 @@ lib.callback.register('sd-phone:server:wifi:connect', function(source, payload)
     end
 
     connections[source] = net.id
+    -- Remembered from the config's own password, never the string the client sent: the only thing
+    -- a client can do here is fail the check above, so nothing it types can reach `known`. A DB
+    -- hiccup must not turn a good join into a refusal, so the write is pcall'd.
+    if cid then pcall(store.remember, cid, net.id, wifi.secured(net) and net.password or nil) end
     return util.ok()
+end)
+
+---This character's persisted Wi-Fi state, for the client to hydrate the radio switch and its
+---remembered networks from. Read-only.
+---@param source number player server id
+---@return table envelope { success, data: { enabled: boolean, known: table } }
+lib.callback.register('sd-phone:server:wifi:state', function(source)
+    local cid = player.getIdentifier(source)
+    if not cid then return util.fail('No character') end
+    return util.ok(store.get(cid))
+end)
+
+---The radio switch, persisted per character so it survives a restart, a relog and a swap. Nothing
+---to validate: owning the phone is what entitles a player to turn its own radio off.
+---@param source number player server id
+---@param payload table { on: boolean }
+---@return table envelope { success, data: { enabled: boolean } }
+lib.callback.register('sd-phone:server:wifi:setEnabled', function(source, payload)
+    local cid = player.getIdentifier(source)
+    if not cid then return util.fail('No character') end
+
+    local on = type(payload) == 'table' and payload.on == true
+    store.setEnabled(cid, on)
+    return util.ok({ enabled = on })
+end)
+
+---A client dropping a network from its remembered list, so a forgotten network stays forgotten
+---across a restart. Only ever touches the caller's own row.
+---@param id string network id
+RegisterNetEvent('sd-phone:server:wifi:forget', function(id)
+    local source = source
+    local cid = player.getIdentifier(source)
+    if not cid then return end
+    store.forget(cid, id)
 end)
 
 ---A client leaving the network it is on. Nothing to validate: dropping your own connection is

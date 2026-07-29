@@ -45,9 +45,17 @@ local joined = nil
 local joinedStrength = 0.0
 ---@type table[] Last scan result, strongest first, each entry carrying its bar count.
 local scanned = {}
----@type table<string, string|boolean> Networks joined this session: the password that worked, or
----true for an open one. Memory only, so it dies with the session.
+---@type table<string, string|boolean> Networks this character has joined: the password that
+---worked, or true for an open one. Seeded from the server on open and written through on change.
 local remembered = {}
+---@type boolean True once this character's stored state has been read back, so the hydrate runs
+---once per character rather than once per open.
+local hydrated = false
+---@type boolean True while a hydrate is in flight, so a second open cannot stack another.
+local hydrating = false
+---@type integer Bumped on every character change. A hydrate reply carrying a stale epoch belongs
+---to the character that just left and is dropped whole rather than written over the new one.
+local epoch = 0
 ---@type boolean True while the phone is on screen; gates the scan entirely.
 local phoneOpen = false
 ---@type boolean True while an auto-rejoin is in flight, so a scan cannot stack a second one.
@@ -76,6 +84,11 @@ function wifiClient.setEnabled(on)
         wifiClient.disconnect()
         scanned = {}
     end
+    -- Written through rather than awaited inline: the switch has already taken locally, and the
+    -- pane must not sit on a round trip to say so.
+    CreateThread(function()
+        lib.callback.await('sd-phone:server:wifi:setEnabled', false, { on = want })
+    end)
     refresh(true)
 end
 
@@ -133,6 +146,10 @@ end
 local function snapshot()
     return {
         enabled   = wifiClient.enabled(),
+        -- Whether this server runs Wi-Fi at all, which `enabled` cannot say on its own: a
+        -- switched-off radio and a server with no networks both read as false there. The status
+        -- bar needs the difference to know whether the legacy static icon still applies.
+        configured = #NETWORKS > 0,
         connected = wifiClient.current(),
         networks  = wifiClient.nearby(),
         -- Whether this connection carries data, which the cell push cannot answer: its own `data`
@@ -178,7 +195,8 @@ function wifiClient.connect(id, password)
     local pos = GetEntityCoords(PlayerPedId())
     joinedStrength = wifi.strength(pos.x, pos.y, pos.z, net)
     -- The password that worked is kept beside the id so an auto-rejoin can hand it back and let
-    -- the server check it again, rather than the player being asked a second time.
+    -- the server check it again, rather than the player being asked a second time. The durable
+    -- copy is written server-side off the same join, from the config's password rather than this.
     remembered[net.id] = (type(password) == 'string' and password ~= '') and password or true
     push(true)
     return true, nil
@@ -192,11 +210,13 @@ function wifiClient.disconnect()
     push(true)
 end
 
----Drops a network from this session's remembered list, so auto-rejoin stops picking it up.
+---Drops a network from this character's remembered list, so auto-rejoin stops picking it up. Told
+---to the server too, so a forgotten network stays forgotten across a restart.
 ---@param id string|nil
 function wifiClient.forget(id)
     if type(id) ~= 'string' then return end
     remembered[id] = nil
+    TriggerServerEvent('sd-phone:server:wifi:forget', id)
     -- Forgetting the network you are on leaves it too, which is what the button says on a real
     -- phone. Staying joined to something the phone has been told to forget reads as a bug.
     if joined and joined.id == id then wifiClient.disconnect() end
@@ -249,6 +269,51 @@ function refresh(force)
     push(force)
 end
 
+---Reads this character's stored radio switch and remembered networks back from the server, once.
+---Threaded like the auto-rejoin above, so the scan tick is never held behind the round trip.
+local function hydrate()
+    if hydrated or hydrating or #NETWORKS == 0 then return end
+    hydrating = true
+    local mine = epoch
+
+    CreateThread(function()
+        local res = lib.callback.await('sd-phone:server:wifi:state', false)
+        if mine ~= epoch then return end
+        hydrating = false
+        -- A refusal means the character is not resolvable yet (mid-spawn, multichar pick), so the
+        -- flag stays down and the next open tries again rather than locking in stock state.
+        if type(res) ~= 'table' or res.success ~= true or type(res.data) ~= 'table' then return end
+
+        hydrated = true
+        radioOn = res.data.enabled ~= false
+        remembered = {}
+        local known = type(res.data.known) == 'table' and res.data.known or {}
+        for id, saved in pairs(known) do
+            if type(id) == 'string' then
+                remembered[id] = type(saved) == 'string' and saved or true
+            end
+        end
+
+        -- A stored-off radio has to drop anything the scan got in first with, or the phone keeps
+        -- carrying data behind a switch it has just read as off.
+        if not radioOn then
+            wifiClient.disconnect()
+            scanned = {}
+        end
+        refresh(true)
+    end)
+end
+
+---Drops everything the outgoing character owned and re-reads from the server. A live switch
+---reuses this client, so the joined network, the radio switch and the remembered list all go
+---before the incoming character's state can land on top of them.
+local function resetForCharacter()
+    epoch = epoch + 1
+    wifiClient.disconnect()
+    hydrated, hydrating, remembered, radioOn, scanned = false, false, {}, true, {}
+    hydrate()
+end
+
 ---Returns the current Wi-Fi picture for the Settings pane on mount.
 ---@param _ table|nil unused payload
 ---@param cb fun(result: table) NUI response
@@ -288,11 +353,20 @@ RegisterNUICallback('sd-phone:wifi:setEnabled', function(payload, cb)
     cb({ success = true, data = { enabled = wifiClient.enabled() } })
 end)
 
--- Only scans while the phone is on screen: a holstered phone costs nothing at all.
+-- Only scans while the phone is on screen: a holstered phone costs nothing at all. The stored
+-- state is pulled on the first open, which is the earliest point a citizenid is sure to exist.
 AddEventHandler('sd-phone:client:openState', function(open)
     phoneOpen = open == true
-    if phoneOpen and wifiClient.enabled() then refresh(true) end
+    if not phoneOpen then return end
+    hydrate()
+    if wifiClient.enabled() then refresh(true) end
 end)
+
+-- The same signals client/main.lua rebuilds its character state on. characterLoaded only ever
+-- travels to the NUI, so the framework events it is pushed from are what this side listens to.
+RegisterNetEvent('QBCore:Client:OnPlayerLoaded', resetForCharacter)
+RegisterNetEvent('esx:playerLoaded', resetForCharacter)
+RegisterNetEvent('sd-phone:client:rehydrate', resetForCharacter)
 
 CreateThread(function()
     if not wifiClient.enabled() then return end
