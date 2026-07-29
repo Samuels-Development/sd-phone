@@ -47,6 +47,7 @@ import { customToAppDef, installedCustomIds, isCustomApp, setCustomInstalled, us
 import { resolveWallpaper } from '@/shell/wallpapers';
 import { NoSimScreen } from '@/shell/NoSimScreen';
 import { useNoService, useNoSim, useSimStore } from '@/stores/simStore';
+import { useNoServiceArea, useServiceBars, useServiceStore } from '@/stores/serviceStore';
 import { resetContacts, syncSimNumber } from '@/stores/contactsStore';
 import { playOnce } from '@/apps/settings/tonePlayer';
 import { resolveTone, toneUrl } from '@/apps/settings/tones';
@@ -230,6 +231,8 @@ function AppContent() {
     // status bar shows "No Service" and only number-dependent actions (call/text) are refused
     // server-side. (In legacy mode useNoSim drives the full-screen wall instead.)
     const noService = useNoService();
+    // A configured dead zone reads as No Service too, from location rather than a missing SIM.
+    const noServiceArea = useNoServiceArea();
     // A pulled SIM drops the phone straight back to the (blocked) lock state: no app stays
     // foregrounded and the switcher/control-center close.
     useEffect(() => {
@@ -712,6 +715,10 @@ function AppContent() {
         if (typeof pct === 'number') { setBattery(pct); useBatteryStore.getState().setLevel(pct); }
     }, []));
 
+    useNuiEvent('sd-phone:service', useCallback((data) => {
+        useServiceStore.getState().apply(data);
+    }, []));
+
     // Home screen widgets render while their app is closed, so the pushes those apps listen for
     // are mirrored into a store here, the same way the battery level is above.
     useNuiEvent('sd-phone:weather', useCallback((data) => {
@@ -796,6 +803,10 @@ function AppContent() {
     ringingAlarmRef.current = ringingAlarm;
     const [ringingSince, setRingingSince] = useState(0);
     const lastViewRef  = useRef<ViewState | null>(null);
+    // Live bars from the cell tower push, falling back to the static value the open payload
+    // carried. Both status bars sit past an early return, so these hooks are read here instead.
+    const peekBars = useServiceBars(lastViewRef.current?.signal ?? 4);
+    const liveBars = useServiceBars(view?.signal ?? 4);
     const phoneOpenRef = useRef(false);
     phoneOpenRef.current = !!view;
     const lockedRef = useRef(locked);
@@ -1238,12 +1249,12 @@ function AppContent() {
                         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/30 via-black/5 to-transparent" />
                         <StatusBar
                             use24h={hour24}
-                            signal={(airplaneMode || noSim || noService) ? 0 : (lv?.signal ?? 4)}
+                            signal={(airplaneMode || noSim || noService) ? 0 : peekBars}
                             showWifi={(airplaneMode || noSim) ? false : ((lv?.showWifi ?? true) && ccWifi)}
                             battery={battery}
                             airplane={airplaneMode}
                             noSim={noSim}
-                            noService={noService}
+                            noService={noService || noServiceArea}
                             light
                         />
                         {ringingAlarm ? (
@@ -1341,12 +1352,12 @@ function AppContent() {
                 {!(showSetup && setupHello && !noSim) && (
                     <StatusBar
                         use24h={hour24}
-                        signal={(airplaneMode || noSim || noService) ? 0 : view.signal}
+                        signal={(airplaneMode || noSim || noService) ? 0 : liveBars}
                         showWifi={(airplaneMode || noSim) ? false : (view.showWifi && ccWifi)}
                         battery={battery}
                         airplane={airplaneMode}
                         noSim={noSim}
-                        noService={noService}
+                        noService={noService || noServiceArea}
                         light={noSim ? true : (showSetup ? false : (cameraMode ? true : (statusLightOverride ?? statusBarAutoLight ?? statusLight)))}
                         controlHint={!showSetup && !cameraMode && !ccOpen && !homeEditing && !noSim}
                         editing={homeEditing && onHomescreen}
