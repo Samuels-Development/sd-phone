@@ -4,6 +4,7 @@ import { ChevronLeft, Home, Inbox as InboxIcon, Plus, Search, User } from 'lucid
 import { useStatusBarLight } from '@/shell/useStatusBarLight';
 import { useDeckActive } from '@/shell/deckActive';
 import { setLaunchIntent } from '@/shell/launchIntent';
+import { useRefreshOnReconnect } from '@/hooks/useRefreshOnReconnect';
 import { useSessionState } from '@/hooks/useSessionState';
 import { isVideoUrl } from '@/core/photosApi';
 import { useAsyncData } from '@/hooks/useAsyncData';
@@ -97,6 +98,9 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
         wasActive.current = deckActive;
         if (returning) bumpRefresh();
     }, [deckActive, bumpRefresh]);
+
+    // The same refresh for someone who never left the screen while driving back into coverage.
+    useRefreshOnReconnect(bumpRefresh);
 
     useNuiEvent('sd-phone:vibez:notification', useCallback(() => {
         void apiCounts().then(setUnread);

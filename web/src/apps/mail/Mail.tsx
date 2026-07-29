@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 
 import { t } from '@/i18n';
+import { useRefreshOnReconnect } from '@/hooks/useRefreshOnReconnect';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useSessionState } from '@/hooks/useSessionState';
 import { takeMailTarget } from '@/shell/deeplink';
@@ -57,6 +58,9 @@ export function Mail({ onClose }: { onClose: () => void }) {
     }, []);
 
     useEffect(() => { void refresh(); }, [refresh]);
+
+    // Pull the mailbox again once coverage returns, for someone who never left the screen.
+    useRefreshOnReconnect(useCallback(() => { void refresh(); }, [refresh]));
     useEffect(() => { void accountsMyNumber().then(setMyNumber); }, []);
     useEffect(() => { void listSavedEmails().then(applySavedState); }, [applySavedState]);
 

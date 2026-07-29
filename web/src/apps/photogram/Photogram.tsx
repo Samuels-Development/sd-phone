@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { t } from '@/i18n';
 import { useStatusBarLight } from '@/shell/useStatusBarLight';
 import { useDeckActive } from '@/shell/deckActive';
+import { useRefreshOnReconnect } from '@/hooks/useRefreshOnReconnect';
 import { clearSessionState, useSessionState } from '@/hooks/useSessionState';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useAppAuth } from '@/hooks/useAppAuth';
@@ -128,6 +129,9 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
         wasActive.current = deckActive;
         if (returning) setSyncNonce(n => n + 1);
     }, [deckActive]);
+
+    // The same refresh for someone who never left the screen while driving back into coverage.
+    useRefreshOnReconnect(useCallback(() => setSyncNonce(n => n + 1), []));
 
     useEffect(() => {
         if (!authed) return;

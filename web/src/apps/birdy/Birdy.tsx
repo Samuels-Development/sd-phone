@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Bell, ChevronLeft, House, Mail, Pen, Search as SearchIcon } from 'lucide-react';
 
 import { t } from '@/i18n';
+import { useRefreshOnReconnect } from '@/hooks/useRefreshOnReconnect';
 import { useAppAuth } from '@/hooks/useAppAuth';
 import { useIosPush } from '@/hooks/useIosPush';
 import { useDidEnter } from '@/hooks/useDidEnter';
@@ -62,6 +63,9 @@ export function Birdy({ onClose }: { onClose: () => void }) {
         if (deckActive && !wasActive.current) refreshFeed();
         wasActive.current = deckActive;
     }, [deckActive, refreshFeed]);
+
+    // The same refresh for someone who never left the screen while driving back into coverage.
+    useRefreshOnReconnect(refreshFeed);
 
     // feedChanged reaches only the phones showing Birdy, so the subscription follows the
     // foreground. The refresh above covers anything pushed while this one was not listening.
