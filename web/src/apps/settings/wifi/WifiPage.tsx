@@ -28,7 +28,11 @@ const DEV_STATE: WifiState = {
     enabled: true,
     connected: null,
     providesData: true,
-    networks: [],
+    networks: [
+        { id: 'legion',    ssid: 'Legion Square Free',   secured: false, strength: 0.86, bars: 3 },
+        { id: 'mazebank',  ssid: 'MazeBank-Corporate',   secured: true,  strength: 0.52, bars: 2 },
+        { id: 'unicorn',   ssid: 'Unicorn-VIP',          secured: true,  strength: 0.19, bars: 1 },
+    ],
 };
 
 /** The status bar's Wi-Fi glyph at list size, its arcs filled to `bars` and the rest dimmed. */
@@ -215,20 +219,19 @@ export function WifiPage({ onBack }: { onBack: () => void }) {
             </SubPage>
 
             {asking && (
-                <div className="contents [&_input]:[-webkit-text-security:disc]">
-                    <PromptDialog
-                        title={asking.ssid}
-                        message={t('settings.wifiPasswordMsg', 'This network is secured. Enter its password to join.')}
-                        placeholder={t('settings.wifiPassword', 'Password')}
-                        maxLength={64}
-                        confirmLabel={t('settings.wifiJoin', 'Join')}
-                        onCancel={() => setAsking(null)}
-                        onConfirm={async value => {
-                            const err = await join(asking, value);
-                            if (err) setNotice(err);
-                        }}
-                    />
-                </div>
+                <PromptDialog
+                    title={asking.ssid}
+                    message={t('settings.wifiPasswordMsg', 'This network is secured. Enter its password to join.')}
+                    placeholder={t('settings.wifiPassword', 'Password')}
+                    maxLength={64}
+                    secure
+                    confirmLabel={t('settings.wifiJoin', 'Join')}
+                    onCancel={() => setAsking(null)}
+                    onConfirm={async value => {
+                        const err = await join(asking, value);
+                        if (err) setNotice(err);
+                    }}
+                />
             )}
 
             {forget && (

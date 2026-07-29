@@ -24,6 +24,8 @@ interface Props {
     initialValue?:   string;
     maxLength?:      number;
     inputMode?:      Mode;
+    /** Mask what is typed, for passwords. Uses a real password input rather than styling. */
+    secure?:         boolean;
     sanitize?:       (v: string) => string;
     secondField?:  FieldConfig;
     confirmLabel?: string;
@@ -38,7 +40,7 @@ function isThenable(r: ConfirmResult | Promise<ConfirmResult>): r is Promise<Con
 }
 
 export function PromptDialog({
-    title, message, label, placeholder, initialValue = '', maxLength, inputMode, sanitize,
+    title, message, label, placeholder, initialValue = '', maxLength, inputMode, secure, sanitize,
     secondField, confirmLabel = t('common.ok', 'OK'), cancelLabel = t('common.cancel', 'Cancel'),
     validate, onCancel, onConfirm,
 }: Props) {
@@ -137,6 +139,7 @@ export function PromptDialog({
                     {label && <div className={labelCls}>{label}</div>}
                     <input
                         ref={input1Ref}
+                        type={secure ? 'password' : undefined}
                         value={v1}
                         maxLength={maxLength}
                         placeholder={placeholder}
