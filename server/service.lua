@@ -55,4 +55,15 @@ RegisterNetEvent('sd-phone:server:service:report', function()
     TriggerEvent('sd-phone:server:service:regained', source)
 end)
 
+---Authoritative service level for a player, 0..1.
+---@param source number player server id
+exports('getServiceLevel', function(source) return service.levelFor(source) end)
+
+---Whether a player can currently use a capability: 'text', 'call' or 'data' (default 'data').
+---@param source number player server id
+---@param capability string|nil
+exports('hasService', function(source, capability)
+    return service.allows(source, capability or 'data')
+end)
+
 return service

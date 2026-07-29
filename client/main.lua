@@ -780,6 +780,19 @@ exports('open',     OpenPhone)
 exports('close',    ClosePhone)
 exports('openApp',  OpenApp)
 
+---Current cell service, 0 (dead zone) to 1 (standing at a mast). Always 1 when no towers are
+---configured.
+exports('getServiceLevel', function() return service.level() end)
+
+---Current status bar bars, 0..4.
+exports('getServiceBars', function() return service.bars() end)
+
+---Whether a capability is currently possible: 'text', 'call' or 'data' (default 'data').
+---@param capability string|nil
+exports('hasService', function(capability)
+    return service.allows(capability or 'data')
+end)
+
 ---Registers a third-party app - exports['sd-phone']:addCustomApp(data). Attribution is the calling
 ---resource; re-registering an identifier is only allowed from that same resource.
 ---@param data table lb-phone-shaped app definition
