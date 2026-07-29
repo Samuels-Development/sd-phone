@@ -9,8 +9,9 @@ local player = require 'bridge.server.player'
 
 ---@type table Cell tower settings (configs/celltowers.lua).
 local cfg = config.CellTowers or {}
----@type table[] Configured masts; empty leaves every reading full.
-local TOWERS = type(cfg.Towers) == 'table' and cfg.Towers or {}
+---@type table[] Configured masts, empty while the system is switched off. Folding Enabled in
+---here means every reading downstream treats a disabled system as a server with no masts.
+local TOWERS = (cfg.Enabled == true and type(cfg.Towers) == 'table') and cfg.Towers or {}
 ---@type table Minimum level per capability.
 local THRESHOLDS = type(cfg.Thresholds) == 'table' and cfg.Thresholds or {}
 ---@type integer Milliseconds a player must wait between honoured back-in-range reports.

@@ -44,10 +44,13 @@ end)
 stubLbExport('GetConfig', {})
 
 ---GetCellTowers() -> vector3[]. lb-phone's shape is a bare coordinate list, so sd-phone's
----per-tower `range` is dropped; read it via exports['sd-phone']:getServiceLevel(source).
+---per-tower `range` is dropped; read it via exports['sd-phone']:getServiceLevel(source). A
+---switched-off system reports no masts, matching the full service every phone actually has.
 registerLbExport('GetCellTowers', function()
+    local cfg = config.CellTowers
+    if not cfg or cfg.Enabled ~= true then return {} end
     local out = {}
-    for _, entry in ipairs(config.CellTowers and config.CellTowers.Towers or {}) do
+    for _, entry in ipairs(type(cfg.Towers) == 'table' and cfg.Towers or {}) do
         if entry and entry.tower then out[#out + 1] = entry.tower end
     end
     return out

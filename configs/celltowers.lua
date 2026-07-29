@@ -1,7 +1,13 @@
--- Cell towers - degradable cellular service by location. Leave Towers empty and the whole
--- system is inert: every phone always has full service and StatusBar.SignalBars keeps drawing
--- the static bar count, exactly as before.
+-- Cell towers - degradable cellular service by location. Turn Enabled off and the whole system
+-- is inert: every phone always has full service and StatusBar.SignalBars keeps drawing the
+-- static bar count, exactly as before, without you having to delete your tower list.
 return {
+    -- Master switch. False leaves every phone on full service no matter where its owner stands,
+    -- so a server can keep the mast list below intact while the system is parked. An empty
+    -- Towers list does the same thing on its own, as does a list where every entry is malformed:
+    -- a typo must never leave a whole server without phones.
+    Enabled = false,
+
     -- Each entry is a mast position and the flat radius it covers. Service at a point is the
     -- BEST reading across every tower: 1 - distance / range. So a player 200 units from a
     -- 250-range tower (20%) who is also 750 units from a 1000-range tower (25%) gets 25% - the
@@ -10,9 +16,22 @@ return {
     -- Distance is horizontal only. The Z you put here is ignored by the maths, so you can paste
     -- coordinates straight off an antenna prop without the height eating your coverage, and a
     -- pilot at altitude keeps the same service as the ground below them.
+    --
+    -- This curated eight-mast network covers the whole map. Every town and populated area holds
+    -- a usable signal, the back country thins out, and the far corners genuinely drop to nothing:
+    --   full service   Los Santos, LSIA, Vinewood, Chumash, Zancudo, Harmony, Sandy Shores, Paleto
+    --   fringe         Vespucci Beach, Grapeseed and Chiliad's summit sit around two bars
+    --   texts only     Raton Canyon
+    --   no service     Mount Gordo, the eastern desert and open ocean
     Towers = {
-        -- { tower = vec3(2792.25, 5996.05, 355.19), range = 1000.0 },
-        -- { tower = vec3(1858.30, 3694.04,  37.91), range =  750.0 },
+        { tower = vec3(  -75.00,  -818.00, 326.00), range = 2200.0 },  -- Downtown Los Santos
+        { tower = vec3(-1050.00, -2750.00,  20.00), range = 1800.0 },  -- LSIA and the south docks
+        { tower = vec3( -438.00,  1075.00, 352.00), range = 1800.0 },  -- Galileo Observatory, Vinewood Hills
+        { tower = vec3(-3050.00,  1250.00,  20.00), range = 1600.0 },  -- Chumash, Great Ocean Highway
+        { tower = vec3(-2050.00,  3200.00,  32.00), range = 1700.0 },  -- Fort Zancudo
+        { tower = vec3(  280.00,  2900.00,  44.00), range = 1800.0 },  -- Harmony, Route 68
+        { tower = vec3( 1858.30,  3694.04,  37.91), range = 1700.0 },  -- Sandy Shores and the Alamo Sea
+        { tower = vec3( -180.00,  6350.00,  31.00), range = 1600.0 },  -- Paleto Bay and the north coast
     },
 
     -- Minimum level each capability needs. Texts get through on a signal too weak to hold a

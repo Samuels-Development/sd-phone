@@ -5,8 +5,9 @@ local celltowers = require 'shared.celltowers'
 
 ---@type table Cell tower settings (configs/celltowers.lua): towers, thresholds, bar cutoffs.
 local cfg = config.CellTowers or {}
----@type table[] Configured masts; empty leaves the whole system inert.
-local TOWERS = type(cfg.Towers) == 'table' and cfg.Towers or {}
+---@type table[] Configured masts, empty while the system is switched off. Folding Enabled in
+---here means every reading downstream treats a disabled system as a server with no masts.
+local TOWERS = (cfg.Enabled == true and type(cfg.Towers) == 'table') and cfg.Towers or {}
 ---@type number[] Ascending level cutoffs for the 0..4 bars.
 local CUTOFFS = type(cfg.Bars) == 'table' and cfg.Bars or { 0.05, 0.25, 0.50, 0.75 }
 ---@type table Minimum level per capability.
