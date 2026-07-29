@@ -21,12 +21,20 @@ end
 ---@type boolean True while the local mic is muted for the active call.
 local micMuted = false
 
----Mutes/unmutes the local mic entirely (call AND proximity - a muted caller isn't talking).
----Mumble's audio input distance gates capture at the source; near-zero captures nothing.
+---Mutes/unmutes the local mic entirely (call AND proximity).
+---Switching the voice target to 0 (the default, which carries no call channels) prevents audio
+---from reaching the pma-voice call channel; zeroing the input distance silences proximity too.
+---pma-voice rebuilds target 1's channel list every ~200 ms, so unmuting restores it instantly.
 ---@param on boolean
 local function setMicMuted(on)
     micMuted = on == true
-    MumbleSetAudioInputDistance(micMuted and 0.05 or 9999.0)
+    if micMuted then
+        MumbleSetVoiceTarget(0)
+        MumbleSetAudioInputDistance(0.0)
+    else
+        MumbleSetVoiceTarget(1)
+        MumbleSetAudioInputDistance(9999.0)
+    end
 end
 
 ---React to Lua: the call UI's Mute button.
