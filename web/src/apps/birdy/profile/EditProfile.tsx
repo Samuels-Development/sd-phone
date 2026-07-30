@@ -69,18 +69,18 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onDeleted }
         >
             <div className="h-[54px] shrink-0" aria-hidden />
             <header className="flex items-center justify-between px-4 py-2.5">
-                <button type="button" onClick={() => dismiss(onCancel)} className="text-[17px]" style={{ color: BLUE }}>{t('birdy.cancel', 'Cancel')}</button>
-                <div className="text-[18px] font-bold">{t('birdy.editProfile', 'Edit profile')}</div>
-                <button type="button" onClick={save} disabled={busy} className="text-[17px] font-bold disabled:opacity-50" style={{ color: BLUE }}>{t('birdy.save', 'Save')}</button>
+                <button type="button" onClick={() => dismiss(onCancel)} className="text-[17px]" style={{ color: BLUE }}>{t('squawk.cancel', 'Cancel')}</button>
+                <div className="text-[18px] font-bold">{t('squawk.editProfile', 'Edit profile')}</div>
+                <button type="button" onClick={save} disabled={busy} className="text-[17px] font-bold disabled:opacity-50" style={{ color: BLUE }}>{t('squawk.save', 'Save')}</button>
             </header>
 
             <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
                 <div className="relative h-32 bg-black/10">
                     {banner && <img src={banner} alt="" draggable={false} className="h-full w-full object-cover" />}
-                    <button type="button" onClick={() => setPicking('banner')} aria-label={t('birdy.changeCover', 'Change cover')} className="absolute left-1/2 top-1/2 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white" style={{ background: 'rgba(0,0,0,0.4)' }}>
+                    <button type="button" onClick={() => setPicking('banner')} aria-label={t('squawk.changeCover', 'Change cover')} className="absolute left-1/2 top-1/2 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white" style={{ background: 'rgba(0,0,0,0.4)' }}>
                         <Camera className="h-[22px] w-[22px]" />
                     </button>
-                    <button type="button" onClick={() => setPicking('avatar')} aria-label={t('birdy.changeAvatar', 'Change avatar')} className="absolute -bottom-10 left-4 flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-4 text-white" style={{ borderColor: BG, background: '#5b6671' }}>
+                    <button type="button" onClick={() => setPicking('avatar')} aria-label={t('squawk.changeAvatar', 'Change avatar')} className="absolute -bottom-10 left-4 flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-4 text-white" style={{ borderColor: BG, background: '#5b6671' }}>
                         {avatar
                             ? <img src={avatar} alt="" draggable={false} className="h-full w-full object-cover" />
                             : <Camera className="h-7 w-7" />}
@@ -89,53 +89,53 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onDeleted }
                 <div className="h-14" aria-hidden />
 
                 <div className="mx-4 overflow-hidden rounded-[12px] bg-white">
-                    <Row label={t('birdy.name', 'Name')}>
+                    <Row label={t('squawk.name', 'Name')}>
                         <input value={name} onChange={e => setName(e.target.value)} className="w-full bg-transparent text-right text-[17px] text-black outline-none" style={{ caretColor: BLUE }} />
                     </Row>
 
                     <div className="border-b border-black/10 px-4 py-3.5">
-                        <div className="text-[17px] font-bold text-black">{t('birdy.bio', 'Bio')}</div>
+                        <div className="text-[17px] font-bold text-black">{t('squawk.bio', 'Bio')}</div>
                         <textarea
                             value={bio}
                             onChange={e => setBio(e.target.value)}
                             rows={3}
-                            placeholder={t('birdy.bioPlaceholder', 'Tell people about yourself')}
+                            placeholder={t('squawk.bioPlaceholder', 'Tell people about yourself')}
                             className="mt-1 w-full resize-none bg-transparent text-[17px] leading-snug text-black outline-none placeholder:text-black/35"
                             style={{ caretColor: BLUE }}
                         />
                     </div>
 
-                    <Row label={t('birdy.joinDate', 'Join Date')}>
+                    <Row label={t('squawk.joinDate', 'Join Date')}>
                         <span className="block w-full text-right text-[17px] text-black/45">{profile.joined}</span>
                     </Row>
 
                     <div className="flex items-center justify-between px-4 py-3.5">
-                        <span className="text-[17px] font-bold">{t('birdy.privateAccount', 'Private account')}</span>
+                        <span className="text-[17px] font-bold">{t('squawk.privateAccount', 'Private account')}</span>
                         <Toggle on={protect} onChange={setProtect} activeColor={BLUE} />
                     </div>
                 </div>
 
                 <div className="flex flex-col gap-3 px-4 py-6">
-                    <button type="button" onClick={() => setPwOpen(true)} className="w-full rounded-[12px] bg-white py-4 text-[18px] font-semibold active:opacity-70" style={{ color: BLUE }}>{t('birdy.changePassword', 'Change Password')}</button>
-                    <button type="button" onClick={() => setConfirmSignOut(true)} className="w-full rounded-[12px] bg-white py-4 text-[18px] font-semibold active:opacity-70" style={{ color: RED }}>{t('birdy.signOut', 'Sign Out')}</button>
-                    <button type="button" onClick={() => setConfirmDel(true)} className="w-full rounded-[12px] bg-white py-4 text-[18px] font-semibold active:opacity-70" style={{ color: RED }}>{t('birdy.deleteAccount', 'Delete Account')}</button>
+                    <button type="button" onClick={() => setPwOpen(true)} className="w-full rounded-[12px] bg-white py-4 text-[18px] font-semibold active:opacity-70" style={{ color: BLUE }}>{t('squawk.changePassword', 'Change Password')}</button>
+                    <button type="button" onClick={() => setConfirmSignOut(true)} className="w-full rounded-[12px] bg-white py-4 text-[18px] font-semibold active:opacity-70" style={{ color: RED }}>{t('squawk.signOut', 'Sign Out')}</button>
+                    <button type="button" onClick={() => setConfirmDel(true)} className="w-full rounded-[12px] bg-white py-4 text-[18px] font-semibold active:opacity-70" style={{ color: RED }}>{t('squawk.deleteAccount', 'Delete Account')}</button>
                 </div>
             </div>
 
             {confirmSignOut && (
                 <AlertDialog
-                    title={t('birdy.signOutTitle', 'Sign out of Squawk?')}
-                    message={t('birdy.signOutMessage', 'You can sign back in anytime.')}
-                    confirmLabel={t('birdy.signOut', 'Sign Out')}
+                    title={t('squawk.signOutTitle', 'Sign out of Squawk?')}
+                    message={t('squawk.signOutMessage', 'You can sign back in anytime.')}
+                    confirmLabel={t('squawk.signOut', 'Sign Out')}
                     onCancel={() => setConfirmSignOut(false)}
                     onConfirm={signOut}
                 />
             )}
             {confirmDel && (
                 <AlertDialog
-                    title={t('birdy.deleteAccountTitle', 'Delete account?')}
-                    message={t('birdy.deleteAccountMessage', "This permanently removes your profile, posts and messages, and its saved login from the Passwords app. This can't be undone.")}
-                    confirmLabel={t('birdy.delete', 'Delete')}
+                    title={t('squawk.deleteAccountTitle', 'Delete account?')}
+                    message={t('squawk.deleteAccountMessage', "This permanently removes your profile, posts and messages, and its saved login from the Passwords app. This can't be undone.")}
+                    confirmLabel={t('squawk.delete', 'Delete')}
                     destructive
                     onCancel={() => setConfirmDel(false)}
                     onConfirm={remove}

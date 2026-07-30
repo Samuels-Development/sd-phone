@@ -91,7 +91,7 @@ export function ActionsTab({ myCompany, multijob = false, invoicesEnabled = fals
                     <Row
                         icon={<Tile color="#FF9F0A"><Hourglass className="h-[18px] w-[18px] text-white" strokeWidth={2.25} /></Tile>}
                         title={t('services.duty', 'Duty')}
-                        subtitle={t('services.toggleDutyStatus', 'Go on or off duty')}
+                        subtitle={t('services.dutyOnOff', 'Go on or off duty')}
                         right={<Toggle on={myCompany.duty} onChange={v => void toggle('duty', v)} />}
                     />
                     {myCompany.isCompany && (
@@ -108,7 +108,7 @@ export function ActionsTab({ myCompany, multijob = false, invoicesEnabled = fals
                             <Row
                                 dimmed={dutyOff}
                                 icon={<Tile color="#0A84FF"><MessageSquare className="h-[18px] w-[18px] text-white" strokeWidth={2.25} /></Tile>}
-                                title={t('services.jobMessages', 'Work Messages')}
+                                title={t('services.workMessages', 'Work Messages')}
                                 subtitle={t('services.getNotified', 'Get notified of new messages.')}
                                 right={<Toggle disabled={dutyOff} on={!dutyOff && myCompany.jobMessages} onChange={v => void toggle('jobMessages', v)} />}
                             />
@@ -123,7 +123,7 @@ export function ActionsTab({ myCompany, multijob = false, invoicesEnabled = fals
                             <Row
                                 icon={<Tile color="#34C759"><Briefcase className="h-[18px] w-[18px] text-white" strokeWidth={2.25} /></Tile>}
                                 title={t('services.balance', 'Balance')}
-                                subtitle={t('services.currentBalance', 'Current balance of the company')}
+                                subtitle={t('services.currentBalance', 'Money the company holds')}
                                 right={<span className="text-[17px] font-semibold text-black dark:text-white">{fmtMoney(myCompany.balance ?? 0)}</span>}
                             />
                             <Divider />
@@ -138,12 +138,12 @@ export function ActionsTab({ myCompany, multijob = false, invoicesEnabled = fals
 
                 {showEmployees && (
                     <>
-                        <SectionHeader>{t('services.manageEmployees', 'Manage Staff')}</SectionHeader>
+                        <SectionHeader>{t('services.manageStaff', 'Manage Staff')}</SectionHeader>
                         <div className="overflow-hidden rounded-[12px] bg-[#e5e5e5] dark:bg-surface">
                             <Row
                                 icon={<Tile color="#0A84FF"><UserPlus className="h-[18px] w-[18px] text-white" strokeWidth={2.25} /></Tile>}
                                 title={t('services.hire', 'Hire')}
-                                subtitle={t('services.hireNewEmployee', 'Add someone to the payroll')}
+                                subtitle={t('services.addToPayroll', 'Add someone to the payroll')}
                                 onClick={() => setHiring(true)}
                                 right={<Plus className="h-[22px] w-[22px] text-black/35 dark:text-white/35" strokeWidth={2.25} />}
                             />

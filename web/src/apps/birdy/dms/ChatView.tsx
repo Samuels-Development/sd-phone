@@ -29,10 +29,10 @@ type Panel = 'emoji' | 'money' | 'voice' | null;
 
 function actionBtns(): { id: string; label: string; emoji?: string; Icon?: LucideIcon }[] {
     return [
-        { id: 'emoji',    label: t('birdy.emoji', 'Emoji'),    emoji: '😊' },
-        { id: 'photos',   label: t('birdy.photos', 'Photos') },
-        { id: 'gif',      label: t('birdy.gif', 'GIF') },
-        { id: 'voice',    label: t('birdy.voice', 'Voice'),    Icon: Mic },
+        { id: 'emoji',    label: t('squawk.emoji', 'Emoji'),    emoji: '😊' },
+        { id: 'photos',   label: t('squawk.photos', 'Photos') },
+        { id: 'gif',      label: t('squawk.gif', 'GIF') },
+        { id: 'voice',    label: t('squawk.voice', 'Voice'),    Icon: Mic },
     ];
 }
 
@@ -89,13 +89,13 @@ export function ChatView({ convo, onBack, onSend, onReact, onPayRequest, animate
         void fetchNui('sd-phone:maps:waypoint', wp ? { x: wp.x, y: wp.y } : {});
     }
 
-    function replyName(m: BirdyMessage): string { return m.fromMe ? t('birdy.you', 'You') : name; }
+    function replyName(m: BirdyMessage): string { return m.fromMe ? t('squawk.you', 'You') : name; }
     function msgPreview(m: BirdyMessage): string {
-        if (m.kind === 'image')    return t('birdy.photoPreview', '📷 Photo');
-        if (m.kind === 'gif')      return t('birdy.gif', 'GIF');
+        if (m.kind === 'image')    return t('squawk.photoPreview', '📷 Photo');
+        if (m.kind === 'gif')      return t('squawk.gif', 'GIF');
         if (m.kind === 'money')    return `$${m.amount}`;
-        if (m.kind === 'voice')    return t('birdy.voiceMessagePreview', '🎤 Voice message');
-        if (m.kind === 'location') return t('birdy.locationPreview', '📍 Location');
+        if (m.kind === 'voice')    return t('squawk.voiceMessagePreview', '🎤 Voice message');
+        if (m.kind === 'location') return t('squawk.locationPreview', '📍 Location');
         return m.body;
     }
 
@@ -177,7 +177,7 @@ export function ChatView({ convo, onBack, onSend, onReact, onPayRequest, animate
 
             <div className="shrink-0">
                 <div className="flex items-center gap-2 px-2 pb-3">
-                    <button type="button" onClick={() => setClosing(true)} aria-label={t('birdy.back', 'Back')} className="shrink-0 active:opacity-60" style={{ color: BLUE }}>
+                    <button type="button" onClick={() => setClosing(true)} aria-label={t('squawk.back', 'Back')} className="shrink-0 active:opacity-60" style={{ color: BLUE }}>
                         <ChevronLeft className="h-[38px] w-[38px]" strokeWidth={2.4} />
                     </button>
                     <div className="flex min-w-0 items-center gap-2">
@@ -193,7 +193,7 @@ export function ChatView({ convo, onBack, onSend, onReact, onPayRequest, animate
                     <div className="flex h-full flex-col items-center justify-center px-8 pb-10 text-center">
                         <Avatar size={104} src={convo.user.avatar} />
                         <p className="mt-4 text-[21px] font-semibold text-black/85">{name}</p>
-                        <p className="mt-1.5 text-[16px] font-medium leading-snug text-black/65">{t('birdy.sayHello', 'Say hello to @{handle}', { handle: convo.user.handle })}</p>
+                        <p className="mt-1.5 text-[16px] font-medium leading-snug text-black/65">{t('squawk.sayHello', 'Say hello to @{handle}', { handle: convo.user.handle })}</p>
                     </div>
                 ) : null}
                 {items.map((item, i) => {
@@ -227,7 +227,7 @@ export function ChatView({ convo, onBack, onSend, onReact, onPayRequest, animate
                                     onLocationTap={handleLocationTap}
                                     onImageTap={handleImageTap}
                                     locationCaption={msg.kind === 'location'
-                                        ? (sent ? t('birdy.youSharedLocation', 'You shared your location with {name}', { name }) : t('birdy.sharedTheirLocation', '{name} shared their location', { name }))
+                                        ? (sent ? t('squawk.youSharedLocation', 'You shared your location with {name}', { name }) : t('squawk.locationShared', '{name} shared their location', { name }))
                                         : undefined}
                                 />
                             </div>
@@ -247,7 +247,7 @@ export function ChatView({ convo, onBack, onSend, onReact, onPayRequest, animate
                     <div className="flex items-center gap-2 px-4 pb-1 pt-2">
                         <div className="w-[3px] self-stretch rounded-full" style={{ background: BLUE }} />
                         <div className="min-w-0 flex-1">
-                            <div className="text-[12px] font-semibold" style={{ color: BLUE }}>{t('birdy.replyTo', 'In reply to {name}', { name: replyName(replyTo) })}</div>
+                            <div className="text-[12px] font-semibold" style={{ color: BLUE }}>{t('squawk.replyTo', 'In reply to {name}', { name: replyName(replyTo) })}</div>
                             <div className="truncate text-[13px] text-black/55">{msgPreview(replyTo)}</div>
                         </div>
                         <button
@@ -268,7 +268,7 @@ export function ChatView({ convo, onBack, onSend, onReact, onPayRequest, animate
                                 <button
                                     type="button"
                                     onClick={() => setAttachments(prev => prev.filter((_, idx) => idx !== i))}
-                                    aria-label={t('birdy.removeImage', 'Remove image')}
+                                    aria-label={t('squawk.removeImage', 'Remove image')}
                                     className="absolute right-1 top-1 flex h-[20px] w-[20px] items-center justify-center rounded-full bg-black/55 active:opacity-70"
                                 >
                                     <X className="h-[12px] w-[12px] text-white" strokeWidth={2.75} />
@@ -287,7 +287,7 @@ export function ChatView({ convo, onBack, onSend, onReact, onPayRequest, animate
                             onChange={e => setDraft(e.target.value)}
                             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); } }}
                             onFocus={() => setPanel(null)}
-                            placeholder={t('birdy.textMessage', 'Text Message')}
+                            placeholder={t('squawk.textMessage', 'Text Message')}
                             className="min-w-0 flex-1 bg-transparent py-[5px] text-[18px] text-black placeholder-black/35 outline-none"
                         />
                         {(draft.trim() || attachments.length > 0) && (
@@ -375,10 +375,10 @@ export function ChatView({ convo, onBack, onSend, onReact, onPayRequest, animate
 
             {pendingPay && (
                 <AlertDialog
-                    title={t('birdy.payRequest', 'Pay Request')}
-                    message={t('birdy.payAmountTo', 'Pay ${amount} to {name}?', { amount: pendingPay.amount, name })}
-                    cancelLabel={t('birdy.cancel', 'Cancel')}
-                    confirmLabel={t('birdy.pay', 'Pay')}
+                    title={t('squawk.payRequest', 'Pay Request')}
+                    message={t('squawk.payAmountTo', 'Pay ${amount} to {name}?', { amount: pendingPay.amount, name })}
+                    cancelLabel={t('squawk.cancel', 'Cancel')}
+                    confirmLabel={t('squawk.pay', 'Pay')}
                     onCancel={() => setPendingPay(null)}
                     onConfirm={() => { onPayRequest(pendingPay.id, pendingPay.amount); setPendingPay(null); }}
                 />
@@ -386,10 +386,10 @@ export function ChatView({ convo, onBack, onSend, onReact, onPayRequest, animate
 
             {confirmLocation && (
                 <AlertDialog
-                    title={t('birdy.shareLocation', 'Share Location')}
-                    message={t('birdy.shareLocationWith', 'Share your current location with {name}?', { name })}
-                    cancelLabel={t('birdy.cancel', 'Cancel')}
-                    confirmLabel={t('birdy.share', 'Share')}
+                    title={t('squawk.shareLocation', 'Share Location')}
+                    message={t('squawk.shareLocationWith', 'Share your current location with {name}?', { name })}
+                    cancelLabel={t('squawk.cancel', 'Cancel')}
+                    confirmLabel={t('squawk.share', 'Share')}
                     onCancel={() => setConfirmLocation(false)}
                     onConfirm={async () => {
                         setConfirmLocation(false);
@@ -411,8 +411,8 @@ export function ChatView({ convo, onBack, onSend, onReact, onPayRequest, animate
             {locSheet && (
                 <ActionSheet
                     actions={[
-                        { label: t('birdy.openInMaps', 'Open in Maps'), onClick: () => openInMaps(locSheet) },
-                        { label: t('birdy.setWaypoint', 'Set Waypoint'), onClick: () => setWaypointFor(locSheet) },
+                        { label: t('squawk.openInMaps', 'Open in Maps'), onClick: () => openInMaps(locSheet) },
+                        { label: t('squawk.setWaypoint', 'Set Waypoint'), onClick: () => setWaypointFor(locSheet) },
                     ]}
                     onClose={() => setLocSheet(null)}
                 />
@@ -430,7 +430,7 @@ export function ChatView({ convo, onBack, onSend, onReact, onPayRequest, animate
                         onClick={e => { e.stopPropagation(); if (!savedPreview) { void apiSavePhotoFromUrl(preview); setSavedPreview(true); } }}
                         className="mt-6 text-[15px] text-white/85 active:opacity-60"
                     >
-                        {savedPreview ? t('birdy.savedToGallery', 'Saved to Gallery') : t('birdy.saveToGallery', 'Save to Gallery')}
+                        {savedPreview ? t('squawk.savedToGallery', 'Saved to Gallery') : t('squawk.saveToGallery', 'Save to Gallery')}
                     </button>
                 </div>
             )}

@@ -26,8 +26,8 @@ export function Notifications({ onOpenProfile }: { onOpenProfile: (handle?: stri
     return (
         <div className="flex h-full flex-col" style={{ background: BG }}>
             <header className="flex shrink-0 items-center px-4 py-2">
-                <button type="button" onClick={() => onOpenProfile()} aria-label={t('birdy.yourProfile', 'Your profile')}><Avatar size={44} /></button>
-                <h1 className="flex-1 text-center text-[22px] font-extrabold text-black">{t('birdy.notifications', 'Notifications')}</h1>
+                <button type="button" onClick={() => onOpenProfile()} aria-label={t('squawk.yourProfile', 'Your profile')}><Avatar size={44} /></button>
+                <h1 className="flex-1 text-center text-[22px] font-extrabold text-black">{t('squawk.notifications', 'Notifications')}</h1>
                 <div className="w-11" aria-hidden />
             </header>
 
@@ -38,8 +38,8 @@ export function Notifications({ onOpenProfile }: { onOpenProfile: (handle?: stri
                         center
                         icon={<Bell className="h-7 w-7" strokeWidth={1.8} />}
                         circleClassName="bg-black/[0.06] text-black/35"
-                        title={t('birdy.noNotificationsYet', 'No notifications yet')}
-                        subtitle={t('birdy.notificationsEmptySubtitle', "When people reply, like, or follow you, you'll see it here.")}
+                        title={t('squawk.noNotificationsYet', 'No notifications yet')}
+                        subtitle={t('squawk.notificationsEmptySubtitle', "When people reply, like, or follow you, you'll see it here.")}
                         subtitleClassName="text-[#536471]"
                     />
                 )}
@@ -52,7 +52,7 @@ export function Notifications({ onOpenProfile }: { onOpenProfile: (handle?: stri
                         : n.kind === 'repost'
                             ? <Repeat2 className="h-7 w-7" color={REPOST} />
                             : <PersonGlyph className="h-8 w-8" color={BLUE} />;
-                    const text = n.kind === 'follow' ? t('birdy.followedYou', 'is now following you') : n.text;
+                    const text = n.kind === 'follow' ? t('squawk.nowFollowingYou', 'is now following you') : n.text;
                     const preview = n.kind === 'follow' ? undefined : n.post?.body;
                     return <NotifRow key={n.id} icon={icon} user={n.user} text={text} preview={preview} onOpen={() => onOpenProfile(n.user.handle)} />;
                 })}

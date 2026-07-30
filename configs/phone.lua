@@ -153,10 +153,10 @@ return {
 
     -- Let other players see the phone in your hand. When true, your ped broadcasts a replicated
     -- statebag while the phone is out and every nearby client spawns its own LOCAL welded copy of
-    -- the prop on your ped (the hold animation already replicates on its own). This is lb-phone's
-    -- "state" strategy: the prop is deliberately NOT a networked object, because a networked prop's
-    -- ownership can migrate to another client whose sync then freezes it mid-hold. Set false to go
-    -- back to local-only (only you see your own prop).
+    -- the prop on your ped (the hold animation already replicates on its own). The prop is
+    -- deliberately NOT a networked object, because a networked prop's ownership can migrate to
+    -- another client whose sync then freezes it mid-hold. Set false to go back to local-only
+    -- (only you see your own prop).
     PropVisibleToOthers = true,
 
     -- Flashlight beam emitted forward from the phone (lockscreen torch button).

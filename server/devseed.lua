@@ -42,37 +42,49 @@ lib.addCommand('seedclassifieds', {
     local cid = player.getIdentifier(source)
     if not cid then return end
 
-    MySQL.query.await("DELETE FROM `pages_posts` WHERE citizenid = ? OR (citizenid = ? AND title = 'Looking for a new job')", { OTHER, cid })
-    MySQL.query.await("DELETE FROM `marketplace_listings` WHERE citizenid = ? OR (citizenid = ? AND title IN ('X80 Proto', 'Dominator'))", { OTHER, cid })
+    MySQL.query.await("DELETE FROM `pages_posts` WHERE citizenid = ? OR (citizenid = ? AND title = 'Tiling and bathroom fitting')", { OTHER, cid })
+    MySQL.query.await("DELETE FROM `marketplace_listings` WHERE citizenid = ? OR (citizenid = ? AND title IN ('Tornado, restored', 'Seminole, tow bar'))", { OTHER, cid })
 
-    pagesStore.insert(OTHER, '2018+ Sanchez',
-        'Looking for a 2018 or newer model Sanchez. I am willing to pay a fair price for the right bike.',
-        nil, nil, nil, '3105550123', nil, at(2026, 5, 23, 9, 10))
-    pagesStore.insert(OTHER, 'Banshee Detailing Service',
-        'Professional mobile car detailing. I come to you, full valet inside and out. Banshee in the photo is my own.',
-        nil, VEH .. 'banshee.webp', nil, '2135550192', 'mike.banshee@lsmail.com', at(2026, 5, 25, 14, 0))
-    pagesStore.insert(cid, 'Looking for a new job',
-        'I am looking for a new job in the field of software development. Reliable, experienced, references available.',
-        nil, nil, nil, '2135550148', nil, os.time())
+    pagesStore.insert(OTHER, 'Dog walking, Mirror Park',
+        'Two walks a day, small groups only, and a photo once they are back inside. Full for August, taking names for September.',
+        nil, nil, nil, '2135550739', nil, at(2026, 6, 4, 7, 45))
+    pagesStore.insert(OTHER, 'Locksmith, out of hours',
+        'Locked out, lost keys, snapped cylinders. I cover the city and Sandy Shores overnight. Have ID that matches the address ready before I open anything.',
+        nil, nil, nil, '3105550205', nil, at(2026, 6, 8, 23, 20))
+    pagesStore.insert(OTHER, 'Piano lessons, beginners welcome',
+        'Half hour and hour slots at my place in Rockford Hills, weekday evenings. Children and adults. The first lesson is free so you can decide if it suits you.',
+        nil, nil, nil, '2135550478', nil, at(2026, 6, 11, 18, 5))
+    pagesStore.insert(OTHER, 'Paleto Bay Bakery, new hours',
+        'We open at six and shut when the shelves are empty, usually around two. Closed Mondays. Custom cakes need three days notice.',
+        nil, nil, nil, '3105550348', 'paletobakery@lsmail.com', at(2026, 6, 13, 6, 30))
+    pagesStore.insert(cid, 'Tiling and bathroom fitting',
+        'Twelve years on the tools. Wet rooms, splashbacks, regrouting, tile repairs. I quote in person and the quote is the price you pay.',
+        nil, nil, nil, '2135550107', nil, os.time())
 
-    mpStore.insert(OTHER, 'Mechanic tools — full set',
-        'Complete socket and wrench set, barely used. Selling as I am leaving the city. Can deliver locally.',
-        850, nil, nil, '2135550133', nil, at(2026, 5, 20, 10, 0))
-    mpStore.insert(OTHER, 'Looking for a Faggio',
-        'In the market for a cheap runaround scooter. Condition is not important as long as it runs — cash waiting.',
-        nil, nil, nil, '3105550160', nil, at(2026, 5, 21, 10, 0))
-    mpStore.insert(cid, 'Dominator',
-        'Vapid Dominator GTX, well maintained with a recent full service. Serious buyers only.',
-        38500, VEH .. 'dominator.webp', nil, '2135550174', nil, at(2026, 5, 22, 10, 0))
-    mpStore.insert(OTHER, 'Sanchez, 2018 Model',
-        'Selling my 2018 Sanchez. It has low mileage and is in perfect condition. Price is negotiable.',
-        1999, VEH .. 'sanchez.webp', nil, '3105550123', nil, at(2026, 5, 24, 10, 0))
-    mpStore.insert(OTHER, 'Banshee',
-        'Selling my 2020 model Bravado Banshee, low mileage and in perfect condition. Price is negotiable.',
-        74999, VEH .. 'banshee.webp', nil, '2135550192', 'mike.banshee@lsmail.com', at(2026, 5, 25, 10, 52))
-    mpStore.insert(cid, 'X80 Proto',
-        'X80 Proto, white with red details. Has been driven carefully and is in mint condition.',
-        2000000, VEH .. 'x80proto.webp', nil, '2135550148', nil, os.time())
+    mpStore.insert(OTHER, 'Alloys and tyres',
+        'Eighteens off a Sultan, so they will go on anything with that stud pattern. Most of the tread is left and one wheel has a kerb mark on the lip. Collection only, they are heavier than they look.',
+        900, nil, nil, '2135550362', nil, at(2026, 6, 2, 16, 40))
+    mpStore.insert(OTHER, 'Wanted: Sentinel',
+        'After an Ubermacht Sentinel, any year, running or not. Ring me rather than message, I miss messages. If it is off the road, tell me what is wrong with it and I will still come and look.',
+        nil, nil, nil, '3105550557', nil, at(2026, 6, 5, 13, 15))
+    mpStore.insert(cid, 'Seminole, tow bar',
+        'This Canis has been the family car, so expect crumbs in the back. Tow bar and roof bars stay with it. It is due a service in about six hundred miles and I would rather price that in than pretend otherwise.',
+        11200, VEH .. 'seminole.webp', nil, '2135550107', nil, at(2026, 6, 7, 9, 5))
+    mpStore.insert(OTHER, 'Carbon RS, tidy',
+        'Nagasaki, chain and sprockets done last month and there is fresh rubber on the rear. A spare fairing in black comes with it, plus the original exhaust in a box. No test rides without a licence, sorry.',
+        14400, VEH .. 'carbonrs.webp', nil, '3105550194', nil, at(2026, 6, 9, 20, 30))
+    mpStore.insert(OTHER, 'Gauntlet, will swap',
+        'Bravado, supercharged, coilovers, cage in the back. My situation has changed, so I would look at a part exchange against anything with four doors and a boot. Email is better than ringing, I am underground most of the day.',
+        28750, VEH .. 'gauntlet.webp', nil, '2135550416', 'r.okafor@lsmail.com', at(2026, 6, 11, 11, 50))
+    mpStore.insert(OTHER, 'Warrener, project',
+        'The Vulcar turns over and will not fire. I have run out of both patience and driveway. Interior is complete and all the glass is good. Bring a trailer, it is not driving out of here.',
+        3200, VEH .. 'warrener.webp', nil, '2135550623', nil, at(2026, 6, 12, 22, 10))
+    mpStore.insert(OTHER, 'Futo, cheap to run',
+        'Daily drove this Karin for three years and it never once left me stranded. The rear arch on the driver side has started bubbling, which is why it is priced where it is. Viewings at the Sandy Shores yard.',
+        9500, VEH .. 'futo.webp', nil, '3105550281', nil, at(2026, 6, 14, 12, 25))
+    mpStore.insert(cid, 'Tornado, restored',
+        'Two years of evenings went into this Declasse. New loom, rebuilt carb, and the paint is a respray in the colour it left the factory in. Every receipt is in a folder and you can read the lot before you decide anything.',
+        42000, VEH .. 'tornado.webp', nil, '2135550107', nil, os.time())
 
     print('^2[sd-phone]^0 seeded Yellow Pages + Marketplace dev entries')
     TriggerClientEvent('sd-phone:client:notify', source, {

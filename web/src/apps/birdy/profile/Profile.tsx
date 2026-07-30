@@ -19,15 +19,15 @@ type Tab = 'posts' | 'replies' | 'media' | 'likes';
 const TABS: Tab[] = ['posts', 'replies', 'media', 'likes'];
 
 function tabLabels(): Record<Tab, string> {
-    return { posts: t('birdy.posts', 'Posts'), replies: t('birdy.replies', 'Replies'), media: t('birdy.media', 'Media'), likes: t('birdy.likes', 'Likes') };
+    return { posts: t('squawk.posts', 'Posts'), replies: t('squawk.replies', 'Replies'), media: t('squawk.media', 'Media'), likes: t('squawk.likes', 'Likes') };
 }
 
 function tabEmptyStates(): Record<Tab, { icon: React.ReactNode; title: string; subtitle: string }> {
     return {
-        posts:   { icon: <BirdyBird className="h-7 w-7" />,       title: t('birdy.noPostsYet', 'No posts yet'),   subtitle: t('birdy.postsEmptySubtitle', 'Posts will show up here.') },
-        replies: { icon: <MessageCircle className="h-7 w-7" strokeWidth={1.8} />, title: t('birdy.noRepliesYet', 'No replies yet'), subtitle: t('birdy.repliesEmptySubtitle', 'Replies will show up here.') },
-        media:   { icon: <ImageIcon className="h-7 w-7" strokeWidth={1.8} />,     title: t('birdy.noMediaYet', 'No media yet'),   subtitle: t('birdy.mediaEmptySubtitle', 'Photos and videos will show up here.') },
-        likes:   { icon: <Heart className="h-7 w-7" strokeWidth={1.8} />,         title: t('birdy.noLikesYet', 'No likes yet'),   subtitle: t('birdy.likesEmptySubtitle', 'Liked posts will show up here.') },
+        posts:   { icon: <BirdyBird className="h-7 w-7" />,       title: t('squawk.noPostsYet', 'No posts yet'),   subtitle: t('squawk.postsEmptySubtitle', 'Posts will show up here.') },
+        replies: { icon: <MessageCircle className="h-7 w-7" strokeWidth={1.8} />, title: t('squawk.noRepliesYet', 'No replies yet'), subtitle: t('squawk.repliesEmptySubtitle', 'Replies will show up here.') },
+        media:   { icon: <ImageIcon className="h-7 w-7" strokeWidth={1.8} />,     title: t('squawk.noMediaYet', 'No media yet'),   subtitle: t('squawk.mediaEmptySubtitle', 'Photos and videos will show up here.') },
+        likes:   { icon: <Heart className="h-7 w-7" strokeWidth={1.8} />,         title: t('squawk.noLikesYet', 'No likes yet'),   subtitle: t('squawk.likesEmptySubtitle', 'Liked posts will show up here.') },
     };
 }
 
@@ -93,7 +93,7 @@ export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onTog
                                     <button
                                         type="button"
                                         onClick={() => onMessage(displayHandle)}
-                                        aria-label={t('birdy.message', 'Message')}
+                                        aria-label={t('squawk.message', 'Message')}
                                         className="flex h-[38px] w-[38px] items-center justify-center rounded-full active:opacity-80"
                                         style={{ border: `1.5px solid ${BLUE}`, color: BLUE }}
                                     >
@@ -113,8 +113,8 @@ export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onTog
                                         : { background: BLUE, color: '#fff' }}
                                 >
                                     {following
-                                        ? (followHover ? t('birdy.unfollow', 'Unfollow') : t('birdy.following', 'Following'))
-                                        : t('birdy.follow', 'Follow')}
+                                        ? (followHover ? t('squawk.unfollow', 'Unfollow') : t('squawk.following', 'Following'))
+                                        : t('squawk.follow', 'Follow')}
                                 </button>
                             </div>
                         ) : (
@@ -124,7 +124,7 @@ export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onTog
                                 className="mt-2 rounded-full px-5 py-2 text-[15px] font-bold transition-colors hover:bg-[#1d9bf0]/10 active:bg-[#1d9bf0]/15"
                                 style={{ border: `1.5px solid ${BLUE}`, color: BLUE }}
                             >
-                                {t('birdy.editProfileButton', 'Edit Profile')}
+                                {t('squawk.editProfileButton', 'Edit Profile')}
                             </button>
                         )}
                     </div>
@@ -153,16 +153,16 @@ export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onTog
                     {profile?.joined ? (
                         <div className="mt-2 flex items-center gap-1.5 text-[15px]" style={{ color: META }}>
                             <CalendarDays className="h-[18px] w-[18px]" strokeWidth={2} />
-                            {t('birdy.joined', 'Member since {date}', { date: profile.joined })}
+                            {t('squawk.joined', 'Member since {date}', { date: profile.joined })}
                         </div>
                     ) : null}
 
                     <div className="mt-2 flex gap-4 text-[16px]" style={{ color: META }}>
                         <button type="button" onClick={() => setFollowView('following')} className="hover:underline">
-                            <span className="font-bold tabular-nums text-black">{compactCount(profile?.following ?? 0)}</span> {t('birdy.following', 'Following')}
+                            <span className="font-bold tabular-nums text-black">{compactCount(profile?.following ?? 0)}</span> {t('squawk.following', 'Following')}
                         </button>
                         <button type="button" onClick={() => setFollowView('followers')} className="hover:underline">
-                            <span className="font-bold tabular-nums text-black">{compactCount(profile?.followers ?? 0)}</span> {t('birdy.followers', 'Followers')}
+                            <span className="font-bold tabular-nums text-black">{compactCount(profile?.followers ?? 0)}</span> {t('squawk.followers', 'Followers')}
                         </button>
                     </div>
                 </div>
@@ -186,8 +186,8 @@ export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onTog
                     <EmptyState
                         icon={<Lock className="h-7 w-7" strokeWidth={1.8} />}
                         circleClassName="bg-black/[0.06] text-black/35"
-                        title={t('birdy.protectedTitle', 'These posts are protected')}
-                        subtitle={t('birdy.protectedSubtitle', 'Only followers can see {name}’s posts.', { name })}
+                        title={t('squawk.postsArePrivate', 'This account keeps its posts private')}
+                        subtitle={t('squawk.protectedSubtitle', 'Only followers can see {name}’s posts.', { name })}
                         subtitleClassName="text-[#536471]"
                     />
                 ) : posts.length === 0 ? (
@@ -216,7 +216,7 @@ export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onTog
             <button
                 type="button"
                 onClick={onBack}
-                aria-label={t('birdy.back', 'Back')}
+                aria-label={t('squawk.back', 'Back')}
                 className="absolute left-3 top-[62px] z-10 flex h-9 w-9 items-center justify-center rounded-full text-white"
                 style={{ background: 'rgba(0,0,0,0.55)' }}
             >

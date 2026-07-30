@@ -70,9 +70,9 @@ end
 ---clip can never leave the watchdog hunting for one the player was never given.
 ---@return { dict: string, anim: string, blendIn: number, blendOut: number }
 local function currentClip()
-    -- One camera pose covers both lenses, as lb-phone's animations.lua does. The native cell cam
-    -- swapped pose on flip, but no outward-facing clip outside that native is verified to exist.
-    -- Landscape is the exception: it turns the phone on its side, so it gets its own clip.
+    -- One camera pose covers both lenses: the native cell cam swapped pose on flip, but no
+    -- outward-facing clip outside that native is verified to exist. Landscape is the exception:
+    -- it turns the phone on its side, so it gets its own clip.
     local action = 'default'
     if cameraOn and phonecam.active() then
         action = landscape and 'landscape' or 'camera'

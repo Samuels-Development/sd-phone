@@ -11,7 +11,7 @@ local PASSWORD = 'cherry123'
 ---@type table<string, string[]> Name pools per gender.
 local NAMES = {
     Man       = { 'Marcus', 'Diego', 'Tyrone', 'Vince', 'Lukas', 'Andre', 'Nikolai', 'Trevor', 'Dante', 'Jaxon' },
-    Woman     = { 'Klara', 'Sofia', 'Mia', 'Aaliyah', 'Ivy', 'Nova', 'Jess', 'Lena', 'Bianca', 'Rosa' },
+    Woman     = { 'Noemi', 'Sofia', 'Mia', 'Aaliyah', 'Ivy', 'Nova', 'Jess', 'Lena', 'Bianca', 'Rosa' },
     Nonbinary = { 'Alex', 'Sam', 'Riley', 'Jordan', 'Quinn', 'Charlie', 'Skyler', 'Rowan', 'Kai', 'Emery' },
 }
 ---@type string[] Weighted gender mix: mostly men/women, a real share of nonbinary profiles.

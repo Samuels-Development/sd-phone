@@ -30,7 +30,7 @@ const DEV_OVERVIEW: BankOverview = {
     balance: ACCOUNTS[0].balance,
     cash:    1_240,
     name:    'Sam Nicol',
-    number:  '2051189847',
+    number:  '2135550100',
     transactions: TRANSACTIONS
         .filter(t => t.accountId === ACCOUNTS[0].id)
         .map(t => ({ id: t.id, merchant: t.merchant, amount: t.amount, category: t.category, date: t.date, pending: t.pending, peerNumber: t.peerNumber, peerInitials: t.peerInitials, peerColor: t.peerColor })),

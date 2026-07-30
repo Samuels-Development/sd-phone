@@ -41,11 +41,11 @@ export function FaceUnlockPage({ onBack }: { onBack: () => void }) {
     }
 
     return (
-        <SubPage title={t('settings.faceUnlockPasscode', 'Face Unlock & Passcode')} backLabel={t('settings.settings', 'Settings')} onBack={onBack} sub={subNode}>
+        <SubPage title={t('settings.faceScanPasscode', 'Face Scan & Passcode')} backLabel={t('settings.settings', 'Settings')} onBack={onBack} sub={subNode}>
 
-            <ListGroup header={t('settings.faceUnlock', 'Face Unlock')}>
+            <ListGroup header={t('settings.faceScan', 'Face Scan')}>
                 <ActionRow
-                    label={faceId ? t('settings.disableFaceUnlock', 'Disable Face Unlock') : t('settings.enableFaceUnlock', 'Enable Face Unlock')}
+                    label={faceId ? t('settings.disableFaceScan', 'Turn Off Face Scan') : t('settings.enableFaceScan', 'Turn On Face Scan')}
                     color={faceId ? 'red' : 'default'}
                     onPress={toggleFace}
                 />

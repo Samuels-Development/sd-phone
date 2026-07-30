@@ -417,7 +417,7 @@ function LanguageStage({
             <div className="mt-6 flex shrink-0 items-center justify-center gap-2.5 pb-2">
                 <Globe className="h-[24px] w-[24px] text-ios-gray" strokeWidth={2.2} />
                 <span className="text-[24px] font-semibold text-ios-gray">
-                    {t('setup.selectYourLanguage', 'Select your language')}
+                    {t('setup.chooseLanguage', 'Choose a language')}
                 </span>
             </div>
 
@@ -502,14 +502,14 @@ function PinStage({
             >
                 <div className="flex flex-col items-center">
                     <div className="mt-4 text-[37px] font-bold tracking-tight text-black dark:text-white">
-                        {confirming ? t('setup.confirmYourPin', 'Confirm your pin') : t('setup.setAPin', 'Set a pin')}
+                        {confirming ? t('setup.confirmPasscode', 'Confirm your passcode') : t('setup.choosePasscode', 'Choose a passcode')}
                     </div>
                     <p className="mt-2.5 max-w-[300px] text-center text-[18px] leading-snug text-ios-gray">
                         {error
-                            ? t('setup.pinsDidntMatch', 'Pins didn’t match. Try again.')
+                            ? t('setup.passcodesDidntMatch', 'Those did not match. Try again.')
                             : confirming
-                                ? t('setup.reenterPin', 'Re-enter your pin to confirm it.')
-                                : t('setup.pinDescription', 'A pin code is used to secure your device and is required to unlock it.')}
+                                ? t('setup.reenterPasscode', 'Enter it once more so we know it matches.')
+                                : t('setup.passcodeDescription', 'Your passcode keeps the phone locked until you enter it.')}
                     </p>
                 </div>
 
@@ -568,17 +568,17 @@ function FaceStage({
             <div className="flex flex-col items-center pt-2">
                 <ScanFace className="setup-icon-grad h-[68px] w-[68px]" strokeWidth={2.1} />
                 <div className="mt-4 text-[37px] font-bold tracking-tight text-black dark:text-white">
-                    {t('setup.faceUnlock', 'Face Unlock')}
+                    {t('setup.faceScan', 'Face Scan')}
                 </div>
                 <p className="mt-2.5 max-w-[300px] text-center text-[18px] leading-snug text-ios-gray">
-                    {t('setup.faceUnlockDescription', 'Set up Face Unlock to easily open your phone without entering your pin code.')}
+                    {t('setup.faceScanDescription', 'Open the phone by looking at it, instead of typing your passcode every time.')}
                 </p>
                 <p className="mt-3 max-w-[300px] text-center text-[18px] leading-snug text-ios-gray">
-                    {t('setup.faceUnlockObstructed', 'Face Unlock only works when your face is not obstructed.')}
+                    {t('setup.faceScanObstructed', 'Nothing can be covering your face when you look at the screen.')}
                 </p>
                 {!hasPin && (
                     <p className="mt-3 max-w-[300px] text-center text-[15px] leading-snug text-ios-orange">
-                        {t('setup.faceUnlockNeedsPin', 'Face Unlock requires a passcode as a backup. You’ll be asked to set one first.')}
+                        {t('setup.faceScanNeedsPasscode', 'A passcode has to exist as the fallback, so that comes first.')}
                     </p>
                 )}
             </div>
@@ -591,7 +591,7 @@ function FaceStage({
                     onClick={hasPin ? onEnable : onNeedPin}
                     className="w-full rounded-[18px] bg-ios-blue py-[17px] text-[19px] font-semibold text-white shadow-[0_6px_18px_rgba(10,132,255,0.3)] transition-transform active:scale-[0.98] active:opacity-90"
                 >
-                    {hasPin ? t('setup.enableFaceUnlock', 'Enable Face Unlock') : t('setup.setPasscodeFirst', 'Set Passcode First')}
+                    {hasPin ? t('setup.enableFaceScan', 'Turn On Face Scan') : t('setup.setPasscodeFirst', 'Passcode Needed First')}
                 </button>
                 <button
                     type="button"
@@ -621,7 +621,7 @@ function ThemeStage({
                     {t('setup.theme', 'Theme')}
                 </div>
                 <p className="mt-2.5 max-w-[300px] text-center text-[18px] leading-snug text-ios-gray">
-                    {t('setup.themeDescription', 'Select a dark or light theme for your device')}
+                    {t('setup.themeDescription', 'Light through the day, dark for everything else.')}
                 </p>
             </div>
 
@@ -843,7 +843,7 @@ function OverviewStage({
                 <div className="overflow-hidden rounded-[16px] bg-black/[0.05] dark:bg-white/[0.06]">
                     <OverviewRow icon={Globe}     label={t('setup.language', 'Language')}    value={language || 'English'} />
                     <OverviewRow icon={Lock}      label={t('setup.passcode', 'Passcode')}    value={pin ? t('setup.on', 'On') : t('setup.off', 'Off')} />
-                    <OverviewRow icon={ScanFace}  label={t('setup.faceUnlock', 'Face Unlock')} value={faceUnlock ? t('setup.on', 'On') : t('setup.off', 'Off')} />
+                    <OverviewRow icon={ScanFace}  label={t('setup.faceScan', 'Face Scan')}   value={faceUnlock ? t('setup.on', 'On') : t('setup.off', 'Off')} />
                     <OverviewRow icon={Palette}   label={t('setup.theme', 'Theme')}       value={theme === 'dark' ? t('setup.dark', 'Dark') : t('setup.light', 'Light')} />
                     <OverviewRow icon={ImageIcon} label={t('setup.wallpaper', 'Wallpaper')}   thumb={wallpaperSrc} last />
                 </div>

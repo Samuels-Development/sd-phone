@@ -66,7 +66,7 @@ export function WallpaperPage({ onBack }: { onBack: () => void }) {
                             className="relative flex w-full items-center px-4 py-3.5 active:bg-black/5 dark:active:bg-white/5"
                         >
                             <span className="flex-1 text-left text-[17px] text-black dark:text-white">
-                                {t('settings.chooseNewWallpaper', 'Pick a Wallpaper')}
+                                {t('settings.pickAWallpaper', 'Pick a Wallpaper')}
                             </span>
                             <ChevronRight className="h-[17px] w-[17px] shrink-0 text-ios-gray3" strokeWidth={2.5} />
                         </button>

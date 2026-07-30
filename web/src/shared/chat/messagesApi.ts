@@ -61,7 +61,7 @@ export async function loadMessages(): Promise<MessagesState> {
         return {
             conversations: CONVERSATIONS.map(cloneConv),
             contacts:      Object.values(CONTACTS),
-            myNumber:      '2051189847',
+            myNumber:      '2135550100',
             myName:        ME.name,
         };
     }

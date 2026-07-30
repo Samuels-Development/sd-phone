@@ -73,21 +73,22 @@ export interface Match {
 }
 
 export const PROFILES: SwipeProfile[] = [
-    { id: 's1', name: 'Klara',   age: 25, gender: 'Woman',     bio: 'Member of Lost MC, looking for a good time.',           photos: [bg6, bg11, bg9], likesYou: true },
-    { id: 's2', name: 'Sofia',   age: 23, gender: 'Woman',     bio: 'Vinewood hopeful. Buy me a coffee at the Bean Machine?', photos: [bg9, bg3] },
-    { id: 's3', name: 'Mia',     age: 27, gender: 'Woman',     bio: "Mechanic by day. Don't ask about the nights.",           photos: [bg11, bg7], likesYou: true },
-    { id: 's4', name: 'Aaliyah', age: 24, gender: 'Woman',     bio: "Paramedic — I'll fix your broken heart. Literally.",      photos: [bg5, bg12] },
-    { id: 's5', name: 'Ivy',     age: 22, gender: 'Nonbinary', bio: 'Here for the views and the vibes. Mostly the views.',      photos: [bg3, bg8] },
-    { id: 's6', name: 'Nova',    age: 26, gender: 'Nonbinary', bio: 'Spins records at the afterparties. Find me there.',        photos: [bg12, bg4], likesYou: true },
+    { id: 'd1', name: 'Marisol', age: 31, gender: 'Woman',     bio: 'Taco truck on Vespucci Beach. I close up at nine.',        photos: [bg9, bg4] },
+    { id: 'd2', name: 'Wren',    age: 24, gender: 'Nonbinary', bio: 'Thrift shops, cheap wine, long arguments about films.',    photos: [bg3, bg12], likesYou: true },
+    { id: 'd3', name: 'Theo',    age: 34, gender: 'Man',       bio: 'Tow truck nights. I have seen every road in this county.', photos: [bg7, bg10, bg5] },
+    { id: 'd4', name: 'Hana',    age: 27, gender: 'Woman',     bio: 'Two jobs, one dog. The dog gets my weekends.',             photos: [bg11, bg6], likesYou: true },
+    { id: 'd5', name: 'Ade',     age: 29, gender: 'Man',       bio: 'Five a side in Rancho on Thursdays. Bring boots.',         photos: [bg5, bg8], likesYou: true },
+    { id: 'd6', name: 'Sloane',  age: 26, gender: 'Woman',     bio: 'Paints murals in Mission Row. Currently up a ladder.',     photos: [bg12, bg9] },
+    { id: 'd7', name: 'Frankie', age: 22, gender: 'Nonbinary', bio: 'Skate park after dark. I will teach you, badly.',          photos: [bg8, bg3] },
 ];
 
 export const MY_PROFILE: MyProfile = {
-    name:         'James',
-    age:          25,
-    photos:       [bg4, bg8, bg10],
-    about:        "I'm a cool guy",
-    interestedIn: 'Women',
-    gender:       'Man',
+    name:         'Noor',
+    age:          29,
+    photos:       [bg10, bg4, bg6],
+    about:        'Nightshifts at the docks, so my mornings are free.',
+    interestedIn: 'Everyone',
+    gender:       'Woman',
     visible:      true,
 };
 
@@ -96,25 +97,25 @@ const MIN = 60_000;
 
 export const MATCHES: Match[] = [
     {
-        id: 'm1', loaded: true,
-        partner: { username: 'klara', name: 'Klara', age: 25, gender: 'Woman', photo: bg6, photos: [bg6, bg11, bg9], about: 'Member of Lost MC, looking for a good time.' },
+        id: 'c1', loaded: true,
+        partner: { username: 'marisol', name: 'Marisol', age: 31, gender: 'Woman', photo: bg9, photos: [bg9, bg4], about: 'Taco truck on Vespucci Beach. I close up at nine.' },
         messages: [
-            { id: 'k1', from: 'klara', body: 'hey, saw you ride a Bati too 👀', kind: 'text', ts: NOW - 32 * MIN, read: true },
-            { id: 'k2', from: 'me',    body: 'maybe. why, you racing?',         kind: 'text', ts: NOW - 28 * MIN, read: true },
-            { id: 'k3', from: 'klara', body: 'always. tonight?',                kind: 'text', ts: NOW - 27 * MIN, read: true },
-            { id: 'k4', from: 'me',    body: "i'm perfect, you look good!",     kind: 'text', ts: NOW - 20 * MIN, read: true },
+            { id: 'w1', from: 'marisol', body: 'we are parked by the pier until nine if you want food', kind: 'text', ts: NOW - 26 * MIN, read: true },
         ],
     },
     {
-        id: 'm2', loaded: true,
-        partner: { username: 'mia', name: 'Mia', age: 27, gender: 'Woman', photo: bg11, photos: [bg11, bg7], about: "Mechanic by day. Don't ask about the nights." },
+        id: 'c2', loaded: true,
+        partner: { username: 'theo', name: 'Theo', age: 34, gender: 'Man', photo: bg7, photos: [bg7, bg10, bg5], about: 'Tow truck nights. I have seen every road in this county.' },
         messages: [
-            { id: 'a1', from: 'mia', body: 'your car sounds rough, bring it by the shop', kind: 'text', ts: NOW - 130 * MIN, read: true },
+            { id: 'v1', from: 'theo', body: 'what does anyone do in this city at four in the morning', kind: 'text', ts: NOW - 212 * MIN, read: true },
+            { id: 'v2', from: 'me',   body: 'the diner on san andreas ave. best coffee at that hour',  kind: 'text', ts: NOW - 206 * MIN, read: true },
+            { id: 'v3', from: 'theo', body: 'is that the one with the broken sign',                    kind: 'text', ts: NOW - 178 * MIN, read: true },
+            { id: 'v4', from: 'me',   body: 'that is the one. i finish at three if you want to try it', kind: 'text', ts: NOW - 170 * MIN, read: true },
         ],
     },
     {
-        id: 'm3', loaded: true,
-        partner: { username: 'nova', name: 'Nova', age: 26, photo: bg12 },
+        id: 'c3', loaded: true,
+        partner: { username: 'sloane', name: 'Sloane', age: 26, photo: bg12 },
         messages: [],
     },
 ];

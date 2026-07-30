@@ -81,7 +81,7 @@ export function Comments({ post, me, comments, onBack, onSubmit, onToggleLike, o
                             onChange={e => setDraft(e.target.value)}
                             onKeyDown={e => { if (e.key === 'Enter') submit(); }}
                             onFocus={() => setEmojiOpen(false)}
-                            placeholder={gif ? t('photogram.addCaption', 'Add a caption…') : t('photogram.addCommentAs', 'Add Comment as {handle}', { handle: me.handle })}
+                            placeholder={gif ? t('photogram.addCaption', 'Add a caption…') : t('photogram.addCommentAs', 'Add a comment as {handle}…', { handle: me.handle })}
                             className="min-w-0 flex-1 bg-transparent text-[18px] text-black outline-none placeholder:text-[#9b9b9b]"
                         />
                         <button type="button" onClick={submit} disabled={!draft.trim() && !gif} className="shrink-0 text-[18px] font-semibold disabled:opacity-40" style={{ color: IG.blue }}>

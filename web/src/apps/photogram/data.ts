@@ -60,83 +60,85 @@ export interface DMsg  {
 }
 export interface DM    { id: string; user: User; messages: DMsg[] }
 
-const marcus: User = { id: 'marcus', handle: 'marcus', avatar: bg4,  verified: true };
-const tommy:  User = { id: 'tommy',  handle: 'tommy',  avatar: bg8 };
-const mango: User = { id: 'mango', handle: 'mango_ls', avatar: bg9 };
-const kai:   User = { id: 'kai',   handle: 'kai.exe', avatar: bg5, verified: true };
-const vee:   User = { id: 'vee',   handle: 'vee', avatar: bg12 };
+const nia:   User = { id: 'nia',   handle: 'nia.builds',  avatar: bg11, verified: true };
+const sasha: User = { id: 'sasha', handle: 'sashagrills', avatar: bg3,  verified: true };
+const hugo:  User = { id: 'hugo',  handle: 'hugoruiz',    avatar: bg9 };
+const tobi:  User = { id: 'tobi',  handle: 'tobi.k',      avatar: bg8 };
+const bea:   User = { id: 'bea',   handle: 'beatriz.p',   avatar: bg12 };
 
 export const STORIES: Story[] = [
-    { user: marcus, frames: [bg6, bg11] },
-    { user: kai,   frames: [bg5] },
-    { user: mango, frames: [bg9, bg3] },
-    { user: tommy,  seen: true, frames: [bg8] },
-    { user: vee,   seen: true, frames: [bg12] },
+    { user: sasha, frames: [bg3, bg10] },
+    { user: bea,   frames: [bg12, bg7, bg4] },
+    { user: nia,   frames: [bg11] },
+    { user: tobi,  seen: true, frames: [bg8] },
 ];
 
 export const POSTS: Post[] = [
     {
-        id: 'p1', user: marcus, location: 'Sandy Shores',
-        images: [bg6, bg11], caption: 'sunsets are the best', likes: 2, comments: 0, time: 'Yesterday',
+        id: 'p1', user: sasha, location: 'Vespucci Canals',
+        images: [bg3, bg10], caption: 'birria plate is back on the board, twelve bucks, cash only', likes: 96, comments: 7, time: '2 hours ago', saved: true,
     },
     {
-        id: 'p2', user: kai, location: 'Vinewood Hills',
-        images: [bg5], caption: 'view from the top 🌃', likes: 184, comments: 12, time: '3 hours ago', liked: true,
+        id: 'p2', user: nia, location: 'La Mesa',
+        images: [bg11], caption: 'coilovers went in this morning, wheels next week', likes: 312, comments: 19, time: '6 hours ago', liked: true,
     },
     {
-        id: 'p3', user: mango, location: 'Del Perro Pier',
-        images: [bg9, bg3, bg12], caption: 'beach day with the crew', likes: 57, comments: 4, time: '8 hours ago',
+        id: 'p3', user: bea, location: 'Mirror Park',
+        images: [bg12, bg7, bg4], caption: 'first week in the new place, still no curtains and the corner shop already knows my coffee order', likes: 41, comments: 3, time: '11 hours ago',
     },
     {
-        id: 'p4', user: tommy,
-        images: [bg8], caption: 'late night drive', likes: 23, comments: 1, time: '1 day ago',
+        id: 'p4', user: hugo,
+        images: [bg9], caption: 'rain came in off the water before i got the bike home', likes: 8, comments: 0, time: 'Yesterday',
+    },
+    {
+        id: 'p5', user: tobi, location: 'Vinewood',
+        images: [bg8, bg6], caption: 'rooftop until three, ears still going', likes: 154, comments: 5, time: '2 days ago',
     },
 ];
 
 export const COMMENTS: Record<string, Comment[]> = {
+    p1: [
+        { id: 'p1c1', user: hugo, text: 'saved me twice this week',  time: '90m', likes: 3 },
+        { id: 'p1c2', user: bea,  text: 'what time do you park up',  time: '55m' },
+    ],
     p2: [
-        { id: 'p2c1', user: tommy,  text: 'unreal 🔥',            time: '2h',  likes: 4 },
-        { id: 'p2c2', user: mango, text: 'where is this spot??', time: '1h'  },
-        { id: 'p2c3', user: vee,   text: 'so clean',             time: '45m', likes: 1 },
+        { id: 'p2c1', user: tobi,  text: 'sitting perfect 🔥',        time: '5h', likes: 6 },
+        { id: 'p2c2', user: sasha, text: 'who did the alignment',     time: '4h' },
+        { id: 'p2c3', user: hugo,  text: 'that ride height is illegal surely', time: '3h', likes: 2 },
     ],
     p3: [
-        { id: 'p3c1', user: kai,   text: 'wish i was there', time: '6h' },
-        { id: 'p3c2', user: marcus, text: 'great crew 🙌',     time: '5h' },
-    ],
-    p4: [
-        { id: 'p4c1', user: mango, text: 'night drives hit different', time: '20h' },
+        { id: 'p3c1', user: nia, text: 'curtains are overrated', time: '9h', likes: 1 },
     ],
 };
 
-export const EXPLORE: string[] = [bg11, bg6, bg9, bg5, bg3, bg12, bg8, bg4, bg7, bg10, bg6, bg9, bg11, bg5, bg3];
+export const EXPLORE: string[] = [bg7, bg5, bg12, bg10, bg4, bg9, bg6, bg3, bg11, bg8, bg5, bg7, bg10, bg12, bg6, bg4];
 
 export const ACTIVITY: Notif[] = [
-    { id: 'n1', user: kai,   text: 'liked your photo.',              time: '2h', thumb: bg5 },
-    { id: 'n2', user: tommy,  text: 'started following you.',         time: '5h', follow: true },
-    { id: 'n3', user: marcus, text: 'commented: "clean shot 🔥"',      time: '9h', thumb: bg6 },
-    { id: 'n4', user: mango, text: 'and 12 others liked your photo.', time: '1d', thumb: bg9 },
-    { id: 'n5', user: vee,   text: 'mentioned you in a comment.',     time: '2d', thumb: bg11 },
+    { id: 'n1', user: sasha, text: 'commented: "pull up saturday"',  time: '40m', thumb: bg5 },
+    { id: 'n2', user: bea,   text: 'started following you.',         time: '3h',  follow: true },
+    { id: 'n3', user: nia,   text: 'and 6 others liked your photo.', time: '8h',  thumb: bg7 },
+    { id: 'n4', user: tobi,  text: 'liked your photo.',              time: '2d',  thumb: bg10 },
 ];
 
 const dmNow = Date.now();
 const H = 3_600_000, M = 60_000;
 export const DMS: DM[] = [
-    { id: 'd1', user: marcus, messages: [
-        { id: 'm1', body: 'yo that last post went hard', at: '14:02',              ts: dmNow - 2 * H },
-        { id: 'm2', body: 'appreciate it 🙏',            at: '14:05', mine: true, ts: dmNow - 2 * H + 3 * M },
-        { id: 'm3', body: 'where was it shot?',          at: '14:06',              ts: dmNow - 2 * H + 4 * M },
-        { id: 'm4', body: '', at: '14:08', ts: dmNow - 2 * H + 6 * M, kind: 'post', post: { id: 'p3', image: bg9, author: 'mango_ls', avatar: bg9, caption: 'beach day with the crew — sun, sand and good vibes all afternoon long into the evening' } },
-        { id: 'm5', body: 'check this one out', at: '14:09', mine: true, ts: dmNow - 2 * H + 7 * M, kind: 'post', post: { id: 'p2', image: bg5, author: 'kai.exe', avatar: bg5, caption: 'view from the top 🌃' } },
+    { id: 'd1', user: nia, messages: [
+        { id: 'm1', body: 'what did you end up eating after the meet', at: '13:40', ts: dmNow - 3 * H },
+        { id: 'm2', body: '', at: '13:44', mine: true, ts: dmNow - 3 * H + 4 * M, kind: 'post', post: { id: 'p1', image: bg3, author: 'sashagrills', avatar: bg3, caption: 'birria plate is back on the board, twelve bucks, cash only' } },
+        { id: 'm3', body: 'the place bea moved into, did you see the photos', at: '13:51', ts: dmNow - 3 * H + 11 * M, kind: 'post', post: { id: 'p3', image: bg12, author: 'beatriz.p', avatar: bg12, caption: 'first week in the new place, still no curtains and the corner shop already knows my coffee order' } },
+        { id: 'm4', body: 'curtains still not up apparently', at: '13:53', mine: true, ts: dmNow - 3 * H + 13 * M },
     ] },
-    { id: 'd2', user: kai, messages: [
-        { id: 'k1', body: 'sending the edit over now', at: '11:20', mine: true, ts: dmNow - 5 * H },
+    { id: 'd2', user: sasha, messages: [
+        { id: 's1', body: 'on the canals till nine if you want a plate', at: '17:30',              ts: dmNow - 7 * H },
+        { id: 's2', body: 'be there straight after work',                at: '17:41', mine: true, ts: dmNow - 7 * H + 11 * M },
     ] },
-    { id: 'd3', user: mango, messages: [
-        { id: 'g1', body: 'beach day again this weekend?', at: 'Mon', ts: dmNow - 26 * H },
+    { id: 'd3', user: hugo, messages: [
+        { id: 'h1', body: 'bike is dry, that spot was worth the soaking', at: 'Mon', ts: dmNow - 29 * H },
     ] },
 ];
 
-export const MY_POSTS: string[] = [bg10, bg7, bg3, bg5, bg12, bg9];
+export const MY_POSTS: string[] = [bg5, bg7, bg10, bg4, bg6, bg9, bg12];
 
 export interface ProfileData { name: string; bio: string; avatar: string; private: boolean }
 

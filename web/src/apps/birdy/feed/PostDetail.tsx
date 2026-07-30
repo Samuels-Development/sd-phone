@@ -42,10 +42,10 @@ export function PostDetail({ post, me, onBack, onToggleLike, onToggleRepost, onT
     return (
         <div className="flex h-full flex-col" style={{ background: BG }}>
             <header className="flex shrink-0 items-center border-b border-black/10 px-3 py-2.5">
-                <button type="button" onClick={onBack} aria-label={t('birdy.back', 'Back')} style={{ color: BLUE }}>
+                <button type="button" onClick={onBack} aria-label={t('squawk.back', 'Back')} style={{ color: BLUE }}>
                     <ArrowLeft className="h-6 w-6" strokeWidth={2.4} />
                 </button>
-                <div className="flex-1 text-center text-[17px] font-bold text-black">{t('birdy.postTitle', 'Post')}</div>
+                <div className="flex-1 text-center text-[17px] font-bold text-black">{t('squawk.postTitle', 'Post')}</div>
                 <div className="w-6" aria-hidden />
             </header>
 
@@ -71,19 +71,19 @@ export function PostDetail({ post, me, onBack, onToggleLike, onToggleRepost, onT
                     <PostImages images={post.images} />
 
                     <div className="mt-3 text-[16px]" style={{ color: META }}>
-                        {absoluteTime(post.createdAt)} · <span className="font-semibold text-black">{compactCount(post.views ?? 0)}</span> {t('birdy.views', 'views')}
+                        {absoluteTime(post.createdAt)} · <span className="font-semibold text-black">{compactCount(post.views ?? 0)}</span> {t('squawk.views', 'views')}
                     </div>
                 </div>
 
                 <div className="mx-4 mt-4 text-[16px]" style={{ color: META }}>
-                    <span className="font-bold text-black">{compactCount(post.reposts)}</span> {t('birdy.reposts', 'Reposts')}
-                    <span className="ml-5 font-bold text-black">{compactCount(post.likes)}</span> {t('birdy.likes', 'Likes')}
+                    <span className="font-bold text-black">{compactCount(post.reposts)}</span> {t('squawk.reposts', 'Reposts')}
+                    <span className="ml-5 font-bold text-black">{compactCount(post.likes)}</span> {t('squawk.likes', 'Likes')}
                 </div>
 
                 <div className="mx-4 flex items-center justify-around py-4" style={{ color: META }}>
-                    <button type="button" aria-label={t('birdy.reply', 'Reply')} onClick={() => inputRef.current?.focus()} className="transition-transform active:scale-90"><MessageCircle className="h-[25px] w-[25px]" strokeWidth={1.8} /></button>
-                    <button type="button" aria-label={t('birdy.repost', 'Repost')} onClick={onToggleRepost} className="transition-transform active:scale-90" style={post.reposted ? { color: REPOST } : undefined}><Repeat2 className="h-[25px] w-[25px]" strokeWidth={1.8} /></button>
-                    <button type="button" aria-label={t('birdy.like', 'Like')} onClick={onToggleLike} className="transition-transform active:scale-90" style={post.liked ? { color: LIKE } : undefined}>
+                    <button type="button" aria-label={t('squawk.reply', 'Reply')} onClick={() => inputRef.current?.focus()} className="transition-transform active:scale-90"><MessageCircle className="h-[25px] w-[25px]" strokeWidth={1.8} /></button>
+                    <button type="button" aria-label={t('squawk.repost', 'Repost')} onClick={onToggleRepost} className="transition-transform active:scale-90" style={post.reposted ? { color: REPOST } : undefined}><Repeat2 className="h-[25px] w-[25px]" strokeWidth={1.8} /></button>
+                    <button type="button" aria-label={t('squawk.like', 'Like')} onClick={onToggleLike} className="transition-transform active:scale-90" style={post.liked ? { color: LIKE } : undefined}>
                         <HeartBurst liked={post.liked === true}>
                             <Heart className="h-[25px] w-[25px]" strokeWidth={1.8} fill={post.liked ? LIKE : 'none'} color={post.liked ? LIKE : 'currentColor'} />
                         </HeartBurst>
@@ -92,7 +92,7 @@ export function PostDetail({ post, me, onBack, onToggleLike, onToggleRepost, onT
 
                 {(post.thread?.length ?? 0) > 0 && (
                     <p className="border-t border-black/10 px-4 pt-3 text-[14px] font-semibold uppercase tracking-wide" style={{ color: META }}>
-                        {t('birdy.replies', 'Replies')}
+                        {t('squawk.replies', 'Replies')}
                     </p>
                 )}
                 {post.thread?.map(r => (
@@ -116,7 +116,7 @@ export function PostDetail({ post, me, onBack, onToggleLike, onToggleRepost, onT
                                     <button
                                         type="button"
                                         onClick={() => setMedia(prev => prev.filter((_, idx) => idx !== i))}
-                                        aria-label={t('birdy.removeImage', 'Remove image')}
+                                        aria-label={t('squawk.removeImage', 'Remove image')}
                                         className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 active:opacity-70"
                                     >
                                         <X className="h-[12px] w-[12px] text-white" strokeWidth={2.6} />
@@ -128,7 +128,7 @@ export function PostDetail({ post, me, onBack, onToggleLike, onToggleRepost, onT
                     <div className="flex items-center gap-1.5 px-3 py-2.5">
                         <button
                             type="button"
-                            aria-label={t('birdy.addImage', 'Add image')}
+                            aria-label={t('squawk.addImage', 'Add image')}
                             disabled={media.length >= MAX_REPLY_IMAGES}
                             onClick={() => setPicking('photo')}
                             className="flex h-10 w-9 shrink-0 items-center justify-center rounded-full active:bg-black/5 disabled:opacity-40"
@@ -137,7 +137,7 @@ export function PostDetail({ post, me, onBack, onToggleLike, onToggleRepost, onT
                         </button>
                         <button
                             type="button"
-                            aria-label={t('birdy.addGif', 'Add GIF')}
+                            aria-label={t('squawk.addGif', 'Add GIF')}
                             disabled={media.length >= MAX_REPLY_IMAGES}
                             onClick={() => setPicking('gif')}
                             className="mr-1 flex h-10 w-9 shrink-0 items-center justify-center rounded-full active:bg-black/5 disabled:opacity-40"
@@ -150,7 +150,7 @@ export function PostDetail({ post, me, onBack, onToggleLike, onToggleRepost, onT
                             onChange={e => setReply(e.target.value)}
                             onKeyDown={e => { if (e.key === 'Enter') sendReply(); }}
                             maxLength={MAX_POST_LENGTH}
-                            placeholder={t('birdy.postYourReply', 'Write a reply')}
+                            placeholder={t('squawk.writeAReply', 'Write a reply')}
                             className="min-w-0 flex-1 rounded-full px-4 py-2.5 text-[17px] text-black outline-none placeholder:text-[#657786]"
                             style={{ background: PILL, caretColor: BLUE }}
                         />
@@ -161,7 +161,7 @@ export function PostDetail({ post, me, onBack, onToggleLike, onToggleRepost, onT
                             className="shrink-0 rounded-full px-5 py-2.5 text-[16px] font-bold text-white disabled:opacity-50"
                             style={{ background: BLUE }}
                         >
-                            {t('birdy.reply', 'Reply')}
+                            {t('squawk.reply', 'Reply')}
                         </button>
                     </div>
                 </div>

@@ -22,7 +22,7 @@ export function Avatar({ size = 40, src }: { size?: number; src?: string }) {
 
 export function VerifiedBadge({ size = 16 }: { size?: number }) {
     return (
-        <svg viewBox="0 0 24 24" width={size} height={size} aria-label={t('birdy.verified', 'Verified')} className="shrink-0">
+        <svg viewBox="0 0 24 24" width={size} height={size} aria-label={t('squawk.verified', 'Verified')} className="shrink-0">
             <circle cx="12" cy="12" r="11" fill="#1d9bf0" />
             <path
                 d="M6.8 12.4 L10.2 15.7 L17.2 8.4"

@@ -115,7 +115,7 @@ export function Stocks({ onClose }: { onClose: () => void }) {
             <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-12 pt-3">
                 <div className="rounded-[22px] p-5 text-white" style={{ background: 'linear-gradient(135deg,#0a84ff 0%,#5e5ce6 100%)' }}>
                     <div className="flex items-center gap-2">
-                        <span className="text-[18px] font-semibold text-white/95">{t('stocks.estimatedBalance', 'Available Funds')}</span>
+                        <span className="text-[18px] font-semibold text-white/95">{t('stocks.availableFunds', 'Available Funds')}</span>
                         <button type="button" onClick={() => setHideBalance(v => !v)} aria-label={t('stocks.toggleBalance', 'Toggle balance')} className="text-white/90 active:opacity-60">
                             {hideBalance ? <EyeOff className="h-[22px] w-[22px]" /> : <Eye className="h-[22px] w-[22px]" />}
                         </button>

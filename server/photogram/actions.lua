@@ -498,7 +498,7 @@ function actions.post(src, payload)
     local row = store.getPost(acc.username, trim(payload.id))
     if not row then return fail('Post not found') end
     local author = store.getProfile(row.author)
-    if author and not canView(acc.username, author) then return fail('This account is private') end
+    if author and not canView(acc.username, author) then return fail('Profile is not public') end
     local comments = {}
     for _, c in ipairs(store.commentsFor(row.id, acc.username, 200)) do comments[#comments + 1] = serializeComment(c) end
     return ok({ post = serializePost(row), comments = comments })
@@ -591,7 +591,7 @@ function actions.toggleLike(src, payload)
     local slow = throttle(src, 'like'); if slow then return slow end
     local row = store.getPostRow(trim(payload.id))
     if not row then return fail('Post not found') end
-    if not canInteract(acc.username, row.author) then return fail('This account is private') end
+    if not canInteract(acc.username, row.author) then return fail('Profile is not public') end
 
     local nowLiked
     if store.isLiked(row.id, acc.username) then
@@ -618,7 +618,7 @@ function actions.toggleSave(src, payload)
     if not acc then return fail('Not signed in') end
     local row = store.getPostRow(trim(payload.id))
     if not row then return fail('Post not found') end
-    if not canInteract(acc.username, row.author) then return fail('This account is private') end
+    if not canInteract(acc.username, row.author) then return fail('Profile is not public') end
 
     local nowSaved
     if store.isSaved(row.id, acc.username) then
@@ -650,7 +650,7 @@ function actions.comments(src, payload)
     if not acc then return fail('Not signed in') end
     local row = store.getPostRow(trim(payload.postId))
     if not row then return fail('Post not found') end
-    if not canInteract(acc.username, row.author) then return fail('This account is private') end
+    if not canInteract(acc.username, row.author) then return fail('Profile is not public') end
     local out = {}
     for _, c in ipairs(store.commentsFor(row.id, acc.username, 200)) do out[#out + 1] = serializeComment(c) end
     return ok({ comments = out })
@@ -670,7 +670,7 @@ function actions.addComment(src, payload)
 
     local row = store.getPostRow(trim(payload.postId))
     if not row then return fail('Post not found') end
-    if not canInteract(acc.username, row.author) then return fail('This account is private') end
+    if not canInteract(acc.username, row.author) then return fail('Profile is not public') end
 
     local text   = trim(payload.text):sub(1, 1000)
     local gifUrl = trim(payload.gifUrl)
@@ -703,7 +703,7 @@ function actions.toggleCommentLike(src, payload)
     local row = store.getCommentRow(trim(payload.commentId))
     if not row then return fail('Comment not found') end
     local post = store.getPostRow(row.post_id)
-    if post and not canInteract(acc.username, post.author) then return fail('This account is private') end
+    if post and not canInteract(acc.username, post.author) then return fail('Profile is not public') end
 
     local nowLiked
     if store.isCommentLiked(row.id, acc.username) then

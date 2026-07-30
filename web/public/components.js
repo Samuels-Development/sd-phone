@@ -1,230 +1,302 @@
-if (!globalThis.componentsLoaded) {
-    globalThis.componentsLoaded = true;
+(function () {
+    'use strict';
 
-    globalThis.fetchNui = async (event, data, scriptName) => {
-        scriptName = scriptName || globalThis.resourceName;
+    if (globalThis.componentsLoaded) return;
 
-        if (scriptName !== globalThis.resourceName) {
-            console.warn(`The app ${globalThis.appName} (${globalThis.resourceName}) is fetching from another resource (${scriptName}), this may be blocked by FiveM.`);
-        }
+    const settingsListeners = new Set();
+    const nuiListeners      = new Map();
+    const quietEndpoints    = new Set();
 
-        try {
-            const response = await fetch(`https://${scriptName}/${event}`, {
-                method: 'post',
-                body: JSON.stringify(data)
-            });
+    let popUpInput = null;
 
-            if (!response.ok) throw new Error(`${response.status} - ${response.statusText}`);
+    function appLabel() {
+        return globalThis.appName || globalThis.appIdentifier || 'custom app';
+    }
 
-            return await response.json();
-        } catch (err) {
-            console.error(`Error fetching ${event} from ${scriptName}`, err);
-        }
-    };
-
-    function onNuiEvent(eventName, cb) {
-        window.addEventListener('message', (event) => {
-            if (event.data?.action === eventName) {
-                cb(event.data.data);
+    function notifyAll(listeners, value, label) {
+        listeners.forEach(function (listener) {
+            try {
+                listener(value);
+            } catch (err) {
+                console.error(`[${label}] listener threw:`, err);
             }
         });
     }
 
-    globalThis.useNuiEvent = onNuiEvent;
+    function callPhone(endpoint, payload) {
+        const bridge = globalThis.components;
 
-    let currentPopUpInputCb = null;
-
-    function setPopUp(data) {
-        currentPopUpInputCb = null;
-
-        if (!data?.buttons) return;
-
-        for (let i = 0; i < data.buttons.length; i++) {
-            if (data.buttons[i].cb) data.buttons[i].callbackId = i;
+        if (!bridge || typeof bridge.fetchPhone !== 'function') {
+            if (!quietEndpoints.has(endpoint)) {
+                quietEndpoints.add(endpoint);
+                console.warn(`[${appLabel()}] no phone bridge for "${endpoint}"; the call was dropped.`);
+            }
+            return Promise.resolve(undefined);
         }
 
-        if (data.input?.onChange) {
-            currentPopUpInputCb = data.input.onChange;
-            data.input.onChange = true;
+        try {
+            return Promise.resolve(bridge.fetchPhone(endpoint, payload));
+        } catch (err) {
+            console.error(`[${appLabel()}] phone call "${endpoint}" failed:`, err);
+            return Promise.resolve(undefined);
+        }
+    }
+
+    async function fetchNui(event, data, scriptName) {
+        const target = scriptName || globalThis.resourceName;
+
+        if (scriptName && scriptName !== globalThis.resourceName) {
+            console.warn(
+                `[${appLabel()}] app "${globalThis.appName}" belongs to resource "${globalThis.resourceName}" `
+                + `but addressed "${scriptName}". FiveM may block the request.`,
+            );
         }
 
-        globalThis.components.fetchPhone('SetPopUp', data).then((buttonId) => {
-            if (!data.buttons[buttonId]?.cb) return;
-            data.buttons[buttonId].cb();
-        });
-    }
-
-    function setContextMenu(data) {
-        if (!data?.buttons) return;
-
-        for (let i = 0; i < data.buttons.length; i++) {
-            if (data.buttons[i].cb) data.buttons[i].callbackId = i;
-        }
-
-        globalThis.components.fetchPhone('SetContextMenu', data).then((buttonId) => {
-            if (!data.buttons[buttonId]?.cb) return;
-            data.buttons[buttonId].cb();
-        });
-    }
-
-    function setContactModal(number) {
-        if (!number) return;
-
-        globalThis.components.fetchPhone('SetContactModal', number);
-    }
-
-    function useComponent(cb, data) {
-        if (!cb || !data?.component) return;
-
-        globalThis.components
-            .fetchPhone('ShowComponent', data)
-            .then((result) => {
-                cb(result);
-            })
-            .catch((err) => {
-                console.log(err);
-                cb(null);
+        try {
+            const response = await fetch(`https://${target}/${event}`, {
+                method:  'post',
+                headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+                body:    JSON.stringify(data === undefined ? {} : data),
             });
-    }
 
-    function selectGallery(data) {
-        useComponent(data.cb, { ...data, component: 'gallery' });
-    }
+            if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
 
-    function selectGIF(cb) {
-        useComponent(cb, { component: 'gif' });
-    }
-
-    function selectEmoji(cb) {
-        useComponent(cb, { component: 'emoji' });
-    }
-
-    function useCamera(cb, data) {
-        useComponent(cb, { ...data, component: 'camera' });
-    }
-
-    function colorPicker(cb, data) {
-        useComponent(cb, { ...data, customApp: true, component: 'colorpicker' });
-    }
-
-    function contactSelector(cb, data) {
-        useComponent(cb, { ...data, component: 'contactselector' });
-    }
-
-    function getSettings() {
-        return globalThis.components.fetchPhone('GetSettings');
-    }
-
-    function getLocale(path, format) {
-        return globalThis.components.fetchPhone('GetLocale', { path, format });
-    }
-
-    function sendNotification(data) {
-        data.app = globalThis.appIdentifier;
-        if (!data?.title && !data?.content) return console.log('Invalid notification data');
-        globalThis.components.fetchPhone('SendNotification', data);
-    }
-
-    let settingsListeners = [];
-
-    function onSettingsChange(cb) {
-        if (!cb) return;
-
-        settingsListeners.push(cb);
-    }
-
-    function removeSettingsChangeListener(cb) {
-        settingsListeners = settingsListeners.filter((listener) => listener !== cb);
-    }
-
-    globalThis.addEventListener('message', (event) => {
-        const data = event.data;
-        const type = data?.type;
-
-        if (type === 'settingsUpdated') {
-            settingsListeners.forEach((cb) => cb(data.settings));
-        } else if (type === 'popUpInputChanged') {
-            if (currentPopUpInputCb) currentPopUpInputCb(data.value);
+            return await response.json();
+        } catch (err) {
+            console.error(`[fetchNui] ${target}/${event} failed:`, err);
+            return undefined;
         }
+    }
+
+    function subscribeNuiEvent(eventName, cb) {
+        if (!eventName || typeof cb !== 'function') return function () {};
+
+        let subscribers = nuiListeners.get(eventName);
+        if (!subscribers) {
+            subscribers = new Set();
+            nuiListeners.set(eventName, subscribers);
+        }
+        subscribers.add(cb);
+
+        return function unsubscribe() {
+            subscribers.delete(cb);
+        };
+    }
+
+    function handleMessage(event) {
+        const message = event.data;
+        if (!message || typeof message !== 'object') return;
+
+        if (message.type === 'settingsUpdated') {
+            if (message.settings) globalThis.settings = message.settings;
+            notifyAll(settingsListeners, message.settings, 'onSettingsChange');
+        } else if (message.type === 'popUpInputChanged' && popUpInput) {
+            popUpInput(message.value);
+        }
+
+        if (typeof message.action === 'string') {
+            const subscribers = nuiListeners.get(message.action);
+            if (subscribers) notifyAll(subscribers, message.data, message.action);
+        }
+    }
+
+    function tagCallbacks(buttons) {
+        buttons.forEach(function (button, index) {
+            if (button && typeof button.cb === 'function') button.callbackId = index;
+        });
+    }
+
+    function runCallback(buttons, index) {
+        if (index === undefined || index === null) return;
+
+        const button = buttons[index];
+        if (button && typeof button.cb === 'function') button.cb();
+    }
+
+    function openPopUp(data) {
+        const buttons = data && data.buttons;
+        if (!Array.isArray(buttons)) return undefined;
+
+        tagCallbacks(buttons);
+
+        let payload = data;
+
+        if (data.input && typeof data.input.onChange === 'function') {
+            popUpInput = data.input.onChange;
+            payload = Object.assign({}, data, { input: Object.assign({}, data.input, { onChange: true }) });
+        } else {
+            popUpInput = null;
+        }
+
+        return callPhone('SetPopUp', payload).then(function (index) {
+            runCallback(buttons, index);
+        });
+    }
+
+    function openContextMenu(data) {
+        const buttons = data && data.buttons;
+        if (!Array.isArray(buttons)) return undefined;
+
+        tagCallbacks(buttons);
+
+        return callPhone('SetContextMenu', data).then(function (index) {
+            runCallback(buttons, index);
+        });
+    }
+
+    function openContactModal(number) {
+        return callPhone('SetContactModal', number);
+    }
+
+    function showComponent(cb, data) {
+        const done = typeof cb === 'function' ? cb : null;
+
+        return callPhone('ShowComponent', data).then(
+            function (result) {
+                if (done) done(result === undefined ? null : result);
+            },
+            function (err) {
+                console.error(`[useComponent] "${data && data.component}" failed:`, err);
+                if (done) done(null);
+            },
+        );
+    }
+
+    function pickFromGallery(data) {
+        const options = Object.assign({}, data);
+        const cb = options.cb;
+        delete options.cb;
+
+        return showComponent(cb, Object.assign(options, { component: 'gallery' }));
+    }
+
+    function pickGif(cb) {
+        return showComponent(cb, { component: 'gif' });
+    }
+
+    function pickEmoji(cb) {
+        return showComponent(cb, { component: 'emoji' });
+    }
+
+    function openCamera(cb, data) {
+        return showComponent(cb, Object.assign({}, data, { component: 'camera' }));
+    }
+
+    function pickContact(cb, data) {
+        return showComponent(cb, Object.assign({}, data, { component: 'contactselector' }));
+    }
+
+    function pickColour(cb, data) {
+        return showComponent(cb, Object.assign({}, data, { component: 'colorpicker', customApp: true }));
+    }
+
+    function readSettings() {
+        return callPhone('GetSettings');
+    }
+
+    function readLocale(path, format) {
+        return callPhone('GetLocale', { path: path, format: format });
+    }
+
+    function pushNotification(data) {
+        if (!data || (!data.title && !data.content)) {
+            console.error('[sendNotification] invalid notification data: a title or content is required.', data);
+            return undefined;
+        }
+
+        return callPhone('SendNotification', Object.assign({}, data, { app: globalThis.appIdentifier }));
+    }
+
+    function watchSettings(cb) {
+        if (typeof cb !== 'function') return;
+        settingsListeners.add(cb);
+    }
+
+    function unwatchSettings(cb) {
+        settingsListeners.delete(cb);
+    }
+
+    function captureKeyboard(state) {
+        return callPhone('toggleInput', !!state);
+    }
+
+    function startCall(data) {
+        return callPhone('CreateCall', data);
+    }
+
+    function viewMedia(data) {
+        return callPhone('OpenMedia', typeof data === 'string' ? { src: data } : data);
+    }
+
+    const API = {
+        SetPopUp:                     openPopUp,
+        SetContextMenu:               openContextMenu,
+        SetContactModal:              openContactModal,
+        UseComponent:                 showComponent,
+        SelectGallery:                pickFromGallery,
+        SelectGIF:                    pickGif,
+        SelectEmoji:                  pickEmoji,
+        UseCamera:                    openCamera,
+        ColorPicker:                  pickColour,
+        ContactSelector:              pickContact,
+        GetSettings:                  readSettings,
+        GetLocale:                    readLocale,
+        SendNotification:             pushNotification,
+        OnSettingsChange:             watchSettings,
+        RemoveSettingsChangeListener: unwatchSettings,
+        ToggleInput:                  captureKeyboard,
+        CreateCall:                   startCall,
+        OpenMedia:                    viewMedia,
+    };
+
+    Object.keys(API).forEach(function (name) {
+        globalThis[name] = API[name];
+        globalThis[name.charAt(0).toLowerCase() + name.slice(1)] = API[name];
     });
 
-    function toggleInput(toggle) {
-        globalThis.components.fetchPhone('toggleInput', toggle);
+    globalThis.selectGif   = API.SelectGIF;
+    globalThis.fetchNui    = fetchNui;
+    globalThis.onNuiEvent  = subscribeNuiEvent;
+    globalThis.useNuiEvent = subscribeNuiEvent;
+
+    globalThis.addEventListener('message', handleMessage);
+
+    const boundFields = new WeakSet();
+
+    function onFieldFocus() {
+        captureKeyboard(true);
     }
 
-    let addedHandlers = [];
+    function onFieldBlur() {
+        captureKeyboard(false);
+    }
 
-    function refreshInputs(inputs) {
-        inputs.forEach((input) => {
-            if (input.type === 'range') return;
-            if (addedHandlers.includes(input)) return;
+    function bindField(field) {
+        if (field.type === 'range') return;
+        if (boundFields.has(field)) return;
 
-            addedHandlers.push(input);
-            input.addEventListener('focus', () => toggleInput(true));
-            input.addEventListener('blur', () => toggleInput(false));
+        boundFields.add(field);
+        field.addEventListener('focus', onFieldFocus);
+        field.addEventListener('blur', onFieldBlur);
+    }
+
+    function bindFieldsWithin(node) {
+        if (!node || node.nodeType !== 1) return;
+        if (node.matches('input, textarea')) bindField(node);
+        node.querySelectorAll('input, textarea').forEach(bindField);
+    }
+
+    const appRoot = document.body || document.documentElement;
+
+    bindFieldsWithin(appRoot);
+
+    new MutationObserver(function (records) {
+        records.forEach(function (record) {
+            record.addedNodes.forEach(bindFieldsWithin);
         });
-    }
+    }).observe(appRoot, { childList: true, subtree: true });
 
-    refreshInputs(document.querySelectorAll('input, textarea'));
-
-    const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-            mutation.addedNodes.forEach((node) => {
-                if (node.childNodes && node.childNodes.length > 0) refreshInputs(node.querySelectorAll('input, textarea'));
-                if (node.tagName === 'INPUT' || node.tagName === 'TEXTAREA') refreshInputs([node]);
-            });
-        });
-    });
-
-    observer.observe(document.body, { childList: true, subtree: true });
-
-    function createCall(data) {
-        globalThis.components.fetchPhone('CreateCall', data);
-    }
-
-    function openMedia(data) {
-        globalThis.components.fetchPhone('OpenMedia', typeof data === 'string' ? { src: data } : data);
-    }
-
-    globalThis.SetPopUp = setPopUp;
-    globalThis.SetContextMenu = setContextMenu;
-    globalThis.SetContactModal = setContactModal;
-    globalThis.UseComponent = useComponent;
-    globalThis.SelectGallery = selectGallery;
-    globalThis.SelectGIF = selectGIF;
-    globalThis.SelectEmoji = selectEmoji;
-    globalThis.UseCamera = useCamera;
-    globalThis.ColorPicker = colorPicker;
-    globalThis.ContactSelector = contactSelector;
-    globalThis.GetSettings = getSettings;
-    globalThis.GetLocale = getLocale;
-    globalThis.SendNotification = sendNotification;
-    globalThis.OnSettingsChange = onSettingsChange;
-    globalThis.RemoveSettingsChangeListener = removeSettingsChangeListener;
-    globalThis.ToggleInput = toggleInput;
-    globalThis.CreateCall = createCall;
-    globalThis.OpenMedia = openMedia;
-
-    globalThis.setPopUp = setPopUp;
-    globalThis.setContextMenu = setContextMenu;
-    globalThis.setContactModal = setContactModal;
-    globalThis.useComponent = useComponent;
-    globalThis.selectGallery = selectGallery;
-    globalThis.selectGIF = selectGIF;
-    globalThis.selectGif = selectGIF;
-    globalThis.selectEmoji = selectEmoji;
-    globalThis.useCamera = useCamera;
-    globalThis.colorPicker = colorPicker;
-    globalThis.contactSelector = contactSelector;
-    globalThis.getSettings = getSettings;
-    globalThis.getLocale = getLocale;
-    globalThis.sendNotification = sendNotification;
-    globalThis.onSettingsChange = onSettingsChange;
-    globalThis.removeSettingsChangeListener = removeSettingsChangeListener;
-    globalThis.toggleInput = toggleInput;
-    globalThis.createCall = createCall;
-    globalThis.openMedia = openMedia;
-    globalThis.onNuiEvent = onNuiEvent;
+    globalThis.componentsLoaded = true;
 
     globalThis.postMessage('componentsLoaded', '*');
-}
+})();

@@ -145,20 +145,20 @@ function devPost(id: string, user: VUser, video: string, caption: string, sound:
 }
 
 export const DEV_POSTS: VPost[] = [
-    devPost('v1', luna, bg6,  'Trippy vibes 🌌 catch the sunset before it’s gone #sunset', 'original sound — luna.vibe', 16, 1, 1, 480),
-    devPost('v2', dex,  bg5,  'view from the top never gets old 🌃 #lossantos', 'Night Drive — synthwave', 1243, 88, 42, 12400, { liked: true }),
-    devPost('v3', mira, bg9,  'beach day with the whole crew ☀️ #lossantos #beach', 'original sound — mira_ls', 5821, 204, 311, 88100),
-    devPost('v4', kobe, bg8,  'late night drive, no destination #nightdrive', 'lofi hours — chill beats', 932, 31, 64, 7040),
-    devPost('v5', sora, bg11, 'golden hour hits different up here ✨ #goldenhour', 'original sound — sora', 28400, 1290, 2200, 402000, { saved: true }),
-    devPost('v6', nox,  bg3,  'found this spot at 3am 🔥 worth it', 'Phonk Mix — nightcore', 412, 17, 9, 3900),
+    devPost('v1', luna, bg6,  'Trippy vibes 🌌 catch the sunset before it’s gone #sunset', 'original sound · luna.vibe', 16, 1, 1, 480),
+    devPost('v2', dex,  bg5,  'view from the top never gets old 🌃 #lossantos', 'Night Drive · synthwave', 1243, 88, 42, 12400, { liked: true }),
+    devPost('v3', mira, bg9,  'beach day with the whole crew ☀️ #lossantos #beach', 'original sound · mira_ls', 5821, 204, 311, 88100),
+    devPost('v4', kobe, bg8,  'late night drive, no destination #nightdrive', 'lofi hours · chill beats', 932, 31, 64, 7040),
+    devPost('v5', sora, bg11, 'golden hour hits different up here ✨ #goldenhour', 'original sound · sora', 28400, 1290, 2200, 402000, { saved: true }),
+    devPost('v6', nox,  bg3,  'found this spot at 3am 🔥 worth it', 'Phonk Mix · nightcore', 412, 17, 9, 3900),
 ];
 
 export const DEV_DISCOVER: VPost[] = [
     ...DEV_POSTS,
-    devPost('v7', luna, bg12, 'city lights forever #lossantos', 'original sound — luna.vibe', 214, 9, 3, 920400),
-    devPost('v8', dex,  bg4,  'garage day 🔧', 'original sound — dex', 87, 4, 1, 12700),
-    devPost('v9', sora, bg7,  'rooftop sunrise club', 'Morning Air — chillhop', 460, 21, 12, 460),
-    devPost('v10', mira, bg10, 'weekend loading… #beach', 'original sound — mira_ls', 1350, 66, 40, 2400000),
+    devPost('v7', luna, bg12, 'city lights forever #lossantos', 'original sound · luna.vibe', 214, 9, 3, 920400),
+    devPost('v8', dex,  bg4,  'garage day 🔧', 'original sound · dex', 87, 4, 1, 12700),
+    devPost('v9', sora, bg7,  'rooftop sunrise club', 'Morning Air · chillhop', 460, 21, 12, 460),
+    devPost('v10', mira, bg10, 'weekend loading… #beach', 'original sound · mira_ls', 1350, 66, 40, 2400000),
 ];
 
 export const DEV_TRENDS = ['#lossantos', '#sunset', '#nightdrive', '#beach', '#goldenhour'];
@@ -183,8 +183,8 @@ export const DEV_NOTIFS: VNotif[] = [
 ];
 
 export const DEV_MY_POSTS: VPost[] = [
-    devPost('m1', devUser('dev', true), bg10, 'my city 🌆', 'original sound — dev', 120, 4, 2, 957),
-    devPost('m2', devUser('dev', true), bg7,  'sunrise shift', 'original sound — dev', 84, 2, 1, 1794),
-    devPost('m3', devUser('dev', true), bg5,  'skyline', 'Night Drive — synthwave', 402, 12, 8, 2631),
-    devPost('m4', devUser('dev', true), bg12, 'downtown run', 'original sound — dev', 61, 1, 0, 3468),
+    devPost('m1', devUser('dev', true), bg10, 'my city 🌆', 'original sound · dev', 120, 4, 2, 957),
+    devPost('m2', devUser('dev', true), bg7,  'sunrise shift', 'original sound · dev', 84, 2, 1, 1794),
+    devPost('m3', devUser('dev', true), bg5,  'skyline', 'Night Drive · synthwave', 402, 12, 8, 2631),
+    devPost('m4', devUser('dev', true), bg12, 'downtown run', 'original sound · dev', 61, 1, 0, 3468),
 ];

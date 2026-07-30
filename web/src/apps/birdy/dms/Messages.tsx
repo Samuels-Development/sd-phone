@@ -13,11 +13,11 @@ import { Avatar, VerifiedBadge } from '../ui';
 function previewText(m?: BirdyMessage): string {
     if (!m) return '';
     switch (m.kind) {
-        case 'image':    return t('birdy.photoPreview', '📷 Photo');
-        case 'gif':      return t('birdy.gif', 'GIF');
+        case 'image':    return t('squawk.photoPreview', '📷 Photo');
+        case 'gif':      return t('squawk.gif', 'GIF');
         case 'money':    return `$${m.amount ?? 0}`;
-        case 'voice':    return t('birdy.voiceMessagePreview', '🎤 Voice message');
-        case 'location': return t('birdy.locationPreview', '📍 Location');
+        case 'voice':    return t('squawk.voiceMessagePreview', '🎤 Voice message');
+        case 'location': return t('squawk.locationPreview', '📍 Location');
         default:         return m.body;
     }
 }
@@ -38,10 +38,10 @@ export function MessagesList({ conversations, onOpen, onOpenProfile, onCompose }
     return (
         <div className="flex h-full flex-col" style={{ background: BG }}>
             <header className="flex shrink-0 items-center px-4 py-2">
-                <button type="button" onClick={onOpenProfile} aria-label={t('birdy.yourProfile', 'Your profile')}><Avatar size={44} /></button>
-                <h1 className="flex-1 text-center text-[22px] font-extrabold text-black">{t('birdy.messages', 'Messages')}</h1>
+                <button type="button" onClick={onOpenProfile} aria-label={t('squawk.yourProfile', 'Your profile')}><Avatar size={44} /></button>
+                <h1 className="flex-1 text-center text-[22px] font-extrabold text-black">{t('squawk.messages', 'Messages')}</h1>
                 {onCompose ? (
-                    <button type="button" onClick={() => setComposing(true)} aria-label={t('birdy.newMessage', 'New message')} className="flex h-11 w-11 items-center justify-center" style={{ color: BLUE }}>
+                    <button type="button" onClick={() => setComposing(true)} aria-label={t('squawk.newMessage', 'New message')} className="flex h-11 w-11 items-center justify-center" style={{ color: BLUE }}>
                         <PenSquare className="h-[24px] w-[24px]" strokeWidth={2} />
                     </button>
                 ) : (
@@ -53,7 +53,7 @@ export function MessagesList({ conversations, onOpen, onOpenProfile, onCompose }
                 <SearchBar
                     value={query}
                     onChange={setQuery}
-                    placeholder={t('birdy.searchDirectMessages', 'Find a conversation')}
+                    placeholder={t('squawk.findAConversation', 'Find a conversation')}
                     pillClassName="min-w-0 flex-1 gap-2 rounded-[12px] px-3.5 py-[10px]"
                     pillStyle={{ background: PILL }}
                     textClassName="text-[17px] font-medium text-black placeholder:text-black/55"
@@ -67,8 +67,8 @@ export function MessagesList({ conversations, onOpen, onOpenProfile, onCompose }
                         center
                         icon={<Mail className="h-7 w-7" strokeWidth={1.8} />}
                         circleClassName="bg-black/[0.06] text-black/35"
-                        title={t('birdy.noMessagesYet', 'No messages yet')}
-                        subtitle={t('birdy.messagesEmptySubtitle', 'Your direct messages will show up here.')}
+                        title={t('squawk.noMessagesYet', 'No messages yet')}
+                        subtitle={t('squawk.messagesEmptySubtitle', 'Your direct messages will show up here.')}
                         subtitleClassName="text-[#536471]"
                     />
                 ) : filtered.length === 0 ? (
@@ -76,8 +76,8 @@ export function MessagesList({ conversations, onOpen, onOpenProfile, onCompose }
                         <div className="mb-5 flex h-24 w-24 items-center justify-center rounded-full bg-black/[0.06] text-black/35">
                             <SearchIcon className="h-12 w-12" strokeWidth={1.8} />
                         </div>
-                        <div className="text-[24px] font-bold text-black">{t('birdy.noResults', 'No results')}</div>
-                        <div className="mt-2 text-[17px] leading-snug" style={{ color: '#536471' }}>{t('birdy.noConversationsMatch', 'No conversations match "{query}".', { query: query.trim() })}</div>
+                        <div className="text-[24px] font-bold text-black">{t('squawk.noResults', 'No results')}</div>
+                        <div className="mt-2 text-[17px] leading-snug" style={{ color: '#536471' }}>{t('squawk.noConversationsMatch', 'No conversations match "{query}".', { query: query.trim() })}</div>
                     </div>
                 ) : (
                     <div className="flex flex-col gap-2 pt-1">
@@ -106,7 +106,7 @@ export function MessagesList({ conversations, onOpen, onOpenProfile, onCompose }
                                             {previewText(last)}
                                         </div>
                                     </div>
-                                    {unread && <span className="ml-1 shrink-0 h-[11px] w-[11px] rounded-full" style={{ background: BLUE }} aria-label={t('birdy.unread', 'Unread')} />}
+                                    {unread && <span className="ml-1 shrink-0 h-[11px] w-[11px] rounded-full" style={{ background: BLUE }} aria-label={t('squawk.unread', 'Unread')} />}
                                 </button>
                             );
                         })}
@@ -130,10 +130,10 @@ function NewDm({ onSelect, onBack }: { onSelect: (handle: string) => void; onBac
     return (
         <div className="absolute inset-0 z-20 flex flex-col" style={{ background: BG, ...pageStyle }}>
             <header className="flex shrink-0 items-center px-2 py-2">
-                <button type="button" onClick={goBack} aria-label={t('birdy.back', 'Back')} className="flex h-11 w-11 items-center justify-center text-black active:opacity-60">
+                <button type="button" onClick={goBack} aria-label={t('squawk.back', 'Back')} className="flex h-11 w-11 items-center justify-center text-black active:opacity-60">
                     <ArrowLeft className="h-6 w-6" strokeWidth={2.2} />
                 </button>
-                <h1 className="flex-1 text-center text-[22px] font-extrabold text-black">{t('birdy.newMessage', 'New message')}</h1>
+                <h1 className="flex-1 text-center text-[22px] font-extrabold text-black">{t('squawk.newMessage', 'New message')}</h1>
                 <div className="w-11" aria-hidden />
             </header>
 
@@ -141,7 +141,7 @@ function NewDm({ onSelect, onBack }: { onSelect: (handle: string) => void; onBac
                 <SearchBar
                     value={query}
                     onChange={setQuery}
-                    placeholder={t('birdy.searchPeople', 'Search people')}
+                    placeholder={t('squawk.searchPeople', 'Search people')}
                     pillClassName="min-w-0 flex-1 gap-2 rounded-[12px] px-3.5 py-[10px]"
                     pillStyle={{ background: PILL }}
                     textClassName="text-[17px] font-medium text-black placeholder:text-black/55"
@@ -163,7 +163,7 @@ function NewDm({ onSelect, onBack }: { onSelect: (handle: string) => void; onBac
                     </button>
                 ))}
                 {query.trim() !== '' && users.length === 0 && (
-                    <div className="px-4 pt-10 text-center text-[15px]" style={{ color: META }}>{t('birdy.noResults', 'No results')}</div>
+                    <div className="px-4 pt-10 text-center text-[15px]" style={{ color: META }}>{t('squawk.noResults', 'No results')}</div>
                 )}
             </div>
         </div>

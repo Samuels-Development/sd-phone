@@ -50,7 +50,7 @@ export function PostCard({ post, isOwn, onToggleLike, onToggleRepost, onOpen, on
                             type="button"
                             onClick={e => e.stopPropagation()}
                             className="ml-auto -mr-1 p-1"
-                            aria-label={t('birdy.more', 'More')}
+                            aria-label={t('squawk.more', 'More')}
                             style={{ color: META }}
                         >
                             <MoreHorizontal className="h-[22px] w-[22px]" />
@@ -102,11 +102,11 @@ export function PostCard({ post, isOwn, onToggleLike, onToggleRepost, onOpen, on
 
         {confirmRepost && (
             <AlertDialog
-                title={reposted ? t('birdy.undoRetweet', 'Undo Retweet') : t('birdy.retweet', 'Retweet')}
+                title={reposted ? t('squawk.undoRetweet', 'Undo Retweet') : t('squawk.retweet', 'Retweet')}
                 message={reposted
-                    ? t('birdy.removeRetweetMessage', "Remove your retweet of {name}'s post?", { name: post.author.name })
-                    : t('birdy.retweetMessage', "Are you sure you want to retweet {name}'s post?", { name: post.author.name })}
-                confirmLabel={reposted ? t('birdy.undo', 'Undo') : t('birdy.retweet', 'Retweet')}
+                    ? t('squawk.removeRetweetMessage', "Remove your retweet of {name}'s post?", { name: post.author.name })
+                    : t('squawk.retweetMessage', "Are you sure you want to retweet {name}'s post?", { name: post.author.name })}
+                confirmLabel={reposted ? t('squawk.undo', 'Undo') : t('squawk.retweet', 'Retweet')}
                 onCancel={() => setConfirmRepost(false)}
                 onConfirm={() => { onToggleRepost?.(); setConfirmRepost(false); }}
             />

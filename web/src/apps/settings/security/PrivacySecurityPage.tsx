@@ -6,7 +6,7 @@ export function PrivacySecurityPage({ onBack, onOpenFaceUnlock }: { onBack: () =
     return (
         <SubPage title={t('settings.privacySecurity', 'Privacy & Security')} backLabel={t('settings.settings', 'Settings')} onBack={onBack}>
             <ListGroup footer={t('settings.privacySecurityFooter', 'Protect your phone with a passcode and control what apps can access.')}>
-                <ListRow label={t('settings.faceUnlockPasscode', 'Face Unlock & Passcode')} onPress={onOpenFaceUnlock} />
+                <ListRow label={t('settings.faceScanPasscode', 'Face Scan & Passcode')} onPress={onOpenFaceUnlock} />
             </ListGroup>
 
             <ListGroup header={t('settings.privacyHeader', 'Privacy')}>

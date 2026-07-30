@@ -61,83 +61,84 @@ export const REPOST = '#00ba7c';
 export const BG     = '#e5e5e5';
 export const PILL   = '#d9d9d9';
 
-export const CURRENT_USER: BirdyAuthor = { name: 'Los Santos',  handle: 'lossantos', verified: true };
-export const MARCUS:       BirdyAuthor = { name: 'Marcus',      handle: 'marcus', verified: false };
-export const TOMMY:        BirdyAuthor = { name: 'Tommy V',     handle: 'tommy',  verified: false };
+export const CURRENT_USER: BirdyAuthor = { name: 'Renata Salas',      handle: 'renata_ls', verified: true  };
+export const MARCUS:       BirdyAuthor = { name: 'Kilo Tire & Wheel', handle: 'kilotire',  verified: false };
+export const TOMMY:        BirdyAuthor = { name: 'Deb Karras',        handle: 'debkarras', verified: false };
 
 export const MAX_POST_LENGTH = 280;
 
 const HOUR = 3_600_000;
+const MIN  = 60_000;
 
-const MARCUS_REPLY: BirdyPost = {
+const SHOP_REPLY: BirdyPost = {
     id:        'reply-1',
     author:    MARCUS,
-    body:      'finally, been waiting for this for ages!',
+    body:      'we are ten minutes off that exit and open till eight, for anyone who gives up and pulls off',
     createdAt: Date.now() - 2 * HOUR,
     replies:   0,
     reposts:   0,
-    likes:     0,
+    likes:     2,
     liked:     false,
+};
+
+const NEIGHBOUR_REPLY: BirdyPost = {
+    id:        'reply-2',
+    author:    TOMMY,
+    body:      'took the 68 to get around it and lost the same hour anyway',
+    createdAt: Date.now() - 95 * MIN,
+    replies:   0,
+    reposts:   0,
+    likes:     1,
+    liked:     true,
 };
 
 export const SEED_POSTS: BirdyPost[] = [
     {
         id:        'seed-1',
-        author:    CURRENT_USER,
-        body:      'Just got my new phone set up and honestly this thing is slick #LosSantos',
-        createdAt: Date.now() - 2 * HOUR,
-        replies:   1,
-        reposts:   0,
-        likes:     4,
-        liked:     false,
-        views:     2,
-        thread:    [MARCUS_REPLY],
+        author:    TOMMY,
+        body:      'Grey husky slipped his collar by the Route 68 turnoff last night. He answers to Bandit and he is chipped. Message me if you see him. #LostDog',
+        createdAt: Date.now() - 40 * MIN,
+        replies:   0,
+        reposts:   6,
+        likes:     14,
+        liked:     true,
+        views:     231,
+        images:    [seedPhoto3],
     },
     {
         id:        'seed-2',
-        author:    MARCUS,
-        body:      'wow, the squawk app really is cool #Squawk',
+        author:    CURRENT_USER,
+        body:      'Southbound Del Perro Freeway is one lane again and nobody has said why. Twenty minutes to clear the on ramp. #LSTraffic',
         createdAt: Date.now() - 3 * HOUR,
-        replies:   0,
-        reposts:   0,
-        likes:     1,
-        liked:     true,
-        views:     1,
+        replies:   2,
+        reposts:   1,
+        likes:     9,
+        liked:     false,
+        views:     147,
+        thread:    [SHOP_REPLY, NEIGHBOUR_REPLY],
     },
     {
         id:        'seed-3',
-        author:    CURRENT_USER,
-        body:      'Hello, world! #LosSantos',
-        createdAt: Date.now() - 5 * HOUR,
+        author:    MARCUS,
+        body:      'Two tires and an alignment, out the door inside the hour. Corner of Innocence and Roy Lowenstein, cash or card. #LSTraffic',
+        createdAt: Date.now() - 6 * HOUR,
         replies:   0,
         reposts:   0,
-        likes:     0,
-        liked:     false,
-        views:     3,
+        likes:     4,
+        liked:     true,
+        views:     58,
     },
     {
         id:        'seed-4',
-        author:    TOMMY,
-        body:      'sunset over the pier tonight, no filter needed',
-        createdAt: Date.now() - 7 * HOUR,
+        author:    CURRENT_USER,
+        body:      'City hall says the pier deck reopens in June. They said June last year as well. #DelPerro',
+        createdAt: Date.now() - 11 * HOUR,
         replies:   0,
-        reposts:   1,
-        likes:     7,
+        reposts:   2,
+        likes:     18,
         liked:     false,
-        views:     19,
-        images:    [seedPhoto1],
-    },
-    {
-        id:        'seed-5',
-        author:    MARCUS,
-        body:      'little road trip up the coast, camera roll is full',
-        createdAt: Date.now() - 9 * HOUR,
-        replies:   0,
-        reposts:   0,
-        likes:     3,
-        liked:     true,
-        views:     11,
-        images:    [seedPhoto2, seedPhoto3, seedPhoto4],
+        views:     402,
+        images:    [seedPhoto2, seedPhoto4, seedPhoto1],
     },
 ];
 
@@ -149,10 +150,11 @@ export type BirdyNotification =
     | { id: string; kind: 'follow'; user: BirdyAuthor };
 
 export const SEED_NOTIFICATIONS: BirdyNotification[] = [
-    { id: 'n1', kind: 'reply',  post: MARCUS_REPLY },
-    { id: 'n2', kind: 'like',   user: TOMMY, text: 'liked your post', post: SEED_POSTS[0] },
-    { id: 'n3', kind: 'follow', user: TOMMY },
+    { id: 'n1', kind: 'reply',  post: SHOP_REPLY },
+    { id: 'n2', kind: 'like',   user: TOMMY,  text: 'liked your post',     post: SEED_POSTS[1] },
+    { id: 'n3', kind: 'repost', user: MARCUS, text: 'reposted your post',  post: SEED_POSTS[3] },
     { id: 'n4', kind: 'follow', user: MARCUS },
+    { id: 'n5', kind: 'follow', user: TOMMY },
 ];
 
 export interface BirdyMessage {
@@ -182,15 +184,15 @@ export interface BirdyConversation {
     messages: BirdyMessage[];
 }
 
-const MIN = 60_000;
 export const SEED_CONVERSATIONS: BirdyConversation[] = [
     {
         id:      'c1',
         user:    MARCUS,
-        updated: '5h',
-        unread:  1,
+        updated: '2h',
+        unread:  2,
         messages: [
-            { id: 'm1', fromMe: false, body: 'great job on the new update, really proud of you!', at: '16:42', ts: Date.now() - 5 * HOUR },
+            { id: 'm1', fromMe: false, body: 'your rims came in on the morning truck',           at: '15:04', ts: Date.now() - 2 * HOUR },
+            { id: 'm2', fromMe: false, body: 'we can fit them today if you get here before six', at: '15:06', ts: Date.now() - 2 * HOUR + 2 * MIN },
         ],
     },
     {
@@ -198,9 +200,10 @@ export const SEED_CONVERSATIONS: BirdyConversation[] = [
         user:    TOMMY,
         updated: '1d',
         messages: [
-            { id: 'm2', fromMe: false, body: 'hey, loved the latest release',   at: 'Yesterday', ts: Date.now() - 26 * HOUR },
-            { id: 'm3', fromMe: true,  body: 'thanks! glad you like it',         at: 'Yesterday', ts: Date.now() - 26 * HOUR + 2 * MIN },
-            { id: 'm4', fromMe: false, body: 'thanks for responding, haha!',     at: 'Yesterday', ts: Date.now() - 26 * HOUR + 4 * MIN },
+            { id: 'm3', fromMe: false, body: 'any chance the husky came down your street last night', at: 'Yesterday', ts: Date.now() - 27 * HOUR },
+            { id: 'm4', fromMe: true,  body: 'not that i saw, i was at the pier until late',          at: 'Yesterday', ts: Date.now() - 27 * HOUR + 3 * MIN },
+            { id: 'm5', fromMe: false, body: 'someone said the gas station on the 68, driving out',   at: 'Yesterday', ts: Date.now() - 27 * HOUR + 9 * MIN },
+            { id: 'm6', fromMe: true,  body: 'good luck, i will keep an eye out this end',            at: 'Yesterday', ts: Date.now() - 27 * HOUR + 11 * MIN },
         ],
     },
 ];
@@ -212,7 +215,7 @@ export function newId(prefix = 'id'): string {
 }
 
 export function relativeTime(from: number, now: number = Date.now()): string {
-    return relTimeCompact(from, { now, nowLabel: t('birdy.now', 'now') });
+    return relTimeCompact(from, { now, nowLabel: t('squawk.now', 'now') });
 }
 
 export function absoluteTime(ms: number): string {

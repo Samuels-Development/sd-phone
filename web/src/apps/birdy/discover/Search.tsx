@@ -71,11 +71,11 @@ export function Search({ me, onOpenProfile, onOpenPost, onToggleLike, onToggleRe
     return (
         <div className="flex h-full flex-col" style={{ background: BG }}>
             <header className="flex shrink-0 items-center gap-3 px-4 py-2">
-                <button type="button" onClick={() => onOpenProfile()} aria-label={t('birdy.yourProfile', 'Your profile')}><Avatar size={44} /></button>
+                <button type="button" onClick={() => onOpenProfile()} aria-label={t('squawk.yourProfile', 'Your profile')}><Avatar size={44} /></button>
                 <SearchBar
                     value={query}
                     onChange={setQuery}
-                    placeholder={t('birdy.searchBirdy', 'Search Squawk')}
+                    placeholder={t('squawk.searchSquawk', 'Search Squawk')}
                     pillClassName="min-w-0 flex-1 gap-2 rounded-[12px] px-3.5 py-[10px]"
                     pillStyle={{ background: PILL }}
                     textClassName="text-[17px] font-medium text-black placeholder:text-black/55"
@@ -90,7 +90,7 @@ export function Search({ me, onOpenProfile, onOpenPost, onToggleLike, onToggleRe
                             // While the debounce + fetch run, say nothing rather than a false
                             // "no posts" that corrects itself a beat later.
                             pending ? null : (
-                                <div className="px-10 py-16 text-center text-[15px]" style={{ color: META }}>{t('birdy.noPostsFound', 'No posts found.')}</div>
+                                <div className="px-10 py-16 text-center text-[15px]" style={{ color: META }}>{t('squawk.noPostsFound', 'No posts found.')}</div>
                             )
                         ) : (
                             postResults.map(p => (
@@ -107,7 +107,7 @@ export function Search({ me, onOpenProfile, onOpenPost, onToggleLike, onToggleRe
                         )
                     ) : results.length === 0 ? (
                         pending ? null : (
-                            <div className="px-10 py-16 text-center text-[15px]" style={{ color: META }}>{t('birdy.noAccountsFound', 'No accounts found.')}</div>
+                            <div className="px-10 py-16 text-center text-[15px]" style={{ color: META }}>{t('squawk.noAccountsFound', 'No accounts found.')}</div>
                         )
                     ) : (
                         results.map(u => (
@@ -132,13 +132,13 @@ export function Search({ me, onOpenProfile, onOpenPost, onToggleLike, onToggleRe
                     <div>
                         <div className="relative flex h-[200px] w-full items-center justify-center overflow-hidden pb-6" style={{ background: BLUE }}>
                             <BirdyBird className="h-28 w-28 text-white" />
-                            <span className="absolute bottom-4 left-4 text-[17px] font-bold text-white">{t('birdy.startSearching', 'Start searching to explore Squawk')}</span>
+                            <span className="absolute bottom-4 left-4 text-[17px] font-bold text-white">{t('squawk.startSearching', 'Start searching to explore Squawk')}</span>
                         </div>
 
-                        <h2 className="px-4 pb-1.5 pt-4 text-[22px] font-extrabold text-black">{t('birdy.trendingHashtags', 'Trending now')}</h2>
+                        <h2 className="px-4 pb-1.5 pt-4 text-[22px] font-extrabold text-black">{t('squawk.trendingNow', 'Trending now')}</h2>
                         {trending !== null && (
                             trending.length === 0 ? (
-                                <div className="px-10 py-10 text-center text-[15px]" style={{ color: META }}>{t('birdy.noTrending', 'No trending hashtags right now.')}</div>
+                                <div className="px-10 py-10 text-center text-[15px]" style={{ color: META }}>{t('squawk.noTrending', 'No trending hashtags right now.')}</div>
                             ) : (
                                 trending.map((row, i) => (
                                     <div key={row.tag}>
@@ -150,8 +150,8 @@ export function Search({ me, onOpenProfile, onOpenPost, onToggleLike, onToggleRe
                                             <span className="text-[19px] font-bold" style={{ color: BLUE }}>{row.tag}</span>
                                             <span className="mt-0.5 text-[14px]" style={{ color: META }}>
                                                 {row.count === 1
-                                                    ? t('birdy.onePost', '1 post')
-                                                    : t('birdy.postsCount', '{count} posts', { count: row.count.toLocaleString() })}
+                                                    ? t('squawk.onePost', '1 post')
+                                                    : t('squawk.postsCount', '{count} posts', { count: row.count.toLocaleString() })}
                                             </span>
                                         </button>
                                         {i < trending.length - 1 && (

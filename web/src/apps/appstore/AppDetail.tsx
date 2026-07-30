@@ -107,7 +107,7 @@ export function AppDetail({ app, desc, installed, downloadProgress, onBack, onIn
                 {custom && custom.price != null && custom.price > 0 && (
                     <InfoRow label={t('appstore.price', 'Price')} value={t('appstore.priceValue', '${price}', { price: custom.price.toLocaleString() })} />
                 )}
-                <InfoRow label={t('appstore.compatibility', 'Compatibility')}    value={t('appstore.worksWithThisPhone', 'Compatible with your device')} />
+                <InfoRow label={t('appstore.compatibility', 'Compatibility')}    value={t('appstore.deviceCompatible', 'Compatible with your device')} />
                 <InfoRow label={t('appstore.inAppPurchases', 'In-App Purchases')} value={t('appstore.no', 'No')} last />
             </div>
         </div>

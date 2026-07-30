@@ -219,7 +219,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
             setOpenConvo(prev => (prev && prev.id === convoId
                 ? { ...prev, messages: prev.messages.filter(m => m.id !== optimistic.id) }
                 : prev));
-            setSendError(res.error ?? t('birdy.failedToSend', 'Message not sent'));
+            setSendError(res.error ?? t('squawk.messageNotSent', 'Message not sent'));
         }
     }
 
@@ -308,7 +308,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
         return (
             <AppAuth
                 appName="Birdy"
-                tagline={t('birdy.tagline', 'Where the city starts conversations.')}
+                tagline={t('squawk.tagline', 'Where the city starts conversations.')}
                 icon="birdy"
                 theme={{
                     accent:      BLUE,
@@ -319,12 +319,12 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                 myEmail={myEmail}
                 savedLogin={savedLogin}
                 fields={[
-                    { key: 'username', label: t('birdy.username', 'Username') },
-                    { key: 'name',     label: t('birdy.name', 'Name') },
-                    { key: 'password', label: t('birdy.password', 'Password'), type: 'password' },
-                    { key: 'email',    label: t('birdy.email', 'Email'), suffix: `@${MAIL_DOMAIN}`, createOnly: true },
-                    { key: 'phone',    label: t('birdy.phone', 'Phone'), type: 'tel',   createOnly: true },
-                    { key: 'bio',      label: t('birdy.bio', 'Bio'), createOnly: true, optional: true },
+                    { key: 'username', label: t('squawk.username', 'Username') },
+                    { key: 'name',     label: t('squawk.name', 'Name') },
+                    { key: 'password', label: t('squawk.password', 'Password'), type: 'password' },
+                    { key: 'email',    label: t('squawk.email', 'Email'), suffix: `@${MAIL_DOMAIN}`, createOnly: true },
+                    { key: 'phone',    label: t('squawk.phone', 'Phone'), type: 'tel',   createOnly: true },
+                    { key: 'bio',      label: t('squawk.bio', 'Bio'), createOnly: true, optional: true },
                 ]}
                 onSubmit={async (mode, vals) => {
                     if (mode === 'create') {
@@ -350,7 +350,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
             <div key={tab} className="relative z-0 min-h-0 flex-1 overflow-hidden animate-swipe-in-left">
                 {content}
                 {showComposeFab && (
-                    <FabButton onClick={() => setComposing(true)} label={t('birdy.newPost', 'New post')} className="bottom-[9px] right-5 z-10">
+                    <FabButton onClick={() => setComposing(true)} label={t('squawk.newPost', 'New post')} className="bottom-[9px] right-5 z-10">
                         <Pen className="h-6 w-6 text-white" strokeWidth={2} />
                     </FabButton>
                 )}
@@ -392,11 +392,11 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                     <div className="absolute inset-0 z-20 flex flex-col" style={{ background: '#e5e5e5' }}>
                         <div className="h-[58px] shrink-0" aria-hidden />
                         <div className="flex shrink-0 items-center px-2 pb-3">
-                            <button type="button" onClick={() => setOpenConvoId(null)} aria-label={t('birdy.back', 'Back')} className="active:opacity-60" style={{ color: BLUE }}>
+                            <button type="button" onClick={() => setOpenConvoId(null)} aria-label={t('squawk.back', 'Back')} className="active:opacity-60" style={{ color: BLUE }}>
                                 <ChevronLeft className="h-[38px] w-[38px]" strokeWidth={2.4} />
                             </button>
                         </div>
-                        <div className="flex flex-1 items-center justify-center text-[14px] text-black/40">{t('birdy.loading', 'Loading…')}</div>
+                        <div className="flex flex-1 items-center justify-center text-[14px] text-black/40">{t('squawk.loading', 'Loading…')}</div>
                     </div>
                 )
             )}
@@ -436,10 +436,10 @@ export function Birdy({ onClose }: { onClose: () => void }) {
 
             {sendError && (
                 <AlertDialog
-                    title={t('birdy.couldntSend', "Couldn't send")}
+                    title={t('squawk.couldntSend', "Couldn't send")}
                     message={sendError}
                     hideCancel
-                    confirmLabel={t('birdy.ok', 'OK')}
+                    confirmLabel={t('squawk.ok', 'OK')}
                     onCancel={() => setSendError(null)}
                     onConfirm={() => setSendError(null)}
                 />
@@ -448,7 +448,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
             <button
                 type="button"
                 onClick={onClose}
-                aria-label={t('birdy.closeBirdy', 'Close Squawk')}
+                aria-label={t('squawk.closeBirdy', 'Close Squawk')}
                 className="absolute inset-x-0 bottom-0 z-[5] h-5 cursor-default"
             />
         </div>
@@ -459,9 +459,9 @@ function LoadingPane({ onBack }: { onBack: () => void }) {
     return (
         <div className="flex h-full flex-col" style={{ background: BG }}>
             <header className="flex shrink-0 items-center border-b border-black/10 px-3 py-2.5">
-                <button type="button" onClick={onBack} aria-label={t('birdy.back', 'Back')} style={{ color: BLUE }} className="text-[15px]">{t('birdy.back', 'Back')}</button>
+                <button type="button" onClick={onBack} aria-label={t('squawk.back', 'Back')} style={{ color: BLUE }} className="text-[15px]">{t('squawk.back', 'Back')}</button>
             </header>
-            <div className="flex flex-1 items-center justify-center text-[13px]" style={{ color: '#536471' }}>{t('birdy.loading', 'Loading…')}</div>
+            <div className="flex flex-1 items-center justify-center text-[13px]" style={{ color: '#536471' }}>{t('squawk.loading', 'Loading…')}</div>
         </div>
     );
 }

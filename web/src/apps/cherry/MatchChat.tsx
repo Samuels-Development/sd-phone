@@ -179,11 +179,11 @@ export function MatchChat({ match, onBack, onSend, onReact, onPayRequest, onUnma
                         {match.partner.photo
                             ? <img src={match.partner.photo} alt={name} draggable={false} className="h-[108px] w-[108px] rounded-full object-cover" />
                             : <span className="flex h-[108px] w-[108px] items-center justify-center rounded-full text-[40px] font-bold text-white" style={{ background: CHERRY.pink }}>{name.slice(0, 1)}</span>}
-                        <p className="mt-4 text-[21px] font-semibold text-black/85">{t('cherry.youMatchedWith', 'You matched with {name}', { name })}</p>
-                        <p className="mt-1.5 text-[16px] font-medium leading-snug text-black/65">{t('cherry.breakTheIce', 'Say something nice to break the ice.')}</p>
+                        <p className="mt-4 text-[21px] font-semibold text-black/85">{t('cherry.bothLikedEachOther', 'You and {name} liked each other', { name })}</p>
+                        <p className="mt-1.5 text-[16px] font-medium leading-snug text-black/65">{t('cherry.breakTheIce', 'Nobody has said anything yet.')}</p>
                     </div>
                 ) : (
-                    <p className="pb-1 pt-2 text-center text-[12px] text-black/35">{t('cherry.youMatchedWith', 'You matched with {name}', { name })}</p>
+                    <p className="pb-1 pt-2 text-center text-[12px] text-black/35">{t('cherry.bothLikedEachOther', 'You and {name} liked each other', { name })}</p>
                 )}
                 {items.map((item, i) => {
                     if (item.kind === 'separator') {
@@ -216,7 +216,7 @@ export function MatchChat({ match, onBack, onSend, onReact, onPayRequest, onUnma
                                     onLocationTap={handleLocationTap}
                                     onImageTap={handleImageTap}
                                     locationCaption={msg.kind === 'location'
-                                        ? (sent ? t('cherry.youSharedLocation', 'You shared your location with {name}', { name }) : t('cherry.sharedTheirLocation', '{name} shared their location', { name }))
+                                        ? (sent ? t('cherry.youSharedLocation', 'You shared your location with {name}', { name }) : t('cherry.locationShared', '{name} shared their location', { name }))
                                         : undefined}
                                 />
                             </div>

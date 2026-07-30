@@ -405,7 +405,7 @@ export function MatchOverlay({ profile, onSend, onClose }: {
 
                 <div className="flex-1" />
 
-                <p className="text-[24px] font-semibold italic text-white">{t('cherry.likesYouToo', '{name} likes you too!', { name: profile.name })}</p>
+                <p className="text-[24px] font-semibold italic text-white">{t('cherry.likedYouBack', '{name} liked you back', { name: profile.name })}</p>
 
                 <div className="mt-6 flex w-full items-center rounded-[14px] bg-white pr-2.5">
                     <input

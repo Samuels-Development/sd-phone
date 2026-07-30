@@ -1,7 +1,7 @@
 -- Phone voice capture for camera videos and Photogram Live. The recorder's own mic is always
 -- mixed in client-side; the settings below govern capturing NEARBY players' voices, done with a
 -- real WebRTC mesh (each nearby player's client streams their mic peer-to-peer, mixed into the
--- recording) - the same approach lb-phone uses.
+-- recording).
 return {
     -- Master switch. When false, recordings carry only the recorder's own voice. Note:
     -- capturing other players' microphones may have privacy implications on your server.

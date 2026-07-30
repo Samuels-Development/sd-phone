@@ -20,7 +20,7 @@ export interface CardOverrides {
 }
 
 export async function loadPhoneState(): Promise<{ contacts: Contact[]; recents: RawCall[]; myNumber: string; myName: string; card: CardOverrides }> {
-    if (!isFiveM) return { contacts: CONTACTS.map(c => ({ ...c })), recents: RAW_CALLS, myNumber: '2051189847', myName: 'Samuel Black', card: { email: 'samuel.black@lsmail.com' } };
+    if (!isFiveM) return { contacts: CONTACTS.map(c => ({ ...c })), recents: RAW_CALLS, myNumber: '2135550100', myName: 'Samuel Black', card: { email: 'samuel.black@lsmail.com' } };
     const res = await apiData<{ contacts: Contact[]; recents: RawCall[]; myNumber: string; myName: string; card: CardOverrides }>('sd-phone:contacts:list');
     if (res) {
         return {

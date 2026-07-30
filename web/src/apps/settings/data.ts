@@ -56,7 +56,7 @@ export function getSettingsGroups(): SettingsGroup[] {
                 { id: 'display',      icon: 'Sun',         iconBg: '#0a84ff', label: t('settings.displayBrightness', 'Display & Brightness'),  subtitle: t('settings.displayBrightnessSub', 'Wallpaper, theme and brightness') },
                 { id: 'wallpaper',    icon: 'Image',       iconBg: '#64d2ff', label: t('settings.wallpaper', 'Wallpaper'),             subtitle: t('settings.wallpaperSub', 'Wallpaper & background') },
                 { id: 'app-icons',    icon: 'LayoutGrid',  iconBg: '#5e5ce6', label: t('settings.appIcons', 'App Icons'),              subtitle: t('settings.appIconsSub', 'Icon theme and Home Screen names') },
-                { id: 'face-unlock',  icon: 'Fingerprint', iconBg: '#34c759', label: t('settings.faceUnlockPasscode', 'Face Unlock & Passcode'), subtitle: t('settings.faceUnlockPasscodeSub', 'Lock and unlock options') },
+                { id: 'face-unlock',  icon: 'Fingerprint', iconBg: '#34c759', label: t('settings.faceScanPasscode', 'Face Scan & Passcode'), subtitle: t('settings.faceScanPasscodeSub', 'Lock and unlock options') },
                 { id: 'battery',      icon: 'BatteryFull', iconBg: '#34c759', label: t('settings.battery', 'Battery'),               subtitle: t('settings.batterySub', 'Manage battery usage') },
                 { id: 'privacy',      icon: 'ShieldCheck', iconBg: '#0a84ff', label: t('settings.privacySecurity', 'Privacy & Security'),    subtitle: t('settings.privacySecuritySub', 'Control app permissions') },
             ],

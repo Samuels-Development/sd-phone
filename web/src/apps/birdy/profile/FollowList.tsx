@@ -21,11 +21,11 @@ export function FollowList({ kind, handle, onBack }: {
         <div className="absolute inset-0 z-20 flex flex-col" style={{ background: BG, ...pageStyle }}>
             <div className="h-[54px] shrink-0" aria-hidden />
             <header className="flex shrink-0 items-center border-b border-black/10 px-2 pb-2.5 pt-2">
-                <button type="button" onClick={goBack} aria-label={t('birdy.back', 'Back')} className="flex h-9 w-9 items-center justify-center text-black active:opacity-60">
+                <button type="button" onClick={goBack} aria-label={t('squawk.back', 'Back')} className="flex h-9 w-9 items-center justify-center text-black active:opacity-60">
                     <ArrowLeft className="h-6 w-6" strokeWidth={2.2} />
                 </button>
                 <div className="flex-1 text-center text-[19px] font-bold text-black">
-                    {kind === 'following' ? t('birdy.following', 'Following') : t('birdy.followers', 'Followers')}
+                    {kind === 'following' ? t('squawk.following', 'Following') : t('squawk.followers', 'Followers')}
                 </div>
                 <div className="w-9" aria-hidden />
             </header>
@@ -63,7 +63,7 @@ function FollowRow({ user }: { user: BirdyFollowUser }) {
                     {user.verified && <VerifiedBadge size={19} />}
                     {user.followsYou && (
                         <span className="shrink-0 rounded-md border px-2 py-[3px] text-[14px] font-semibold leading-none" style={{ background: '#eeeeee', borderColor: 'rgba(0,0,0,0.2)', color: '#0f1419' }}>
-                            {t('birdy.followsYou', 'Follows you')}
+                            {t('squawk.followsYou', 'Follows you')}
                         </span>
                     )}
                 </div>
@@ -83,15 +83,15 @@ function FollowRow({ user }: { user: BirdyFollowUser }) {
                     ? { border: '1px solid rgba(0,0,0,0.2)', color: '#0f1419' }
                     : { background: BLUE, color: '#fff' }}
             >
-                {following ? t('birdy.following', 'Following') : t('birdy.follow', 'Follow')}
+                {following ? t('squawk.following', 'Following') : t('squawk.follow', 'Follow')}
             </button>
         </div>
 
         {confirmUnfollow && (
             <AlertDialog
-                title={t('birdy.unfollowTitle', 'Unfollow @{handle}?', { handle: user.handle })}
-                message={t('birdy.unfollowMessage', 'Their posts will no longer show up in your home timeline.')}
-                confirmLabel={t('birdy.unfollow', 'Unfollow')}
+                title={t('squawk.unfollowTitle', 'Unfollow @{handle}?', { handle: user.handle })}
+                message={t('squawk.unfollowMessage', 'Their posts will no longer show up in your home timeline.')}
+                confirmLabel={t('squawk.unfollow', 'Unfollow')}
                 onCancel={() => setConfirmUnfollow(false)}
                 onConfirm={unfollow}
             />

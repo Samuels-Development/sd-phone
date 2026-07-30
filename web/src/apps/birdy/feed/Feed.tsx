@@ -54,15 +54,15 @@ export function Feed({ posts, me, feed, onFeedChange, onRefresh, onToggleLike, o
         <div className="flex h-full flex-col">
             <header className="shrink-0">
                 <div className="flex items-center px-4 py-2">
-                    <button type="button" onClick={onOpenProfile} aria-label={t('birdy.yourProfile', 'Your profile')}><Avatar size={44} src={me.avatar} /></button>
+                    <button type="button" onClick={onOpenProfile} aria-label={t('squawk.yourProfile', 'Your profile')}><Avatar size={44} src={me.avatar} /></button>
                     <div className="flex flex-1 justify-center">
                         <BirdyBird className="h-9 w-9 text-[#1d9bf0]" />
                     </div>
                     <div className="w-11" aria-hidden />
                 </div>
                 <div className="relative flex border-b border-black/10">
-                    <FeedTab label={t('birdy.all', 'All')}       active={feed === 'all'}       onClick={() => onFeedChange('all')} />
-                    <FeedTab label={t('birdy.following', 'Following')} active={feed === 'following'} onClick={() => onFeedChange('following')} />
+                    <FeedTab label={t('squawk.all', 'All')}       active={feed === 'all'}       onClick={() => onFeedChange('all')} />
+                    <FeedTab label={t('squawk.following', 'Following')} active={feed === 'following'} onClick={() => onFeedChange('following')} />
                     <span
                         aria-hidden
                         className="absolute bottom-0 left-0 flex w-1/2 justify-center transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
@@ -95,7 +95,7 @@ export function Feed({ posts, me, feed, onFeedChange, onRefresh, onToggleLike, o
                         style={{ background: BLUE }}
                     >
                         <ArrowUp className="h-4 w-4" strokeWidth={2.6} />
-                        {t('birdy.newPosts', 'New posts')}
+                        {t('squawk.newPosts', 'New posts')}
                     </button>
                 )}
 
@@ -116,11 +116,11 @@ export function Feed({ posts, me, feed, onFeedChange, onRefresh, onToggleLike, o
                             icon={<BirdyBird className="h-8 w-8" />}
                             circleClassName="bg-black/[0.06] text-black/35"
                             title={feed === 'following'
-                                ? t('birdy.nothingHereYet', 'Nothing here yet')
-                                : t('birdy.noPostsYet', 'No posts yet')}
+                                ? t('squawk.nothingHereYet', 'Nothing here yet')
+                                : t('squawk.noPostsYet', 'No posts yet')}
                             subtitle={feed === 'following'
-                                ? t('birdy.followingEmptySubtitle', 'When you follow people, their latest posts will show up here.')
-                                : t('birdy.feedEmptySubtitle', 'Posts from you and people you follow will show up here.')}
+                                ? t('squawk.followingEmptySubtitle', 'When you follow people, their latest posts will show up here.')
+                                : t('squawk.feedEmptySubtitle', 'Posts from you and people you follow will show up here.')}
                             subtitleClassName="text-[#536471]"
                         />
                     ) : (

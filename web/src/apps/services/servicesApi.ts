@@ -120,7 +120,7 @@ const DEV_INBOX: Inbox = {
             key: 'police', name: 'Police', color: '#F2C94C', emoji: '🚓',
             preview: 'On our way.', ts: Date.now() - 60_000, unread: 1,
             messages: [
-                { id: 'd1', from: 'me',   body: 'Is anyone available to help me?', ts: Date.now() - 120_000 },
+                { id: 'd1', from: 'me',   body: 'Can someone get out to me?', ts: Date.now() - 120_000 },
                 { id: 'd2', from: 'them', name: 'Officer Marcus', body: 'On our way.', ts: Date.now() - 60_000 },
             ],
         },
@@ -128,8 +128,8 @@ const DEV_INBOX: Inbox = {
     job: [
         {
             key: '5551234', name: 'John Doe', color: '#F2C94C', emoji: '🚓',
-            preview: 'Is anyone available to help me?', ts: Date.now() - 120_000, unread: 2,
-            messages: [{ id: 'd1', from: 'them', name: 'John Doe', body: 'Is anyone available to help me?', ts: Date.now() - 120_000 }],
+            preview: 'Can someone get out to me?', ts: Date.now() - 120_000, unread: 2,
+            messages: [{ id: 'd1', from: 'them', name: 'John Doe', body: 'Can someone get out to me?', ts: Date.now() - 120_000 }],
         },
     ],
     hasJob: true,

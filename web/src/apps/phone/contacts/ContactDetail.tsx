@@ -143,7 +143,7 @@ export function ContactDetail({ contact, onBack, backLabel = t('phone.contacts',
 
                 {!minimal && (
                     <div className="overflow-hidden rounded-[10px] bg-[#e5e5e5] dark:bg-surface">
-                        <ActionRow label={t('phone.shareMyLocation','Send My Location')} onClick={() => setConfirmLocation(true)} />
+                        <ActionRow label={t('phone.sendMyLocation','Send My Location')} onClick={() => setConfirmLocation(true)} />
                         <Divider />
                         <ActionRow
                             label={current.favorite ? t('phone.removeFromFavorites','Remove from Favorites') : t('phone.addToFavorites','Add to Favorites')}
@@ -155,7 +155,7 @@ export function ContactDetail({ contact, onBack, backLabel = t('phone.contacts',
                         />
                         <Divider />
                         <ActionRow
-                            label={blocked ? t('phone.unblockThisCaller','Allow This Number') : t('phone.blockThisCaller','Stop Calls From This Number')}
+                            label={blocked ? t('phone.allowThisNumber','Allow This Number') : t('phone.stopCallsFromNumber','Stop Calls From This Number')}
                             tone="red"
                             onClick={onBlockRow}
                         />
@@ -200,7 +200,7 @@ export function ContactDetail({ contact, onBack, backLabel = t('phone.contacts',
 
             {confirmBlock && (
                 <AlertDialog
-                    title={blocked ? t('phone.unblockThisCaller','Allow This Number') : t('phone.blockThisCaller','Stop Calls From This Number')}
+                    title={blocked ? t('phone.allowThisNumber','Allow This Number') : t('phone.stopCallsFromNumber','Stop Calls From This Number')}
                     message={blocked
                         ? t('phone.unblockMessage','{name} will be able to call and message you again.',{ name: current.name })
                         : t('phone.blockMessage','{name} will no longer be able to call or message you.',{ name: current.name })}

@@ -254,7 +254,7 @@ function Welcome({ appName, tagline, icon, theme, onCreate, onLogin, onForgot, o
                         className="mt-4 w-full px-6 text-center text-[14px] font-semibold leading-snug active:opacity-70"
                         style={{ color: ctaWhite ? '#ffffff' : theme.accent }}
                     >
-                        {t('common.forgotPassword', 'Forgot your password? Tap here to recover your account')}
+                        {t('common.recoverAccount', 'Forgot your password? Tap here to recover your account')}
                     </button>
                 )}
             </div>
@@ -361,7 +361,7 @@ function AuthForm({ mode, appName, icon, theme, fields, notice, myNumber, myEmai
     }
 
     const heading = isCreate ? t('common.createAccount', 'Create account') : t('common.logIn', 'Log in');
-    const title   = isCreate ? t('common.createYourAccount', 'Create your {appName} account', { appName }) : t('common.logInTo', 'Log in to {appName}', { appName });
+    const title   = isCreate ? t('common.newAccountFor', 'Create your {appName} account', { appName }) : t('common.logInTo', 'Log in to {appName}', { appName });
     const formBg  = theme.formBg ?? '#f2f3f5';
 
     function clearFieldError(key: string) {

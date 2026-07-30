@@ -115,7 +115,7 @@ export function UserProfile({ handle, me: _me, onBack, onOpenProfile: _onOpenPro
                             <div className="flex h-[68px] w-[68px] items-center justify-center rounded-full border-[2.5px] border-black">
                                 <Lock className="h-[32px] w-[32px] text-black" strokeWidth={2} />
                             </div>
-                            <div className="text-[21px] font-bold text-black">{t('photogram.accountIsPrivate', 'This Account is Private')}</div>
+                            <div className="text-[21px] font-bold text-black">{t('photogram.accountIsPrivate', 'Private Account')}</div>
                             <div className="text-[16px]" style={{ color: IG.sub }}>{t('photogram.followToSeePhotos', 'Follow to see their photos and videos.')}</div>
                         </div>
                     ) : posts.length === 0 ? (

@@ -139,7 +139,7 @@ export function EditProfile({ profile, onChange, onSignOut, onDeleteAccount }: {
                     onChange={v => onChange({ ...profile, gender: v })}
                 />
 
-                <Label>{t('cherry.profileVisibility', 'Who Can See You')}</Label>
+                <Label>{t('cherry.whoCanSeeYou', 'Who Can See You')}</Label>
                 <div className="flex items-center justify-between rounded-[10px] bg-black/[0.05] px-4 py-3.5">
                     <div className="min-w-0">
                         <p className="text-[17px] font-medium text-black">{t('cherry.showMeOnCherry', 'Show me on Cherry')}</p>

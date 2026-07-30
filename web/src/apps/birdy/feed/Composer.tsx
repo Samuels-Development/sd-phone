@@ -76,7 +76,7 @@ export function Composer({ onClose, onPost }: {
 
             <header className="flex items-center justify-between px-4 py-2.5">
                 <button type="button" onClick={requestClose} className="text-[16px]" style={{ color: BLUE }}>
-                    {t('birdy.cancel', 'Cancel')}
+                    {t('squawk.cancel', 'Cancel')}
                 </button>
                 <button
                     type="button"
@@ -85,7 +85,7 @@ export function Composer({ onClose, onPost }: {
                     className="rounded-full px-4 py-1.5 text-[15px] font-bold text-white transition-[transform,opacity] active:scale-95 disabled:opacity-50"
                     style={{ background: BLUE }}
                 >
-                    {t('birdy.post', 'Post')}
+                    {t('squawk.post', 'Post')}
                 </button>
             </header>
 
@@ -98,7 +98,7 @@ export function Composer({ onClose, onPost }: {
                         onChange={e => setText(e.target.value)}
                         onFocus={() => setEmojiOpen(false)}
                         maxLength={MAX_POST_LENGTH}
-                        placeholder={t('birdy.whatsHappening', "What's on your mind?")}
+                        placeholder={t('squawk.whatsHappening', "What's on your mind?")}
                         className="min-h-[110px] flex-none resize-none bg-transparent pt-1 text-[17px] leading-snug text-black outline-none placeholder:font-semibold placeholder:text-[#536471]"
                         style={{ caretColor: BLUE }}
                     />
@@ -111,7 +111,7 @@ export function Composer({ onClose, onPost }: {
                                     <button
                                         type="button"
                                         onClick={() => removeImage(i)}
-                                        aria-label={t('birdy.removeImage', 'Remove image')}
+                                        aria-label={t('squawk.removeImage', 'Remove image')}
                                         className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 active:opacity-70"
                                     >
                                         <X className="h-[16px] w-[16px] text-white" strokeWidth={2.6} />
@@ -128,7 +128,7 @@ export function Composer({ onClose, onPost }: {
             <div className="flex items-center gap-1 px-3 pb-8 pt-1.5" style={{ background: BG }}>
                 <button
                     type="button"
-                    aria-label={t('birdy.addImage', 'Add image')}
+                    aria-label={t('squawk.addImage', 'Add image')}
                     disabled={atImageLimit}
                     onClick={() => setPicking(true)}
                     className="flex h-10 w-10 items-center justify-center rounded-full active:bg-black/5 disabled:opacity-40"
@@ -137,7 +137,7 @@ export function Composer({ onClose, onPost }: {
                 </button>
                 <button
                     type="button"
-                    aria-label={t('birdy.addGif', 'Add GIF')}
+                    aria-label={t('squawk.addGif', 'Add GIF')}
                     disabled={atImageLimit}
                     onClick={() => setPickingGif(true)}
                     className="flex h-10 w-10 items-center justify-center rounded-full active:bg-black/5 disabled:opacity-40"
@@ -146,7 +146,7 @@ export function Composer({ onClose, onPost }: {
                 </button>
                 <button
                     type="button"
-                    aria-label={t('birdy.addEmoji', 'Add emoji')}
+                    aria-label={t('squawk.addEmoji', 'Add emoji')}
                     onClick={toggleEmoji}
                     className="flex h-10 w-10 items-center justify-center rounded-full active:bg-black/5"
                 >

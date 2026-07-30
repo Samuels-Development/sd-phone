@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { resetContacts, syncSimNumber, useContactsStore } from './contactsStore';
 
-const MOCK_NUMBER = '2051189847';
+const MOCK_NUMBER = '2135550100';
 
 function flush(): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, 0));

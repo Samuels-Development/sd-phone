@@ -154,8 +154,8 @@ export interface BlockedEntry { username: string; name: string; age: number; pho
 
 export async function cherryBlockedList(): Promise<BlockedEntry[]> {
     if (!isFiveM) {
-        const nova = PROFILES.find(p => p.name === 'Nova');
-        return [{ username: 'nova', name: 'Nova', age: 26, photo: nova?.photos[0] }];
+        const sloane = PROFILES.find(p => p.name === 'Sloane');
+        return [{ username: 'sloane', name: 'Sloane', age: 26, photo: sloane?.photos[0] }];
     }
     const r = await apiData<BlockedEntry[]>('sd-phone:cherry:blockedList');
     return Array.isArray(r) ? r : [];

@@ -12,7 +12,8 @@ local CAM_FOV <const> = 50.0
 local REAR_OFFSET <const> = 0.12
 ---@type number Metres the lens rides above the head bone.
 local RISE <const> = 0.05
----@type number Metres the selfie lens sits out in front of the face, lb-phone's selfie reach.
+---@type number Metres the selfie lens sits out in front of the face: far enough out that the
+---player's head and shoulders fit in frame at arm's length.
 local SELFIE_REACH <const> = 0.55
 ---@type number Metres the selfie lens sits right of centre, where a right hand holds it.
 local SELFIE_RIGHT <const> = 0.05
@@ -21,8 +22,8 @@ local SELFIE_DROP <const> = 0.05
 ---@type number Degrees the selfie lens may swing off the body while seated, where the player
 ---cannot turn to follow it. Well short of the quarter turn that would show the side of the head.
 local SELFIE_YAW_LIMIT <const> = 60.0
----@type number Degrees the rear lens may swing off the vehicle while seated, lb-phone's seated
----left/right limit. On foot there is none: the player turns to face the shot instead.
+---@type number Degrees the rear lens may swing off the vehicle while seated, wide enough to shoot
+---out of either side window. On foot there is none: the player turns to face the shot instead.
 local SEATED_YAW_LIMIT <const> = 120.0
 ---@type number Degrees of view turn per frame below which the player is not deliberately looking
 ---around, so the pivot stays out of the way of ordinary walking.
@@ -32,10 +33,11 @@ local TURN_EPSILON <const> = 0.05
 local MOVING_SPEED <const> = 0.1
 ---@type number Degrees the selfie lens may tilt up or down under the mouse.
 local SELFIE_PITCH_LIMIT <const> = 45.0
----@type number Selfie field of view, lb-phone's selfie default: wider than the rear lens so the
----player fits in frame at arm's length.
+---@type number Selfie field of view, wider than the rear lens so the player and some of the street
+---behind them both fit at that reach.
 local SELFIE_FOV <const> = 60.0
----@type number Tightest field of view the lens will zoom to, lb-phone's MinFOV.
+---@type number Tightest field of view the lens will zoom to. Any narrower and the smallest aim
+---movement throws the frame off the subject.
 local MIN_FOV <const> = 10.0
 ---@type number Fraction of the remaining gap to the target field of view the lens closes each
 ---frame. Zooming optically means the game renders the tighter view, so it stays sharp.

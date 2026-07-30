@@ -9,6 +9,7 @@
         "build:demo": "tsc --noEmit && vite build --mode demo",
         "preview": "vite preview",
         "lint": "eslint src",
+        "guard:strings": "node scripts/string-guard.mjs",
         "test": "vitest run",
         "knip": "knip"
     },
