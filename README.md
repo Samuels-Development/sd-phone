@@ -91,6 +91,33 @@ Eleven widgets, each in three sizes (2x2, 4x2 and 4x4), added from the Add Widge
 
 Nine of them offer a **Dark, Light or Glass** finish; Glass frosts your wallpaper behind the tile. Weather and Now Playing take their colour from their content instead. Clock and Weather also align left, centre or right. Previews in the picker render over your own wallpaper at true size, so what you see is what gets placed.
 
+## Companion: sd-tablet
+
+<div align="center">
+
+### [sd-tablet](https://github.com/Samuels-Development/sd-tablet) is a tablet for the same character
+
+[![sd-tablet](https://img.shields.io/badge/sd--tablet-companion%20resource-94DD0C?style=for-the-badge)](https://github.com/Samuels-Development/sd-tablet)
+
+</div>
+
+A second device your players can carry, running **this** phone's apps on a bigger screen. It is a
+companion resource, not a separate phone: it ships no apps, no database tables and no server logic
+of its own, and it renders sd-phone's own `web/src` against a tablet device profile, so there is
+exactly one copy of the interface and it cannot drift.
+
+Everything is shared because nothing is copied. One set of player data on this server, two devices
+reading it: the same Messages threads, contacts, mail, notes, photos, app logins, wallet, settings
+and passcode. There is no pairing step and no sync, because there is nothing to sync.
+
+The tablet cannot **place or answer voice calls**. That refusal is enforced here, in
+`client/companion.lua`, on sd-phone's side of the seam, so it holds even for a modified tablet
+build. Home screen arrangement is the one thing the two devices keep separately, since a layout's
+page boundaries are that device's own grid.
+
+Requires sd-phone, and only works alongside it. Install it next to this resource and `ensure` it
+after: [github.com/Samuels-Development/sd-tablet](https://github.com/Samuels-Development/sd-tablet)
+
 ## Highlights
 
 - **Real accounts engine.** Social apps use actual registration and login, with verification codes and password resets delivered by in-game mail or SMS. Accounts are global, not per-character-slot.
