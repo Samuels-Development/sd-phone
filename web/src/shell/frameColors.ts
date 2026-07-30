@@ -33,13 +33,24 @@ const darken  = (hex: string, amt: number) => mix(hex, 0, amt);
 
 export interface FrameStops { s0: string; s20: string; s45: string; s68: string; s100: string }
 
-export function frameStops(name: string): FrameStops {
+// How hard the chassis gradient swings either side of the base colour. The polished ramp is tuned
+// for a phone rail a few hundred px long; across a tablet slab the same swing spreads into a broad
+// shine, so the matte ramp keeps the same shape at roughly a third of the contrast.
+const FINISH_RAMP = {
+    polished: { top: 0.30, trough: 0.30, tail: 0.14 },
+    matte:    { top: 0.11, trough: 0.09, tail: 0.05 },
+} as const;
+
+export type FrameFinish = keyof typeof FINISH_RAMP;
+
+export function frameStops(name: string, finish: FrameFinish = 'polished'): FrameStops {
     const base = FRAME_COLORS[name] ?? FRAME_COLORS[DEFAULT_FRAME_COLOR];
+    const ramp = FINISH_RAMP[finish] ?? FINISH_RAMP.polished;
     return {
-        s0:   lighten(base, 0.30),
+        s0:   lighten(base, ramp.top),
         s20:  base,
-        s45:  darken(base, 0.30),
+        s45:  darken(base, ramp.trough),
         s68:  base,
-        s100: lighten(base, 0.14),
+        s100: lighten(base, ramp.tail),
     };
 }

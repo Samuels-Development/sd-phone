@@ -43,6 +43,13 @@ export interface DeviceGrid {
     stripTop: number;
 }
 
+/**
+ * Chassis finish. `polished` is the phone's high-contrast metal sweep, which sells a small rail.
+ * `matte` flattens the same ramp for a large slab, where that sweep reads as a shiny toy rather
+ * than anodised aluminium.
+ */
+export type DeviceFinish = 'polished' | 'matte';
+
 export interface DeviceScreen {
     /** Screen width/height in CSS px - the coordinate space every app is laid out in. */
     w: number;
@@ -53,8 +60,18 @@ export interface DeviceScreen {
     radius: number;
     /** Dynamic Island cutout, pills and the lens dot. Tablets have none. */
     island: boolean;
+    /** How the chassis is shaded. Defaults to `polished`, the phone's look. */
+    finish?: DeviceFinish;
+    /** Side-button thickness in frame px. Defaults to 3.5, the phone's rail. */
+    buttonWidth?: number;
     buttons: readonly DeviceButton[];
     grid: DeviceGrid;
+    /**
+     * Dock width. `true` stretches the tray edge to edge and spreads its icons across it, which
+     * suits a narrow phone. `false` sizes the tray to its contents and centres it, the way a
+     * tablet dock floats. Defaults to `true`.
+     */
+    dockFill?: boolean;
 }
 
 export interface DeviceProfile {

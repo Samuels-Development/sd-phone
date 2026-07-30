@@ -75,8 +75,17 @@ const BEZEL = rrect(0, 0, W, H, BR) + ' ' + rrect(
     SR - CUTOUT_INSET,
 );
 
-const BTN_W  = 3.5;
-const BTN_RX = 1.75;
+const FINISH = device.screen.finish ?? 'polished';
+const MATTE  = FINISH === 'matte';
+
+const BTN_W  = device.screen.buttonWidth ?? 3.5;
+const BTN_RX = BTN_W / 2;
+
+// A matte slab catches far less light than a polished rail: the diagonal sheen and the bright
+// top edge both drop to roughly half, or the flattened gradient underneath is wasted.
+const SHEEN_TOP  = MATTE ? 0.05 : 0.10;
+const SHEEN_MID  = MATTE ? 0.015 : 0.03;
+const EDGE_LIGHT = MATTE ? 0.10 : 0.18;
 
 // The profile stores a rail side; the rail's x is whatever the frame width makes it.
 const BUTTONS = device.screen.buttons.map(b => ({ ...b, x: b.side === 'left' ? -BTN_W : W }));
@@ -289,7 +298,7 @@ function MusicIsland({ track, playing, expanded, closing, onToggle, onPlayPause,
 }
 
 export function PhoneShell({ children, cameraActive = false, entering = false, leaving = false, landscape = false, peek, onClose, radioIsland, alarmIsland, frameColor = DEFAULT_FRAME_COLOR }: PhoneShellProps) {
-    const rail = frameStops(frameColor);
+    const rail = frameStops(frameColor, FINISH);
     const { brightness, phoneScale, phoneAlign, ringtoneVol, setRingtoneVol } = useTheme('brightness', 'phoneScale', 'phoneAlign', 'ringtoneVol', 'setRingtoneVol');
     const { current: nowPlaying, playing: musicPlaying, volume: musicVolume, setVolume: setMusicVolume, requestOpen: openMusic, toggle: toggleMusic, next: nextMusic, prev: prevMusic } = useMusic();
 
@@ -463,8 +472,8 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                         </linearGradient>
 
                         <linearGradient id={`${GID}-sheen`} x1="0%" y1="0%" x2="60%" y2="100%">
-                            <stop offset="0%"   stopColor="rgba(255,255,255,0.10)" />
-                            <stop offset="40%"  stopColor="rgba(255,255,255,0.03)" />
+                            <stop offset="0%"   stopColor={`rgba(255,255,255,${SHEEN_TOP})`} />
+                            <stop offset="40%"  stopColor={`rgba(255,255,255,${SHEEN_MID})`} />
                             <stop offset="100%" stopColor="rgba(255,255,255,0.00)" />
                         </linearGradient>
                     </defs>
@@ -475,7 +484,7 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                     <path
                         d={rrect(0.5, 0.5, W - 1, stageH - 1, BR)}
                         fill="none"
-                        stroke="rgba(255,255,255,0.18)"
+                        stroke={`rgba(255,255,255,${EDGE_LIGHT})`}
                         strokeWidth="0.75"
                     />
 
@@ -523,13 +532,13 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                                 x={btn.x} y={btn.y}
                                 width={BTN_W} height={4}
                                 rx={BTN_RX}
-                                fill="rgba(255,255,255,0.22)"
+                                fill={`rgba(255,255,255,${MATTE ? 0.12 : 0.22})`}
                             />
                             <rect
                                 x={btn.x} y={btn.y + btn.h - 4}
                                 width={BTN_W} height={4}
                                 rx={BTN_RX}
-                                fill="rgba(0,0,0,0.30)"
+                                fill={`rgba(0,0,0,${MATTE ? 0.18 : 0.30})`}
                             />
                         </g>
                     ))}

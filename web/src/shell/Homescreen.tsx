@@ -28,6 +28,11 @@ import { t } from '@/i18n';
 // the artwork - so a centred tile and a left-aligned one land on the same pixel in either mode.
 const { cols: COLS, rows: ROWS, padX: PAD_X, icon: ICON, colStride: COL_STRIDE, rowY0: ROW_Y0, rowStride: ROW_STRIDE, stripTop } = device.screen.grid;
 const { w: SCREEN_W, h: SCREEN_H } = device.screen;
+
+// A phone dock spans the screen and spreads its icons over it. A tablet dock is a floating tray
+// sized to its contents, so the slots stop stretching and the row is centred instead.
+const DOCK_FILL = device.screen.dockFill ?? true;
+const DOCK_SLOT = DOCK_FILL ? 'relative flex flex-1 justify-center' : 'relative flex justify-center';
 const ITEMS_PER_PAGE = COLS * ROWS;
 const COMMIT_THRESHOLD = SCREEN_W * 0.2;
 const FLICK_VELOCITY = 0.4;
@@ -1081,21 +1086,26 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
 
             <div
                 ref={dockRef}
-                className="absolute bottom-5 left-4 right-4 z-10"
+                className={DOCK_FILL
+                    ? 'absolute bottom-5 left-4 right-4 z-10'
+                    : 'absolute bottom-5 left-1/2 z-10 -translate-x-1/2'}
                 onPointerDown={armLongPress}
                 onPointerMove={longPressMove}
                 onPointerUp={clearLP}
                 onPointerCancel={clearLP}
             >
-                <div ref={dockRowRef} className="flex items-center rounded-[28px] border border-white/20 bg-white/15 px-4 py-3.5 backdrop-blur-2xl">
+                <div
+                    ref={dockRowRef}
+                    className={`flex items-center rounded-[28px] border border-white/20 bg-white/15 py-3.5 backdrop-blur-2xl ${DOCK_FILL ? 'px-4' : 'gap-5 px-5'}`}
+                >
                     {dockView.map((app, di) => (
                         <div
                             key={app.id}
                             data-dock-idx={di}
                             data-dock-id={app.id}
                             onPointerDown={e => onDockIconDown(e, app.id, di)}
-                            className="relative flex flex-1 justify-center"
-                            style={{ touchAction: 'none' }}
+                            className={DOCK_SLOT}
+                            style={DOCK_FILL ? { touchAction: 'none' } : { touchAction: 'none', width: TILE }}
                         >
                             {!!dragId && (dockOver === di || app.id === dockPlan?.intoDock) && (
                                 <div
@@ -1130,7 +1140,11 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
                         </div>
                     ))}
                     {dockOver !== null && !dragFromDock && dockView.length < DOCK_MAX && (
-                        <div data-dock-idx={dockView.length} className="relative flex flex-1 justify-center" style={{ touchAction: 'none' }}>
+                        <div
+                            data-dock-idx={dockView.length}
+                            className={DOCK_SLOT}
+                            style={DOCK_FILL ? { touchAction: 'none' } : { touchAction: 'none', width: TILE }}
+                        >
                             <div
                                 className="border border-white/40 bg-white/10"
                                 style={{ width: TILE, height: TILE, borderRadius: '27.6%', boxShadow: dockOver === dockView.length ? '0 0 0 3.5px rgba(255,255,255,0.92)' : undefined }}
