@@ -1,6 +1,7 @@
 {
     "entry": ["index.html"],
     "project": ["src/**/*.{ts,tsx}"],
+    "ignoreExportsUsedInFile": true,
     "ignore": [
         "src/render/threeExports.d.ts",
         "src/stores/index.ts",
