@@ -11,10 +11,6 @@ function readInstalled(): string[] {
     return arr ? arr.filter((x): x is string => typeof x === 'string') : [];
 }
 
-export function installedCustomIds(): string[] {
-    return readInstalled();
-}
-
 export function setCustomInstalled(id: string, installed: boolean): void {
     const set = new Set(readInstalled());
     if (installed) set.add(id); else set.delete(id);
