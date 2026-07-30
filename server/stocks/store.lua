@@ -139,19 +139,27 @@ function store.loadPrices()
     return out
 end
 
----Batch-persist the in-memory market (upsert per symbol, one prepared statement). `rows` is an
----array of { symbol, price, history (number[]) } straight from engine.persistRows.
+---Batch-persist the in-memory market as one multi-row upsert. `rows` is an array of
+---{ symbol, price, history (number[]) } straight from engine.persistRows.
 ---@param rows table[] rows to persist
 function store.savePrices(rows)
     if #rows == 0 then return end
+
     local ts = os.time()
-    local params = {}
-    for i, r in ipairs(rows) do
-        params[i] = { r.symbol, r.price, json.encode(r.history or {}), ts }
+    local values, params = {}, {}
+    for i = 1, #rows do
+        local row = rows[i]
+        values[i] = '(?, ?, ?, ?)'
+        params[#params + 1] = row.symbol
+        params[#params + 1] = row.price
+        params[#params + 1] = json.encode(row.history or {})
+        params[#params + 1] = ts
     end
+
     MySQL.prepare.await(
-        'INSERT INTO `phone_stock_prices` (symbol, price, history, updated_at) VALUES (?, ?, ?, ?) ' ..
-        'ON DUPLICATE KEY UPDATE price = VALUES(price), history = VALUES(history), updated_at = VALUES(updated_at)',
+        'INSERT INTO `phone_stock_prices` (symbol, price, history, updated_at) VALUES ' ..
+        table.concat(values, ', ') ..
+        ' ON DUPLICATE KEY UPDATE price = VALUES(price), history = VALUES(history), updated_at = VALUES(updated_at)',
         params)
 end
 
