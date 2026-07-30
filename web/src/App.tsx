@@ -43,7 +43,7 @@ import { ThemeProvider, useTheme, useThemeStore } from '@/stores/themeStore';
 import { useCallStore } from '@/stores/callStore';
 import type { AppDef } from '@/core/types';
 import { listInstalledApps, installApp, uninstallApp, loadHomeLayout, saveHomeLayout, parseLayout, type SavedLayout } from '@/apps/appstore/appsApi';
-import { customToAppDef, installedCustomIds, isCustomApp, setCustomInstalled, useCustomApps, useCustomAppsStore } from '@/stores/customAppsStore';
+import { clearCustomInstalled, customToAppDef, isCustomApp, setCustomInstalled, useCustomApps, useCustomAppsStore, withCustomInstalled } from '@/stores/customAppsStore';
 import { resolveWallpaper } from '@/shell/wallpapers';
 import { NoSimScreen } from '@/shell/NoSimScreen';
 import { useNoService, useNoSim, useSimStore } from '@/stores/simStore';
@@ -405,10 +405,10 @@ function AppContent() {
         // payload still counts as ready - the Homescreen must never wait on a follow-up that
         // isn't coming. The dev harness fetches from its local mock instead.
         if (data.installedApps) {
-            setInstalledApps(new Set([...data.installedApps, ...installedCustomIds()]));
+            setInstalledApps(withCustomInstalled(data.installedApps));
             setAppsReady(true);
         } else {
-            if (!isFiveM) void listInstalledApps().then(ids => setInstalledApps(new Set([...ids, ...installedCustomIds()])));
+            if (!isFiveM) void listInstalledApps().then(ids => setInstalledApps(withCustomInstalled(ids)));
             setAppsReady(!isFiveM);
         }
         // Under unique phones the localStorage layout fallback is another profile's - server only.
@@ -428,7 +428,7 @@ function AppContent() {
     // fetched after the reveal so the server round-trip never delayed the phone appearing.
     useNuiEvent('sd-phone:apps', useCallback((data) => {
         if (!data) return;
-        setInstalledApps(new Set([...(data.installedApps ?? []), ...installedCustomIds()]));
+        setInstalledApps(withCustomInstalled(data.installedApps ?? []));
         setSavedLayout(data.homeLayout ? parseLayout(data.homeLayout) : null);
         setAppsReady(true);
     }, []));
@@ -652,7 +652,7 @@ function AppContent() {
     const finishInstall = useCallback((id: string) => {
         setInstalledApps(prev => new Set(prev).add(id));
         if (isCustomApp(id)) { setCustomInstalled(id, true); void fetchNui('customApps/lifecycle', { id, action: 'install' }); }
-        else void installApp(id).then(ids => setInstalledApps(new Set(ids)));
+        else void installApp(id).then(ids => setInstalledApps(withCustomInstalled(ids)));
     }, []);
     const pumpDownloads = useCallback(function pump() {
         const id = downloadQueue.current[0];
@@ -689,7 +689,7 @@ function AppContent() {
         setRecentApps(prev => prev.filter(x => x !== id));
         setForegroundKeys(m => { const n = { ...m }; delete n[id]; return n; });
         if (isCustomApp(id)) { setCustomInstalled(id, false); void fetchNui('customApps/lifecycle', { id, action: 'uninstall' }); }
-        else void uninstallApp(id).then(ids => setInstalledApps(new Set(ids)));
+        else void uninstallApp(id).then(ids => setInstalledApps(withCustomInstalled(ids)));
     }, []);
     const handleSaveLayout = useCallback((layout: SavedLayout) => {
         saveHomeLayout(layout);
@@ -1195,6 +1195,7 @@ function AppContent() {
         for (const k of doomed) window.localStorage.removeItem(k);
         if (scope === 'erase') {
             resetAuth();
+            clearCustomInstalled();
             useMusicLibrary.getState().reset();
             useLocaleStore.getState().hydrate();
             void fetchNui('sd-phone:settings:factoryReset');

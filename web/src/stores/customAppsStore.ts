@@ -21,6 +21,14 @@ export function setCustomInstalled(id: string, installed: boolean): void {
     writeJson(INSTALLED_KEY, [...set]);
 }
 
+export function withCustomInstalled(ids: Iterable<string>): Set<string> {
+    return new Set([...ids, ...readInstalled()]);
+}
+
+export function clearCustomInstalled(): void {
+    writeJson(INSTALLED_KEY, []);
+}
+
 interface CustomAppsState {
     apps:    CustomAppDef[];
     setAll:  (apps: CustomAppDef[] | null | undefined) => void;
