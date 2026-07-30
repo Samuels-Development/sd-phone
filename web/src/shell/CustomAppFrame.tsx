@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { fetchNui } from '@/core/nui';
+import { device } from '@device';
+import { fetchNui, hostResource } from '@/core/nui';
 import { apiData } from '@/core/api';
 import { apiSavePhotoFromUrl } from '@/core/photosApi';
 import { t, getLocale, getLocaleTag } from '@/i18n';
@@ -20,7 +21,9 @@ import { useDeckActive } from './deckActive';
 import { resolveCustomUi } from './widgets/customUrl';
 import type { Contact } from '@/apps/phone/data';
 
-const COMPONENTS_URL = 'https://cfx-nui-sd-phone/web/build/components.js';
+// The SDK ships with whichever resource serves this page - a companion device may not reach
+// sd-phone's own files.
+const COMPONENTS_URL = `https://cfx-nui-${hostResource}/web/build/components.js`;
 
 const warned = new Set<string>();
 function warnOnce(name: string): void {
@@ -162,6 +165,7 @@ export function CustomAppFrame({ appId }: { appId: string; onClose: () => void }
     }, []);
 
     const createCall = useCallback((data: Record<string, unknown>) => {
+        if (!device.calls) { warnOnce('CreateCall'); return; }
         window.postMessage({ action: 'sd-phone:launchApp', data: { id: 'phone', link: data } }, '*');
         warnOnce('CreateCall(auto-dial)');
     }, []);

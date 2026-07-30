@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Image as ImageIcon, Pencil, Trash2 } from 'lucide-react';
 
+import { device } from '@device';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { Scroller } from '@/ui/Scroller';
 import { MailGlyph, MessageGlyph, PhoneGlyph } from '@/shell/AppGlyphs';
@@ -157,9 +158,11 @@ export function ListingDetail({ item, backLabel, itemNoun = t('classifieds.post'
                                         <Tile color="#34C759" label={t('classifieds.message', 'Message')} onClick={onMessage}>
                                             <MessageGlyph className="h-[32px] w-[32px]" />
                                         </Tile>
-                                        <Tile color="#0A84FF" label={t('classifieds.call', 'Call')} onClick={onCall}>
-                                            <PhoneGlyph className="h-[30px] w-[30px]" />
-                                        </Tile>
+                                        {device.calls && (
+                                            <Tile color="#0A84FF" label={t('classifieds.call', 'Call')} onClick={onCall}>
+                                                <PhoneGlyph className="h-[30px] w-[30px]" />
+                                            </Tile>
+                                        )}
                                     </>
                                 )}
                                 {item.email && onEmail && (

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 
+import { device } from '@device';
 import { AppIconSVG } from './AppIconSVG';
 import { AppBadge } from './AppBadge';
 import { registerCardStage } from './appDeckBridge';
@@ -8,10 +9,10 @@ import { useBadges } from '@/stores/badgeStore';
 import type { AppDef } from '@/core/types';
 import { t } from '@/i18n';
 
-const SW         = 440;
-const SH         = 956;
-const SR         = 49;
-const CARD_W     = 362;
+const SW         = device.screen.w;
+const SH         = device.screen.h;
+const SR         = 49;   // card corner, drawn scaled - deliberately rounder than the screen's own radius
+const CARD_W     = Math.round(SW * 362 / 440);   // the card is a fraction of the screen, not a fixed width: hold the phone's 362/440
 const CARD_H     = Math.round(SH * CARD_W / SW);
 const SCALE      = CARD_W / SW;
 const CARD_STEP  = Math.round(CARD_W * 0.74);   // overlap so the focused card sits forward
@@ -21,6 +22,12 @@ const FLICK_VX   = 0.35;               // px/ms - a quick flick pages even on a 
 const HEADER_H   = 42;
 const HEADER_TOP = 46;
 const CARD_TOP   = HEADER_TOP + HEADER_H + 8;
+
+// index.css's ios-app-expand grows an opened app from exactly the card scale it was tapped at,
+// but that keyframe runs on AppDeck's host - not a descendant of this component, which unmounts
+// as the animation starts. PhoneShell publishes this on the screen instead: an ancestor of the
+// host that outlives the switcher.
+export const SWITCHER_SCALE = SCALE;
 
 const ICON_NATIVE = 60;
 const ICON_DISP   = 36;

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUp, ChevronLeft, MapPin, Mic, Phone, UserPlus, Video, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
+import { device } from '@device';
 import { t } from '@/i18n';
 import { useTheme } from '@/stores/themeStore';
 import { useSessionState } from '@/hooks/useSessionState';
@@ -335,7 +336,7 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
                     )}
 
                     <div className="flex flex-1 items-center justify-end gap-[18px] pr-1.5">
-                        {!conv.groupName && (
+                        {!conv.groupName && device.calls && (
                             <>
                                 <button type="button" onClick={() => setCallConfirm('voice')} className="text-[#007AFF] active:opacity-60">
                                     <Phone className="h-[28px] w-[28px]" strokeWidth={2} />

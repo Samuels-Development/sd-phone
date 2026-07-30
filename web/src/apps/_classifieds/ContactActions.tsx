@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Trash2 } from 'lucide-react';
 
+import { device } from '@device';
 import { t } from '@/i18n';
 import { MailGlyph, MessageGlyph, PhoneGlyph } from '@/shell/AppGlyphs';
 
@@ -33,7 +34,7 @@ export function ContactActions({ onMessage, onCall, onEmail, onDelete, subject =
                     <MessageGlyph className="h-[25px] w-[25px]" />
                 </Tile>
             )}
-            {onCall && (
+            {onCall && device.calls && (
                 <Tile color="#0A84FF" label={t('common.callSubject', 'Call {subject}', { subject })} onClick={onCall}>
                     <PhoneGlyph className="h-[21px] w-[21px]" />
                 </Tile>

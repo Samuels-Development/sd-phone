@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { device } from '@device';
 import { t } from '@/i18n';
 import { useContactActions } from '@/apps/_classifieds/useContactActions';
 import { BusinessLogo } from './BusinessCard';
@@ -99,7 +100,7 @@ export function BusinessDetail({ businessId, initial, onBack, onMutated }: {
                         <div className="flex items-center justify-between border-t border-black/[0.06] py-2.5 dark:border-white/[0.08]">
                             <span className="text-[14px] text-black/55 dark:text-white/55">{t('review.contact', 'Contact')}</span>
                             <div className="flex gap-4">
-                                <button type="button" onClick={() => contact.call(b.phone!)} className="text-[15px] font-medium text-ios-blue">{t('review.call', 'Call')}</button>
+                                {device.calls && <button type="button" onClick={() => contact.call(b.phone!)} className="text-[15px] font-medium text-ios-blue">{t('review.call', 'Call')}</button>}
                                 <button type="button" onClick={() => contact.message(b.phone!)} className="text-[15px] font-medium text-ios-blue">{t('review.message', 'Message')}</button>
                             </div>
                         </div>

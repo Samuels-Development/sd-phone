@@ -317,12 +317,14 @@ input[type='number'] {
     to   { transform: scale(0.01); }
 }
 
-/* Opening from the app switcher: the card is already a ~0.82-scale near-fullscreen
-   preview of the live app, so grow from THAT size (about the tapped card's centre)
-   instead of popping up from a point like a home-screen launch. 0.82 = CARD_W / SW. */
+/* Opening from the app switcher: the card is already a near-fullscreen preview of the live
+   app, so grow from THAT size (about the tapped card's centre) instead of popping up from a
+   point like a home-screen launch. The start scale IS AppSwitcher's SCALE (CARD_W / SW), so it
+   moves with the screen width - AppSwitcher publishes it as --switcher-scale; the fallback is
+   the phone's 362/440. */
 @keyframes ios-app-expand {
-    from { transform: scale(0.82); }
-    to   { transform: scale(1);    }
+    from { transform: scale(var(--switcher-scale, 0.82)); }
+    to   { transform: scale(1);                           }
 }
 
 /* Applied to the app wrapper only while its open/close scale is running (AppDeck's

@@ -2,6 +2,8 @@
 local config = require 'configs.config'
 ---@type table Target bridge (bridge.client.target): ox_target/qb-target/qtarget wrapper.
 local target = require 'bridge.client.target'
+---@type table Companion-device bus (client.companion): whether a sibling device holds the screen.
+local companion = require 'client.companion'
 
 ---@type table Payphone config (configs/payphone.lua).
 local cfg = config.Payphone
@@ -316,6 +318,10 @@ end
 ---@param connected table|nil live-call payload when answering an inbound ring
 local function openPayphone(entity, coords, connected)
     if not cfg.Enabled or activeLocation then return end
+    -- One device at a time, the same exclusion OpenPhone starts: the booth's UI lives in THIS
+    -- frame and its pushes are denied to a companion, so a tablet holding the screen would keep
+    -- the cursor while the keypad drew behind it.
+    if companion.companionOpen then TriggerEvent('sd-phone:client:companion:close') end
     local location = locationKey(coords)
 
     local state

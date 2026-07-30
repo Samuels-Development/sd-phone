@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { MapPin, MessageSquare, Navigation, Phone, X } from 'lucide-react';
 
+import { device } from '@device';
 import { fetchNui, isFiveM } from '@/core/nui';
 import { t } from '@/i18n';
 import { AlertDialog } from '@/ui/AlertDialog';
@@ -149,10 +150,12 @@ export function TripDriver() {
                         </div>
 
                         {r.riderNumber && (
-                            <div className="mb-3.5 grid grid-cols-2 gap-3">
-                                <button onClick={() => setConfirmCall(true)} className="flex items-center justify-center gap-2 rounded-[14px] bg-black/[0.06] py-3 text-[15px] font-semibold text-black active:opacity-70 dark:bg-white/10 dark:text-white">
-                                    <Phone className="h-[20px] w-[20px]" strokeWidth={2.2} /> {t('ryde.call', 'Call')}
-                                </button>
+                            <div className={`mb-3.5 grid ${device.calls ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
+                                {device.calls && (
+                                    <button onClick={() => setConfirmCall(true)} className="flex items-center justify-center gap-2 rounded-[14px] bg-black/[0.06] py-3 text-[15px] font-semibold text-black active:opacity-70 dark:bg-white/10 dark:text-white">
+                                        <Phone className="h-[20px] w-[20px]" strokeWidth={2.2} /> {t('ryde.call', 'Call')}
+                                    </button>
+                                )}
                                 <button onClick={messageRider} className="flex items-center justify-center gap-2 rounded-[14px] bg-black/[0.06] py-3 text-[15px] font-semibold text-black active:opacity-70 dark:bg-white/10 dark:text-white">
                                     <MessageSquare className="h-[20px] w-[20px]" strokeWidth={2.2} /> {t('ryde.message', 'Message')}
                                 </button>

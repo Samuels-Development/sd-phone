@@ -128,10 +128,42 @@ function actions.uninstall(source, payload)
     return ok({ installed = remaining })
 end
 
----Persists the caller's home-screen layout, an opaque JSON string from the UI. Validation is
----type + a 16k size cap; scoped to the citizenid resolved from src.
+-- One player has one layout column but may own several devices, and a layout only means anything
+-- against the grid it was arranged on: the slot array's page boundaries are that device's
+-- cols * rows, 24 on the phone against 36 on the tablet. So the column holds an envelope,
+-- { devices = { <id> = '<layout json>' } }, one opaque string per device.
+---@type table<string, boolean> Device ids allowed to own a layout slice.
+local LAYOUT_DEVICES = { phone = true, tablet = true }
+
+---@type integer Cap on the merged envelope, sitting under the TEXT column's 65535 bytes with room
+---for the escaping the nesting adds - two full-size layouts still fit.
+local MAX_LAYOUT_COLUMN = 60000
+
+---Reads the layout column as a device -> layout-string map. The layout strings stay opaque: they
+---are never decoded here, because a slot array is full of nulls and a Lua table cannot hold those
+---without turning the array into holes and re-encoding it as something else entirely.
+---@param stored string|nil raw column value
+---@return table<string, string> devices device id -> layout JSON
+local function decodeLayouts(stored)
+    if type(stored) ~= 'string' or stored == '' then return {} end
+    local parsed, decoded = pcall(json.decode, stored)
+    if parsed and type(decoded) == 'table' and type(decoded.devices) == 'table' then
+        local out = {}
+        for id, layout in pairs(decoded.devices) do
+            if LAYOUT_DEVICES[id] and type(layout) == 'string' then out[id] = layout end
+        end
+        return out
+    end
+    -- No envelope: written when the phone was the only device, so it is the phone's layout and is
+    -- carried over under that id rather than dropped.
+    return { phone = stored }
+end
+
+---Persists the caller's home-screen layout for one device, an opaque JSON string from the UI,
+---merged into the envelope so the other device's layout survives. Validation is type + a 16k size
+---cap; scoped to the citizenid resolved from src.
 ---@param source number player server id
----@param payload { layout?: string } client payload
+---@param payload { layout?: string, device?: string } client payload
 ---@return table result { success }
 function actions.saveLayout(source, payload)
     if type(payload) ~= 'table' then payload = {} end
@@ -144,7 +176,16 @@ function actions.saveLayout(source, payload)
 
     local layout = payload.layout
     if type(layout) ~= 'string' or #layout > 16000 then return fail('Invalid layout') end
-    settings.setHomeLayout(cid, layout)
+
+    -- An absent or unrecognised device is the phone: that is what every caller predating the
+    -- tablet sent, so an older NUI bundle keeps writing exactly the slice it always wrote.
+    local deviceId = LAYOUT_DEVICES[payload.device] and payload.device or 'phone'
+    local devices = decodeLayouts(settings.getHomeLayout(cid))
+    devices[deviceId] = layout
+
+    local encoded = json.encode({ devices = devices })
+    if #encoded > MAX_LAYOUT_COLUMN then return fail('Invalid layout') end
+    settings.setHomeLayout(cid, encoded)
     return ok()
 end
 

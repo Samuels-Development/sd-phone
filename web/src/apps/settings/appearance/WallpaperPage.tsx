@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Camera, ChevronRight, Flashlight } from 'lucide-react';
 
+import { device } from '@device';
 import { t } from '@/i18n';
 import { formatClockTime, formatLongDate, useClock } from '@/hooks/useClock';
 import { useIosPush } from '@/hooks/useIosPush';
@@ -15,13 +16,14 @@ import { Toggle } from '@/ui/Toggle';
 import { WallpaperPickerPage } from './WallpaperPickerPage';
 import { NavBar } from '@/ui/NavBar';
 
-// The previews are full-size 440x956 replicas of the real Lockscreen/Homescreen render,
-// scale-transformed to thumbnail size - geometry constants below mirror shell/Homescreen.tsx
-// and shell/Lockscreen.tsx so the previews can't drift from the real screens.
-const SW = 440;
-const SH = 956;
+// The previews are full-size replicas of the real Lockscreen/Homescreen render, scale-transformed
+// to thumbnail size - the geometry below is read from the device profile, the same source
+// shell/Homescreen.tsx reads, so the previews can't drift from the real screens.
+const { w: SW, h: SH } = device.screen;
+const { cols: COLS, padX: PAD_X, icon: ICON, colStride: COL_STRIDE, rowY0: ROW_Y0, rowStride: ROW_STRIDE, stripTop } = device.screen.grid;
 
-// Default first homescreen page: the first 12 non-dock apps in catalog order.
+// Default first homescreen page: the first 12 non-dock apps in catalog order. Both lists are
+// filtered the way the real home grid is - a preview must never show an app the device lacks.
 const PAGE_APPS = [
     { icon: 'mail',       label: 'Mail' },
     { icon: 'maps',       label: 'Maps' },
@@ -35,8 +37,8 @@ const PAGE_APPS = [
     { icon: 'bank',       label: 'Bank' },
     { icon: 'health',     label: 'Health' },
     { icon: 'documents',  label: 'Files' },
-];
-const DOCK_APPS = ['phone', 'messages', 'camera', 'photos'];
+].filter(a => !device.excludedApps.includes(a.icon));
+const DOCK_APPS = ['phone', 'messages', 'camera', 'photos'].filter(id => !device.excludedApps.includes(id));
 
 export function WallpaperPage({ onBack }: { onBack: () => void }) {
     const { goBack, pageStyle, animating } = useIosPush(onBack);
@@ -115,7 +117,7 @@ function BlurRow({ label, on, onToggle }: { label: string; on: boolean; onToggle
 }
 
 
-// Renders children on a full-size 440x956 stage, scale-transformed to the thumb's measured
+// Renders children on a full-size screen stage, scale-transformed to the thumb's measured
 // width - so every child uses the real screens' CSS values verbatim.
 function PreviewThumb({ caption, onPress, children }: { caption: string; onPress: () => void; children: ReactNode }) {
     const ref = useRef<HTMLButtonElement>(null);
@@ -152,6 +154,9 @@ function PreviewThumb({ caption, onPress, children }: { caption: string; onPress
 
 
 function DynamicIsland() {
+    // A device with no cutout has none on its real screens either, so painting one here would
+    // be exactly the drift these previews exist to avoid.
+    if (!device.screen.island) return null;
     return <div className="absolute left-1/2 top-[11px] -translate-x-1/2 rounded-full bg-black" style={{ width: 126, height: 37 }} />;
 }
 
@@ -235,7 +240,7 @@ function HomePreview({ wallpaper, blurred, animating }: { wallpaper: string; blu
                 <div
                     key={app.icon}
                     className="absolute"
-                    style={{ left: 28 + (i % 4) * 102, top: 78 + Math.floor(i / 4) * 122, width: 78 }}
+                    style={{ left: PAD_X + (i % COLS) * COL_STRIDE, top: stripTop + ROW_Y0 + Math.floor(i / COLS) * ROW_STRIDE, width: ICON }}
                 >
                     <PreviewIcon icon={app.icon} label={app.label} />
                 </div>

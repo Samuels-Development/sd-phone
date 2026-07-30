@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { device } from '@device';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { requestOpenMail, requestOpenMessages } from '@/shell/deeplink';
 import { fetchNui, isFiveM } from '@/core/nui';
@@ -49,7 +50,7 @@ export function useContactActions(): {
                 onConfirm={() => {
                     const num = dlg.number;
                     setDlg(null);
-                    if (isFiveM) void fetchNui('sd-phone:call:dial', { number: num });
+                    if (isFiveM && device.calls) void fetchNui('sd-phone:call:dial', { number: num });
                 }}
             />
         );

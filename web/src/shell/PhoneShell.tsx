@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AlarmClock, Music2, Pause, Phone, Play, Radio, SkipBack, SkipForward } from 'lucide-react';
 
+import { device } from '@device';
 import { useTheme } from '@/stores/themeStore';
 import type { PhoneAlign } from '@/stores/themeStore';
 import { useCallStore } from '@/stores/callStore';
@@ -11,19 +12,20 @@ import { coverGradient, youtubeId } from '@/apps/music/data';
 import type { Track } from '@/apps/music/data';
 import { RingDuration } from '@/apps/clock/AlarmRinging';
 import { playShutter } from '@/media/shutter';
+import { SWITCHER_SCALE } from './AppSwitcher';
 import { DEFAULT_FRAME_COLOR, frameStops } from './frameColors';
 import { t } from '@/i18n';
 
 
-const B  = 9;
+const B  = device.screen.bezel;
 
-const SW = 440;
-const SH = 956;
+const SW = device.screen.w;
+const SH = device.screen.h;
 const W  = SW + B * 2;
 const H  = SH + B * 2;
 const SX = B;
 const SY = B;
-const BR = 55;
+const BR = device.screen.radius;
 const SR = BR - B;
 
 const SCREEN_MASK =
@@ -76,13 +78,13 @@ const BEZEL = rrect(0, 0, W, H, BR) + ' ' + rrect(
 const BTN_W  = 3.5;
 const BTN_RX = 1.75;
 
-const BUTTONS = [
-    { x: -BTN_W, y: 174, h: 38 },
-    { x: -BTN_W, y: 252, h: 64 },
-    { x: -BTN_W, y: 346, h: 64 },
-    { x: W,      y: 217, h: 80 },
-    { x: W,      y: 566, h: 60 },
-] as const;
+// The profile stores a rail side; the rail's x is whatever the frame width makes it.
+const BUTTONS = device.screen.buttons.map(b => ({ ...b, x: b.side === 'left' ? -BTN_W : W }));
+
+const VOL_UP_BTN     = BUTTONS.find(b => b.role === 'volumeUp');
+const VOL_DOWN_BTN   = BUTTONS.find(b => b.role === 'volumeDown');
+const POWER_BTN      = BUTTONS.find(b => b.role === 'power');
+const SCREENSHOT_BTN = BUTTONS.find(b => b.role === 'screenshot');
 
 
 const ALIGN_MAP: Record<string, string> = {
@@ -379,7 +381,12 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
     const reanchor = (H - W) / 2;
     const shiftX = align.includes('right') ? -reanchor : align.includes('left') ? reanchor : 0;
     const shiftY = align.includes('bottom') ? reanchor : align.includes('top') ? -reanchor : 0;
-    const landscapeTransform = `translate(${shiftX}px, ${shiftY}px) rotate(-90deg)`;
+    // A device that is already wider than it is tall has nothing to rotate into: turning it would
+    // stand a landscape tablet on its end. The reanchor shifts would be backwards there too.
+    const nativeLandscape = SW > SH;
+    const landscapeTransform = nativeLandscape
+        ? undefined
+        : `translate(${shiftX}px, ${shiftY}px) rotate(-90deg)`;
 
     return (
         <div
@@ -412,6 +419,10 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                         maskSize: '100% 100%',
                         WebkitMaskRepeat: 'no-repeat',
                         maskRepeat: 'no-repeat',
+                        // The switcher's card scale, for index.css's ios-app-expand. The deck
+                        // re-parents the opening app's host into this screen, so the value
+                        // inherits down to it - and unlike the switcher, this element stays.
+                        ...({ '--switcher-scale': String(SWITCHER_SCALE) } as React.CSSProperties),
                     }}
                 >
                     {!cameraActive && (
@@ -475,26 +486,30 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                         strokeWidth="1.5"
                     />
 
-                    <rect
-                        x={DI_X} y={DI_Y}
-                        width={DI_W} height={DI_H}
-                        rx={DI_R}
-                        fill="#000"
-                    />
-                    <circle cx={DI_X + DI_W - DI_R * 1.12} cy={DI_Y + DI_H / 2} r={7}   fill="#0c0c14" />
-                    <circle cx={DI_X + DI_W - DI_R * 1.12} cy={DI_Y + DI_H / 2} r={4}   fill="#07070f" />
-                    <circle cx={DI_X + DI_W - DI_R * 1.12 - 1.5} cy={DI_Y + DI_H / 2 - 2} r={1.5} fill="rgba(255,255,255,0.18)" />
+                    {device.screen.island && (
+                        <>
+                            <rect
+                                x={DI_X} y={DI_Y}
+                                width={DI_W} height={DI_H}
+                                rx={DI_R}
+                                fill="#000"
+                            />
+                            <circle cx={DI_X + DI_W - DI_R * 1.12} cy={DI_Y + DI_H / 2} r={7}   fill="#0c0c14" />
+                            <circle cx={DI_X + DI_W - DI_R * 1.12} cy={DI_Y + DI_H / 2} r={4}   fill="#07070f" />
+                            <circle cx={DI_X + DI_W - DI_R * 1.12 - 1.5} cy={DI_Y + DI_H / 2 - 2} r={1.5} fill="rgba(255,255,255,0.18)" />
 
-                    {cameraActive && (() => {
-                        const dotCx = DI_X + DI_W - DI_R * 2.5;
-                        const dotCy = DI_Y + DI_H / 2;
-                        return (
-                            <>
-                                <circle cx={dotCx} cy={dotCy} r={7}   fill="rgba(48,209,88,0.18)" />
-                                <circle cx={dotCx} cy={dotCy} r={3.6} fill="#30D158" />
-                            </>
-                        );
-                    })()}
+                            {cameraActive && (() => {
+                                const dotCx = DI_X + DI_W - DI_R * 2.5;
+                                const dotCy = DI_Y + DI_H / 2;
+                                return (
+                                    <>
+                                        <circle cx={dotCx} cy={dotCy} r={7}   fill="rgba(48,209,88,0.18)" />
+                                        <circle cx={dotCx} cy={dotCy} r={3.6} fill="#30D158" />
+                                    </>
+                                );
+                            })()}
+                        </>
+                    )}
 
                     {BUTTONS.map((btn, i) => (
                         <g key={i}>
@@ -520,40 +535,46 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                     ))}
                 </svg>
 
-                <button
-                    type="button"
-                    aria-label={t('shell.volumeUp','Volume up')}
-                    onClick={() => bumpVolume(1)}
-                    className="absolute z-[300] cursor-pointer bg-transparent"
-                    style={{ left: BUTTONS[1].x - 6, top: BUTTONS[1].y, width: 16, height: BUTTONS[1].h }}
-                />
-                <button
-                    type="button"
-                    aria-label={t('shell.volumeDown','Volume down')}
-                    onClick={() => bumpVolume(-1)}
-                    className="absolute z-[300] cursor-pointer bg-transparent"
-                    style={{ left: BUTTONS[2].x - 6, top: BUTTONS[2].y, width: 16, height: BUTTONS[2].h }}
-                />
+                {VOL_UP_BTN && (
+                    <button
+                        type="button"
+                        aria-label={t('shell.volumeUp','Volume up')}
+                        onClick={() => bumpVolume(1)}
+                        className="absolute z-[300] cursor-pointer bg-transparent"
+                        style={{ left: VOL_UP_BTN.x - 6, top: VOL_UP_BTN.y, width: 16, height: VOL_UP_BTN.h }}
+                    />
+                )}
+                {VOL_DOWN_BTN && (
+                    <button
+                        type="button"
+                        aria-label={t('shell.volumeDown','Volume down')}
+                        onClick={() => bumpVolume(-1)}
+                        className="absolute z-[300] cursor-pointer bg-transparent"
+                        style={{ left: VOL_DOWN_BTN.x - 6, top: VOL_DOWN_BTN.y, width: 16, height: VOL_DOWN_BTN.h }}
+                    />
+                )}
 
-                {onClose && (
+                {POWER_BTN && onClose && (
                     <button
                         type="button"
                         aria-label={t('shell.power','Power')}
                         onClick={onClose}
                         className="absolute z-[300] cursor-pointer bg-transparent"
-                        style={{ left: BUTTONS[3].x - 8, top: BUTTONS[3].y, width: 16, height: BUTTONS[3].h }}
+                        style={{ left: POWER_BTN.x - 8, top: POWER_BTN.y, width: 16, height: POWER_BTN.h }}
                     />
                 )}
 
-                <button
-                    type="button"
-                    aria-label={t('shell.screenshot','Screenshot (double-click the Action button)')}
-                    onDoubleClick={() => void takeScreenshot()}
-                    className="absolute z-[300] cursor-pointer bg-transparent"
-                    style={{ left: BUTTONS[0].x - 6, top: BUTTONS[0].y, width: 16, height: BUTTONS[0].h }}
-                />
+                {SCREENSHOT_BTN && (
+                    <button
+                        type="button"
+                        aria-label={t('shell.screenshot','Screenshot (double-click the Action button)')}
+                        onDoubleClick={() => void takeScreenshot()}
+                        className="absolute z-[300] cursor-pointer bg-transparent"
+                        style={{ left: SCREENSHOT_BTN.x - 6, top: SCREENSHOT_BTN.y, width: 16, height: SCREENSHOT_BTN.h }}
+                    />
+                )}
 
-                {islandTrack && !callActive && !radioOn && !radioStandby && !alarmRinging && (
+                {device.screen.island && islandTrack && !callActive && !radioOn && !radioStandby && !alarmRinging && (
                     <MusicIsland
                         track={islandTrack}
                         playing={musicPlaying}
@@ -567,47 +588,55 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                     />
                 )}
 
-                <IslandPill
-                    active={callActive}
-                    onClick={() => void fetchNui('sd-phone:requestOpen')}
-                    compactX={DI_X} compactW={DI_W} expandedX={CALL_X} expandedW={CALL_W}
-                >
-                    <span className="absolute left-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
-                        <Phone className="h-[14px] w-[14px]" style={{ color: '#30D158' }} fill="currentColor" strokeWidth={0} />
-                        <span className="text-[13px] font-semibold tabular-nums" style={{ color: '#30D158' }}>
-                            {callStartedAt ? <RingDuration since={callStartedAt} /> : t('shell.mobile','Mobile')}
+                {device.screen.island && device.calls && (
+                    <IslandPill
+                        active={callActive}
+                        onClick={() => void fetchNui('sd-phone:requestOpen')}
+                        compactX={DI_X} compactW={DI_W} expandedX={CALL_X} expandedW={CALL_W}
+                    >
+                        <span className="absolute left-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
+                            <Phone className="h-[14px] w-[14px]" style={{ color: '#30D158' }} fill="currentColor" strokeWidth={0} />
+                            <span className="text-[13px] font-semibold tabular-nums" style={{ color: '#30D158' }}>
+                                {callStartedAt ? <RingDuration since={callStartedAt} /> : t('shell.mobile','Mobile')}
+                            </span>
                         </span>
-                    </span>
-                </IslandPill>
+                    </IslandPill>
+                )}
 
-                <IslandPill
-                    active={(radioOn || radioStandby) && !callActive && !alarmRinging}
-                    onClick={() => { if (radioOn) void fetchNui('sd-phone:radio:leave'); else void fetchNui('sd-phone:radio:set', { on: true }); }}
-                    compactX={DI_X} compactW={DI_W} expandedX={CALL_X} expandedW={CALL_W}
-                >
-                    <span className="absolute left-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
-                        <Radio className={`h-[16px] w-[16px] ${radioOnAir ? 'animate-pulse' : ''}`} style={{ color: radioOn ? '#30D158' : '#FF453A', transition: 'color 0.2s ease' }} strokeWidth={2.4} />
-                        <span className="text-[13px] font-semibold tabular-nums" style={{ color: radioOn ? '#30D158' : '#FF453A', transition: 'color 0.2s ease' }}>{radioFreq.toFixed(1)}</span>
-                    </span>
-                </IslandPill>
+                {device.screen.island && (
+                    <IslandPill
+                        active={(radioOn || radioStandby) && !callActive && !alarmRinging}
+                        onClick={() => { if (radioOn) void fetchNui('sd-phone:radio:leave'); else void fetchNui('sd-phone:radio:set', { on: true }); }}
+                        compactX={DI_X} compactW={DI_W} expandedX={CALL_X} expandedW={CALL_W}
+                    >
+                        <span className="absolute left-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
+                            <Radio className={`h-[16px] w-[16px] ${radioOnAir ? 'animate-pulse' : ''}`} style={{ color: radioOn ? '#30D158' : '#FF453A', transition: 'color 0.2s ease' }} strokeWidth={2.4} />
+                            <span className="text-[13px] font-semibold tabular-nums" style={{ color: radioOn ? '#30D158' : '#FF453A', transition: 'color 0.2s ease' }}>{radioFreq.toFixed(1)}</span>
+                        </span>
+                    </IslandPill>
+                )}
 
-                <IslandPill
-                    active={alarmRinging && !callActive}
-                    compactX={DI_X} compactW={DI_W} expandedX={CALL_X} expandedW={CALL_W}
-                >
-                    <span className="absolute left-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
-                        <AlarmClock className="h-[15px] w-[15px]" style={{ color: '#FF9F0A' }} strokeWidth={2.5} />
-                        <span className="text-[13px] font-semibold tabular-nums" style={{ color: '#FF9F0A' }}><RingDuration since={alarmSince} /></span>
-                    </span>
-                </IslandPill>
+                {device.screen.island && (
+                    <IslandPill
+                        active={alarmRinging && !callActive}
+                        compactX={DI_X} compactW={DI_W} expandedX={CALL_X} expandedW={CALL_W}
+                    >
+                        <span className="absolute left-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
+                            <AlarmClock className="h-[15px] w-[15px]" style={{ color: '#FF9F0A' }} strokeWidth={2.5} />
+                            <span className="text-[13px] font-semibold tabular-nums" style={{ color: '#FF9F0A' }}><RingDuration since={alarmSince} /></span>
+                        </span>
+                    </IslandPill>
+                )}
 
-                <span
-                    className="pointer-events-none absolute z-[320] rounded-full"
-                    style={{ left: DI_X + DI_W - DI_R * 1.12 - 7, top: DI_Y + DI_H / 2 - 7, width: 14, height: 14, background: '#0c0c14' }}
-                >
-                    <span className="absolute rounded-full" style={{ left: 3, top: 3, width: 8, height: 8, background: '#07070f' }} />
-                    <span className="absolute rounded-full" style={{ left: 2.5, top: 1.5, width: 3, height: 3, background: 'rgba(255,255,255,0.18)' }} />
-                </span>
+                {device.screen.island && (
+                    <span
+                        className="pointer-events-none absolute z-[320] rounded-full"
+                        style={{ left: DI_X + DI_W - DI_R * 1.12 - 7, top: DI_Y + DI_H / 2 - 7, width: 14, height: 14, background: '#0c0c14' }}
+                    >
+                        <span className="absolute rounded-full" style={{ left: 3, top: 3, width: 8, height: 8, background: '#07070f' }} />
+                        <span className="absolute rounded-full" style={{ left: 2.5, top: 1.5, width: 3, height: 3, background: 'rgba(255,255,255,0.18)' }} />
+                    </span>
+                )}
             </div>
         </div>
     );

@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { LayoutGrid, Minus, Plus } from 'lucide-react';
 
+import { device } from '@device';
 import type { AppDef } from '@/core/types';
 import { useTheme } from '@/stores/themeStore';
 import { resolveWallpaper } from './wallpapers';
-import { AppIcon, TILE_SHADOW, radiusPct } from './AppIcon';
+import { ART, AppIcon, TILE, TILE_SHADOW, radiusPct } from './AppIcon';
 import { AppIconSVG } from './AppIconSVG';
 import { AppGlyph } from './AppGlyphs';
 import { AppBadge } from './AppBadge';
@@ -23,20 +24,13 @@ import { WidgetGallery } from './widgets/WidgetGallery';
 import { t } from '@/i18n';
 
 
-const COLS = 4;
-const ROWS = 6;
+// ICON is the grid's cell measure. AppIcon's TILE is the same number by construction - the cell IS
+// the artwork - so a centred tile and a left-aligned one land on the same pixel in either mode.
+const { cols: COLS, rows: ROWS, padX: PAD_X, icon: ICON, colStride: COL_STRIDE, rowY0: ROW_Y0, rowStride: ROW_STRIDE, stripTop } = device.screen.grid;
+const { w: SCREEN_W, h: SCREEN_H } = device.screen;
 const ITEMS_PER_PAGE = COLS * ROWS;
-const SCREEN_W = 440;
-const SCREEN_H = 956;
 const COMMIT_THRESHOLD = SCREEN_W * 0.2;
 const FLICK_VELOCITY = 0.4;
-
-const PAD_X = 28;
-const ICON = 78;
-const COL_STRIDE = ICON + 24;
-const ROW_Y0 = 8;
-const ROW_STRIDE = 122;
-const stripTop = 70;
 
 function chunk<T>(arr: T[], size: number): T[][] {
     const out: T[][] = [];
@@ -168,6 +162,7 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
         if (savedLayout && savedLayout.slots.length) return normalize(savedLayout.slots);
         const seeded = new Set(Object.values(folders).flatMap(f => f.appIds));
         const loose = apps.filter(a => !dockIds.includes(a.id) && !seeded.has(a.id)).map(a => a.id);
+        // A seeding count, not a grid measure: how many apps land on page one before it spills.
         const FIRST_PAGE = 12;
         const arr: (string | null)[] = Array(ITEMS_PER_PAGE * 2).fill(null);
         loose.slice(0, FIRST_PAGE).forEach((id, i) => { arr[i] = id; });
@@ -1104,12 +1099,12 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
                         >
                             {!!dragId && (dockOver === di || app.id === dockPlan?.intoDock) && (
                                 <div
-                                    className="pointer-events-none absolute left-1/2 top-0 h-[78px] w-[78px] -translate-x-1/2"
-                                    style={{ borderRadius: '27.6%', boxShadow: '0 0 0 3.5px rgba(255,255,255,0.92), 0 2px 12px rgba(0,0,0,0.42)' }}
+                                    className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2"
+                                    style={{ width: TILE, height: TILE, borderRadius: '27.6%', boxShadow: '0 0 0 3.5px rgba(255,255,255,0.92), 0 2px 12px rgba(0,0,0,0.42)' }}
                                 />
                             )}
                             {app.id === dragId
-                                ? <div className="h-[78px] w-[78px]" />
+                                ? <div style={{ width: TILE, height: TILE }} />
                                 : (
                                     <div
                                         className={editing ? 'animate-app-jiggle' : ''}
@@ -1125,7 +1120,7 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
                                                 onPointerDown={e => e.stopPropagation()}
                                                 onClick={() => setConfirmRemove(app)}
                                                 className="absolute z-10 flex h-[24px] w-[24px] items-center justify-center rounded-full bg-[#e4e4e6] shadow-[0_1px_3px_rgba(0,0,0,0.4)] active:scale-90"
-                                                style={{ left: 'calc(50% - 46px)', top: -7 }}
+                                                style={{ left: `calc(50% - ${TILE / 2 + 7}px)`, top: -7 }}
                                             >
                                                 <Minus className="h-[16px] w-[16px] text-black/75" strokeWidth={3} />
                                             </button>
@@ -1137,8 +1132,8 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
                     {dockOver !== null && !dragFromDock && dockView.length < DOCK_MAX && (
                         <div data-dock-idx={dockView.length} className="relative flex flex-1 justify-center" style={{ touchAction: 'none' }}>
                             <div
-                                className="h-[78px] w-[78px] border border-white/40 bg-white/10"
-                                style={{ borderRadius: '27.6%', boxShadow: dockOver === dockView.length ? '0 0 0 3.5px rgba(255,255,255,0.92)' : undefined }}
+                                className="border border-white/40 bg-white/10"
+                                style={{ width: TILE, height: TILE, borderRadius: '27.6%', boxShadow: dockOver === dockView.length ? '0 0 0 3.5px rgba(255,255,255,0.92)' : undefined }}
                             />
                         </div>
                     )}
@@ -1190,9 +1185,9 @@ function EditTile({ app, dragging, swapTarget, plopping, removable, merging, bad
         <div className={dragging ? '' : 'animate-app-jiggle'} style={{ animationDelay: `${jiggleDelay(app.id)}ms` }}>
             <div className="relative">
                 {merging && <div className="pointer-events-none absolute -inset-[8px] rounded-[30%] bg-white/25 backdrop-blur-sm" />}
-                <div className={`relative h-[78px] w-[78px] overflow-hidden transition-[box-shadow,transform] duration-150 ${plopping ? 'animate-plop' : ''}`} style={{ borderRadius: radiusPct(radius), boxShadow: [swapTarget ? '0 2px 12px rgba(0,0,0,0.42), 0 0 0 3.5px rgba(255,255,255,0.92)' : TILE_SHADOW, boxShadow].filter(Boolean).join(', '), transform: dragging || merging ? 'scale(1.12)' : undefined }}>
+                <div className={`relative overflow-hidden transition-[box-shadow,transform] duration-150 ${plopping ? 'animate-plop' : ''}`} style={{ width: TILE, height: TILE, borderRadius: radiusPct(radius), boxShadow: [swapTarget ? '0 2px 12px rgba(0,0,0,0.42), 0 0 0 3.5px rgba(255,255,255,0.92)' : TILE_SHADOW, boxShadow].filter(Boolean).join(', '), transform: dragging || merging ? 'scale(1.12)' : undefined }}>
                     {art === 'native' ? (
-                        <div style={{ width: 60, height: 60, transform: 'scale(1.3)', transformOrigin: '0 0' }}>
+                        <div style={{ width: ART, height: ART, transform: `scale(${TILE / ART})`, transformOrigin: '0 0' }}>
                             <AppIconSVG icon={app.icon} />
                         </div>
                     ) : (
@@ -1220,13 +1215,16 @@ const TILE_RADIUS = 0.276;
 const MINI_RADIUS = 0.30;
 const TILE_GLYPH  = 40;
 const MINI_GLYPH  = 10;
+// One cell of the folder's 3x3 preview: the tile less its 9px padding and two 3px gutters. Derived
+// rather than fixed so a native mini keeps filling its cell when the tile follows a bigger profile.
+const MINI = (TILE - 9 * 2 - 3 * 2) / 3;
 
 function FolderMini({ app }: { app: AppDef }): ReactNode {
     const { background, glyph, art, radius, glyphSize, glyphWeight, icon: glyphOverride } = useIconAppearance(app.id, app.accent);
     return (
         <div className="overflow-hidden" style={{ borderRadius: radiusPct(radius * (MINI_RADIUS / TILE_RADIUS)) }}>
             {art === 'native' ? (
-                <div style={{ width: 60, height: 60, transform: 'scale(0.3)', transformOrigin: '0 0' }}>
+                <div style={{ width: ART, height: ART, transform: `scale(${MINI / ART})`, transformOrigin: '0 0' }}>
                     <AppIconSVG icon={app.icon} />
                 </div>
             ) : (
@@ -1248,11 +1246,13 @@ function FolderMini({ app }: { app: AppDef }): ReactNode {
 function FolderTile({ label, apps, onOpen, merging = false, badge }: { label: string; apps: AppDef[]; onOpen: () => void; merging?: boolean; badge?: number }): ReactNode {
     const showNames = useShowAppNames();
     return (
-        <button type="button" onClick={onOpen} className="group block w-[78px]">
+        <button type="button" onClick={onOpen} className="group block" style={{ width: TILE }}>
             <div className="relative">
                 <div
-                    className="grid h-[78px] w-[78px] grid-cols-3 grid-rows-3 gap-[3px] overflow-hidden p-[9px] backdrop-blur-xl transition-[transform,box-shadow] duration-150 group-active:scale-[0.94]"
+                    className="grid grid-cols-3 grid-rows-3 gap-[3px] overflow-hidden p-[9px] backdrop-blur-xl transition-[transform,box-shadow] duration-150 group-active:scale-[0.94]"
                     style={{
+                        width:        TILE,
+                        height:       TILE,
                         borderRadius: '27.6%',
                         background: merging ? 'rgba(118,122,132,0.6)' : 'rgba(70,70,78,0.42)',
                         boxShadow: merging
@@ -1420,6 +1420,7 @@ function FolderOverlay({ name, apps, badges, editing: homeEditing, autoEdit, wal
                     style={{ touchAction: 'none' }}
                     className="w-[calc(100%-48px)] rounded-[34px] border border-white/15 bg-white/10 p-5 backdrop-blur-2xl"
                 >
+                    {/* A folder page is its own 4-up grid, not the home grid, so it does not follow device cols. */}
                     <div ref={gridRef} className="relative grid grid-cols-4 gap-x-3 gap-y-5">
                         {apps.map((a, i) => {
                             const isDragging = dragIdx === i;
@@ -1447,7 +1448,7 @@ function FolderOverlay({ name, apps, badges, editing: homeEditing, autoEdit, wal
                                 }}
                             >
                                 {isOver && (
-                                    <div className="pointer-events-none absolute left-0 top-0 h-[78px] w-[78px]" style={{ borderRadius: '27.6%', boxShadow: '0 0 0 3.5px rgba(255,255,255,0.92), 0 2px 12px rgba(0,0,0,0.42)' }} />
+                                    <div className="pointer-events-none absolute left-0 top-0" style={{ width: TILE, height: TILE, borderRadius: '27.6%', boxShadow: '0 0 0 3.5px rgba(255,255,255,0.92), 0 2px 12px rgba(0,0,0,0.42)' }} />
                                 )}
                                 <div
                                     className={plopIds.has(a.id) ? 'animate-plop' : (jiggle ? 'animate-app-jiggle' : '')}

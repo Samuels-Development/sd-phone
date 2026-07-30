@@ -1,3 +1,7 @@
+---@type table Companion-device bus (client.companion): NUI callback registry + push mirror for a
+---sibling device resource (sd-tablet). Required FIRST - it shadows RegisterNUICallback and
+---SendNUIMessage, so it has to be installed before any module that uses them loads.
+local companion = require 'client.companion'
 ---@type table sd-phone config root (configs/config.lua).
 local config = require 'configs.config'
 ---@type table Notify bridge (bridge.client.notify): backend-agnostic on-screen toasts.
@@ -327,8 +331,13 @@ local function OpenPhone()
         return
     end
 
+    -- One device at a time: a companion holding the screen gives it up here, so focus, the
+    -- cell-cam and pma-voice only ever have one owner.
+    if companion.companionOpen then TriggerEvent('sd-phone:client:companion:close') end
+
     phoneState.open   = true
     phoneState.locked = true
+    companion.phoneOpen = true
 
     CreateThread(function()
         while phoneState.open do
@@ -423,6 +432,7 @@ function ClosePhone()
     if not phoneState.open then return end
 
     phoneState.open = false
+    companion.phoneOpen = false
     TriggerEvent('sd-phone:client:openState', false)
     TriggerServerEvent('sd-phone:server:phone:setOpen', false)
     SetNuiFocus(false, false)
@@ -653,17 +663,18 @@ pushWeather = function()
     })
 end
 
--- 5s weather poll while the phone is open.
+-- 5s weather poll while a device is on screen (ours or a companion's - the push mirror carries
+-- it across, so the tablet's Weather app stays live while the phone is stowed).
 CreateThread(function()
     while true do
-        if phoneState.open then pushWeather() end
+        if phoneState.open or companion.companionOpen then pushWeather() end
         Wait(5000)
     end
 end)
 
 -- Immediate push on every weather change.
 weatherBridge.onChange(function()
-    if phoneState.open then pushWeather() end
+    if phoneState.open or companion.companionOpen then pushWeather() end
 end)
 
 ---Returns a weather + world-time snapshot for the Weather app on mount.

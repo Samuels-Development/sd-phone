@@ -1,6 +1,7 @@
 import { lazy } from 'react';
 import type { ComponentType, LazyExoticComponent, ReactNode } from 'react';
 
+import { device } from '@device';
 import type { AppDef } from '@/core/types';
 import { isCustomApp } from '@/stores/customAppsStore';
 
@@ -121,11 +122,18 @@ export function isPreviewApp(id: AppId): boolean {
     return !PREVIEW_EXCLUDE.has(id);
 }
 
+// Apps this device does not have. The registry stays complete (AppId must keep naming every
+// app or the tree stops type-checking); the ids are refused at asAppId instead.
+const EXCLUDED_APPS = new Set<string>(device.excludedApps);
+
 // A raw id becomes an openable AppId when it is either a statically-registered app
 // or a runtime-registered custom app. Every downstream AppId-typed site keys off the
-// id string, so widening the union at this single boundary is enough to open it.
+// id string, so widening the union at this single boundary is enough to open it -
+// and refusing it here is what stops a notification tap, a deeplink, Control Center,
+// sd-phone:launchApp or the custom-app SDK from opening an app this device lacks.
 export function asAppId(id: string | null | undefined): AppId | null {
     if (id == null) return null;
+    if (EXCLUDED_APPS.has(id)) return null;
     if (id in APP_REGISTRY) return id as AppId;
     if (isCustomApp(id)) return id as AppId;
     return null;

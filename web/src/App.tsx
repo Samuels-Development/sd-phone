@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { device } from '@device';
 import { AdminPanel } from '@/admin/AdminPanel';
 import { PayphoneUI } from '@/payphone/PayphoneUI';
 import { CallLayer } from '@/apps/phone/CallLayer';
@@ -82,7 +83,11 @@ interface SetupSaved {
     wallpaper?: string;
 }
 
+// A device without the wizard is set up by definition: theme, wallpaper, locale and passcode
+// all live in phone_settings and hydrate normally, so there is nothing left to ask for. Both
+// halves short-circuit, which is what keeps the key unwritten on such a device.
 function loadSetup(): SetupSaved {
+    if (!device.setup) return { completed: true };
     try {
         const raw = window.localStorage.getItem(SETUP_KEY());
         if (raw) {
@@ -94,6 +99,7 @@ function loadSetup(): SetupSaved {
 }
 
 function saveSetup(s: SetupSaved): void {
+    if (!device.setup) return;
     try { window.localStorage.setItem(SETUP_KEY(), JSON.stringify(s)); } catch { /* ignore */ }
 }
 
@@ -153,8 +159,8 @@ export function App() {
         <ThemeProvider>
             <MusicProvider>
                 <AppContent />
-                <AdminPanel />
-                <PayphoneUI />
+                {device.admin && <AdminPanel />}
+                {device.payphone && <PayphoneUI />}
             </MusicProvider>
         </ThemeProvider>
     );
@@ -703,7 +709,9 @@ function AppContent() {
     // it only changes when the app list / install set / stable callbacks change.
     const deckCtx = useMemo<DeckAppCtx>(() => ({
         onClose:           handleCloseApp,
-        allApps:           [...(view?.apps ?? []), ...customDefs],
+        // The App Store is this list's only consumer, so the exclusion has to land here: an app
+        // the device has no route to launch must not be advertised for install either.
+        allApps:           [...(view?.apps ?? []), ...customDefs].filter(a => !device.excludedApps.includes(a.id)),
         installedApps,
         onInstall:         startDownload,
         onOpenApp:         openAppCentered,
@@ -827,7 +835,7 @@ function AppContent() {
         useBadgeStore.getState().patchServer(data ?? {});
     }, []));
     useEffect(() => {
-        if (currentApp === 'phone') void fetchNui('sd-phone:calls:seen');
+        if (device.calls && currentApp === 'phone') void fetchNui('sd-phone:calls:seen');
     }, [currentApp]);
     const currentAppRef = useRef(currentApp);
     currentAppRef.current = currentApp;
@@ -1220,7 +1228,8 @@ function AppContent() {
         setFinishingSetup(false);
         setSetupHello(true);
         setLocked(false);
-        setSetup({ completed: false });
+        // A factory reset re-arms the wizard; a device that has none stays complete.
+        setSetup({ completed: !device.setup });
     }, [resetNonce]);
 
     // The keep-alive deck is rendered ABOVE the shell (in both the closed and open
@@ -1290,16 +1299,19 @@ function AppContent() {
     const lockWallpaper = wallpaperLock || view.wallpaperLock;
 
     const allApps       = [...view.apps, ...customDefs.filter(c => !view.apps.some(a => a.id === c.id))];
-    const effectiveApps = allApps.filter(a => a.base || installedApps.has(a.id) || downloadingIds.includes(a.id));
+    // Excluded apps are dropped here, not just refused at launch: this list is the home grid,
+    // the switcher's card set and the App Store's catalogue.
+    const effectiveApps = allApps.filter(a => !device.excludedApps.includes(a.id) && (a.base || installedApps.has(a.id) || downloadingIds.includes(a.id)));
     const effectiveIds  = new Set(effectiveApps.map(a => a.id));
 
     const canShowSwitcher = recentApps.length > 0 || !!currentApp;
 
-    // Hello only renders once the answer is trustworthy: the localStorage flag OR the server
-    // flag says completed -> never; unique phones -> wait for the resolved profile; in-game ->
-    // wait for the profile's settings hydrate (serverSetupDone non-null) so a cleared cache
-    // can't flash setup at a phone whose server flag says done.
-    const showSetup = !setupCompleted
+    // Hello only renders once the answer is trustworthy: the device has no wizard, or the
+    // localStorage flag OR the server flag says completed -> never; unique phones -> wait for
+    // the resolved profile; in-game -> wait for the profile's settings hydrate (serverSetupDone
+    // non-null) so a cleared cache can't flash setup at a phone whose server flag says done.
+    const showSetup = device.setup
+        && !setupCompleted
         && (!simEnabled || simProfileReady)
         && (!isFiveM || serverSetupDone !== null);
 
@@ -1311,7 +1323,7 @@ function AppContent() {
         <>
         {deckLayer}
         <div key={showSetup ? 'setup' : locale} className={theme === 'dark' ? 'dark' : undefined} data-dark-theme={darkTheme}>
-            {import.meta.env.DEV && (
+            {import.meta.env.DEV && device.setup && (
                 <button
                     type="button"
                     onClick={() => setSetup(prev => { const next = { ...prev, completed: !prev.completed }; saveSetup(next); return next; })}
@@ -1455,7 +1467,9 @@ function AppContent() {
                     />
                 )}
 
-                <CallLayer wallpaper={homeWallpaper} />
+                {/* Must not MOUNT on a device without calls: CallLayer self-hydrates through
+                    getCurrentCall(), so an ongoing call would surface here even with no pushes. */}
+                {device.calls && <CallLayer wallpaper={homeWallpaper} />}
 
                 {ringingAlarm && (
                     <div className="absolute inset-0 z-30">

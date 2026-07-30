@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { ReactNode } from 'react';
 
+import { device } from '@device';
 import type { WidgetAlign, WidgetSize, WidgetTheme } from '@/apps/appstore/appsApi';
 import type { CustomAppDef, CustomWidgetDef } from '@/core/types';
 import { t } from '@/i18n';
@@ -38,7 +39,7 @@ export interface WidgetDef {
     render: (o: WidgetRender) => ReactNode;
 }
 
-const WIDGETS: WidgetDef[] = [
+const ALL_WIDGETS: WidgetDef[] = [
     {
         kind: 'weather',
         label: () => t('widgets.weather', 'Weather'),
@@ -130,6 +131,9 @@ const WIDGETS: WidgetDef[] = [
         render: o => <TimersWidget size={o.size} width={o.width} height={o.height} theme={o.theme} />,
     },
 ];
+
+// Contacts is a speed-dial: every tile places a call, so it is gone on a device that cannot.
+const WIDGETS: WidgetDef[] = device.calls ? ALL_WIDGETS : ALL_WIDGETS.filter(w => w.kind !== 'contacts');
 
 function thirdPartyDef(app: CustomAppDef, widget: CustomWidgetDef): WidgetDef {
     const kind = customWidgetKind(app.id, widget.id);

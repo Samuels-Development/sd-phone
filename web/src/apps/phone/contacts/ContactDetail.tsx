@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Check, ChevronLeft, Copy, MessageSquare, Phone, Share, Video } from 'lucide-react';
 
+import { device } from '@device';
 import { ContactAvatar } from '@/shared/ContactAvatar';
 import { ShareAction, ShareSheet } from '@/shared/ShareSheet';
 import { AlertDialog } from '@/ui/AlertDialog';
@@ -108,8 +109,8 @@ export function ContactDetail({ contact, onBack, backLabel = t('phone.contacts',
 
                 <div className="mb-7 flex gap-3">
                     <ActionButton label={t('phone.actionMessage','message')} disabled={minimal} onClick={() => requestOpenMessages({ number: current.phone, name: current.name })} icon={<MessageSquare className="h-[28px] w-[28px]" strokeWidth={2} fill="currentColor" />} />
-                    <ActionButton label={t('phone.actionCall','call')}    disabled={minimal} onClick={() => onCall?.({ number: current.phone, name: current.name })} icon={<Phone className="h-[28px] w-[28px]" strokeWidth={2} fill="currentColor" />} />
-                    <ActionButton label={t('phone.actionVideo','video')}   disabled={minimal} onClick={() => { requestVideoOnConnect(); onCall?.({ number: current.phone, name: current.name }); }} icon={<Video className="h-[28px] w-[28px]" strokeWidth={2} fill="currentColor" />} />
+                    {device.calls && <ActionButton label={t('phone.actionCall','call')}    disabled={minimal} onClick={() => onCall?.({ number: current.phone, name: current.name })} icon={<Phone className="h-[28px] w-[28px]" strokeWidth={2} fill="currentColor" />} />}
+                    {device.calls && <ActionButton label={t('phone.actionVideo','video')}   disabled={minimal} onClick={() => { requestVideoOnConnect(); onCall?.({ number: current.phone, name: current.name }); }} icon={<Video className="h-[28px] w-[28px]" strokeWidth={2} fill="currentColor" />} />}
                     <ActionButton label={t('phone.actionShare','share')}   onClick={() => setSharing(true)} icon={<Share className="h-[28px] w-[28px]" strokeWidth={2} />} />
                 </div>
 

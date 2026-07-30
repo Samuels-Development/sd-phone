@@ -6,7 +6,12 @@ export default defineConfig(({ mode }) => ({
     plugins: [react()],
     base: './',
     resolve: {
-        alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+        alias: {
+            '@': fileURLToPath(new URL('./src', import.meta.url)),
+            // The device profile this build targets. sd-tablet points the same alias at its own
+            // profile and compiles this exact source tree against it.
+            '@device': fileURLToPath(new URL('./src/device/phone.ts', import.meta.url)),
+        },
     },
     // The UI locale catalog lives in the resource-root locales/ folder (shared
     // with the Lua side), which is above the Vite root — allow the dev server to

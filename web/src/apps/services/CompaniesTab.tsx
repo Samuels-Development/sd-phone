@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { Building2, MessageSquare, Navigation, Phone } from 'lucide-react';
 
+import { device } from '@device';
 import { ActionSheet } from '@/ui/ActionSheet';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { EmptyState } from '@/ui/EmptyState';
@@ -139,7 +140,7 @@ function CompanyCard({ company, onLocate, onCall, onMessage }: {
                 <ActionTile color="#FF9F0A" label={t('services.locateName', 'Locate {name}', { name: company.name })} onClick={onLocate}>
                     <Navigation className="h-[20px] w-[20px]" strokeWidth={2.2} fill="currentColor" />
                 </ActionTile>
-                {company.canCall && (
+                {company.canCall && device.calls && (
                     <ActionTile color="#34C759" label={t('services.callName', 'Call {name}', { name: company.name })} onClick={onCall}>
                         <Phone className="h-[20px] w-[20px]" strokeWidth={2.2} fill="currentColor" />
                     </ActionTile>

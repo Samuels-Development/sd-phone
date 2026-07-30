@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 
+import { device } from '@device';
 import { t } from '@/i18n';
 import { useIosPush } from '@/hooks/useIosPush';
 import { AppIconSVG } from '@/shell/AppIconSVG';
@@ -29,7 +30,8 @@ const APPS: AppEntry[] = [
     { id: 'settings', label: 'Settings'  },
     { id: 'wallet',   label: 'Wallet'    },
     { id: 'weather',  label: 'Weather'   },
-].sort((a, b) => a.label.localeCompare(b.label));
+].filter(a => device.calls || a.id !== 'phone')
+    .sort((a, b) => a.label.localeCompare(b.label));
 
 export function NotificationsPage({ onBack }: { onBack: () => void }) {
     const { goBack, pageStyle } = useIosPush(onBack);

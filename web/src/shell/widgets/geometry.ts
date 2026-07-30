@@ -1,18 +1,16 @@
+import { device } from '@device';
 import { freeCellNear } from '../dockMoves';
 import type { WidgetSize, WidgetPlacement } from '@/apps/appstore/appsApi';
 
-const COLS = 4;
-const ROWS = 6;
+// The same destructure the homescreen does. A widget's cells have to index the SAME number space
+// the icons are drawn in, so both sides must read the grid from the profile rather than inline it.
+const { cols: COLS, rows: ROWS, icon: ICON, colStride: COL_STRIDE, rowStride: ROW_STRIDE } = device.screen.grid;
 
 export const SPAN: Record<WidgetSize, { w: number; h: number }> = {
     sm: { w: 2, h: 2 },
     md: { w: 4, h: 2 },
     lg: { w: 4, h: 4 },
 };
-
-const ICON = 78;
-const COL_STRIDE = 102;
-const ROW_STRIDE = 122;
 
 export function widgetPx(size: WidgetSize, scale = 1): { width: number; height: number } {
     const { w, h } = SPAN[size];

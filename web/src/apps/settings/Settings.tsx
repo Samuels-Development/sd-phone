@@ -1,3 +1,4 @@
+import { device } from '@device';
 import { t } from '@/i18n';
 import { useSessionState } from '@/hooks/useSessionState';
 import { AppIconsPage } from './appearance/AppIconsPage';
@@ -36,6 +37,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
     // The SIM & Backup row only exists while the server runs unique phones.
     const settingsGroups = getSettingsGroups()
         .map(g => simEnabled ? g : { ...g, rows: g.rows.filter(r => r.id !== 'sim') })
+        .map(g => device.calls ? g : { ...g, rows: g.rows.filter(r => r.id !== 'phone') })
         .map(g => wifiConfigured ? g : { ...g, rows: g.rows.filter(r => r.id !== 'wifi') })
         .map(g => bluetoothConfigured ? g : { ...g, rows: g.rows.filter(r => r.id !== 'bluetooth') })
         .map(g => ({

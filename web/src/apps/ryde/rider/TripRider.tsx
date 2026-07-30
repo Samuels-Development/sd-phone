@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeftRight, Phone, MessageSquare, X } from 'lucide-react';
 
+import { device } from '@device';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { dialCall } from '@/apps/phone/callsApi';
 import { requestOpenMessages } from '@/shell/deeplink';
@@ -121,8 +122,8 @@ function TripRiderView({ r }: { r: Ride }) {
                 )}
 
                 {r.driver && !inTrip && !offered && (
-                    <div className="mb-3.5 grid grid-cols-2 gap-3">
-                        <Action icon={<Phone className="h-[24px] w-[24px]" />} label={t('ryde.call', 'Call')} onClick={() => setConfirmCall(true)} />
+                    <div className={`mb-3.5 grid ${device.calls ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
+                        {device.calls && <Action icon={<Phone className="h-[24px] w-[24px]" />} label={t('ryde.call', 'Call')} onClick={() => setConfirmCall(true)} />}
                         <Action icon={<MessageSquare className="h-[24px] w-[24px]" />} label={t('ryde.message', 'Message')} onClick={messageDriver} />
                     </div>
                 )}

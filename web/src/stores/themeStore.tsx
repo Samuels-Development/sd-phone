@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
+import { device } from '@device';
+import type { DeviceAlign } from '@/device/types';
 import lockscreenAsset from '@/assets/wallpapers/lockscreen.webp';
 import devDefaultAsset from '@/assets/photos/background5.webp';
 import { fetchNui, isFiveM } from '@/core/nui';
@@ -131,10 +133,7 @@ function savePhoneScaleLocal(v: number) {
     try { window.localStorage.setItem(PHONE_SCALE_KEY, String(v)); } catch { /* ignore */ }
 }
 
-export type PhoneAlign =
-    | 'top-left'    | 'top-center'    | 'top-right'
-    | 'middle-left' | 'middle-center' | 'middle-right'
-    | 'bottom-left' | 'bottom-center' | 'bottom-right';
+export type PhoneAlign = DeviceAlign;
 
 const PHONE_ALIGN_KEY = 'sd-phone:phoneAlign';
 const PHONE_ALIGNS: PhoneAlign[] = [
@@ -145,8 +144,8 @@ const PHONE_ALIGNS: PhoneAlign[] = [
 function loadPhoneAlignLocal(): PhoneAlign {
     try {
         const v = window.localStorage.getItem(PHONE_ALIGN_KEY) as PhoneAlign | null;
-        return v && PHONE_ALIGNS.includes(v) ? v : 'bottom-right';
-    } catch { return 'bottom-right'; }
+        return v && PHONE_ALIGNS.includes(v) ? v : device.defaultAlign;
+    } catch { return device.defaultAlign; }
 }
 function savePhoneAlignLocal(v: PhoneAlign) {
     try { window.localStorage.setItem(PHONE_ALIGN_KEY, v); } catch { /* ignore */ }
@@ -265,7 +264,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     brightness: 100,
     phoneScale: isFiveM ? 50 : loadPhoneScaleLocal(),
     chatTextScale: isFiveM ? 1 : loadChatScaleLocal(),
-    phoneAlign: isFiveM ? 'bottom-right' : loadPhoneAlignLocal(),
+    phoneAlign: isFiveM && device.id === 'phone' ? device.defaultAlign : loadPhoneAlignLocal(),
     ringtoneVol: 40,
     callVol: 60,
     airplaneMode: false,
@@ -362,9 +361,12 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         else saveBlurLocal(BLUR_HOME_KEY, v);
     },
 
+    // Where the device sits is the one setting that is NOT shared with the phone: the two have
+    // different shapes and want different spots, and phone_settings holds a single value. A
+    // companion device keeps its own position in its own NUI origin's storage instead.
     setPhoneAlign: (v) => {
         set({ phoneAlign: v });
-        if (isFiveM) void fetchNui('sd-phone:settings:setPhoneAlign', { align: v }).catch(() => {});
+        if (isFiveM && device.id === 'phone') void fetchNui('sd-phone:settings:setPhoneAlign', { align: v }).catch(() => {});
         else savePhoneAlignLocal(v);
     },
 
@@ -383,8 +385,9 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         set({ callVol: v });
         if (isFiveM) {
             persistDebounced('volumes', () => { void fetchNui('sd-phone:settings:setVolumes', { ringtone: get().ringtoneVol, call: get().callVol }).catch(() => {}); });
-            // Live in-call volume must track the drag in real time - never debounced.
-            void fetchNui('sd-phone:call:setVolume', { volume: v }).catch(() => {});
+            // Live in-call volume must track the drag in real time - never debounced. Only the
+            // device that owns the call may set it; a companion would stomp the phone's call.
+            if (device.calls) void fetchNui('sd-phone:call:setVolume', { volume: v }).catch(() => {});
         }
     },
 
@@ -536,7 +539,9 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
                 if (typeof d.chatTextScale === 'number') patch.chatTextScale = clampChatScale(d.chatTextScale);
                 if (typeof d.phoneScale === 'number') patch.phoneScale = clampPhoneScale(d.phoneScale);
                 if (typeof d.brightness === 'number') patch.brightness = clampPhoneScale(d.brightness);
-                if (typeof d.phoneAlign === 'string' && (PHONE_ALIGNS as string[]).includes(d.phoneAlign)) patch.phoneAlign = d.phoneAlign as PhoneAlign;
+                // Position is device-local (see setPhoneAlign): a companion must not adopt the
+                // phone's corner out of the shared settings row.
+                if (device.id === 'phone' && typeof d.phoneAlign === 'string' && (PHONE_ALIGNS as string[]).includes(d.phoneAlign)) patch.phoneAlign = d.phoneAlign as PhoneAlign;
                 if (typeof d.ringtoneVol === 'number') patch.ringtoneVol = clampVol(d.ringtoneVol);
                 if (typeof d.callVol === 'number') patch.callVol = clampVol(d.callVol);
                 patch.lockClock = (d.lockClock && typeof d.lockClock === 'object')
@@ -556,7 +561,8 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
                 if (isFiveM && keyAtRequest === wallpaperProfileKey) {
                     cacheWallpapers(lockWall, homeWall);
                 }
-                if (isFiveM) void fetchNui('sd-phone:call:setVolume', { volume: get().callVol }).catch(() => {});
+                // Same rule on hydrate: a companion opening would push its volume onto the call.
+                if (isFiveM && device.calls) void fetchNui('sd-phone:call:setVolume', { volume: get().callVol }).catch(() => {});
                 const ringIsYt  = !!d.ringtone         && ring.some(c => c.id === d.ringtone);
                 const notifIsYt = !!d.notificationTone && notif.some(c => c.id === d.notificationTone);
                 if (ringIsYt || notifIsYt) warmYouTube();

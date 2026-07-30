@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Check, Play, Plus, Square, Trash2, Volume, Volume2 } from 'lucide-react';
 
+import { device } from '@device';
 import { t } from '@/i18n';
 import { useIosPush } from '@/hooks/useIosPush';
 import { useTheme } from '@/stores/themeStore';
@@ -76,26 +77,30 @@ export function SoundHapticsPage({ onBack }: { onBack: () => void }) {
                 </div>
             </ListGroup>
 
-            <ListGroup header={t('settings.callVolume', 'Call Volume')}>
-                <div className="flex items-center gap-3 px-4 py-3">
-                    <Volume
-                        className="h-[18px] w-[18px] shrink-0 text-ios-gray"
-                        strokeWidth={2}
-                    />
-                    <input
-                        type="range"
-                        min={0} max={100}
-                        value={callVol}
-                        onChange={e => setCallVol(+e.target.value)}
-                        className="ios-slider flex-1"
-                        style={{ '--sp': `${callVol}%`, '--se': trackEmpty } as React.CSSProperties}
-                    />
-                    <Volume2
-                        className="h-[20px] w-[20px] shrink-0 text-ios-gray"
-                        strokeWidth={2}
-                    />
-                </div>
-            </ListGroup>
+            {/* This slider sets the in-call voice level, so it has nothing to control on a
+                device that cannot call - dropped entirely rather than shown disabled. */}
+            {device.calls && (
+                <ListGroup header={t('settings.callVolume', 'Call Volume')}>
+                    <div className="flex items-center gap-3 px-4 py-3">
+                        <Volume
+                            className="h-[18px] w-[18px] shrink-0 text-ios-gray"
+                            strokeWidth={2}
+                        />
+                        <input
+                            type="range"
+                            min={0} max={100}
+                            value={callVol}
+                            onChange={e => setCallVol(+e.target.value)}
+                            className="ios-slider flex-1"
+                            style={{ '--sp': `${callVol}%`, '--se': trackEmpty } as React.CSSProperties}
+                        />
+                        <Volume2
+                            className="h-[20px] w-[20px] shrink-0 text-ios-gray"
+                            strokeWidth={2}
+                        />
+                    </div>
+                </ListGroup>
+            )}
 
             <ListGroup header={t('settings.soundHapticsPatterns', 'Sound and Haptics Patterns')}>
                 <ListRow

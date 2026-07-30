@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 
+import { device } from '@device';
 import type { AppDef } from '@/core/types';
 import { useDownloadProgress } from '@/stores/downloadStore';
 import { useIconAppearance, useShowAppNames } from '@/stores/iconThemeStore';
@@ -8,6 +9,12 @@ import { AppGlyph } from './AppGlyphs';
 import { AppBadge } from './AppBadge';
 import { launchOriginFrom } from './launchOrigin';
 import { CircularProgress } from '@/ui/CircularProgress';
+
+// The icon artwork IS the grid cell: `grid.icon` is documented as the tile edge length, and the
+// homescreen measures cells, hit-tests and landing pads with it, so the tile must be exactly it.
+export const TILE = device.screen.grid.icon;
+// AppIconSVG always draws on a fixed 60px design box; every caller scales that box to fit.
+export const ART = 60;
 
 export const TILE_SHADOW = '0 2px 10px rgba(0,0,0,0.38), 0 0 0 0.5px rgba(0,0,0,0.12)';
 
@@ -48,8 +55,10 @@ export function AppIcon({ app, label = true, onOpen, badge }: AppIconProps) {
         >
             <div className="relative">
                 <div
-                    className={`relative h-[78px] w-[78px] overflow-hidden transition-transform duration-150 ease-out ${downloading ? '' : 'group-active:scale-[0.96]'}`}
+                    className={`relative overflow-hidden transition-transform duration-150 ease-out ${downloading ? '' : 'group-active:scale-[0.96]'}`}
                     style={{
+                        width:        TILE,
+                        height:       TILE,
                         borderRadius: radiusPct(radius),
                         boxShadow:    [TILE_SHADOW, boxShadow].filter(Boolean).join(', '),
                     }}
@@ -57,9 +66,9 @@ export function AppIcon({ app, label = true, onOpen, badge }: AppIconProps) {
                     {art === 'native' ? (
                         <div
                             style={{
-                                width:           60,
-                                height:          60,
-                                transform:       'scale(1.3)',
+                                width:           ART,
+                                height:          ART,
+                                transform:       `scale(${TILE / ART})`,
                                 transformOrigin: '0 0',
                             }}
                         >

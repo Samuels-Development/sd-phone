@@ -7,7 +7,7 @@
         "skipLibCheck": true,
         "moduleResolution": "bundler",
         "baseUrl": ".",
-        "paths": { "@/*": ["./src/*"] },
+        "paths": { "@/*": ["./src/*"], "@device": ["./src/device/phone.ts"] },
         "allowImportingTsExtensions": true,
         "resolveJsonModule": true,
         "isolatedModules": true,
