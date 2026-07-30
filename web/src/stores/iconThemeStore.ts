@@ -5,7 +5,7 @@ import { t } from '@/i18n';
 import { customAccent } from '@/stores/customAppsStore';
 import { useThemeStore } from '@/stores/themeStore';
 
-export type BuiltinIconThemeId =
+type BuiltinIconThemeId =
     | 'default' | 'glass' | 'flat' | 'light' | 'pastel' | 'sand'
     | 'slate' | 'tinted' | 'noir' | 'mono' | 'contrast';
 
@@ -24,7 +24,7 @@ export interface ColorRecipe {
 
 export type IconTexture = 'none' | 'noise' | 'dots' | 'stripes';
 
-export interface IconThemeBorder {
+interface IconThemeBorder {
     color: ColorRecipe;
     width: number;
 }
@@ -41,7 +41,7 @@ export interface IconThemeOverride {
     icon?:       string;
 }
 
-export interface IconThemeTraits {
+interface IconThemeTraits {
     radius?:      number;
     background2?: ColorRecipe;
     angle?:       number;
