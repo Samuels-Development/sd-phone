@@ -24,6 +24,14 @@ function registry.get(id)
     return devices[id]
 end
 
+---A device as another resource may see it: identity only, so neither the owning script's callbacks
+---nor a table the registry still holds ever leaves this module.
+---@param device table
+---@return table view { id, name, kind, owner }
+function registry.view(device)
+    return { id = device.id, name = device.name, kind = device.kind, owner = device.owner }
+end
+
 ---Adds a device. Rejects a duplicate id rather than replacing, so two resources cannot silently
 ---fight over one device.
 ---@param def table registration passed to registerBluetoothDevice
@@ -37,6 +45,30 @@ function registry.add(def, owner)
     device.owner = owner
     devices[device.id] = device
     links[device.id] = {}
+    return true
+end
+
+---Patches a device in place, so renaming or moving one does not have to unregister it and drop
+---everyone connected. Only the resource that registered a device may patch it.
+---@param id string
+---@param patch table fields to change; omitted keys keep their current value
+---@param owner string resource asking
+---@return boolean ok, string|nil err
+function registry.update(id, patch, owner)
+    local current = devices[id]
+    if not current then return false, ('device %s is not registered'):format(tostring(id)) end
+    if current.owner ~= owner then
+        return false, ('device %s belongs to %s'):format(id, tostring(current.owner))
+    end
+
+    local merged = bt.merge(current, patch)
+    if not merged then return false, 'patch must be a table' end
+
+    local device, err = bt.validate(merged)
+    if not device then return false, err end
+
+    device.owner = current.owner
+    devices[id] = device
     return true
 end
 
@@ -119,6 +151,21 @@ local function safely(fn, ...)
     end
 end
 
+---Server-local lifecycle events, fired once per change. Every path that touches `links` goes through
+---connect and disconnect below, so none of them can open or close a connection silently.
+---@param src number player server id
+---@param device table the device connected to
+local function announceConnect(src, device)
+    TriggerEvent('sd-phone:server:bluetooth:connected', src, device.id, registry.view(device))
+end
+
+---@param src number player server id
+---@param id string device the player was on, read before the link was cleared
+---@param reason string why it ended
+local function announceDisconnect(src, id, reason)
+    TriggerEvent('sd-phone:server:bluetooth:disconnected', src, id, reason)
+end
+
 ---Links a player to a device, if it exists and has room. Range is the caller's to check, because
 ---pairing and the reconnect tick already hold the player's coords.
 ---@param src number
@@ -132,6 +179,7 @@ function registry.connect(src, id)
 
     links[id][src] = true
     safely(device.onConnect, src, id)
+    announceConnect(src, device)
     return true
 end
 
@@ -144,8 +192,10 @@ function registry.disconnect(src, id, reason)
     if not registry.isConnected(src, id) then return false end
     links[id][src] = nil
 
+    local why = reason or 'manual'
     local device = devices[id]
-    if device then safely(device.onDisconnect, src, id, reason or 'manual') end
+    if device then safely(device.onDisconnect, src, id, why) end
+    announceDisconnect(src, id, why)
     return true
 end
 

@@ -47,10 +47,11 @@ local phonecam = require 'client.phonecam'
 local service = require 'client.service'
 ---@type table Wi-Fi (client.wifi): joined network, nearby scan + capability gating.
 local wifiClient = require 'client.wifi'
+---@type table Bluetooth (client.bluetooth): the radio switch + connected devices, mirrored server-side.
+local bluetoothClient = require 'client.bluetooth'
 
 -- Loaded for side effects: each app module registers its own NUI callbacks, net events and
 -- server proxies.
-require 'client.bluetooth'
 require 'client.apps.groups'
 require 'client.apps.health'
 require 'client.apps.mail'
@@ -821,6 +822,18 @@ exports('getWifiNetworks', function() return wifiClient.networks() end)
 ---The networks in reach as of the last scan, strongest first, as { id, ssid, secured, strength,
 ---bars, known }. Empty while the radio is off or nothing is in range.
 exports('getNearbyWifi', function() return wifiClient.nearby() end)
+
+---Whether this character's Bluetooth radio is switched on. Says nothing about what is connected:
+---a switched-on radio with nothing in range is still on.
+exports('isBluetoothOn', function() return bluetoothClient.enabled() end)
+
+---Whether this phone is connected to a device right now, by the id its owning script registered.
+---@param deviceId string
+exports('isBluetoothConnected', function(deviceId) return bluetoothClient.isConnected(deviceId) end)
+
+---Every device this phone is connected to as { id, name, kind }. Empty while the radio is off or
+---nothing paired is in range.
+exports('getConnectedDevices', function() return bluetoothClient.devices() end)
 
 ---Registers a third-party app - exports['sd-phone']:addCustomApp(data). Attribution is the calling
 ---resource; re-registering an identifier is only allowed from that same resource.

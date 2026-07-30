@@ -51,6 +51,30 @@ function bluetooth.cleanId(v)
     return v:sub(1, bluetooth.MAX_ID)
 end
 
+---@type string[] Registration fields a patch may carry. `id` is absent on purpose: it keys the
+---registry, so a device that changed it would be a different device.
+local PATCHABLE = {
+    'name', 'kind', 'coords', 'entity', 'range', 'maxConnections', 'onConnect', 'onDisconnect',
+}
+
+---Folds a patch over a registration so a device can be renamed, moved or resized in place. Keys the
+---patch omits keep their current value, which is why a patch cannot accidentally drop a callback.
+---@param device table the registration already held
+---@param patch table fields to change
+---@return table|nil def a registration for validate, nil when either side is not a table
+function bluetooth.merge(device, patch)
+    if type(device) ~= 'table' or type(patch) ~= 'table' then return nil end
+
+    local def = { id = device.id }
+    for i = 1, #PATCHABLE do
+        local key = PATCHABLE[i]
+        local value = patch[key]
+        if value == nil then value = device[key] end
+        def[key] = value
+    end
+    return def
+end
+
 ---Validates a registration, returning the fields worth keeping. Rejects rather than repairs, so a
 ---script learns its device is wrong instead of finding it silently unreachable.
 ---@param def table registration passed to registerBluetoothDevice

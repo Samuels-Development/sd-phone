@@ -9,8 +9,8 @@ local actions = require 'server.bluetooth.actions'
 ---feature carries when nobody is looking at the Bluetooth page.
 local TICK_MS = 4000
 
----@type table<number, table|false> Per-player state the tick needs, loaded once per session. `false`
----records a player with nothing paired, so they are never queried again.
+---@type table<number, table> Per-player state the tick and the exports need, loaded once per session
+---and dropped again by anything that changes it.
 local watch = {}
 
 CreateThread(function()
@@ -21,22 +21,18 @@ CreateThread(function()
 end)
 
 ---A player's cached state, read from the database the first time and kept until they leave or change
----something. Returns nil when they have nothing paired and so need no sweeping.
+---something. Returns nil when they have no loaded character to read for.
 ---@param src number player server id
----@return table|nil state { enabled: boolean, paired: table<string, string> }
+---@return { enabled: boolean, paired: table<string, string> }|nil state
 local function stateOf(src)
     local cached = watch[src]
-    if cached ~= nil then return cached or nil end
+    if cached then return cached end
 
     local player = require 'bridge.server.player'
     local cid = player.getIdentifier(src)
     if not cid then return nil end
 
     local state = store.get(cid)
-    if not next(state.paired) then
-        watch[src] = false
-        return nil
-    end
     watch[src] = state
     return state
 end
@@ -46,6 +42,41 @@ end
 local function invalidate(src)
     watch[src] = nil
 end
+
+---The picture the client-side cache mirrors: the radio switch plus the devices connected right now.
+---Threaded because the lifecycle events driving it are synchronous and a cold cache reads the
+---database, which would otherwise hold up the reconnect sweep.
+---@param src number player server id
+local function pushState(src)
+    CreateThread(function()
+        if not src or not GetPlayerName(src) then return end
+
+        local state = stateOf(src)
+        local connected = {}
+        for _, id in ipairs(registry.connectedTo(src)) do
+            local device = registry.get(id)
+            connected[#connected + 1] = device
+                and { id = id, name = device.name, kind = device.kind }
+                or { id = id, name = id, kind = 'device' }
+        end
+
+        TriggerClientEvent('sd-phone:client:bluetooth', src, {
+            enabled = state == nil or state.enabled == true,
+            devices = connected,
+        })
+    end)
+end
+
+-- Mirroring off the lifecycle events rather than the call sites means every path that opens or
+-- closes a connection keeps the client cache honest, including the reconnect sweep.
+AddEventHandler('sd-phone:server:bluetooth:connected', function(src) pushState(src) end)
+AddEventHandler('sd-phone:server:bluetooth:disconnected', function(src) pushState(src) end)
+
+---Seeds the cache on the client's first ask, which is the earliest point a citizenid is sure to
+---exist. Only ever answers the caller with their own state.
+RegisterNetEvent('sd-phone:server:bluetooth:sync', function()
+    pushState(source)
+end)
 
 lib.callback.register('sd-phone:server:bluetooth:scan', function(source)
     invalidate(source)
@@ -71,6 +102,7 @@ end)
 lib.callback.register('sd-phone:server:bluetooth:setEnabled', function(source, payload)
     local res = actions.setEnabled(source, payload)
     invalidate(source)
+    pushState(source)
     return res
 end)
 
@@ -118,26 +150,98 @@ AddEventHandler('onResourceStop', function(name)
     registry.removeByOwner(name)
 end)
 
+---Registers a device phones can pair with. Attribution is the calling resource, and its devices go
+---with it when it stops.
+---@param def table { id, name, kind?, coords?, entity?, range?, maxConnections?, onConnect?, onDisconnect? }
+---@return boolean ok, string? err
 exports('registerBluetoothDevice', function(def)
     return registry.add(def, GetInvokingResource() or GetCurrentResourceName())
 end)
 
+---Patches a registered device in place, so a rename or a move keeps everyone connected. Only the
+---resource that registered a device may patch it; omitted keys keep their current value.
+---@param id string
+---@param patch table fields to change
+---@return boolean ok, string? err
+exports('updateBluetoothDevice', function(id, patch)
+    local ok, err = registry.update(id, patch, GetInvokingResource() or GetCurrentResourceName())
+    if ok then
+        for _, src in ipairs(registry.connections(id)) do pushState(src) end
+    end
+    return ok, err
+end)
+
+---Removes a device, disconnecting everyone on it first with reason `unregistered`.
+---@param id string
+---@return boolean removed
 exports('unregisterBluetoothDevice', function(id)
     return registry.remove(id)
 end)
 
+---Every registered device, as identity only.
+---@return table[] devices { id, name, kind, owner }
+exports('getBluetoothDevices', function()
+    local out = {}
+    for _, id in ipairs(registry.ids()) do
+        local device = registry.get(id)
+        if device then out[#out + 1] = registry.view(device) end
+    end
+    return out
+end)
+
+---One registered device, as identity only.
+---@param id string
+---@return table? device { id, name, kind, owner }
+exports('getBluetoothDevice', function(id)
+    local device = type(id) == 'string' and registry.get(id) or nil
+    return device and registry.view(device) or nil
+end)
+
+---@param source number player server id
+---@param deviceId string
+---@return boolean connected
 exports('isBluetoothConnected', function(source, deviceId)
     return registry.isConnected(source, deviceId)
 end)
 
+---@param deviceId string
+---@return number[] sources players connected to the device
 exports('getBluetoothConnections', function(deviceId)
     return registry.connections(deviceId)
 end)
 
+---@param source number player server id
+---@return string[] ids devices the player is connected to
 exports('getConnectedDevices', function(source)
     return registry.connectedTo(source)
 end)
 
+---Whether a player's Bluetooth radio is switched on. False for a source with no loaded character,
+---which is what tells "the radio is off" apart from "the device is out of range".
+---@param source number player server id
+---@return boolean enabled
+exports('isBluetoothEnabled', function(source)
+    local state = stateOf(source)
+    return state ~= nil and state.enabled == true
+end)
+
+---Connects a player to a device from script. Honours the radio switch and the device's connection
+---limit but not its range, which is the point of connecting by hand; it does not pair.
+---@param source number player server id
+---@param deviceId string
+---@return boolean ok, string? err
+exports('connectBluetooth', function(source, deviceId)
+    local state = stateOf(source)
+    if not state then return false, 'no character' end
+    if not state.enabled then return false, 'bluetooth is off' end
+    return registry.connect(source, deviceId)
+end)
+
+---Disconnects a player from a device with reason `kicked`. The pairing survives, so the reconnect
+---sweep picks it up again while they stay in range.
+---@param source number player server id
+---@param deviceId string
+---@return boolean disconnected
 exports('disconnectBluetooth', function(source, deviceId)
     return registry.disconnect(source, deviceId, 'kicked')
 end)

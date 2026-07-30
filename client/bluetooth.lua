@@ -1,3 +1,79 @@
+---@type table Bluetooth module; the table returned at end of file.
+local bluetoothClient = {}
+
+---@type boolean The radio switch, mirrored from the server so an export never has to ask for it.
+local radioOn = true
+---@type table[] Devices connected right now, as { id, name, kind }.
+local devices = {}
+---@type table<string, boolean> The same devices as a set, for a lookup that does not walk the list.
+local index = {}
+
+---Whether this character's Bluetooth radio is switched on.
+---@return boolean
+function bluetoothClient.enabled()
+    return radioOn
+end
+
+---Every device this phone is connected to, as fresh tables so a caller mutating the result cannot
+---reach into the mirror.
+---@return table[] devices { id, name, kind }
+function bluetoothClient.devices()
+    local out = {}
+    for i = 1, #devices do
+        out[i] = { id = devices[i].id, name = devices[i].name, kind = devices[i].kind }
+    end
+    return out
+end
+
+---Whether this phone is connected to a device right now.
+---@param id string|nil
+---@return boolean
+function bluetoothClient.isConnected(id)
+    return type(id) == 'string' and index[id] == true
+end
+
+---Replaces the mirror wholesale. The server sends the whole picture on every change, so there is no
+---patch to merge and no way for the two sides to drift apart.
+---@param data table { enabled: boolean, devices: table[] }
+local function apply(data)
+    if type(data) ~= 'table' then return end
+
+    radioOn = data.enabled ~= false
+    devices, index = {}, {}
+
+    local list = type(data.devices) == 'table' and data.devices or {}
+    for i = 1, #list do
+        local device = list[i]
+        if type(device) == 'table' and type(device.id) == 'string' then
+            devices[#devices + 1] = {
+                id   = device.id,
+                name = type(device.name) == 'string' and device.name or device.id,
+                kind = type(device.kind) == 'string' and device.kind or 'device',
+            }
+            index[device.id] = true
+        end
+    end
+end
+
+---Asks the server for a fresh picture, for the points where this side cannot know it has gone stale.
+local function sync()
+    TriggerServerEvent('sd-phone:server:bluetooth:sync')
+end
+
+RegisterNetEvent('sd-phone:client:bluetooth', apply)
+
+-- The same signals client/main.lua rebuilds its character state on: a live character switch has to
+-- drop the outgoing character's connections before the incoming one's land on top of them.
+RegisterNetEvent('QBCore:Client:OnPlayerLoaded', sync)
+RegisterNetEvent('esx:playerLoaded', sync)
+RegisterNetEvent('sd-phone:client:rehydrate', sync)
+
+-- A restart puts this script beside a player who is already loaded, so nothing above would fire.
+CreateThread(function()
+    Wait(2000)
+    sync()
+end)
+
 ---Nearby and paired devices for the Bluetooth settings page. Thin forward into server/bluetooth,
 ---which reads player distances server-side.
 RegisterNUICallback('sd-phone:bluetooth:scan', function(_, cb)
@@ -23,3 +99,5 @@ end)
 RegisterNUICallback('sd-phone:bluetooth:setEnabled', function(payload, cb)
     cb(lib.callback.await('sd-phone:server:bluetooth:setEnabled', false, payload) or { success = false })
 end)
+
+return bluetoothClient
