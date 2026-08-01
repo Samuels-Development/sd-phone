@@ -12,7 +12,7 @@ import {
     WebGLRenderTarget,
     WebGLRenderer,
 } from './threeExports';
-import { computeCropRegion, SELFIE_CROP_BIAS_X, type CropRegion, type Orientation } from './crop';
+import { computeCropRegion, SELFIE_CROP_BIAS_X, type Orientation } from './crop';
 
 // Live game-view renderer, ported from utk_render (citizenfx/screenshot-basic).
 // CfxTexture's isCfxTexture flag makes the patched fork's WebGLTextures emit a
@@ -49,7 +49,6 @@ export class GameRender {
     private zoom = 1;
     private orientation: Orientation = 'portrait';
     private selfie = false;
-    private crop: CropRegion | null = null;
 
     constructor() {
         const gameTexture = new CfxTexture();
@@ -113,19 +112,13 @@ export class GameRender {
         const camera = new OrthographicCamera(w / -2, w / 2, h / 2, h / -2, -10000, 10000);
         camera.position.z = 0;
         if (fullScreen) {
-            this.crop = null;
             camera.setViewOffset(w, h, 0, 0, w, h);
         } else {
             const biasX = this.selfie ? SELFIE_CROP_BIAS_X : 0;
             const crop  = computeCropRegion(w, h, this.zoom, this.orientation, biasX);
-            this.crop = crop;
             camera.setViewOffset(w, h, crop.offsetX, crop.offsetY, crop.width, crop.height);
         }
         return camera;
-    }
-
-    getCrop(): CropRegion | null {
-        return this.crop;
     }
 
     private buildScene(): Scene {

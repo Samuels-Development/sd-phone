@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { LayoutGrid, Play, RotateCw, Sparkles, X, Zap, ZapOff } from 'lucide-react';
 
@@ -19,25 +19,38 @@ import shutterSfx from '@/assets/camera/shutter.mp3';
 import { useSessionState } from '@/hooks/useSessionState';
 import { CAMERA_FILTERS, filterCss, filterLabel } from './filters';
 import { FilterDefs } from './FilterDefs';
-import { CAMERA_MASKS, drawMask, findMask, maskLabel, type FaceAnchor } from './masks';
-import { computeFaceAnchor, type FacePush } from './faceAnchor';
 
-function MaskThumb({ id }: { id: string }) {
-    const ref = useRef<HTMLCanvasElement>(null);
-    useEffect(() => {
-        const el = ref.current;
-        const mask = findMask(id);
-        if (!el || !mask) return;
-        const ctx = el.getContext('2d');
-        if (!ctx) return;
-        ctx.clearRect(0, 0, el.width, el.height);
-        ctx.fillStyle = 'rgba(255,255,255,0.16)';
-        ctx.beginPath();
-        ctx.ellipse(el.width / 2, el.height * 0.60, el.width * 0.21, el.height * 0.26, 0, 0, Math.PI * 2);
-        ctx.fill();
-        drawMask(ctx, mask, { u: 0.5, v: 0.60, fx: 0.27, fy: 0.27, roll: 0 }, el.width, el.height);
-    }, [id]);
-    return <canvas ref={ref} width={116} height={116} className="h-full w-full" />;
+function PickerItem({ active, label, onClick, children }: {
+    active:   boolean;
+    label:    string;
+    onClick:  () => void;
+    children: ReactNode;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            aria-pressed={active}
+            className="flex shrink-0 flex-col items-center gap-1.5"
+        >
+            <span
+                className={[
+                    'flex h-[58px] w-[58px] items-center justify-center overflow-hidden rounded-[9px] bg-white/10 transition-all duration-150',
+                    active ? 'ring-[2.5px] ring-[#FFD60A]' : 'ring-1 ring-white/25',
+                ].join(' ')}
+            >
+                {children}
+            </span>
+            <span
+                className={[
+                    'max-w-[70px] truncate text-[10.5px] font-medium',
+                    active ? 'text-[#FFD60A]' : 'text-white/85',
+                ].join(' ')}
+            >
+                {label}
+            </span>
+        </button>
+    );
 }
 
 function playShutter() {
@@ -117,8 +130,6 @@ const clampZoom = (z: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
 const zoomLabel = (z: number) => `${Number.isInteger(z) ? z : z.toFixed(1)}×`;
 const MODE_OPTIONS = ['VIDEO', 'PHOTO', 'LANDSCAPE'] as const;
 
-const PICKER_EXIT_MS = 300;
-
 const CAPTURE_TIMEOUT_MS = 8000;
 const VIDEO_TIMEOUT_MS   = 45000;
 
@@ -152,16 +163,7 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
     const [flash,     setFlash]     = useState(false);
     const [filterId,  setFilterId]  = useSessionState('camera:filter', 'original');
     const [pickerOpen, setPickerOpen] = useState(false);
-    const [pickerLeaving, setPickerLeaving] = useState(false);
-    const [maskId, setMaskId] = useSessionState('camera:mask', 'none');
-    const [tab, setTab] = useSessionState<'filters' | 'masks'>('camera:pickerTab', 'filters');
-    const faceRef = useRef<FaceAnchor | null>(null);
-    const overlayRef = useRef<HTMLCanvasElement>(null);
-    const maskRef = useRef(maskId);
-    maskRef.current = maskId;
-    const trackingRef = useRef(false);
     const [swatch,    setSwatch]    = useState<string | null>(null);
-    const pickerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const filterStyle = filterCss(filterId);
     const filterRef = useRef(filterStyle);
     filterRef.current = filterStyle;
@@ -255,7 +257,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
             mixerRef.current?.destroy();
             mixerRef.current = null;
             if (captureTimer.current) clearTimeout(captureTimer.current);
-            if (pickerTimer.current) clearTimeout(pickerTimer.current);
         };
     }, []);
 
@@ -397,86 +398,26 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
         if (captureTimer.current) { clearTimeout(captureTimer.current); captureTimer.current = null; }
     }, []));
 
-    useNuiEvent('sd-phone:camera:face', useCallback((data: FacePush) => {
-        const crop = renderRef.current?.getCrop();
-        faceRef.current = crop
-            ? computeFaceAnchor(data, crop, window.innerWidth, window.innerHeight)
-            : null;
-    }, []));
-
-    useEffect(() => {
-        const want = maskId !== 'none';
-        if (want === trackingRef.current) return;
-        trackingRef.current = want;
-        void fetchNui('sd-phone:camera:faceTrack', { on: want });
-    }, [maskId]);
-
-    useEffect(() => () => {
-        if (!trackingRef.current) return;
-        trackingRef.current = false;
-        void fetchNui('sd-phone:camera:faceTrack', { on: false });
-    }, []);
-
-    useEffect(() => {
-        if (maskId === 'none') return;
-        let raf = 0;
-        const paint = () => {
-            raf = requestAnimationFrame(paint);
-            const host = overlayRef.current;
-            if (!host) return;
-            const w = Math.max(1, Math.round(landscape ? vp.h : vp.w));
-            const h = Math.max(1, Math.round(landscape ? vp.w : vp.h));
-            if (host.width !== w || host.height !== h) {
-                host.width = w;
-                host.height = h;
-            }
-            const ctx = host.getContext('2d');
-            if (!ctx) return;
-            ctx.clearRect(0, 0, host.width, host.height);
-            const mask = findMask(maskRef.current);
-            const anchor = faceRef.current;
-            if (mask && anchor) drawMask(ctx, mask, anchor, host.width, host.height);
-        };
-        paint();
-        return () => cancelAnimationFrame(raf);
-    }, [maskId, landscape, vp.w, vp.h]);
-
     function togglePicker() {
-        if (pickerTimer.current) { clearTimeout(pickerTimer.current); pickerTimer.current = null; }
-        if (pickerOpen) {
-            setPickerLeaving(true);
-            pickerTimer.current = setTimeout(() => {
-                setPickerOpen(false);
-                setPickerLeaving(false);
-                pickerTimer.current = null;
-            }, PICKER_EXIT_MS);
-            return;
-        }
-        setSwatch(grabSwatch());
-        setPickerLeaving(false);
-        setPickerOpen(true);
-    }
-
-    // The mask lives on its own overlay canvas at viewfinder size, so a capture at a different
-    // resolution has to re-draw it rather than copy it, and it is stamped AFTER the filter so the
-    // ears keep their own colours instead of being graded with the scene.
-    function stampMask(ctx: CanvasRenderingContext2D, outW: number, outH: number) {
-        const mask = findMask(maskRef.current);
-        const anchor = faceRef.current;
-        if (!mask || !anchor) return;
-        drawMask(ctx, mask, anchor, outW, outH);
+        if (!pickerOpen) setSwatch(grabSwatch());
+        setPickerOpen(open => !open);
     }
 
     function grabSwatch(): string | null {
         const src = canvasRef.current;
         if (!src || !src.width || !src.height) return null;
+        const shownW = src.offsetWidth;
+        const shownH = src.offsetHeight;
+        if (!shownW || !shownH) return null;
         const out = document.createElement('canvas');
         out.width = 96;
         out.height = 96;
         const ctx = out.getContext('2d');
         if (!ctx) return null;
-        const side = Math.min(src.width, src.height);
-        ctx.drawImage(src, (src.width - side) / 2, (src.height - side) / 2, side, side, 0, 0, 96, 96);
+        const side = Math.min(shownW, shownH);
+        const sw = src.width  * (side / shownW);
+        const sh = src.height * (side / shownH);
+        ctx.drawImage(src, (src.width - sw) / 2, (src.height - sh) / 2, sw, sh, 0, 0, 96, 96);
         return out.toDataURL('image/jpeg', 0.7);
     }
 
@@ -503,7 +444,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
         if (filterStyle !== 'none') ctx.filter = filterStyle;
         ctx.drawImage(src, 0, 0, outW, outH);
         ctx.filter = 'none';
-        stampMask(ctx, outW, outH);
         return out.toDataURL('image/jpeg', 0.9);
     }
 
@@ -591,7 +531,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
                 rctx.filter = filterRef.current === 'none' ? 'none' : filterRef.current;
                 rctx.drawImage(live, 0, 0, outW, outH);
                 rctx.filter = 'none';
-                stampMask(rctx, outW, outH);
             }
             recRafRef.current = requestAnimationFrame(pump);
         };
@@ -784,28 +723,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
                 <FilterDefs />
 
                 <canvas
-                    ref={overlayRef}
-                    className="pointer-events-none absolute z-[14]"
-                    style={
-                        landscape && vp.w > 0
-                            ? {
-                                  display: maskId === 'none' ? 'none' : 'block',
-                                  top: '50%',
-                                  left: '50%',
-                                  width: vp.h,
-                                  height: vp.w,
-                                  transform: 'translate(-50%, -50%) rotate(90deg)',
-                              }
-                            : {
-                                  display: maskId === 'none' ? 'none' : 'block',
-                                  inset: 0,
-                                  width: '100%',
-                                  height: '100%',
-                              }
-                    }
-                />
-
-                <canvas
                     ref={canvasRef}
                     className="absolute"
                     style={
@@ -878,102 +795,46 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
                     </div>
                 </div>
 
-                {pickerOpen && (
+                <div
+                    className="absolute bottom-[68px] left-3 right-3 z-30 overflow-hidden rounded-[20px] border transition-all ease-[cubic-bezier(0.32,0.72,0,1)]"
+                    style={{
+                        transform:            pickerOpen ? 'translateY(0)' : 'translateY(14px)',
+                        backgroundColor:      pickerOpen ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0)',
+                        borderColor:          pickerOpen ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0)',
+                        backdropFilter:       pickerOpen ? 'blur(20px)' : 'blur(0px)',
+                        WebkitBackdropFilter: pickerOpen ? 'blur(20px)' : 'blur(0px)',
+                        boxShadow:            pickerOpen ? '0 8px 28px rgba(0,0,0,0.45)' : '0 8px 28px rgba(0,0,0,0)',
+                        transitionDuration:   pickerOpen ? '300ms' : '260ms',
+                        visibility:           pickerOpen ? 'visible' : 'hidden',
+                        pointerEvents:        pickerOpen ? 'auto' : 'none',
+                    }}
+                    aria-hidden={!pickerOpen}
+                >
                     <div
-                        className={[
-                            'absolute bottom-[68px] left-0 right-0 z-30',
-                            pickerLeaving ? 'animate-slide-out-down' : 'animate-slide-up-fade',
-                        ].join(' ')}
+                        className="no-scrollbar flex gap-3 overflow-x-auto overscroll-x-contain px-3 py-3 transition-opacity duration-200 ease-out"
+                        onWheel={e => {
+                            e.stopPropagation();
+                            if (e.deltaY) e.currentTarget.scrollLeft += e.deltaY;
+                        }}
+                        style={{
+                            opacity:         pickerOpen ? 1 : 0,
+                            transitionDelay: pickerOpen ? '80ms' : '0ms',
+                        }}
                     >
-                        <div className="mb-2 flex justify-center gap-1 px-4">
-                            {(['filters', 'masks'] as const).map(key => (
-                                <button
-                                    key={key}
-                                    type="button"
-                                    onClick={() => setTab(key)}
-                                    className={[
-                                        'rounded-full px-3.5 py-[5px] text-[12px] font-semibold transition-colors duration-150',
-                                        tab === key ? 'bg-white/20 text-white' : 'text-white/60 hover:text-white/85',
-                                    ].join(' ')}
-                                >
-                                    {key === 'filters'
-                                        ? t('camera.tabFilters', 'Filters')
-                                        : t('camera.tabMasks', 'Masks')}
-                                </button>
-                            ))}
-                        </div>
-
-                        {tab === 'masks' ? (
-                            <div className="ios-scrollbar flex gap-3 overflow-x-auto px-4 pb-1 pt-1">
-                                {[{ id: 'none' }, ...CAMERA_MASKS].map(m => {
-                                    const active = m.id === maskId;
-                                    return (
-                                        <button
-                                            key={m.id}
-                                            type="button"
-                                            onClick={() => setMaskId(m.id)}
-                                            aria-pressed={active}
-                                            className="flex shrink-0 flex-col items-center gap-1.5"
-                                        >
-                                            <span
-                                                className={[
-                                                    'flex h-[58px] w-[58px] items-center justify-center overflow-hidden rounded-[9px] bg-white/10 transition-all duration-150',
-                                                    active ? 'ring-[2.5px] ring-[#FFD60A]' : 'ring-1 ring-white/20',
-                                                ].join(' ')}
-                                            >
-                                                {m.id === 'none'
-                                                    ? <X className="h-[20px] w-[20px] text-white/70" strokeWidth={2.2} />
-                                                    : <MaskThumb id={m.id} />}
-                                            </span>
-                                            <span
-                                                className={[
-                                                    'max-w-[70px] truncate text-[10.5px] font-medium',
-                                                    active ? 'text-[#FFD60A]' : 'text-white/75',
-                                                ].join(' ')}
-                                            >
-                                                {maskLabel(m.id)}
-                                            </span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        ) : (
-                        <div className="ios-scrollbar flex gap-3 overflow-x-auto px-4 pb-1 pt-1">
-                            {CAMERA_FILTERS.map(f => {
-                                const active = f.id === filterId;
-                                return (
-                                    <button
-                                        key={f.id}
-                                        type="button"
-                                        onClick={() => setFilterId(f.id)}
-                                        aria-pressed={active}
-                                        className="flex shrink-0 flex-col items-center gap-1.5"
-                                    >
-                                        <span
-                                            className={[
-                                                'flex h-[58px] w-[58px] items-center justify-center overflow-hidden rounded-[9px] bg-white/10 transition-all duration-150',
-                                                active ? 'ring-[2.5px] ring-[#FFD60A]' : 'ring-1 ring-white/20',
-                                            ].join(' ')}
-                                        >
-                                            {swatch
-                                                ? <img src={swatch} alt="" className="h-full w-full object-cover" style={{ filter: f.css }} />
-                                                : <span className="h-full w-full" style={{ background: 'linear-gradient(140deg,#6a8ec9,#c9a06a)', filter: f.css }} />}
-                                        </span>
-                                        <span
-                                            className={[
-                                                'max-w-[70px] truncate text-[10.5px] font-medium',
-                                                active ? 'text-[#FFD60A]' : 'text-white/75',
-                                            ].join(' ')}
-                                        >
-                                            {filterLabel(f.id)}
-                                        </span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                        )}
+                        {CAMERA_FILTERS.map(f => (
+                            <PickerItem
+                                key={f.id}
+                                active={f.id === filterId}
+                                label={filterLabel(f.id)}
+                                onClick={() => setFilterId(f.id)}
+                            >
+                                {swatch
+                                    ? <img src={swatch} alt="" className="h-full w-full object-cover" style={{ filter: f.css }} />
+                                    : <span className="h-full w-full" style={{ background: 'linear-gradient(140deg,#6a8ec9,#c9a06a)', filter: f.css }} />}
+                            </PickerItem>
+                        ))}
                     </div>
-                )}
+                </div>
 
                 <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/60 px-2 py-1.5 backdrop-blur">
                     {ZOOM_PRESETS.map(z => {

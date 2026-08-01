@@ -152,10 +152,6 @@ local function exitCameraView()
     active   = false
     frontCam = false
 
-    -- The push thread runs on its own clock now, so handing the view back no longer stops it. The
-    -- React side only says "off" on unmount, and the app stays mounted under switcher keep-alive.
-    phonecam.setFaceTrack(false)
-
     if phonecam.active() then
         phonecam.stop()
     else
@@ -248,13 +244,6 @@ end)
 ---cropping the rendered frame magnifies fewer pixels the further in you go.
 RegisterNUICallback('sd-phone:camera:zoom', function(data, cb)
     phonecam.setZoom(data and data.zoom)
-    cb({ success = true })
-end)
-
----React -> Lua: a face mask was put on or taken off. Head tracking only runs between these two,
----so a camera with no mask on projects nothing and sends nothing.
-RegisterNUICallback('sd-phone:camera:faceTrack', function(data, cb)
-    phonecam.setFaceTrack(data and data.on == true)
     cb({ success = true })
 end)
 

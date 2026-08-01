@@ -2,7 +2,6 @@ import { isFiveM } from '@/core/nui';
 import type { GameRender } from './GameRender';
 
 export { PORTRAIT_CROP } from './crop';
-export type { CropRegion } from './crop';
 export type { GameRender } from './GameRender';
 
 let loader: Promise<GameRender | null> | null = null;
