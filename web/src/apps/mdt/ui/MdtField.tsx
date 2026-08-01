@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { mdtFieldClass, mdtSectionHeader } from '../mdtTheme';
+import { MdtSelect } from './MdtSelect';
 
 interface MdtFieldProps {
     label?:       string;
@@ -43,16 +44,15 @@ export function MdtField({
     return (
         <Labelled label={label} hint={hint} className={className}>
             {options ? (
-                <select
+                <MdtSelect
                     value={value}
-                    onChange={e => onChange(e.target.value)}
+                    onChange={onChange}
+                    options={options}
                     disabled={disabled}
-                    className={`${base} appearance-none pr-8`}
-                >
-                    {options.map(o => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                </select>
+                    ariaLabel={label}
+                    placeholder={placeholder}
+                    className={fieldClassName}
+                />
             ) : multiline ? (
                 <textarea
                     value={value}

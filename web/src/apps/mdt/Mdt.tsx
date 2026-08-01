@@ -71,6 +71,7 @@ function MdtTerminal() {
     return (
         <div
             ref={rootRef}
+            data-mdt-root=""
             className={`absolute inset-0 z-10 flex select-none flex-col font-sf text-black dark:text-white ${mdtBackdrop}`}
             style={{ '--mdt-accent': accent } as CSSProperties}
         >

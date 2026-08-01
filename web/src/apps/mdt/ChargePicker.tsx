@@ -10,8 +10,9 @@ import { SearchBar } from '@/ui/SearchBar';
 
 import { CHARGE_CLASSES, type ChargeClass, type ChargeInput, type Offence } from './data';
 import { useMdtSession } from './useMdtSession';
-import { mdtFieldXs, mdtRowHover, mdtRowMeta, mdtRowTitle, mdtSectionHeader, STATUS_TONE } from './mdtTheme';
+import { mdtRowHover, mdtRowMeta, mdtRowTitle, mdtSectionHeader, STATUS_TONE } from './mdtTheme';
 import { MdtCard } from './ui/MdtCard';
+import { MdtSelect } from './ui/MdtSelect';
 
 const MAX_COUNT = 99;
 
@@ -138,18 +139,14 @@ export function ChargePicker({ lines, onChange, subjects = [], className = '' }:
                                     </span>
 
                                     {subjects.length > 1 && (
-                                        <select
+                                        <MdtSelect
                                             value={line.citizenid ?? ''}
-                                            onChange={e => setSubject(index, e.target.value)}
-                                            aria-label={t('mdt.attributeCharge', 'Attribute charge')}
-                                            className={`max-w-[150px] shrink-0 ${mdtFieldXs}`}
-                                        >
-                                            {subjects.map(subject => (
-                                                <option key={subject.citizenid} value={subject.citizenid}>
-                                                    {subject.name}
-                                                </option>
-                                            ))}
-                                        </select>
+                                            onChange={next => setSubject(index, next)}
+                                            options={subjects.map(subject => ({ value: subject.citizenid, label: subject.name }))}
+                                            size="xs"
+                                            ariaLabel={t('mdt.attributeCharge', 'Attribute charge')}
+                                            className="max-w-[150px] shrink-0"
+                                        />
                                     )}
 
                                     <span className="flex shrink-0 items-center gap-1 rounded-full bg-black/[0.06] px-1 py-0.5 dark:bg-white/[0.12]">

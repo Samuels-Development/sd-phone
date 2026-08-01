@@ -18,10 +18,11 @@ import {
 import { PersonPicker } from './PersonPicker';
 import { ReportLinker, reportTypeLabel, reportTypeTone } from './ReportEditor';
 import { useMdtSession } from './useMdtSession';
-import { mdtFieldArea, mdtFieldSm, mdtFieldXs, mdtPanePad, mdtRef, mdtRowMeta, mdtRowTitle, mdtSectionHeader, STATUS_TONE } from './mdtTheme';
+import { mdtFieldArea, mdtPanePad, mdtRef, mdtRowMeta, mdtRowTitle, mdtSectionHeader, STATUS_TONE } from './mdtTheme';
 import { MdtButton } from './ui/MdtButton';
 import { MdtCard } from './ui/MdtCard';
 import { MdtField } from './ui/MdtField';
+import { MdtSelect } from './ui/MdtSelect';
 
 export const CASE_STATUSES: readonly CaseStatus[] = ['open', 'in_progress', 'closed'] as const;
 export const CASE_PRIORITIES: readonly CasePriority[] = ['low', 'medium', 'high'] as const;
@@ -243,22 +244,20 @@ export function CaseFile({ caseRef, onSaved, onDeleted, onClose, onChanged }: {
                 <div className="mt-4 flex flex-wrap items-center gap-3">
                     {editable ? (
                         <>
-                            <select
+                            <MdtSelect<CaseStatus>
                                 value={file.status}
-                                onChange={e => void patch({ status: e.target.value as CaseStatus })}
-                                aria-label={t('mdt.status', 'Status')}
-                                className={mdtFieldSm}
-                            >
-                                {CASE_STATUSES.map((s: CaseStatus) => <option key={s} value={s}>{caseStatusLabel(s)}</option>)}
-                            </select>
-                            <select
+                                onChange={status => void patch({ status })}
+                                options={CASE_STATUSES.map((s: CaseStatus) => ({ value: s, label: caseStatusLabel(s) }))}
+                                size="sm"
+                                ariaLabel={t('mdt.status', 'Status')}
+                            />
+                            <MdtSelect<CasePriority>
                                 value={file.priority}
-                                onChange={e => void patch({ priority: e.target.value as CasePriority })}
-                                aria-label={t('mdt.priority', 'Priority')}
-                                className={mdtFieldSm}
-                            >
-                                {CASE_PRIORITIES.map((p: CasePriority) => <option key={p} value={p}>{casePriorityLabel(p)}</option>)}
-                            </select>
+                                onChange={priority => void patch({ priority })}
+                                options={CASE_PRIORITIES.map((p: CasePriority) => ({ value: p, label: casePriorityLabel(p) }))}
+                                size="sm"
+                                ariaLabel={t('mdt.priority', 'Priority')}
+                            />
                         </>
                     ) : (
                         <>
@@ -337,17 +336,15 @@ export function CaseFile({ caseRef, onSaved, onDeleted, onClose, onChanged }: {
                                         )}
                                     </span>
                                     {editable ? (
-                                        <select
+                                        <MdtSelect<CaseRole>
                                             value={officer.role}
-                                            onChange={e => void apply(mdtCaseAssign(
-                                                file.ref, officer.citizenid, e.target.value as CaseRole, true))}
-                                            aria-label={t('mdt.role', 'Role')}
-                                            className={`shrink-0 ${mdtFieldXs}`}
-                                        >
-                                            {CASE_ROLES.map((role: CaseRole) => (
-                                                <option key={role} value={role}>{caseRoleLabel(role)}</option>
-                                            ))}
-                                        </select>
+                                            onChange={role => void apply(mdtCaseAssign(
+                                                file.ref, officer.citizenid, role, true))}
+                                            options={CASE_ROLES.map((role: CaseRole) => ({ value: role, label: caseRoleLabel(role) }))}
+                                            size="xs"
+                                            ariaLabel={t('mdt.role', 'Role')}
+                                            className="shrink-0"
+                                        />
                                     ) : (
                                         <Pill tone={STATUS_TONE[officer.role] ?? 'blue'}>{caseRoleLabel(officer.role)}</Pill>
                                     )}

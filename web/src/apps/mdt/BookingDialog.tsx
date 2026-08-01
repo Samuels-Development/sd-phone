@@ -11,7 +11,8 @@ import { sentenceLabel } from './ChargePicker';
 import type { ArrestRow } from './data';
 import { mdtBook, mdtJailQuote, mdtReport } from './mdtApi';
 import { ReportLinker } from './ReportEditor';
-import { mdtFieldClass, mdtSectionHeader } from './mdtTheme';
+import { mdtSectionHeader } from './mdtTheme';
+import { MdtSelect } from './ui/MdtSelect';
 
 export function BookingDialog({ onClose, onBooked }: {
     onClose:  () => void;
@@ -139,16 +140,13 @@ export function BookingDialog({ onClose, onBooked }: {
         >
             <div className="mt-4 text-left">
                 {suspects.length > 1 && (
-                    <select
+                    <MdtSelect
                         value={citizenid}
-                        onChange={e => setCitizenid(e.target.value)}
-                        aria-label={t('mdt.suspect', 'Suspect')}
-                        className={`mb-3 ${mdtFieldClass}`}
-                    >
-                        {suspects.map(suspect => (
-                            <option key={suspect.citizenid} value={suspect.citizenid}>{suspect.name}</option>
-                        ))}
-                    </select>
+                        onChange={setCitizenid}
+                        options={suspects.map(suspect => ({ value: suspect.citizenid, label: suspect.name }))}
+                        ariaLabel={t('mdt.suspect', 'Suspect')}
+                        className="mb-3"
+                    />
                 )}
 
                 <div className="flex gap-2">
