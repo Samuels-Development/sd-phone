@@ -876,6 +876,12 @@ exports('getConnectedDevices', function() return bluetoothClient.devices() end)
 
 ---Registers a third-party app - exports['sd-phone']:addCustomApp(data). Attribution is the calling
 ---resource; re-registering an identifier is only allowed from that same resource.
+---
+---`devices` limits which devices list the app ('phone', 'tablet'); absent means all of them.
+---`job` limits who sees it, as a name, an array of names, or a name->minimum-grade map.
+---
+---Both only decide whether an icon is DRAWN. Neither authorises anything: a player can still fire
+---your resource's events and callbacks directly, so keep checking the job server-side.
 ---@param data table lb-phone-shaped app definition
 ---@return boolean ok, string? err
 exports('addCustomApp', function(data)

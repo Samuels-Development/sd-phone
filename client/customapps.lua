@@ -4,6 +4,9 @@ local config = require 'configs.config'
 ---@type {list: string[], set: table<string, true>} Canonical built-in app ids, reserved from custom apps.
 local appIds = require 'client.appids'
 
+---@type table Client job bridge (bridge.client.job): live job name/grade plus a change hook.
+local job = require 'bridge.client.job'
+
 ---@type table<string, {def: table, resource: string, onOpen: function?, onClose: function?, onDelete: function?}>
 ---Registered third-party apps keyed by identifier. onOpen also covers lb-phone's onUse alias.
 local registry = {}
@@ -173,13 +176,64 @@ local function removeOrder(id)
     end
 end
 
----Builds the sanitized def array in registration order.
+---A device allow-list: non-empty lowercased strings, or nil when the caller named none. Nil means
+---every device shows the app; the frontend does the matching, since one client serves both devices.
+---@param value any
+---@return string[]|nil
+local function readDevices(value)
+    if type(value) == 'string' then value = { value } end
+    if type(value) ~= 'table' then return nil end
+    local out = {}
+    for _, entry in ipairs(value) do
+        if type(entry) == 'string' and entry ~= '' then out[#out + 1] = entry:lower() end
+    end
+    if #out == 0 then return nil end
+    return out
+end
+
+---A job gate as `{ [jobName] = minGrade }`, from a name, an array of names, or a name->grade map.
+---Nil when the caller named none, which leaves the app ungated.
+---@param value any
+---@return table<string, integer>|nil
+local function readJobs(value)
+    if type(value) == 'string' then value = { value } end
+    if type(value) ~= 'table' then return nil end
+    local out = {}
+    local count = 0
+    for key, entry in pairs(value) do
+        if type(key) == 'string' and key ~= '' then
+            out[key] = math.max(0, math.floor(tonumber(entry) or 0))
+            count = count + 1
+        elseif type(entry) == 'string' and entry ~= '' then
+            out[entry] = 0
+            count = count + 1
+        end
+    end
+    if count == 0 then return nil end
+    return out
+end
+
+---Whether the player's current job clears an entry's gate. Ungated entries always pass; gated ones
+---fail closed until the framework has a job for us.
+---@param entry table
+---@return boolean
+local function jobAllows(entry)
+    local gate = entry.jobs
+    if not gate then return true end
+    for name, minGrade in pairs(gate) do
+        if job.has(name, minGrade) then return true end
+    end
+    return false
+end
+
+---The sanitized def array in registration order, job gate applied. The device gate is not applied
+---here: one client serves both the phone and the tablet, so only the UI knows which is asking.
 ---@return table[] list
 local function currentList()
     local list = {}
     for i = 1, #order do
         local entry = registry[order[i]]
-        if entry then list[#list + 1] = entry.def end
+        if entry and jobAllows(entry) then list[#list + 1] = entry.def end
     end
     return list
 end
@@ -240,11 +294,17 @@ function M.add(data, resource)
     local widgets = readWidgets(data.widgets, identifier)
     if #widgets > 0 then def.widgets = widgets end
 
+    -- Devices ride on the def because the UI does that matching; the job gate does not, so a job
+    -- the player cannot hold never reaches the page at all.
+    local devices = readDevices(data.devices)
+    if devices then def.devices = devices end
+
     local onOpen = data.onOpen
     if type(onOpen) ~= 'function' then onOpen = data.onUse end
     registry[identifier] = {
         def      = def,
         resource = resource,
+        jobs     = readJobs(data.job),
         onOpen   = type(onOpen) == 'function' and onOpen or nil,
         onClose  = type(data.onClose) == 'function' and data.onClose or nil,
         onDelete = type(data.onDelete) == 'function' and data.onDelete or nil,
@@ -352,5 +412,8 @@ AddEventHandler('onResourceStop', function(stopped)
     end
     if changed then pushSet() end
 end)
+
+---Job-gated apps appear and disappear with the player's job, so every change re-pushes the list.
+job.onChange(function() pushSet() end)
 
 return M

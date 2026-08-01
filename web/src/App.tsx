@@ -647,6 +647,15 @@ function AppContent() {
         });
     }, []);
 
+    const knownCustomIds = useRef<Set<string>>(new Set());
+    useEffect(() => {
+        const live = new Set(customApps.map(a => a.id));
+        for (const id of knownCustomIds.current) {
+            if (!live.has(id)) handleRemoveFromRecents(id);
+        }
+        knownCustomIds.current = live;
+    }, [customApps, handleRemoveFromRecents]);
+
     const handleRemoveAll = useCallback(() => {
         setRecentApps([]);
         setCurrentApp(null);

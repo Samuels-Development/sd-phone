@@ -105,6 +105,8 @@ export interface CustomAppDef {
     landscape?:  boolean;
     /** Wi-Fi network id (configs/wifi.lua) the phone must be joined to before this app downloads. */
     wifi?:       string;
+    /** Device ids this app appears on. Absent means every device. */
+    devices?:    string[];
     widgets?:    CustomWidgetDef[];
     resource:    string;
 }

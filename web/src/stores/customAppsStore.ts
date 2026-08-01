@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 import { fetchNui } from '@/core/nui';
 import { readJson, writeJson } from '@/lib/storage';
+import { device } from '@device';
 import type { AppDef, CustomAppDef } from '@/core/types';
 
 const INSTALLED_KEY = 'customApps:installed';
@@ -25,6 +26,11 @@ export function clearCustomInstalled(): void {
     writeJson(INSTALLED_KEY, []);
 }
 
+function forThisDevice(apps: CustomAppDef[] | null | undefined): CustomAppDef[] {
+    if (!Array.isArray(apps)) return [];
+    return apps.filter(a => !a.devices?.length || a.devices.includes(device.id));
+}
+
 interface CustomAppsState {
     apps:    CustomAppDef[];
     setAll:  (apps: CustomAppDef[] | null | undefined) => void;
@@ -33,10 +39,10 @@ interface CustomAppsState {
 
 export const useCustomAppsStore = create<CustomAppsState>((set) => ({
     apps: [],
-    setAll: (apps) => set({ apps: Array.isArray(apps) ? apps : [] }),
+    setAll: (apps) => set({ apps: forThisDevice(apps) }),
     hydrate: () => {
         void fetchNui<CustomAppDef[]>('customApps/get').then(list => {
-            if (Array.isArray(list)) set({ apps: list });
+            if (Array.isArray(list)) set({ apps: forThisDevice(list) });
         }).catch(() => { /* offline / dev: keep current */ });
     },
 }));
