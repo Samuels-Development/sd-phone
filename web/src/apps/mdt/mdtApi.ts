@@ -1102,20 +1102,6 @@ export async function mdtPageUnit(citizenid: string): Promise<{ source: number |
     return apiData<{ source: number | null; name: string }>('sd-phone:mdt:roster:page', { citizenid });
 }
 
-export interface SelfPatch {
-    callsign?: string;
-    avatar?:   string;
-    notes?:    string;
-}
-
-export async function mdtUpdateMe(patch: SelfPatch): Promise<MdtBootstrap['me'] | null> {
-    if (!isFiveM) {
-        DEV_BOOTSTRAP.me = { ...DEV_BOOTSTRAP.me, ...patch };
-        return { ...DEV_BOOTSTRAP.me };
-    }
-    return (await apiData<{ me: MdtBootstrap['me'] }>('sd-phone:mdt:me:update', patch))?.me ?? null;
-}
-
 export async function mdtChatHistory(): Promise<ChatMsg[]> {
     if (!isFiveM) return [...DEV_CHAT];
     return (await apiData<{ messages: ChatMsg[] }>('sd-phone:mdt:chat:history'))?.messages ?? [];
@@ -1135,11 +1121,6 @@ export async function mdtSendChat(body: string): Promise<ChatMsg | null> {
         return msg;
     }
     return (await apiData<{ message: ChatMsg }>('sd-phone:mdt:chat:send', { body }))?.message ?? null;
-}
-
-export async function mdtBulletins(): Promise<Bulletin[]> {
-    if (!isFiveM) return [...DEV_BULLETINS];
-    return (await apiData<{ rows: Bulletin[] }>('sd-phone:mdt:bulletins:list'))?.rows ?? [];
 }
 
 export async function mdtSaveBulletin(draft: { id: number | null; title: string; body: string }): Promise<Bulletin | null> {
