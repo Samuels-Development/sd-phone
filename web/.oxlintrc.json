@@ -1,0 +1,16 @@
+{
+    "$schema": "./node_modules/oxlint/configuration_schema.json",
+    "plugins": ["eslint", "typescript", "react", "oxc"],
+    "categories": { "correctness": "error" },
+    "env": { "builtin": true, "es2020": true, "browser": true },
+    "ignorePatterns": ["build", "node_modules", "src/render/three"],
+    "rules": {
+        "react-hooks/rules-of-hooks": "error",
+        "react-hooks/exhaustive-deps": "warn",
+        "typescript/no-unused-vars": "off",
+        "typescript/no-explicit-any": "off",
+        "typescript/no-non-null-assertion": "off",
+        "typescript/no-empty-object-type": "off",
+        "no-control-regex": "off"
+    }
+}
