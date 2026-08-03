@@ -1,3 +1,5 @@
+import type { JSX } from 'react';
+
 import { t } from '@/i18n';
 
 export type IslandPetId =

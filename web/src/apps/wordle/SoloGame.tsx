@@ -27,7 +27,7 @@ export function SoloGame({ pal, onFinish, onNew }: {
     const [shake,   setShake]   = useState(false);
     const [revealRow, setRevealRow] = useState<number | null>(null);
 
-    const shakeTimer = useRef<ReturnType<typeof setTimeout>>();
+    const shakeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const finishedRef = useRef(false);
 
     const done = useCallback((won: boolean) => {

@@ -9,7 +9,7 @@ const HOLD_AT   = 56;
  *  and holding a spinner while `onRefresh` runs. Returns the pull offset to translate the
  *  content by and the state the spinner renders from. */
 export function usePullToRefresh(
-    ref: React.RefObject<HTMLElement>,
+    ref: React.RefObject<HTMLElement | null>,
     onRefresh: () => Promise<unknown>,
 ): { pull: number; refreshing: boolean; armed: boolean } {
     const [pull,       setPull]       = useState(0);

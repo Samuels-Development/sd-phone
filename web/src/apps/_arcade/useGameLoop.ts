@@ -18,7 +18,7 @@ export function useGameLoop(handlers: GameLoopHandlers): void {
     const active = useDeckActive();
     const activeRef = useRef(active);
     activeRef.current = active;
-    const rafRef = useRef<number>();
+    const rafRef = useRef<number | undefined>(undefined);
     const lastTs = useRef<number>(0);
 
     useEffect(() => {

@@ -51,10 +51,10 @@ export function Cookie({ onClose: _onClose }: Props) {
     const topRef     = useRef<HTMLDivElement>(null);
     const [fallH, setFallH] = useState(420);
     const seq        = useRef(0);
-    const goldenHide = useRef<ReturnType<typeof setTimeout>>();
-    const goldenNext = useRef<ReturnType<typeof setTimeout>>();
+    const goldenHide = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    const goldenNext = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const scheduleRef = useRef<() => void>(() => {});
-    const resetTimer = useRef<ReturnType<typeof setTimeout>>();
+    const resetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
     const { cps } = deriveStats(save.owned);
 

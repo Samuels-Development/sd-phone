@@ -72,7 +72,7 @@ export function Chess({ onClose: _onClose }: Props) {
     const [leaderboard, setLeaderboard] = useState<GameLeaderboard | null>(null);
     const [lbLoading,  setLbLoading]  = useState(false);
 
-    const aiTimer  = useRef<ReturnType<typeof setTimeout>>();
+    const aiTimer  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const recorded = useRef(false);
 
     useEffect(() => { void loadStats(GAME).then(setStats); }, []);

@@ -37,7 +37,7 @@ export function SketchCanvas({ initial, onSave, onCancel }: Props) {
     const [customColor, setCustomColor] = useState('#ff7eb9');
     const [, bump] = useState(0);
     const [closing, setClosing] = useState(false);
-    const pendingRef = useRef<() => void>();
+    const pendingRef = useRef<(() => void) | undefined>(undefined);
     function startClose(action: () => void) {
         if (closing) return;
         pendingRef.current = action;

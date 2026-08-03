@@ -28,7 +28,7 @@ export function OnlineMatch({ pal, dk, gameId, opponent, pot, oppLeft, onResult,
     pal: Pal; dk: boolean; gameId: string; opponent: string; pot: number; oppLeft: boolean;
     onResult: (r: 'win' | 'loss' | 'draw') => void; onRematch: () => void; onMenu: () => void; rematchDisabled: boolean;
 }) {
-    const wordRef = useRef<string>();
+    const wordRef = useRef<string | undefined>(undefined);
     if (!wordRef.current) wordRef.current = wordForGame(gameId);
     const word = wordRef.current;
 

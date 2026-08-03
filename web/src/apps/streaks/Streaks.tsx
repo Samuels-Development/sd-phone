@@ -18,7 +18,7 @@ const SB_H = 61;
 const PAGE = 30;
 const TAB_ORDER: Record<StreakTab, number> = { me: 0, gallery: 1, board: 2 };
 
-export function Streaks({ onClose: _onClose }: { onClose: () => void }): JSX.Element {
+export function Streaks({ onClose: _onClose }: { onClose: () => void }) {
     const { theme } = useTheme('theme');
     const dark = theme === 'dark';
 

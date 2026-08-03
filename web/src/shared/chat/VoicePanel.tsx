@@ -58,9 +58,9 @@ export function VoicePanel({ onSend, onClose, forceDark = false }: Props) {
     const streamRef   = useRef<MediaStream | null>(null);
     const chunksRef   = useRef<Blob[]>([]);
     const startRef    = useRef(0);
-    const timerRef    = useRef<ReturnType<typeof setInterval>>();
+    const timerRef    = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
     const audioCtxRef    = useRef<AudioContext | null>(null);
-    const sampleTimerRef = useRef<ReturnType<typeof setInterval>>();
+    const sampleTimerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
     const samplesRef     = useRef<number[]>([]);
 
     function cleanup() {

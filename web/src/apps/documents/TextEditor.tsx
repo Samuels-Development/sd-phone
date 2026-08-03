@@ -36,7 +36,7 @@ export function TextEditor({ doc, backLabel, onBack, onSave, onSigned, animateIn
 
     // Baseline is the parsed round-trip, not the raw content, so normalization alone never
     // triggers a save.
-    const lastSaved = useRef<string>();
+    const lastSaved = useRef<string | undefined>(undefined);
     lastSaved.current ??= serializeBlocks(blocks);
     const onSaveRef = useRef(onSave);
     onSaveRef.current = onSave;

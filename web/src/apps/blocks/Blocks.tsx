@@ -63,8 +63,8 @@ export function Blocks({ onClose: _onClose }: Props) {
     const levelRef  = useRef(0);
     const phaseRef  = useRef(phase);   phaseRef.current  = phase;
     const bagRef    = useRef<Bag>(new Bag());
-    const dropTimer = useRef<ReturnType<typeof setTimeout>>();
-    const flashTimer = useRef<ReturnType<typeof setTimeout>>();
+    const dropTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const nextKindRef = useRef(nextKind);
     nextKindRef.current = nextKind;
 
