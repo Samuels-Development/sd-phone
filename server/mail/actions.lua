@@ -934,6 +934,10 @@ function actions.deleteAccount(source, payload)
     local email = trim(payload.email or ''):lower()
     local _, err = requireOwnership(source, email); if err then return err end
     store.deleteAccount(email)
+    -- The engine row owns the name and the per-app quota, so leaving it behind keeps the address
+    -- reserved and the cap spent against an account that no longer exists.
+    local acc = acctStore.getAccount('mail', email)
+    if acc then acctStore.deleteAccount(acc.id) end
     return ok({ email = email })
 end
 

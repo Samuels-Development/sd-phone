@@ -108,13 +108,6 @@ export async function accountsDeletePassword(id: number): Promise<void> {
     await fetchNui('sd-phone:accounts:deletePassword', { id });
 }
 
-export async function accountsForgetPassword(app: string): Promise<void> {
-    const entries = await accountsListPasswords();
-    for (const e of entries) {
-        if (e.app === app) await accountsDeletePassword(e.id);
-    }
-}
-
 export async function accountsSavedLogin(app: string): Promise<{ username: string; password: string } | null> {
     const entries = await accountsListPasswords();
     const e = entries.find(x => x.app === app);

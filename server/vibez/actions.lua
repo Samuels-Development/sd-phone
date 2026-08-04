@@ -770,6 +770,9 @@ function actions.deleteAccount(src)
     local acc = viewerAccount(src)
     if not acc then return fail('Not signed in') end
     store.wipeUser(acc.username)
+    -- The engine row owns the name and the per-app quota, so leaving it behind keeps the handle
+    -- reserved and the cap spent against an account that no longer exists.
+    acctStore.deleteAccount(acc.id)
     return ok()
 end
 

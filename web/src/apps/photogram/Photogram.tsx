@@ -11,7 +11,7 @@ import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useAppAuth } from '@/hooks/useAppAuth';
 import { AppAuth } from '@/shared/AppAuth';
 import { AccountSwitcher } from '@/shared/AccountSwitcher';
-import { MAIL_DOMAIN, accountsConfirmReset, accountsForgetPassword, accountsLogin, accountsLogout, accountsMe, accountsRegister, accountsRequestReset, accountsSavePassword, accountsSignOut, accountsSuggestCode, accountsSwitch } from '@/core/accountsApi';
+import { MAIL_DOMAIN, accountsConfirmReset, accountsLogin, accountsLogout, accountsMe, accountsRegister, accountsRequestReset, accountsSavePassword, accountsSignOut, accountsSuggestCode, accountsSwitch } from '@/core/accountsApi';
 import { IG, type Comment as IGComment, type Post, type ProfileData, type User } from './data';
 import {
     apiActivity, apiAddComment, apiAddStory, apiComments, apiCounts, apiCreate, apiDeleteAccount, apiDeletePost, apiDismissNotification, apiExplore, apiFeed,
@@ -443,7 +443,7 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
                         });
                     }}
                     onSwitchAccount={() => { setEditing(false); setSwitching(true); }}
-                    onDelete={() => { setEditing(false); clearSessionState('photogram:'); void apiDeleteAccount(); void accountsForgetPassword('photogram'); void accountsLogout('photogram'); setAuthed(false); }}
+                    onDelete={() => { setEditing(false); clearSessionState('photogram:'); void apiDeleteAccount(); void accountsLogout('photogram'); refreshAccounts(); setAuthed(false); }}
                 />
             )}
 

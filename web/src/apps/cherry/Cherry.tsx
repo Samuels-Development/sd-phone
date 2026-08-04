@@ -12,7 +12,7 @@ import { useAppAuth } from '@/hooks/useAppAuth';
 import { AppAuth } from '@/shared/AppAuth';
 import { AccountSwitcher } from '@/shared/AccountSwitcher';
 import { AlertDialog } from '@/ui/AlertDialog';
-import { MAIL_DOMAIN, accountsConfirmReset, accountsForgetPassword, accountsLogin, accountsLogout, accountsMe, accountsRegister, accountsRequestReset, accountsSavePassword, accountsSignOut, accountsSuggestCode, accountsSwitch } from '@/core/accountsApi';
+import { MAIL_DOMAIN, accountsConfirmReset, accountsLogin, accountsLogout, accountsMe, accountsRegister, accountsRequestReset, accountsSavePassword, accountsSignOut, accountsSuggestCode, accountsSwitch } from '@/core/accountsApi';
 import { appendThreadMessage, patchThreadMessage, toggleReactionLocal } from '@/shared/chat/messagesApi';
 import type { Message, Reaction } from '@/shared/chat/data';
 import type { MessageDraft } from '@/shared/chat/ChatView';
@@ -368,8 +368,9 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
                                 onDeleteAccount={() => {
                                     void (async () => {
                                         await cherryDeleteAccount();
-                                        await accountsForgetPassword('cherry');
                                         await accountsLogout('cherry');
+                                        clearSessionState('cherry:');
+                                        refreshAccounts();
                                         setAuthed(false);
                                     })();
                                 }}

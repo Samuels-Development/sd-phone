@@ -9,7 +9,7 @@ import { AlertDialog } from '@/ui/AlertDialog';
 import { ListGroup } from '@/ui/ListGroup';
 import { t } from '@/i18n';
 import {
-    MAIL_DOMAIN, accountsConfirmReset, accountsForgetPassword, accountsLogin, accountsLogout,
+    MAIL_DOMAIN, accountsConfirmReset, accountsLogin, accountsLogout,
     accountsMe, accountsMyEmail, accountsMyNumber, accountsRegister, accountsRequestReset,
     accountsSavePassword, accountsSavedLogin, accountsSignOut, accountsSuggestCode, accountsSwitch,
     accountsSwitchable, type SwitchableAccount,
@@ -113,12 +113,11 @@ export function Account({ onClose }: { onClose: () => void }) {
 
     async function deleteAccount() {
         await rydeDeleteAccount();
-        await accountsForgetPassword('ryde');
         await accountsLogout('ryde');
         g.wipeAccount();
         setConfirmDelete(false);
         setAuth(false, null);
-        void accountsSavedLogin('ryde').then(setSavedLogin);
+        refreshAccounts();
     }
 
     const displayName = me?.name || me?.username || t('ryde.you', 'You');

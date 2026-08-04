@@ -6,7 +6,6 @@ import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { Toggle } from '@/ui/Toggle';
 import { apiDeleteAccount, apiUpdateProfile } from '../birdyApi';
-import { accountsForgetPassword } from '@/core/accountsApi';
 import { ChangePasswordPage } from '@/shared/ChangePasswordPage';
 import { BG, BLUE, type BirdyProfile } from '../data';
 
@@ -52,7 +51,6 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onSwitchAcc
 
     async function remove() {
         await apiDeleteAccount();
-        await accountsForgetPassword('birdy');
         onDeleted();
     }
 

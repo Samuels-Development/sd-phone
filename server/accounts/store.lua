@@ -173,8 +173,16 @@ end
 ---Deletes an account and its sessions, sessions first.
 ---@param id number account row id
 function store.deleteAccount(id)
+    local acc = store.getAccountById(id)
     MySQL.update.await('DELETE FROM phone_app_sessions WHERE account_id = ?', { id })
     MySQL.update.await('DELETE FROM phone_app_accounts WHERE id = ?', { id })
+    -- Vault rows are keyed by name, not by account id, so they outlive the account: every
+    -- character who saved this login would keep being offered a dead one in the switcher.
+    -- Scoped to this username on purpose, so deleting one account leaves your others alone.
+    if acc then
+        MySQL.update.await('DELETE FROM phone_passwords WHERE app = ? AND username = ?',
+            { acc.app, acc.username })
+    end
 end
 
 ---Signs a citizen into an account, replacing any prior session for (app, citizenid).
