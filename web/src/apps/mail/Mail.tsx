@@ -43,6 +43,7 @@ export function Mail({ onClose }: { onClose: () => void }) {
     const [savedEmails,     setSavedEmails]     = useState<string[]>([]);
     const [declinedEmails,  setDeclinedEmails]  = useState<string[]>([]);
     const [savedPageOpen,   setSavedPageOpen]   = useState(false);
+    const [adding,          setAdding]          = useState(false);
     const [savePromptQueue, setSavePromptQueue] = useState<string[]>([]);
 
     const applySavedState = useCallback((s: SavedEmailState) => {
@@ -55,6 +56,7 @@ export function Mail({ onClose }: { onClose: () => void }) {
         setAccounts(next.accounts);
         setMessages(next.messages);
         setAuthChecked(true);
+        return next;
     }, []);
 
     useEffect(() => { void refresh(); }, [refresh]);
@@ -217,12 +219,6 @@ export function Mail({ onClose }: { onClose: () => void }) {
 
     const [pwOpen, setPwOpen] = useState(false);
 
-    function handleAccountAdded(account: MailAccount) {
-        setAccounts(prev => prev.some(a => a.email === account.email) ? prev : [...prev, account]);
-        selectAccount(account.id);
-        void refresh();
-    }
-
     async function handleSignOut(id: string) {
         const target = accounts.find(a => a.id === id);
         if (!target) return;
@@ -282,7 +278,7 @@ export function Mail({ onClose }: { onClose: () => void }) {
         ?? (nav.stage === 'list' || nav.stage === 'detail' ? nav.accountId : undefined)
         ?? accounts[0]?.id;
 
-    if (locked || (authChecked && accounts.length === 0)) {
+    if (locked || adding || (authChecked && accounts.length === 0)) {
         return (
             <AppAuth
                 appName={t('mail.appName', 'Mail')}
@@ -290,7 +286,8 @@ export function Mail({ onClose }: { onClose: () => void }) {
                 icon="mail"
                 theme={{ accent: '#0A84FF', welcomeBg: '#f2f2f7', welcomeText: 'dark' }}
                 myNumber={myNumber}
-                savedLogin={savedLogin}
+                savedLogin={adding ? null : savedLogin}
+                onDismiss={adding ? () => setAdding(false) : undefined}
                 fields={[
                     { key: 'email',    label: t('mail.fieldEmail', 'Email'), suffix: `@${MAIL_DOMAIN}` },
                     { key: 'name',     label: t('mail.fieldName', 'Name'), createOnly: true },
@@ -303,7 +300,17 @@ export function Mail({ onClose }: { onClose: () => void }) {
                         : await mailSignIn({ email: vals.email ?? '', password: vals.password ?? '' });
                     return typeof r === 'string' ? { ok: false, message: r } : { ok: true };
                 }}
-                onAuthed={() => { unlockMail('mail', {}); setLocked(false); setJustAuthed(true); void refresh(); }}
+                onAuthed={() => {
+                    unlockMail('mail', {});
+                    setLocked(false);
+                    setJustAuthed(true);
+                    const known = new Set(accounts.map(a => a.id));
+                    void refresh().then(next => {
+                        const added = next.accounts.find(a => !known.has(a.id));
+                        if (added) selectAccount(added.id);
+                        setAdding(false);
+                    });
+                }}
                 onRequestReset={(id) => accountsRequestReset('mail', id)}
                 onConfirmReset={(id, code, pw) => accountsConfirmReset('mail', id, code, pw)}
                 onSuggestCode={(id) => accountsSuggestCode('mail', id)}
@@ -334,7 +341,7 @@ export function Mail({ onClose }: { onClose: () => void }) {
                     });
                 }}
                 onCompose={() => setComposeFor({ accountId: activeAccount?.id })}
-                onAccountAdded={handleAccountAdded}
+                onAddAccount={() => setAdding(true)}
                 onSignOut={handleSignOut}
                 onReorderFolders={handleReorderFolders}
                 onLockApp={() => { lockMail('mail'); setLocked(true); }}

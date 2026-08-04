@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import {
-    AlertOctagon, BookUser, ChevronRight, FileText, Flag, GripVertical, Inbox, Send, SquarePen, Trash2,
+    AlertOctagon, AtSign, BookUser, Check, ChevronRight, FileText, Flag, GripVertical, Inbox, Plus,
+    Send, SquarePen, Trash2,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 
@@ -18,7 +19,7 @@ interface Props {
     onSelectAccount:  (id: string) => void;
     onOpenFolder:     (f: Folder) => void;
     onCompose:        () => void;
-    onAccountAdded:   (account: MailAccount) => void;
+    onAddAccount:     () => void;
     onSignOut:        (id: string) => void;
     onReorderFolders: (next: Folder[]) => void;
     onLockApp:        () => void;
@@ -37,7 +38,7 @@ const FOLDER_ICONS: Record<Folder, ComponentType<{ className?: string }>> = {
 };
 
 export function MailboxList({
-    activeAccount, messages, folderOrder, onOpenFolder, onCompose, onReorderFolders, onLockApp, onDeleteAccount, onChangePassword, onOpenSavedEmails,
+    accounts, activeAccount, messages, folderOrder, onSelectAccount, onOpenFolder, onCompose, onAddAccount, onSignOut, onReorderFolders, onLockApp, onDeleteAccount, onChangePassword, onOpenSavedEmails,
 }: Props) {
     const [editing, setEditing] = useState(false);
     const [confirmOut, setConfirmOut] = useState(false);
@@ -236,6 +237,56 @@ export function MailboxList({
                         </div>
                     </button>
                 )}
+
+                <div className="mt-6 px-4 pb-1.5 text-[13px] font-medium uppercase tracking-wide text-ios-gray">
+                    {t('mail.accounts', 'Accounts')}
+                </div>
+                <div className="overflow-hidden rounded-[10px] bg-[#e5e5e5] dark:bg-surface">
+                    {accounts.map((a, i) => (
+                        <div key={a.id}>
+                            <div className="relative flex w-full items-center gap-4 px-4 py-[13px]">
+                                <AtSign className="h-[25px] w-[25px] shrink-0 text-ios-blue" />
+                                <button
+                                    type="button"
+                                    onClick={() => !editing && onSelectAccount(a.id)}
+                                    disabled={editing}
+                                    className="flex min-w-0 flex-1 items-center gap-2 text-left active:opacity-60 disabled:active:opacity-100"
+                                >
+                                    <span className="flex min-w-0 flex-1 flex-col">
+                                        <span className="truncate text-[18px]">{a.name}</span>
+                                        <span className="truncate text-[13px] text-ios-gray">{a.email}</span>
+                                    </span>
+                                    {!editing && a.id === activeAccount?.id && (
+                                        <Check className="h-[19px] w-[19px] shrink-0 text-ios-blue" strokeWidth={2.6} />
+                                    )}
+                                </button>
+                                {editing && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onSignOut(a.id)}
+                                        className="shrink-0 text-[15px] font-medium text-ios-red active:opacity-60"
+                                    >
+                                        {t('mail.signOut', 'Sign Out')}
+                                    </button>
+                                )}
+                            </div>
+                            {i < accounts.length - 1 && (
+                                <div className="pointer-events-none bg-black/12 dark:bg-white/10" style={{ marginLeft: 60, height: '0.5px' }} />
+                            )}
+                        </div>
+                    ))}
+                    {accounts.length > 0 && (
+                        <div className="pointer-events-none bg-black/12 dark:bg-white/10" style={{ marginLeft: 60, height: '0.5px' }} />
+                    )}
+                    <button
+                        type="button"
+                        onClick={onAddAccount}
+                        className="flex w-full items-center gap-4 px-4 py-[15px] text-left active:bg-black/5 dark:active:bg-white/5"
+                    >
+                        <Plus className="h-[25px] w-[25px] shrink-0 text-ios-blue" strokeWidth={2.2} />
+                        <span className="flex-1 text-[18px] text-ios-blue">{t('mail.addMailbox', 'Add Mailbox')}</span>
+                    </button>
+                </div>
 
                 {activeAccount && (
                     <button
