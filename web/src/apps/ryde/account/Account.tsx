@@ -26,6 +26,7 @@ export function Account({ onClose }: { onClose: () => void }) {
     const [savedLogin,  setSavedLogin]  = useState<{ username: string; password: string } | null>(null);
     const [confirmSignOut, setConfirmSignOut] = useState(false);
     const [switching,      setSwitching]      = useState(false);
+    const [adding,         setAdding]         = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [pwOpen, setPwOpen] = useState(false);
 
@@ -43,7 +44,7 @@ export function Account({ onClose }: { onClose: () => void }) {
         return <div className="absolute inset-0 bg-ios-gray6 dark:bg-base" />;
     }
 
-    if (!authed) {
+    if (!authed || adding) {
         return (
             <AppAuth
                 appName="Ryde"
@@ -52,7 +53,7 @@ export function Account({ onClose }: { onClose: () => void }) {
                 theme={{ accent: '#111111', welcomeBg: '#ffffff', welcomeText: 'dark' }}
                 myNumber={myNumber}
                 myEmail={myEmail}
-                savedLogin={savedLogin}
+                savedLogin={adding ? null : savedLogin}
                 fields={[
                     { key: 'username', label: t('ryde.fieldUsername', 'Username') },
                     { key: 'name',     label: t('ryde.fieldName', 'Name') },
@@ -66,8 +67,8 @@ export function Account({ onClose }: { onClose: () => void }) {
                         : await accountsLogin('ryde', vals);
                     return { ok: r.ok, message: r.message };
                 }}
-                onAuthed={() => { void accountsMe('ryde').then(s => setAuth(true, s.me)); }}
-                onDismiss={onClose}
+                onAuthed={() => { setAdding(false); void accountsMe('ryde').then(s => setAuth(true, s.me)); }}
+                onDismiss={adding ? () => setAdding(false) : onClose}
                 onRequestReset={(id) => accountsRequestReset('ryde', id)}
                 onConfirmReset={(id, code, pw) => accountsConfirmReset('ryde', id, code, pw)}
                 onSuggestCode={(id) => accountsSuggestCode('ryde', id)}
@@ -181,6 +182,7 @@ export function Account({ onClose }: { onClose: () => void }) {
                     app="ryde"
                     onClose={() => setSwitching(false)}
                     onSwitched={() => { void accountsMe('ryde').then(s => setAuth(s.loggedIn, s.me)); }}
+                    onAdd={() => setAdding(true)}
                 />
             )}
 

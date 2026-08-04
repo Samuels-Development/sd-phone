@@ -49,6 +49,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
     const [profileTarget,  setProfileTarget]  = useSessionState<string | null>('birdy:profileTarget', null);
     const [editingProfile, setEditingProfile] = useState(false);
     const [switching,      setSwitching]      = useState(false);
+    const [adding,         setAdding]         = useState(false);
     const [profile,        setProfile]        = useState<BirdyProfile | null>(null);
     const [sendError,      setSendError]      = useState<string | null>(null);
 
@@ -315,7 +316,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
     if (!authChecked) {
         return <div className="absolute inset-0 z-10" style={{ background: BG }} />;
     }
-    if (!authed) {
+    if (!authed || adding) {
         return (
             <AppAuth
                 appName="Birdy"
@@ -328,7 +329,8 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                 }}
                 myNumber={myNumber}
                 myEmail={myEmail}
-                savedLogin={savedLogin}
+                savedLogin={adding ? null : savedLogin}
+                onDismiss={adding ? () => setAdding(false) : undefined}
                 fields={[
                     { key: 'username', label: t('squawk.username', 'Username') },
                     { key: 'name',     label: t('squawk.name', 'Name') },
@@ -345,7 +347,12 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                     const r = await apiLogin({ username: vals.username ?? '', password: vals.password ?? '' });
                     return { ok: r.ok, message: r.message };
                 }}
-                onAuthed={() => { setAuthed(true); setJustAuthed(true); void apiMe().then(s => { if (s.me) setMe(s.me); }); }}
+                onAuthed={() => {
+                    setAuthed(true);
+                    setJustAuthed(true);
+                    if (adding) { setAdding(false); switchedAccount(); }
+                    else void apiMe().then(s => { if (s.me) setMe(s.me); });
+                }}
                 onRequestReset={(id) => accountsRequestReset('birdy', id)}
                 onConfirmReset={(id, code, pw) => accountsConfirmReset('birdy', id, code, pw)}
                 onSuggestCode={(id) => accountsSuggestCode('birdy', id)}
@@ -451,6 +458,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                     app="birdy"
                     onClose={() => setSwitching(false)}
                     onSwitched={switchedAccount}
+                    onAdd={() => setAdding(true)}
                 />
             )}
 

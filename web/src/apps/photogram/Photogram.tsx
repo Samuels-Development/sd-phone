@@ -68,6 +68,7 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
     const [follows,    setFollows]    = useSessionState<{ handle: string; kind: 'followers' | 'following' } | null>('photogram:follows', null);
     const [storyMenu,  setStoryMenu]  = useState(false);
     const [switching,  setSwitching]  = useState(false);
+    const [adding,     setAdding]     = useState(false);
     const [liveEnabled, setLiveEnabled] = useState(!isFiveM);
 
     useEffect(() => {
@@ -257,7 +258,7 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
 
     if (!authChecked) return <div className="absolute inset-0 z-10 bg-[#f2f2f2]" />;
 
-    if (!authed) {
+    if (!authed || adding) {
         return (
             <AppAuth
                 appName="Photogram"
@@ -266,7 +267,8 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
                 theme={{ accent: IG.blue, welcomeBg: '#f2f2f2', welcomeText: 'dark' }}
                 myNumber={myNumber}
                 myEmail={myEmail}
-                savedLogin={savedLogin}
+                savedLogin={adding ? null : savedLogin}
+                onDismiss={adding ? () => setAdding(false) : undefined}
                 fields={[
                     { key: 'username', label: t('photogram.username', 'Username') },
                     { key: 'name',     label: t('photogram.name', 'Name') },
@@ -275,7 +277,11 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
                     { key: 'phone',    label: t('photogram.phone', 'Phone'),    type: 'tel',   createOnly: true },
                 ]}
                 onSubmit={(mode, vals) => (mode === 'create' ? accountsRegister('photogram', vals) : accountsLogin('photogram', vals))}
-                onAuthed={() => { setAuthed(true); setJustAuthed(true); }}
+                onAuthed={() => {
+                    setAuthed(true);
+                    setJustAuthed(true);
+                    if (adding) { setAdding(false); clearSessionState('photogram:'); refreshHome(); }
+                }}
                 onRequestReset={(id) => accountsRequestReset('photogram', id)}
                 onConfirmReset={(id, code, pw) => accountsConfirmReset('photogram', id, code, pw)}
                 onSuggestCode={(id) => accountsSuggestCode('photogram', id)}
@@ -355,6 +361,7 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
                     app="photogram"
                     onClose={() => setSwitching(false)}
                     onSwitched={() => { clearSessionState('photogram:'); refreshHome(); }}
+                    onAdd={() => setAdding(true)}
                 />
             )}
             {sharePost && <SharePostSheet post={sharePost} onClose={() => setSharePost(null)} />}

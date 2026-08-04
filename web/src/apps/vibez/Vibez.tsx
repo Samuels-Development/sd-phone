@@ -57,6 +57,7 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
     const [unread,        setUnread]        = useState(0);
     const [refreshKey,    setRefreshKey]    = useState(0);
     const [switching,     setSwitching]     = useState(false);
+    const [adding,        setAdding]        = useState(false);
     const [me,            setMe]            = useState<VProfile | null>(null);
 
     const viewedRef = useRef(new Set<string>());
@@ -191,7 +192,7 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
     if (!authChecked) {
         return <div className="absolute inset-0 z-10 bg-black" />;
     }
-    if (!authed) {
+    if (!authed || adding) {
         return (
             <AppAuth
                 appName="vibez"
@@ -200,7 +201,8 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
                 theme={{ accent: ACCENT, welcomeBg: '#0a0518', welcomeText: 'light' }}
                 myNumber={myNumber}
                 myEmail={myEmail}
-                savedLogin={savedLogin}
+                savedLogin={adding ? null : savedLogin}
+                onDismiss={adding ? () => setAdding(false) : undefined}
                 fields={[
                     { key: 'username', label: t('vibez.username', 'Username') },
                     { key: 'name',     label: t('vibez.name', 'Name') },
@@ -209,7 +211,11 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
                     { key: 'phone',    label: t('vibez.phone', 'Phone'), type: 'tel',   createOnly: true },
                 ]}
                 onSubmit={(mode, vals) => (mode === 'create' ? accountsRegister('vibez', vals) : accountsLogin('vibez', vals))}
-                onAuthed={() => { setAuthed(true); setJustAuthed(true); }}
+                onAuthed={() => {
+                    setAuthed(true);
+                    setJustAuthed(true);
+                    if (adding) { setAdding(false); bumpRefresh(); }
+                }}
                 onRequestReset={(id) => accountsRequestReset('vibez', id)}
                 onConfirmReset={(id, code, pw) => accountsConfirmReset('vibez', id, code, pw)}
                 onSuggestCode={(id) => accountsSuggestCode('vibez', id)}
@@ -298,6 +304,7 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
                     forceDark
                     onClose={() => setSwitching(false)}
                     onSwitched={bumpRefresh}
+                    onAdd={() => setAdding(true)}
                 />
             )}
 

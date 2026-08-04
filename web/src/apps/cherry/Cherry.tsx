@@ -44,6 +44,7 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
     const [matches, setMatches] = useState<Match[]>([]);
     const [sendError, setSendError] = useState<string | null>(null);
     const [switching, setSwitching] = useState(false);
+    const [adding,    setAdding]    = useState(false);
     const [lockedIds, setLockedIds] = useState<string[]>([]);
     const [incomingMatch, setIncomingMatch] = useState<Match | null>(null);
 
@@ -249,7 +250,7 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
     if (!authChecked) {
         return <div className="absolute inset-0 z-10 bg-[#e5e5e5]" />;
     }
-    if (!authed) {
+    if (!authed || adding) {
         return (
             <AppAuth
                 appName="Cherry"
@@ -263,7 +264,8 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
                 }}
                 myNumber={myNumber}
                 myEmail={myEmail}
-                savedLogin={savedLogin}
+                savedLogin={adding ? null : savedLogin}
+                onDismiss={adding ? () => setAdding(false) : undefined}
                 fields={[
                     { key: 'username', label: t('cherry.username', 'Username') },
                     { key: 'name',     label: t('cherry.name', 'Name') },
@@ -283,7 +285,11 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
                     }
                     return res;
                 }}
-                onAuthed={() => { setAuthed(true); setJustAuthed(true); }}
+                onAuthed={() => {
+                    setAuthed(true);
+                    setJustAuthed(true);
+                    if (adding) { setAdding(false); void refreshDeck(); }
+                }}
                 onRequestReset={(id) => accountsRequestReset('cherry', id)}
                 onConfirmReset={(id, code, pw) => accountsConfirmReset('cherry', id, code, pw)}
                 onSuggestCode={(id) => accountsSuggestCode('cherry', id)}
@@ -392,6 +398,7 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
                     app="cherry"
                     onClose={() => setSwitching(false)}
                     onSwitched={() => { void refreshDeck(); }}
+                    onAdd={() => setAdding(true)}
                 />
             )}
         </div>
