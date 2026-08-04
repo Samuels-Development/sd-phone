@@ -708,7 +708,7 @@
     "recoverAccount": "Forgot your password? Tap here to recover your account",
     "required": "Required",
     "resetAppPassword": "Reset {appName} password",
-    "resetHelp": "Enter the email or phone number linked to your account and we will text or email you a code.",
+    "resetHelp": "Enter your username, or the email or phone number linked to your account, and we will text or email you a code.",
     "resetYourPassword": "Reset your password",
     "save": "Save",
     "savePasswordsBody": "Keep your {appName} username and password in the Passwords app so you can always find them.",

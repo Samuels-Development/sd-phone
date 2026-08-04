@@ -324,10 +324,8 @@ function actions.signUp(source, payload)
     if phone ~= '' and (#phone < 7 or #phone > 15) then
         return fail('That phone number looks invalid')
     end
-    if phone ~= '' and #acctStore.findAccountsByContact('mail', nil, phone) > 0 then
-        return fail('That phone number is already in use')
-    end
-
+    -- The number is deliberately NOT unique: one person runs several mailboxes off one phone.
+    -- Recovery stays possible because a reset is identified by the address, not by the number.
     if store.getAccount(email) then
         return fail('That email is already registered')
     end

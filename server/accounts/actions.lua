@@ -333,31 +333,51 @@ local REQUEST_WINDOW = 600
 ---@return string key
 local function resetKey(app, accountId) return app .. ':' .. accountId end
 
----Resolves a recovery identity (the email or phone number on file) to the single matching
----account and its delivery channel; ambiguity or no match returns an error.
+---Resolves a recovery identity (a username, or the email or phone number on file) to the single
+---matching account and its delivery channel; ambiguity or no match returns an error.
 ---@param app string account app key
 ---@param raw string trimmed client-supplied identity
----@return table|nil acc, string|nil channel ('email'|'sms'), string|nil err
+---@return table|nil acc matched account
+---@return string|nil channel 'email' or 'sms'
+---@return string|nil err
 local function resolveRecovery(app, raw)
-    if raw == '' then return nil, nil, 'Enter the email or phone number on the account' end
+    if raw == '' then return nil, nil, 'Enter the username, email or phone number on the account' end
+
+    -- A username names exactly one account, so it is the only identity that still resolves once
+    -- several accounts share a recovery contact. Identity and delivery are separate here: the
+    -- name picks the account, its stored contact decides where the code goes. Mail usernames are
+    -- addresses, which is why an address identifies the mailbox rather than being the
+    -- destination - a code sent to the mailbox you are locked out of is no use.
+    local named = raw:lower()
+    if app == 'mail' and not named:find('@', 1, true) then named = named .. '@' .. MAIL_DOMAIN end
+    local byName = store.getAccount(app, named)
+    if byName then
+        local canEmail = app ~= 'mail' and byName.email and byName.email ~= ''
+        local canSms   = byName.phone and byName.phone ~= ''
+        if canEmail then return byName, 'email', nil end
+        if canSms   then return byName, 'sms',   nil end
+        return nil, nil, 'That account has no email or phone number to send a code to'
+    end
 
     local email, phone, channel
     if raw:find('@', 1, true) or raw:match('%a') then
         if app == 'mail' then
-            return nil, nil, 'Use the phone number linked to the account'
+            return nil, nil, 'No Mail account uses that address'
         end
         local e = raw:lower()
         if not e:find('@', 1, true) then e = e .. '@' .. MAIL_DOMAIN end
         email, channel = e, 'email'
     else
         local p = digits(raw)
-        if #p < 7 or #p > 15 then return nil, nil, 'Enter the email or phone number on the account' end
+        if #p < 7 or #p > 15 then return nil, nil, 'Enter the username, email or phone number on the account' end
         phone, channel = p, 'sms'
     end
 
     local matches = store.findAccountsByContact(app, email, phone)
     if #matches == 0 then return nil, nil, 'No account uses that contact' end
-    if #matches > 1 then return nil, nil, 'More than one account uses that contact. Ask an admin for help' end
+    if #matches > 1 then
+        return nil, nil, 'More than one account uses that contact. Enter the account username instead'
+    end
     return matches[1], channel, nil
 end
 

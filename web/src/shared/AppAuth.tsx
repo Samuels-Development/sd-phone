@@ -696,7 +696,7 @@ function ResetForm({ phase, appName, icon, theme, identity, onIdentity, myNumber
                         </div>
 
                         <p className="mt-3 px-2 text-[15px] leading-snug text-black/60">
-                            {t('common.resetHelp', 'Enter the email or phone number linked to your account and we will text or email you a code.')}
+                            {t('common.resetHelp', 'Enter your username, or the email or phone number linked to your account, and we will text or email you a code.')}
                         </p>
 
                         {error && <div className="mt-3 text-[13px]" style={{ color: '#e0245e' }}>{error}</div>}
