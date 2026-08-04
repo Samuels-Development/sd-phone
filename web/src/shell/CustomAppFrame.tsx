@@ -432,7 +432,7 @@ export function CustomAppFrame({ appId }: { appId: string; onClose: () => void }
             )}
 
             {ctxMenu && (
-                <Sheet fit="content" onClose={() => settleCtx(undefined)} title={ctxMenu.title}>
+                <Sheet fit="content" onClose={() => settleCtx(undefined)} title={ctxMenu.title} className="bg-[#ececec] dark:bg-base">
                     {({ close }) => (
                         <div className="px-4 pb-2">
                             {ctxMenu.description && (
@@ -468,7 +468,7 @@ export function CustomAppFrame({ appId }: { appId: string; onClose: () => void }
             )}
 
             {emojiOpen && (
-                <Sheet fit="content" onClose={() => settleEmoji(null)} title={t('common.emoji', 'Emoji')} forceDark={theme === 'dark'}>
+                <Sheet fit="content" onClose={() => settleEmoji(null)} title={t('common.emoji', 'Emoji')} forceDark={theme === 'dark'} className="bg-[#ececec] dark:bg-surface">
                     {({ close }) => (
                         <div className="px-1 pb-1">
                             <EmojiPanel isDark={theme === 'dark'} onSelect={e => { const r = emojiResolve.current; emojiResolve.current = null; if (r) r(e); close(); }} />
@@ -503,7 +503,7 @@ export function CustomAppFrame({ appId }: { appId: string; onClose: () => void }
             )}
 
             {colorReq && (
-                <Sheet fit="content" onClose={() => settleColor(null)} title={t('customApps.pickColor', 'Pick a Color')}>
+                <Sheet fit="content" onClose={() => settleColor(null)} title={t('customApps.pickColor', 'Pick a Color')} className="bg-[#ececec] dark:bg-base">
                     {({ close }) => (
                         <div className="px-5 pb-3">
                             <div className="grid grid-cols-7 gap-3 pb-4">

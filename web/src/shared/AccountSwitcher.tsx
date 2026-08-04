@@ -38,7 +38,13 @@ export function AccountSwitcher({ app, forceDark = false, onClose, onSwitched, o
     const label = forceDark ? 'text-white' : 'text-black dark:text-white';
 
     return (
-        <Sheet onClose={onClose} title={t('accounts.switchAccount', 'Switch account')} forceDark={forceDark}>
+        <Sheet
+            onClose={onClose}
+            fit="content"
+            title={t('accounts.switchAccount', 'Switch account')}
+            forceDark={forceDark}
+            className="bg-[#ececec] dark:bg-surface"
+        >
             {() => (
             <div className="flex flex-col gap-1 px-2 pb-3">
                 {accounts.length === 0 && (
