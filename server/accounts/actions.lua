@@ -26,6 +26,10 @@ local ok, fail, digits, trim = util.ok, util.fail, util.digits, util.trim
 -- App whitelists; every handler resolves its payload `app` against one of these.
 ---@type table<string, boolean> Apps served by the generic register/login/logout/me callbacks.
 local DIRECT_APPS    = { photogram = true, cherry = true, vibez = true, ryde = true }
+---@type table<string, boolean> Apps offering the in-app account switcher. Squawk owns its own
+---register/login because it writes a profile row beside the account, so adding it to DIRECT_APPS
+---would let the generic register mint an account with no profile; switching only moves a session.
+local SWITCH_APPS    = { photogram = true, cherry = true, vibez = true, ryde = true, birdy = true }
 ---@type table<string, boolean> Every account app the engine knows (reset + vault callbacks).
 local ALL_APPS       = { photogram = true, cherry = true, vibez = true, birdy = true, mail = true, ryde = true }
 
@@ -246,7 +250,7 @@ end
 ---@return table envelope on success data = { accounts, active }
 function actions.switchable(source, payload)
     local app = payload and payload.app
-    if not DIRECT_APPS[app] then return fail('Unknown app') end
+    if not SWITCH_APPS[app] then return fail('Unknown app') end
     local cid = player.getIdentifier(source); if not cid then return fail('Player not found') end
 
     local current = store.getSessionAccount(app, cid)
@@ -271,7 +275,7 @@ end
 function actions.switchAccount(source, payload)
     payload = payload or {}
     local app = payload.app
-    if not DIRECT_APPS[app] then return fail('Unknown app') end
+    if not SWITCH_APPS[app] then return fail('Unknown app') end
     local cid = player.getIdentifier(source); if not cid then return fail('Player not found') end
     if not util.cooldown(cid, 'accounts:switch', 500) then return fail('Slow down') end
 

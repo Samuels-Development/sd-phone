@@ -34,8 +34,9 @@ function M.run(ctx)
         if not app or not cid then
             skipped = skipped + 1
         elseif app == 'birdy' then
-            -- Squawk is still one account per character; its porter arrives with the
-            -- multi-account refactor and these rows are picked up then.
+            -- Squawk accepts multiple accounts now, but nothing has ported lb's Twitter profiles
+            -- across yet, so there is no account to attach these logins to. The Squawk porter
+            -- picks them up.
             deferred = deferred + 1
         else
             rows[#rows + 1] = { app, cid, l.username }

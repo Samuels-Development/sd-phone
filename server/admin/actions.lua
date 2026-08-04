@@ -447,13 +447,14 @@ function actions.forceLogout(source, payload)
     if not cid then return fail('Missing player') end
     local app = payload and payload.app
 
+    -- The Squawk flag is resolved through the session, so it has to clear before the session does.
     if type(app) == 'string' and app ~= '' then
-        acctStore.clearSession(app, cid)
         if app == 'birdy' then store.clearBirdyLoggedIn(cid) end
+        acctStore.clearSession(app, cid)
     else
         app = 'all apps'
-        acctStore.clearAllSessions(cid)
         store.clearBirdyLoggedIn(cid)
+        acctStore.clearAllSessions(cid)
     end
 
     local aCid, aName = adminIdent(source)
@@ -497,17 +498,18 @@ function actions.birdyDeletePost(source, payload)
     return ok()
 end
 
----Toggles the verified badge on a player's Birdy profile.
+---Toggles the verified badge on one Birdy account, addressed by handle: a character can hold
+---several, so a citizenid no longer names one.
 ---@param source number admin player server id
----@param payload { cid?: string, verified?: boolean }|nil
+---@param payload { handle?: string, verified?: boolean }|nil
 ---@return table envelope
 function actions.birdySetVerified(source, payload)
-    local cid = cleanCid(payload and payload.cid)
-    if not cid then return fail('Missing player') end
+    local handle = util.trim(payload and payload.handle):lower()
+    if handle == '' or #handle > 32 then return fail('Missing account') end
     local verified = payload and payload.verified == true
-    if store.setBirdyVerified(cid, verified) == 0 then return fail('No Birdy profile') end
+    if store.setBirdyVerified(handle, verified) == 0 then return fail('No Birdy profile') end
     local aCid, aName = adminIdent(source)
-    store.audit(aCid, aName, verified and 'birdy-verify' or 'birdy-unverify', cid, '')
+    store.audit(aCid, aName, verified and 'birdy-verify' or 'birdy-unverify', nil, '@' .. handle)
     return ok()
 end
 

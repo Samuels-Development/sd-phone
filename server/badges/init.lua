@@ -42,6 +42,16 @@ local function vibezCount(cid)
     return vibezStore.unseenNotificationCount(acc.username)
 end
 
+---Birdy unread = unseen notifications, keyed by the Squawk account signed in on this character;
+---0 if not signed in.
+---@param cid string framework per-character id
+---@return number unread
+local function birdyCount(cid)
+    local acc = acctStore.getSessionAccount('birdy', cid)
+    if not acc then return 0 end
+    return birdyStore.unseenNotificationCount(acc.username)
+end
+
 ---@type table<string, fun(cid: string): number> One count resolver per home-screen app id. The
 ---single source of truth for both the full snapshot and a single-app push, so the two can never
 ---disagree about which apps carry a badge.
@@ -52,7 +62,7 @@ local counters = {
     groups    = function(cid) return groupStore.pendingInviteCount(cid) end,
     photogram = photogramCount,
     vibez     = vibezCount,
-    birdy     = function(cid) return birdyStore.unseenNotificationCount(cid) end,
+    birdy     = birdyCount,
 }
 
 ---@type integer How long a computed snapshot stays reusable for the client-facing fetch (ms).

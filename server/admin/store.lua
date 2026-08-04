@@ -6,6 +6,25 @@ local util = require 'server.util'
 ---@type table Store module; the table returned at end of file.
 local store = {}
 
+---@type string Resolves an app account username to the citizenid signed into it; formatted with
+---(app, username expression) wherever a content row carries an account rather than a character.
+local SESSION_CID = [[(
+    SELECT s.citizenid FROM phone_app_sessions s
+    JOIN phone_app_accounts a ON a.id = s.account_id
+    WHERE a.app = '%s' AND a.username = %s
+    LIMIT 1
+)]]
+
+---@type string Subquery for every Squawk handle one character is tied to: the accounts they
+---created plus the one they are signed into. Takes the citizenid twice.
+local BIRDY_HANDLES_FOR_CID = [[
+    SELECT handle FROM phone_birdy_profiles WHERE citizenid = ?
+    UNION
+    SELECT a.username FROM phone_app_sessions s
+    JOIN phone_app_accounts a ON a.id = s.account_id
+    WHERE a.app = 'birdy' AND s.citizenid = ?
+]]
+
 ---Creates the audit table and the phone-number search index idempotently.
 function store.ensureSchema()
     MySQL.query.await([[
@@ -273,19 +292,38 @@ function store.playerOverview(cid)
         ORDER BY a.app, a.username
     ]], { cid }) or {}
 
-    local birdy = MySQL.single.await([[
-        SELECT handle, display_name, bio, verified, logged_in, protected,
-               UNIX_TIMESTAMP(created_at) AS created_at
-        FROM phone_birdy_profiles WHERE citizenid = ?
-    ]], { cid })
+    -- Squawk is multi-account: a character can hold several profiles, and can also be signed into
+    -- one another character created, so both sides of the link are listed.
+    -- logged_in is derived from live sessions, not the profile column: that column is a legacy
+    -- per-account flag and cannot say which characters are in the account right now.
+    local birdy = MySQL.query.await(([[
+        SELECT p.handle, p.display_name, p.bio, p.verified, p.protected,
+               UNIX_TIMESTAMP(p.created_at) AS created_at,
+               EXISTS(SELECT 1 FROM phone_app_sessions s
+                      JOIN phone_app_accounts a ON a.id = s.account_id
+                      WHERE a.app = 'birdy' AND a.username = p.handle) AS logged_in
+        FROM phone_birdy_profiles p WHERE p.handle IN (%s) ORDER BY p.created_at
+    ]]):format(BIRDY_HANDLES_FOR_CID), { cid, cid }) or {}
 
-    if not settings and #accounts == 0 and not birdy then return nil end
+    if not settings and #accounts == 0 and #birdy == 0 then return nil end
 
     local function count(sql)
         return tonumber(MySQL.scalar.await(sql, { cid })) or 0
     end
+
+    local handles = {}
+    for i = 1, #birdy do handles[i] = birdy[i].handle end
+    local birdyPosts = 0
+    if #handles > 0 then
+        local marks = {}
+        for i = 1, #handles do marks[i] = '?' end
+        birdyPosts = tonumber(MySQL.scalar.await(
+            ('SELECT COUNT(*) FROM phone_birdy_posts WHERE author IN (%s)'):format(table.concat(marks, ',')),
+            handles)) or 0
+    end
+
     local counts = {
-        birdyPosts = count('SELECT COUNT(*) FROM phone_birdy_posts WHERE author_cid = ?'),
+        birdyPosts = birdyPosts,
         messages   = count('SELECT COUNT(*) FROM phone_messages WHERE citizenid = ?'),
         calls      = count('SELECT COUNT(*) FROM phone_calls WHERE citizenid = ?'),
         photos     = count('SELECT COUNT(*) FROM phone_photos WHERE citizenid = ?'),
@@ -305,6 +343,19 @@ function store.playerOverview(cid)
         }
     end
 
+    local birdyList = {}
+    for i, b in ipairs(birdy) do
+        birdyList[i] = {
+            handle      = b.handle,
+            displayName = b.display_name,
+            bio         = b.bio,
+            verified    = util.truthy(b.verified),
+            loggedIn    = util.truthy(b.logged_in),
+            protected   = util.truthy(b.protected),
+            createdAt   = tonumber(b.created_at),
+        }
+    end
+
     return {
         settings = settings and {
             phoneNumber  = settings.phone_number,
@@ -320,15 +371,7 @@ function store.playerOverview(cid)
             updatedAt    = tonumber(settings.updated_at),
         } or nil,
         accounts = accountList,
-        birdy = birdy and {
-            handle      = birdy.handle,
-            displayName = birdy.display_name,
-            bio         = birdy.bio,
-            verified    = util.truthy(birdy.verified),
-            loggedIn    = util.truthy(birdy.logged_in),
-            protected   = util.truthy(birdy.protected),
-            createdAt   = tonumber(birdy.created_at),
-        } or nil,
+        birdy = birdyList,
         counts = counts,
     }
 end
@@ -388,21 +431,23 @@ function store.listBirdyPosts(cursor, limit, query, authorCid)
     local ts, id = splitCursor(cursor)
     local like = (type(query) == 'string' and query ~= '') and ('%' .. escapeLike(query) .. '%') or nil
 
-    local rows = MySQL.query.await([[
-        SELECT p.id, p.author_cid, p.body, p.parent_id, p.images, p.views,
+    local rows = MySQL.query.await(([[
+        SELECT p.id, p.author, p.body, p.parent_id, p.images, p.views,
                UNIX_TIMESTAMP(p.created_at) AS ts,
                pr.handle, pr.display_name, pr.verified,
+               %s AS author_cid,
                (SELECT COUNT(*) FROM phone_birdy_likes l WHERE l.post_id = p.id) AS likes,
                (SELECT COUNT(*) FROM phone_birdy_posts c WHERE c.parent_id = p.id) AS replies
         FROM phone_birdy_posts p
-        LEFT JOIN phone_birdy_profiles pr ON pr.citizenid = p.author_cid
-        WHERE (? IS NULL OR p.author_cid = ?)
+        LEFT JOIN phone_birdy_profiles pr ON pr.handle = p.author
+        WHERE (? IS NULL OR p.author IN (%s))
           AND (? IS NULL OR p.body LIKE ? OR pr.handle LIKE ?)
           AND (? IS NULL OR p.created_at < FROM_UNIXTIME(?)
                OR (p.created_at = FROM_UNIXTIME(?) AND p.id < ?))
         ORDER BY p.created_at DESC, p.id DESC
         LIMIT ?
-    ]], { authorCid, authorCid, like, like, like, ts, ts, ts, id, limit + 1 }) or {}
+    ]]):format(SESSION_CID:format('birdy', 'p.author'), BIRDY_HANDLES_FOR_CID),
+        { authorCid, authorCid, authorCid, like, like, like, ts, ts, ts, id, limit + 1 }) or {}
 
     return shapePosts(rows, limit)
 end
@@ -425,20 +470,29 @@ function store.deleteBirdyPost(id)
     return removed
 end
 
----Sets the verified flag on a Birdy profile.
----@param cid string profile owner citizenid
+---Sets the verified flag on one Birdy profile.
+---@param handle string profile handle
 ---@param verified boolean
 ---@return integer affected
-function store.setBirdyVerified(cid, verified)
+function store.setBirdyVerified(handle, verified)
     return tonumber(MySQL.update.await(
-        'UPDATE phone_birdy_profiles SET verified = ? WHERE citizenid = ?',
-        { verified and 1 or 0, cid })) or 0
+        'UPDATE phone_birdy_profiles SET verified = ? WHERE handle = ?',
+        { verified and 1 or 0, handle })) or 0
 end
 
----Clears the legacy logged_in flag on a Birdy profile (used on admin force-logout).
----@param cid string profile owner citizenid
+---Clears the legacy logged_in flag on whichever Birdy profile this character is signed into, so
+---the one-time credential import cannot sign them back in on a later boot. Call before dropping
+---the engine session, or the lookup finds nothing.
+---@param cid string citizenid being signed out
 function store.clearBirdyLoggedIn(cid)
-    MySQL.update.await('UPDATE phone_birdy_profiles SET logged_in = 0 WHERE citizenid = ?', { cid })
+    MySQL.update.await([[
+        UPDATE phone_birdy_profiles SET logged_in = 0
+        WHERE handle IN (
+            SELECT a.username FROM phone_app_sessions s
+            JOIN phone_app_accounts a ON a.id = s.account_id
+            WHERE a.app = 'birdy' AND s.citizenid = ?
+        )
+    ]], { cid })
 end
 
 ---Clears a player's passcode and Face ID so they can get back into a locked phone.
@@ -529,15 +583,6 @@ end
 -- { id, ts, authorCid?, label?, title?, body, kind?, images? } keyset-paged
 -- newest-first on (ts, id) with an opaque "ts:id" cursor.
 -- ---------------------------------------------------------------------------
-
----Resolves a photogram/cherry account username to the citizenid signed into it (subquery
----fragment used inside the adapters below).
-local SESSION_CID = [[(
-    SELECT s.citizenid FROM phone_app_sessions s
-    JOIN phone_app_accounts a ON a.id = s.account_id
-    WHERE a.app = '%s' AND a.username = %s
-    LIMIT 1
-)]]
 
 -- Adapter shape: { deletable: boolean, list: fun(ts, id, like, limit): rows, delete?: fun(id): removed }.
 ---@type table<string, table>

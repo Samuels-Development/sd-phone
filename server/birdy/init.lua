@@ -5,8 +5,6 @@ local boot = require 'server.boot'
 local store   = require 'server.birdy.store'
 ---@type table Authoritative Birdy handlers (server.birdy.actions): all validation + mutation.
 local actions = require 'server.birdy.actions'
----@type table Player bridge (bridge.server.player): citizenid -> online source for pushes.
-local player  = require 'bridge.server.player'
 ---@type table Watcher registry (server.watchers): shared with the feed broadcast in actions.
 local watchers = require('server.watchers').of('birdy')
 ---@type table Shared server helpers (server.util): disconnect sweep registration.
@@ -22,23 +20,26 @@ CreateThread(function()
     boot.schemaReady()
 end)
 
----Pushes an event to a single player. No-op when they're offline.
----@param src number|nil online server id, or nil
+---Pushes an event to every phone signed into a Birdy account. An account can be open on more
+---than one character, so a handle resolves to a list of sources rather than one.
+---@param handle string|nil Birdy handle
 ---@param event string client event name
 ---@param payload any
-local function pushTo(src, event, payload)
-    if not src then return end
-    TriggerClientEvent(event, src, payload)
+local function pushTo(handle, event, payload)
+    if not handle then return end
+    for _, src in ipairs(actions.sourcesFor(handle)) do
+        TriggerClientEvent(event, src, payload)
+    end
 end
 
----Forwards an action result, pinging the `notifyCid` player (if online) with a notification
----event, then stripping that internal field.
+---Forwards an action result, pinging the `notify` account (wherever it is open) with a
+---notification event, then stripping that internal field.
 ---@param result table
 ---@return table
 local function withNotifyPush(result)
-    if result.success and result.data and result.data.notifyCid then
-        pushTo(player.getSourceByIdentifier(result.data.notifyCid), 'sd-phone:client:birdy:notification', {})
-        result.data.notifyCid = nil
+    if result.success and result.data and result.data.notify then
+        pushTo(result.data.notify, 'sd-phone:client:birdy:notification', {})
+        result.data.notify = nil
     end
     return result
 end
@@ -92,8 +93,8 @@ lib.callback.register('sd-phone:server:birdy:dmSend', function(src, payload)
     local result = actions.dmSend(src, payload)
     if result.success and result.data then
         local d = result.data
-        pushTo(player.getSourceByIdentifier(d.toCid), 'sd-phone:client:birdy:dmReceived', {
-            conversationId = d.fromCid,
+        pushTo(d.to, 'sd-phone:client:birdy:dmReceived', {
+            conversationId = d.from,
             user           = d.fromProfile,
             message        = d.messageForOther,
         })
@@ -110,7 +111,7 @@ lib.callback.register('sd-phone:server:birdy:dmReact', function(src, payload)
     local result = actions.dmReact(src, payload)
     if result.success and result.data then
         local d = result.data
-        pushTo(player.getSourceByIdentifier(d.otherCid), 'sd-phone:client:birdy:dmReaction', {
+        pushTo(d.other, 'sd-phone:client:birdy:dmReaction', {
             conversationId = d.conversationId,
             id             = d.id,
             reactions      = d.otherReactions,

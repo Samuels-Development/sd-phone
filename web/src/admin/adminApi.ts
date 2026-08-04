@@ -49,8 +49,8 @@ export const adminBirdyPosts = (opts: { cursor?: string | null; q?: string; cid?
 export const adminBirdyDeletePost = (id: string) =>
     call<void>('sd-phone:admin:birdyDeletePost', { id });
 
-export const adminBirdySetVerified = (cid: string, verified: boolean) =>
-    call<void>('sd-phone:admin:birdySetVerified', { cid, verified });
+export const adminBirdySetVerified = (handle: string, verified: boolean) =>
+    call<void>('sd-phone:admin:birdySetVerified', { handle, verified });
 
 export const adminContent = (app: string, cursor?: string | null, q?: string) =>
     call<{ items: AdminContentItem[]; nextCursor?: string | null; deletable: boolean }>('sd-phone:admin:content', { app, cursor, q });

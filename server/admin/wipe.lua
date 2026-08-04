@@ -49,18 +49,12 @@ local CID_SINGLE = {
     { 'darkchat_nicknames',          'citizenid' },
     { 'darkchat_reactions',          'citizenid' },
     { 'darkchat_rooms',              'owner' },
-    { 'phone_birdy_profiles',        'citizenid' },
-    { 'phone_birdy_posts',           'author_cid' },
-    { 'phone_birdy_likes',           'citizenid' },
 }
 
 ---@type table<integer, string[]> Tables where the character can appear on either side of a
 ---relation, deleted with WHERE a = ? OR b = ?: { table, columnA, columnB }.
 local CID_PAIR = {
-    { 'phone_friends',                 'owner',         'friend' },
-    { 'phone_birdy_follows',           'follower_cid',  'target_cid' },
-    { 'phone_birdy_dms',               'from_cid',      'to_cid' },
-    { 'phone_birdy_notifications',     'recipient_cid', 'actor_cid' },
+    { 'phone_friends', 'owner', 'friend' },
 }
 
 ---Deletes one character's entire phone footprint: citizenid-keyed rows, social-app rows keyed by
@@ -130,6 +124,32 @@ local function wipeCid(cid)
         rows = rows + del('DELETE FROM phone_cherry_swipes WHERE swiper = ? OR target = ?', { ch, ch })
         rows = rows + del('DELETE FROM phone_cherry_blocks WHERE blocker = ? OR blocked = ?', { ch, ch })
         rows = rows + del('DELETE FROM phone_cherry_profiles WHERE username = ?', { ch })
+    end
+
+    -- Squawk keys its content by handle, and one character can hold several accounts, so the wipe
+    -- covers every account they created as well as whichever one they are signed into.
+    local birdyRows = MySQL.query.await([[
+        SELECT handle FROM phone_birdy_profiles WHERE citizenid = ?
+        UNION
+        SELECT a.username FROM phone_app_sessions s
+        JOIN phone_app_accounts a ON a.id = s.account_id
+        WHERE a.app = 'birdy' AND s.citizenid = ?
+    ]], { cid, cid }) or {}
+    for _, r in ipairs(birdyRows) do
+        local h = r.handle
+        del('DELETE FROM phone_birdy_likes         WHERE post_id IN (SELECT id FROM phone_birdy_posts WHERE author = ?)', { h })
+        del('DELETE FROM phone_birdy_reposts       WHERE post_id IN (SELECT id FROM phone_birdy_posts WHERE author = ?)', { h })
+        del('DELETE FROM phone_birdy_notifications WHERE post_id IN (SELECT id FROM phone_birdy_posts WHERE author = ?)', { h })
+        rows = rows + del('DELETE FROM phone_birdy_likes         WHERE handle = ?', { h })
+        rows = rows + del('DELETE FROM phone_birdy_reposts       WHERE handle = ?', { h })
+        rows = rows + del('DELETE FROM phone_birdy_posts         WHERE author = ?', { h })
+        rows = rows + del('DELETE FROM phone_birdy_follows       WHERE follower = ? OR target = ?', { h, h })
+        rows = rows + del('DELETE FROM phone_birdy_dms           WHERE from_handle = ? OR to_handle = ?', { h, h })
+        rows = rows + del('DELETE FROM phone_birdy_notifications WHERE recipient = ? OR actor = ?', { h, h })
+        rows = rows + del('DELETE FROM phone_birdy_profiles      WHERE handle = ?', { h })
+        -- By username, not by created_by: accounts made before the creator column existed carry
+        -- no owner, and leaving one behind is a login that resolves to a profile that is gone.
+        rows = rows + del("DELETE FROM phone_app_accounts WHERE app = 'birdy' AND username = ?", { h })
     end
 
     local ry = userFor['ryde']

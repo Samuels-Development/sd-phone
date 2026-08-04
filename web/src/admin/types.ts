@@ -50,15 +50,7 @@ export interface AdminOverview {
         updatedAt?:    number;
     } | null;
     accounts: AdminAccount[];
-    birdy?: {
-        handle:      string;
-        displayName: string;
-        bio:         string;
-        verified:    boolean;
-        loggedIn:    boolean;
-        protected:   boolean;
-        createdAt?:  number;
-    } | null;
+    birdy: AdminBirdyProfile[];
     counts?: {
         birdyPosts: number;
         messages:   number;
@@ -103,6 +95,16 @@ export interface AdminSimLookup {
     ownerName?:   string | null;
     boundProfile: boolean;
     holder?: { cid?: string | null; name?: string | null; active: boolean } | null;
+}
+
+export interface AdminBirdyProfile {
+    handle:      string;
+    displayName: string;
+    bio:         string;
+    verified:    boolean;
+    loggedIn:    boolean;
+    protected:   boolean;
+    createdAt?:  number;
 }
 
 export interface AdminBirdyPost {

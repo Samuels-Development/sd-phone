@@ -285,12 +285,22 @@ function store.migrateLegacy()
         FROM phone_birdy_profiles p
         WHERE p.handle <> '' AND p.password <> ''
     ]])
+    -- The NOT EXISTS is load-bearing, not belt-and-braces: the session key is
+    -- (app, citizenid, account_id), so a character who already signed into a second Squawk
+    -- account would collect a SECOND session row here rather than being ignored, and
+    -- getSessionAccount would then pick between them arbitrarily.
     MySQL.query.await([[
         INSERT IGNORE INTO phone_app_sessions (app, citizenid, account_id)
         SELECT 'birdy', p.citizenid, a.id
         FROM phone_birdy_profiles p
         JOIN phone_app_accounts a ON a.app = 'birdy' AND a.username = p.handle COLLATE utf8mb4_unicode_ci
         WHERE p.logged_in = 1
+          AND NOT EXISTS (
+              -- Wrapped in a derived table: a bare subquery over the INSERT's own target is
+              -- rejected outright by MySQL.
+              SELECT 1 FROM (SELECT citizenid FROM phone_app_sessions WHERE app = 'birdy') s
+              WHERE s.citizenid = p.citizenid
+          )
     ]])
     MySQL.query.await([[
         INSERT IGNORE INTO phone_app_accounts (app, username, display_name, password_hash, email)

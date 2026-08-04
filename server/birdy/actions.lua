@@ -53,7 +53,8 @@ local WRITE_BUDGET = {
 local BUDGET_WINDOW = 86400000
 
 ---Applies the caller's write budget for `key`. nil means the call may proceed; anything else is
----the envelope to hand straight back to the client.
+---the envelope to hand straight back to the client. Keyed by citizenid, never by account: a
+---budget spent per account would reset every time a player switched to an alt.
 ---@param cid string citizenid of the acting player
 ---@param key string WRITE_BUDGET key
 ---@return table|nil refusal
@@ -133,26 +134,49 @@ local function timeLabel(ms)
     return os.date('%H:%M', math.floor(ms / 1000))
 end
 
----Resolves the requesting player's signed-in Birdy profile through the shared accounts engine
----session. Returns nil when signed out.
+---The Birdy account the requesting player is signed into, plus their citizenid. The profile is
+---nil when signed out; the citizenid is nil only when the character cannot be resolved.
 ---@param source number player server id
----@return table|nil profile
+---@return table|nil profile, string|nil cid
 local function viewer(source)
     local cid = player.getIdentifier(source)
-    if not cid then return nil end
+    if not cid then return nil, nil end
     local acc = acctStore.getSessionAccount('birdy', cid)
-    if not acc then return nil end
-    return store.getProfileByHandle(acc.username)
+    if not acc then return nil, cid end
+    return store.getProfileByHandle(acc.username), cid
 end
 
----Resolves a viewer citizenid for the public read actions: the signed-in account's cid, or ''
+---Resolves a viewer handle for the public read actions: the signed-in account's handle, or ''
 ---for a guest.
 ---@param source number player server id
----@return string viewerCid '' = anonymous guest
-local function optionalViewerCid(source)
+---@return string viewerHandle '' = anonymous guest
+local function optionalViewerHandle(source)
     local prof = viewer(source)
-    return prof and prof.citizenid or ''
+    return prof and prof.handle or ''
 end
+
+---Online sources signed into `handle`'s Birdy account. One account can be open on several
+---characters at once, so a push has to reach all of them rather than a single citizenid.
+---@param handle string Birdy handle
+---@param activeSrcs table<string, number>|nil prebuilt citizenid -> source map for a fan-out
+---@return integer[] sources
+local function sourcesFor(handle, activeSrcs)
+    local acc = acctStore.getAccount('birdy', handle)
+    if not acc then return {} end
+    local out = {}
+    for _, cid in ipairs(acctStore.sessionCitizens('birdy', acc.id)) do
+        -- Indexing a prebuilt map is the same lookup getSourceByIdentifier does, minus the
+        -- rescan of every connected player that it costs once per recipient.
+        local src = activeSrcs and activeSrcs[cid] or nil
+        if not activeSrcs then src = player.getSourceByIdentifier(cid) end
+        if src then out[#out + 1] = src end
+    end
+    return out
+end
+
+---@type fun(handle: string, activeSrcs: table|nil): integer[] Shared with server.birdy.init for
+---its DM and reaction pushes.
+actions.sourcesFor = sourcesFor
 
 ---Public author shape embedded in posts, notifications and conversation heads.
 ---@param profile table
@@ -175,8 +199,8 @@ local function serializeProfile(profile)
         protected = profile.protected == true,
         avatar    = profile.avatar,
         banner    = profile.banner,
-        following = store.countFollowing(profile.citizenid),
-        followers = store.countFollowers(profile.citizenid),
+        following = store.countFollowing(profile.handle),
+        followers = store.countFollowers(profile.handle),
     }
 end
 
@@ -211,7 +235,8 @@ function actions.me(source)
 end
 
 ---Registers a new Birdy account and signs the character in. Handle uniqueness is checked
----against both stores; every field is trimmed and bounds-checked against config.Birdy.
+---against both stores; every field is trimmed and bounds-checked against config.Birdy. How many
+---accounts one character may hold is the accounts engine's per-app cap (configs/accounts.lua).
 ---@param source number player server id
 ---@param payload { name?: string, username?: string, password?: string, bio?: string, email?: string, phone?: string }
 ---@return table envelope
@@ -249,9 +274,6 @@ function actions.register(source, payload)
     if store.getProfileByHandle(handle) or acctStore.getAccount('birdy', handle) then
         return fail('That username is taken')
     end
-    if store.getProfile(cid) then
-        return fail('This character already created a Birdy account. Log into it instead')
-    end
 
     local acctRes = acctActions.createAccount('birdy', {
         username = handle, password = password, name = name,
@@ -259,14 +281,14 @@ function actions.register(source, payload)
     }, cid)
     if not acctRes.success then return acctRes end
 
-    if not store.insertAccount(cid, handle, name, store.hashPassword(password), bio, birdyCfg.DefaultVerified == true, os.date('%B %Y')) then
+    if not store.insertAccount(handle, cid, name, store.hashPassword(password), bio, birdyCfg.DefaultVerified == true, os.date('%B %Y')) then
         acctStore.deleteAccount(acctRes.data.account.id)
         return fail('Failed to create the account')
     end
     acctStore.setSession('birdy', cid, acctRes.data.account.id)
-    store.setLoggedIn(cid, true)
+    store.setLoggedIn(handle, true)
 
-    return ok({ me = serializeAuthor(store.getProfile(cid)) })
+    return ok({ me = serializeAuthor(store.getProfileByHandle(handle)) })
 end
 
 ---Signs in to any existing Birdy account by handle + password. Accepts the handle or the linked
@@ -301,18 +323,22 @@ function actions.login(source, payload)
     if not prof then return fail('That account has no Birdy profile') end
 
     acctStore.setSession('birdy', cid, acc.id)
-    store.setLoggedIn(prof.citizenid, true)
+    store.setLoggedIn(prof.handle, true)
     return ok({ me = serializeAuthor(prof) })
 end
 
----Signs out: keeps the account, drops this character's engine session. Idempotent.
+---Signs out: keeps the account, drops this character's engine session. Idempotent. The account's
+---signed-in flag only clears once no character is left in it.
 ---@param source number player server id
 ---@return table envelope
 function actions.logout(source)
     local cid = player.getIdentifier(source)
     if cid then
+        local acc = acctStore.getSessionAccount('birdy', cid)
         acctStore.clearSession('birdy', cid)
-        store.setLoggedIn(cid, false)
+        if acc and #acctStore.sessionCitizens('birdy', acc.id) == 0 then
+            store.setLoggedIn(acc.username, false)
+        end
     end
     return ok()
 end
@@ -324,55 +350,55 @@ end
 ---@return table envelope
 function actions.profile(source, payload)
     payload = tbl(payload)
-    local viewerCid = optionalViewerCid(source)
+    local me = optionalViewerHandle(source)
     local handle = payload and payload.handle and normalizeHandle(payload.handle)
     local prof
     if handle and handle ~= '' then
         prof = store.getProfileByHandle(handle)
-    elseif viewerCid ~= '' then
-        prof = store.getProfile(viewerCid)
+    elseif me ~= '' then
+        prof = store.getProfileByHandle(me)
     end
     if not prof then return fail('Profile not found') end
 
     local data = serializeProfile(prof)
-    local isMe = viewerCid ~= '' and prof.citizenid == viewerCid
+    local isMe = me ~= '' and prof.handle == me
     data.isMe = isMe
-    data.isFollowing = ((not isMe) and viewerCid ~= '' and store.isFollowing(viewerCid, prof.citizenid)) or false
+    data.isFollowing = ((not isMe) and me ~= '' and store.isFollowing(me, prof.handle)) or false
     return ok({ profile = data })
 end
 
----Posts for a profile tab: 'posts', 'replies', 'media', or 'likes'. targetCid = whose posts,
----viewerCid = whose like-state colours the hearts. Read-only.
+---Posts for a profile tab: 'posts', 'replies', 'media', or 'likes'. target = whose posts,
+---me = whose like-state colours the hearts. Read-only.
 ---@param source number player server id
 ---@param payload { kind?: string, handle?: string }|nil
 ---@return table envelope
 function actions.profilePosts(source, payload)
     payload = tbl(payload)
-    local viewerCid = optionalViewerCid(source)
+    local me = optionalViewerHandle(source)
     local handle = payload and payload.handle and normalizeHandle(payload.handle)
-    local targetCid
+    local target
     if handle and handle ~= '' then
         local tp = store.getProfileByHandle(handle)
-        targetCid = tp and tp.citizenid
-    elseif viewerCid ~= '' then
-        targetCid = viewerCid
+        target = tp and tp.handle
+    elseif me ~= '' then
+        target = me
     end
-    if not targetCid then return fail('Profile not found') end
+    if not target then return fail('Profile not found') end
     local kind = (payload and payload.kind) or 'posts'
 
     -- Protected profiles expose posts only to themselves and their followers.
-    if targetCid ~= viewerCid then
-        local tp = store.getProfile(targetCid)
-        if tp and tp.protected and not (viewerCid ~= '' and store.isFollowing(viewerCid, targetCid)) then
+    if target ~= me then
+        local tp = store.getProfileByHandle(target)
+        if tp and tp.protected and not (me ~= '' and store.isFollowing(me, target)) then
             return ok({ posts = {}, protected = true })
         end
     end
 
     local rows
     if kind == 'likes' then
-        rows = store.listLikedBy(targetCid, viewerCid, birdyCfg.FeedLimit)
+        rows = store.listLikedBy(target, me, birdyCfg.FeedLimit)
     else
-        rows = store.listPostsBy(targetCid, kind, viewerCid, birdyCfg.FeedLimit)
+        rows = store.listPostsBy(target, kind, me, birdyCfg.FeedLimit)
     end
 
     local posts = {}
@@ -387,10 +413,10 @@ end
 ---@return table envelope
 function actions.search(source, payload)
     payload = tbl(payload)
-    local viewerCid = optionalViewerCid(source)
+    local me = optionalViewerHandle(source)
     local q = trimmed(payload and payload.query)
     if not q or #q == 0 then return ok({ users = {} }) end
-    local rows = store.searchProfiles(q:sub(1, 64), viewerCid, 20)
+    local rows = store.searchProfiles(q:sub(1, 64), me, 20)
     local users = {}
     for i = 1, #rows do
         users[i] = { name = rows[i].displayName, handle = rows[i].handle, verified = rows[i].verified }
@@ -410,17 +436,17 @@ end
 ---@return table envelope
 function actions.hashtag(source, payload)
     payload = tbl(payload)
-    local viewerCid = optionalViewerCid(source)
+    local me = optionalViewerHandle(source)
     local raw = trimmed(payload.tag)
     local tag = raw and raw:sub(1, 64):match('^#?([%w_]+)')
     if not tag then return ok({ posts = {} }) end
-    local rows = store.postsByHashtag(tag:lower(), viewerCid, birdyCfg.FeedLimit)
+    local rows = store.postsByHashtag(tag:lower(), me, birdyCfg.FeedLimit)
     local posts = {}
     for i = 1, #rows do posts[i] = serializePost(rows[i]) end
     return ok({ posts = posts })
 end
 
----Updates the signed-in user's editable profile fields. Missing fields keep their current
+---Updates the signed-in account's editable profile fields. Missing fields keep their current
 ---value; everything is trimmed and bounds-checked.
 ---@param source number player server id
 ---@param payload { name?: string, bio?: string, protected?: boolean, avatar?: string|false, banner?: string|false }|nil
@@ -446,12 +472,12 @@ function actions.updateProfile(source, payload)
     local banner = imageUrl(payload.banner, prof.banner)
 
     -- joinLabel is ignored; the join date is derived from created_at.
-    store.updateProfileFields(prof.citizenid, name, bio, prof.joinLabel or '', payload.protected == true, avatar, banner)
-    return ok({ profile = serializeProfile(store.getProfile(prof.citizenid)) })
+    store.updateProfileFields(prof.handle, name, bio, prof.joinLabel or '', payload.protected == true, avatar, banner)
+    return ok({ profile = serializeProfile(store.getProfileByHandle(prof.handle)) })
 end
 
----Changes the signed-in user's password, syncing the engine hash, the Passwords-app vault copy,
----and Birdy's legacy profile-row hash.
+---Changes the signed-in account's password, syncing the engine hash, the Passwords-app vault
+---copy, and Birdy's legacy profile-row hash.
 ---@param source number player server id
 ---@param payload { password?: string }|nil
 ---@return table envelope
@@ -468,11 +494,11 @@ function actions.changePassword(source, payload)
     acctStore.setPassword(acc.id, acctStore.hashPassword(password))
     acctStore.syncVaultPassword('birdy', acc.username, password)
     local prof = store.getProfileByHandle(acc.username)
-    if prof then store.setPassword(prof.citizenid, store.hashPassword(password)) end
+    if prof then store.setPassword(prof.handle, store.hashPassword(password)) end
     return ok()
 end
 
----Permanently deletes the signed-in user's account and all of its content: content rows first,
+---Permanently deletes the signed-in account and all of its content: content rows first,
 ---then the engine account.
 ---@param source number player server id
 ---@return table envelope
@@ -481,7 +507,7 @@ function actions.deleteAccount(source)
     local acc = cid and acctStore.getSessionAccount('birdy', cid) or nil
     if not acc then return fail('Not signed in') end
     local prof = store.getProfileByHandle(acc.username)
-    if prof then store.deleteAccount(prof.citizenid) end
+    if prof then store.deleteAccount(prof.handle) end
     acctStore.deleteAccount(acc.id)
     return ok()
 end
@@ -493,9 +519,9 @@ end
 ---@return table envelope
 function actions.feed(source, payload)
     payload = tbl(payload)
-    local viewerCid = optionalViewerCid(source)
-    local following = viewerCid ~= '' and payload and payload.following == true
-    local rows = store.listFeed(viewerCid, birdyCfg.FeedLimit, following)
+    local me = optionalViewerHandle(source)
+    local following = me ~= '' and payload and payload.following == true
+    local rows = store.listFeed(me, birdyCfg.FeedLimit, following)
     local posts = {}
     for i = 1, #rows do posts[i] = serializePost(rows[i]) end
     return ok({ posts = posts })
@@ -507,16 +533,16 @@ end
 ---@return table envelope
 function actions.post(source, payload)
     payload = tbl(payload)
-    local viewerCid = optionalViewerCid(source)
+    local me = optionalViewerHandle(source)
     local id = payload and payload.id
     if type(id) ~= 'string' or id == '' then return fail('Post id required') end
 
-    store.bumpViews(id, viewerCid)
-    local row = store.getPost(id, viewerCid)
+    store.bumpViews(id, me)
+    local row = store.getPost(id, me)
     if not row then return fail('Post not found') end
 
     local post = serializePost(row)
-    local replyRows = store.listReplies(id, viewerCid)
+    local replyRows = store.listReplies(id, me)
     local thread = {}
     for i = 1, #replyRows do thread[i] = serializePost(replyRows[i]) end
     post.thread = thread
@@ -524,15 +550,15 @@ function actions.post(source, payload)
     return ok({ post = post })
 end
 
----Creates a top-level post as the session profile. A post needs text OR at least one image; the
+---Creates a top-level post as the session account. A post needs text OR at least one image; the
 ---body is trimmed and capped, images are whitelisted, and the row id is server-generated.
 ---@param source number player server id
 ---@param payload { body?: string, images?: string[] }|nil
 ---@return table envelope
 function actions.create(source, payload)
-    local prof = viewer(source); if not prof then return fail('Player not found') end
-    local muted = moderation.guard(prof.citizenid, 'birdy'); if muted then return muted end
-    local slow = throttle(prof.citizenid, 'create'); if slow then return slow end
+    local prof, cid = viewer(source); if not prof or not cid then return fail('Player not found') end
+    local muted = moderation.guard(cid, 'birdy'); if muted then return muted end
+    local slow = throttle(cid, 'create'); if slow then return slow end
     payload = tbl(payload)
     local body = trimmed(payload and payload.body) or ''
     local images = sanitizeImages(payload and payload.images)
@@ -540,11 +566,12 @@ function actions.create(source, payload)
     if #body > birdyCfg.MaxPostLength then return fail('Post is too long') end
 
     local id = store.newId()
-    if not store.insertPost(id, prof.citizenid, body, nil, images) then return fail('Failed to post') end
+    if not store.insertPost(id, prof.handle, body, nil, images) then return fail('Failed to post') end
 
-    -- First-party hook: one server-local event per created post; the payload carries a citizenid.
+    -- First-party hook: one server-local event per created post; the citizenid is the character
+    -- who posted, which is not necessarily the one that created the account.
     TriggerEvent('sd-phone:server:birdy:post', {
-        id = id, source = source, citizenid = prof.citizenid,
+        id = id, source = source, citizenid = cid,
         username = prof.handle, displayName = prof.displayName,
         body = body, images = images,
     })
@@ -554,22 +581,21 @@ function actions.create(source, payload)
     watchers.push('sd-phone:client:birdy:feedChanged', {})
 
     local preview   = body ~= '' and body:sub(1, 80) or 'shared a photo'
-    local followers = store.followerCids(prof.citizenid)
+    local followers = store.followerHandles(prof.handle)
 
-    if #followers == 0 then return ok({ post = serializePost(store.getPost(id, prof.citizenid)) }) end
+    if #followers == 0 then return ok({ post = serializePost(store.getPost(id, prof.handle)) }) end
 
     local notifs = {}
     for i = 1, #followers do
-        notifs[i] = { id = store.newId(), recipient = followers[i], kind = 'post', actor = prof.citizenid, postId = id }
+        notifs[i] = { id = store.newId(), recipient = followers[i], kind = 'post', actor = prof.handle, postId = id }
     end
     store.insertNotifications(notifs)
 
     -- One pass over the connected players for the whole fan-out; this resolved each follower
     -- separately, and every resolution re-scanned every player on the server.
     local activeSrcs = player.activeCidMap()
-    for _, cid in ipairs(followers) do
-        local src = activeSrcs[cid]
-        if src then
+    for _, handle in ipairs(followers) do
+        for _, src in ipairs(sourcesFor(handle, activeSrcs)) do
             TriggerClientEvent('sd-phone:client:birdy:notification', src, {})
             TriggerClientEvent('sd-phone:client:notify', src, {
                 app = 'birdy', appId = 'birdy', title = 'Squawk',
@@ -580,19 +606,19 @@ function actions.create(source, payload)
         end
     end
 
-    return ok({ post = serializePost(store.getPost(id, prof.citizenid)) })
+    return ok({ post = serializePost(store.getPost(id, prof.handle)) })
 end
 
 ---Replies to a post; the parent must exist. A reply needs text OR at least one image. Returns
----the new reply plus the recipient citizenid for the parent-author notification (never for
+---the new reply plus the recipient handle for the parent-author notification (never for
 ---self-replies).
 ---@param source number player server id
 ---@param payload { parentId?: string, body?: string, images?: string[] }|nil
 ---@return table envelope
 function actions.reply(source, payload)
-    local prof = viewer(source); if not prof then return fail('Player not found') end
-    local muted = moderation.guard(prof.citizenid, 'birdy'); if muted then return muted end
-    local slow = throttle(prof.citizenid, 'reply'); if slow then return slow end
+    local prof, cid = viewer(source); if not prof or not cid then return fail('Player not found') end
+    local muted = moderation.guard(cid, 'birdy'); if muted then return muted end
+    local slow = throttle(cid, 'reply'); if slow then return slow end
     payload = tbl(payload)
     local parentId = payload and payload.parentId
     local body = trimmed(payload and payload.body) or ''
@@ -605,87 +631,87 @@ function actions.reply(source, payload)
     if not parentAuthor then return fail('Post not found') end
 
     local id = store.newId()
-    if not store.insertPost(id, prof.citizenid, body, parentId, images) then return fail('Failed to reply') end
+    if not store.insertPost(id, prof.handle, body, parentId, images) then return fail('Failed to reply') end
 
-    local notifyCid = nil
-    if parentAuthor ~= prof.citizenid then
-        store.insertNotification(store.newId(), parentAuthor, 'reply', prof.citizenid, id)
-        notifyCid = parentAuthor
+    local notify = nil
+    if parentAuthor ~= prof.handle then
+        store.insertNotification(store.newId(), parentAuthor, 'reply', prof.handle, id)
+        notify = parentAuthor
     end
 
-    return ok({ post = serializePost(store.getPost(id, prof.citizenid)), notifyCid = notifyCid })
+    return ok({ post = serializePost(store.getPost(id, prof.handle)), notify = notify })
 end
 
----Toggles the viewer's like on a post. Returns the new liked state plus the author citizenid to
+---Toggles the viewer's like on a post. Returns the new liked state plus the author handle to
 ---notify when a like was just added (not on unlike, never for self-likes).
 ---@param source number player server id
 ---@param payload { id?: string }|nil
 ---@return table envelope
 function actions.toggleLike(source, payload)
-    local prof = viewer(source); if not prof then return fail('Player not found') end
+    local prof, cid = viewer(source); if not prof or not cid then return fail('Player not found') end
     payload = tbl(payload)
     local id = payload and payload.id
     if type(id) ~= 'string' or id == '' then return fail('Missing post') end
-    local slow = throttle(prof.citizenid, 'like'); if slow then return slow end
+    local slow = throttle(cid, 'like'); if slow then return slow end
 
     local author = store.getPostAuthor(id)
     if not author then return fail('Post not found') end
 
     local nowLiked
-    if store.isLiked(id, prof.citizenid) then
-        store.removeLike(id, prof.citizenid)
+    if store.isLiked(id, prof.handle) then
+        store.removeLike(id, prof.handle)
         nowLiked = false
     else
-        store.addLike(id, prof.citizenid)
+        store.addLike(id, prof.handle)
         nowLiked = true
     end
 
     -- Un-liking does not delete the notification, so re-liking would otherwise mint a permanent
     -- duplicate on every flip.
-    local notifyCid = nil
-    if nowLiked and author ~= prof.citizenid
-        and not store.recentNotification(author, 'like', prof.citizenid, id, NOTIF_DEDUPE) then
-        store.insertNotification(store.newId(), author, 'like', prof.citizenid, id)
-        notifyCid = author
+    local notify = nil
+    if nowLiked and author ~= prof.handle
+        and not store.recentNotification(author, 'like', prof.handle, id, NOTIF_DEDUPE) then
+        store.insertNotification(store.newId(), author, 'like', prof.handle, id)
+        notify = author
     end
 
-    return ok({ liked = nowLiked, notifyCid = notifyCid })
+    return ok({ liked = nowLiked, notify = notify })
 end
 
----Toggles a repost of a post. Mirrors toggleLike: idempotent per (post, citizen), and notifies
+---Toggles a repost of a post. Mirrors toggleLike: idempotent per (post, account), and notifies
 ---the post's author on a new repost (never on un-repost, never for self-reposts).
 ---@param source number player server id
 ---@param payload { id?: string }|nil
 ---@return table envelope
 function actions.toggleRepost(source, payload)
-    local prof = viewer(source); if not prof then return fail('Player not found') end
+    local prof, cid = viewer(source); if not prof or not cid then return fail('Player not found') end
     payload = tbl(payload)
     local id = payload and payload.id
     if type(id) ~= 'string' or id == '' then return fail('Missing post') end
-    local slow = throttle(prof.citizenid, 'repost'); if slow then return slow end
+    local slow = throttle(cid, 'repost'); if slow then return slow end
 
     local author = store.getPostAuthor(id)
     if not author then return fail('Post not found') end
 
     local nowReposted
-    if store.isReposted(id, prof.citizenid) then
-        store.removeRepost(id, prof.citizenid)
+    if store.isReposted(id, prof.handle) then
+        store.removeRepost(id, prof.handle)
         nowReposted = false
     else
-        store.addRepost(id, prof.citizenid)
+        store.addRepost(id, prof.handle)
         nowReposted = true
     end
 
     -- Un-reposting does not delete the notification, so re-reposting would otherwise mint a
     -- permanent duplicate on every flip.
-    local notifyCid = nil
-    if nowReposted and author ~= prof.citizenid
-        and not store.recentNotification(author, 'repost', prof.citizenid, id, NOTIF_DEDUPE) then
-        store.insertNotification(store.newId(), author, 'repost', prof.citizenid, id)
-        notifyCid = author
+    local notify = nil
+    if nowReposted and author ~= prof.handle
+        and not store.recentNotification(author, 'repost', prof.handle, id, NOTIF_DEDUPE) then
+        store.insertNotification(store.newId(), author, 'repost', prof.handle, id)
+        notify = author
     end
 
-    return ok({ reposted = nowReposted, notifyCid = notifyCid })
+    return ok({ reposted = nowReposted, notify = notify })
 end
 
 ---Followers or following for a handle (defaulting to the viewer's own profile), shaped for the
@@ -700,20 +726,20 @@ function actions.followList(source, payload)
     local kind = payload.kind == 'following' and 'following' or 'followers'
 
     -- No handle means own list; an unknown handle is empty, not an error.
-    local targetCid = prof.citizenid
+    local target = prof.handle
     local handle = payload.handle and normalizeHandle(payload.handle)
     if handle and handle ~= '' and handle ~= prof.handle then
         local tp = store.getProfileByHandle(handle)
         if not tp then return ok({ users = {} }) end
         -- Protected profiles hide their follow graph from non-followers.
-        if tp.protected and not store.isFollowing(prof.citizenid, tp.citizenid) then
+        if tp.protected and not store.isFollowing(prof.handle, tp.handle) then
             return ok({ users = {} })
         end
-        targetCid = tp.citizenid
+        target = tp.handle
     end
 
     local users = {}
-    for _, row in ipairs(store.followList(prof.citizenid, targetCid, kind)) do
+    for _, row in ipairs(store.followList(prof.handle, target, kind)) do
         users[#users + 1] = {
             name        = row.display_name,
             handle      = row.handle,
@@ -727,41 +753,38 @@ function actions.followList(source, payload)
     return ok({ users = users })
 end
 
----Toggles following another account, addressed by handle (preferred) or citizenid. Self-follows
----are rejected. Returns the target to notify on a new follow (not on unfollow).
+---Toggles following another account by handle. Self-follows are rejected. Returns the target to
+---notify on a new follow (not on unfollow).
 ---@param source number player server id
----@param payload { handle?: string, targetCid?: string }|nil
+---@param payload { handle?: string }|nil
 ---@return table envelope
 function actions.toggleFollow(source, payload)
-    local prof = viewer(source); if not prof then return fail('Player not found') end
+    local prof, cid = viewer(source); if not prof or not cid then return fail('Player not found') end
     payload = tbl(payload)
     local handle = payload and payload.handle and normalizeHandle(payload.handle)
-    local target = payload and payload.targetCid
-    if handle and handle ~= '' then
-        local tp = store.getProfileByHandle(handle)
-        target = tp and tp.citizenid
-    end
-    if type(target) ~= 'string' or target == '' or #target > 64 then return fail('Missing account') end
-    if target == prof.citizenid then return fail('You cannot follow yourself') end
-    local slow = throttle(prof.citizenid, 'follow'); if slow then return slow end
+    if not handle or handle == '' or #handle > 32 then return fail('Missing account') end
+    if handle == prof.handle then return fail('You cannot follow yourself') end
+    local target = store.getProfileByHandle(handle)
+    if not target then return fail('Missing account') end
+    local slow = throttle(cid, 'follow'); if slow then return slow end
 
-    local notifyCid = nil
+    local notify = nil
     local nowFollowing
-    if store.isFollowing(prof.citizenid, target) then
-        store.removeFollow(prof.citizenid, target)
+    if store.isFollowing(prof.handle, target.handle) then
+        store.removeFollow(prof.handle, target.handle)
         nowFollowing = false
     else
-        store.addFollow(prof.citizenid, target)
+        store.addFollow(prof.handle, target.handle)
         nowFollowing = true
         -- Unfollowing does not delete the notification, so re-following would otherwise mint a
         -- permanent duplicate on every flip.
-        if not store.recentNotification(target, 'follow', prof.citizenid, nil, NOTIF_DEDUPE) then
-            store.insertNotification(store.newId(), target, 'follow', prof.citizenid, nil)
-            notifyCid = target
+        if not store.recentNotification(target.handle, 'follow', prof.handle, nil, NOTIF_DEDUPE) then
+            store.insertNotification(store.newId(), target.handle, 'follow', prof.handle, nil)
+            notify = target.handle
         end
     end
 
-    return ok({ following = nowFollowing, notifyCid = notifyCid })
+    return ok({ following = nowFollowing, notify = notify })
 end
 
 ---Lists the viewer's notifications, serialized into the React union shape. Reply notifications
@@ -770,17 +793,17 @@ end
 ---@return table envelope
 function actions.notifications(source)
     local prof = viewer(source); if not prof then return fail('Player not found') end
-    local rows = store.listNotifications(prof.citizenid, birdyCfg.NotificationLimit)
+    local rows = store.listNotifications(prof.handle, birdyCfg.NotificationLimit)
 
-    local actorCids = {}
-    for i = 1, #rows do actorCids[#actorCids + 1] = rows[i].actor_cid end
-    local profiles = store.getProfilesByCids(actorCids)
+    local actors = {}
+    for i = 1, #rows do actors[#actors + 1] = rows[i].actor end
+    local profiles = store.getProfilesByHandles(actors)
 
     local replyPostIds = {}
     for i = 1, #rows do
         if rows[i].kind == 'reply' and rows[i].post_id then replyPostIds[#replyPostIds + 1] = rows[i].post_id end
     end
-    local replyPosts = store.postsByIds(replyPostIds, prof.citizenid)
+    local replyPosts = store.postsByIds(replyPostIds, prof.handle)
 
     local items = {}
     for i = 1, #rows do
@@ -791,7 +814,7 @@ function actions.notifications(source)
                 items[#items + 1] = { id = r.id, kind = 'reply', post = serializePost(postRow) }
             end
         else
-            local ap = profiles[r.actor_cid]
+            local ap = profiles[r.actor]
             local user = ap and serializeAuthor(ap) or { name = 'Someone', handle = 'someone', verified = false }
             if r.kind == 'like' then
                 items[#items + 1] = { id = r.id, kind = 'like', user = user, text = 'liked your post' }
@@ -805,7 +828,7 @@ function actions.notifications(source)
         end
     end
 
-    store.markNotificationsSeen(prof.citizenid)
+    store.markNotificationsSeen(prof.handle)
     badges.pushApp(source, 'birdy')
 
     return ok({ notifications = items })
@@ -817,7 +840,7 @@ end
 function actions.notificationCount(source)
     local prof = viewer(source)
     if not prof then return ok({ count = 0 }) end
-    return ok({ count = store.unseenNotificationCount(prof.citizenid) })
+    return ok({ count = store.unseenNotificationCount(prof.handle) })
 end
 
 -- Rich DM messages (text / image / gif / money / location / voice).
@@ -877,13 +900,13 @@ end
 ---DB row -> the client DM message shape: `fromMe` from the viewer's perspective plus whichever
 ---rich fields the bubble renders. Reactions are re-shaped per viewer.
 ---@param row table
----@param viewerCid string
+---@param viewerHandle string
 ---@return table
-local function serializeDm(row, viewerCid)
+local function serializeDm(row, viewerHandle)
     local meta = store.decodeJson(row.meta)
     local msg = {
         id     = row.id,
-        fromMe = row.from_cid == viewerCid,
+        fromMe = row.from_handle == viewerHandle,
         body   = row.body or '',
         kind   = row.kind or 'text',
         ts     = row.created_ms or 0,
@@ -903,7 +926,7 @@ local function serializeDm(row, viewerCid)
         local out = {}
         for emoji, users in pairs(reactions) do
             local mine = false
-            for _, u in ipairs(users) do if u == viewerCid then mine = true break end end
+            for _, u in ipairs(users) do if u == viewerHandle then mine = true break end end
             if #users > 0 then out[#out + 1] = { emoji = emoji, count = #users, mine = mine } end
         end
         if #out > 0 then msg.reactions = out end
@@ -917,16 +940,16 @@ end
 ---@return table envelope
 function actions.dmList(source)
     local prof = viewer(source); if not prof then return fail('Player not found') end
-    local msgs = store.listMessagesFor(prof.citizenid)
+    local msgs = store.listMessagesFor(prof.handle)
 
     local function isRead(v) return v == true or v == 1 or v == '1' end
 
     local lastByOther, unreadByOther = {}, {}
     for i = 1, #msgs do
         local m = msgs[i]
-        local other = (m.from_cid == prof.citizenid) and m.to_cid or m.from_cid
+        local other = (m.from_handle == prof.handle) and m.to_handle or m.from_handle
         lastByOther[other] = m
-        if m.to_cid == prof.citizenid and not isRead(m.read_flag) then
+        if m.to_handle == prof.handle and not isRead(m.read_flag) then
             unreadByOther[other] = (unreadByOther[other] or 0) + 1
         end
     end
@@ -935,7 +958,7 @@ function actions.dmList(source)
     for other in pairs(lastByOther) do others[#others + 1] = other end
     table.sort(others, function(a, b) return lastByOther[a].created_ms > lastByOther[b].created_ms end)
 
-    local profiles = store.getProfilesByCids(others)
+    local profiles = store.getProfilesByHandles(others)
     local convos = {}
     for i = 1, #others do
         local other = others[i]
@@ -946,14 +969,14 @@ function actions.dmList(source)
             user     = p and serializeAuthor(p) or { name = 'Unknown', handle = 'unknown', verified = false },
             updated  = relativeLabel(last.created_ms),
             unread   = unreadByOther[other] or 0,
-            messages = { serializeDm(last, prof.citizenid) },
+            messages = { serializeDm(last, prof.handle) },
         }
     end
 
     return ok({ conversations = convos })
 end
 
----Full message thread with one other party (conversation id = their cid). Opening the thread
+---Full message thread with one other party (conversation id = their handle). Opening the thread
 ---clears its unread flags.
 ---@param source number player server id
 ---@param payload { id?: string }|nil
@@ -964,13 +987,13 @@ function actions.dmThread(source, payload)
     local other = payload and payload.id
     if type(other) ~= 'string' or other == '' then return fail('Missing conversation') end
 
-    local rows = store.listThread(prof.citizenid, other)
+    local rows = store.listThread(prof.handle, other)
     local messages = {}
-    for i = 1, #rows do messages[i] = serializeDm(rows[i], prof.citizenid) end
+    for i = 1, #rows do messages[i] = serializeDm(rows[i], prof.handle) end
 
-    store.markThreadRead(prof.citizenid, other)
+    store.markThreadRead(prof.handle, other)
 
-    local op = store.getProfile(other)
+    local op = store.getProfileByHandle(other)
     return ok({
         id       = other,
         user     = op and serializeAuthor(op) or { name = 'Unknown', handle = 'unknown', verified = false },
@@ -987,12 +1010,12 @@ function actions.markRead(source, payload)
     payload = tbl(payload)
     local other = payload and payload.id
     if type(other) ~= 'string' or other == '' then return fail('Missing conversation') end
-    store.markThreadRead(prof.citizenid, other)
+    store.markThreadRead(prof.handle, other)
     return ok()
 end
 
----Resolves a handle to its DM conversation id (the other party's cid) plus their author card,
----so the UI can open a thread with someone it has never messaged. Read-only.
+---Resolves a handle to its DM conversation id plus the account's author card, so the UI can open
+---a thread with someone it has never messaged. Read-only.
 ---@param source number player server id
 ---@param payload { handle?: string }|nil
 ---@return table envelope
@@ -1001,31 +1024,26 @@ function actions.dmResolve(source, payload)
     payload = tbl(payload)
     local tp = store.getProfileByHandle(normalizeHandle(payload.handle or '') or '')
     if not tp then return fail('Account not found') end
-    if tp.citizenid == prof.citizenid then return fail('You cannot message yourself') end
-    return ok({ id = tp.citizenid, user = serializeAuthor(tp) })
+    if tp.handle == prof.handle then return fail('You cannot message yourself') end
+    return ok({ id = tp.handle, user = serializeAuthor(tp) })
 end
 
 ---Sends a DM of any kind. Returns the sender's own message + the recipient's copy + the routing
 ---data init needs. Money clears through banking.send before the row is stored.
 ---@param source number player server id
----@param payload table { toCid, kind, body, gifUrl, amount, requested, duration, audioUrl, waveform, wpCode, wpSub }
+---@param payload table { to, kind, body, gifUrl, amount, requested, duration, audioUrl, waveform, wpCode, wpSub }
 ---@return table envelope
 function actions.dmSend(source, payload)
-    local prof = viewer(source); if not prof then return fail('Player not found') end
-    local muted = moderation.guard(prof.citizenid, 'birdy'); if muted then return muted end
-    local slow = throttle(prof.citizenid, 'dm'); if slow then return slow end
+    local prof, cid = viewer(source); if not prof or not cid then return fail('Player not found') end
+    local muted = moderation.guard(cid, 'birdy'); if muted then return muted end
+    local slow = throttle(cid, 'dm'); if slow then return slow end
     payload = tbl(payload)
-    local toCid = payload.toCid
-    -- Discovery surfaces only expose handles, so accept one and resolve it here.
-    if (type(toCid) ~= 'string' or toCid == '') and payload.toHandle then
-        local tp = store.getProfileByHandle(normalizeHandle(payload.toHandle) or '')
-        toCid = tp and tp.citizenid
-    end
-    if type(toCid) ~= 'string' or toCid == '' or #toCid > 64 then return fail('Missing recipient') end
-    if toCid == prof.citizenid then return fail('You cannot message yourself') end
-    -- Without this a DM addressed to a made-up citizenid is stored forever: no owner can open it,
+    local to = normalizeHandle(payload.to or payload.toHandle or '')
+    if not to or to == '' or #to > 32 then return fail('Missing recipient') end
+    if to == prof.handle then return fail('You cannot message yourself') end
+    -- Without this a DM addressed to a made-up handle is stored forever: no owner can open it,
     -- and no account-delete or wipe path reaches it.
-    if not store.getProfile(toCid) then return fail('Account not found') end
+    if not store.getProfileByHandle(to) then return fail('Account not found') end
 
     local kind = VALID_DM_KINDS[payload.kind] and payload.kind or 'text'
     local body = (trimmed(payload.body) or ''):sub(1, birdyCfg.MaxDmLength)
@@ -1033,8 +1051,14 @@ function actions.dmSend(source, payload)
     if not dmHasContent(kind, body, meta) then return fail('Message cannot be empty') end
 
     if kind == 'money' and not meta.requested then
-        local tsrc = player.getSourceByIdentifier(toCid)
-        if not tsrc then return fail('They need to be online to receive money') end
+        -- The money lands in a character's account, not the Squawk account, so it needs whichever
+        -- character currently has the recipient's account open.
+        local acc = acctStore.getAccount('birdy', to)
+        local toCid
+        for _, c in ipairs(acc and acctStore.sessionCitizens('birdy', acc.id) or {}) do
+            if player.getSourceByIdentifier(c) then toCid = c break end
+        end
+        if not toCid then return fail('They need to be online to receive money') end
         local number = settings.getPhoneNumber(toCid)
         if not number then return fail('Payment failed') end
         local res = banking.send(source, { number = number, amount = meta.amount, note = 'Birdy payment' })
@@ -1042,30 +1066,30 @@ function actions.dmSend(source, payload)
     end
 
     local id = store.newId()
-    if not store.insertDm(id, prof.citizenid, toCid, kind, body, meta) then return fail('Failed to send') end
+    if not store.insertDm(id, prof.handle, to, kind, body, meta) then return fail('Failed to send') end
 
     local row = store.getDm(id)
     return ok({
-        message         = serializeDm(row, prof.citizenid),
-        messageForOther = serializeDm(row, toCid),
-        toCid           = toCid,
-        fromCid         = prof.citizenid,
+        message         = serializeDm(row, prof.handle),
+        messageForOther = serializeDm(row, to),
+        to              = to,
+        from            = prof.handle,
         fromProfile     = serializeAuthor(prof),
     })
 end
 
 ---Toggles the viewer's reaction on a DM; both parties get the new set. Only a participant may
----react; the emoji key is length-capped. conversationId = the caller's cid.
+---react; the emoji key is length-capped. conversationId = the caller's handle.
 ---@param source number player server id
 ---@param payload { id?: string, emoji?: string }|nil
 ---@return table envelope
 function actions.dmReact(source, payload)
-    local prof = viewer(source); if not prof then return fail('Player not found') end
+    local prof, cid = viewer(source); if not prof or not cid then return fail('Player not found') end
     payload = tbl(payload)
-    local slow = throttle(prof.citizenid, 'react'); if slow then return slow end
+    local slow = throttle(cid, 'react'); if slow then return slow end
     local row = type(payload.id) == 'string' and store.getDm(payload.id) or nil
     if not row then return fail('Message not found') end
-    if row.from_cid ~= prof.citizenid and row.to_cid ~= prof.citizenid then return fail('Message not found') end
+    if row.from_handle ~= prof.handle and row.to_handle ~= prof.handle then return fail('Message not found') end
 
     local emoji = tostring(payload.emoji or '')
     if not REACTION_SET[emoji] then return fail('Invalid reaction') end
@@ -1073,19 +1097,19 @@ function actions.dmReact(source, payload)
     local reactions = store.decodeJson(row.reactions)
     local users = reactions[emoji] or {}
     local found
-    for i, u in ipairs(users) do if u == prof.citizenid then found = i break end end
-    if found then table.remove(users, found) else users[#users + 1] = prof.citizenid end
+    for i, u in ipairs(users) do if u == prof.handle then found = i break end end
+    if found then table.remove(users, found) else users[#users + 1] = prof.handle end
     if #users > 0 then reactions[emoji] = users else reactions[emoji] = nil end
     store.updateDmReactions(row.id, reactions)
 
     local fresh = store.getDm(row.id)
-    local other = (row.from_cid == prof.citizenid) and row.to_cid or row.from_cid
+    local other = (row.from_handle == prof.handle) and row.to_handle or row.from_handle
     return ok({
         id             = row.id,
-        reactions      = serializeDm(fresh, prof.citizenid).reactions or {},
-        otherCid       = other,
+        reactions      = serializeDm(fresh, prof.handle).reactions or {},
+        other          = other,
         otherReactions = serializeDm(fresh, other).reactions or {},
-        conversationId = prof.citizenid,
+        conversationId = prof.handle,
     })
 end
 

@@ -47,6 +47,7 @@ local WIPE_TABLES = {
     'phone_birdy_profiles',
     'phone_birdy_posts',
     'phone_birdy_likes',
+    'phone_birdy_reposts',
     'phone_birdy_follows',
     'phone_birdy_dms',
     'phone_birdy_notifications',

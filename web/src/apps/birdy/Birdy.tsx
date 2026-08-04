@@ -7,8 +7,9 @@ import { useAppAuth } from '@/hooks/useAppAuth';
 import { useIosPush } from '@/hooks/useIosPush';
 import { useDidEnter } from '@/hooks/useDidEnter';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
-import { useSessionState } from '@/hooks/useSessionState';
+import { clearSessionState, useSessionState } from '@/hooks/useSessionState';
 import { useDeckActive } from '@/shell/deckActive';
+import { AccountSwitcher } from '@/shared/AccountSwitcher';
 import { AppAuth } from '@/shared/AppAuth';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { MAIL_DOMAIN, accountsConfirmReset, accountsRequestReset, accountsSavePassword, accountsSuggestCode } from '@/core/accountsApi';
@@ -47,6 +48,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
     const [profileOpen,    setProfileOpen]    = useSessionState('birdy:profileOpen', false);
     const [profileTarget,  setProfileTarget]  = useSessionState<string | null>('birdy:profileTarget', null);
     const [editingProfile, setEditingProfile] = useState(false);
+    const [switching,      setSwitching]      = useState(false);
     const [profile,        setProfile]        = useState<BirdyProfile | null>(null);
     const [sendError,      setSendError]      = useState<string | null>(null);
 
@@ -240,6 +242,15 @@ export function Birdy({ onClose }: { onClose: () => void }) {
         void sendMessage(openConvoId, { kind: 'money', body: `$${amount}`, amount });
     }
 
+    function switchedAccount() {
+        clearSessionState('birdy:');
+        setProfileOpen(false); setProfileTarget(null); setProfile(null);
+        setOpenPostId(null); setOpenConvoId(null); setOpenConvo(null);
+        setPosts(null); setConvos([]); setNotifCount(0); setTab('home'); setFeed('all');
+        void apiMe().then(s => { if (s.me) setMe(s.me); });
+        refreshFeed();
+    }
+
     function selectTab(t: Tab) {
         setTab(t);
         setOpenPostId(null);
@@ -429,8 +440,17 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                     profile={profile}
                     onCancel={() => setEditingProfile(false)}
                     onSaved={p => { setProfile(p); setMe({ name: p.name, handle: p.handle, verified: p.verified }); setEditingProfile(false); }}
-                    onSignOut={() => { setEditingProfile(false); setProfileOpen(false); setAuthed(false); }}
-                    onDeleted={() => { setEditingProfile(false); setProfileOpen(false); setAuthed(false); }}
+                    onSignOut={() => { setEditingProfile(false); setProfileOpen(false); clearSessionState('birdy:'); setAuthed(false); }}
+                    onSwitchAccount={() => { setEditingProfile(false); setSwitching(true); }}
+                    onDeleted={() => { setEditingProfile(false); setProfileOpen(false); clearSessionState('birdy:'); setAuthed(false); }}
+                />
+            )}
+
+            {switching && (
+                <AccountSwitcher
+                    app="birdy"
+                    onClose={() => setSwitching(false)}
+                    onSwitched={switchedAccount}
                 />
             )}
 

@@ -13,7 +13,7 @@ import {
 import { acceptedNumberLengths } from '@/lib/phone';
 import {
     fmtPhone, fmtTime, scopeLabel,
-    type AdminBirdyPost, type AdminCall, type AdminMessage, type AdminMute, type AdminOverview,
+    type AdminBirdyPost, type AdminBirdyProfile, type AdminCall, type AdminMessage, type AdminMute, type AdminOverview,
 } from '../types';
 import { Badge, Btn, Card, CenterNote, ConfirmModal, LoadMore, OnlineDot, PromptModal, Spinner } from '../ui';
 import { usePaged } from '../usePaged';
@@ -264,22 +264,21 @@ function OverviewTab({ ov, toast, reload, onOpenTab, onOpenGallery }: {
                         onOpen={onOpenGallery ? () => onOpenGallery(ov.citizenid) : undefined} />
                     <CountRow label="Contacts"      count={c?.contacts ?? 0} />
                 </Card>
-                <Card title="Birdy profile">
-                    {ov.birdy ? (
-                        <>
-                            <InfoRow label="Handle">
-                                <span className="inline-flex items-center gap-1">
-                                    @{ov.birdy.handle}
-                                    {ov.birdy.verified && <BadgeCheck size={14} className="text-ios-blue" />}
-                                </span>
-                            </InfoRow>
-                            <InfoRow label="Display name">{ov.birdy.displayName}</InfoRow>
-                            <InfoRow label="Signed in">{ov.birdy.loggedIn ? 'Yes' : 'No'}</InfoRow>
-                            <InfoRow label="Created">{fmtTime(ov.birdy.createdAt)}</InfoRow>
-                        </>
-                    ) : (
-                        <div className="px-4 py-3 text-[13px] text-zinc-500">No Birdy profile.</div>
+                <Card title="Squawk accounts">
+                    {ov.birdy.length === 0 && (
+                        <div className="px-4 py-3 text-[13px] text-zinc-500">No Squawk account.</div>
                     )}
+                    {ov.birdy.map(b => (
+                        <InfoRow key={b.handle} label={`@${b.handle}`}>
+                            <span className="inline-flex items-center gap-1.5">
+                                {b.displayName}
+                                {b.verified && <BadgeCheck size={14} className="text-ios-blue" />}
+                                <span className="text-zinc-500">
+                                    {b.loggedIn ? 'signed in' : fmtTime(b.createdAt)}
+                                </span>
+                            </span>
+                        </InfoRow>
+                    ))}
                 </Card>
             </div>
         </div>
@@ -499,10 +498,9 @@ function BirdyTab({ ov, onChanged, toast }: {
 
     const { items, loading, hasMore, loadMore, setItems } = usePaged<AdminBirdyPost, string>(fetchPage, `birdy-player:${cid}`);
 
-    const toggleVerified = async () => {
-        if (!ov.birdy) return;
-        const res = await adminBirdySetVerified(cid, !ov.birdy.verified);
-        if (res.success) { toast(ov.birdy.verified ? 'Verification removed' : 'Profile verified'); onChanged(); }
+    const toggleVerified = async (profile: AdminBirdyProfile) => {
+        const res = await adminBirdySetVerified(profile.handle, !profile.verified);
+        if (res.success) { toast(profile.verified ? 'Verification removed' : 'Profile verified'); onChanged(); }
         else toast(res.message ?? 'Failed', true);
     };
 
@@ -512,20 +510,22 @@ function BirdyTab({ ov, onChanged, toast }: {
         else toast(res.message ?? 'Delete failed', true);
     };
 
-    if (!ov.birdy) return <CenterNote>This player has no Birdy profile.</CenterNote>;
+    if (ov.birdy.length === 0) return <CenterNote>This player has no Squawk account.</CenterNote>;
 
     return (
         <div className="space-y-4">
-            <Card className="flex items-center justify-between px-4 py-3">
-                <div className="flex items-center gap-2 text-[13px]">
-                    <span className="font-bold text-zinc-100">{ov.birdy.displayName}</span>
-                    {ov.birdy.verified && <BadgeCheck size={14} className="text-ios-blue" />}
-                    <span className="text-zinc-500">@{ov.birdy.handle}</span>
-                </div>
-                <Btn variant={ov.birdy.verified ? 'ghost' : 'primary'} onClick={() => void toggleVerified()}>
-                    <BadgeCheck size={14} /> {ov.birdy.verified ? 'Remove verification' : 'Verify profile'}
-                </Btn>
-            </Card>
+            {ov.birdy.map(b => (
+                <Card key={b.handle} className="flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-2 text-[13px]">
+                        <span className="font-bold text-zinc-100">{b.displayName}</span>
+                        {b.verified && <BadgeCheck size={14} className="text-ios-blue" />}
+                        <span className="text-zinc-500">@{b.handle}</span>
+                    </div>
+                    <Btn variant={b.verified ? 'ghost' : 'primary'} onClick={() => void toggleVerified(b)}>
+                        <BadgeCheck size={14} /> {b.verified ? 'Remove verification' : 'Verify profile'}
+                    </Btn>
+                </Card>
+            ))}
 
             <Card title={`Posts (${ov.counts?.birdyPosts ?? items.length})`}>
                 {items.map(p => (
