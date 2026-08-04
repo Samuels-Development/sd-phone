@@ -33,6 +33,10 @@ local BASE = framework.name == 'esx'
 --   esx_garage (+ ESX variants)                    : owned_vehicles
 --       owner=`owner`, props=`vehicle` JSON (model hash, fuelLevel, engineHealth,
 --       bodyHealth), stored=`stored`/`state`, garage=`parking`/`garage`
+--   qs-advancedgarages                             : owned_vehicles (esx) / player_vehicles (qb)
+--       garage=`garage` ('OUT' while the car is out), state=`stored` (esx) or
+--       `state` (qb), impound=`impound_data` (JSON blob, '' when free),
+--       type=`type` ('vehicle'|'boat'|'plane')
 ---@type table Permissive fallback column profile for systems without an exact entry.
 local DEFAULT_PROFILE = {
     garage     = { 'garage', 'parking', 'garage_id', 'garagename' },
@@ -43,6 +47,7 @@ local DEFAULT_PROFILE = {
 }
 ---@type table<string, table> Exact column profiles, keyed by garage resource name.
 local PROFILES = {
+    ['qs-advancedgarages'] = { garage = { 'garage' },             state = { 'stored', 'state' }, impoundCol = 'impound_data' },
     ['qb-garages']         = { garage = { 'garage' },             state = { 'state' } },
     ['qbx_garages']        = { garage = { 'garage' },             state = { 'state' } },
     ['jg-advancedgarages'] = { garage = { 'garage_id', 'garage' },state = { 'in_garage' }, impoundCol = 'impound' },
@@ -251,6 +256,7 @@ local function loadGarageCollection()
         if ACTIVE == 'qb-garages'         then return exports['qb-garages']:getAllGarages() end
         if ACTIVE == 'jg-advancedgarages' then return exports['jg-advancedgarages']:getAllGarages() end
         if ACTIVE == 'cd_garage'          then return exports['cd_garage']:GetConfig() end
+        if ACTIVE == 'qs-advancedgarages' then return exports['qs-advancedgarages']:GetAllGarages(true) end
         return nil
     end)
     gcolCache, gcolAt = ok and data or nil, now
@@ -283,7 +289,11 @@ local function systemCoords(gcol, row, garageId)
             return g and (g.CenterOfZone or g.AccessPoint)
         end
         if not gcol then return nil end
-        if ACTIVE == 'qbx_garages' then
+        if ACTIVE == 'qs-advancedgarages' then
+            local g = garageId and gcol[garageId]
+            local c = g and g.coords
+            return c and (c.menuCoords or c.spawnCoords)
+        elseif ACTIVE == 'qbx_garages' then
             local g  = gcol[garageId]
             local ap = g and g.accessPoints and g.accessPoints[1]
             return ap and ap.coords
@@ -340,7 +350,20 @@ local function impoundCoords(gcol, row, garageId)
             return g and g.Coords
         end
         if not gcol then return nil end
-        if ACTIVE == 'qbx_garages' then
+        if ACTIVE == 'qs-advancedgarages' then
+            local own = garageId and gcol[garageId]
+            local oc  = own and own.isImpound and own.coords
+            if oc then return oc.menuCoords or oc.spawnCoords end
+            local fallback
+            for _, g in pairs(gcol) do
+                local c = g.isImpound and g.coords and (g.coords.menuCoords or g.coords.spawnCoords)
+                if c then
+                    if g.type == nil or g.type == 'vehicle' then return c end
+                    fallback = fallback or c
+                end
+            end
+            return fallback
+        elseif ACTIVE == 'qbx_garages' then
             local own = garageId and gcol[garageId]
             local ap  = own and own.type == 'depot' and own.accessPoints and own.accessPoints[1]
             if ap then return ap.coords end
@@ -423,7 +446,9 @@ function garages.list(source)
         end
 
         local garageName = pick(row, PROFILE.garage)
-        if type(garageName) ~= 'string' or garageName == '' then garageName = nil end
+        if type(garageName) ~= 'string' or garageName == '' or garageName:upper() == 'OUT' then
+            garageName = nil
+        end
 
         local rawModel = row.vehicle
         if type(rawModel) ~= 'string' or rawModel:sub(1, 1) == '{' then

@@ -15,8 +15,8 @@ return {
     -- Resources checked, in priority order, when System = 'auto'. The first
     -- one that's `started` wins. Add custom/renamed resources here.
     Resources = {
-        'jg-advancedgarages', 'qbx_garages', 'qb-garages', 'cd_garage',
-        'okokGarage', 'codem-garage', 'lunar_garage', 'nc_garage',
+        'qs-advancedgarages', 'jg-advancedgarages', 'qbx_garages', 'qb-garages',
+        'cd_garage', 'okokGarage', 'codem-garage', 'lunar_garage', 'nc_garage',
         'op_garages', 'esx_garage',
     },
 
@@ -40,10 +40,12 @@ return {
 
     -- Garage waypoint coordinates - used as a FALLBACK. The app first auto-reads
     -- a garage's coords from the running system's own export, so these systems
-    -- need NO setup: qbx_garages, qb-garages, jg-advancedgarages, cd_garage,
-    -- op-garages. Only systems without a usable export (esx, codem, okok, nc,
-    -- lunar) need entries here: key by the exact Location TEXT a stored OR
-    -- impounded vehicle shows (open one and copy it - e.g. a garage name, or
+    -- need NO setup: qs-advancedgarages, qbx_garages, qb-garages,
+    -- jg-advancedgarages, cd_garage, op-garages. Only systems without a usable
+    -- export (esx, codem, okok, nc, lunar) need entries here, plus any garage a
+    -- player built themselves in qs-advancedgarages (those live in
+    -- `player_garages`, not the config): key by the exact Location TEXT a
+    -- stored OR impounded vehicle shows (open one and copy it - e.g. a garage name, or
     -- 'Impound' to mark the impound lot) and map it to a vec2(x, y). Locations
     -- left out (and vehicles out on the street) simply don't get a button.
     Locations = {

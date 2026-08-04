@@ -1,5 +1,8 @@
 ---@type string[] Supported vehicle-key resources, in detection-priority order.
-local RESOURCES = { 'qbx_vehiclekeys', 'qb-vehiclekeys', 'qs-vehiclekeys', 'vehicles_keys', 'mk_vehiclekeys' }
+local RESOURCES = {
+    'qbx_vehiclekeys', 'qb-vehiclekeys', 'qs-vehiclekeys', 'Renewed-Vehiclekeys',
+    'dusa_vehiclekeys', 'wasabi_carlock', 'vehicles_keys', 'mk_vehiclekeys',
+}
 
 ---@type table Vehicle-lock module; the table returned at end of file. Reads and toggles lock
 ---state on the live entity found by plate; returns nil for vehicles not streamed nearby.
@@ -80,8 +83,9 @@ local function fobLights(veh)
 end
 
 ---Lock or unlock the nearby spawned vehicle for a plate, requesting network control first. Fires
----qbx_vehiclekeys' own lock path when active, else the native door lock + hazard flash; nil when
----not streamed nearby.
+---qbx_vehiclekeys' own lock path when active, or Renewed-Vehiclekeys' `vehicleLock` statebag; the
+---rest (wasabi_carlock, dusa_vehiclekeys, qs-vehiclekeys, qb) read the door lock straight off the
+---entity, so they get the native door lock + hazard flash. nil when not streamed nearby.
 ---@param plate string
 ---@param locked boolean true = lock, false = unlock
 ---@return boolean|nil locked the applied state, or nil if no nearby entity
@@ -92,10 +96,14 @@ function M.setLocked(plate, locked)
         NetworkRequestControlOfEntity(veh)
     end
 
+    local sys       = M.active()
     local lockstate = locked and 2 or 1
-    if M.active() == 'qbx_vehiclekeys' then
+    if sys == 'qbx_vehiclekeys' then
         TriggerServerEvent('qb-vehiclekeys:server:setVehLockState', NetworkGetNetworkIdFromEntity(veh), lockstate)
         PlaySoundFromEntity(-1, 'Remote_Control_Fob', veh, 'PI_Menu_Sounds', false, 0)
+        fobLights(veh)
+    elseif sys == 'Renewed-Vehiclekeys' then
+        Entity(veh).state:set('vehicleLock', { lock = lockstate, sound = true }, true)
         fobLights(veh)
     else
         SetVehicleDoorsLocked(veh, lockstate)
