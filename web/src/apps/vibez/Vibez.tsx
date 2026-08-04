@@ -5,7 +5,7 @@ import { useStatusBarLight } from '@/shell/useStatusBarLight';
 import { useDeckActive } from '@/shell/deckActive';
 import { setLaunchIntent } from '@/shell/launchIntent';
 import { useRefreshOnReconnect } from '@/hooks/useRefreshOnReconnect';
-import { useSessionState } from '@/hooks/useSessionState';
+import { clearSessionState, useSessionState } from '@/hooks/useSessionState';
 import { isVideoUrl } from '@/core/photosApi';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
@@ -84,6 +84,25 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
     );
 
     const bumpRefresh = useCallback(() => setRefreshKey(k => k + 1), []);
+
+    // bumpRefresh alone reloads the feeds but leaves the inbox count, the open viewer and the
+    // profile you had drilled into, all of which belong to the account being left.
+    const afterAccountChange = useCallback(() => {
+        clearSessionState('vibez:');
+        setTab('home');
+        setFeedTab('foryou');
+        setUpload(false);
+        setViewer(null);
+        setProfileHandle(null);
+        setCommentsPost(null);
+        setPosts([]);
+        setMe(null);
+        setUnread(0);
+        refreshAccounts();
+        bumpRefresh();
+        void apiCounts().then(setUnread);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [refreshAccounts, bumpRefresh]);
 
     // Content pushes reach only the phones showing Vibez, so the subscription follows the
     // foreground. AppDeck keeps this subtree alive, so returning to it is not a remount.
@@ -216,7 +235,7 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
                 onAuthed={() => {
                     setAuthed(true);
                     setJustAuthed(true);
-                    if (adding) { setAdding(false); refreshAccounts(); bumpRefresh(); }
+                    if (adding) { setAdding(false); afterAccountChange(); }
                 }}
                 onRequestReset={(id) => accountsRequestReset('vibez', id)}
                 onConfirmReset={(id, code, pw) => accountsConfirmReset('vibez', id, code, pw)}
@@ -258,9 +277,8 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
                         onOpenPost={openPostList}
                         onSignOut={() => {
                             void accountsSignOut('vibez').then(r => {
-                                refreshAccounts();
-                                if (r.switchedTo) bumpRefresh();
-                                else setAuthed(false);
+                                if (r.switchedTo) afterAccountChange();
+                                else { clearSessionState('vibez:'); refreshAccounts(); setAuthed(false); }
                             });
                         }}
                         onSwitchAccount={() => setSwitching(true)}
@@ -312,7 +330,7 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
                     app="vibez"
                     forceDark
                     onClose={() => setSwitching(false)}
-                    onSwitched={() => { refreshAccounts(); bumpRefresh(); }}
+                    onSwitched={afterAccountChange}
                     onAdd={() => setAdding(true)}
                 />
             )}

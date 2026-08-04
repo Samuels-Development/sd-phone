@@ -249,6 +249,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
         setProfileOpen(false); setProfileTarget(null); setProfile(null);
         setOpenPostId(null); setOpenConvoId(null); setOpenConvo(null);
         setPosts(null); setConvos([]); setNotifCount(0); setTab('home'); setFeed('all');
+        setComposing(false); setEditingProfile(false);
         void apiMe().then(s => { if (s.me) setMe(s.me); });
         refreshFeed();
     }

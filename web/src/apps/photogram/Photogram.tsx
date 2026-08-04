@@ -122,6 +122,31 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
         refreshCounts();
     }, [authed, refreshMe, refreshHome, refreshCounts]);
 
+    // Everything on screen belongs to the account that was signed in, so a change refetches all
+    // of it and closes whatever was open: a post detail or a profile drill-in from the previous
+    // account would otherwise sit there looking like this account's.
+    const afterAccountChange = useCallback(() => {
+        clearSessionState('photogram:');
+        setTab('home');
+        setDetail(null);
+        setViewHandle(null);
+        setFollows(null);
+        setCommentId(null);
+        setDmOpen(false);
+        setCreateOpen(false);
+        setEditing(false);
+        setActivity([]);
+        setRequests([]);
+        setExplore([]);
+        setComments({});
+        refreshAccounts();
+        refreshMe();
+        void refreshHome();
+        refreshCounts();
+        refreshActivity();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [refreshAccounts, refreshMe, refreshHome, refreshCounts, refreshActivity]);
+
     useEffect(() => { if (authed) refreshCounts(); }, [dmOpen, authed, refreshCounts]);
 
     // Content pushes reach only the phones showing Photogram, so the subscription follows the
@@ -282,7 +307,7 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
                 onAuthed={() => {
                     setAuthed(true);
                     setJustAuthed(true);
-                    if (adding) { setAdding(false); clearSessionState('photogram:'); refreshAccounts(); refreshMe(); void refreshHome(); refreshCounts(); }
+                    if (adding) { setAdding(false); afterAccountChange(); }
                 }}
                 onRequestReset={(id) => accountsRequestReset('photogram', id)}
                 onConfirmReset={(id, code, pw) => accountsConfirmReset('photogram', id, code, pw)}
@@ -363,7 +388,7 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
                 <AccountSwitcher
                     app="photogram"
                     onClose={() => setSwitching(false)}
-                    onSwitched={() => { clearSessionState('photogram:'); refreshAccounts(); refreshMe(); void refreshHome(); refreshCounts(); }}
+                    onSwitched={afterAccountChange}
                     onAdd={() => setAdding(true)}
                 />
             )}
@@ -412,11 +437,9 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
                     onSave={async p => { const updated = await apiUpdateProfile({ name: p.name, bio: p.bio, avatar: p.avatar, private: p.private }); if (updated) setMe(updated); setEditing(false); }}
                     onSignOut={() => {
                         setEditing(false);
-                        clearSessionState('photogram:');
                         void accountsSignOut('photogram').then(r => {
-                            refreshAccounts();
-                            if (r.switchedTo) { refreshMe(); void refreshHome(); refreshCounts(); }
-                            else setAuthed(false);
+                            if (r.switchedTo) afterAccountChange();
+                            else { clearSessionState('photogram:'); refreshAccounts(); setAuthed(false); }
                         });
                     }}
                     onSwitchAccount={() => { setEditing(false); setSwitching(true); }}

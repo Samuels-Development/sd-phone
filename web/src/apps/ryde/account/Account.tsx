@@ -37,6 +37,15 @@ export function Account({ onClose }: { onClose: () => void }) {
         void accountsSwitchable('ryde').then(d => setSavedAccounts(d.accounts.filter(a => a.username !== d.active)));
     }, []);
 
+    // Ryde keeps rides and the driver profile locally and only syncs them on mount, so without
+    // this wipe the new account inherits the previous one's history, earnings and driver status.
+    const afterAccountChange = useCallback(() => {
+        g.wipeAccount();
+        void accountsMe('ryde').then(s => setAuth(s.loggedIn, s.me));
+        refreshAccounts();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [refreshAccounts, setAuth]);
+
     useEffect(() => {
         void accountsMyNumber().then(setMyNumber);
         void accountsMyEmail().then(setMyEmails);
@@ -75,7 +84,10 @@ export function Account({ onClose }: { onClose: () => void }) {
                         : await accountsLogin('ryde', vals);
                     return { ok: r.ok, message: r.message };
                 }}
-                onAuthed={() => { setAdding(false); void accountsMe('ryde').then(s => setAuth(true, s.me)); }}
+                onAuthed={() => {
+                    if (adding) { setAdding(false); afterAccountChange(); }
+                    else void accountsMe('ryde').then(s => setAuth(true, s.me));
+                }}
                 onDismiss={adding ? () => setAdding(false) : onClose}
                 modal={adding}
                 onRequestReset={(id) => accountsRequestReset('ryde', id)}
@@ -91,12 +103,12 @@ export function Account({ onClose }: { onClose: () => void }) {
         const res = await accountsSignOut('ryde');
         setConfirmSignOut(false);
         if (res.switchedTo) {
-            const s = await accountsMe('ryde');
-            setAuth(s.loggedIn, s.me);
+            afterAccountChange();
         } else {
+            g.wipeAccount();
             setAuth(false, null);
+            refreshAccounts();
         }
-        refreshAccounts();
     }
 
     async function deleteAccount() {
@@ -196,7 +208,7 @@ export function Account({ onClose }: { onClose: () => void }) {
                 <AccountSwitcher
                     app="ryde"
                     onClose={() => setSwitching(false)}
-                    onSwitched={() => { void accountsMe('ryde').then(s => setAuth(s.loggedIn, s.me)); refreshAccounts(); }}
+                    onSwitched={afterAccountChange}
                     onAdd={() => setAdding(true)}
                 />
             )}

@@ -5,7 +5,7 @@ import { isFiveM } from '@/core/nui';
 import { t } from '@/i18n';
 import { readJson, writeJson } from '@/lib/storage';
 import { useStatusBarLight } from '@/shell/useStatusBarLight';
-import { useSessionState } from '@/hooks/useSessionState';
+import { clearSessionState, useSessionState } from '@/hooks/useSessionState';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useDeckActive } from '@/shell/deckActive';
 import { useAppAuth } from '@/hooks/useAppAuth';
@@ -200,6 +200,22 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
         if (s) { setDeck(s.deck); setCanReset(s.canReset); }
     }, []);
 
+    // A new account changes who you are, not just what the deck holds, so this reloads the whole
+    // cherryState (me, profile, deck, matches) and drops the screen you were on: an open chat or
+    // a half-scrolled deck belongs to the account you just left.
+    const afterAccountChange = useCallback(() => {
+        clearSessionState('cherry:');
+        setView('deck');
+        setProfile(null);
+        setDeck([]);
+        setMatches([]);
+        setLockedIds([]);
+        setIncomingMatch(null);
+        setSendError(null);
+        refreshAccounts();
+        setStateNonce(n => n + 1);
+    }, [refreshAccounts, setView]);
+
     const openChatRef = useRef<string | null>(null);
     useEffect(() => { openChatRef.current = typeof view === 'object' ? view.chatId : null; }, [view]);
 
@@ -290,7 +306,7 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
                 onAuthed={() => {
                     setAuthed(true);
                     setJustAuthed(true);
-                    if (adding) { setAdding(false); refreshAccounts(); void refreshDeck(); }
+                    if (adding) { setAdding(false); afterAccountChange(); }
                 }}
                 onRequestReset={(id) => accountsRequestReset('cherry', id)}
                 onConfirmReset={(id, code, pw) => accountsConfirmReset('cherry', id, code, pw)}
@@ -344,9 +360,8 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
                                 onChange={setProfile}
                                 onSignOut={() => {
                                     void accountsSignOut('cherry').then(r => {
-                                        refreshAccounts();
-                                        if (r.switchedTo) setStateNonce(n => n + 1);
-                                        else setAuthed(false);
+                                        if (r.switchedTo) afterAccountChange();
+                                        else { clearSessionState('cherry:'); refreshAccounts(); setAuthed(false); }
                                     });
                                 }}
                                 onSwitchAccount={() => setSwitching(true)}
@@ -406,7 +421,7 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
                 <AccountSwitcher
                     app="cherry"
                     onClose={() => setSwitching(false)}
-                    onSwitched={() => { refreshAccounts(); void refreshDeck(); }}
+                    onSwitched={afterAccountChange}
                     onAdd={() => setAdding(true)}
                 />
             )}
