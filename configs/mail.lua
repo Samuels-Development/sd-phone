@@ -8,9 +8,10 @@ return {
     -- on any other domain are rejected.
     Domain = 'lifeinvader.com',
 
-    -- Per-player cap on simultaneously logged-in accounts. Prevents one
-    -- player hoarding hundreds of inboxes.
-    MaxAccountsPerPlayer = 5,
+    -- Per-player cap on simultaneously logged-in accounts. How many a character may CREATE is
+    -- configs/accounts.lua (Accounts.PerApp.mail, else MaxPerApp), shared with every other app;
+    -- keep this at or above that or a player cannot hold all the mailboxes they are allowed.
+    MaxAccountsPerPlayer = 3,
 
     -- Hard cap on stored messages per account. Once exceeded, the oldest
     -- messages are pruned. Tunes the JSON row size.

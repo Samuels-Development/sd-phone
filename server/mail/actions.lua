@@ -45,9 +45,6 @@ local DRAFT_GAP_MS = 1000
 ---@type integer Minimum gap between accepted sign-ups, per character.
 local SIGNUP_GAP_MS = 30000
 
----@type integer Accounts one character may ever create. MaxAccountsPerPlayer only caps how many
----are signed in at once, and signing out leaves the row behind, so the loop re-arms it forever.
-local MAX_ACCOUNTS_CREATED = 10
 
 ---@type integer Rolling window over the per-message mailbox writes, and the calls allowed inside
 ---it. Each one decodes and re-encodes the whole messages blob, so the byte ceiling alone leaves
@@ -316,9 +313,13 @@ function actions.signUp(source, payload)
     if not util.cooldown(me.cid, 'mail:signUp', SIGNUP_GAP_MS) then
         return fail('Please wait before creating another account')
     end
-    if store.countAccountsCreatedBy(me.cid) >= MAX_ACCOUNTS_CREATED then
-        return fail(('You can create at most %d accounts'):format(MAX_ACCOUNTS_CREATED))
-    end
+    -- The same cap every other app gets, from configs/accounts.lua, but counted off Mail's own
+    -- created_by_cid: it predates the accounts engine, so it is accurate for mailboxes made
+    -- before the engine existed. Checked here rather than left to createAccount below, whose
+    -- refusal that call discards - which is how a 4th mailbox used to get written with no
+    -- engine account behind it, unrecoverable and missing from the Passwords app.
+    local capped = acctActions.accountCapMessage('mail', store.countAccountsCreatedBy(me.cid))
+    if capped then return fail(capped) end
 
     local phone = (tostring(payload.phone or '')):gsub('%D', '')
     if phone ~= '' and (#phone < 7 or #phone > 15) then
@@ -340,10 +341,17 @@ function actions.signUp(source, payload)
     end
     store.addSession(email, me.cid)
 
-    acctActions.createAccount('mail', {
+    -- Ordered after the mail row on purpose: createAccount validates the recovery email against
+    -- phone_mail_accounts, so the mailbox has to exist first. A refusal here leaves a mailbox
+    -- with no engine account, which cannot be recovered or saved to Passwords, so it is undone.
+    local acctRes = acctActions.createAccount('mail', {
         username = email, password = password, name = displayName,
         email = email, phone = phone ~= '' and phone or nil,
     }, me.cid)
+    if not acctRes.success then
+        store.deleteAccount(email)
+        return acctRes
+    end
 
     local acc = store.getAccount(email)
     if not acc then return fail('Account vanished after creation') end

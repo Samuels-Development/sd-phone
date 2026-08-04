@@ -114,6 +114,23 @@ local function accountLimit(app)
     return n < 0 and 0 or math.floor(n)
 end
 
+---@type fun(app: string): integer Public alias, so an app that owns its own registration (Mail)
+---caps itself from configs/accounts.lua instead of carrying a second number of its own.
+actions.accountLimit = accountLimit
+
+---The refusal to hand back when `cid` has already created as many accounts in `app` as the
+---config allows; nil while there is room. 0 configured means unlimited.
+---@param app string account app key
+---@param count integer accounts this character has created in the app
+---@return string|nil refusal
+function actions.accountCapMessage(app, count)
+    local limit = accountLimit(app)
+    if limit <= 0 or count < limit then return nil end
+    return limit == 1
+        and 'You already have an account for this app'
+        or ('You can have at most %d accounts for this app'):format(limit)
+end
+
 ---Validates an optional recovery phone: nil when blank, otherwise 7-15 digits.
 ---@param raw any client-supplied phone number
 ---@return string|nil phone, string|nil err
@@ -159,12 +176,8 @@ function actions.createAccount(app, payload, cid)
     -- Accounts may share a recovery email and number; what caps a character is how many they
     -- have created here. Usernames stay unique per app, so the accounts remain distinguishable.
     if cid then
-        local limit = accountLimit(app)
-        if limit > 0 and store.countAccountsFor(app, cid) >= limit then
-            return fail(limit == 1
-                and 'You already have an account for this app'
-                or ('You can have at most %d accounts for this app'):format(limit))
-        end
+        local capped = actions.accountCapMessage(app, store.countAccountsFor(app, cid))
+        if capped then return fail(capped) end
     end
 
     local id = store.insertAccount(app, username, displayName, store.hashPassword(password), email, phone, cid)
