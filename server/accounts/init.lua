@@ -38,40 +38,102 @@ lib.callback.register('sd-phone:server:accounts:savePassword',   function(src, p
 lib.callback.register('sd-phone:server:accounts:listPasswords',  function(src)          return actions.listPasswords(src) end)
 lib.callback.register('sd-phone:server:accounts:deletePassword', function(src, payload) return actions.deletePassword(src, payload) end)
 
----@type string[] Tables truncated by /wipephoneaccounts.
-local WIPE_TABLES = {
-    'phone_app_accounts',
-    'phone_app_sessions',
-    'phone_passwords',
-    'phone_mail_accounts',
-    'phone_birdy_profiles',
-    'phone_birdy_posts',
-    'phone_birdy_likes',
-    'phone_birdy_reposts',
-    'phone_birdy_follows',
-    'phone_birdy_dms',
-    'phone_birdy_notifications',
+---@type table<string, string[]> Every content table an account app owns, children before parents.
+---Order matters: these are DELETEs, not TRUNCATEs, because MySQL refuses to truncate any table a
+---foreign key points at, and three constraints point at phone_birdy_posts alone.
+local APP_TABLES = {
+    mail = {
+        'phone_mail_saved_emails', 'phone_mail_sessions', 'phone_mail_accounts',
+    },
+    birdy = {
+        'phone_birdy_notifications', 'phone_birdy_dms', 'phone_birdy_follows',
+        'phone_birdy_reposts', 'phone_birdy_likes', 'phone_birdy_posts', 'phone_birdy_profiles',
+    },
+    photogram = {
+        'phone_photogram_story_views', 'phone_photogram_stories', 'phone_photogram_comment_likes',
+        'phone_photogram_comments', 'phone_photogram_saves', 'phone_photogram_likes',
+        'phone_photogram_dms', 'phone_photogram_notifications', 'phone_photogram_follows',
+        'phone_photogram_posts', 'phone_photogram_profiles',
+    },
+    cherry = {
+        'phone_cherry_messages', 'phone_cherry_matches', 'phone_cherry_swipes',
+        'phone_cherry_blocks', 'phone_cherry_profiles',
+    },
+    vibez = {
+        'phone_vibez_comment_likes', 'phone_vibez_comments', 'phone_vibez_saves',
+        'phone_vibez_likes', 'phone_vibez_notifications', 'phone_vibez_follows',
+        'phone_vibez_posts', 'phone_vibez_profiles',
+    },
+    ryde = { 'phone_ryde_rides', 'phone_ryde_drivers' },
 }
 
----/wipephoneaccounts - truncates every table in WIPE_TABLES (admin-only), each TRUNCATE
----pcall-guarded; runnable from the server console.
----@param source integer player server id (0 from console)
-lib.addCommand('wipephoneaccounts', {
-    help = 'Wipe EVERY phone app account (mail, birdy, photogram, cherry, vibez), all birdy content, and the passwords vault',
-    restricted = 'group.admin',
-}, function(source)
-    local wiped, failed = 0, 0
-    for i = 1, #WIPE_TABLES do
-        local okTruncate = pcall(function()
-            MySQL.query.await('TRUNCATE TABLE ' .. WIPE_TABLES[i])
+---@type string[] APP_TABLES keys in a stable order, for the help text and the wipe-everything pass.
+local APP_ORDER = { 'mail', 'birdy', 'photogram', 'cherry', 'vibez', 'ryde' }
+
+---Empties one table, swallowing the error when it does not exist on this install.
+---@param tbl string table name
+---@return integer removed rows deleted (0 on failure)
+local function clearTable(tbl)
+    local okDel, res = pcall(function() return MySQL.update.await('DELETE FROM ' .. tbl) end)
+    return okDel and (tonumber(res) or 0) or 0
+end
+
+---Wipes one app: its content tables, then its credentials, sessions and saved vault logins.
+---@param app string account app key
+---@return integer removed
+local function wipeApp(app)
+    local removed = 0
+    for _, tbl in ipairs(APP_TABLES[app]) do removed = removed + clearTable(tbl) end
+    for _, tbl in ipairs({ 'phone_app_accounts', 'phone_app_sessions', 'phone_passwords' }) do
+        local okDel, res = pcall(function()
+            return MySQL.update.await(('DELETE FROM %s WHERE app = ?'):format(tbl), { app })
         end)
-        if okTruncate then wiped = wiped + 1 else failed = failed + 1 end
+        removed = removed + (okDel and (tonumber(res) or 0) or 0)
+    end
+    return removed
+end
+
+---/wipephoneaccounts [app] - wipes every phone app account, or one app's, along with all of that
+---app's content and its saved Passwords-app logins. Admin-only, runnable from the server console.
+---Content goes too on purpose: these apps key their rows by username, so leaving them behind means
+---re-registering a name silently inherits the old account's posts, matches and messages.
+---@param source integer player server id (0 from console)
+---@param args table { app?: string }
+lib.addCommand('wipephoneaccounts', {
+    help = 'Wipe phone app accounts and all their content. No argument wipes every app; pass one of mail, birdy, photogram, cherry, vibez, ryde to wipe just that one.',
+    params = {
+        { name = 'app', type = 'string', help = 'mail | birdy | photogram | cherry | vibez | ryde (blank = all)', optional = true },
+    },
+    restricted = 'group.admin',
+}, function(source, args)
+    local app = args and args.app and args.app:lower() or nil
+    if app == '' or app == 'all' then app = nil end
+
+    if app and not APP_TABLES[app] then
+        local msg = ('unknown app "%s". Use one of: %s'):format(app, table.concat(APP_ORDER, ', '))
+        print(('^1[sd-phone:accounts]^0 %s'):format(msg))
+        if source and source > 0 then
+            TriggerClientEvent('ox_lib:notify', source, {
+                title = 'Phone accounts', description = msg, type = 'error',
+            })
+        end
+        return
     end
 
-    local msg = ('wiped %d account table%s%s'):format(
-        wiped, wiped == 1 and '' or 's',
-        failed > 0 and (' (%d missing/failed)'):format(failed) or ''
-    )
+    local removed = 0
+    if app then
+        removed = wipeApp(app)
+    else
+        for _, key in ipairs(APP_ORDER) do removed = removed + wipeApp(key) end
+        -- Anything left in the shared tables belongs to an app with no content of its own.
+        removed = removed + clearTable('phone_app_sessions')
+        removed = removed + clearTable('phone_app_accounts')
+        removed = removed + clearTable('phone_passwords')
+    end
+
+    local msg = ('wiped %s (%d row%s)'):format(
+        app and (app .. ' accounts') or 'every phone app account',
+        removed, removed == 1 and '' or 's')
     print(('^3[sd-phone:accounts]^0 %s'):format(msg))
     if source and source > 0 then
         TriggerClientEvent('ox_lib:notify', source, {
@@ -80,27 +142,20 @@ lib.addCommand('wipephoneaccounts', {
     end
 end)
 
----/wipephotogram - deletes Photogram accounts, their sessions, and saved Passwords-app logins,
----leaving every other app's accounts intact (admin-only).
+---/wipephotogram - kept for the muscle memory; identical to `/wipephoneaccounts photogram`. It
+---used to leave the content tables behind, which meant re-registering a username inherited the
+---old account's posts and followers.
 ---@param source integer player server id (0 from console)
 lib.addCommand('wipephotogram', {
-    help = 'Wipe ALL Photogram accounts (plus their sessions and saved logins). Everyone must re-register.',
+    help = 'Wipe ALL Photogram accounts and their content. Same as /wipephoneaccounts photogram.',
     restricted = 'group.admin',
 }, function(source)
-    local removed = 0
-    local ok = pcall(function()
-        removed = MySQL.update.await('DELETE FROM phone_app_accounts WHERE app = ?', { 'photogram' }) or 0
-        MySQL.update.await('DELETE FROM phone_app_sessions WHERE app = ?', { 'photogram' })
-        MySQL.update.await('DELETE FROM phone_passwords   WHERE app = ?', { 'photogram' })
-    end)
-
-    local msg = ok
-        and ('wiped %d Photogram account%s'):format(removed, removed == 1 and '' or 's')
-        or  'failed to wipe Photogram accounts (see server console)'
+    local removed = wipeApp('photogram')
+    local msg = ('wiped photogram accounts (%d row%s)'):format(removed, removed == 1 and '' or 's')
     print(('^3[sd-phone:accounts]^0 %s'):format(msg))
     if source and source > 0 then
         TriggerClientEvent('ox_lib:notify', source, {
-            title = 'Photogram', description = msg, type = ok and 'success' or 'error',
+            title = 'Photogram', description = msg, type = 'success',
         })
     end
 end)
