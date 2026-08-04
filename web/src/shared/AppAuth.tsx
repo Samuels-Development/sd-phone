@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AtSign, ChevronLeft, Eye, EyeOff, KeyRound, Phone, ShieldCheck, X } from 'lucide-react';
+import { AtSign, ChevronLeft, Eye, EyeOff, KeyRound, Phone, ShieldCheck, UserRound, X } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { useStatusBarLight } from '@/shell/useStatusBarLight';
@@ -42,14 +42,17 @@ export interface AppAuthProps {
     onSaveCredentials?: (values: Record<string, string>) => void | Promise<unknown>;
     savedLogin?: { username: string; password: string } | null;
     myNumber?: string | null;
-    myEmail?: string | null;
+    myEmails?: string[] | null;
+    /** Saved logins for this app, already minus the one in use. Empty hides the picker. */
+    savedAccounts?: { username: string; name?: string }[];
+    onPickAccount?: (username: string) => Promise<{ ok: boolean; message?: string }>;
 }
 
 type Screen = 'welcome' | 'create' | 'login' | 'reset' | 'resetCode' | 'success';
 
 const MODAL_OUT_MS = 300;
 
-export function AppAuth({ appName, tagline, icon, theme, fields, onAuthed, onDismiss, modal = false, onSubmit, onRequestReset, onConfirmReset, onSuggestCode, onSaveCredentials, savedLogin, myNumber, myEmail }: AppAuthProps) {
+export function AppAuth({ appName, tagline, icon, theme, fields, onAuthed, onDismiss, modal = false, onSubmit, onRequestReset, onConfirmReset, onSuggestCode, onSaveCredentials, savedLogin, myNumber, myEmails, savedAccounts, onPickAccount }: AppAuthProps) {
     const [screen, setScreen] = useSessionState<Screen>(`auth:${appName}:screen`, 'welcome');
     const [resetIdentity, setResetIdentity] = useSessionState<string>(`auth:${appName}:resetIdentity`, '');
     const [notice, setNotice] = useState<string | null>(null);
@@ -148,6 +151,9 @@ export function AppAuth({ appName, tagline, icon, theme, fields, onAuthed, onDis
                         onLogin={() => go('login')}
                         onForgot={onRequestReset ? () => go('reset') : undefined}
                         onDismiss={onDismiss ? requestDismiss : undefined}
+                        savedAccounts={savedAccounts}
+                        onPickAccount={onPickAccount}
+                        onAuthed={() => beginSuccess('login', {})}
                     />
                 </div>
                 <div className="h-full w-1/2 shrink-0">
@@ -182,7 +188,7 @@ export function AppAuth({ appName, tagline, icon, theme, fields, onAuthed, onDis
                             fields={fields}
                             notice={notice}
                             myNumber={myNumber}
-                            myEmail={myEmail}
+                            myEmails={myEmails}
                             savedUsername={savedLogin?.username}
                             quickBusy={quickBusy}
                             onQuickLogin={savedLogin ? () => void quickLogin() : undefined}
@@ -208,7 +214,7 @@ export function AppAuth({ appName, tagline, icon, theme, fields, onAuthed, onDis
     );
 }
 
-function Welcome({ appName, tagline, icon, theme, onCreate, onLogin, onForgot, onDismiss }: {
+function Welcome({ appName, tagline, icon, theme, onCreate, onLogin, onForgot, onDismiss, savedAccounts, onPickAccount, onAuthed }: {
     appName:  string;
     tagline:  string;
     icon?:    string;
@@ -217,9 +223,26 @@ function Welcome({ appName, tagline, icon, theme, onCreate, onLogin, onForgot, o
     onLogin:  () => void;
     onForgot?: () => void;
     onDismiss?: () => void;
+    savedAccounts?: { username: string; name?: string }[];
+    onPickAccount?: (username: string) => Promise<{ ok: boolean; message?: string }>;
+    onAuthed: () => void;
 }) {
     const light    = theme.welcomeText === 'light';
     const ctaWhite = !!theme.welcomeCtaWhite;
+
+    const [picking, setPicking] = useState<string | null>(null);
+    const [pickError, setPickError] = useState<string | null>(null);
+    const accounts = onPickAccount ? (savedAccounts ?? []) : [];
+
+    async function pick(username: string) {
+        if (picking || !onPickAccount) return;
+        setPicking(username);
+        setPickError(null);
+        const res = await onPickAccount(username);
+        setPicking(null);
+        if (res.ok) onAuthed();
+        else setPickError(res.message ?? t('common.couldNotSignIn', 'Could not sign in to that account'));
+    }
     return (
         <div
             className={`relative flex h-full flex-col ${light ? 'text-white' : 'text-black'}`}
@@ -252,6 +275,40 @@ function Welcome({ appName, tagline, icon, theme, onCreate, onLogin, onForgot, o
                 </p>
             </div>
             <div className="px-6 pb-10">
+                {accounts.length > 0 && (
+                    <div className="mb-4">
+                        <p className="px-1 pb-2 text-[13px] font-semibold uppercase tracking-wide" style={{ color: light ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.45)' }}>
+                            {t('common.continueAs', 'Continue as')}
+                        </p>
+                        <div className="overflow-hidden rounded-[14px]" style={{ background: light ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.05)' }}>
+                            {accounts.map((a, i) => (
+                                <button
+                                    key={a.username}
+                                    type="button"
+                                    onClick={() => void pick(a.username)}
+                                    disabled={!!picking}
+                                    className="flex w-full items-center gap-3 px-4 py-3 text-left active:opacity-70 disabled:opacity-50"
+                                    style={i > 0 ? { borderTop: `0.5px solid ${light ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)'}` } : undefined}
+                                >
+                                    <span
+                                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                                        style={{ background: light ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.07)' }}
+                                    >
+                                        <UserRound className="h-[18px] w-[18px]" strokeWidth={2.2} />
+                                    </span>
+                                    <span className="flex min-w-0 flex-1 flex-col">
+                                        <span className="truncate text-[16px] font-semibold">{a.name || a.username}</span>
+                                        <span className="truncate text-[13px]" style={{ color: light ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>@{a.username}</span>
+                                    </span>
+                                    <span className="shrink-0 text-[15px] font-bold" style={{ color: ctaWhite ? '#ffffff' : theme.accent }}>
+                                        {picking === a.username ? t('common.pleaseWait', 'Please wait…') : t('common.logIn', 'Log in')}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                        {pickError && <p className="px-1 pt-2 text-[13px]" style={{ color: '#e0245e' }}>{pickError}</p>}
+                    </div>
+                )}
                 <button
                     type="button"
                     onClick={onCreate}
@@ -333,7 +390,7 @@ function generateStrongPassword() {
     return `${group(0)}-${group(6)}-${group(12)}`;
 }
 
-function AuthForm({ mode, appName, icon, theme, fields, notice, myNumber, myEmail, savedUsername, quickBusy, onQuickLogin, onBack, onAuthed, onSubmit }: {
+function AuthForm({ mode, appName, icon, theme, fields, notice, myNumber, myEmails, savedUsername, quickBusy, onQuickLogin, onBack, onAuthed, onSubmit }: {
     mode:     'create' | 'login';
     appName:  string;
     icon?:    string;
@@ -341,7 +398,7 @@ function AuthForm({ mode, appName, icon, theme, fields, notice, myNumber, myEmai
     fields:   AppAuthField[];
     notice?:  string | null;
     myNumber?: string | null;
-    myEmail?: string | null;
+    myEmails?: string[] | null;
     savedUsername?: string;
     quickBusy?: boolean;
     onQuickLogin?: () => void;
@@ -374,12 +431,26 @@ function AuthForm({ mode, appName, icon, theme, fields, notice, myNumber, myEmai
         if (focusingNewPw) setSuggestedPw(generateStrongPassword());
     }, [focusedKey]);
 
-    let fill: { value: string; display: string; sub: string; icon: React.ReactNode } | null = null;
+    // One Mail account is the common case; several is why the bar cycles rather than picking for
+    // you, since only the player knows which address they want on this account.
+    const emails = myEmails ?? [];
+    const [emailPick, setEmailPick] = useState(0);
+    const chosenEmail = emails.length > 0 ? emails[emailPick % emails.length] : null;
+
+    let fill: { value: string; display: string; sub: string; icon: React.ReactNode; onCycle?: () => void } | null = null;
     if (focusedField && !(values[focusedField.key] ?? '')) {
         if (focusedField.type === 'tel' && myNumber) {
             fill = { value: myNumber, display: formatPhone(myNumber), sub: t('common.fromYourPhoneNumber', 'From your phone number'), icon: <Phone className="h-[20px] w-[20px]" strokeWidth={2.2} /> };
-        } else if (focusedField.suffix && myEmail) {
-            fill = { value: myEmail.split('@')[0], display: myEmail, sub: t('common.fromYourMailAccount', 'From your Mail account'), icon: <AtSign className="h-[20px] w-[20px]" strokeWidth={2.2} /> };
+        } else if (focusedField.suffix && chosenEmail) {
+            fill = {
+                value: chosenEmail.split('@')[0],
+                display: chosenEmail,
+                sub: emails.length > 1
+                    ? t('common.fromYourMailAccountN', 'Mail account {n} of {total} · tap to change', { n: String((emailPick % emails.length) + 1), total: String(emails.length) })
+                    : t('common.fromYourMailAccount', 'From your Mail account'),
+                icon: <AtSign className="h-[20px] w-[20px]" strokeWidth={2.2} />,
+                onCycle: emails.length > 1 ? () => setEmailPick(i => i + 1) : undefined,
+            };
         } else if (focusingNewPw && suggestedPw) {
             fill = { value: suggestedPw, display: t('common.useStrongPassword', 'Use a strong password'), sub: t('common.createdFor', 'Created for {appName}', { appName }), icon: <KeyRound className="h-[20px] w-[20px]" strokeWidth={2.2} /> };
         }
@@ -582,6 +653,7 @@ function AuthForm({ mode, appName, icon, theme, fields, notice, myNumber, myEmai
                 main={fill?.display ?? ''}
                 sub={fill?.sub ?? ''}
                 accent={theme.accent}
+                onCycle={fill?.onCycle}
                 onPick={() => {
                     if (!focusedField || !fill) return;
                     if (focusedField.type === 'password') fillGenerated(fill.value);
@@ -994,13 +1066,14 @@ function Field({ label, value, onChange, type, last, suffix, onFocus, onBlur, re
     );
 }
 
-function SuggestionBar({ show, icon, main, sub, accent, onPick }: {
+function SuggestionBar({ show, icon, main, sub, accent, onPick, onCycle }: {
     show: boolean;
     icon: React.ReactNode;
     main: string;
     sub:  string;
     accent: string;
     onPick: () => void;
+    onCycle?: () => void;
 }) {
     const [mounted, setMounted] = useState(false);
     useEffect(() => { if (show) setMounted(true); }, [show]);
@@ -1030,10 +1103,16 @@ function SuggestionBar({ show, icon, main, sub, accent, onPick }: {
                 >
                     {c.icon}
                 </span>
-                <span className="min-w-0 flex-1">
+                <button
+                    type="button"
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={onCycle}
+                    disabled={!onCycle}
+                    className="min-w-0 flex-1 text-left disabled:active:opacity-100 active:opacity-60"
+                >
                     <span className="block truncate text-[18px] font-bold text-black">{c.main}</span>
                     <span className="block text-[14.5px] font-medium text-black/55">{c.sub}</span>
-                </span>
+                </button>
                 <button
                     type="button"
                     onMouseDown={e => e.preventDefault()}

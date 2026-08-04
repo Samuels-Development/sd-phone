@@ -5,7 +5,7 @@ import { t } from '@/i18n';
 import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { Toggle } from '@/ui/Toggle';
-import { apiDeleteAccount, apiLogout, apiUpdateProfile } from '../birdyApi';
+import { apiDeleteAccount, apiUpdateProfile } from '../birdyApi';
 import { accountsForgetPassword } from '@/core/accountsApi';
 import { ChangePasswordPage } from '@/shared/ChangePasswordPage';
 import { BG, BLUE, type BirdyProfile } from '../data';
@@ -46,8 +46,7 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onSwitchAcc
         if (p) dismiss(() => onSaved(p));
     }
 
-    async function signOut() {
-        await apiLogout();
+    function signOut() {
         onSignOut();
     }
 

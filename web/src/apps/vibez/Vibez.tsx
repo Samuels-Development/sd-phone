@@ -13,7 +13,7 @@ import { useAppAuth } from '@/hooks/useAppAuth';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { AppAuth } from '@/shared/AppAuth';
 import { AccountSwitcher } from '@/shared/AccountSwitcher';
-import { MAIL_DOMAIN, accountsConfirmReset, accountsLogin, accountsLogout, accountsMe, accountsRegister, accountsRequestReset, accountsSavePassword, accountsSuggestCode } from '@/core/accountsApi';
+import { MAIL_DOMAIN, accountsConfirmReset, accountsLogin, accountsMe, accountsRegister, accountsRequestReset, accountsSavePassword, accountsSignOut, accountsSuggestCode, accountsSwitch } from '@/core/accountsApi';
 import { t } from '@/i18n';
 import { ACCENT, GRAD_FROM, GRAD_TO, fmt, type VLive, type VPost, type VProfile } from './data';
 import {
@@ -34,7 +34,7 @@ type Tab = 'home' | 'discover' | 'inbox' | 'profile';
 interface ViewerState { posts: VPost[]; index: number }
 
 export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
-    const { authed, setAuthed, authChecked, justAuthed, setJustAuthed, myNumber, myEmail, savedLogin } = useAppAuth('vibez',
+    const { authed, setAuthed, authChecked, justAuthed, setJustAuthed, myNumber, myEmails, savedLogin, savedAccounts, refreshAccounts } = useAppAuth('vibez',
         () => accountsMe('vibez').then(s => s.loggedIn));
 
     useStatusBarLight(authed ? true : null);
@@ -199,7 +199,9 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
                 icon="vibez"
                 theme={{ accent: ACCENT, welcomeBg: '#0a0518', welcomeText: 'light' }}
                 myNumber={myNumber}
-                myEmail={myEmail}
+                myEmails={myEmails}
+                savedAccounts={savedAccounts}
+                onPickAccount={u => accountsSwitch('vibez', u)}
                 savedLogin={adding ? null : savedLogin}
                 onDismiss={adding ? () => setAdding(false) : undefined}
                 modal={adding}
@@ -214,7 +216,7 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
                 onAuthed={() => {
                     setAuthed(true);
                     setJustAuthed(true);
-                    if (adding) { setAdding(false); bumpRefresh(); }
+                    if (adding) { setAdding(false); refreshAccounts(); bumpRefresh(); }
                 }}
                 onRequestReset={(id) => accountsRequestReset('vibez', id)}
                 onConfirmReset={(id, code, pw) => accountsConfirmReset('vibez', id, code, pw)}
@@ -254,7 +256,13 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
                 {tab === 'profile' && (
                     <Profile
                         onOpenPost={openPostList}
-                        onSignOut={() => { void accountsLogout('vibez'); setAuthed(false); }}
+                        onSignOut={() => {
+                            void accountsSignOut('vibez').then(r => {
+                                refreshAccounts();
+                                if (r.switchedTo) bumpRefresh();
+                                else setAuthed(false);
+                            });
+                        }}
                         onSwitchAccount={() => setSwitching(true)}
                         refreshKey={refreshKey}
                     />
@@ -304,7 +312,7 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
                     app="vibez"
                     forceDark
                     onClose={() => setSwitching(false)}
-                    onSwitched={bumpRefresh}
+                    onSwitched={() => { refreshAccounts(); bumpRefresh(); }}
                     onAdd={() => setAdding(true)}
                 />
             )}

@@ -12,7 +12,7 @@ import { useAppAuth } from '@/hooks/useAppAuth';
 import { AppAuth } from '@/shared/AppAuth';
 import { AccountSwitcher } from '@/shared/AccountSwitcher';
 import { AlertDialog } from '@/ui/AlertDialog';
-import { MAIL_DOMAIN, accountsConfirmReset, accountsForgetPassword, accountsLogin, accountsLogout, accountsMe, accountsRegister, accountsRequestReset, accountsSavePassword, accountsSuggestCode } from '@/core/accountsApi';
+import { MAIL_DOMAIN, accountsConfirmReset, accountsForgetPassword, accountsLogin, accountsLogout, accountsMe, accountsRegister, accountsRequestReset, accountsSavePassword, accountsSignOut, accountsSuggestCode, accountsSwitch } from '@/core/accountsApi';
 import { appendThreadMessage, patchThreadMessage, toggleReactionLocal } from '@/shared/chat/messagesApi';
 import type { Message, Reaction } from '@/shared/chat/data';
 import type { MessageDraft } from '@/shared/chat/ChatView';
@@ -30,7 +30,7 @@ import { MatchChat } from './MatchChat';
 type View = 'deck' | 'profile' | 'matches' | { chatId: string };
 
 export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
-    const { authed, setAuthed, authChecked, justAuthed, setJustAuthed, myNumber, myEmail, savedLogin } = useAppAuth('cherry',
+    const { authed, setAuthed, authChecked, justAuthed, setJustAuthed, myNumber, myEmails, savedLogin, savedAccounts, refreshAccounts } = useAppAuth('cherry',
         () => accountsMe('cherry').then(s => s.loggedIn));
 
     useStatusBarLight(authed ? false : null);
@@ -262,7 +262,9 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
                     welcomeCtaWhite: true,
                 }}
                 myNumber={myNumber}
-                myEmail={myEmail}
+                myEmails={myEmails}
+                savedAccounts={savedAccounts}
+                onPickAccount={u => accountsSwitch('cherry', u)}
                 savedLogin={adding ? null : savedLogin}
                 onDismiss={adding ? () => setAdding(false) : undefined}
                 modal={adding}
@@ -288,7 +290,7 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
                 onAuthed={() => {
                     setAuthed(true);
                     setJustAuthed(true);
-                    if (adding) { setAdding(false); void refreshDeck(); }
+                    if (adding) { setAdding(false); refreshAccounts(); void refreshDeck(); }
                 }}
                 onRequestReset={(id) => accountsRequestReset('cherry', id)}
                 onConfirmReset={(id, code, pw) => accountsConfirmReset('cherry', id, code, pw)}
@@ -340,7 +342,13 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
                             <EditProfile
                                 profile={profile}
                                 onChange={setProfile}
-                                onSignOut={() => { void accountsLogout('cherry'); setAuthed(false); }}
+                                onSignOut={() => {
+                                    void accountsSignOut('cherry').then(r => {
+                                        refreshAccounts();
+                                        if (r.switchedTo) setStateNonce(n => n + 1);
+                                        else setAuthed(false);
+                                    });
+                                }}
                                 onSwitchAccount={() => setSwitching(true)}
                                 onDeleteAccount={() => {
                                     void (async () => {
@@ -398,7 +406,7 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
                 <AccountSwitcher
                     app="cherry"
                     onClose={() => setSwitching(false)}
-                    onSwitched={() => { void refreshDeck(); }}
+                    onSwitched={() => { refreshAccounts(); void refreshDeck(); }}
                     onAdd={() => setAdding(true)}
                 />
             )}

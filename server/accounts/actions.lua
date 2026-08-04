@@ -579,15 +579,48 @@ function actions.myNumber(source)
     return ok({ number = settings.getPhoneNumber(cid) })
 end
 
----Returns the first mail account this character is signed into; nil when signed out of Mail.
+---Every mail address this character is signed into, for the recovery-email quick fill. `email` is
+---the first and is kept so an older UI build still fills something.
 ---@param source number player server id
----@return table envelope data = { email? }
+---@return table envelope data = { email?, emails }
 function actions.myEmail(source)
     local cid = player.getIdentifier(source)
-    if not cid then return ok({}) end
-    local accounts = mailStore.listAccountsForCitizen(cid)
-    local first = accounts[1]
-    return ok({ email = first and first.email or nil })
+    if not cid then return ok({ emails = {} }) end
+    local emails = {}
+    for _, acc in ipairs(mailStore.listAccountsForCitizen(cid)) do
+        if acc.email and acc.email ~= '' then emails[#emails + 1] = acc.email end
+    end
+    return ok({ email = emails[1], emails = emails })
+end
+
+---Signs the caller out of one app, moving them to another of their own saved accounts when they
+---have one rather than dropping them at the sign-in screen. Returns the account they landed on,
+---or nil when there was nowhere to go and the session was cleared.
+---@param source number player server id
+---@param payload table|nil client-supplied { app }
+---@return table envelope data = { switchedTo?, me? }
+function actions.signOutOrSwitch(source, payload)
+    local app = payload and payload.app
+    if not SWITCH_APPS[app] then return fail('Unknown app') end
+    local cid = player.getIdentifier(source); if not cid then return fail('Player not found') end
+
+    local current = store.getSessionAccount(app, cid)
+
+    -- The vault is a convenience, not an authority: each saved password is verified against the
+    -- account before it is used, exactly as switchAccount does, so a stale entry is skipped
+    -- rather than granting access.
+    for _, row in ipairs(store.listVaultEntries(cid)) do
+        if row.app == app and (not current or row.username:lower() ~= current.username:lower()) then
+            local acc = store.getAccount(app, row.username)
+            if acc and actions.verifyPassword(acc, row.password) then
+                store.setSession(app, cid, acc.id)
+                return ok({ switchedTo = acc.username, me = publicAccount(acc) })
+            end
+        end
+    end
+
+    store.clearSession(app, cid)
+    return ok({ switchedTo = nil })
 end
 
 ---Resolves an export-supplied (app, username) pair to a full account row, nil for an unknown

@@ -12,7 +12,7 @@ import { useDeckActive } from '@/shell/deckActive';
 import { AccountSwitcher } from '@/shared/AccountSwitcher';
 import { AppAuth } from '@/shared/AppAuth';
 import { AlertDialog } from '@/ui/AlertDialog';
-import { MAIL_DOMAIN, accountsConfirmReset, accountsRequestReset, accountsSavePassword, accountsSuggestCode } from '@/core/accountsApi';
+import { MAIL_DOMAIN, accountsConfirmReset, accountsRequestReset, accountsSavePassword, accountsSignOut, accountsSuggestCode, accountsSwitch } from '@/core/accountsApi';
 import { toggleReactionLocal } from '@/shared/chat/messagesApi';
 import type { MessageDraft } from '@/shared/chat/ChatView';
 import {
@@ -33,7 +33,7 @@ type Tab = 'home' | 'search' | 'notifications' | 'messages';
 
 export function Birdy({ onClose }: { onClose: () => void }) {
     const [me,          setMe]          = useState<BirdyAuthor>(CURRENT_USER);
-    const { authed, setAuthed, authChecked, justAuthed, setJustAuthed, myNumber, myEmail, savedLogin } = useAppAuth('birdy',
+    const { authed, setAuthed, authChecked, justAuthed, setJustAuthed, myNumber, myEmails, savedLogin, savedAccounts, refreshAccounts } = useAppAuth('birdy',
         () => apiMe().then(s => { if (s.me) setMe(s.me); return s.loggedIn; }));
     // null = not fetched yet (the feed shows skeletons instead of a false "no posts" flash).
     const [posts,       setPosts]       = useState<BirdyPost[] | null>(null);
@@ -245,6 +245,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
 
     function switchedAccount() {
         clearSessionState('birdy:');
+        refreshAccounts();
         setProfileOpen(false); setProfileTarget(null); setProfile(null);
         setOpenPostId(null); setOpenConvoId(null); setOpenConvo(null);
         setPosts(null); setConvos([]); setNotifCount(0); setTab('home'); setFeed('all');
@@ -327,7 +328,9 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                     welcomeText: 'dark',
                 }}
                 myNumber={myNumber}
-                myEmail={myEmail}
+                myEmails={myEmails}
+                savedAccounts={savedAccounts}
+                onPickAccount={u => accountsSwitch('birdy', u)}
                 savedLogin={adding ? null : savedLogin}
                 onDismiss={adding ? () => setAdding(false) : undefined}
                 modal={adding}
@@ -448,7 +451,14 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                     profile={profile}
                     onCancel={() => setEditingProfile(false)}
                     onSaved={p => { setProfile(p); setMe({ name: p.name, handle: p.handle, verified: p.verified }); setEditingProfile(false); }}
-                    onSignOut={() => { setEditingProfile(false); setProfileOpen(false); clearSessionState('birdy:'); setAuthed(false); }}
+                    onSignOut={() => {
+                        setEditingProfile(false);
+                        setProfileOpen(false);
+                        void accountsSignOut('birdy').then(r => {
+                            if (r.switchedTo) switchedAccount();
+                            else { clearSessionState('birdy:'); refreshAccounts(); setAuthed(false); }
+                        });
+                    }}
                     onSwitchAccount={() => { setEditingProfile(false); setSwitching(true); }}
                     onDeleted={() => { setEditingProfile(false); setProfileOpen(false); clearSessionState('birdy:'); setAuthed(false); }}
                 />

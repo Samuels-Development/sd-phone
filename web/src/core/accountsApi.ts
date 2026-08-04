@@ -162,7 +162,19 @@ export async function accountsMyNumber(): Promise<string | null> {
     return (await apiData<{ number?: string }>('sd-phone:accounts:myNumber'))?.number ?? null;
 }
 
-export async function accountsMyEmail(): Promise<string | null> {
-    if (!isFiveM) return `dev@${MAIL_DOMAIN}`;
-    return (await apiData<{ email?: string }>('sd-phone:accounts:myEmail'))?.email ?? null;
+export async function accountsMyEmail(): Promise<string[]> {
+    if (!isFiveM) return [`dev@${MAIL_DOMAIN}`, `you@${MAIL_DOMAIN}`, `work@${MAIL_DOMAIN}`];
+    return (await apiData<{ emails?: string[] }>('sd-phone:accounts:myEmail'))?.emails ?? [];
+}
+
+/** Leaves the current account, landing on another saved one when there is a usable one. */
+export async function accountsSignOut(app: string): Promise<{ switchedTo: string | null }> {
+    if (!isFiveM) {
+        const active = devSessions[app]?.username ?? null;
+        const next = DEV_VAULT.find(e => e.app === app && e.username !== active);
+        devSessions[app] = next ? { username: next.username, name: next.username } : null;
+        return { switchedTo: next?.username ?? null };
+    }
+    const d = await apiData<{ switchedTo?: string | null }>('sd-phone:accounts:signOut', { app });
+    return { switchedTo: d?.switchedTo ?? null };
 }

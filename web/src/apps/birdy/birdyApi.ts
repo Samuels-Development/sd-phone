@@ -46,11 +46,6 @@ export async function apiLogin(input: { username: string; password: string }): P
     return res.success ? { ok: true, me: res.data?.me } : { ok: false, message: res.message };
 }
 
-export async function apiLogout(): Promise<void> {
-    if (!isFiveM) { devLoggedIn = false; return; }
-    await fetchNui('sd-phone:birdy:logout');
-}
-
 /** Subscribe/unsubscribe this phone to the feed push. The server only pushes to watchers, so a
  * phone that is closed or backgrounded no longer pays to receive and discard one. */
 export function apiWatch(on: boolean): void {
