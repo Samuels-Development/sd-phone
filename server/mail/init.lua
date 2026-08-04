@@ -20,6 +20,9 @@ CreateThread(function()
         boot.schemaFailed('mail', err)
         return
     end
+    -- Runs from here, not from the accounts module, because it can only tell a deleted mailbox
+    -- from a live one once phone_mail_accounts exists; the two schemas boot on separate threads.
+    pcall(actions.repairOrphanAccounts)
     boot.schemaReady()
 end)
 

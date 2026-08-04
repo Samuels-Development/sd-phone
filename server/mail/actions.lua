@@ -297,6 +297,28 @@ function actions.list(source)
     return ok({ accounts = outAccounts, messages = outMessages })
 end
 
+---Clears engine accounts left behind by mailboxes deleted before the delete path removed them.
+---Such a row keeps the address reserved and a per-app slot spent against a mailbox that is gone.
+---Only Mail can be repaired this way: phone_mail_accounts IS the mailbox, so its absence is
+---proof. Photogram and Vibez seed their profile row lazily on first open, which makes a deleted
+---account indistinguishable from one that registered and never opened the app.
+---@return boolean ran true when the repair executed on this call
+function actions.repairOrphanAccounts()
+    return util.runOnce('accounts_orphan_mail_cleanup', function()
+        local orphans = MySQL.query.await([[
+            SELECT a.id, a.username FROM phone_app_accounts a
+            LEFT JOIN phone_mail_accounts m
+                   ON m.email = a.username COLLATE utf8mb4_unicode_ci
+            WHERE a.app = 'mail' AND m.email IS NULL
+        ]]) or {}
+        for i = 1, #orphans do acctStore.deleteAccount(orphans[i].id) end
+        if #orphans > 0 then
+            print(('^3[sd-phone:mail]^0 released %d orphaned mail account name(s)'):format(#orphans))
+        end
+        return { removed = #orphans }
+    end)
+end
+
 ---Creates a brand-new email account and signs the caller straight into it. Every field is
 ---validated server-side; the password is hashed and mirrored into the accounts engine.
 ---@param source number
