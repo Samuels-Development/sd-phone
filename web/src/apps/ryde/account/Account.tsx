@@ -44,8 +44,7 @@ export function Account({ onClose }: { onClose: () => void }) {
         return <div className="absolute inset-0 bg-ios-gray6 dark:bg-base" />;
     }
 
-    if (!authed || adding) {
-        return (
+    const authScreen = (
             <AppAuth
                 appName="Ryde"
                 tagline={t('ryde.tagline', 'Your ride, your schedule.')}
@@ -69,13 +68,15 @@ export function Account({ onClose }: { onClose: () => void }) {
                 }}
                 onAuthed={() => { setAdding(false); void accountsMe('ryde').then(s => setAuth(true, s.me)); }}
                 onDismiss={adding ? () => setAdding(false) : onClose}
+                modal={adding}
                 onRequestReset={(id) => accountsRequestReset('ryde', id)}
                 onConfirmReset={(id, code, pw) => accountsConfirmReset('ryde', id, code, pw)}
                 onSuggestCode={(id) => accountsSuggestCode('ryde', id)}
                 onSaveCredentials={(vals) => accountsSavePassword('ryde', vals)}
             />
-        );
-    }
+    );
+
+    if (!authed) return authScreen;
 
     async function signOut() {
         await accountsLogout('ryde');
@@ -218,6 +219,8 @@ export function Account({ onClose }: { onClose: () => void }) {
                     onClose={() => setPwOpen(false)}
                 />
             )}
+
+            {adding && <div className="absolute inset-0 z-[70]">{authScreen}</div>}
         </div>
     );
 }

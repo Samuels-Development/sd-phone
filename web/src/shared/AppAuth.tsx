@@ -34,6 +34,7 @@ export interface AppAuthProps {
     fields:   AppAuthField[];
     onAuthed: (values: Record<string, string>) => void;
     onDismiss?: () => void;
+    modal?:   boolean;
     onSubmit?: (mode: 'create' | 'login', values: Record<string, string>) => Promise<{ ok: boolean; message?: string; field?: string }>;
     onRequestReset?: (identity: string) => Promise<{ ok: boolean; message?: string; channel?: 'email' | 'sms' }>;
     onConfirmReset?: (identity: string, code: string, password: string) => Promise<{ ok: boolean; message?: string }>;
@@ -46,7 +47,9 @@ export interface AppAuthProps {
 
 type Screen = 'welcome' | 'create' | 'login' | 'reset' | 'resetCode' | 'success';
 
-export function AppAuth({ appName, tagline, icon, theme, fields, onAuthed, onDismiss, onSubmit, onRequestReset, onConfirmReset, onSuggestCode, onSaveCredentials, savedLogin, myNumber, myEmail }: AppAuthProps) {
+const MODAL_OUT_MS = 300;
+
+export function AppAuth({ appName, tagline, icon, theme, fields, onAuthed, onDismiss, modal = false, onSubmit, onRequestReset, onConfirmReset, onSuggestCode, onSaveCredentials, savedLogin, myNumber, myEmail }: AppAuthProps) {
     const [screen, setScreen] = useSessionState<Screen>(`auth:${appName}:screen`, 'welcome');
     const [resetIdentity, setResetIdentity] = useSessionState<string>(`auth:${appName}:resetIdentity`, '');
     const [notice, setNotice] = useState<string | null>(null);
@@ -63,11 +66,25 @@ export function AppAuth({ appName, tagline, icon, theme, fields, onAuthed, onDis
     const onAuthedRef = useRef(onAuthed); onAuthedRef.current = onAuthed;
     const onSaveRef   = useRef(onSaveCredentials); onSaveRef.current = onSaveCredentials;
 
+    const [dismissing, setDismissing] = useState(false);
+
     function finishAuth(save: boolean) {
         if (save) void onSaveRef.current?.(pendingValues.current);
         setSavePrompt(false);
         clearSessionState(`auth:${appName}:`);
+        if (modal) {
+            setDismissing(true);
+            window.setTimeout(() => onAuthedRef.current(pendingValues.current), MODAL_OUT_MS);
+            return;
+        }
         onAuthedRef.current(pendingValues.current);
+    }
+
+    function requestDismiss() {
+        if (!onDismiss || dismissing) return;
+        if (!modal) { onDismiss(); return; }
+        setDismissing(true);
+        window.setTimeout(onDismiss, MODAL_OUT_MS);
     }
 
     useEffect(() => {
@@ -108,7 +125,15 @@ export function AppAuth({ appName, tagline, icon, theme, fields, onAuthed, onDis
     }
 
     return (
-        <div className="absolute inset-0 z-10 overflow-hidden">
+        <div
+            className={`absolute inset-0 z-10 overflow-hidden ${modal ? 'rounded-t-[14px] shadow-[0_-8px_28px_rgba(0,0,0,0.28)]' : ''}`}
+            style={modal ? {
+                animation: dismissing
+                    ? `ios-sheet-down ${MODAL_OUT_MS}ms cubic-bezier(0.32,0,0.68,1) forwards`
+                    : 'ios-sheet-up 0.42s cubic-bezier(0.32,0.72,0,1)',
+                willChange: 'transform',
+            } : undefined}
+        >
             <div
                 className="flex h-full w-[200%] transition-transform duration-300 ease-out"
                 style={{ transform: showingDetail ? 'translateX(-50%)' : 'translateX(0)' }}
@@ -122,7 +147,7 @@ export function AppAuth({ appName, tagline, icon, theme, fields, onAuthed, onDis
                         onCreate={() => go('create')}
                         onLogin={() => go('login')}
                         onForgot={onRequestReset ? () => go('reset') : undefined}
-                        onDismiss={onDismiss}
+                        onDismiss={onDismiss ? requestDismiss : undefined}
                     />
                 </div>
                 <div className="h-full w-1/2 shrink-0">

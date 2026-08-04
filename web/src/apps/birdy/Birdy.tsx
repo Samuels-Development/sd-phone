@@ -316,8 +316,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
     if (!authChecked) {
         return <div className="absolute inset-0 z-10" style={{ background: BG }} />;
     }
-    if (!authed || adding) {
-        return (
+    const authScreen = (
             <AppAuth
                 appName="Birdy"
                 tagline={t('squawk.tagline', 'Where the city starts conversations.')}
@@ -331,6 +330,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                 myEmail={myEmail}
                 savedLogin={adding ? null : savedLogin}
                 onDismiss={adding ? () => setAdding(false) : undefined}
+                modal={adding}
                 fields={[
                     { key: 'username', label: t('squawk.username', 'Username') },
                     { key: 'name',     label: t('squawk.name', 'Name') },
@@ -358,8 +358,9 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                 onSuggestCode={(id) => accountsSuggestCode('birdy', id)}
                 onSaveCredentials={(vals) => accountsSavePassword('birdy', vals)}
             />
-        );
-    }
+    );
+
+    if (!authed) return authScreen;
 
     return (
         <div className={`absolute inset-0 z-10 flex flex-col text-black ${justAuthed ? 'animate-swipe-in-left' : ''}`} style={{ background: BG }}>
@@ -479,6 +480,8 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                 aria-label={t('squawk.closeBirdy', 'Close Squawk')}
                 className="absolute inset-x-0 bottom-0 z-[5] h-5 cursor-default"
             />
+
+            {adding && <div className="absolute inset-0 z-[70]">{authScreen}</div>}
         </div>
     );
 }

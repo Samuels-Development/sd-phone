@@ -278,8 +278,7 @@ export function Mail({ onClose }: { onClose: () => void }) {
         ?? (nav.stage === 'list' || nav.stage === 'detail' ? nav.accountId : undefined)
         ?? accounts[0]?.id;
 
-    if (locked || adding || (authChecked && accounts.length === 0)) {
-        return (
+    const authScreen = (
             <AppAuth
                 appName={t('mail.appName', 'Mail')}
                 tagline={t('mail.tagline', 'All your email in one place.')}
@@ -288,6 +287,7 @@ export function Mail({ onClose }: { onClose: () => void }) {
                 myNumber={myNumber}
                 savedLogin={adding ? null : savedLogin}
                 onDismiss={adding ? () => setAdding(false) : undefined}
+                modal={adding}
                 fields={[
                     { key: 'email',    label: t('mail.fieldEmail', 'Email'), suffix: `@${MAIL_DOMAIN}` },
                     { key: 'name',     label: t('mail.fieldName', 'Name'), createOnly: true },
@@ -320,8 +320,9 @@ export function Mail({ onClose }: { onClose: () => void }) {
                     email:    `${vals.email ?? ''}@${MAIL_DOMAIN}`,
                 })}
             />
-        );
-    }
+    );
+
+    if (locked || (authChecked && accounts.length === 0)) return authScreen;
 
     return (
         <div className={`absolute inset-0 z-10 overflow-hidden bg-[#d4d4d4] dark:bg-base ${justAuthed ? 'animate-swipe-in-left' : ''}`}>
@@ -446,6 +447,8 @@ export function Mail({ onClose }: { onClose: () => void }) {
                 aria-label={t('mail.closeMail', 'Close Mail')}
                 className="absolute inset-x-0 bottom-0 z-50 h-7 cursor-default"
             />
+
+            {adding && <div className="absolute inset-0 z-[70]">{authScreen}</div>}
         </div>
     );
 }

@@ -250,8 +250,7 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
     if (!authChecked) {
         return <div className="absolute inset-0 z-10 bg-[#e5e5e5]" />;
     }
-    if (!authed || adding) {
-        return (
+    const authScreen = (
             <AppAuth
                 appName="Cherry"
                 tagline={t('cherry.tagline', 'Find your person in Los Santos.')}
@@ -266,6 +265,7 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
                 myEmail={myEmail}
                 savedLogin={adding ? null : savedLogin}
                 onDismiss={adding ? () => setAdding(false) : undefined}
+                modal={adding}
                 fields={[
                     { key: 'username', label: t('cherry.username', 'Username') },
                     { key: 'name',     label: t('cherry.name', 'Name') },
@@ -295,8 +295,9 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
                 onSuggestCode={(id) => accountsSuggestCode('cherry', id)}
                 onSaveCredentials={(vals) => accountsSavePassword('cherry', vals)}
             />
-        );
-    }
+    );
+
+    if (!authed) return authScreen;
 
     return (
         <div className={`absolute inset-0 flex flex-col bg-[#e5e5e5] font-sf ${justAuthed ? 'animate-swipe-in-left' : ''}`}>
@@ -401,6 +402,8 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
                     onAdd={() => setAdding(true)}
                 />
             )}
+
+            {adding && <div className="absolute inset-0 z-[70]">{authScreen}</div>}
         </div>
     );
 }

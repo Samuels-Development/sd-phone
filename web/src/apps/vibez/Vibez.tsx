@@ -192,8 +192,7 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
     if (!authChecked) {
         return <div className="absolute inset-0 z-10 bg-black" />;
     }
-    if (!authed || adding) {
-        return (
+    const authScreen = (
             <AppAuth
                 appName="vibez"
                 tagline={t('vibez.tagline', 'Catch the vibe. Share yours.')}
@@ -203,6 +202,7 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
                 myEmail={myEmail}
                 savedLogin={adding ? null : savedLogin}
                 onDismiss={adding ? () => setAdding(false) : undefined}
+                modal={adding}
                 fields={[
                     { key: 'username', label: t('vibez.username', 'Username') },
                     { key: 'name',     label: t('vibez.name', 'Name') },
@@ -221,8 +221,9 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
                 onSuggestCode={(id) => accountsSuggestCode('vibez', id)}
                 onSaveCredentials={(vals) => accountsSavePassword('vibez', vals)}
             />
-        );
-    }
+    );
+
+    if (!authed) return authScreen;
 
     return (
         <div className={`absolute inset-0 z-10 flex flex-col select-none overflow-hidden bg-black text-white ${justAuthed ? 'animate-swipe-in-left' : ''}`}>
@@ -389,6 +390,8 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
 
             {liveHost && <LiveHost onClose={() => { setLiveHost(false); refetchLives(); }} />}
             {liveJoin && <LiveViewer liveId={liveJoin.liveId} host={liveJoin.user} onClose={() => setLiveJoin(null)} />}
+
+            {adding && <div className="absolute inset-0 z-[70]">{authScreen}</div>}
         </div>
     );
 }

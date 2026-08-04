@@ -258,8 +258,7 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
 
     if (!authChecked) return <div className="absolute inset-0 z-10 bg-[#f2f2f2]" />;
 
-    if (!authed || adding) {
-        return (
+    const authScreen = (
             <AppAuth
                 appName="Photogram"
                 tagline={t('photogram.tagline', 'Sign up to see photos from your friends.')}
@@ -269,6 +268,7 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
                 myEmail={myEmail}
                 savedLogin={adding ? null : savedLogin}
                 onDismiss={adding ? () => setAdding(false) : undefined}
+                modal={adding}
                 fields={[
                     { key: 'username', label: t('photogram.username', 'Username') },
                     { key: 'name',     label: t('photogram.name', 'Name') },
@@ -287,8 +287,9 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
                 onSuggestCode={(id) => accountsSuggestCode('photogram', id)}
                 onSaveCredentials={(vals) => accountsSavePassword('photogram', vals)}
             />
-        );
-    }
+    );
+
+    if (!authed) return authScreen;
 
     return (
         <div className={`absolute inset-0 flex flex-col bg-[#f2f2f2] font-sf ${justAuthed ? 'animate-swipe-in-left' : ''}`}>
@@ -412,6 +413,8 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
                     onDelete={() => { setEditing(false); clearSessionState('photogram:'); void apiDeleteAccount(); void accountsForgetPassword('photogram'); void accountsLogout('photogram'); setAuthed(false); }}
                 />
             )}
+
+            {adding && <div className="absolute inset-0 z-[70]">{authScreen}</div>}
         </div>
     );
 }
