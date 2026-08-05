@@ -23,7 +23,6 @@ interface Props {
     onSignOut:        (id: string) => void;
     onSignOutAll:     () => void;
     onReorderFolders: (next: Folder[]) => void;
-    onLockApp:        () => void;
     onDeleteAccount:  (id: string) => void;
     onChangePassword: () => void;
     onOpenSavedEmails: () => void;
@@ -39,7 +38,7 @@ const FOLDER_ICONS: Record<Folder, ComponentType<{ className?: string }>> = {
 };
 
 export function MailboxList({
-    accounts, activeAccount, messages, folderOrder, onSelectAccount, onOpenFolder, onCompose, onAddAccount, onSignOut, onSignOutAll, onReorderFolders, onLockApp, onDeleteAccount, onChangePassword, onOpenSavedEmails,
+    accounts, activeAccount, messages, folderOrder, onSelectAccount, onOpenFolder, onCompose, onAddAccount, onSignOut, onSignOutAll, onReorderFolders, onDeleteAccount, onChangePassword, onOpenSavedEmails,
 }: Props) {
     const [editing, setEditing] = useState(false);
     const [confirmOut, setConfirmOut] = useState(false);
@@ -313,13 +312,15 @@ export function MailboxList({
                     </button>
                 )}
 
-                <button
-                    type="button"
-                    onClick={() => setConfirmOut(true)}
-                    className={`${activeAccount ? 'mt-3' : 'mt-6'} w-full rounded-[10px] bg-[#e5e5e5] py-4 text-center text-[18px] font-semibold text-ios-red active:bg-black/5 dark:bg-surface dark:active:bg-white/5`}
-                >
-                    {t('mail.signOutOfMail', 'Sign out of Mail')}
-                </button>
+                {activeAccount && (
+                    <button
+                        type="button"
+                        onClick={() => setConfirmOut(true)}
+                        className="mt-3 w-full rounded-[10px] bg-[#e5e5e5] py-4 text-center text-[18px] font-semibold text-ios-red active:bg-black/5 dark:bg-surface dark:active:bg-white/5"
+                    >
+                        {t('mail.signOut', 'Sign Out')}
+                    </button>
+                )}
 
                 {activeAccount && (
                     <button
@@ -332,15 +333,17 @@ export function MailboxList({
                 )}
             </div>
 
-            {confirmOut && (
+            {confirmOut && activeAccount && (
                 <AlertDialog
-                    title={t('mail.signOut', 'Sign Out')}
-                    message={t('mail.signOutConfirm', "Are you sure you want to sign out of Mail? Your accounts stay saved, you'll just need to sign back in on this phone.")}
+                    title={t('mail.signOutOfTitle', 'Sign out of {email}?', { email: activeAccount.email })}
+                    message={accounts.length > 1
+                        ? t('mail.signOutNextMessage', "You'll stay signed in to your other mailboxes and land on one of them.")
+                        : t('mail.signOutLastMessage', "This is your only mailbox, so you'll be signed out of Mail. Your saved password is kept.")}
                     confirmLabel={t('mail.signOut', 'Sign Out')}
                     cancelLabel={t('mail.cancel', 'Cancel')}
                     destructive
                     onCancel={() => setConfirmOut(false)}
-                    onConfirm={() => { setConfirmOut(false); onLockApp(); }}
+                    onConfirm={() => { setConfirmOut(false); onSignOut(activeAccount.id); }}
                 />
             )}
 

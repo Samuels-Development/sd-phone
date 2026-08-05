@@ -23,7 +23,6 @@ interface AuthState {
     records:    Record<string, AuthRecord | null | undefined>;
     ensure:     (appKey: string) => void;
     signIn:     (appKey: string, profile: Record<string, string>) => void;
-    signOut:    (appKey: string) => void;
     signOutAll: (appKeys: readonly string[]) => void;
 }
 
@@ -38,10 +37,6 @@ const useAuthStore = create<AuthState>((set, get) => ({
         const rec: AuthRecord = { profile, at: Date.now() };
         try { localStorage.setItem(keyFor(appKey), JSON.stringify(rec)); } catch { /* non-fatal */ }
         set(s => ({ records: { ...s.records, [appKey]: rec } }));
-    },
-    signOut: (appKey) => {
-        try { localStorage.removeItem(keyFor(appKey)); } catch { /* non-fatal */ }
-        set(s => ({ records: { ...s.records, [appKey]: null } }));
     },
     signOutAll: (appKeys) => {
         const cleared: Record<string, null> = {};
@@ -65,10 +60,6 @@ export function isAuthed(appKey: string): boolean {
 
 export function signIn(appKey: string, profile: Record<string, string>): void {
     useAuthStore.getState().signIn(appKey, profile);
-}
-
-export function signOut(appKey: string): void {
-    useAuthStore.getState().signOut(appKey);
 }
 
 export function signOutAll(appKeys: readonly string[]): void {

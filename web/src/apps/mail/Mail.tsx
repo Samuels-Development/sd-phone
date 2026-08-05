@@ -8,7 +8,7 @@ import { takeMailTarget } from '@/shell/deeplink';
 import { AppAuth } from '@/shared/AppAuth';
 import { ChangePasswordPage } from '@/shared/ChangePasswordPage';
 import { MAIL_DOMAIN, accountsConfirmReset, accountsMyNumber, accountsRequestReset, accountsSavePassword, accountsSavedLogin, accountsSuggestCode } from '@/core/accountsApi';
-import { isAuthed, signIn as unlockMail, signOut as lockMail } from '@/stores/authStore';
+import { isAuthed, signIn as unlockMail } from '@/stores/authStore';
 import { signOutAllForApp } from '@/shared/signOutAll';
 import { Compose } from './Compose';
 import { AlertDialog } from '@/ui/AlertDialog';
@@ -356,7 +356,6 @@ export function Mail({ onClose }: { onClose: () => void }) {
                 onSignOut={handleSignOut}
                 onSignOutAll={() => { void handleSignOutAll(); }}
                 onReorderFolders={handleReorderFolders}
-                onLockApp={() => { lockMail('mail'); setLocked(true); }}
                 onDeleteAccount={(id) => void handleDeleteAccount(id)}
                 onChangePassword={() => setPwOpen(true)}
                 onOpenSavedEmails={() => setSavedPageOpen(true)}
