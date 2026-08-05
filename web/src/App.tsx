@@ -272,7 +272,11 @@ function AppContent() {
     // Server-side twin of the localStorage flag (phone_settings.setup_done): survives a cleared
     // FiveM cache / another PC. null = this profile's hydrate hasn't answered yet.
     const serverSetupDone = useThemeStore(s => s.setupDone);
-    const setupCompleted = setup.completed || serverSetupDone === true;
+    // In game the server row decides, and the localStorage flag is only the dev fallback where
+    // there is no server to ask. ORing the two let the client cache outvote the server, so
+    // nothing server-side could ever un-complete setup: a wiped phone and a fresh device both
+    // kept reading "done" from a flag the wipe never touched.
+    const setupCompleted = isFiveM ? serverSetupDone === true : setup.completed;
     // Theme and wallpaper are NOT re-applied from the saved setup on launch. Both
     // persist server-side (phone_settings) and hydrate via settings:get on mount;
     // re-applying the localStorage setup value every launch clobbered the player's
