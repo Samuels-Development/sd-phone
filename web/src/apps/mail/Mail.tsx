@@ -7,7 +7,7 @@ import { useSessionState } from '@/hooks/useSessionState';
 import { takeMailTarget } from '@/shell/deeplink';
 import { AppAuth } from '@/shared/AppAuth';
 import { ChangePasswordPage } from '@/shared/ChangePasswordPage';
-import { MAIL_DOMAIN, accountsConfirmReset, accountsMyNumber, accountsRequestReset, accountsSavePassword, accountsSavedLogin, accountsSuggestCode } from '@/core/accountsApi';
+import { MAIL_DOMAIN, accountsConfirmReset, accountsMyNumber, accountsRequestReset, accountsSavePassword, accountsSavedLogin, accountsSavedLogins, accountsSuggestCode } from '@/core/accountsApi';
 import { isAuthed, signIn as unlockMail } from '@/stores/authStore';
 import { signOutAllForApp } from '@/shared/signOutAll';
 import { Compose } from './Compose';
@@ -35,6 +35,7 @@ export function Mail({ onClose }: { onClose: () => void }) {
     const [justAuthed,      setJustAuthed]      = useState(false);
     const [myNumber,        setMyNumber]        = useState<string | null>(null);
     const [savedLogin,      setSavedLogin]      = useState<{ username: string; password: string } | null>(null);
+    const [savedMailLogins, setSavedMailLogins] = useState<{ username: string; password: string }[]>([]);
     const [accounts,        setAccounts]        = useState<MailAccount[]>([]);
     const [messages,        setMessages]        = useState<MailMessage[]>([]);
     const [folderOrder,     setFolderOrder]     = useState<Folder[]>(() => loadFolderOrder());
@@ -73,6 +74,7 @@ export function Mail({ onClose }: { onClose: () => void }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     useEffect(() => { void accountsSavedLogin('mail').then(setSavedLogin); }, []);
+    useEffect(() => { void accountsSavedLogins('mail').then(setSavedMailLogins); }, [accounts.length]);
 
     useEffect(() => {
         if (accounts.length === 0) {
@@ -288,6 +290,9 @@ export function Mail({ onClose }: { onClose: () => void }) {
         ?? (nav.stage === 'list' || nav.stage === 'detail' ? nav.accountId : undefined)
         ?? accounts[0]?.id;
 
+    const signedInEmails = new Set(accounts.map(a => a.email.toLowerCase()));
+    const offerableMailLogins = savedMailLogins.filter(e => !signedInEmails.has(e.username.toLowerCase()));
+
     const authScreen = (
             <AppAuth
                 appName={t('mail.appName', 'Mail')}
@@ -296,6 +301,13 @@ export function Mail({ onClose }: { onClose: () => void }) {
                 theme={{ accent: '#0A84FF', welcomeBg: '#f2f2f7', welcomeText: 'dark' }}
                 myNumber={myNumber}
                 savedLogin={adding ? null : savedLogin}
+                savedAccounts={offerableMailLogins.map(e => ({ username: e.username, name: e.username.split('@')[0] }))}
+                onPickAccount={async (username) => {
+                    const entry = offerableMailLogins.find(e => e.username === username);
+                    if (!entry) return { ok: false, message: t('mail.errSignIn', 'Could not sign in') };
+                    const r = await mailSignIn({ email: entry.username, password: entry.password });
+                    return typeof r === 'string' ? { ok: false, message: r } : { ok: true };
+                }}
                 onDismiss={adding ? () => setAdding(false) : undefined}
                 modal={adding}
                 fields={[

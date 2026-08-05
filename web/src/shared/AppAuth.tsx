@@ -250,7 +250,7 @@ function SavedAccounts({ accounts, theme, light, ctaWhite, picking, pickError, o
                         </span>
                         <span className="flex min-w-0 flex-1 flex-col">
                             <span className="truncate text-[16px] font-semibold">{a.name || a.username}</span>
-                            <span className="truncate text-[13px]" style={{ color: light ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>@{a.username}</span>
+                            <span className="truncate text-[13px]" style={{ color: light ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>{a.username.includes('@') ? a.username : `@${a.username}`}</span>
                         </span>
                         <span className="shrink-0 text-[15px] font-bold" style={{ color: ctaWhite ? '#ffffff' : theme.accent }}>
                             {picking === a.username ? t('common.pleaseWait', 'Please wait…') : t('common.logIn', 'Log in')}

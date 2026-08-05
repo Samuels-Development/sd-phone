@@ -125,6 +125,11 @@ export async function accountsSavedLogin(app: string): Promise<{ username: strin
     return e ? { username: e.username, password: e.password } : null;
 }
 
+export async function accountsSavedLogins(app: string): Promise<{ username: string; password: string }[]> {
+    const entries = await accountsListPasswords();
+    return entries.filter(x => x.app === app).map(e => ({ username: e.username, password: e.password }));
+}
+
 export interface SwitchableAccount {
     username: string;
     name?:    string;
