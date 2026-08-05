@@ -360,7 +360,7 @@ function Welcome({ appName, tagline, icon, theme, onCreate, onLogin, onForgot, o
                         <span>
                             {capacity?.limit === 1
                                 ? t('common.capOneReached', 'You already have an account for this app.')
-                                : t('common.capReached', 'You already have max {limit} accounts for this app.', { limit: String(capacity?.limit ?? 0) })}
+                                : t('common.capReached', 'You already have all {limit} accounts for this app.', { limit: String(capacity?.limit ?? 0) })}
                         </span>
                     </p>
                 )}
