@@ -354,6 +354,16 @@ function Welcome({ appName, tagline, icon, theme, onCreate, onLogin, onForgot, o
                 </p>
             </div>
             <div className="px-6 pb-10">
+                {full && (
+                    <p className="mb-3 flex items-start justify-center gap-1.5 px-2 text-center text-[14px] font-medium leading-snug" style={{ color: light ? 'rgba(255,255,255,0.62)' : 'rgba(0,0,0,0.52)' }}>
+                        <Info className="mt-[2px] h-[15px] w-[15px] shrink-0" strokeWidth={2.2} />
+                        <span>
+                            {capacity?.limit === 1
+                                ? t('common.capOneReached', 'You already have an account for this app.')
+                                : t('common.capReached', 'You already have the maximum {limit} accounts for this app.', { limit: String(capacity?.limit ?? 0) })}
+                        </span>
+                    </p>
+                )}
                 <button
                     type="button"
                     onClick={full ? undefined : onCreate}
@@ -367,16 +377,6 @@ function Welcome({ appName, tagline, icon, theme, onCreate, onLogin, onForgot, o
                 >
                     {t('common.createAccount', 'Create account')}
                 </button>
-                {full && (
-                    <p className="mt-2.5 flex items-start justify-center gap-1.5 px-2 text-center text-[13px] leading-snug" style={{ color: light ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.45)' }}>
-                        <Info className="mt-[1px] h-[14px] w-[14px] shrink-0" strokeWidth={2.2} />
-                        <span>
-                            {capacity?.limit === 1
-                                ? t('common.capOneReached', 'You already have an account here. Log in below.')
-                                : t('common.capReached', "You've used all {limit} accounts for this app. Log in below, or delete one to make room.", { limit: String(capacity?.limit ?? 0) })}
-                        </span>
-                    </p>
-                )}
                 <button
                     type="button"
                     onClick={onLogin}
