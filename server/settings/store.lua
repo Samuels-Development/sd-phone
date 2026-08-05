@@ -981,6 +981,15 @@ end
 ---@type table<string, boolean> Cached airplane-mode flag per citizenid.
 local airplaneCache = {}
 
+---Cache key for one device's airplane flag. Keyed by citizenid AND device because the column is
+---per-device: a shared key would let the tablet answer with the phone's radio state.
+---@param citizenid string framework per-character id
+---@param device string device id
+---@return string key
+local function airplaneKey(citizenid, device)
+    return citizenid .. '\0' .. device
+end
+
 ---Returns true if a player currently has airplane mode on, lazily warming the cache from the DB
 ---on first read.
 ---@param citizenid string framework per-character id
