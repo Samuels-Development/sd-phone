@@ -9,6 +9,7 @@ import { AppAuth } from '@/shared/AppAuth';
 import { ChangePasswordPage } from '@/shared/ChangePasswordPage';
 import { MAIL_DOMAIN, accountsConfirmReset, accountsMyNumber, accountsRequestReset, accountsSavePassword, accountsSavedLogin, accountsSuggestCode } from '@/core/accountsApi';
 import { isAuthed, signIn as unlockMail, signOut as lockMail } from '@/stores/authStore';
+import { signOutAllForApp } from '@/shared/signOutAll';
 import { Compose } from './Compose';
 import { AlertDialog } from '@/ui/AlertDialog';
 import {
@@ -231,6 +232,15 @@ export function Mail({ onClose }: { onClose: () => void }) {
         await signOut(target.email);
     }
 
+    async function handleSignOutAll() {
+        setAccounts([]);
+        setMessages([]);
+        setNav({ stage: 'mailboxes' });
+        setComposeFor(null);
+        await signOutAllForApp('mail');
+        setLocked(true);
+    }
+
     async function handleDeleteAccount(id: string) {
         const target = accounts.find(a => a.id === id);
         if (!target) return;
@@ -344,6 +354,7 @@ export function Mail({ onClose }: { onClose: () => void }) {
                 onCompose={() => setComposeFor({ accountId: activeAccount?.id })}
                 onAddAccount={() => setAdding(true)}
                 onSignOut={handleSignOut}
+                onSignOutAll={() => { void handleSignOutAll(); }}
                 onReorderFolders={handleReorderFolders}
                 onLockApp={() => { lockMail('mail'); setLocked(true); }}
                 onDeleteAccount={(id) => void handleDeleteAccount(id)}

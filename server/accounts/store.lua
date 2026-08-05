@@ -200,14 +200,19 @@ end
 ---Sign a citizen out of an app (idempotent: no rows is a no-op).
 ---@param app string account app key
 ---@param citizenid string framework per-character id
+---@return integer cleared sessions removed
 function store.clearSession(app, citizenid)
-    MySQL.update.await('DELETE FROM phone_app_sessions WHERE app = ? AND citizenid = ?', { app, citizenid })
+    return MySQL.update.await(
+        'DELETE FROM phone_app_sessions WHERE app = ? AND citizenid = ?',
+        { app, citizenid }
+    ) or 0
 end
 
 ---Signs a citizen out of every app at once (idempotent).
 ---@param citizenid string framework per-character id
+---@return integer cleared sessions removed
 function store.clearAllSessions(citizenid)
-    MySQL.update.await('DELETE FROM phone_app_sessions WHERE citizenid = ?', { citizenid })
+    return MySQL.update.await('DELETE FROM phone_app_sessions WHERE citizenid = ?', { citizenid }) or 0
 end
 
 ---Returns every citizen currently signed into an account in `app`. Read-only.

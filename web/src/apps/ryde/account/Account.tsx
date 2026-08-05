@@ -11,9 +11,10 @@ import { t } from '@/i18n';
 import {
     MAIL_DOMAIN, accountsConfirmReset, accountsLogin, accountsLogout,
     accountsMe, accountsMyEmail, accountsMyNumber, accountsRegister, accountsRequestReset,
-    accountsSavePassword, accountsSavedLogin, accountsSignOut, accountsSuggestCode, accountsSwitch,
+    accountsSavePassword, accountsSavedLogin, accountsSuggestCode, accountsSwitch,
     accountsSwitchable, type SwitchableAccount,
 } from '@/core/accountsApi';
+import { signOutAllForApp } from '@/shared/signOutAll';
 import { driverStats, useRyde } from '../store';
 import { money } from '../data';
 import { rydeDeleteAccount } from '../rydeApi';
@@ -27,6 +28,7 @@ export function Account({ onClose }: { onClose: () => void }) {
     const [savedAccounts, setSavedAccounts] = useState<SwitchableAccount[]>([]);
     const [savedLogin,  setSavedLogin]  = useState<{ username: string; password: string } | null>(null);
     const [confirmSignOut, setConfirmSignOut] = useState(false);
+    const [confirmSignOutAll, setConfirmSignOutAll] = useState(false);
     const [switching,      setSwitching]      = useState(false);
     const [adding,         setAdding]         = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
@@ -100,15 +102,19 @@ export function Account({ onClose }: { onClose: () => void }) {
     if (!authed) return authScreen;
 
     async function signOut() {
-        const res = await accountsSignOut('ryde');
+        await accountsLogout('ryde');
         setConfirmSignOut(false);
-        if (res.switchedTo) {
-            afterAccountChange();
-        } else {
-            g.wipeAccount();
-            setAuth(false, null);
-            refreshAccounts();
-        }
+        g.wipeAccount();
+        setAuth(false, null);
+        refreshAccounts();
+    }
+
+    async function signOutAll() {
+        await signOutAllForApp('ryde');
+        setConfirmSignOutAll(false);
+        g.wipeAccount();
+        setAuth(false, null);
+        refreshAccounts();
     }
 
     async function deleteAccount() {
@@ -192,6 +198,16 @@ export function Account({ onClose }: { onClose: () => void }) {
                         <div className="pointer-events-none absolute bottom-0 right-0 bg-ios-gray4 dark:bg-control" style={{ left: '70px', height: '0.5px' }} />
                     </button>
                     <button
+                        onClick={() => setConfirmSignOutAll(true)}
+                        className="relative flex w-full items-center gap-3.5 px-4 py-2.5 text-left active:bg-black/5 dark:active:bg-white/5"
+                    >
+                        <div className="flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-[9px] shadow-sm" style={{ background: '#FF3B30' }}>
+                            <LogOut className="h-[22px] w-[22px] text-white" strokeWidth={2.2} />
+                        </div>
+                        <span className="flex-1 text-[18px] font-medium text-ios-red">{t('accounts.signOutAll', 'Log Out of All Accounts')}</span>
+                        <div className="pointer-events-none absolute bottom-0 right-0 bg-ios-gray4 dark:bg-control" style={{ left: '70px', height: '0.5px' }} />
+                    </button>
+                    <button
                         onClick={() => setConfirmDelete(true)}
                         className="flex w-full items-center gap-3.5 px-4 py-2.5 text-left active:bg-black/5 dark:active:bg-white/5"
                     >
@@ -220,6 +236,17 @@ export function Account({ onClose }: { onClose: () => void }) {
                     destructive
                     onCancel={() => setConfirmSignOut(false)}
                     onConfirm={() => { void signOut(); }}
+                />
+            )}
+
+            {confirmSignOutAll && (
+                <AlertDialog
+                    title={t('accounts.signOutAllTitle', 'Log out of all accounts?')}
+                    message={t('accounts.signOutAllMessage', 'Every account you have in this app will be signed out. Saved passwords are kept.')}
+                    confirmLabel={t('accounts.signOutAllConfirm', 'Log Out')}
+                    destructive
+                    onCancel={() => setConfirmSignOutAll(false)}
+                    onConfirm={() => { void signOutAll(); }}
                 />
             )}
 

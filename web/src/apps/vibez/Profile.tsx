@@ -13,11 +13,12 @@ const SB_H = 54;
 
 type Grid = 'posts' | 'liked' | 'saved';
 
-export function Profile({ handle, onBack, onOpenPost, onSignOut, onSwitchAccount, refreshKey }: {
+export function Profile({ handle, onBack, onOpenPost, onSignOut, onSignOutAll, onSwitchAccount, refreshKey }: {
     handle?:    string;
     onBack?:    () => void;
     onOpenPost: (posts: VPost[], index: number) => void;
     onSignOut?: () => void;
+    onSignOutAll?: () => void;
     onSwitchAccount?: () => void;
     refreshKey: number;
 }) {
@@ -188,6 +189,15 @@ export function Profile({ handle, onBack, onOpenPost, onSignOut, onSwitchAccount
                         >
                             {t('vibez.logOut', 'Log out')}
                         </button>
+                        {onSignOutAll && (
+                            <button
+                                type="button"
+                                onClick={onSignOutAll}
+                                className="mt-2 w-full rounded-md border border-white/20 py-2.5 text-[14px] font-semibold text-white/90 active:opacity-70"
+                            >
+                                {t('accounts.signOutAll', 'Log Out of All Accounts')}
+                            </button>
+                        )}
                     </div>
                 )}
             </div>

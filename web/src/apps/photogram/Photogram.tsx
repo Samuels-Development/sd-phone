@@ -11,7 +11,8 @@ import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useAppAuth } from '@/hooks/useAppAuth';
 import { AppAuth } from '@/shared/AppAuth';
 import { AccountSwitcher } from '@/shared/AccountSwitcher';
-import { MAIL_DOMAIN, accountsConfirmReset, accountsLogin, accountsLogout, accountsMe, accountsRegister, accountsRequestReset, accountsSavePassword, accountsSignOut, accountsSuggestCode, accountsSwitch } from '@/core/accountsApi';
+import { MAIL_DOMAIN, accountsConfirmReset, accountsLogin, accountsLogout, accountsMe, accountsRegister, accountsRequestReset, accountsSavePassword, accountsSuggestCode, accountsSwitch } from '@/core/accountsApi';
+import { signOutAllForApp } from '@/shared/signOutAll';
 import { IG, type Comment as IGComment, type Post, type ProfileData, type User } from './data';
 import {
     apiActivity, apiAddComment, apiAddStory, apiComments, apiCounts, apiCreate, apiDeleteAccount, apiDeletePost, apiDismissNotification, apiExplore, apiFeed,
@@ -437,10 +438,13 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
                     onSave={async p => { const updated = await apiUpdateProfile({ name: p.name, bio: p.bio, avatar: p.avatar, private: p.private }); if (updated) setMe(updated); setEditing(false); }}
                     onSignOut={() => {
                         setEditing(false);
-                        void accountsSignOut('photogram').then(r => {
-                            if (r.switchedTo) afterAccountChange();
-                            else { clearSessionState('photogram:'); refreshAccounts(); setAuthed(false); }
+                        void accountsLogout('photogram').then(() => {
+                            clearSessionState('photogram:'); refreshAccounts(); setAuthed(false);
                         });
+                    }}
+                    onSignOutAll={() => {
+                        setEditing(false);
+                        void signOutAllForApp('photogram').then(() => { refreshAccounts(); setAuthed(false); });
                     }}
                     onSwitchAccount={() => { setEditing(false); setSwitching(true); }}
                     onDelete={() => { setEditing(false); clearSessionState('photogram:'); void apiDeleteAccount(); void accountsLogout('photogram'); refreshAccounts(); setAuthed(false); }}

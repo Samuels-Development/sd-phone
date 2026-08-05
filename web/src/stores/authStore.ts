@@ -20,10 +20,11 @@ function loadFromDisk(appKey: string): AuthRecord | null {
 }
 
 interface AuthState {
-    records: Record<string, AuthRecord | null | undefined>;
-    ensure:  (appKey: string) => void;
-    signIn:  (appKey: string, profile: Record<string, string>) => void;
-    signOut: (appKey: string) => void;
+    records:    Record<string, AuthRecord | null | undefined>;
+    ensure:     (appKey: string) => void;
+    signIn:     (appKey: string, profile: Record<string, string>) => void;
+    signOut:    (appKey: string) => void;
+    signOutAll: (appKeys: readonly string[]) => void;
 }
 
 const useAuthStore = create<AuthState>((set, get) => ({
@@ -41,6 +42,14 @@ const useAuthStore = create<AuthState>((set, get) => ({
     signOut: (appKey) => {
         try { localStorage.removeItem(keyFor(appKey)); } catch { /* non-fatal */ }
         set(s => ({ records: { ...s.records, [appKey]: null } }));
+    },
+    signOutAll: (appKeys) => {
+        const cleared: Record<string, null> = {};
+        for (const appKey of appKeys) {
+            try { localStorage.removeItem(keyFor(appKey)); } catch { /* non-fatal */ }
+            cleared[appKey] = null;
+        }
+        set(s => ({ records: { ...s.records, ...cleared } }));
     },
 }));
 
@@ -60,6 +69,10 @@ export function signIn(appKey: string, profile: Record<string, string>): void {
 
 export function signOut(appKey: string): void {
     useAuthStore.getState().signOut(appKey);
+}
+
+export function signOutAll(appKeys: readonly string[]): void {
+    useAuthStore.getState().signOutAll(appKeys);
 }
 
 export function resetAuth(): void {

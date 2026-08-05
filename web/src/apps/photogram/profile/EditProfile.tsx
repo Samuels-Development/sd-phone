@@ -7,13 +7,14 @@ import { ChangePasswordPage } from '@/shared/ChangePasswordPage';
 import { Toggle } from '@/ui/Toggle';
 import { IG, type ProfileData } from '../data';
 
-export function EditProfile({ profile, onCancel, onSave, onSignOut, onSwitchAccount, onDelete }: {
+export function EditProfile({ profile, onCancel, onSave, onSignOut, onSignOutAll, onSwitchAccount, onDelete }: {
     onSwitchAccount: () => void;
-    profile:   ProfileData;
-    onCancel:  () => void;
-    onSave:    (p: ProfileData) => void;
-    onSignOut: () => void;
-    onDelete:  () => void;
+    profile:      ProfileData;
+    onCancel:     () => void;
+    onSave:       (p: ProfileData) => void;
+    onSignOut:    () => void;
+    onSignOutAll: () => void;
+    onDelete:     () => void;
 }) {
     const [name,   setName]   = useState(profile.name);
     const [bio,    setBio]    = useState(profile.bio);
@@ -21,6 +22,7 @@ export function EditProfile({ profile, onCancel, onSave, onSignOut, onSwitchAcco
     const [priv,   setPriv]   = useState(profile.private);
     const [pickerOpen, setPickerOpen] = useState(false);
     const [confirmOut, setConfirmOut] = useState(false);
+    const [confirmAll, setConfirmAll] = useState(false);
     const [confirmDel, setConfirmDel] = useState(false);
     const [closing,    setClosing]    = useState(false);
     const [pwOpen,     setPwOpen]     = useState(false);
@@ -94,6 +96,7 @@ export function EditProfile({ profile, onCancel, onSave, onSignOut, onSwitchAcco
                     <button type="button" onClick={() => setPwOpen(true)} className="w-full rounded-[12px] bg-black/[0.06] py-3.5 text-[18px] font-semibold active:opacity-70" style={{ color: IG.blue }}>{t('photogram.changePassword', 'Change Password')}</button>
                     <button type="button" onClick={onSwitchAccount} className="w-full rounded-[12px] bg-black/[0.06] py-3.5 text-[18px] font-semibold active:opacity-70" style={{ color: IG.blue }}>{t('accounts.switchAccount', 'Switch account')}</button>
                     <button type="button" onClick={() => setConfirmOut(true)} className="w-full rounded-[12px] bg-black/[0.06] py-3.5 text-[18px] font-semibold text-black active:opacity-70">{t('photogram.signOut', 'Sign Out')}</button>
+                    <button type="button" onClick={() => setConfirmAll(true)} className="w-full rounded-[12px] bg-black/[0.06] py-3.5 text-[18px] font-semibold text-black active:opacity-70">{t('accounts.signOutAll', 'Log Out of All Accounts')}</button>
                     <button type="button" onClick={() => setConfirmDel(true)} className="w-full rounded-[12px] py-3.5 text-[18px] font-semibold text-white active:opacity-80" style={{ background: IG.red }}>{t('photogram.deleteAccount', 'Delete Account')}</button>
                 </div>
             </div>
@@ -112,6 +115,16 @@ export function EditProfile({ profile, onCancel, onSave, onSignOut, onSwitchAcco
                     confirmLabel={t('photogram.signOut', 'Sign Out')}
                     onCancel={() => setConfirmOut(false)}
                     onConfirm={onSignOut}
+                />
+            )}
+            {confirmAll && (
+                <AlertDialog
+                    title={t('accounts.signOutAllTitle', 'Log out of all accounts?')}
+                    message={t('accounts.signOutAllMessage', 'Every account you have in this app will be signed out. Saved passwords are kept.')}
+                    confirmLabel={t('accounts.signOutAllConfirm', 'Log Out')}
+                    destructive
+                    onCancel={() => setConfirmAll(false)}
+                    onConfirm={onSignOutAll}
                 />
             )}
             {confirmDel && (

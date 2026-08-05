@@ -6,10 +6,9 @@ local player = require 'bridge.server.player'
 ---@type table Settings persistence layer (server.settings.store): phone_settings row CRUD plus
 ---custom tones and per-app notification prefs, all keyed by citizenid.
 local store  = require 'server.settings.store'
----@type table Accounts engine persistence (server.accounts.store): session rows for the factory reset.
-local accounts = require 'server.accounts.store'
----@type table Mail persistence layer (server.mail.store): per-mailbox sessions for the factory reset.
-local mail = require 'server.mail.store'
+---@type table Accounts engine handlers (server.accounts.actions): the shared sign-out the factory
+---reset and Settings > Sign Out of All Accounts both run through.
+local accounts = require 'server.accounts.actions'
 ---@type table Badge recompute-and-push (server.badges.init).
 local badges = require 'server.badges.init'
 ---@type table Photos actions (server.photos.actions): the URL-import gate + host allow/blocklist
@@ -477,10 +476,7 @@ lib.callback.register('sd-phone:server:settings:factoryReset', function(source)
     end
     store.setInstalledApps(cid, {})
     store.setHomeLayout(cid, '')
-    accounts.clearAllSessions(cid)
-    for _, acc in ipairs(mail.listAccountsForCitizen(cid)) do
-        mail.removeSession(acc.email, cid)
-    end
+    accounts.signOutEverywhere(cid)
     badges.push(source)
     return { success = true }
 end)

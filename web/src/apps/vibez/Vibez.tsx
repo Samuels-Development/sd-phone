@@ -13,7 +13,8 @@ import { useAppAuth } from '@/hooks/useAppAuth';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { AppAuth } from '@/shared/AppAuth';
 import { AccountSwitcher } from '@/shared/AccountSwitcher';
-import { MAIL_DOMAIN, accountsConfirmReset, accountsLogin, accountsMe, accountsRegister, accountsRequestReset, accountsSavePassword, accountsSignOut, accountsSuggestCode, accountsSwitch } from '@/core/accountsApi';
+import { MAIL_DOMAIN, accountsConfirmReset, accountsLogin, accountsLogout, accountsMe, accountsRegister, accountsRequestReset, accountsSavePassword, accountsSuggestCode, accountsSwitch } from '@/core/accountsApi';
+import { signOutAllForApp } from '@/shared/signOutAll';
 import { t } from '@/i18n';
 import { ACCENT, GRAD_FROM, GRAD_TO, fmt, type VLive, type VPost, type VProfile } from './data';
 import {
@@ -276,10 +277,12 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
                     <Profile
                         onOpenPost={openPostList}
                         onSignOut={() => {
-                            void accountsSignOut('vibez').then(r => {
-                                if (r.switchedTo) afterAccountChange();
-                                else { clearSessionState('vibez:'); refreshAccounts(); setAuthed(false); }
+                            void accountsLogout('vibez').then(() => {
+                                clearSessionState('vibez:'); refreshAccounts(); setAuthed(false);
                             });
+                        }}
+                        onSignOutAll={() => {
+                            void signOutAllForApp('vibez').then(() => { refreshAccounts(); setAuthed(false); });
                         }}
                         onSwitchAccount={() => setSwitching(true)}
                         refreshKey={refreshKey}

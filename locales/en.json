@@ -1390,6 +1390,9 @@
     "signIn": "Sign In",
     "signInPrompt": "Sign in to a mail account to get started.",
     "signOut": "Sign Out",
+    "signOutAllMailboxes": "Sign Out of All Mailboxes",
+    "signOutAllMessage": "Every mailbox on this phone will be signed out. Saved passwords are kept, so you can sign back in.",
+    "signOutAllTitle": "Sign out of all mailboxes?",
     "signOutConfirm": "Are you sure you want to sign out of Mail? Your accounts stay saved, you'll just need to sign back in on this phone.",
     "signOutOfMail": "Sign out of Mail",
     "signUp": "Sign Up",
@@ -4032,6 +4035,11 @@
     "settings": "Settings",
     "shareAnalytics": "Share Analytics",
     "showCallerId": "Show Caller ID",
+    "signOutAllAccounts": "Sign Out of All Accounts",
+    "signOutAllConfirm": "Sign Out",
+    "signOutAllFooter": "Signs you out of every app account and mailbox on this phone. Your saved passwords are kept, so you can sign back in from Passwords.",
+    "signOutAllMessage": "You'll be signed out of every app account and mailbox on this phone. Saved passwords are kept.",
+    "signOutAllTitle": "Sign Out of All Accounts?",
     "simAutoBackup": "Auto Backup",
     "simBackedUpPhones": "Backed-up phones",
     "simBackedUpPhonesFooter": "Tap a backup to delete it and free the slot. Deleting erases its cloud snapshot — the phone itself keeps its data.",
@@ -4821,6 +4829,10 @@
   "accounts": {
     "addAccount": "Add account",
     "noSavedAccounts": "No other saved accounts. Sign in once and your login is saved here.",
+    "signOutAll": "Log Out of All Accounts",
+    "signOutAllConfirm": "Log Out",
+    "signOutAllMessage": "Every account you have in this app will be signed out. Saved passwords are kept.",
+    "signOutAllTitle": "Log out of all accounts?",
     "switchAccount": "Switch account",
     "switchFailed": "Could not switch account"
   }

@@ -12,7 +12,8 @@ import { useAppAuth } from '@/hooks/useAppAuth';
 import { AppAuth } from '@/shared/AppAuth';
 import { AccountSwitcher } from '@/shared/AccountSwitcher';
 import { AlertDialog } from '@/ui/AlertDialog';
-import { MAIL_DOMAIN, accountsConfirmReset, accountsLogin, accountsLogout, accountsMe, accountsRegister, accountsRequestReset, accountsSavePassword, accountsSignOut, accountsSuggestCode, accountsSwitch } from '@/core/accountsApi';
+import { MAIL_DOMAIN, accountsConfirmReset, accountsLogin, accountsLogout, accountsMe, accountsRegister, accountsRequestReset, accountsSavePassword, accountsSuggestCode, accountsSwitch } from '@/core/accountsApi';
+import { signOutAllForApp } from '@/shared/signOutAll';
 import { appendThreadMessage, patchThreadMessage, toggleReactionLocal } from '@/shared/chat/messagesApi';
 import type { Message, Reaction } from '@/shared/chat/data';
 import type { MessageDraft } from '@/shared/chat/ChatView';
@@ -359,10 +360,12 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
                                 profile={profile}
                                 onChange={setProfile}
                                 onSignOut={() => {
-                                    void accountsSignOut('cherry').then(r => {
-                                        if (r.switchedTo) afterAccountChange();
-                                        else { clearSessionState('cherry:'); refreshAccounts(); setAuthed(false); }
+                                    void accountsLogout('cherry').then(() => {
+                                        clearSessionState('cherry:'); refreshAccounts(); setAuthed(false);
                                     });
+                                }}
+                                onSignOutAll={() => {
+                                    void signOutAllForApp('cherry').then(() => { refreshAccounts(); setAuthed(false); });
                                 }}
                                 onSwitchAccount={() => setSwitching(true)}
                                 onDeleteAccount={() => {

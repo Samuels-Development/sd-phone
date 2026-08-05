@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import {
-    AlertOctagon, AtSign, BookUser, Check, ChevronRight, FileText, Flag, GripVertical, Inbox, Plus,
-    Send, SquarePen, Trash2,
+    AlertOctagon, AtSign, BookUser, Check, ChevronRight, FileText, Flag, GripVertical, Inbox, LogOut,
+    Plus, Send, SquarePen, Trash2,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 
@@ -21,6 +21,7 @@ interface Props {
     onCompose:        () => void;
     onAddAccount:     () => void;
     onSignOut:        (id: string) => void;
+    onSignOutAll:     () => void;
     onReorderFolders: (next: Folder[]) => void;
     onLockApp:        () => void;
     onDeleteAccount:  (id: string) => void;
@@ -38,10 +39,11 @@ const FOLDER_ICONS: Record<Folder, ComponentType<{ className?: string }>> = {
 };
 
 export function MailboxList({
-    accounts, activeAccount, messages, folderOrder, onSelectAccount, onOpenFolder, onCompose, onAddAccount, onSignOut, onReorderFolders, onLockApp, onDeleteAccount, onChangePassword, onOpenSavedEmails,
+    accounts, activeAccount, messages, folderOrder, onSelectAccount, onOpenFolder, onCompose, onAddAccount, onSignOut, onSignOutAll, onReorderFolders, onLockApp, onDeleteAccount, onChangePassword, onOpenSavedEmails,
 }: Props) {
     const [editing, setEditing] = useState(false);
     const [confirmOut, setConfirmOut] = useState(false);
+    const [confirmOutAll, setConfirmOutAll] = useState(false);
     const [confirmDeleteAcc, setConfirmDeleteAcc] = useState(false);
 
     const [draggingId, setDraggingId] = useState<Folder | null>(null);
@@ -286,6 +288,19 @@ export function MailboxList({
                         <Plus className="h-[25px] w-[25px] shrink-0 text-ios-blue" strokeWidth={2.2} />
                         <span className="flex-1 text-[18px] text-ios-blue">{t('mail.addMailbox', 'Add Mailbox')}</span>
                     </button>
+                    {editing && accounts.length > 0 && (
+                        <>
+                            <div className="pointer-events-none bg-black/12 dark:bg-white/10" style={{ marginLeft: 60, height: '0.5px' }} />
+                            <button
+                                type="button"
+                                onClick={() => setConfirmOutAll(true)}
+                                className="flex w-full items-center gap-4 px-4 py-[15px] text-left active:bg-black/5 dark:active:bg-white/5"
+                            >
+                                <LogOut className="h-[25px] w-[25px] shrink-0 text-ios-red" strokeWidth={2.2} />
+                                <span className="flex-1 text-[18px] text-ios-red">{t('mail.signOutAllMailboxes', 'Sign Out of All Mailboxes')}</span>
+                            </button>
+                        </>
+                    )}
                 </div>
 
                 {activeAccount && (
@@ -326,6 +341,18 @@ export function MailboxList({
                     destructive
                     onCancel={() => setConfirmOut(false)}
                     onConfirm={() => { setConfirmOut(false); onLockApp(); }}
+                />
+            )}
+
+            {confirmOutAll && (
+                <AlertDialog
+                    title={t('mail.signOutAllTitle', 'Sign out of all mailboxes?')}
+                    message={t('mail.signOutAllMessage', 'Every mailbox on this phone will be signed out. Saved passwords are kept, so you can sign back in.')}
+                    confirmLabel={t('accounts.signOutAllConfirm', 'Log Out')}
+                    cancelLabel={t('mail.cancel', 'Cancel')}
+                    destructive
+                    onCancel={() => setConfirmOutAll(false)}
+                    onConfirm={() => { setConfirmOutAll(false); onSignOutAll(); }}
                 />
             )}
 
