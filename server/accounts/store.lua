@@ -71,6 +71,14 @@ function store.ensureSchema()
     -- An account is identified by its contacts alone, which cannot say who owns it: an account
     -- with only an email is unattributable, and an email need not be the holder's, so counting a
     -- quota by contact would let a stranger consume it. The creator is stamped instead.
+    -- A player may hold several sessions per app at once; the most recently used one is the
+    -- active account. A timestamp rather than a flag, so switching is a single-row write that
+    -- cannot leave two rows both claiming to be active.
+    util.ensureColumns('phone_app_sessions', {
+        last_used = 'last_used TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP',
+    })
+    util.ensureIndex('phone_app_sessions', 'idx_app_sessions_active', '(app, citizenid, last_used)')
+
     util.ensureColumns('phone_app_accounts', {
         created_by = 'created_by VARCHAR(64) NULL',
     })
@@ -185,19 +193,38 @@ function store.deleteAccount(id)
     end
 end
 
----Signs a citizen into an account, replacing any prior session for (app, citizenid).
+---Signs a citizen into an account and makes it the active one. Sessions the citizen already
+---holds in the app are kept, so several accounts stay signed in at once and the switcher can
+---move between them without a password.
 ---@param app string account app key
 ---@param citizenid string framework per-character id
 ---@param accountId number account row id
 function store.setSession(app, citizenid, accountId)
-    MySQL.update.await('DELETE FROM phone_app_sessions WHERE app = ? AND citizenid = ?', { app, citizenid })
-    MySQL.insert.await(
-        'INSERT INTO phone_app_sessions (app, citizenid, account_id) VALUES (?, ?, ?)',
-        { app, citizenid, accountId }
-    )
+    MySQL.query.await([[
+        INSERT INTO phone_app_sessions (app, citizenid, account_id, last_used)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        ON DUPLICATE KEY UPDATE last_used = CURRENT_TIMESTAMP
+    ]], { app, citizenid, accountId })
 end
 
----Sign a citizen out of an app (idempotent: no rows is a no-op).
+---Every account the citizen is currently signed into for `app`, most recently used first, so
+---the head of the list is the active account. Read-only.
+---@param app string account app key
+---@param citizenid string framework per-character id
+---@return table[] accounts
+function store.listSessionAccounts(app, citizenid)
+    local rows = MySQL.query.await([[
+        SELECT a.* FROM phone_app_sessions s
+        JOIN phone_app_accounts a ON a.id = s.account_id
+        WHERE s.app = ? AND s.citizenid = ?
+        ORDER BY s.last_used DESC, a.id ASC
+    ]], { app, citizenid }) or {}
+    local out = {}
+    for i = 1, #rows do out[i] = rowToAccount(rows[i]) end
+    return out
+end
+
+---Ends every session a citizen holds in an app (idempotent: no rows is a no-op).
 ---@param app string account app key
 ---@param citizenid string framework per-character id
 ---@return integer cleared sessions removed
@@ -205,6 +232,18 @@ function store.clearSession(app, citizenid)
     return MySQL.update.await(
         'DELETE FROM phone_app_sessions WHERE app = ? AND citizenid = ?',
         { app, citizenid }
+    ) or 0
+end
+
+---Ends one account's session, leaving the citizen's other sessions in the app signed in.
+---@param app string account app key
+---@param citizenid string framework per-character id
+---@param accountId number account row id
+---@return integer cleared sessions removed
+function store.clearAccountSession(app, citizenid, accountId)
+    return MySQL.update.await(
+        'DELETE FROM phone_app_sessions WHERE app = ? AND citizenid = ? AND account_id = ?',
+        { app, citizenid, accountId }
     ) or 0
 end
 
@@ -229,7 +268,8 @@ function store.sessionCitizens(app, accountId)
     return out
 end
 
----First (only, for single-session apps) account this citizen is signed into. Read-only.
+---The citizen's active account in an app: the session they most recently signed into or
+---switched to. Nil when they hold no session. Read-only.
 ---@param app string account app key
 ---@param citizenid string framework per-character id
 ---@return table|nil account
@@ -238,6 +278,7 @@ function store.getSessionAccount(app, citizenid)
         SELECT a.* FROM phone_app_sessions s
         JOIN phone_app_accounts a ON a.id = s.account_id
         WHERE s.app = ? AND s.citizenid = ?
+        ORDER BY s.last_used DESC, a.id ASC
         LIMIT 1
     ]], { app, citizenid })
     return rowToAccount(row)

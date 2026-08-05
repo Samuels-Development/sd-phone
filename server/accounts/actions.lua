@@ -251,11 +251,20 @@ end
 function actions.logout(source, payload)
     local app = payload and payload.app
     -- SWITCH_APPS rather than DIRECT_APPS: Squawk registers itself, but it still needs a plain
-    -- logout, or its only exit is signOutOrSwitch and it can never reach a signed-out state.
+    -- logout, or the switcher is its only way out of an account.
     if not SWITCH_APPS[app] then return fail('Unknown app') end
     local cid = player.getIdentifier(source)
-    if cid then store.clearSession(app, cid) end
-    return ok()
+    if not cid then return ok({ switchedTo = nil }) end
+
+    -- Ends this account's session only. Any other account the player is signed into stays that
+    -- way, and the next most recently used one becomes active, so they land on it rather than
+    -- at the sign-in screen.
+    local current = store.getSessionAccount(app, cid)
+    if not current then return ok({ switchedTo = nil }) end
+    store.clearAccountSession(app, cid, current.id)
+
+    local next_ = store.getSessionAccount(app, cid)
+    return ok({ switchedTo = next_ and next_.username or nil, me = next_ and publicAccount(next_) or nil })
 end
 
 ---Signs `cid` out of every account in one app, or out of every account app at once when `app` is
@@ -329,17 +338,14 @@ function actions.switchable(source, payload)
     if not SWITCH_APPS[app] then return fail('Unknown app') end
     local cid = player.getIdentifier(source); if not cid then return fail('Player not found') end
 
-    local current = store.getSessionAccount(app, cid)
+    -- Live sessions, not vault entries: the switcher moves between accounts the player is
+    -- actually signed into, so signing out of one drops it from the list until they add it back.
+    local signedIn = store.listSessionAccounts(app, cid)
     local out = {}
-    for _, row in ipairs(store.listVaultEntries(cid)) do
-        if row.app == app then
-            local acc = store.getAccount(app, row.username)
-            if acc then
-                out[#out + 1] = { username = acc.username, name = acc.displayName, email = acc.email }
-            end
-        end
+    for i = 1, #signedIn do
+        out[i] = { username = signedIn[i].username, name = signedIn[i].displayName, email = signedIn[i].email }
     end
-    return ok({ accounts = out, active = current and current.username or nil })
+    return ok({ accounts = out, active = signedIn[1] and signedIn[1].username or nil })
 end
 
 ---Signs the caller into another of their own saved accounts without retyping the password. The
@@ -358,6 +364,16 @@ function actions.switchAccount(source, payload)
     local username = trim(payload.username):lower()
     if username == '' then return fail('Pick an account') end
 
+    -- Already signed into it: switching is just making that session the active one, so no
+    -- password is involved. This is the path the switcher takes.
+    for _, held in ipairs(store.listSessionAccounts(app, cid)) do
+        if held.username:lower() == username then
+            store.setSession(app, cid, held.id)
+            return ok({ me = publicAccount(held) })
+        end
+    end
+
+    -- Not signed in: signing in again needs the saved password, verified against the account.
     local saved
     for _, row in ipairs(store.listVaultEntries(cid)) do
         if row.app == app and row.username:lower() == username then saved = row break end

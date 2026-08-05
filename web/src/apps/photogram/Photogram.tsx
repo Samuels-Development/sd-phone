@@ -441,7 +441,7 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
                     switchTo={switchTargetLabel(savedAccounts[0])}
                     onSignOut={() => {
                         setEditing(false);
-                        void logOutOrSwitch('photogram', savedAccounts[0]).then(switched => {
+                        void logOutOrSwitch('photogram').then(switched => {
                             if (switched) afterAccountChange();
                             else { clearSessionState('photogram:'); refreshAccounts(); setAuthed(false); }
                         });

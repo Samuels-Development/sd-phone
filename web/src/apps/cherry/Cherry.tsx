@@ -363,7 +363,7 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
                                 onChange={setProfile}
                                 switchTo={switchTargetLabel(savedAccounts[0])}
                                 onSignOut={() => {
-                                    void logOutOrSwitch('cherry', savedAccounts[0]).then(switched => {
+                                    void logOutOrSwitch('cherry').then(switched => {
                                         if (switched) afterAccountChange();
                                         else { clearSessionState('cherry:'); refreshAccounts(); setAuthed(false); }
                                     });

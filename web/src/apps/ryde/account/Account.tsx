@@ -104,7 +104,7 @@ export function Account({ onClose }: { onClose: () => void }) {
     if (!authed) return authScreen;
 
     async function signOut() {
-        const switched = await logOutOrSwitch('ryde', savedAccounts[0]);
+        const switched = await logOutOrSwitch('ryde');
         setConfirmSignOut(false);
         if (switched) { afterAccountChange(); return; }
         g.wipeAccount();

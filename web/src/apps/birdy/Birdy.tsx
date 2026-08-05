@@ -459,7 +459,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                     onSignOut={() => {
                         setEditingProfile(false);
                         setProfileOpen(false);
-                        void logOutOrSwitch('birdy', savedAccounts[0]).then(switched => {
+                        void logOutOrSwitch('birdy').then(switched => {
                             if (switched) switchedAccount();
                             else { clearSessionState('birdy:'); refreshAccounts(); setAuthed(false); }
                         });

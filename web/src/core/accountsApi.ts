@@ -34,9 +34,10 @@ export async function accountsLogin(app: string, values: Record<string, string>)
     return res.success ? { ok: true } : { ok: false, message: res.message };
 }
 
-export async function accountsLogout(app: string): Promise<void> {
-    if (!isFiveM) { devSessions[app] = null; return; }
-    await fetchNui('sd-phone:accounts:logout', { app });
+export async function accountsLogout(app: string): Promise<{ switchedTo: string | null }> {
+    if (!isFiveM) { devSessions[app] = null; return { switchedTo: null }; }
+    const d = await apiData<{ switchedTo?: string | null }>('sd-phone:accounts:logout', { app });
+    return { switchedTo: d?.switchedTo ?? null };
 }
 
 export const ACCOUNT_APPS = ['photogram', 'cherry', 'vibez', 'ryde', 'birdy', 'mail'] as const;
