@@ -359,8 +359,8 @@ function Welcome({ appName, tagline, icon, theme, onCreate, onLogin, onForgot, o
                         <Info className="mt-[2px] h-[15px] w-[15px] shrink-0" strokeWidth={2.2} />
                         <span>
                             {capacity?.limit === 1
-                                ? t('common.capOneReached', 'You already have an account for this app.')
-                                : t('common.capReached', 'You already have all {limit} accounts for this app.', { limit: String(capacity?.limit ?? 0) })}
+                                ? t('common.capOneReached', 'You can only have one account for this app.')
+                                : t('common.capReached', 'You can only have {limit} accounts for this app.', { limit: String(capacity?.limit ?? 0) })}
                         </span>
                     </p>
                 )}
