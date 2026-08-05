@@ -61,6 +61,10 @@ export function AppAuth({ appName, tagline, icon, theme, fields, onAuthed, onDis
     }, [appId, savedAccounts?.length]);
 
     const [screen, setScreen] = useSessionState<Screen>(`auth:${appName}:screen`, 'welcome');
+
+    useEffect(() => {
+        if (capacity && !capacity.canCreate) setScreen(s => s === 'create' ? 'welcome' : s);
+    }, [capacity, setScreen]);
     const [resetIdentity, setResetIdentity] = useSessionState<string>(`auth:${appName}:resetIdentity`, '');
     const [notice, setNotice] = useState<string | null>(null);
     const [successMode, setSuccessMode] = useState<'create' | 'login'>('login');
@@ -262,14 +266,16 @@ function SavedAccounts({ accounts, theme, light, ctaWhite, picking, pickError, o
                             }}
                         >
                             <span
-                                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[17px] font-bold text-white"
+                                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
                                 style={{ background: avatarTint(a.username) }}
                             >
-                                {initials(label)}
+                                <span className="block text-[18px] font-bold leading-none tracking-[0.01em] text-white">
+                                    {initials(label)}
+                                </span>
                             </span>
-                            <span className="flex min-w-0 flex-1 flex-col gap-[1px]">
-                                <span className="truncate text-[16px] font-semibold leading-tight">{label}</span>
-                                <span className="truncate text-[13px] leading-tight" style={{ color: light ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.45)' }}>
+                            <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
+                                <span className="truncate text-[17px] font-semibold leading-tight">{label}</span>
+                                <span className="truncate text-[14px] font-medium leading-tight" style={{ color: light ? 'rgba(255,255,255,0.72)' : 'rgba(0,0,0,0.6)' }}>
                                     {a.username.includes('@') ? a.username : `@${a.username}`}
                                 </span>
                             </span>

@@ -6,6 +6,8 @@ local proxyCallback = require 'client.nui'
 proxyCallback('sd-phone:accounts:register',     'sd-phone:server:accounts:register')
 proxyCallback('sd-phone:accounts:login',        'sd-phone:server:accounts:login')
 proxyCallback('sd-phone:accounts:logout',       'sd-phone:server:accounts:logout')
+proxyCallback('sd-phone:accounts:signOutAll',   'sd-phone:server:accounts:signOutAll')
+proxyCallback('sd-phone:accounts:capacity',     'sd-phone:server:accounts:capacity')
 proxyCallback('sd-phone:accounts:me',           'sd-phone:server:accounts:me')
 proxyCallback('sd-phone:accounts:switchable',   'sd-phone:server:accounts:switchable')
 proxyCallback('sd-phone:accounts:switch',       'sd-phone:server:accounts:switch')
