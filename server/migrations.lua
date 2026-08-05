@@ -30,6 +30,7 @@ local COLUMNS = {
         brightness        = 'brightness TINYINT UNSIGNED NULL',
         icon_theme        = 'icon_theme VARCHAR(16) NULL',
         icon_custom       = 'icon_custom LONGTEXT NULL',
+        palette_custom    = 'palette_custom LONGTEXT NULL',
         show_app_names    = 'show_app_names TINYINT(1) NOT NULL DEFAULT 1',
         island_pet        = 'island_pet VARCHAR(16) NULL',
         device            = "device VARCHAR(16) NOT NULL DEFAULT 'phone'",

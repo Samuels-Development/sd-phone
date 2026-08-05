@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState  } from 'react';
+import type { CSSProperties } from 'react';
 
 import { device } from '@device';
+import { isCustomPaletteId, rampFor, rampVars } from '@/apps/settings/appearance/paletteRamp';
 import { AdminPanel } from '@/admin/AdminPanel';
 import { PayphoneUI } from '@/payphone/PayphoneUI';
 import { CallLayer } from '@/apps/phone/CallLayer';
@@ -174,7 +176,13 @@ function AppContent() {
     // Tone/volume fields are deliberately NOT subscribed here — they're only
     // read inside event callbacks (via useThemeStore.getState()), so slider
     // drags in Control Center don't re-render the whole tree from the root.
-    const { theme, darkTheme, lightTheme, wallpaperLock, wallpaperHome, setTheme, setWallpaper, statusLightOverride, statusBarAutoLight, hideHomeIndicator, airplaneMode, hour24, setHour24, setSecurity } = useTheme('theme', 'darkTheme', 'lightTheme', 'wallpaperLock', 'wallpaperHome', 'setTheme', 'setWallpaper', 'statusLightOverride', 'statusBarAutoLight', 'hideHomeIndicator', 'airplaneMode', 'hour24', 'setHour24', 'setSecurity');
+    const { theme, darkTheme, lightTheme, customPalettes, wallpaperLock, wallpaperHome, setTheme, setWallpaper, statusLightOverride, statusBarAutoLight, hideHomeIndicator, airplaneMode, hour24, setHour24, setSecurity } = useTheme('theme', 'darkTheme', 'lightTheme', 'wallpaperLock', 'wallpaperHome', 'setTheme', 'setWallpaper', 'statusLightOverride', 'statusBarAutoLight', 'hideHomeIndicator', 'airplaneMode', 'hour24', 'setHour24', 'setSecurity', 'customPalettes');
+    const activeThemeId = theme === 'dark' ? darkTheme : lightTheme;
+    const themeVars = useMemo(() => {
+        if (!isCustomPaletteId(activeThemeId)) return undefined;
+        const palette = customPalettes.find(p => p.id === activeThemeId);
+        return palette ? rampVars(rampFor(palette.mode, palette)) as CSSProperties : undefined;
+    }, [activeThemeId, customPalettes]);
     const locale = useLocaleStore(s => s.locale);
     useEffect(() => { useLocaleStore.getState().hydrate(); }, []);
     useEffect(() => { void useNotifPrefsStore.getState().hydrate(); }, []);
@@ -1301,7 +1309,7 @@ function AppContent() {
     // active app drops to the deck's hidden pool and every app suspends to ~0 CPU.
     const deckActiveId = (!view || locked) ? null : currentApp;
     const deckLayer = (
-        <div key="deck-root" className={theme === 'dark' ? 'dark' : undefined} data-dark-theme={darkTheme} data-light-theme={lightTheme}>
+        <div key="deck-root" className={theme === 'dark' ? 'dark' : undefined} data-dark-theme={darkTheme} data-light-theme={lightTheme} style={themeVars}>
             <AppDeck
                 deckIds={deckIds}
                 activeId={deckActiveId}
@@ -1323,7 +1331,7 @@ function AppContent() {
         return (
             <>
                 {deckLayer}
-                <div key="shell-closed" className={theme === 'dark' ? 'dark' : undefined} data-dark-theme={darkTheme} data-light-theme={lightTheme}>
+                <div key="shell-closed" className={theme === 'dark' ? 'dark' : undefined} data-dark-theme={darkTheme} data-light-theme={lightTheme} style={themeVars}>
                 {peek && (
                     <PhoneShell peek={peek} frameColor={peekColor ?? frameColor} radioIsland={radioIsland} alarmIsland={{ ringing: !!ringingAlarm, since: ringingSince }}>
                         <div className="wallpaper absolute inset-0" style={{ backgroundImage: `url(${peekWall})` }} />
@@ -1384,7 +1392,7 @@ function AppContent() {
     return (
         <>
         {deckLayer}
-        <div key={showSetup ? 'setup' : locale} className={theme === 'dark' ? 'dark' : undefined} data-dark-theme={darkTheme} data-light-theme={lightTheme}>
+        <div key={showSetup ? 'setup' : locale} className={theme === 'dark' ? 'dark' : undefined} data-dark-theme={darkTheme} data-light-theme={lightTheme} style={themeVars}>
             {import.meta.env.DEV && device.setup && (
                 <button
                     type="button"

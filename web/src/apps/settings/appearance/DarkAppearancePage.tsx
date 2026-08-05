@@ -2,10 +2,13 @@ import { ChevronRight, MessageCircle, Phone, Star } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { useIosPush } from '@/hooks/useIosPush';
+import { useSessionState } from '@/hooks/useSessionState';
 import { useTheme } from '@/stores/themeStore';
 import type { DarkTheme } from '@/stores/themeStore';
 import { ListGroup, ListRow } from '@/ui/ListGroup';
 import { NavBar } from '@/ui/NavBar';
+import { PaletteChip, CustomPalettesSection } from './PaletteRows';
+import { PaletteEditorPage } from './PaletteEditorPage';
 import { Toggle } from '@/ui/Toggle';
 
 const PALETTES: { id: DarkTheme; label: string; swatch: { base: string; surface: string; control: string } }[] = [
@@ -36,7 +39,20 @@ const DESC: Record<DarkTheme, string> = {
 
 export function DarkAppearancePage({ onBack }: { onBack: () => void }) {
     const { goBack, pageStyle } = useIosPush(onBack);
-    const { darkTheme, setDarkTheme } = useTheme('darkTheme', 'setDarkTheme');
+    const { darkTheme, setDarkTheme, customPalettes } = useTheme('darkTheme', 'setDarkTheme', 'customPalettes');
+    const [editing, setEditing] = useSessionState<string | null>('settings:darkPaletteEditor', null);
+
+    const editTarget = editing === null || editing === 'new' ? null : customPalettes.find(p => p.id === editing) ?? null;
+    if (editing === 'new' || editTarget) {
+        return (
+            <PaletteEditorPage
+                key={editing}
+                mode="dark"
+                editing={editTarget ?? undefined}
+                onBack={() => setEditing(null)}
+            />
+        );
+    }
 
     return (
         <div className="absolute inset-0 z-30 flex flex-col bg-base text-black dark:text-white" style={pageStyle}>
@@ -60,6 +76,17 @@ export function DarkAppearancePage({ onBack }: { onBack: () => void }) {
                                 />
                             ))}
                         </ListGroup>
+                    </section>
+
+                    <section>
+                        <CustomPalettesSection
+                            mode="dark"
+                            palettes={customPalettes}
+                            selected={darkTheme}
+                            onSelect={setDarkTheme}
+                            onEdit={setEditing}
+                            onCreate={() => setEditing('new')}
+                        />
                     </section>
 
                     <section>
@@ -139,17 +166,5 @@ function TabIcon({ icon, label, active }: { icon: React.ReactNode; label: string
             {icon}
             <span className="text-[10px] font-semibold">{label}</span>
         </div>
-    );
-}
-
-function PaletteChip({ swatch }: { swatch: { base: string; surface: string; control: string } }) {
-    return (
-        <span
-            className="relative block h-[34px] w-[34px] shrink-0 overflow-hidden rounded-[9px]"
-            style={{ background: swatch.base, boxShadow: `inset 0 0 0 1px ${swatch.control}` }}
-        >
-            <span className="absolute inset-x-[5px] top-[6px] block h-[9px] rounded-[3px]" style={{ background: swatch.surface }} />
-            <span className="absolute inset-x-[5px] bottom-[6px] block h-[7px] rounded-[3px]" style={{ background: swatch.control }} />
-        </span>
     );
 }

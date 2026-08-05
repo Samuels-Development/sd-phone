@@ -417,6 +417,32 @@ lib.callback.register('sd-phone:server:settings:deleteCustomIconTheme', function
     return { success = true }
 end)
 
+---Saves one of the caller's own colour palettes, keyed by its id; the store validates every
+---field and refuses past the per-character cap.
+lib.callback.register('sd-phone:server:settings:savePalette', function(source, payload)
+    local cid = player.getIdentifier(source)
+    if not cid then return { success = false, message = 'Player not found' } end
+    if not writeAllowed(cid, 'paletteSave') then return BUSY end
+    payload = type(payload) == 'table' and payload or {}
+    local ok, reason = store.saveCustomPalette(cid, payload.palette)
+    if ok then return { success = true } end
+    if reason == 'limit' then
+        return { success = false, message = 'You have saved as many palettes as this phone holds' }
+    end
+    return { success = false, message = 'Could not save that palette' }
+end)
+
+---Removes one of the caller's own colour palettes; any device using it falls back to its
+---built-in default shade.
+lib.callback.register('sd-phone:server:settings:deletePalette', function(source, payload)
+    local cid = player.getIdentifier(source)
+    if not cid then return { success = false, message = 'Player not found' } end
+    if not writeAllowed(cid, 'paletteDelete') then return BUSY end
+    payload = type(payload) == 'table' and payload or {}
+    store.deleteCustomPalette(cid, payload.id)
+    return { success = true }
+end)
+
 ---Persists whether the caller wants app names under their home-screen icons.
 lib.callback.register('sd-phone:server:settings:setShowAppNames', function(source, payload)
     local cid = player.getIdentifier(source)

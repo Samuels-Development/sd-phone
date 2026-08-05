@@ -1,9 +1,12 @@
 import { t } from '@/i18n';
 import { useIosPush } from '@/hooks/useIosPush';
+import { useSessionState } from '@/hooks/useSessionState';
 import { useTheme } from '@/stores/themeStore';
 import type { LightTheme } from '@/stores/themeStore';
 import { ListGroup, ListRow } from '@/ui/ListGroup';
 import { NavBar } from '@/ui/NavBar';
+import { PaletteChip, CustomPalettesSection } from './PaletteRows';
+import { PaletteEditorPage } from './PaletteEditorPage';
 
 const PALETTES: { id: LightTheme; label: string; swatch: { base: string; surface: string; control: string } }[] = [
     { id: 'silver',   label: t('settings.lightSilver', 'Silver'),     swatch: { base: '#d4d4d4', surface: '#e5e5e5', control: '#c6c6c8' } },
@@ -33,7 +36,20 @@ const DESC: Record<LightTheme, string> = {
 
 export function LightAppearancePage({ onBack }: { onBack: () => void }) {
     const { goBack, pageStyle } = useIosPush(onBack);
-    const { lightTheme, setLightTheme } = useTheme('lightTheme', 'setLightTheme');
+    const { lightTheme, setLightTheme, customPalettes } = useTheme('lightTheme', 'setLightTheme', 'customPalettes');
+    const [editing, setEditing] = useSessionState<string | null>('settings:lightPaletteEditor', null);
+
+    const editTarget = editing === null || editing === 'new' ? null : customPalettes.find(p => p.id === editing) ?? null;
+    if (editing === 'new' || editTarget) {
+        return (
+            <PaletteEditorPage
+                key={editing}
+                mode="light"
+                editing={editTarget ?? undefined}
+                onBack={() => setEditing(null)}
+            />
+        );
+    }
 
     return (
         <div className="absolute inset-0 z-30 flex flex-col bg-base text-black dark:text-white" style={pageStyle}>
@@ -57,20 +73,19 @@ export function LightAppearancePage({ onBack }: { onBack: () => void }) {
                             ))}
                         </ListGroup>
                     </section>
+
+                    <section>
+                        <CustomPalettesSection
+                            mode="light"
+                            palettes={customPalettes}
+                            selected={lightTheme}
+                            onSelect={setLightTheme}
+                            onEdit={setEditing}
+                            onCreate={() => setEditing('new')}
+                        />
+                    </section>
                 </div>
             </div>
         </div>
-    );
-}
-
-function PaletteChip({ swatch }: { swatch: { base: string; surface: string; control: string } }) {
-    return (
-        <span
-            className="relative block h-[34px] w-[34px] shrink-0 overflow-hidden rounded-[9px]"
-            style={{ background: swatch.base, boxShadow: `inset 0 0 0 1px ${swatch.control}` }}
-        >
-            <span className="absolute inset-x-[5px] top-[6px] block h-[9px] rounded-[3px]" style={{ background: swatch.surface }} />
-            <span className="absolute inset-x-[5px] bottom-[6px] block h-[7px] rounded-[3px]" style={{ background: swatch.control }} />
-        </span>
     );
 }

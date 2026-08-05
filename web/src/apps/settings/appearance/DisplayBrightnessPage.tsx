@@ -9,6 +9,7 @@ import { NavBar } from '@/ui/NavBar';
 import { Toggle } from '@/ui/Toggle';
 import { DarkAppearancePage } from './DarkAppearancePage';
 import { LightAppearancePage } from './LightAppearancePage';
+import { isCustomPaletteId } from './paletteRamp';
 
 const DARK_THEME_LABEL: Record<DarkTheme, string> = {
     graphite: t('settings.darkGraphite', 'Graphite'),
@@ -45,13 +46,19 @@ export function DisplayBrightnessPage({ onBack }: { onBack: () => void }) {
         phoneScale, setPhoneScale,
         chatTextScale, setChatTextScale,
         phoneAlign, setPhoneAlign,
-    } = useTheme('theme', 'setTheme', 'darkTheme', 'lightTheme', 'brightness', 'setBrightness', 'phoneScale', 'setPhoneScale', 'chatTextScale', 'setChatTextScale', 'phoneAlign', 'setPhoneAlign');
+        customPalettes,
+    } = useTheme('theme', 'setTheme', 'darkTheme', 'lightTheme', 'brightness', 'setBrightness', 'phoneScale', 'setPhoneScale', 'chatTextScale', 'setChatTextScale', 'phoneAlign', 'setPhoneAlign', 'customPalettes');
 
     const isDark     = theme === 'dark';
     const trackEmpty = isDark ? '#3A3A3C' : '#E5E5EA';
     const [auto, setAuto] = useState(true);
     const [darkAppearanceOpen, setDarkAppearanceOpen] = useState(false);
     const [lightAppearanceOpen, setLightAppearanceOpen] = useState(false);
+
+    const activeTheme = isDark ? darkTheme : lightTheme;
+    const appearanceValue = isCustomPaletteId(activeTheme)
+        ? customPalettes.find(p => p.id === activeTheme)?.name ?? t('settings.paletteCustom', 'Custom')
+        : isDark ? DARK_THEME_LABEL[darkTheme as DarkTheme] : LIGHT_THEME_LABEL[lightTheme as LightTheme];
 
     useEffect(() => {
         if (!isDark) setDarkAppearanceOpen(false);
@@ -130,7 +137,7 @@ export function DisplayBrightnessPage({ onBack }: { onBack: () => void }) {
                                         : t('settings.lightAppearance', 'Light Appearance')}
                                 </span>
                                 <span className="mr-1 text-[17px] font-normal text-ios-gray">
-                                    {isDark ? DARK_THEME_LABEL[darkTheme] : LIGHT_THEME_LABEL[lightTheme]}
+                                    {appearanceValue}
                                 </span>
                                 <ChevronRight className="h-[17px] w-[17px] shrink-0 text-ios-gray3" strokeWidth={2.5} />
                             </button>

@@ -29,6 +29,8 @@ writeCallback('sd-phone:settings:setLightTheme', 'sd-phone:server:settings:setLi
 writeCallback('sd-phone:settings:setIconTheme',    'sd-phone:server:settings:setIconTheme')
 writeCallback('sd-phone:settings:saveCustomIconTheme',   'sd-phone:server:settings:saveCustomIconTheme')
 writeCallback('sd-phone:settings:deleteCustomIconTheme', 'sd-phone:server:settings:deleteCustomIconTheme')
+writeCallback('sd-phone:settings:savePalette',   'sd-phone:server:settings:savePalette')
+writeCallback('sd-phone:settings:deletePalette', 'sd-phone:server:settings:deletePalette')
 writeCallback('sd-phone:settings:setShowAppNames', 'sd-phone:server:settings:setShowAppNames')
 writeCallback('sd-phone:settings:setLockClock', 'sd-phone:server:settings:setLockClock')
 writeCallback('sd-phone:settings:setSecurity',  'sd-phone:server:settings:setSecurity')

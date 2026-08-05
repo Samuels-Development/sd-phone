@@ -83,6 +83,7 @@ function store.ensureSchema()
             theme              VARCHAR(8)   NULL,
             dark_theme         VARCHAR(16)  NULL,
             light_theme        VARCHAR(16)  NULL,
+            palette_custom     LONGTEXT     NULL,
             icon_theme         VARCHAR(16)  NULL,
             icon_custom        LONGTEXT     NULL,
             show_app_names     TINYINT(1)   NOT NULL DEFAULT 1,
@@ -1133,6 +1134,19 @@ function store.setTheme(citizenid, theme, device)
     ]], { citizenid, device, theme })
 end
 
+-- Mirrors CUSTOM_ID in web/src/apps/settings/appearance/paletteRamp.ts.
+---@type integer Bounds on the slug after the 'custom:' prefix. 8 keeps the longest id at 15
+---characters, which is what lets a player-designed palette share dark_theme VARCHAR(16).
+local CUSTOM_PALETTE_MIN, CUSTOM_PALETTE_MAX = 4, 8
+
+---True for a well-formed player-designed palette id.
+---@param v any client-supplied palette id
+---@return boolean
+local function isCustomPaletteId(v)
+    if type(v) ~= 'string' or not v:match('^custom:[a-z0-9]+$') then return false end
+    local slug = #v - #'custom:'
+    return slug >= CUSTOM_PALETTE_MIN and slug <= CUSTOM_PALETTE_MAX
+end
 ---@type table<string, boolean> Selectable dark-mode palettes; anything else falls back to graphite.
 local DARK_THEMES = { graphite = true, black = true, warm = true, midnight = true, moss = true, plum = true, slate = true, ocean = true, rose = true, clay = true }
 
@@ -1147,7 +1161,7 @@ function store.getDarkTheme(citizenid, device)
     if not citizenid or citizenid == '' then return 'graphite' end
     local row = MySQL.single.await('SELECT dark_theme FROM phone_settings WHERE citizenid = ? AND device = ?', { citizenid, device })
     local v = row and row.dark_theme
-    if type(v) == 'string' and DARK_THEMES[v] then return v end
+    if type(v) == 'string' and (DARK_THEMES[v] or isCustomPaletteId(v)) then return v end
     return 'graphite'
 end
 
@@ -1157,7 +1171,7 @@ end
 function store.setDarkTheme(citizenid, theme, device)
     device = device or 'phone'
     if not citizenid or citizenid == '' then return end
-    if type(theme) ~= 'string' or not DARK_THEMES[theme] then theme = 'graphite' end
+    if type(theme) ~= 'string' or not (DARK_THEMES[theme] or isCustomPaletteId(theme)) then theme = 'graphite' end
     MySQL.update.await([[
         INSERT INTO phone_settings (citizenid, device, dark_theme) VALUES (?, ?, ?)
         ON DUPLICATE KEY UPDATE dark_theme = VALUES(dark_theme)
@@ -1168,7 +1182,7 @@ function store.getLightTheme(citizenid, device)
     if not citizenid or citizenid == '' then return 'silver' end
     local row = MySQL.single.await('SELECT light_theme FROM phone_settings WHERE citizenid = ? AND device = ?', { citizenid, device })
     local v = row and row.light_theme
-    if type(v) == 'string' and LIGHT_THEMES[v] then return v end
+    if type(v) == 'string' and (LIGHT_THEMES[v] or isCustomPaletteId(v)) then return v end
     return 'silver'
 end
 
@@ -1178,7 +1192,7 @@ end
 function store.setLightTheme(citizenid, theme, device)
     device = device or 'phone'
     if not citizenid or citizenid == '' then return end
-    if type(theme) ~= 'string' or not LIGHT_THEMES[theme] then theme = 'silver' end
+    if type(theme) ~= 'string' or not (LIGHT_THEMES[theme] or isCustomPaletteId(theme)) then theme = 'silver' end
     MySQL.update.await([[
         INSERT INTO phone_settings (citizenid, device, light_theme) VALUES (?, ?, ?)
         ON DUPLICATE KEY UPDATE light_theme = VALUES(light_theme)
@@ -1576,6 +1590,110 @@ function store.deleteCustomIconTheme(citizenid, id)
     return true
 end
 
+-- Mirrors MAX_CUSTOM_PALETTES / PALETTE_NAME_MAX in
+-- web/src/apps/settings/appearance/paletteRamp.ts.
+---@type integer Cap on player-designed palettes per character.
+local MAX_CUSTOM_PALETTES = 12
+---@type integer Longest palette name a player may store.
+local PALETTE_NAME_MAX = 24
+
+---Validates one player-designed palette, rebuilding it from only the sanitised fields so no
+---client JSON is ever stored verbatim. Nil when any field is malformed.
+---@param v any client-supplied palette
+---@return table|nil palette { id: string, name: string, mode: string, hue, tint, depth: integer }
+local function sanitizeCustomPalette(v)
+    if type(v) ~= 'table' or not isCustomPaletteId(v.id) then return nil end
+    if v.mode ~= 'light' and v.mode ~= 'dark' then return nil end
+    if type(v.name) ~= 'string' then return nil end
+    local name = (v.name:gsub('^%s+', ''):gsub('%s+$', ''))
+    local chars = nameLength(name)
+    if not chars or chars < 1 or chars > PALETTE_NAME_MAX then return nil end
+    local hue, tint, depth = tonumber(v.hue), tonumber(v.tint), tonumber(v.depth)
+    if not hue or not tint or not depth then return nil end
+    return {
+        id    = v.id,
+        name  = name,
+        mode  = v.mode,
+        hue   = math.floor(math.min(math.max(hue, 0), 359) + 0.5),
+        tint  = math.floor(math.min(math.max(tint, 0), 100) + 0.5),
+        depth = math.floor(math.min(math.max(depth, 0), 100) + 0.5),
+    }
+end
+
+---Decodes a palette_custom column into validated palettes; an unparseable column, a malformed
+---entry or a duplicate id is dropped rather than served.
+---@param raw any stored column value
+---@return table[] palettes
+local function decodeCustomPalettes(raw)
+    if not raw or raw == '' then return {} end
+    local ok, decoded = pcall(json.decode, raw)
+    if not ok or type(decoded) ~= 'table' then return {} end
+    local out, seen = {}, {}
+    for i = 1, #decoded do
+        local clean = sanitizeCustomPalette(decoded[i])
+        if clean and not seen[clean.id] and #out < MAX_CUSTOM_PALETTES then
+            seen[clean.id] = true
+            out[#out + 1] = clean
+        end
+    end
+    return out
+end
+
+---Reads a player's designed palettes (JSON array column on the phone row, since the library is
+---shared across a character's devices even though the active choice is not). Read-only.
+---@param citizenid string framework per-character id
+---@return table[] palettes
+function store.getCustomPalettes(citizenid)
+    if not citizenid or citizenid == '' then return {} end
+    local row = MySQL.single.await("SELECT palette_custom FROM phone_settings WHERE citizenid = ? AND device = 'phone'", { citizenid })
+    if not row then return {} end
+    return decodeCustomPalettes(row.palette_custom)
+end
+
+---Upserts one player-designed palette by id, capped at MAX_CUSTOM_PALETTES per character.
+---@param citizenid string framework per-character id
+---@param palette any client-supplied palette definition
+---@return boolean ok, string|nil reason 'invalid' or 'limit' when refused
+function store.saveCustomPalette(citizenid, palette)
+    if not citizenid or citizenid == '' then return false, 'invalid' end
+    local clean = sanitizeCustomPalette(palette)
+    if not clean then return false, 'invalid' end
+    local list = store.getCustomPalettes(citizenid)
+    local at
+    for i = 1, #list do
+        if list[i].id == clean.id then at = i break end
+    end
+    if not at and #list >= MAX_CUSTOM_PALETTES then return false, 'limit' end
+    list[at or (#list + 1)] = clean
+    MySQL.update.await([[
+        INSERT INTO phone_settings (citizenid, device, palette_custom) VALUES (?, 'phone', ?)
+        ON DUPLICATE KEY UPDATE palette_custom = VALUES(palette_custom)
+    ]], { citizenid, json.encode(list) })
+    return true, nil
+end
+
+---Removes one player-designed palette. Every device row pointing at it falls back to its
+---built-in default in the same statement, so no row is left naming a palette that is gone.
+---@param citizenid string framework per-character id
+---@param id any palette id to remove
+---@return boolean removed
+function store.deleteCustomPalette(citizenid, id)
+    if not citizenid or citizenid == '' or not isCustomPaletteId(id) then return false end
+    local list = store.getCustomPalettes(citizenid)
+    local kept, removed = {}, false
+    for i = 1, #list do
+        if list[i].id == id then removed = true else kept[#kept + 1] = list[i] end
+    end
+    if not removed then return false end
+    MySQL.update.await([[
+        UPDATE phone_settings
+        SET palette_custom = CASE WHEN device = 'phone' THEN ? ELSE palette_custom END,
+            dark_theme     = CASE WHEN dark_theme  = ? THEN 'graphite' ELSE dark_theme  END,
+            light_theme    = CASE WHEN light_theme = ? THEN 'silver'   ELSE light_theme END
+        WHERE citizenid = ?
+    ]], { json.encode(kept), id, id, citizenid })
+    return true
+end
 ---Returns true if a player wants app names printed under their home-screen icons. Read-only.
 ---@param citizenid string framework per-character id
 ---@return boolean showAppNames
@@ -1711,7 +1829,7 @@ function store.snapshot(citizenid, device)
     -- pack are ACTIVE stay on the device row above.
     local shared = row
     if device ~= 'phone' then
-        shared = MySQL.single.await("SELECT custom_wallpapers, icon_custom FROM phone_settings WHERE citizenid = ? AND device = 'phone'", { citizenid })
+        shared = MySQL.single.await("SELECT custom_wallpapers, icon_custom, palette_custom FROM phone_settings WHERE citizenid = ? AND device = 'phone'", { citizenid })
     end
 
     local airplane = airplaneCache[airplaneKey(citizenid, device)]
@@ -1731,9 +1849,9 @@ function store.snapshot(citizenid, device)
         hour24 = defaultHour24()
     end
     local dark = row and row.dark_theme
-    if type(dark) ~= 'string' or not DARK_THEMES[dark] then dark = 'graphite' end
+    if type(dark) ~= 'string' or not (DARK_THEMES[dark] or isCustomPaletteId(dark)) then dark = 'graphite' end
     local light = row and row.light_theme
-    if type(light) ~= 'string' or not LIGHT_THEMES[light] then light = 'silver' end
+    if type(light) ~= 'string' or not (LIGHT_THEMES[light] or isCustomPaletteId(light)) then light = 'silver' end
     local icons = row and row.icon_theme
     if not isStorableIconTheme(icons) then icons = 'default' end
     local showAppNames = row == nil or isTruthy(row.show_app_names)
@@ -1750,6 +1868,7 @@ function store.snapshot(citizenid, device)
         lightTheme       = light,
         iconTheme        = icons,
         customIconThemes = shared and decodeCustomIconThemes(shared.icon_custom) or {},
+        customPalettes   = shared and decodeCustomPalettes(shared.palette_custom) or {},
         showAppNames     = showAppNames,
         lockClock        = row and decodeColumn(row.lock_clock, nil) or nil,
         wallpaper        = (row and row.wallpaper ~= '') and row.wallpaper or nil,
