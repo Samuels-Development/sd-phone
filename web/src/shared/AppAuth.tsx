@@ -192,6 +192,9 @@ export function AppAuth({ appName, tagline, icon, theme, fields, onAuthed, onDis
                             savedUsername={savedLogin?.username}
                             quickBusy={quickBusy}
                             onQuickLogin={savedLogin ? () => void quickLogin() : undefined}
+                            savedAccounts={savedAccounts}
+                            onPickAccount={onPickAccount}
+                            onPicked={() => beginSuccess('login', {})}
                             onBack={() => go('welcome')}
                             onAuthed={vals => beginSuccess(screen === 'login' ? 'login' : 'create', vals)}
                             onSubmit={onSubmit}
@@ -210,6 +213,52 @@ export function AppAuth({ appName, tagline, icon, theme, fields, onAuthed, onDis
                     onConfirm={() => finishAuth(true)}
                 />
             )}
+        </div>
+    );
+}
+
+function SavedAccounts({ accounts, theme, light, ctaWhite, picking, pickError, onPick }: {
+    accounts:  { username: string; name?: string }[];
+    theme:     AppAuthTheme;
+    light:     boolean;
+    ctaWhite:  boolean;
+    picking:   string | null;
+    pickError: string | null;
+    onPick:    (username: string) => void;
+}) {
+    if (accounts.length === 0) return null;
+    return (
+        <div className="mb-4">
+            <p className="px-1 pb-2 text-[13px] font-semibold uppercase tracking-wide" style={{ color: light ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.45)' }}>
+                {t('common.continueAs', 'Continue as')}
+            </p>
+            <div className="overflow-hidden rounded-[14px]" style={{ background: light ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.05)' }}>
+                {accounts.map((a, i) => (
+                    <button
+                        key={a.username}
+                        type="button"
+                        onClick={() => onPick(a.username)}
+                        disabled={!!picking}
+                        className="flex w-full items-center gap-3 px-4 py-3 text-left active:opacity-70 disabled:opacity-50"
+                        style={i > 0 ? { borderTop: `0.5px solid ${light ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)'}` } : undefined}
+                    >
+                        <span
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                            style={{ background: light ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.07)' }}
+                        >
+                            <UserRound className="h-[18px] w-[18px]" strokeWidth={2.2} />
+                        </span>
+                        <span className="flex min-w-0 flex-1 flex-col">
+                            <span className="truncate text-[16px] font-semibold">{a.name || a.username}</span>
+                            <span className="truncate text-[13px]" style={{ color: light ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>@{a.username}</span>
+                        </span>
+                        <span className="shrink-0 text-[15px] font-bold" style={{ color: ctaWhite ? '#ffffff' : theme.accent }}>
+                            {picking === a.username ? t('common.pleaseWait', 'Please wait…') : t('common.logIn', 'Log in')}
+                        </span>
+                    </button>
+                ))}
+            </div>
+            {pickError && <p className="px-1 pt-2 text-[13px]" style={{ color: '#e0245e' }}>{pickError}</p>}
         </div>
     );
 }
@@ -275,40 +324,15 @@ function Welcome({ appName, tagline, icon, theme, onCreate, onLogin, onForgot, o
                 </p>
             </div>
             <div className="px-6 pb-10">
-                {accounts.length > 0 && (
-                    <div className="mb-4">
-                        <p className="px-1 pb-2 text-[13px] font-semibold uppercase tracking-wide" style={{ color: light ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.45)' }}>
-                            {t('common.continueAs', 'Continue as')}
-                        </p>
-                        <div className="overflow-hidden rounded-[14px]" style={{ background: light ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.05)' }}>
-                            {accounts.map((a, i) => (
-                                <button
-                                    key={a.username}
-                                    type="button"
-                                    onClick={() => void pick(a.username)}
-                                    disabled={!!picking}
-                                    className="flex w-full items-center gap-3 px-4 py-3 text-left active:opacity-70 disabled:opacity-50"
-                                    style={i > 0 ? { borderTop: `0.5px solid ${light ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)'}` } : undefined}
-                                >
-                                    <span
-                                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-                                        style={{ background: light ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.07)' }}
-                                    >
-                                        <UserRound className="h-[18px] w-[18px]" strokeWidth={2.2} />
-                                    </span>
-                                    <span className="flex min-w-0 flex-1 flex-col">
-                                        <span className="truncate text-[16px] font-semibold">{a.name || a.username}</span>
-                                        <span className="truncate text-[13px]" style={{ color: light ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>@{a.username}</span>
-                                    </span>
-                                    <span className="shrink-0 text-[15px] font-bold" style={{ color: ctaWhite ? '#ffffff' : theme.accent }}>
-                                        {picking === a.username ? t('common.pleaseWait', 'Please wait…') : t('common.logIn', 'Log in')}
-                                    </span>
-                                </button>
-                            ))}
-                        </div>
-                        {pickError && <p className="px-1 pt-2 text-[13px]" style={{ color: '#e0245e' }}>{pickError}</p>}
-                    </div>
-                )}
+                <SavedAccounts
+                    accounts={accounts}
+                    theme={theme}
+                    light={light}
+                    ctaWhite={ctaWhite}
+                    picking={picking}
+                    pickError={pickError}
+                    onPick={pick}
+                />
                 <button
                     type="button"
                     onClick={onCreate}
@@ -390,7 +414,7 @@ function generateStrongPassword() {
     return `${group(0)}-${group(6)}-${group(12)}`;
 }
 
-function AuthForm({ mode, appName, icon, theme, fields, notice, myNumber, myEmails, savedUsername, quickBusy, onQuickLogin, onBack, onAuthed, onSubmit }: {
+function AuthForm({ mode, appName, icon, theme, fields, notice, myNumber, myEmails, savedUsername, quickBusy, onQuickLogin, savedAccounts, onPickAccount, onPicked, onBack, onAuthed, onSubmit }: {
     mode:     'create' | 'login';
     appName:  string;
     icon?:    string;
@@ -402,11 +426,28 @@ function AuthForm({ mode, appName, icon, theme, fields, notice, myNumber, myEmai
     savedUsername?: string;
     quickBusy?: boolean;
     onQuickLogin?: () => void;
+    savedAccounts?: { username: string; name?: string }[];
+    onPickAccount?: (username: string) => Promise<{ ok: boolean; message?: string }>;
+    onPicked?: () => void;
     onBack:   () => void;
     onAuthed: (values: Record<string, string>) => void;
     onSubmit?: (mode: 'create' | 'login', values: Record<string, string>) => Promise<{ ok: boolean; message?: string; field?: string }>;
 }) {
     const isCreate = mode === 'create';
+
+    const [picking, setPicking] = useState<string | null>(null);
+    const [pickError, setPickError] = useState<string | null>(null);
+    const pickable = !isCreate && onPickAccount ? (savedAccounts ?? []) : [];
+
+    async function pick(username: string) {
+        if (picking || !onPickAccount) return;
+        setPicking(username);
+        setPickError(null);
+        const res = await onPickAccount(username);
+        setPicking(null);
+        if (res.ok) onPicked?.();
+        else setPickError(res.message ?? t('common.couldNotSignIn', 'Could not sign in to that account'));
+    }
     const hasPassword = isCreate && fields.some(f => f.type === 'password');
 
     const shown = useMemo<AppAuthField[]>(() => {
@@ -628,7 +669,19 @@ function AuthForm({ mode, appName, icon, theme, fields, notice, myNumber, myEmai
                     {busy ? t('common.pleaseWait', 'Please wait…') : heading}
                 </button>
 
-                {!isCreate && savedUsername && onQuickLogin && (
+                {pickable.length > 0 ? (
+                    <div className="mt-5">
+                        <SavedAccounts
+                            accounts={pickable}
+                            theme={theme}
+                            light={false}
+                            ctaWhite={false}
+                            picking={picking}
+                            pickError={pickError}
+                            onPick={u => void pick(u)}
+                        />
+                    </div>
+                ) : !isCreate && savedUsername && onQuickLogin && (
                     <button
                         type="button"
                         onClick={onQuickLogin}
