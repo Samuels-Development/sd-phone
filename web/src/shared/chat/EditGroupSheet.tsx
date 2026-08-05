@@ -99,7 +99,7 @@ export function EditGroupSheet({ groupName, groupAvatar, participants, onCancel,
                                     <div className="px-1 pb-2 text-[15px] font-semibold uppercase tracking-wide text-black/60 dark:text-white/60">
                                         {t('messages.membersCount', '{count} Members', { count: participants.length + 1 })}
                                     </div>
-                                    <div className="overflow-hidden rounded-[12px] bg-base/40">
+                                    <div className="overflow-hidden rounded-[12px] bg-white dark:bg-base/40">
                                         <MemberRow contact={ME} displayName={t('messages.you', 'You')} />
                                         {participants.map(c => (
                                             <div key={c.id}>
