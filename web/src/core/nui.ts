@@ -31,7 +31,15 @@ const resourceName: string = parseResourceName(currentWindow);
 /** The resource serving this NUI page. Custom-app iframes load their SDK from it. */
 export const hostResource = resourceName;
 
-export async function fetchNui<TResp = unknown>(event: string, payload?: unknown): Promise<TResp> {
+function withDevice(event: string, payload?: unknown): unknown {
+    if (!event.startsWith('sd-phone:settings:')) return payload;
+    if (payload !== undefined && (typeof payload !== 'object' || payload === null || Array.isArray(payload))) return payload;
+    return { ...(payload as Record<string, unknown> | undefined), device: device.id };
+}
+
+export async function fetchNui<TResp = unknown>(event: string, rawPayload?: unknown): Promise<TResp> {
+    const payload = withDevice(event, rawPayload);
+
     if (!isFiveM) {
         console.debug('[sd-phone:dev] fetchNui ->', event, payload);
         return { ok: true } as unknown as TResp;
