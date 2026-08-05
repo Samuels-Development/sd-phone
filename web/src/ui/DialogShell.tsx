@@ -42,9 +42,9 @@ export function DialogShell({ title, message, exiting, forceDark = false, zIndex
                 }}
             >
                 <div className="px-5 pb-4 pt-5">
-                    <div className="text-[22px] font-semibold leading-snug">{title}</div>
+                    <div className="text-[22px] font-semibold leading-snug break-words">{title}</div>
                     {message && (
-                        <div className="mt-1.5 text-[16px] leading-snug text-black/80 dark:text-white/85">
+                        <div className="mt-1.5 text-[16px] leading-snug text-black/80 dark:text-white/85 break-words">
                             {message}
                         </div>
                     )}

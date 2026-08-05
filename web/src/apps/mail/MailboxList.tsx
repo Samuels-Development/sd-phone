@@ -8,7 +8,7 @@ import type { ComponentType } from 'react';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { ancestorZoom, trackFractionY } from '@/lib/zoom';
 import { t } from '@/i18n';
-import { getFolderLabels, unreadCount } from './data';
+import { getFolderLabels, shortEmail, unreadCount } from './data';
 import type { Folder, MailAccount, MailMessage } from './data';
 
 interface Props {
@@ -335,7 +335,7 @@ export function MailboxList({
 
             {confirmOut && activeAccount && (
                 <AlertDialog
-                    title={t('mail.signOutOfTitle', 'Sign out of {email}?', { email: activeAccount.email })}
+                    title={t('mail.signOutOfTitle', 'Sign out of {email}?', { email: shortEmail(activeAccount.email) })}
                     message={accounts.length > 1
                         ? t('mail.signOutNextMessage', "You'll stay signed in to your other mailboxes and land on one of them.")
                         : t('mail.signOutLastMessage', "This is your only mailbox, so you'll be signed out of Mail. Your saved password is kept.")}

@@ -455,6 +455,10 @@ export function unreadCount(messages: MailMessage[], folder: Folder, accountId?:
 }
 
 
+export function shortEmail(email: string): string {
+    return email.length > 26 ? `${email.slice(0, 25)}…` : email;
+}
+
 export function formatMailTime(iso: string): string {
     return formatListDate(iso);
 }
