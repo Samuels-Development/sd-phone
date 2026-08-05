@@ -641,6 +641,8 @@
     "back": "Back",
     "callSubject": "Call {subject}",
     "cancel": "Cancel",
+    "capOneReached": "You already have an account here. Log in below.",
+    "capReached": "You've used all {limit} accounts for this app. Log in below, or delete one to make room.",
     "change": "Change",
     "changeAppPassword": "Change {appName} password",
     "changeAppPasswordQ": "Change {appName} password?",

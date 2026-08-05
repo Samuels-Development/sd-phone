@@ -214,6 +214,7 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
     }
     const authScreen = (
             <AppAuth
+                appId="vibez"
                 appName="vibez"
                 tagline={t('vibez.tagline', 'Catch the vibe. Share yours.')}
                 icon="vibez"

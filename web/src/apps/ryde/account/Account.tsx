@@ -64,6 +64,7 @@ export function Account({ onClose }: { onClose: () => void }) {
 
     const authScreen = (
             <AppAuth
+                appId="ryde"
                 appName="Ryde"
                 tagline={t('ryde.tagline', 'Your ride, your schedule.')}
                 icon="ryde"

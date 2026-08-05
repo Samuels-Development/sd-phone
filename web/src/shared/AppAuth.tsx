@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AtSign, ChevronLeft, Eye, EyeOff, KeyRound, Phone, ShieldCheck, UserRound, X } from 'lucide-react';
+import { AtSign, ChevronLeft, ChevronRight, Eye, EyeOff, Info, KeyRound, Loader2, Phone, ShieldCheck, X } from 'lucide-react';
 
 import { t } from '@/i18n';
+import { accountsCapacity, type AccountCapacity } from '@/core/accountsApi';
 import { useStatusBarLight } from '@/shell/useStatusBarLight';
 import { useIosPush } from '@/hooks/useIosPush';
 import { clearSessionState, useSessionState } from '@/hooks/useSessionState';
@@ -43,16 +44,22 @@ export interface AppAuthProps {
     savedLogin?: { username: string; password: string } | null;
     myNumber?: string | null;
     myEmails?: string[] | null;
-    /** Saved logins for this app, already minus the one in use. Empty hides the picker. */
     savedAccounts?: { username: string; name?: string }[];
     onPickAccount?: (username: string) => Promise<{ ok: boolean; message?: string }>;
+    appId?: string;
 }
 
 type Screen = 'welcome' | 'create' | 'login' | 'reset' | 'resetCode' | 'success';
 
 const MODAL_OUT_MS = 300;
 
-export function AppAuth({ appName, tagline, icon, theme, fields, onAuthed, onDismiss, modal = false, onSubmit, onRequestReset, onConfirmReset, onSuggestCode, onSaveCredentials, savedLogin, myNumber, myEmails, savedAccounts, onPickAccount }: AppAuthProps) {
+export function AppAuth({ appName, tagline, icon, theme, fields, onAuthed, onDismiss, modal = false, onSubmit, onRequestReset, onConfirmReset, onSuggestCode, onSaveCredentials, savedLogin, myNumber, myEmails, savedAccounts, onPickAccount, appId }: AppAuthProps) {
+    const [capacity, setCapacity] = useState<AccountCapacity | null>(null);
+    useEffect(() => {
+        if (!appId) return;
+        void accountsCapacity(appId).then(setCapacity);
+    }, [appId, savedAccounts?.length]);
+
     const [screen, setScreen] = useSessionState<Screen>(`auth:${appName}:screen`, 'welcome');
     const [resetIdentity, setResetIdentity] = useSessionState<string>(`auth:${appName}:resetIdentity`, '');
     const [notice, setNotice] = useState<string | null>(null);
@@ -151,9 +158,7 @@ export function AppAuth({ appName, tagline, icon, theme, fields, onAuthed, onDis
                         onLogin={() => go('login')}
                         onForgot={onRequestReset ? () => go('reset') : undefined}
                         onDismiss={onDismiss ? requestDismiss : undefined}
-                        savedAccounts={savedAccounts}
-                        onPickAccount={onPickAccount}
-                        onAuthed={() => beginSuccess('login', {})}
+                        capacity={capacity}
                     />
                 </div>
                 <div className="h-full w-1/2 shrink-0">
@@ -227,43 +232,76 @@ function SavedAccounts({ accounts, theme, light, ctaWhite, picking, pickError, o
     onPick:    (username: string) => void;
 }) {
     if (accounts.length === 0) return null;
+    const hair = light ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.07)';
     return (
-        <div className="mb-4">
-            <p className="px-1 pb-2 text-[13px] font-semibold uppercase tracking-wide" style={{ color: light ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.45)' }}>
+        <div className="mb-5">
+            <p className="px-1 pb-2.5 text-[12px] font-bold uppercase tracking-[0.06em]" style={{ color: light ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.38)' }}>
                 {t('common.continueAs', 'Continue as')}
             </p>
-            <div className="overflow-hidden rounded-[14px]" style={{ background: light ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.05)' }}>
-                {accounts.map((a, i) => (
-                    <button
-                        key={a.username}
-                        type="button"
-                        onClick={() => onPick(a.username)}
-                        disabled={!!picking}
-                        className="flex w-full items-center gap-3 px-4 py-3 text-left active:opacity-70 disabled:opacity-50"
-                        style={i > 0 ? { borderTop: `0.5px solid ${light ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)'}` } : undefined}
-                    >
-                        <span
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-                            style={{ background: light ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.07)' }}
+            <div
+                className="overflow-hidden rounded-[18px]"
+                style={{
+                    background: light ? 'rgba(255,255,255,0.08)' : '#ffffff',
+                    boxShadow: light ? 'none' : '0 1px 2px rgba(0,0,0,0.06), 0 6px 16px rgba(0,0,0,0.06)',
+                }}
+            >
+                {accounts.map((a, i) => {
+                    const label   = a.name || a.username;
+                    const busy    = picking === a.username;
+                    const dimmed  = !!picking && !busy;
+                    return (
+                        <button
+                            key={a.username}
+                            type="button"
+                            onClick={() => onPick(a.username)}
+                            disabled={!!picking}
+                            className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-opacity active:bg-black/[0.03]"
+                            style={{
+                                opacity: dimmed ? 0.45 : 1,
+                                ...(i > 0 ? { borderTop: `0.5px solid ${hair}` } : {}),
+                            }}
                         >
-                            <UserRound className="h-[18px] w-[18px]" strokeWidth={2.2} />
-                        </span>
-                        <span className="flex min-w-0 flex-1 flex-col">
-                            <span className="truncate text-[16px] font-semibold">{a.name || a.username}</span>
-                            <span className="truncate text-[13px]" style={{ color: light ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>{a.username.includes('@') ? a.username : `@${a.username}`}</span>
-                        </span>
-                        <span className="shrink-0 text-[15px] font-bold" style={{ color: ctaWhite ? '#ffffff' : theme.accent }}>
-                            {picking === a.username ? t('common.pleaseWait', 'Please wait…') : t('common.logIn', 'Log in')}
-                        </span>
-                    </button>
-                ))}
+                            <span
+                                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[17px] font-bold text-white"
+                                style={{ background: avatarTint(a.username) }}
+                            >
+                                {initials(label)}
+                            </span>
+                            <span className="flex min-w-0 flex-1 flex-col gap-[1px]">
+                                <span className="truncate text-[16px] font-semibold leading-tight">{label}</span>
+                                <span className="truncate text-[13px] leading-tight" style={{ color: light ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.45)' }}>
+                                    {a.username.includes('@') ? a.username : `@${a.username}`}
+                                </span>
+                            </span>
+                            {busy
+                                ? <Loader2 className="h-[18px] w-[18px] shrink-0 animate-spin" style={{ color: ctaWhite ? '#ffffff' : theme.accent }} strokeWidth={2.6} />
+                                : <ChevronRight className="h-[18px] w-[18px] shrink-0" style={{ color: light ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.25)' }} strokeWidth={2.6} />}
+                        </button>
+                    );
+                })}
             </div>
             {pickError && <p className="px-1 pt-2 text-[13px]" style={{ color: '#e0245e' }}>{pickError}</p>}
         </div>
     );
 }
 
-function Welcome({ appName, tagline, icon, theme, onCreate, onLogin, onForgot, onDismiss, savedAccounts, onPickAccount, onAuthed }: {
+function initials(label: string): string {
+    const clean = label.split('@')[0].replace(/[^\p{L}\p{N} ._-]/gu, ' ').trim();
+    const parts = clean.split(/[\s._-]+/).filter(Boolean);
+    if (parts.length === 0) return '?';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+const AVATAR_TINTS = ['#ff6b6b', '#f7934c', '#e0a800', '#3ec46d', '#0a84ff', '#5e5ce6', '#bf5af2', '#ff2d92'];
+
+function avatarTint(seed: string): string {
+    let h = 0;
+    for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+    return AVATAR_TINTS[h % AVATAR_TINTS.length];
+}
+
+function Welcome({ appName, tagline, icon, theme, onCreate, onLogin, onForgot, onDismiss, capacity }: {
     appName:  string;
     tagline:  string;
     icon?:    string;
@@ -272,26 +310,12 @@ function Welcome({ appName, tagline, icon, theme, onCreate, onLogin, onForgot, o
     onLogin:  () => void;
     onForgot?: () => void;
     onDismiss?: () => void;
-    savedAccounts?: { username: string; name?: string }[];
-    onPickAccount?: (username: string) => Promise<{ ok: boolean; message?: string }>;
-    onAuthed: () => void;
+    capacity?: AccountCapacity | null;
 }) {
     const light    = theme.welcomeText === 'light';
     const ctaWhite = !!theme.welcomeCtaWhite;
+    const full     = capacity ? !capacity.canCreate : false;
 
-    const [picking, setPicking] = useState<string | null>(null);
-    const [pickError, setPickError] = useState<string | null>(null);
-    const accounts = onPickAccount ? (savedAccounts ?? []) : [];
-
-    async function pick(username: string) {
-        if (picking || !onPickAccount) return;
-        setPicking(username);
-        setPickError(null);
-        const res = await onPickAccount(username);
-        setPicking(null);
-        if (res.ok) onAuthed();
-        else setPickError(res.message ?? t('common.couldNotSignIn', 'Could not sign in to that account'));
-    }
     return (
         <div
             className={`relative flex h-full flex-col ${light ? 'text-white' : 'text-black'}`}
@@ -324,25 +348,29 @@ function Welcome({ appName, tagline, icon, theme, onCreate, onLogin, onForgot, o
                 </p>
             </div>
             <div className="px-6 pb-10">
-                <SavedAccounts
-                    accounts={accounts}
-                    theme={theme}
-                    light={light}
-                    ctaWhite={ctaWhite}
-                    picking={picking}
-                    pickError={pickError}
-                    onPick={pick}
-                />
                 <button
                     type="button"
-                    onClick={onCreate}
-                    className="w-full rounded-full py-4 text-[17px] font-bold active:opacity-90"
-                    style={ctaWhite
-                        ? { background: '#ffffff', color: theme.accent }
-                        : { background: theme.accent, color: '#ffffff' }}
+                    onClick={full ? undefined : onCreate}
+                    disabled={full}
+                    className={`w-full rounded-full py-4 text-[17px] font-bold ${full ? 'cursor-default' : 'active:opacity-90'}`}
+                    style={full
+                        ? { background: light ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.07)', color: light ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)' }
+                        : ctaWhite
+                            ? { background: '#ffffff', color: theme.accent }
+                            : { background: theme.accent, color: '#ffffff' }}
                 >
                     {t('common.createAccount', 'Create account')}
                 </button>
+                {full && (
+                    <p className="mt-2.5 flex items-start justify-center gap-1.5 px-2 text-center text-[13px] leading-snug" style={{ color: light ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.45)' }}>
+                        <Info className="mt-[1px] h-[14px] w-[14px] shrink-0" strokeWidth={2.2} />
+                        <span>
+                            {capacity?.limit === 1
+                                ? t('common.capOneReached', 'You already have an account here. Log in below.')
+                                : t('common.capReached', "You've used all {limit} accounts for this app. Log in below, or delete one to make room.", { limit: String(capacity?.limit ?? 0) })}
+                        </span>
+                    </p>
+                )}
                 <button
                     type="button"
                     onClick={onLogin}

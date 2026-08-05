@@ -286,6 +286,7 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
 
     const authScreen = (
             <AppAuth
+                appId="photogram"
                 appName="Photogram"
                 tagline={t('photogram.tagline', 'Sign up to see photos from your friends.')}
                 icon="photogram"

@@ -284,6 +284,27 @@ function actions.signOutEverywhere(cid, app)
     return signedOut
 end
 
+---How many accounts the caller has in `app` against the configured cap, plus the refusal to show
+---when they are at it. Read-only; the create paths enforce the same cap themselves.
+---@param source number player server id
+---@param payload table|nil client-supplied { app }
+---@return table envelope on success data = { limit, count, canCreate, message? }
+function actions.capacity(source, payload)
+    local app = payload and payload.app
+    if not ALL_APPS[app] then return fail('Unknown app') end
+    local cid = player.getIdentifier(source); if not cid then return fail('Player not found') end
+
+    -- Mail predates the engine, so its mailboxes are counted off its own created_by_cid rather
+    -- than the engine's account table, exactly as its own create path does.
+    local key = tostring(app)
+    local count = key == 'mail'
+        and mailStore.countAccountsCreatedBy(cid)
+        or store.countAccountsFor(key, cid)
+
+    local capped = actions.accountCapMessage(key, count)
+    return ok({ limit = accountLimit(key), count = count, canCreate = capped == nil, message = capped })
+end
+
 ---Signs the caller out of one app's accounts, or out of every account app when no app is given.
 ---@param source number player server id
 ---@param payload table|nil client-supplied { app? }

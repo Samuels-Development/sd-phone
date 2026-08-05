@@ -295,6 +295,7 @@ export function Mail({ onClose }: { onClose: () => void }) {
 
     const authScreen = (
             <AppAuth
+                appId="mail"
                 appName={t('mail.appName', 'Mail')}
                 tagline={t('mail.tagline', 'All your email in one place.')}
                 icon="mail"

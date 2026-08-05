@@ -269,6 +269,7 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
     }
     const authScreen = (
             <AppAuth
+                appId="cherry"
                 appName="Cherry"
                 tagline={t('cherry.tagline', 'Find your person in Los Santos.')}
                 icon="cherry"

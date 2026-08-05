@@ -125,6 +125,19 @@ export async function accountsSavedLogin(app: string): Promise<{ username: strin
     return e ? { username: e.username, password: e.password } : null;
 }
 
+export interface AccountCapacity {
+    limit:     number;
+    count:     number;
+    canCreate: boolean;
+    message?:  string;
+}
+
+export async function accountsCapacity(app: string): Promise<AccountCapacity | null> {
+    if (!isFiveM) return { limit: 3, count: 0, canCreate: true };
+    const d = await apiData<AccountCapacity>('sd-phone:accounts:capacity', { app });
+    return d ?? null;
+}
+
 export async function accountsSavedLogins(app: string): Promise<{ username: string; password: string }[]> {
     const entries = await accountsListPasswords();
     return entries.filter(x => x.app === app).map(e => ({ username: e.username, password: e.password }));
