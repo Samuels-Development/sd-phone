@@ -11,6 +11,70 @@
     --control:  198 198 200;
 }
 
+[data-light-theme="snow"] {
+    --ios-gray: 99 99 105;
+    --base:     245 245 247;
+    --surface:  255 255 255;
+    --elevated: 255 255 255;
+    --control:  219 219 224;
+}
+[data-light-theme="linen"] {
+    --ios-gray: 99 96 88;
+    --base:     240 237 230;
+    --surface:  250 248 243;
+    --elevated: 255 254 250;
+    --control:  214 210 200;
+}
+[data-light-theme="sky"] {
+    --ios-gray: 82 90 102;
+    --base:     208 216 226;
+    --surface:  228 234 242;
+    --elevated: 240 245 250;
+    --control:  190 200 212;
+}
+[data-light-theme="mint"] {
+    --ios-gray: 80 92 84;
+    --base:     208 224 214;
+    --surface:  229 240 233;
+    --elevated: 241 248 244;
+    --control:  190 206 196;
+}
+[data-light-theme="blush"] {
+    --ios-gray: 98 84 88;
+    --base:     228 212 216;
+    --surface:  242 230 233;
+    --elevated: 250 243 245;
+    --control:  210 192 198;
+}
+[data-light-theme="sand"] {
+    --ios-gray: 96 89 78;
+    --base:     224 214 200;
+    --surface:  238 231 220;
+    --elevated: 247 242 234;
+    --control:  206 195 180;
+}
+[data-light-theme="lavender"] {
+    --ios-gray: 90 85 100;
+    --base:     216 210 228;
+    --surface:  234 230 242;
+    --elevated: 245 242 250;
+    --control:  198 191 212;
+}
+[data-light-theme="stone"] {
+    --ios-gray: 80 84 90;
+    --base:     202 206 211;
+    --surface:  223 226 230;
+    --elevated: 237 239 242;
+    --control:  188 192 198;
+}
+[data-light-theme="dusk"] {
+    --ios-gray: 76 78 86;
+    --base:     196 198 204;
+    --surface:  216 218 224;
+    --elevated: 232 233 238;
+    --control:  182 184 192;
+}
+
 .dark {
     --ios-gray: 161 161 168;
     --base:      11 11 13;

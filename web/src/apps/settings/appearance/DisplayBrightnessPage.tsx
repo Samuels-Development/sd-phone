@@ -4,10 +4,11 @@ import { Check, ChevronRight, Minus, Moon, Plus, Sun } from 'lucide-react';
 import { t } from '@/i18n';
 import { useIosPush } from '@/hooks/useIosPush';
 import { useTheme } from '@/stores/themeStore';
-import type { PhoneAlign, DarkTheme } from '@/stores/themeStore';
+import type { PhoneAlign, DarkTheme, LightTheme } from '@/stores/themeStore';
 import { NavBar } from '@/ui/NavBar';
 import { Toggle } from '@/ui/Toggle';
 import { DarkAppearancePage } from './DarkAppearancePage';
+import { LightAppearancePage } from './LightAppearancePage';
 
 const DARK_THEME_LABEL: Record<DarkTheme, string> = {
     graphite: t('settings.darkGraphite', 'Graphite'),
@@ -22,24 +23,39 @@ const DARK_THEME_LABEL: Record<DarkTheme, string> = {
     clay: t('settings.darkClay', 'Clay'),
 };
 
+const LIGHT_THEME_LABEL: Record<LightTheme, string> = {
+    silver:   t('settings.lightSilver', 'Silver'),
+    snow:     t('settings.lightSnow', 'Snow'),
+    linen:    t('settings.lightLinen', 'Linen'),
+    sky:      t('settings.lightSky', 'Sky'),
+    mint:     t('settings.lightMint', 'Mint'),
+    blush:    t('settings.lightBlush', 'Blush'),
+    sand:     t('settings.lightSand', 'Sand'),
+    lavender: t('settings.lightLavender', 'Lavender'),
+    stone:    t('settings.lightStone', 'Stone'),
+    dusk:     t('settings.lightDusk', 'Dusk'),
+};
+
 export function DisplayBrightnessPage({ onBack }: { onBack: () => void }) {
     const { goBack, pageStyle } = useIosPush(onBack);
     const {
         theme, setTheme,
-        darkTheme,
+        darkTheme, lightTheme,
         brightness, setBrightness,
         phoneScale, setPhoneScale,
         chatTextScale, setChatTextScale,
         phoneAlign, setPhoneAlign,
-    } = useTheme('theme', 'setTheme', 'darkTheme', 'brightness', 'setBrightness', 'phoneScale', 'setPhoneScale', 'chatTextScale', 'setChatTextScale', 'phoneAlign', 'setPhoneAlign');
+    } = useTheme('theme', 'setTheme', 'darkTheme', 'lightTheme', 'brightness', 'setBrightness', 'phoneScale', 'setPhoneScale', 'chatTextScale', 'setChatTextScale', 'phoneAlign', 'setPhoneAlign');
 
     const isDark     = theme === 'dark';
     const trackEmpty = isDark ? '#3A3A3C' : '#E5E5EA';
     const [auto, setAuto] = useState(true);
     const [darkAppearanceOpen, setDarkAppearanceOpen] = useState(false);
+    const [lightAppearanceOpen, setLightAppearanceOpen] = useState(false);
 
     useEffect(() => {
         if (!isDark) setDarkAppearanceOpen(false);
+        if (isDark) setLightAppearanceOpen(false);
     }, [isDark]);
 
     const CHAT_MIN = 0.8, CHAT_MAX = 1.5;
@@ -102,24 +118,27 @@ export function DisplayBrightnessPage({ onBack }: { onBack: () => void }) {
                     </section>
 
                     <section>
-                        <div className={`overflow-hidden rounded-[12px] bg-surface ${isDark ? '' : 'opacity-45'}`}>
+                        <div className="overflow-hidden rounded-[12px] bg-surface">
                             <button
                                 type="button"
-                                disabled={!isDark}
-                                onClick={() => setDarkAppearanceOpen(true)}
-                                className="flex w-full items-center px-4 py-3 text-left enabled:active:bg-black/5 dark:enabled:active:bg-white/5"
+                                onClick={() => (isDark ? setDarkAppearanceOpen(true) : setLightAppearanceOpen(true))}
+                                className="flex w-full items-center px-4 py-3 text-left active:bg-black/5 dark:active:bg-white/5"
                             >
                                 <span className="flex-1 text-[17px] font-normal text-black dark:text-white">
-                                    {t('settings.darkAppearance', 'Dark Appearance')}
+                                    {isDark
+                                        ? t('settings.darkAppearance', 'Dark Appearance')
+                                        : t('settings.lightAppearance', 'Light Appearance')}
                                 </span>
-                                <span className="mr-1 text-[17px] font-normal text-ios-gray">{DARK_THEME_LABEL[darkTheme]}</span>
+                                <span className="mr-1 text-[17px] font-normal text-ios-gray">
+                                    {isDark ? DARK_THEME_LABEL[darkTheme] : LIGHT_THEME_LABEL[lightTheme]}
+                                </span>
                                 <ChevronRight className="h-[17px] w-[17px] shrink-0 text-ios-gray3" strokeWidth={2.5} />
                             </button>
                         </div>
                         <p className="mt-1.5 px-1 text-[12px] leading-snug text-ios-gray">
                             {isDark
                                 ? t('settings.darkAppearanceHint', 'Choose the shade of dark mode used across the whole phone.')
-                                : t('settings.darkAppearanceHintLight', 'Turn on Dark above to choose a dark-mode shade.')}
+                                : t('settings.lightAppearanceHint', 'Choose the shade of light mode used across the whole phone.')}
                         </p>
                     </section>
 
@@ -217,6 +236,7 @@ export function DisplayBrightnessPage({ onBack }: { onBack: () => void }) {
                 </div>
             </div>
             {darkAppearanceOpen && <DarkAppearancePage onBack={() => setDarkAppearanceOpen(false)} />}
+            {lightAppearanceOpen && <LightAppearancePage onBack={() => setLightAppearanceOpen(false)} />}
         </div>
     );
 }

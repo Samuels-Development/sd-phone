@@ -82,6 +82,7 @@ function store.ensureSchema()
             setup_done         TINYINT(1)   NULL,
             theme              VARCHAR(8)   NULL,
             dark_theme         VARCHAR(16)  NULL,
+            light_theme        VARCHAR(16)  NULL,
             icon_theme         VARCHAR(16)  NULL,
             icon_custom        LONGTEXT     NULL,
             show_app_names     TINYINT(1)   NOT NULL DEFAULT 1,
@@ -1135,6 +1136,9 @@ end
 ---@type table<string, boolean> Selectable dark-mode palettes; anything else falls back to graphite.
 local DARK_THEMES = { graphite = true, black = true, warm = true, midnight = true, moss = true, plum = true, slate = true, ocean = true, rose = true, clay = true }
 
+---@type table<string, boolean> Selectable light-mode palettes; anything else falls back to silver.
+local LIGHT_THEMES = { silver = true, snow = true, linen = true, sky = true, mint = true, blush = true, sand = true, lavender = true, stone = true, dusk = true }
+
 ---Returns a player's selected dark-mode palette, defaulting to 'graphite'. Read-only.
 ---@param citizenid string framework per-character id
 ---@return string darkTheme a key of DARK_THEMES
@@ -1157,6 +1161,27 @@ function store.setDarkTheme(citizenid, theme, device)
     MySQL.update.await([[
         INSERT INTO phone_settings (citizenid, device, dark_theme) VALUES (?, ?, ?)
         ON DUPLICATE KEY UPDATE dark_theme = VALUES(dark_theme)
+    ]], { citizenid, device, theme })
+end
+function store.getLightTheme(citizenid, device)
+    device = device or 'phone'
+    if not citizenid or citizenid == '' then return 'silver' end
+    local row = MySQL.single.await('SELECT light_theme FROM phone_settings WHERE citizenid = ? AND device = ?', { citizenid, device })
+    local v = row and row.light_theme
+    if type(v) == 'string' and LIGHT_THEMES[v] then return v end
+    return 'silver'
+end
+
+---Persists a player's light-mode palette (upsert), whitelisted to the known values.
+---@param citizenid string framework per-character id
+---@param theme string a key of LIGHT_THEMES
+function store.setLightTheme(citizenid, theme, device)
+    device = device or 'phone'
+    if not citizenid or citizenid == '' then return end
+    if type(theme) ~= 'string' or not LIGHT_THEMES[theme] then theme = 'silver' end
+    MySQL.update.await([[
+        INSERT INTO phone_settings (citizenid, device, light_theme) VALUES (?, ?, ?)
+        ON DUPLICATE KEY UPDATE light_theme = VALUES(light_theme)
     ]], { citizenid, device, theme })
 end
 
@@ -1707,6 +1732,8 @@ function store.snapshot(citizenid, device)
     end
     local dark = row and row.dark_theme
     if type(dark) ~= 'string' or not DARK_THEMES[dark] then dark = 'graphite' end
+    local light = row and row.light_theme
+    if type(light) ~= 'string' or not LIGHT_THEMES[light] then light = 'silver' end
     local icons = row and row.icon_theme
     if not isStorableIconTheme(icons) then icons = 'default' end
     local showAppNames = row == nil or isTruthy(row.show_app_names)
@@ -1720,6 +1747,7 @@ function store.snapshot(citizenid, device)
         setupDone        = row ~= nil and (row.setup_done == true or tonumber(row.setup_done) == 1),
         theme            = (row and row.theme == 'dark') and 'dark' or 'light',
         darkTheme        = dark,
+        lightTheme       = light,
         iconTheme        = icons,
         customIconThemes = shared and decodeCustomIconThemes(shared.icon_custom) or {},
         showAppNames     = showAppNames,

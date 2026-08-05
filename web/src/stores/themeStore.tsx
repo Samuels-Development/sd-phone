@@ -30,8 +30,20 @@ function saveThemeLocal(v: Theme) {
 }
 
 export type DarkTheme = 'graphite' | 'black' | 'warm' | 'midnight' | 'moss' | 'plum' | 'slate' | 'ocean' | 'rose' | 'clay';
+export type LightTheme = 'silver' | 'snow' | 'linen' | 'sky' | 'mint' | 'blush' | 'sand' | 'lavender' | 'stone' | 'dusk';
 const DARK_THEME_KEY = 'sd-phone:darkTheme';
+const LIGHT_THEME_KEY = 'sd-phone:lightTheme';
 const DARK_THEMES: DarkTheme[] = ['graphite', 'black', 'warm', 'midnight', 'moss', 'plum', 'slate', 'ocean', 'rose', 'clay'];
+const LIGHT_THEMES: LightTheme[] = ['silver', 'snow', 'linen', 'sky', 'mint', 'blush', 'sand', 'lavender', 'stone', 'dusk'];
+function loadLightThemeLocal(): LightTheme {
+    try {
+        const v = window.localStorage.getItem(LIGHT_THEME_KEY) as LightTheme | null;
+        return v && LIGHT_THEMES.includes(v) ? v : 'silver';
+    } catch { return 'silver'; }
+}
+function saveLightThemeLocal(v: LightTheme) {
+    try { window.localStorage.setItem(LIGHT_THEME_KEY, v); } catch { /* ignore */ }
+}
 function loadDarkThemeLocal(): DarkTheme {
     try {
         const v = window.localStorage.getItem(DARK_THEME_KEY) as DarkTheme | null;
@@ -165,6 +177,8 @@ interface ThemeState {
     setTheme:          (t: Theme) => void;
     darkTheme:         DarkTheme;
     setDarkTheme:      (t: DarkTheme) => void;
+    lightTheme:        LightTheme;
+    setLightTheme:     (t: LightTheme) => void;
     wallpaperLock:     string;
     wallpaperHome:     string;
     setWallpaper:      (url: string, target: WallpaperTarget) => void;
@@ -267,6 +281,7 @@ function persistDebounced(key: string, send: () => void) {
 export const useThemeStore = create<ThemeState>((set, get) => ({
     theme: isFiveM ? 'light' : loadThemeLocal(),
     darkTheme: isFiveM ? 'graphite' : loadDarkThemeLocal(),
+    lightTheme: isFiveM ? 'silver' : loadLightThemeLocal(),
     wallpaperLock: isFiveM ? lockscreenAsset : (loadWallpaperLocal() ?? devDefaultAsset),
     wallpaperHome: isFiveM ? lockscreenAsset : (loadWallpaperHomeLocal() ?? loadWallpaperLocal() ?? devDefaultAsset),
     customWallpapers: isFiveM ? [] : loadCustomWallpapersLocal(),
@@ -355,6 +370,12 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         set({ darkTheme: next });
         if (isFiveM) void fetchNui('sd-phone:settings:setDarkTheme', { darkTheme: next }).catch(() => {});
         else saveDarkThemeLocal(next);
+    },
+
+    setLightTheme: (next) => {
+        set({ lightTheme: next });
+        if (isFiveM) void fetchNui('sd-phone:settings:setLightTheme', { lightTheme: next }).catch(() => {});
+        else saveLightThemeLocal(next);
     },
 
     setBrightness: (v) => {
@@ -526,7 +547,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
             }
         };
         const keyAtRequest = wallpaperProfileKey;
-        void fetchNui<{ data?: { ringtone?: string; notificationTone?: string; customRingtones?: CustomTone[]; customNotificationTones?: CustomTone[]; airplaneMode?: boolean; hour24?: boolean; reopenApp?: boolean; setupDone?: boolean; lockClock?: Partial<LockClock>; passcode?: string | null; faceId?: boolean; wallpaper?: string; wallpaperHome?: string; blurLock?: boolean; blurHome?: boolean; islandPet?: string; customWallpapers?: string[]; chatTextScale?: number; phoneScale?: number; brightness?: number; phoneAlign?: string; ringtoneVol?: number; callVol?: number; theme?: string; darkTheme?: string; iconTheme?: string; showAppNames?: boolean; customIconThemes?: unknown } }>('sd-phone:settings:get')
+        void fetchNui<{ data?: { ringtone?: string; notificationTone?: string; customRingtones?: CustomTone[]; customNotificationTones?: CustomTone[]; airplaneMode?: boolean; hour24?: boolean; reopenApp?: boolean; setupDone?: boolean; lockClock?: Partial<LockClock>; passcode?: string | null; faceId?: boolean; wallpaper?: string; wallpaperHome?: string; blurLock?: boolean; blurHome?: boolean; islandPet?: string; customWallpapers?: string[]; chatTextScale?: number; phoneScale?: number; brightness?: number; phoneAlign?: string; ringtoneVol?: number; callVol?: number; theme?: string; darkTheme?: string; lightTheme?: string; iconTheme?: string; showAppNames?: boolean; customIconThemes?: unknown } }>('sd-phone:settings:get')
             .then(res => {
                 if (!res?.data) { retry(); return; }
                 const d = res.data;
@@ -555,6 +576,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
                 patch.setupDone = d.setupDone === true;
                 if (d.theme === 'light' || d.theme === 'dark') patch.theme = d.theme;
                 if (typeof d.darkTheme === 'string' && (DARK_THEMES as string[]).includes(d.darkTheme)) patch.darkTheme = d.darkTheme as DarkTheme;
+                if (typeof d.lightTheme === 'string' && (LIGHT_THEMES as string[]).includes(d.lightTheme)) patch.lightTheme = d.lightTheme as LightTheme;
                 if (typeof d.chatTextScale === 'number') patch.chatTextScale = clampChatScale(d.chatTextScale);
                 if (typeof d.phoneScale === 'number') patch.phoneScale = clampPhoneScale(d.phoneScale);
                 if (typeof d.brightness === 'number') patch.brightness = clampPhoneScale(d.brightness);
