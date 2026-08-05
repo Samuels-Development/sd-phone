@@ -195,7 +195,7 @@ end
 ---@param jobName string
 ---@return boolean
 function job.leave(source, jobName)
-    if framework.name ~= 'qb' then return false end
+    if framework.name ~= 'qbx' then return false end
     local p = player_mod.get(source)
     local cid = p and p.PlayerData and p.PlayerData.citizenid
     if not cid then return false end
