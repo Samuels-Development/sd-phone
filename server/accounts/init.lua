@@ -28,6 +28,7 @@ lib.callback.register('sd-phone:server:accounts:logout',       function(src, pay
 lib.callback.register('sd-phone:server:accounts:signOutAll',   function(src, payload) return actions.signOutAll(src, payload) end)
 lib.callback.register('sd-phone:server:accounts:capacity',     function(src, payload) return actions.capacity(src, payload) end)
 lib.callback.register('sd-phone:server:accounts:me',           function(src, payload) return actions.me(src, payload) end)
+lib.callback.register('sd-phone:server:accounts:signInOptions', function(src, payload) return actions.signInOptions(src, payload) end)
 lib.callback.register('sd-phone:server:accounts:switchable',   function(src, payload) return actions.switchable(src, payload) end)
 lib.callback.register('sd-phone:server:accounts:switch',       function(src, payload) return actions.switchAccount(src, payload) end)
 lib.callback.register('sd-phone:server:accounts:requestReset', function(src, payload) return actions.requestReset(src, payload) end)

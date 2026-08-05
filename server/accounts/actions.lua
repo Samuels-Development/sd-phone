@@ -348,6 +348,32 @@ function actions.switchable(source, payload)
     return ok({ accounts = out, active = signedIn[1] and signedIn[1].username or nil })
 end
 
+---Accounts the caller could sign into for `app`: saved-password entries they do NOT already hold
+---a session for. The sign-in screen's picker, and the complement of `switchable`, which lists the
+---sessions they already have.
+---@param source number player server id
+---@param payload table|nil client-supplied { app }
+---@return table envelope on success data = { accounts }
+function actions.signInOptions(source, payload)
+    local app = payload and payload.app
+    if not SWITCH_APPS[app] then return fail('Unknown app') end
+    local cid = player.getIdentifier(source); if not cid then return fail('Player not found') end
+
+    local held = {}
+    for _, acc in ipairs(store.listSessionAccounts(app, cid)) do held[acc.username:lower()] = true end
+
+    local out = {}
+    for _, row in ipairs(store.listVaultEntries(cid)) do
+        if row.app == app and not held[row.username:lower()] then
+            local acc = store.getAccount(app, row.username)
+            if acc then
+                out[#out + 1] = { username = acc.username, name = acc.displayName, email = acc.email }
+            end
+        end
+    end
+    return ok({ accounts = out })
+end
+
 ---Signs the caller into another of their own saved accounts without retyping the password. The
 ---vault is a convenience, not an authority: its stored password is verified against the account,
 ---so a stale entry fails rather than granting access.

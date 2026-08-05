@@ -150,6 +150,12 @@ export interface SwitchableAccount {
     email?:   string;
 }
 
+export async function accountsSignInOptions(app: string): Promise<SwitchableAccount[]> {
+    if (!isFiveM) return DEV_VAULT.filter(e => e.app === app).map(e => ({ username: e.username }));
+    const d = await apiData<{ accounts?: SwitchableAccount[] }>('sd-phone:accounts:signInOptions', { app });
+    return d?.accounts ?? [];
+}
+
 export async function accountsSwitchable(app: string): Promise<{ accounts: SwitchableAccount[]; active: string | null }> {
     if (!isFiveM) {
         const mine = DEV_VAULT.filter(e => e.app === app);

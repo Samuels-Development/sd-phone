@@ -9,6 +9,7 @@ proxyCallback('sd-phone:accounts:logout',       'sd-phone:server:accounts:logout
 proxyCallback('sd-phone:accounts:signOutAll',   'sd-phone:server:accounts:signOutAll')
 proxyCallback('sd-phone:accounts:capacity',     'sd-phone:server:accounts:capacity')
 proxyCallback('sd-phone:accounts:me',           'sd-phone:server:accounts:me')
+proxyCallback('sd-phone:accounts:signInOptions', 'sd-phone:server:accounts:signInOptions')
 proxyCallback('sd-phone:accounts:switchable',   'sd-phone:server:accounts:switchable')
 proxyCallback('sd-phone:accounts:switch',       'sd-phone:server:accounts:switch')
 proxyCallback('sd-phone:accounts:requestReset', 'sd-phone:server:accounts:requestReset')

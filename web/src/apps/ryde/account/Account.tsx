@@ -11,8 +11,8 @@ import { t } from '@/i18n';
 import {
     MAIL_DOMAIN, accountsConfirmReset, accountsLogin, accountsLogout,
     accountsMe, accountsMyEmail, accountsMyNumber, accountsRegister, accountsRequestReset,
-    accountsSavePassword, accountsSavedLogin, accountsSuggestCode, accountsSwitch,
-    accountsSwitchable, type SwitchableAccount,
+    accountsSavePassword, accountsSavedLogin, accountsSignInOptions, accountsSuggestCode, accountsSwitch,
+    type SwitchableAccount,
 } from '@/core/accountsApi';
 import { signOutAllForApp } from '@/shared/signOutAll';
 import { logOutOrSwitch, switchTargetLabel } from '@/shared/logOutOrSwitch';
@@ -37,7 +37,7 @@ export function Account({ onClose }: { onClose: () => void }) {
 
     const refreshAccounts = useCallback(() => {
         void accountsSavedLogin('ryde').then(setSavedLogin);
-        void accountsSwitchable('ryde').then(d => setSavedAccounts(d.accounts.filter(a => a.username !== d.active)));
+        void accountsSignInOptions('ryde').then(setSavedAccounts);
     }, []);
 
     // Ryde keeps rides and the driver profile locally and only syncs them on mount, so without

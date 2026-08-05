@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { accountsMyEmail, accountsMyNumber, accountsSavedLogin, accountsSwitchable, type SwitchableAccount } from '@/core/accountsApi';
+import { accountsMyEmail, accountsMyNumber, accountsSavedLogin, accountsSignInOptions, type SwitchableAccount } from '@/core/accountsApi';
 
 export interface AppAuthState {
     authed:        boolean;
@@ -34,12 +34,10 @@ export function useAppAuth(appId: string, checkSession: () => Promise<boolean>):
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // The picker must never offer the account already in use, and which one that is changes on
-    // every sign-in, switch and sign-out, so this refetches on the same nonce those bump.
+    // The sign-in picker offers accounts this player could sign into: saved logins they do not
+    // already hold a session for. The switcher is the complement and lists the sessions instead.
     useEffect(() => {
-        void accountsSwitchable(appId).then(d => {
-            setSavedAccounts(d.accounts.filter(a => a.username !== d.active));
-        });
+        void accountsSignInOptions(appId).then(setSavedAccounts);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [authed, accountsNonce]);
 
