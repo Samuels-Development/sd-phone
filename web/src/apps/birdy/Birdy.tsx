@@ -12,8 +12,9 @@ import { useDeckActive } from '@/shell/deckActive';
 import { AccountSwitcher } from '@/shared/AccountSwitcher';
 import { AppAuth } from '@/shared/AppAuth';
 import { AlertDialog } from '@/ui/AlertDialog';
-import { MAIL_DOMAIN, accountsConfirmReset, accountsLogout, accountsRequestReset, accountsSavePassword, accountsSuggestCode, accountsSwitch } from '@/core/accountsApi';
+import { MAIL_DOMAIN, accountsConfirmReset, accountsRequestReset, accountsSavePassword, accountsSuggestCode, accountsSwitch } from '@/core/accountsApi';
 import { signOutAllForApp } from '@/shared/signOutAll';
+import { logOutOrSwitch, switchTargetLabel } from '@/shared/logOutOrSwitch';
 import { toggleReactionLocal } from '@/shared/chat/messagesApi';
 import type { MessageDraft } from '@/shared/chat/ChatView';
 import {
@@ -454,11 +455,13 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                     profile={profile}
                     onCancel={() => setEditingProfile(false)}
                     onSaved={p => { setProfile(p); setMe({ name: p.name, handle: p.handle, verified: p.verified }); setEditingProfile(false); }}
+                    switchTo={switchTargetLabel(savedAccounts[0])}
                     onSignOut={() => {
                         setEditingProfile(false);
                         setProfileOpen(false);
-                        void accountsLogout('birdy').then(() => {
-                            clearSessionState('birdy:'); refreshAccounts(); setAuthed(false);
+                        void logOutOrSwitch('birdy', savedAccounts[0]).then(switched => {
+                            if (switched) switchedAccount();
+                            else { clearSessionState('birdy:'); refreshAccounts(); setAuthed(false); }
                         });
                     }}
                     onSignOutAll={() => {

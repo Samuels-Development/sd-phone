@@ -7,7 +7,7 @@ import { ChangePasswordPage } from '@/shared/ChangePasswordPage';
 import { Toggle } from '@/ui/Toggle';
 import { IG, type ProfileData } from '../data';
 
-export function EditProfile({ profile, onCancel, onSave, onSignOut, onSignOutAll, onSwitchAccount, onDelete }: {
+export function EditProfile({ profile, onCancel, onSave, onSignOut, onSignOutAll, onSwitchAccount, onDelete, switchTo }: {
     onSwitchAccount: () => void;
     profile:      ProfileData;
     onCancel:     () => void;
@@ -15,6 +15,7 @@ export function EditProfile({ profile, onCancel, onSave, onSignOut, onSignOutAll
     onSignOut:    () => void;
     onSignOutAll: () => void;
     onDelete:     () => void;
+    switchTo?:    string | null;
 }) {
     const [name,   setName]   = useState(profile.name);
     const [bio,    setBio]    = useState(profile.bio);
@@ -111,7 +112,9 @@ export function EditProfile({ profile, onCancel, onSave, onSignOut, onSignOutAll
             {confirmOut && (
                 <AlertDialog
                     title={t('photogram.signOutTitle', 'Sign out of Photogram?')}
-                    message={t('photogram.signOutMessage', 'You can sign back in anytime.')}
+                    message={switchTo
+                        ? t('accounts.signOutSwitchMessage', "You'll be switched to {name}.", { name: switchTo })
+                        : t('photogram.signOutMessage', 'You can sign back in anytime.')}
                     confirmLabel={t('photogram.signOut', 'Sign Out')}
                     onCancel={() => setConfirmOut(false)}
                     onConfirm={onSignOut}

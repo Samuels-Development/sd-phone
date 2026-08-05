@@ -4836,6 +4836,7 @@
     "signOutAllConfirm": "Log Out",
     "signOutAllMessage": "Every account you have in this app will be signed out. Saved passwords are kept.",
     "signOutAllTitle": "Log out of all accounts?",
+    "signOutSwitchMessage": "You'll be switched to {name}.",
     "switchAccount": "Switch account",
     "switchFailed": "Could not switch account"
   }

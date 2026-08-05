@@ -13,11 +13,12 @@ import { CHERRY, type Gender, type InterestedIn, type MyProfile } from './data';
 
 const MAX_PHOTOS = 6;
 
-export function EditProfile({ profile, onChange, onSignOut, onSignOutAll, onSwitchAccount, onDeleteAccount }: {
+export function EditProfile({ profile, onChange, onSignOut, onSignOutAll, onSwitchAccount, onDeleteAccount, switchTo }: {
     onSwitchAccount?: () => void;
     profile:         MyProfile;
     onChange:        (p: MyProfile) => void;
     onSignOut:       () => void;
+    switchTo?:       string | null;
     onSignOutAll:    () => void;
     onDeleteAccount: () => void;
 }) {
@@ -225,7 +226,9 @@ export function EditProfile({ profile, onChange, onSignOut, onSignOutAll, onSwit
             {confirming === 'logout' && (
                 <AlertDialog
                     title={t('cherry.logOutTitle', 'Log Out?')}
-                    message={t('cherry.logOutMessage', "You'll need to sign in again to use Cherry.")}
+                    message={switchTo
+                        ? t('accounts.signOutSwitchMessage', "You'll be switched to {name}.", { name: switchTo })
+                        : t('cherry.logOutMessage', "You'll need to sign in again to use Cherry.")}
                     cancelLabel={t('cherry.cancel', 'Cancel')}
                     confirmLabel={t('cherry.logOutConfirm', 'Log Out')}
                     onCancel={() => setConfirming(null)}

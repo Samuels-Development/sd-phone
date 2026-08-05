@@ -11,11 +11,12 @@ import { BG, BLUE, type BirdyProfile } from '../data';
 
 const RED = '#ff3b30';
 
-export function EditProfile({ profile, onCancel, onSaved, onSignOut, onSignOutAll, onSwitchAccount, onDeleted }: {
+export function EditProfile({ profile, onCancel, onSaved, onSignOut, onSignOutAll, onSwitchAccount, onDeleted, switchTo }: {
     profile:         BirdyProfile;
     onCancel:        () => void;
     onSaved:         (p: BirdyProfile) => void;
     onSignOut:       () => void;
+    switchTo?:       string | null;
     onSignOutAll:    () => void;
     onSwitchAccount: () => void;
     onDeleted:       () => void;
@@ -127,7 +128,9 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onSignOutAl
             {confirmSignOut && (
                 <AlertDialog
                     title={t('squawk.signOutTitle', 'Sign out of Squawk?')}
-                    message={t('squawk.signOutMessage', 'You can sign back in anytime.')}
+                    message={switchTo
+                        ? t('accounts.signOutSwitchMessage', "You'll be switched to {name}.", { name: switchTo })
+                        : t('squawk.signOutMessage', 'You can sign back in anytime.')}
                     confirmLabel={t('squawk.signOut', 'Sign Out')}
                     onCancel={() => setConfirmSignOut(false)}
                     onConfirm={signOut}
