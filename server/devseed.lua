@@ -235,3 +235,71 @@ lib.addCommand('seedmessages', {
         body = ('Seeded %d conversations (%d unread). Reopen Messages to view.'):format(threads, unread),
     })
 end)
+
+---/testmail [address|all] - DEV TOOL: sends a system email to one of the caller's mailboxes so
+---the inbox, badge and notification path can be exercised without a second player. Defaults to
+---the first mailbox: which one the UI has selected is client-only state the server cannot see.
+---@param source integer player server id
+lib.addCommand('testmail', {
+    help = 'Dev: send yourself an email (defaults to your first mailbox)',
+    restricted = 'group.admin',
+    params = { { name = 'address', type = 'string', help = "Mailbox to send to, or 'all'", optional = true } },
+}, function(source, args)
+    local cid = player.getIdentifier(source)
+    if not cid then return end
+
+    local mailStore   = require 'server.mail.store'
+    local mailActions = require 'server.mail.actions'
+
+    local accounts = mailStore.listAccountsForCitizen(cid)
+    if #accounts == 0 then
+        TriggerClientEvent('sd-phone:client:notify', source, {
+            app = 'mail', appId = 'mail', title = 'Dev Mail',
+            body = 'You are not signed into any mailbox. Open Mail and sign in first.',
+        })
+        return
+    end
+
+    local want = (args.address or ''):lower()
+    local to = {}
+    if want == 'all' then
+        for i = 1, #accounts do to[i] = accounts[i].email end
+    elseif want ~= '' then
+        for i = 1, #accounts do
+            if accounts[i].email:lower() == want then to[1] = accounts[i].email break end
+        end
+        if not to[1] then
+            local known = {}
+            for i = 1, #accounts do known[i] = accounts[i].email end
+            TriggerClientEvent('sd-phone:client:notify', source, {
+                app = 'mail', appId = 'mail', title = 'Dev Mail',
+                body = ('Not signed into %s. Yours: %s'):format(want, table.concat(known, ', ')),
+            })
+            return
+        end
+    else
+        to[1] = accounts[1].email
+    end
+
+    local subject = ('Test email %s'):format(os.date('%H:%M:%S'))
+
+    local res = mailActions.systemSend({
+        to      = to,
+        subject = subject,
+        from    = { name = 'Dev Tools', email = 'devtools@' .. (require 'configs.mail').Domain },
+        body    = ('This is a test email sent by /testmail at %s.\n\nDelivered to: %s')
+            :format(os.date('%H:%M:%S'), table.concat(to, ', ')),
+    })
+
+    local delivered = res.success and res.data and res.data.delivered or 0
+    -- systemSend pushes the message itself, but the unread badge is a separate snapshot.
+    if delivered > 0 then badges.push(source) end
+    print(('^2[sd-phone]^0 /testmail delivered %d for %s (%s)'):format(delivered, cid, table.concat(to, ', ')))
+
+    TriggerClientEvent('sd-phone:client:notify', source, {
+        app = 'mail', appId = 'mail', title = 'Dev Mail',
+        body = res.success
+            and ('Sent to %d mailbox(es).'):format(delivered)
+            or ('Failed: %s'):format(res.message or 'unknown error'),
+    })
+end)
