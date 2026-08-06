@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent, CSSProperties } from 'react';
 import { Camera, Check, Delete, Flashlight, Lock, ScanFace } from 'lucide-react';
 
-import { formatClockTime, formatLongDate, useClock } from '@/hooks/useClock';
+import { formatClockTime, formatLongDate, useDisplayClock } from '@/hooks/useClock';
 import { useKeypadInput } from '@/hooks/useKeypadInput';
 import { fetchNui, isFiveM } from '@/core/nui';
 import { resolveWallpaper } from './wallpapers';
@@ -29,7 +29,7 @@ export interface LockscreenProps {
 }
 
 export function Lockscreen({ use24h, showDate, wallpaper, unlockTrigger, onUnlock, launchTrigger, onLaunch, notifications, onOpenNotif, onDismissNotif, flashlightOn, onToggleFlashlight, onOpenCamera }: LockscreenProps) {
-    const now  = useClock();
+    const now  = useDisplayClock();
     const time = formatClockTime(now, use24h);
     const date = formatLongDate(now);
     const [exiting, setExiting] = useState(false);

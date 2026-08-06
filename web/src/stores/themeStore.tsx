@@ -91,6 +91,13 @@ function loadShellLocal(): string {
 function saveShellLocal(v: string) {
     try { window.localStorage.setItem(SHELL_KEY, v); } catch { /* ignore */ }
 }
+const GAME_TIME_KEY = 'sd-phone:gameTime';
+function loadGameTimeLocal(): boolean {
+    try { return window.localStorage.getItem(GAME_TIME_KEY) === '1'; } catch { return false; }
+}
+function saveGameTimeLocal(v: boolean) {
+    try { window.localStorage.setItem(GAME_TIME_KEY, v ? '1' : '0'); } catch { /* ignore */ }
+}
 const ACCENT_KEY = 'sd-phone:accent';
 function loadAccentLocal(): string {
     try {
@@ -284,6 +291,8 @@ interface ThemeState {
     setAirplaneMode:   (on: boolean) => void;
     hour24:            boolean;
     setHour24:         (on: boolean) => void;
+    gameTime:          boolean;
+    setGameTime:       (on: boolean) => void;
     reopenLastApp:     boolean;
     setReopenLastApp:  (on: boolean) => void;
     ringtone:            string;
@@ -378,6 +387,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     callVol: 60,
     airplaneMode: false,
     hour24: false,
+    gameTime: isFiveM ? false : loadGameTimeLocal(),
     reopenLastApp: false,
     ringtone: DEFAULT_RINGTONE,
     // The website demo opens on Chime, which carries better than the stock
@@ -578,6 +588,12 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         void fetchNui('sd-phone:settings:setHour24', { on }).catch(() => {});
     },
 
+    setGameTime: (on) => {
+        set({ gameTime: on });
+        if (isFiveM) void fetchNui('sd-phone:settings:setGameTime', { on }).catch(() => {});
+        else saveGameTimeLocal(on);
+    },
+
     setReopenLastApp: (on) => {
         set({ reopenLastApp: on });
         void fetchNui('sd-phone:settings:setReopenApp', { on }).catch(() => {});
@@ -679,7 +695,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
             }
         };
         const keyAtRequest = wallpaperProfileKey;
-        void fetchNui<{ data?: { ringtone?: string; notificationTone?: string; customRingtones?: CustomTone[]; customNotificationTones?: CustomTone[]; airplaneMode?: boolean; hour24?: boolean; reopenApp?: boolean; setupDone?: boolean; lockClock?: Partial<LockClock>; passcode?: string | null; faceId?: boolean; wallpaper?: string; wallpaperHome?: string; blurLock?: boolean; blurHome?: boolean; islandPet?: string; customWallpapers?: string[]; chatTextScale?: number; phoneScale?: number; brightness?: number; phoneAlign?: string; ringtoneVol?: number; callVol?: number; theme?: string; darkTheme?: string; lightTheme?: string; accent?: string; shell?: string; shellChoice?: boolean; shellsAllowed?: unknown[]; customPalettes?: unknown; iconTheme?: string; showAppNames?: boolean; customIconThemes?: unknown } }>('sd-phone:settings:get')
+        void fetchNui<{ data?: { ringtone?: string; notificationTone?: string; customRingtones?: CustomTone[]; customNotificationTones?: CustomTone[]; airplaneMode?: boolean; hour24?: boolean; gameTime?: boolean; reopenApp?: boolean; setupDone?: boolean; lockClock?: Partial<LockClock>; passcode?: string | null; faceId?: boolean; wallpaper?: string; wallpaperHome?: string; blurLock?: boolean; blurHome?: boolean; islandPet?: string; customWallpapers?: string[]; chatTextScale?: number; phoneScale?: number; brightness?: number; phoneAlign?: string; ringtoneVol?: number; callVol?: number; theme?: string; darkTheme?: string; lightTheme?: string; accent?: string; shell?: string; shellChoice?: boolean; shellsAllowed?: unknown[]; customPalettes?: unknown; iconTheme?: string; showAppNames?: boolean; customIconThemes?: unknown } }>('sd-phone:settings:get')
             .then(res => {
                 if (!res?.data) { retry(); return; }
                 const d = res.data;
@@ -702,6 +718,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
                 if (d.notificationTone) patch.notificationTone = d.notificationTone;
                 if (typeof d.airplaneMode === 'boolean') patch.airplaneMode = d.airplaneMode;
                 if (typeof d.hour24 === 'boolean') patch.hour24 = d.hour24;
+                if (typeof d.gameTime === 'boolean') patch.gameTime = d.gameTime;
                 if (typeof d.reopenApp === 'boolean') patch.reopenLastApp = d.reopenApp;
                 // Always assigned (true/false, never left null) - the per-profile answer is
                 // what lets the Hello gate decide, and a stale previous-profile value may not leak.

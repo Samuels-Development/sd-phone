@@ -1,5 +1,5 @@
 import type { WidgetAlign, WidgetSize, WidgetTheme } from '@/apps/appstore/appsApi';
-import { formatClockTime, formatLongDate, useClock } from '@/hooks/useClock';
+import { formatClockTime, formatLongDate, useDisplayClock } from '@/hooks/useClock';
 import { t } from '@/i18n';
 import { useTheme } from '@/stores/themeStore';
 import { WidgetTile, alignClasses, palette } from './WidgetTile';
@@ -66,7 +66,7 @@ export function ClockWidget({ size, width, height, align = 'left', theme = 'dark
     align?: WidgetAlign; theme?: WidgetTheme; digital?: boolean;
 }) {
     const al = alignClasses(align);
-    const d = useClock('second');
+    const d = useDisplayClock('second');
     const { hour24 } = useTheme('hour24');
 
     const p     = palette(theme);

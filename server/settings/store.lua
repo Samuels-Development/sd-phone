@@ -85,6 +85,7 @@ function store.ensureSchema()
             light_theme        VARCHAR(16)  NULL,
             accent             VARCHAR(16)  NULL,
             shell              VARCHAR(16)  NULL,
+            game_time          TINYINT(1)   NULL,
             palette_custom     LONGTEXT     NULL,
             icon_theme         VARCHAR(16)  NULL,
             icon_custom        LONGTEXT     NULL,
@@ -1287,6 +1288,18 @@ function store.setLightTheme(citizenid, theme, device)
     ]], { citizenid, device, theme })
 end
 
+---Persists whether the phone shows the in-game clock instead of the player's PC clock.
+---@param citizenid string framework per-character id
+---@param on boolean true to show game time
+function store.setGameTime(citizenid, on, device)
+    device = device or 'phone'
+    if not citizenid or citizenid == '' then return end
+    MySQL.update.await([[
+        INSERT INTO phone_settings (citizenid, device, game_time) VALUES (?, ?, ?)
+        ON DUPLICATE KEY UPDATE game_time = VALUES(game_time)
+    ]], { citizenid, device, on and 1 or 0 })
+end
+
 ---Persists the accent colour applied over whichever palette is active.
 ---@param citizenid string framework per-character id
 ---@param accent string a key of ACCENTS or `custom:<hue>`
@@ -1972,6 +1985,7 @@ function store.snapshot(citizenid, device)
         lightTheme       = light,
         accent           = accent,
         shell            = shell,
+        gameTime         = row ~= nil and isTruthy(row.game_time) or false,
         shellChoice      = shellChoice,
         shellsAllowed    = allowedShells(),
         iconTheme        = icons,

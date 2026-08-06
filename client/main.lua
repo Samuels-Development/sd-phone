@@ -76,6 +76,8 @@ local service = require 'client.service'
 local wifiClient = require 'client.wifi'
 ---@type table Bluetooth (client.bluetooth): the radio switch + connected devices, mirrored server-side.
 local bluetoothClient = require 'client.bluetooth'
+---@type table Game-clock sampler (client.gameclock): pushes GetClock* to the UI while open.
+local gameclock = require 'client.gameclock'
 
 -- Loaded for side effects: each app module registers its own NUI callbacks, net events and
 -- server proxies.
@@ -364,6 +366,7 @@ local function OpenPhone()
     phoneState.open   = true
     phoneState.locked = true
     companion.phoneOpen = true
+    gameclock.push()
 
     CreateThread(function()
         while phoneState.open do
@@ -710,6 +713,8 @@ end)
 RegisterNUICallback('sd-phone:weather:get', function(_data, cb)
     cb(weatherBridge.read())
 end)
+
+gameclock.start(phoneState.isOpen)
 
 -- Cosmetic battery drain: one percent every 30s while the phone is open, pushed to the React app.
 CreateThread(function()

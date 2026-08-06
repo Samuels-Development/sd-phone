@@ -4,7 +4,7 @@ import { Camera, ChevronRight, Flashlight } from 'lucide-react';
 
 import { device } from '@device';
 import { t } from '@/i18n';
-import { formatClockTime, formatLongDate, useClock } from '@/hooks/useClock';
+import { formatClockTime, formatLongDate, useDisplayClock } from '@/hooks/useClock';
 import { useIosPush } from '@/hooks/useIosPush';
 import { PushLayer } from '../SettingsSubPage';
 import { useTheme } from '@/stores/themeStore';
@@ -46,7 +46,7 @@ export function WallpaperPage({ onBack }: { onBack: () => void }) {
         useTheme('wallpaperLock', 'wallpaperHome', 'blurLock', 'setBlurLock', 'blurHome', 'setBlurHome', 'lockClock', 'hour24');
     const [pickerTarget, setPickerTarget] = useState<WallpaperTarget | null>(null);
 
-    const now  = useClock();
+    const now  = useDisplayClock();
     const time = formatClockTime(now, hour24);
     const date = formatLongDate(now);
 

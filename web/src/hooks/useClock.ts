@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 
+import { gameClockDate, useGameClockStore } from '@/stores/gameClockStore';
+import { useTheme } from '@/stores/themeStore';
+
 export { formatClockTime, formatLongDate } from '@/lib/time';
 
 // Default is minute granularity: every current consumer renders HH:MM, so
@@ -25,4 +28,17 @@ export function useClock(granularity: 'minute' | 'second' = 'minute'): Date {
     }, [granularity]);
 
     return now;
+}
+
+// The wall clock the phone SHOWS, which is the player's PC clock unless they have asked for game
+// time in Date & Time. Seconds always come from the real clock so sweeping hands and second
+// readouts keep moving between the client's minute pushes.
+//
+// Display surfaces only. Anything doing arithmetic against a real timestamp (timers counting down,
+// alarms) must keep using useClock, or it will misfire the moment game time is switched on.
+export function useDisplayClock(granularity: 'minute' | 'second' = 'minute'): Date {
+    const real = useClock(granularity);
+    const gameTime = useTheme('gameTime').gameTime;
+    const clock = useGameClockStore(s => s.clock);
+    return gameTime && clock ? gameClockDate(clock, real) : real;
 }

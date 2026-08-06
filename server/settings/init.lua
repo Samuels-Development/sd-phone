@@ -392,6 +392,16 @@ lib.callback.register('sd-phone:server:settings:setAccent', function(source, pay
     return { success = true }
 end)
 
+---Persists whether the caller's phone shows game time rather than their PC clock.
+lib.callback.register('sd-phone:server:settings:setGameTime', function(source, payload)
+    local cid = player.getIdentifier(source)
+    if not cid then return { success = false, message = 'Player not found' } end
+    if not writeAllowed(cid, 'gameTime') then return BUSY end
+    payload = type(payload) == 'table' and payload or {}
+    store.setGameTime(cid, payload.on == true, deviceOf(payload))
+    return { success = true }
+end)
+
 ---Persists the caller's phone shell. The store drops anything the config does not allow.
 lib.callback.register('sd-phone:server:settings:setShell', function(source, payload)
     local cid = player.getIdentifier(source)

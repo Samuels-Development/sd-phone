@@ -1,4 +1,5 @@
 
+import type { GameClock } from '@/stores/gameClockStore';
 import type { BirdyMessage } from '@/apps/birdy/data';
 import type { DocFile } from '@/apps/documents/data';
 import type { Bulletin, Call, ChatMsg, Unit } from '@/apps/mdt/data';
@@ -252,6 +253,7 @@ export type NuiMessage =
     | { action: 'sd-phone:wifi'; data: WifiState }
     | { action: 'sd-phone:weather'; data: WeatherPayload }
     | { action: 'sd-phone:session'; data: SessionPayload }
+    | { action: 'sd-phone:gameClock'; data: GameClock }
     | { action: 'sd-phone:health';  data: HealthPayload }
     | { action: 'sd-phone:bank:received'; data: { amount: number; from: string } }
     | { action: 'sd-phone:bank:txAdded' }

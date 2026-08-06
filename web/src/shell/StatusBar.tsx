@@ -1,4 +1,4 @@
-import { formatClockTime, useClock } from '@/hooks/useClock';
+import { formatClockTime, useDisplayClock } from '@/hooks/useClock';
 import { t } from '@/i18n';
 import { signalBarOpacities } from '@/lib/signal';
 
@@ -17,7 +17,7 @@ export interface StatusBarProps {
 }
 
 export function StatusBar({ use24h, signal, showWifi, wifiBars = null, battery, airplane = false, noSim = false, noService = false, light = true, controlHint = false, editing = false }: StatusBarProps) {
-    const time  = formatClockTime(useClock(), use24h);
+    const time  = formatClockTime(useDisplayClock(), use24h);
     const color = light ? '#ffffff' : '#000000';
 
     return (

@@ -36,6 +36,7 @@ import { SetupFlow }   from '@/shell/SetupFlow';
 import type { SetupResult } from '@/shell/SetupFlow';
 import { isKeyboardCaptured } from '@/hooks/useKeyboardCapture';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
+import { isGameClock, useGameClockStore } from '@/stores/gameClockStore';
 import { seedSessionState } from '@/hooks/useSessionState';
 import { onOpenMail, onOpenMaps, onOpenMessages } from '@/shell/deeplink';
 import { fetchNui, isFiveM } from '@/core/nui';
@@ -194,6 +195,10 @@ function AppContent() {
     const customApps = useCustomApps();
     const customDefs = useMemo(() => customApps.map(customToAppDef), [customApps]);
     useEffect(() => { useCustomAppsStore.getState().hydrate(); }, []);
+    useNuiEvent('sd-phone:gameClock', useCallback((data) => {
+        if (isGameClock(data)) useGameClockStore.getState().setClock(data);
+    }, []));
+
     useNuiEvent('customApps:set', useCallback((data) => {
         useCustomAppsStore.getState().setAll(data ?? []);
     }, []));

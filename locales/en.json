@@ -3766,6 +3766,8 @@
     "dateTime": "Date & Time",
     "dateTime24Hour": "24-Hour Time",
     "dateTimeAutoFooter": "When enabled, your phone automatically sets the time based on your current time zone.",
+    "dateTimeGameTime": "Use Game Time",
+    "dateTimeGameTimeFooter": "Shows the time in Los Santos instead of the clock on your computer.",
     "dateTimeSetAutomatically": "Set Automatically",
     "dateTimeZone": "Time Zone",
     "default": "Default",
