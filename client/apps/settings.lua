@@ -27,6 +27,7 @@ writeCallback('sd-phone:settings:setTheme',     'sd-phone:server:settings:setThe
 writeCallback('sd-phone:settings:setDarkTheme', 'sd-phone:server:settings:setDarkTheme')
 writeCallback('sd-phone:settings:setLightTheme', 'sd-phone:server:settings:setLightTheme')
 writeCallback('sd-phone:settings:setAccent', 'sd-phone:server:settings:setAccent')
+writeCallback('sd-phone:settings:setShell', 'sd-phone:server:settings:setShell')
 writeCallback('sd-phone:settings:setIconTheme',    'sd-phone:server:settings:setIconTheme')
 writeCallback('sd-phone:settings:saveCustomIconTheme',   'sd-phone:server:settings:saveCustomIconTheme')
 writeCallback('sd-phone:settings:deleteCustomIconTheme', 'sd-phone:server:settings:deleteCustomIconTheme')

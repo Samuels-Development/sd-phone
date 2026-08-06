@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AlarmClock, Music2, Pause, Phone, Play, Radio, SkipBack, SkipForward } from 'lucide-react';
 
@@ -16,96 +16,17 @@ import { RingDuration } from '@/apps/clock/AlarmRinging';
 import { playShutter } from '@/media/shutter';
 import { SWITCHER_SCALE } from './AppSwitcher';
 import { DEFAULT_FRAME_COLOR, frameStops } from './frameColors';
+import { chassisMetrics, rrect } from './chassis';
+import type { ChassisMetrics, FacePart, RailButton } from './chassis';
+import { shellFor } from './shells';
 import { t } from '@/i18n';
 
 
-const B  = device.screen.bezel;
-
-const SW = device.screen.w;
-const SH = device.screen.h;
-const W  = SW + B * 2;
-const H  = SH + B * 2;
-const SX = B;
-const SY = B;
-const BR = device.screen.radius;
-const SR = BR - B;
-
-const SCREEN_MASK =
-    `url("data:image/svg+xml,${encodeURIComponent(
-        `<svg xmlns='http://www.w3.org/2000/svg' width='${SW}' height='${SH}'><rect width='${SW}' height='${SH}' rx='${SR}' ry='${SR}' fill='#fff'/></svg>`,
-    )}")`;
-
-const DI_W = 126;
-const DI_H = 37;
-const DI_X = (W - DI_W) / 2;
-const DI_Y = SY + 11;
-const DI_R = DI_H / 2;
-const PET_H = 26;
-const PET_W = PET_H * (16 / 13);
-const PET_FLOOR = 4;
-const PET_TOP = DI_Y + DI_H - PET_FLOOR - PET_H;
-const LENS_X = DI_X + DI_W - DI_R * 1.12 - 7;
-const PET_RIGHT = LENS_X - 4;
-const petStage = (left: number) => ({
-    left: Math.round(left),
-    run:  Math.max(0, Math.floor(PET_RIGHT - Math.round(left) - PET_W)),
-});
-
-const CALL_W = 188;
-const CALL_X = (W - CALL_W) / 2;
-
-const MI_W = 392;
-const MI_X = (W - MI_W) / 2;
-const MI_H = 152;
 const MI_MORPH =
     'left 0.42s cubic-bezier(0.32,0.72,0,1), width 0.42s cubic-bezier(0.32,0.72,0,1), ' +
     'height 0.42s cubic-bezier(0.32,0.72,0,1), border-radius 0.42s cubic-bezier(0.32,0.72,0,1)';
 
-const MIP_W = 180;
-const MIP_X = (W - MIP_W) / 2;
-
 const GID = 'ip17-pm-bt';
-
-
-function rrect(x: number, y: number, w: number, h: number, r: number): string {
-    const rc = Math.min(r, w / 2, h / 2);
-    return (
-        `M${x + rc},${y} ` +
-        `H${x + w - rc} A${rc},${rc} 0 0 1 ${x + w},${y + rc} ` +
-        `V${y + h - rc} A${rc},${rc} 0 0 1 ${x + w - rc},${y + h} ` +
-        `H${x + rc} A${rc},${rc} 0 0 1 ${x},${y + h - rc} ` +
-        `V${y + rc} A${rc},${rc} 0 0 1 ${x + rc},${y} Z`
-    );
-}
-
-const CUTOUT_INSET = 2.5;
-const BEZEL = rrect(0, 0, W, H, BR) + ' ' + rrect(
-    SX + CUTOUT_INSET,
-    SY + CUTOUT_INSET,
-    SW - CUTOUT_INSET * 2,
-    SH - CUTOUT_INSET * 2,
-    SR - CUTOUT_INSET,
-);
-
-const FINISH = device.screen.finish ?? 'polished';
-const MATTE  = FINISH === 'matte';
-
-const BTN_W  = device.screen.buttonWidth ?? 3.5;
-const BTN_RX = BTN_W / 2;
-
-// A matte slab catches far less light than a polished rail: the diagonal sheen and the bright
-// top edge both drop to roughly half, or the flattened gradient underneath is wasted.
-const SHEEN_TOP  = MATTE ? 0.05 : 0.10;
-const SHEEN_MID  = MATTE ? 0.015 : 0.03;
-const EDGE_LIGHT = MATTE ? 0.10 : 0.18;
-
-// The profile stores a rail side; the rail's x is whatever the frame width makes it.
-const BUTTONS = device.screen.buttons.map(b => ({ ...b, x: b.side === 'left' ? -BTN_W : W }));
-
-const VOL_UP_BTN     = BUTTONS.find(b => b.role === 'volumeUp');
-const VOL_DOWN_BTN   = BUTTONS.find(b => b.role === 'volumeDown');
-const POWER_BTN      = BUTTONS.find(b => b.role === 'power');
-const SCREENSHOT_BTN = BUTTONS.find(b => b.role === 'screenshot');
 
 
 const ALIGN_MAP: Record<string, string> = {
@@ -158,7 +79,8 @@ export interface PhoneShellProps {
 
 const VOL_STEP = 100 / 16;
 
-function IslandPill({ active, onClick, compactX, compactW, expandedX, expandedW, children }: {
+function IslandPill({ m, active, onClick, compactX, compactW, expandedX, expandedW, children }: {
+    m:         ChassisMetrics;
     active:    boolean;
     onClick?:  () => void;
     compactX:  number; compactW: number;
@@ -186,9 +108,9 @@ function IslandPill({ active, onClick, compactX, compactW, expandedX, expandedW,
             className={`absolute z-[300] ${onClick ? 'cursor-pointer' : ''}`}
             style={{
                 left: open ? expandedX : compactX,
-                top: DI_Y,
+                top: m.DI_Y,
                 width: open ? expandedW : compactW,
-                height: DI_H, borderRadius: DI_R, background: '#000',
+                height: m.DI_H, borderRadius: m.DI_R, background: '#000',
                 transition: 'left 0.42s cubic-bezier(0.32,0.72,0,1), width 0.42s cubic-bezier(0.32,0.72,0,1)',
             }}
         >
@@ -202,7 +124,8 @@ function IslandPill({ active, onClick, compactX, compactW, expandedX, expandedW,
     );
 }
 
-function MusicIsland({ track, playing, expanded, closing, onToggle, onPlayPause, onNext, onPrev, onOpenApp }: {
+function MusicIsland({ m, track, playing, expanded, closing, onToggle, onPlayPause, onNext, onPrev, onOpenApp }: {
+    m:           ChassisMetrics;
     track:       Track;
     playing:     boolean;
     expanded:    boolean;
@@ -226,16 +149,16 @@ function MusicIsland({ track, playing, expanded, closing, onToggle, onPlayPause,
 
     const phase = closing ? 'di' : expanded ? 'card' : appeared ? 'pill' : 'di';
     const box =
-        phase === 'card' ? { left: MI_X,  width: MI_W,  height: MI_H,  radius: 38 }
-      : phase === 'pill' ? { left: MIP_X, width: MIP_W, height: DI_H,  radius: DI_R }
-      :                    { left: DI_X,  width: DI_W,  height: DI_H,  radius: DI_R };
+        phase === 'card' ? { left: m.MI_X,  width: m.MI_W,  height: m.MI_H,  radius: 38 }
+      : phase === 'pill' ? { left: m.MIP_X, width: m.MIP_W, height: m.DI_H,  radius: m.DI_R }
+      :                    { left: m.DI_X,  width: m.DI_W,  height: m.DI_H,  radius: m.DI_R };
 
     return (
         <div
             onClick={onToggle}
             className="absolute z-[300] cursor-pointer overflow-hidden"
             style={{
-                left: box.left, top: DI_Y, width: box.width, height: box.height,
+                left: box.left, top: m.DI_Y, width: box.width, height: box.height,
                 borderRadius: box.radius, background: '#000', transition: MI_MORPH,
             }}
         >
@@ -309,9 +232,190 @@ function MusicIsland({ track, playing, expanded, closing, onToggle, onPlayPause,
     );
 }
 
+function Lens({ cx, cy, r }: { cx: number; cy: number; r: number }) {
+    return (
+        <>
+            <circle cx={cx} cy={cy} r={r}        fill="#0c0c14" />
+            <circle cx={cx} cy={cy} r={r * 0.57} fill="#07070f" />
+            <circle cx={cx - r * 0.21} cy={cy - r * 0.29} r={r * 0.21} fill="rgba(255,255,255,0.18)" />
+        </>
+    );
+}
+
+function FaceShape({ part, index, m }: { part: FacePart; index: number; m: ChassisMetrics }) {
+    if (part.t === 'slot') {
+        if (part.style === 'slits') {
+            const run = (part.w - part.bars * part.pitchX) / 2;
+            return (
+                <g>
+                    {Array.from({ length: part.bars }, (_, i) => (
+                        <rect
+                            key={i}
+                            x={part.x + run + i * part.pitchX + (part.pitchX - part.barW) / 2}
+                            y={part.y}
+                            width={part.barW}
+                            height={part.h}
+                            rx={part.barW / 2}
+                            fill={part.color}
+                        />
+                    ))}
+                </g>
+            );
+        }
+        if (part.style === 'dots') {
+            return (
+                <rect
+                    x={part.x}
+                    y={part.y + (part.h - part.rows * part.pitchY) / 2}
+                    width={part.cols * part.pitchX}
+                    height={part.rows * part.pitchY}
+                    fill={`url(#${GID}-perf-${index})`}
+                />
+            );
+        }
+        return <rect x={part.x} y={part.y} width={part.w} height={part.h} rx={part.r} fill={part.color} />;
+    }
+
+    if (part.t === 'dot') {
+        if (part.kind === 'lens') return <Lens cx={part.cx} cy={part.cy} r={part.r} />;
+        if (part.kind === 'led') {
+            return (
+                <>
+                    <circle cx={part.cx} cy={part.cy} r={part.r * 1.6} fill={part.color} opacity={0.18} />
+                    <circle cx={part.cx} cy={part.cy} r={part.r} fill={part.color} />
+                </>
+            );
+        }
+        if (part.kind === 'screw') {
+            return (
+                <>
+                    <circle cx={part.cx} cy={part.cy} r={part.r} fill={`url(#${GID})`} stroke="rgba(0,0,0,0.45)" strokeWidth={0.75} />
+                    <rect x={part.cx - part.r * 0.62} y={part.cy - 0.5} width={part.r * 1.24} height={1} fill="rgba(0,0,0,0.5)" />
+                    <rect x={part.cx - 0.5} y={part.cy - part.r * 0.62} width={1} height={part.r * 1.24} fill="rgba(0,0,0,0.5)" />
+                </>
+            );
+        }
+        return (
+            <>
+                <circle cx={part.cx} cy={part.cy} r={part.r}        fill={part.color} />
+                <circle cx={part.cx} cy={part.cy} r={part.r * 0.57} fill="#07070f" />
+            </>
+        );
+    }
+
+    const gx = part.x + part.w / 2;
+    const gy = part.y + part.h / 2;
+    const gs = Math.min(part.w, part.h) * 0.45;
+    return (
+        <>
+            <rect x={part.x} y={part.y} width={part.w} height={part.h} rx={part.r} fill={`url(#${GID})`} />
+            <rect x={part.x} y={part.y} width={part.w} height={part.h} rx={part.r} fill="rgba(0,0,0,0.35)" />
+            {part.ring > 0 && (
+                <rect
+                    x={part.x + part.ring / 2}
+                    y={part.y + part.ring / 2}
+                    width={part.w - part.ring}
+                    height={part.h - part.ring}
+                    rx={Math.max(0, part.r - part.ring / 2)}
+                    fill="none"
+                    stroke={`url(#${GID})`}
+                    strokeWidth={part.ring}
+                />
+            )}
+            <rect
+                x={part.x + part.w * 0.2}
+                y={part.y + part.h * 0.14}
+                width={part.w * 0.6}
+                height={1.5}
+                rx={0.75}
+                fill={`rgba(255,255,255,${m.FACE_LIGHT})`}
+            />
+            {part.glyph === 'square' && (
+                <rect x={gx - gs / 2} y={gy - gs / 2} width={gs} height={gs} rx={gs * 0.22} fill="none" stroke="rgba(255,255,255,0.32)" strokeWidth={2} />
+            )}
+            {part.glyph === 'dot' && <circle cx={gx} cy={gy} r={gs * 0.28} fill="rgba(255,255,255,0.32)" />}
+        </>
+    );
+}
+
+function RailKey({ btn, m }: { btn: RailButton; m: ChassisMetrics }) {
+    const { x, y, h, w } = btn;
+    const rx = w / 2;
+    const fill = btn.accent ?? `url(#${GID})`;
+    const cap  = `rgba(255,255,255,${m.FACE_LIGHT})`;
+    const base = `rgba(0,0,0,${m.FACE_DARK})`;
+
+    if (btn.style === 'inset') {
+        return (
+            <>
+                <rect x={x} y={y} width={w} height={h} rx={rx} fill={fill} />
+                <rect x={x} y={y} width={w} height={h} rx={rx} fill="rgba(0,0,0,0.35)" />
+                <rect x={x} y={y} width={w} height={1} rx={0.5} fill={cap} />
+                <rect x={x} y={y + h - 1} width={w} height={1} rx={0.5} fill="rgba(0,0,0,0.45)" />
+            </>
+        );
+    }
+
+    if (btn.style === 'ringed') {
+        return (
+            <>
+                <rect x={x} y={y} width={w} height={h} rx={rx} fill={fill} />
+                <rect
+                    x={x + 0.75} y={y + 0.75}
+                    width={Math.max(0, w - 1.5)} height={Math.max(0, h - 1.5)}
+                    rx={Math.max(0, rx - 0.75)}
+                    fill="none"
+                    stroke="rgba(255,255,255,0.55)"
+                    strokeWidth={1.5}
+                />
+                <rect x={x + w * 0.36} y={y + 2} width={Math.max(0.6, w * 0.28)} height={Math.max(0, h - 4)} rx={0.5} fill="rgba(255,255,255,0.35)" />
+            </>
+        );
+    }
+
+    if (btn.style === 'switch') {
+        const nub = h * 0.34;
+        const detent = btn.detent ?? 1;
+        const ny = detent === 0 ? y : detent === 2 ? y + h - nub : y + (h - nub) / 2;
+        return (
+            <>
+                <rect x={x} y={y} width={w} height={h} rx={rx} fill="rgba(0,0,0,0.5)" />
+                {btn.accent && detent === 0 && (
+                    <rect x={x} y={ny + nub} width={w} height={Math.max(0, h - nub)} rx={rx} fill={btn.accent} />
+                )}
+                <rect x={x} y={ny} width={w} height={nub} rx={rx} fill={`url(#${GID})`} />
+                <rect x={x} y={ny} width={w} height={1.5} rx={0.75} fill={cap} />
+            </>
+        );
+    }
+
+    return (
+        <>
+            <rect x={x} y={y} width={w} height={h}     rx={rx} fill={fill} />
+            <rect x={x} y={y} width={w} height={4}     rx={rx} fill={cap} />
+            <rect x={x} y={y + h - 4} width={w} height={4} rx={rx} fill={base} />
+            {btn.style === 'ridged' && [0.34, 0.5, 0.66].map(f => (
+                <rect key={f} x={x} y={y + h * f} width={w} height={1} fill="rgba(0,0,0,0.30)" />
+            ))}
+        </>
+    );
+}
+
 export function PhoneShell({ children, cameraActive = false, entering = false, leaving = false, landscape = false, peek, onClose, radioIsland, alarmIsland, frameColor = DEFAULT_FRAME_COLOR }: PhoneShellProps) {
+    const { brightness, phoneScale, phoneAlign, ringtoneVol, setRingtoneVol, islandPet, shell } = useTheme('brightness', 'phoneScale', 'phoneAlign', 'ringtoneVol', 'setRingtoneVol', 'islandPet', 'shell');
+    const m = useMemo(() => chassisMetrics(shellFor(shell, device.id)), [shell]);
+    const {
+        SW, SH, W, H, SX, SY, BR, SR, SCREEN_MASK, BEZEL, hostsIsland, hasCutout, pillInCutout,
+        SCREEN_RRECT, OUTER_RRECT, softPatch,
+        CUT_W, CUT_H, CUT_X, CUT_Y, CUT_R, CUT_PATH, CUT_LENS_X, CUT_COLLAR, CUT_OPTICS,
+        DI_W, DI_H, DI_X, DI_Y, DI_R, MIP_X, PET_H, PET_TOP, petStage,
+        CALL_W, CALL_X,
+        FINISH, SHEEN_TOP, SHEEN_MID, EDGE_LIGHT,
+        PLATE, RAIL_BAND, RIM_W, RIM_PATH, RIM_COLOR,
+        FACE, AUTO_FOREHEAD, GLASS, GLASS_STRENGTH, MARKS, GRIPS, CAPS, CAP_COLOR,
+        BUTTONS, VOL_UP_BTN, VOL_DOWN_BTN, POWER_BTN, SCREENSHOT_BTN,
+    } = m;
     const rail = frameStops(frameColor, FINISH);
-    const { brightness, phoneScale, phoneAlign, ringtoneVol, setRingtoneVol, islandPet } = useTheme('brightness', 'phoneScale', 'phoneAlign', 'ringtoneVol', 'setRingtoneVol', 'islandPet');
     const batteryLevel = useBatteryStore(s => s.level);
     const { current: nowPlaying, playing: musicPlaying, volume: musicVolume, setVolume: setMusicVolume, requestOpen: openMusic, toggle: toggleMusic, next: nextMusic, prev: prevMusic } = useMusic();
 
@@ -494,10 +598,106 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                             <stop offset="40%"  stopColor={`rgba(255,255,255,${SHEEN_MID})`} />
                             <stop offset="100%" stopColor="rgba(255,255,255,0.00)" />
                         </linearGradient>
+
+                        <clipPath id={`${GID}-screen`}>
+                            <path d={SCREEN_RRECT} />
+                        </clipPath>
+
+                        {CAPS.length > 0 && (
+                            <clipPath id={`${GID}-outer`}>
+                                <path d={OUTER_RRECT} />
+                            </clipPath>
+                        )}
+
+                        {RIM_PATH && (
+                            <linearGradient id={`${GID}-rim`} x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%"   stopColor="rgba(255,255,255,0.35)" />
+                                <stop offset="100%" stopColor="rgba(0,0,0,0.35)" />
+                            </linearGradient>
+                        )}
+
+                        {GLASS.map(band => (
+                            <linearGradient
+                                key={band.dir}
+                                id={`${GID}-glass-${band.dir}`}
+                                x1={band.dir === 'r' ? '100%' : '0%'}
+                                y1={band.dir === 'b' ? '100%' : '0%'}
+                                x2={band.dir === 'l' ? '100%' : '0%'}
+                                y2={band.dir === 't' ? '100%' : '0%'}
+                            >
+                                <stop offset="0%"   stopColor="rgba(0,0,0,0.50)" />
+                                <stop offset="14%"  stopColor={`rgba(255,255,255,${GLASS_STRENGTH})`} />
+                                <stop offset="52%"  stopColor={`rgba(255,255,255,${GLASS_STRENGTH * 0.18})`} />
+                                <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+                            </linearGradient>
+                        ))}
+
+                        {softPatch && (
+                            <pattern id={`${GID}-udc`} width={3} height={3} patternUnits="userSpaceOnUse">
+                                <circle cx={1.5} cy={1.5} r={0.5} fill="rgba(255,255,255,0.05)" />
+                            </pattern>
+                        )}
+
+                        {FACE.map((part, i) => part.t === 'slot' && part.style === 'dots' ? (
+                            <pattern
+                                key={i}
+                                id={`${GID}-perf-${i}`}
+                                x={part.x}
+                                y={part.y + (part.h - part.rows * part.pitchY) / 2}
+                                width={part.pitchX}
+                                height={part.pitchY}
+                                patternUnits="userSpaceOnUse"
+                            >
+                                <circle cx={part.pitchX / 2} cy={part.pitchY / 2} r={part.dotR} fill={part.color} />
+                            </pattern>
+                        ) : null)}
                     </defs>
 
-                    <path d={BEZEL} fill={`url(#${GID})`}      fillRule="evenodd" />
-                    <path d={BEZEL} fill={`url(#${GID}-sheen)`} fillRule="evenodd" />
+                    <path d={BEZEL} fill={PLATE ?? `url(#${GID})`} fillRule="evenodd" />
+                    {RAIL_BAND && <path d={RAIL_BAND} fill={`url(#${GID})`} fillRule="evenodd" />}
+                    <path d={RAIL_BAND ?? BEZEL} fill={`url(#${GID}-sheen)`} fillRule="evenodd" />
+
+                    {CAPS.length > 0 && CAP_COLOR && (
+                        <g clipPath={`url(#${GID}-outer)`}>
+                            {CAPS.map((cap, i) => (
+                                <g key={i}>
+                                    <rect x={cap.x} y={cap.y} width={cap.run} height={cap.run} fill={CAP_COLOR} />
+                                    <rect
+                                        x={cap.x === 0 ? cap.run - 0.75 : cap.x}
+                                        y={cap.y}
+                                        width={0.75}
+                                        height={cap.run}
+                                        fill="rgba(0,0,0,0.35)"
+                                    />
+                                    <rect
+                                        x={cap.x}
+                                        y={cap.y === 0 ? cap.run - 0.75 : cap.y}
+                                        width={cap.run}
+                                        height={0.75}
+                                        fill="rgba(0,0,0,0.35)"
+                                    />
+                                </g>
+                            ))}
+                        </g>
+                    )}
+
+                    {MARKS.map((mark, i) => (
+                        <g key={i}>
+                            <rect x={mark.x} y={mark.y} width={mark.w} height={mark.h} fill="rgba(255,255,255,0.10)" />
+                            <rect x={mark.x} y={mark.y} width={mark.w < mark.h ? 0.5 : mark.w} height={mark.w < mark.h ? mark.h : 0.5} fill="rgba(0,0,0,0.25)" />
+                        </g>
+                    ))}
+
+                    {GRIPS.map((grip, i) => (
+                        <g key={i}>
+                            {Array.from({ length: grip.ticks }, (_, k) => {
+                                const ty = grip.y + (k + 0.5) * (grip.h / grip.ticks);
+                                return grip.style === 'hatch'
+                                    ? <path key={k} d={`M${grip.x},${ty + 2} L${grip.x + grip.w},${ty - 2}`} stroke="rgba(0,0,0,0.22)" strokeWidth={1} />
+                                    : <rect key={k} x={grip.x} y={ty - 1.5} width={grip.w} height={3} fill="rgba(0,0,0,0.22)" />;
+                            })}
+                        </g>
+                    ))}
 
                     <path
                         d={rrect(0.5, 0.5, W - 1, stageH - 1, BR)}
@@ -506,6 +706,17 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                         strokeWidth="0.75"
                     />
 
+                    {RIM_PATH && (
+                        <path
+                            d={RIM_PATH}
+                            fill="none"
+                            stroke={RIM_COLOR ?? `url(#${GID}-rim)`}
+                            strokeWidth={RIM_W}
+                        />
+                    )}
+
+                    {FACE.map((part, i) => <FaceShape key={i} part={part} index={i} m={m} />)}
+
                     <path
                         d={rrect(SX - 0.5, SY - 0.5, SW + 1, SH + 1, SR + 0.5)}
                         fill="none"
@@ -513,51 +724,145 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                         strokeWidth="1.5"
                     />
 
-                    {device.screen.island && (
+                    {hostsIsland && hasCutout && (() => {
+                        const lensR = Math.min(7, CUT_H / 2 - 3);
+                        const lensY = CUT_Y + CUT_H / 2;
+                        const irS = Math.max(6, Math.min(22, CUT_H - 8));
+                        return (
+                            <>
+                                {CUT_COLLAR > 0 && (
+                                    <>
+                                        <rect
+                                            x={CUT_X - CUT_COLLAR * 1.6} y={CUT_Y - CUT_COLLAR * 1.6}
+                                            width={CUT_W + CUT_COLLAR * 3.2} height={CUT_H + CUT_COLLAR * 3.2}
+                                            rx={CUT_R + CUT_COLLAR * 1.6}
+                                            fill="rgba(0,0,0,0.55)"
+                                        />
+                                        <rect
+                                            x={CUT_X - CUT_COLLAR / 2} y={CUT_Y - CUT_COLLAR / 2}
+                                            width={CUT_W + CUT_COLLAR} height={CUT_H + CUT_COLLAR}
+                                            rx={CUT_R + CUT_COLLAR / 2}
+                                            fill="none"
+                                            stroke={`url(#${GID})`}
+                                            strokeWidth={CUT_COLLAR}
+                                        />
+                                        <path
+                                            d={`M${CUT_X + CUT_R * 0.4},${CUT_Y - CUT_COLLAR / 2} A${CUT_R + CUT_COLLAR / 2},${CUT_R + CUT_COLLAR / 2} 0 0 0 ${CUT_X - CUT_COLLAR / 2 - CUT_R * 0.1},${CUT_Y + CUT_H * 0.45}`}
+                                            fill="none"
+                                            stroke="rgba(255,255,255,0.45)"
+                                            strokeWidth={1}
+                                        />
+                                    </>
+                                )}
+
+                                {CUT_PATH
+                                    ? <path d={CUT_PATH} fill="#000" />
+                                    : (
+                                        <rect
+                                            x={CUT_X} y={CUT_Y}
+                                            width={CUT_W} height={CUT_H}
+                                            rx={CUT_R}
+                                            fill="#000"
+                                        />
+                                    )}
+
+                                {CUT_OPTICS === 'lens' && <Lens cx={CUT_LENS_X} cy={lensY} r={lensR} />}
+
+                                {CUT_OPTICS === 'twin' && (
+                                    <>
+                                        <Lens cx={CUT_X + CUT_W / 3}     cy={lensY} r={lensR} />
+                                        <Lens cx={CUT_X + CUT_W * 2 / 3} cy={lensY} r={lensR} />
+                                    </>
+                                )}
+
+                                {CUT_OPTICS === 'lensIr' && (
+                                    <>
+                                        <Lens cx={CUT_X + CUT_W / 6} cy={lensY} r={lensR} />
+                                        <rect
+                                            x={CUT_X + CUT_W * 5 / 6 - irS / 2} y={lensY - irS / 2}
+                                            width={irS} height={irS}
+                                            rx={irS * 0.3}
+                                            fill="#0a0a12"
+                                        />
+                                        <rect
+                                            x={CUT_X + CUT_W * 5 / 6 - irS / 4} y={lensY - irS / 4}
+                                            width={irS / 2} height={irS / 2}
+                                            rx={irS * 0.16}
+                                            fill="#12121c"
+                                        />
+                                    </>
+                                )}
+
+                                {cameraActive && (() => {
+                                    const dotCx = Math.max(CUT_X - 14, CUT_X + CUT_W - CUT_R * 2.5);
+                                    return (
+                                        <>
+                                            <circle cx={dotCx} cy={lensY} r={7}   fill="rgba(48,209,88,0.18)" />
+                                            <circle cx={dotCx} cy={lensY} r={3.6} fill="#30D158" />
+                                        </>
+                                    );
+                                })()}
+                            </>
+                        );
+                    })()}
+
+                    {AUTO_FOREHEAD && (() => {
+                        const camX = W / 2 - 70;
+                        const camY = SY / 2;
+                        const camR = Math.min(7, (SY - 6) / 2);
+                        return (
+                            <>
+                                <rect x={W / 2 - 42} y={camY - 2.5} width={84} height={5} rx={2.5} fill="rgba(0,0,0,0.55)" />
+                                <circle cx={camX} cy={camY} r={camR}        fill="#0c0c14" />
+                                <circle cx={camX} cy={camY} r={camR * 0.57} fill="#07070f" />
+                                <circle cx={camX - camR * 0.21} cy={camY - camR * 0.29} r={camR * 0.21} fill="rgba(255,255,255,0.18)" />
+                                <circle cx={W / 2 + 70} cy={camY} r={2.5} fill="rgba(0,0,0,0.6)" />
+
+                                {cameraActive && (
+                                    <>
+                                        <circle cx={camX - camR - 13} cy={camY} r={6}   fill="rgba(48,209,88,0.18)" />
+                                        <circle cx={camX - camR - 13} cy={camY} r={3.2} fill="#30D158" />
+                                    </>
+                                )}
+                            </>
+                        );
+                    })()}
+
+                    {softPatch && (
                         <>
                             <rect
-                                x={DI_X} y={DI_Y}
-                                width={DI_W} height={DI_H}
-                                rx={DI_R}
-                                fill="#000"
+                                x={CUT_X} y={CUT_Y}
+                                width={CUT_W} height={CUT_H}
+                                rx={CUT_R}
+                                fill="rgba(255,255,255,0.045)"
+                                stroke="rgba(255,255,255,0.06)"
+                                strokeWidth={1}
                             />
-                            <circle cx={DI_X + DI_W - DI_R * 1.12} cy={DI_Y + DI_H / 2} r={7}   fill="#0c0c14" />
-                            <circle cx={DI_X + DI_W - DI_R * 1.12} cy={DI_Y + DI_H / 2} r={4}   fill="#07070f" />
-                            <circle cx={DI_X + DI_W - DI_R * 1.12 - 1.5} cy={DI_Y + DI_H / 2 - 2} r={1.5} fill="rgba(255,255,255,0.18)" />
-
-                            {cameraActive && (() => {
-                                const dotCx = DI_X + DI_W - DI_R * 2.5;
-                                const dotCy = DI_Y + DI_H / 2;
-                                return (
-                                    <>
-                                        <circle cx={dotCx} cy={dotCy} r={7}   fill="rgba(48,209,88,0.18)" />
-                                        <circle cx={dotCx} cy={dotCy} r={3.6} fill="#30D158" />
-                                    </>
-                                );
-                            })()}
+                            <rect
+                                x={CUT_X} y={CUT_Y}
+                                width={CUT_W} height={CUT_H}
+                                rx={CUT_R}
+                                fill={`url(#${GID}-udc)`}
+                            />
                         </>
+                    )}
+
+                    {GLASS.length > 0 && (
+                        <g clipPath={`url(#${GID}-screen)`}>
+                            {GLASS.map(band => (
+                                <rect
+                                    key={band.dir}
+                                    x={band.x} y={band.y}
+                                    width={band.w} height={band.h}
+                                    fill={`url(#${GID}-glass-${band.dir})`}
+                                />
+                            ))}
+                        </g>
                     )}
 
                     {BUTTONS.map((btn, i) => (
                         <g key={i}>
-                            <rect
-                                x={btn.x} y={btn.y}
-                                width={BTN_W} height={btn.h}
-                                rx={BTN_RX}
-                                fill={`url(#${GID})`}
-                            />
-                            <rect
-                                x={btn.x} y={btn.y}
-                                width={BTN_W} height={4}
-                                rx={BTN_RX}
-                                fill={`rgba(255,255,255,${MATTE ? 0.12 : 0.22})`}
-                            />
-                            <rect
-                                x={btn.x} y={btn.y + btn.h - 4}
-                                width={BTN_W} height={4}
-                                rx={BTN_RX}
-                                fill={`rgba(0,0,0,${MATTE ? 0.18 : 0.30})`}
-                            />
+                            <RailKey btn={btn} m={m} />
                         </g>
                     ))}
                 </svg>
@@ -568,7 +873,7 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                         aria-label={t('shell.volumeUp','Volume up')}
                         onClick={() => bumpVolume(1)}
                         className="absolute z-[300] cursor-pointer bg-transparent"
-                        style={{ left: VOL_UP_BTN.x - 6, top: VOL_UP_BTN.y, width: 16, height: VOL_UP_BTN.h }}
+                        style={{ left: VOL_UP_BTN.x - 6, top: VOL_UP_BTN.y, width: VOL_UP_BTN.w + 12, height: VOL_UP_BTN.h }}
                     />
                 )}
                 {VOL_DOWN_BTN && (
@@ -577,7 +882,7 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                         aria-label={t('shell.volumeDown','Volume down')}
                         onClick={() => bumpVolume(-1)}
                         className="absolute z-[300] cursor-pointer bg-transparent"
-                        style={{ left: VOL_DOWN_BTN.x - 6, top: VOL_DOWN_BTN.y, width: 16, height: VOL_DOWN_BTN.h }}
+                        style={{ left: VOL_DOWN_BTN.x - 6, top: VOL_DOWN_BTN.y, width: VOL_DOWN_BTN.w + 12, height: VOL_DOWN_BTN.h }}
                     />
                 )}
 
@@ -587,7 +892,7 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                         aria-label={t('shell.power','Power')}
                         onClick={onClose}
                         className="absolute z-[300] cursor-pointer bg-transparent"
-                        style={{ left: POWER_BTN.x - 8, top: POWER_BTN.y, width: 16, height: POWER_BTN.h }}
+                        style={{ left: POWER_BTN.x - 6, top: POWER_BTN.y, width: POWER_BTN.w + 12, height: POWER_BTN.h }}
                     />
                 )}
 
@@ -597,11 +902,11 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                         aria-label={t('shell.screenshot','Screenshot (double-click the Action button)')}
                         onDoubleClick={() => void takeScreenshot()}
                         className="absolute z-[300] cursor-pointer bg-transparent"
-                        style={{ left: SCREENSHOT_BTN.x - 6, top: SCREENSHOT_BTN.y, width: 16, height: SCREENSHOT_BTN.h }}
+                        style={{ left: SCREENSHOT_BTN.x - 6, top: SCREENSHOT_BTN.y, width: SCREENSHOT_BTN.w + 12, height: SCREENSHOT_BTN.h }}
                     />
                 )}
 
-                {device.screen.island && islandPet !== 'none' && (
+                {hostsIsland && islandPet !== 'none' && (
                     <IslandPet
                         id={islandPet}
                         stage={petStageNow}
@@ -613,8 +918,8 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                     />
                 )}
 
-                {device.screen.island && islandTrack && !callActive && !radioOn && !radioStandby && !alarmRinging && (
-                    <MusicIsland
+                {hostsIsland && islandTrack && !callActive && !radioOn && !radioStandby && !alarmRinging && (
+                    <MusicIsland m={m}
                         track={islandTrack}
                         playing={musicPlaying}
                         expanded={musicExpanded}
@@ -627,8 +932,8 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                     />
                 )}
 
-                {device.screen.island && device.calls && (
-                    <IslandPill
+                {hostsIsland && device.calls && (
+                    <IslandPill m={m}
                         active={callActive}
                         onClick={() => void fetchNui('sd-phone:requestOpen')}
                         compactX={DI_X} compactW={DI_W} expandedX={CALL_X} expandedW={CALL_W}
@@ -642,8 +947,8 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                     </IslandPill>
                 )}
 
-                {device.screen.island && (
-                    <IslandPill
+                {hostsIsland && (
+                    <IslandPill m={m}
                         active={(radioOn || radioStandby) && !callActive && !alarmRinging}
                         onClick={() => { if (radioOn) void fetchNui('sd-phone:radio:leave'); else void fetchNui('sd-phone:radio:set', { on: true }); }}
                         compactX={DI_X} compactW={DI_W} expandedX={CALL_X} expandedW={CALL_W}
@@ -655,8 +960,8 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                     </IslandPill>
                 )}
 
-                {device.screen.island && (
-                    <IslandPill
+                {hostsIsland && (
+                    <IslandPill m={m}
                         active={alarmRinging && !callActive}
                         compactX={DI_X} compactW={DI_W} expandedX={CALL_X} expandedW={CALL_W}
                     >
@@ -667,7 +972,7 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                     </IslandPill>
                 )}
 
-                {device.screen.island && (
+                {hostsIsland && pillInCutout && (
                     <span
                         className="pointer-events-none absolute z-[320] rounded-full"
                         style={{ left: DI_X + DI_W - DI_R * 1.12 - 7, top: DI_Y + DI_H / 2 - 7, width: 14, height: 14, background: '#0c0c14' }}

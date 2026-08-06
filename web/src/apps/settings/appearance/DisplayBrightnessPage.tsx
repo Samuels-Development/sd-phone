@@ -10,6 +10,7 @@ import { Toggle } from '@/ui/Toggle';
 import { DarkAppearancePage } from './DarkAppearancePage';
 import { LightAppearancePage } from './LightAppearancePage';
 import { AccentColourPage } from './AccentColourPage';
+import { PhoneShellPage } from './PhoneShellPage';
 import { accentCss } from './accentRamp';
 import { isCustomPaletteId } from './paletteRamp';
 
@@ -50,7 +51,8 @@ export function DisplayBrightnessPage({ onBack }: { onBack: () => void }) {
         phoneAlign, setPhoneAlign,
         customPalettes,
         accent,
-    } = useTheme('theme', 'setTheme', 'darkTheme', 'lightTheme', 'brightness', 'setBrightness', 'phoneScale', 'setPhoneScale', 'chatTextScale', 'setChatTextScale', 'phoneAlign', 'setPhoneAlign', 'customPalettes', 'accent');
+        shellChoice,
+    } = useTheme('theme', 'setTheme', 'darkTheme', 'lightTheme', 'brightness', 'setBrightness', 'phoneScale', 'setPhoneScale', 'chatTextScale', 'setChatTextScale', 'phoneAlign', 'setPhoneAlign', 'customPalettes', 'accent', 'shellChoice');
 
     const isDark     = theme === 'dark';
     const trackEmpty = isDark ? 'rgb(var(--control))' : 'rgb(var(--surface))';
@@ -58,6 +60,7 @@ export function DisplayBrightnessPage({ onBack }: { onBack: () => void }) {
     const [darkAppearanceOpen, setDarkAppearanceOpen] = useState(false);
     const [lightAppearanceOpen, setLightAppearanceOpen] = useState(false);
     const [accentOpen, setAccentOpen] = useState(false);
+    const [shellOpen, setShellOpen] = useState(false);
 
     const activeTheme = isDark ? darkTheme : lightTheme;
     const appearanceValue = isCustomPaletteId(activeTheme)
@@ -162,6 +165,22 @@ export function DisplayBrightnessPage({ onBack }: { onBack: () => void }) {
                                 />
                                 <ChevronRight className="h-[17px] w-[17px] shrink-0 text-ios-gray3" strokeWidth={2.5} />
                             </button>
+
+                            {shellChoice && (
+                                <>
+                                    <div className="ml-4 h-[0.5px] bg-ios-gray4 dark:bg-control" />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShellOpen(true)}
+                                        className="flex w-full items-center px-4 py-3 text-left active:bg-black/5 dark:active:bg-white/5"
+                                    >
+                                        <span className="flex-1 text-[17px] font-normal text-black dark:text-white">
+                                            {t('settings.phoneShell', 'Phone Shell')}
+                                        </span>
+                                        <ChevronRight className="h-[17px] w-[17px] shrink-0 text-ios-gray3" strokeWidth={2.5} />
+                                    </button>
+                                </>
+                            )}
                         </div>
                         <p className="mt-1.5 px-1 text-[12px] leading-snug text-ios-gray">
                             {isDark
@@ -266,6 +285,7 @@ export function DisplayBrightnessPage({ onBack }: { onBack: () => void }) {
             {darkAppearanceOpen && <DarkAppearancePage onBack={() => setDarkAppearanceOpen(false)} />}
             {lightAppearanceOpen && <LightAppearancePage onBack={() => setLightAppearanceOpen(false)} />}
             {accentOpen && <AccentColourPage onBack={() => setAccentOpen(false)} />}
+            {shellOpen && <PhoneShellPage onBack={() => setShellOpen(false)} />}
         </div>
     );
 }

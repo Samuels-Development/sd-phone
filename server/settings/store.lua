@@ -84,6 +84,7 @@ function store.ensureSchema()
             dark_theme         VARCHAR(16)  NULL,
             light_theme        VARCHAR(16)  NULL,
             accent             VARCHAR(16)  NULL,
+            shell              VARCHAR(16)  NULL,
             palette_custom     LONGTEXT     NULL,
             icon_theme         VARCHAR(16)  NULL,
             icon_custom        LONGTEXT     NULL,
@@ -1178,6 +1179,68 @@ local function isStorableAccent(v)
     return type(v) == 'string' and (ACCENTS[v] == true or isCustomAccentId(v))
 end
 
+---@type table<string, boolean> Chassis ids that exist in the UI bundle; mirrors SHELLS in
+---web/src/shell/shells.ts. A config naming anything else is ignored rather than trusted.
+local SHELL_IDS = {
+    ios = true, android = true, edge = true, classic = true, compact = true,
+    droplet = true, dual = true, rugged = true, gaming = true, waterfall = true,
+}
+
+---@type string Shell used when nothing valid is stored and the config forces nothing.
+local SHELL_DEFAULT = 'ios'
+
+---@type table Shell policy (configs/shells.lua).
+local SHELL_CFG = config.Shells or {}
+
+---The shells a player may actually be on, config order preserved, unknown ids dropped. Never
+---empty: a config that lists nothing real still leaves the default, so the picker cannot brick.
+---@return string[] ids
+local function allowedShells()
+    local out = {}
+    local list = type(SHELL_CFG.Allowed) == 'table' and SHELL_CFG.Allowed or {}
+    for i = 1, #list do
+        local id = list[i]
+        if SHELL_IDS[id] then out[#out + 1] = id end
+    end
+    if #out == 0 then out[1] = SHELL_DEFAULT end
+    return out
+end
+
+---Resolves what a stored choice actually renders as. Forced wins over the player's pick without
+---overwriting it, so clearing Forced hands their own shell back instead of resetting it.
+---@param stored any the player's stored shell, if any
+---@return string shell, boolean allowChoice
+local function resolveShell(stored)
+    local allowed = allowedShells()
+    local forced  = SHELL_IDS[SHELL_CFG.Forced] and SHELL_CFG.Forced or nil
+    local choose  = SHELL_CFG.AllowPlayerChoice ~= false and forced == nil
+    if forced then return forced, false end
+    for i = 1, #allowed do
+        if allowed[i] == stored then return stored, choose end
+    end
+    return allowed[1], choose
+end
+
+---Persists the caller's chassis choice. Stored even when the config currently forces a shell, so
+---the pick survives an operator turning Forced on and off again.
+---@param citizenid string framework per-character id
+---@param shell string a key of SHELL_IDS
+function store.setShell(citizenid, shell, device)
+    device = device or 'phone'
+    if not citizenid or citizenid == '' then return end
+    if not SHELL_IDS[shell] then return end
+    local allowed = allowedShells()
+    local ok = false
+    for i = 1, #allowed do
+        if allowed[i] == shell then ok = true break end
+    end
+    if not ok then return end
+    MySQL.update.await([[
+        INSERT INTO phone_settings (citizenid, device, shell) VALUES (?, ?, ?)
+        ON DUPLICATE KEY UPDATE shell = VALUES(shell)
+    ]], { citizenid, device, shell })
+end
+
 ---Returns a player's selected dark-mode palette, defaulting to 'graphite'. Read-only.
 ---@param citizenid string framework per-character id
 ---@return string darkTheme a key of DARK_THEMES
@@ -1892,6 +1955,7 @@ function store.snapshot(citizenid, device)
     if type(light) ~= 'string' or not (LIGHT_THEMES[light] or isCustomPaletteId(light)) then light = 'silver' end
     local accent = row and row.accent
     if not isStorableAccent(accent) then accent = ACCENT_DEFAULT end
+    local shell, shellChoice = resolveShell(row and row.shell)
     local icons = row and row.icon_theme
     if not isStorableIconTheme(icons) then icons = 'default' end
     local showAppNames = row == nil or isTruthy(row.show_app_names)
@@ -1907,6 +1971,9 @@ function store.snapshot(citizenid, device)
         darkTheme        = dark,
         lightTheme       = light,
         accent           = accent,
+        shell            = shell,
+        shellChoice      = shellChoice,
+        shellsAllowed    = allowedShells(),
         iconTheme        = icons,
         customIconThemes = shared and decodeCustomIconThemes(shared.icon_custom) or {},
         customPalettes   = shared and decodeCustomPalettes(shared.palette_custom) or {},

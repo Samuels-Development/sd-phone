@@ -50,6 +50,7 @@ local config = {
     CellTowers  = require 'configs.celltowers',   -- degradable service by distance to a mast
     Wifi        = require 'configs.wifi',          -- local networks that carry data off the towers
     Bluetooth   = require 'configs.bluetooth',     -- devices other resources register for phones to pair with
+    Shells      = require 'configs.shells',        -- selectable phone chassis, and whether players may pick
 }
 
 -- Server-only secrets: third-party API keys live in configs/server/apikeys.lua, which is NOT in
