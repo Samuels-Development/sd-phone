@@ -702,9 +702,8 @@ function housing.giveKey(src, id, targetSrc)
             return exports.LNS_Housing:CheckPermission(src, 'house', p, 'manage')
         end)
         if not okPerm or not allowed then return false end
-        local cid = player.getIdentifier(targetSrc)
-        if not cid then return false end
-        local ok, res = pcall(function() return exports.LNS_Housing:GiveKey(p, cid) end)
+        -- GiveKey now takes targetSource (server ID) per the updated export API.
+        local ok, res = pcall(function() return exports.LNS_Housing:GiveKey(p, targetSrc) end)
         if ok and res ~= false then
             refreshHomes(src, targetSrc)
             return true
@@ -748,7 +747,14 @@ function housing.removeKey(src, id, holderId)
             return exports.LNS_Housing:CheckPermission(src, 'house', p, 'manage')
         end)
         if not okPerm or not allowed then return false end
-        local ok, res = pcall(function() return exports.LNS_Housing:RemoveKey(p, tostring(holderId)) end)
+        -- RemoveKey now takes targetSource (server ID) per the updated export API.
+        -- holderId is a citizenid (from keyHolders), so resolve to a server source first.
+        local holderSrc = tonumber(holderId)
+        if not holderSrc or holderSrc < 1 or holderSrc % 1 ~= 0 then
+            holderSrc = player.getSourceByIdentifier(tostring(holderId))
+        end
+        if not holderSrc then return false end
+        local ok, res = pcall(function() return exports.LNS_Housing:RemoveKey(p, holderSrc) end)
         if ok and res ~= false then
             refreshHomes(src, holderId)
             return true
