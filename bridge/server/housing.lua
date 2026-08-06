@@ -89,8 +89,44 @@ end
 ---@return any id a number when numeric, else unchanged
 local function pid(id) return tonumber(id) or id end
 
+---Resolve an offline player's character name from the framework DB by citizenid.
+---Returns nil when no row is found or the name cannot be extracted.
+---@param cid string citizenid to look up
+---@return string|nil name or nil
+local function offlineName(cid)
+    if framework.name == 'esx' then
+        local ok, rows = pcall(function()
+            return MySQL.query.await(
+                'SELECT firstname, lastname FROM users WHERE identifier = ? LIMIT 1', { cid }
+            )
+        end)
+        if ok and rows and rows[1] then
+            local r = rows[1]
+            local first = s(r.firstname)
+            local last  = s(r.lastname)
+            if first or last then return (first or '') .. ' ' .. (last or '') end
+        end
+    else
+        local ok, rows = pcall(function()
+            return MySQL.query.await(
+                'SELECT charinfo FROM players WHERE citizenid = ? LIMIT 1', { cid }
+            )
+        end)
+        if ok and rows and rows[1] then
+            local ci = decodeJson(rows[1].charinfo)
+            if ci then
+                local first = s(ci.firstname)
+                local last  = s(ci.lastname)
+                if first or last then return (first or '') .. ' ' .. (last or '') end
+            end
+        end
+    end
+    return nil
+end
+
 ---Map an array of citizenids (or { citizenid = ... } objects) to the app's { id, name } holder
----shape, resolving online players to a friendly name and defaulting the rest to 'Resident'.
+---shape, resolving online players to a friendly name, querying the DB for offline players, and
+---defaulting to 'Unknown Resident' only when the DB lookup also fails.
 ---@param list any candidate holder array
 ---@return table[] holders { id = citizenid, name }
 local function resolveCids(list)
@@ -102,10 +138,15 @@ local function resolveCids(list)
         if cid ~= nil and cid ~= '' then
             cid = tostring(cid)
             local osrc = online[cid]
-            out[#out + 1] = {
-                id   = cid,
-                name = (osrc and player.getName(osrc)) or (type(v) == 'table' and s(v.name)) or 'Resident',
-            }
+            local name
+            if osrc then
+                name = player.getName(osrc)
+            elseif type(v) == 'table' and s(v.name) then
+                name = s(v.name)
+            else
+                name = offlineName(cid) or 'Unknown Resident'
+            end
+            out[#out + 1] = { id = cid, name = name }
         end
     end
     return out
@@ -408,9 +449,10 @@ ADAPTERS['origen_housing'] = function(source, id)
 end
 
 ---LNS_Housing: reads the in-memory Properties table via the GetProperties export and filters to
----properties owned by the calling player. Entrance coords come from `metadata.entrance`; lock
----state from `metadata.locked`; property type is inferred from `metadata.shell`.
----@param _source number caller server id (unused - filtered by owner citizenid)
+---properties owned by or where the calling player holds a key. Entrance coords come from
+---`metadata.entrance` (Shell/IPL) falling back to `metadata.doorCoords` (MLO, populated by
+---EnrichPropertyDoorlockData). Lock state from `metadata.locked`.
+---@param source number caller server id
 ---@param id string caller citizenid
 ---@return table[] homes
 ADAPTERS['LNS_Housing'] = function(source, id)
@@ -426,7 +468,29 @@ ADAPTERS['LNS_Housing'] = function(source, id)
             end
         end
         if isOwner or isKeyholder then
-            local coords = p.metadata and asXY(p.metadata.entrance) or nil
+            local coords = nil
+            if p.metadata and p.metadata.entrance then
+                coords = asXY(p.metadata.entrance)
+            end
+            if not coords then
+                local doorId = p.door_id
+                if (not doorId or doorId == 0) and p.doors and #p.doors > 0 then
+                    doorId = p.doors[1]
+                end
+                if doorId and doorId ~= 0 then
+                    local okD, door = pcall(function() return exports.ox_doorlock:getDoor(doorId) end)
+                    if okD and door and door.coords then
+                        coords = asXY(door.coords)
+                    end
+                end
+            end
+            if not coords and p.zone_data and p.zone_data.points and #p.zone_data.points > 0 then
+                local sumX, sumY, sumZ, count = 0, 0, 0, #p.zone_data.points
+                for _, pt in ipairs(p.zone_data.points) do
+                    sumX = sumX + pt.x; sumY = sumY + pt.y; sumZ = sumZ + (pt.z or 0)
+                end
+                coords = asXY({ x = sumX / count, y = sumY / count, z = sumZ / count })
+            end
             local area = ''
             if coords then
                 local zone = clientExec(source, 'zone', coords)
@@ -435,12 +499,12 @@ ADAPTERS['LNS_Housing'] = function(source, id)
             out[#out + 1] = home{
                 id      = p.id,
                 address = s(p.label),
-                type    = 'House', -- Really the only type. Apartments aren't meant to be purchased.
+                type    = 'House',
                 area    = area,
                 value   = p.price,
                 status  = isOwner and ((p.sale_type == 'rent') and 'rented' or 'owned') or 'rented',
                 coords  = coords,
-                locked  = p.metadata and p.metadata.locked or nil,
+                locked  = (p.metadata ~= nil) and (p.metadata.locked == true) or nil,
             }
         end
     end
@@ -625,15 +689,17 @@ function housing.lock(src, id, want)
     return nil
 end
 
----List the property's key holders as { id, name } records (id = citizenid). Ownership-gated;
----read via server exports, the qs keyholders column, or the caller's client, per system.
+---List the property's key holders as { id, name } records (id = citizenid). For most systems
+---this is ownership-gated. For LNS_Housing it is accessible to both owners and keyholders so
+---that a new keyholder added via the phone can see the full list (including the owner).
 ---@param src number caller source
----@param id any property id (client-echoed)
+---@param id any property id (client-echoed)\r
 ---@return table[] holders (empty when unsupported or rejected)
 function housing.keyHolders(src, id)
-    if not caps().keyList or not ownsProperty(src, id) then return {} end
+    if not caps().keyList then return {} end
     local p = pid(id)
     if ACTIVE == 'bcs_housing' then
+        if not ownsProperty(src, id) then return {} end
         local ok, list = pcall(function() return exports.bcs_housing:GetKeyHolders(p) end)
         if not ok or type(list) ~= 'table' then return {} end
         local out = {}
@@ -642,25 +708,63 @@ function housing.keyHolders(src, id)
         end
         return out
     elseif ACTIVE == 'RxHousing' then
+        if not ownsProperty(src, id) then return {} end
         local ok, list = pcall(function() return exports['RxHousing']:GetPropertyKeyholders(p) end)
         return ok and resolveCids(list) or {}
     elseif ACTIVE == 'qs-housing' then
+        if not ownsProperty(src, id) then return {} end
         local rows = dbQuery('SELECT `keyholders` FROM `player_houses` WHERE `id` = ? OR `house` = ?', { id, id })
         local raw  = rows and rows[1] and rows[1].keyholders
         return resolveCids(decodeJson(raw))
     elseif ACTIVE == 'ps-housing' then
+        if not ownsProperty(src, id) then return {} end
         local r = clientExec(src, 'keyHolders', p)
         return type(r) == 'table' and r or {}
     elseif ACTIVE == 'LNS_Housing' then
-        local okPerm, allowed = pcall(function()
-            return exports.LNS_Housing:CheckPermission(src, 'house', p, 'manage')
-        end)
-        if not okPerm or not allowed then return {} end
         local okProp, prop = pcall(function() return exports.LNS_Housing:GetProperty(p) end)
         if not okProp or type(prop) ~= 'table' then return {} end
+
+        local callerCid = player.getIdentifier(src)
+        if not callerCid then return {} end
+
+        local isOwner  = (prop.owner == callerCid)
+        local isHolder = false
+        if not isOwner and prop.permissions and type(prop.permissions.entry) == 'table' then
+            for _, cid in ipairs(prop.permissions.entry) do
+                if cid == callerCid then isHolder = true; break end
+            end
+        end
+        if not isOwner and not isHolder then return {} end
+
+        local out = {}
+        if prop.owner and prop.owner ~= '' then
+            local ownerOnline = player.onlineCidMap()[prop.owner]
+            local ownerName
+            if ownerOnline then
+                ownerName = player.getName(ownerOnline)
+            else
+                ownerName = offlineName(prop.owner) or 'Unknown Resident'
+            end
+            out[#out + 1] = { id = prop.owner, name = ownerName }
+        end
         local entry = prop.permissions and prop.permissions.entry
-        return resolveCids(entry)
+        if type(entry) == 'table' then
+            for _, cid in ipairs(entry) do
+                if cid ~= prop.owner then
+                    local online = player.onlineCidMap()[cid]
+                    local name
+                    if online then
+                        name = player.getName(online)
+                    else
+                        name = offlineName(cid) or 'Unknown Resident'
+                    end
+                    out[#out + 1] = { id = cid, name = name }
+                end
+            end
+        end
+        return out
     elseif ACTIVE == 'nolag_properties' then
+        if not ownsProperty(src, id) then return {} end
         local okH, holders = pcall(function() return exports.nolag_properties:GetKeyHolders(p) end)
         if not okH or type(holders) ~= 'table' then return {} end
         local cids = {}
