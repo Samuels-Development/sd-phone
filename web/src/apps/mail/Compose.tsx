@@ -93,7 +93,7 @@ export function Compose({ accounts, defaultAccountId, initialTo = '', initialSub
             />
 
             <div
-                className="absolute inset-x-0 bottom-0 flex flex-col overflow-hidden rounded-t-[14px] bg-[#d4d4d4] text-black dark:bg-base dark:text-white"
+                className="absolute inset-x-0 bottom-0 flex flex-col overflow-hidden rounded-t-[14px] bg-base text-black dark:text-white"
                 style={{
                     top: 50,
                     animation: exiting

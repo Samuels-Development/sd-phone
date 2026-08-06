@@ -14,7 +14,7 @@ import type { Call, MapPoint, Unit } from './data';
 const CALL_TINT: Record<number, string> = {
     1: '#FF3B30',
     2: '#FF9500',
-    3: '#0A84FF',
+    3: 'rgb(var(--ios-blue))',
     4: '#8E8E93',
 };
 
@@ -22,7 +22,7 @@ const CODE_TINT: Record<string, string> = {
     '10-8':  '#34C759',
     '10-6':  '#FF9500',
     '10-7':  '#FF3B30',
-    '10-90': '#0A84FF',
+    '10-90': 'rgb(var(--ios-blue))',
 };
 
 const LEGEND_CLEARANCE = '47px';
@@ -43,7 +43,7 @@ function MarkerCard({ children }: { children: ReactNode }) {
             onPointerDown={e => e.stopPropagation()}
             onPointerMove={e => e.stopPropagation()}
             onPointerUp={e => e.stopPropagation()}
-            className="absolute bottom-full left-1/2 mb-2 w-[236px] -translate-x-1/2 cursor-default rounded-[13px] bg-[#f4f4f4] p-3 text-left shadow-[0_10px_34px_rgba(0,0,0,0.26)] ring-1 ring-black/[0.08] dark:bg-elevated dark:ring-white/[0.10]"
+            className="absolute bottom-full left-1/2 mb-2 w-[236px] -translate-x-1/2 cursor-default rounded-[13px] bg-elevated p-3 text-left shadow-[0_10px_34px_rgba(0,0,0,0.26)] ring-1 ring-black/[0.08] dark:ring-white/[0.10]"
         >
             {children}
         </div>

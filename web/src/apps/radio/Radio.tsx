@@ -124,7 +124,7 @@ export function Radio({ onClose: _onClose }: { onClose: () => void }) {
     const del = () => setEntry(prev => prev.slice(0, -1));
 
     return (
-        <div className="absolute inset-0 z-10 flex flex-col bg-[#d4d4d4] font-sf text-black dark:bg-base dark:text-white">
+        <div className="absolute inset-0 z-10 flex flex-col bg-base font-sf text-black dark:text-white">
             <div className="h-[54px] shrink-0" aria-hidden />
             <div className="px-5 pb-1 pt-0.5 text-[34px] font-bold tracking-tight">{t('radio.title', 'Radio')}</div>
 
@@ -199,7 +199,7 @@ export function Radio({ onClose: _onClose }: { onClose: () => void }) {
                     </button>
                 </div>
 
-                <div className="mt-3 flex items-center gap-3 rounded-[16px] bg-[#e5e5e5] px-4 py-3.5 dark:bg-surface">
+                <div className="mt-3 flex items-center gap-3 rounded-[16px] bg-surface px-4 py-3.5">
                     <Volume1 className="h-[20px] w-[20px] shrink-0 text-black/45 dark:text-white/45" strokeWidth={2} />
                     <input
                         type="range" min={0} max={100} value={volume}
@@ -214,7 +214,7 @@ export function Radio({ onClose: _onClose }: { onClose: () => void }) {
                 <button
                     type="button"
                     onClick={() => setShowSaved(true)}
-                    className="mt-3 flex w-full items-center gap-3 rounded-[16px] bg-[#e5e5e5] px-4 py-3.5 text-left active:opacity-70 dark:bg-surface"
+                    className="mt-3 flex w-full items-center gap-3 rounded-[16px] bg-surface px-4 py-3.5 text-left active:opacity-70"
                 >
                     <Bookmark className="h-[19px] w-[19px] shrink-0 text-ios-blue" strokeWidth={2.2} />
                     <span className="flex-1 text-[17px] font-semibold">{t('radio.savedChannels', 'Saved Channels')}</span>

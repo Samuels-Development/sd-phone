@@ -11,7 +11,7 @@ import {
 } from './lockClock';
 
 
-const ACCENT = '#0a84ff';
+const ACCENT = 'rgb(var(--ios-blue))';
 
 export function LockClockEditor({ config, time, date, wallpaper, onChange, onClose }: {
     config:    LockClock;

@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 
 import { device } from '@device';
 import { isCustomPaletteId, rampFor, rampVars } from '@/apps/settings/appearance/paletteRamp';
+import { accentVars } from '@/apps/settings/appearance/accentRamp';
 import { AdminPanel } from '@/admin/AdminPanel';
 import { PayphoneUI } from '@/payphone/PayphoneUI';
 import { CallLayer } from '@/apps/phone/CallLayer';
@@ -176,13 +177,16 @@ function AppContent() {
     // Tone/volume fields are deliberately NOT subscribed here — they're only
     // read inside event callbacks (via useThemeStore.getState()), so slider
     // drags in Control Center don't re-render the whole tree from the root.
-    const { theme, darkTheme, lightTheme, customPalettes, wallpaperLock, wallpaperHome, setTheme, setWallpaper, statusLightOverride, statusBarAutoLight, hideHomeIndicator, airplaneMode, hour24, setHour24, setSecurity } = useTheme('theme', 'darkTheme', 'lightTheme', 'wallpaperLock', 'wallpaperHome', 'setTheme', 'setWallpaper', 'statusLightOverride', 'statusBarAutoLight', 'hideHomeIndicator', 'airplaneMode', 'hour24', 'setHour24', 'setSecurity', 'customPalettes');
+    const { theme, darkTheme, lightTheme, accent, customPalettes, wallpaperLock, wallpaperHome, setTheme, setWallpaper, statusLightOverride, statusBarAutoLight, hideHomeIndicator, airplaneMode, hour24, setHour24, setSecurity } = useTheme('theme', 'darkTheme', 'lightTheme', 'accent', 'wallpaperLock', 'wallpaperHome', 'setTheme', 'setWallpaper', 'statusLightOverride', 'statusBarAutoLight', 'hideHomeIndicator', 'airplaneMode', 'hour24', 'setHour24', 'setSecurity', 'customPalettes');
     const activeThemeId = theme === 'dark' ? darkTheme : lightTheme;
     const themeVars = useMemo(() => {
-        if (!isCustomPaletteId(activeThemeId)) return undefined;
-        const palette = customPalettes.find(p => p.id === activeThemeId);
-        return palette ? rampVars(rampFor(palette.mode, palette)) as CSSProperties : undefined;
-    }, [activeThemeId, customPalettes]);
+        const vars: Record<string, string> = accentVars(theme === 'dark' ? 'dark' : 'light', accent);
+        if (isCustomPaletteId(activeThemeId)) {
+            const palette = customPalettes.find(p => p.id === activeThemeId);
+            if (palette) Object.assign(vars, rampVars(rampFor(palette.mode, palette)));
+        }
+        return vars as CSSProperties;
+    }, [activeThemeId, customPalettes, accent, theme]);
     const locale = useLocaleStore(s => s.locale);
     useEffect(() => { useLocaleStore.getState().hydrate(); }, []);
     useEffect(() => { void useNotifPrefsStore.getState().hydrate(); }, []);

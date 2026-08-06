@@ -22,7 +22,7 @@ export function OfferSheet({ request, onClose }: { request: Ride; onClose: () =>
     const feePct = Math.round((1 - cut) * 100);
 
     return (
-        <Sheet title={t('ryde.offerAFare', 'Offer a fare')} onClose={onClose} fit="content" className="bg-[#e5e5e5] px-5 pt-3 dark:bg-surface">
+        <Sheet title={t('ryde.offerAFare', 'Offer a fare')} onClose={onClose} fit="content" className="bg-surface px-5 pt-3">
             {() => (
                 <>
                     <div className="mb-4 flex items-center gap-3.5">

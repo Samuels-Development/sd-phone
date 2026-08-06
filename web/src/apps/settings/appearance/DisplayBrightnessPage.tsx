@@ -9,6 +9,8 @@ import { NavBar } from '@/ui/NavBar';
 import { Toggle } from '@/ui/Toggle';
 import { DarkAppearancePage } from './DarkAppearancePage';
 import { LightAppearancePage } from './LightAppearancePage';
+import { AccentColourPage } from './AccentColourPage';
+import { accentCss } from './accentRamp';
 import { isCustomPaletteId } from './paletteRamp';
 
 const DARK_THEME_LABEL: Record<DarkTheme, string> = {
@@ -47,13 +49,15 @@ export function DisplayBrightnessPage({ onBack }: { onBack: () => void }) {
         chatTextScale, setChatTextScale,
         phoneAlign, setPhoneAlign,
         customPalettes,
-    } = useTheme('theme', 'setTheme', 'darkTheme', 'lightTheme', 'brightness', 'setBrightness', 'phoneScale', 'setPhoneScale', 'chatTextScale', 'setChatTextScale', 'phoneAlign', 'setPhoneAlign', 'customPalettes');
+        accent,
+    } = useTheme('theme', 'setTheme', 'darkTheme', 'lightTheme', 'brightness', 'setBrightness', 'phoneScale', 'setPhoneScale', 'chatTextScale', 'setChatTextScale', 'phoneAlign', 'setPhoneAlign', 'customPalettes', 'accent');
 
     const isDark     = theme === 'dark';
-    const trackEmpty = isDark ? '#3A3A3C' : '#E5E5EA';
+    const trackEmpty = isDark ? 'rgb(var(--control))' : 'rgb(var(--surface))';
     const [auto, setAuto] = useState(true);
     const [darkAppearanceOpen, setDarkAppearanceOpen] = useState(false);
     const [lightAppearanceOpen, setLightAppearanceOpen] = useState(false);
+    const [accentOpen, setAccentOpen] = useState(false);
 
     const activeTheme = isDark ? darkTheme : lightTheme;
     const appearanceValue = isCustomPaletteId(activeTheme)
@@ -141,6 +145,23 @@ export function DisplayBrightnessPage({ onBack }: { onBack: () => void }) {
                                 </span>
                                 <ChevronRight className="h-[17px] w-[17px] shrink-0 text-ios-gray3" strokeWidth={2.5} />
                             </button>
+
+                            <div className="ml-4 h-[0.5px] bg-ios-gray4 dark:bg-control" />
+
+                            <button
+                                type="button"
+                                onClick={() => setAccentOpen(true)}
+                                className="flex w-full items-center px-4 py-3 text-left active:bg-black/5 dark:active:bg-white/5"
+                            >
+                                <span className="flex-1 text-[17px] font-normal text-black dark:text-white">
+                                    {t('settings.accentColour', 'Accent Colour')}
+                                </span>
+                                <span
+                                    className="mr-2 h-[20px] w-[20px] shrink-0 rounded-full ring-1 ring-black/10 dark:ring-white/15"
+                                    style={{ background: accentCss(isDark ? 'dark' : 'light', accent) }}
+                                />
+                                <ChevronRight className="h-[17px] w-[17px] shrink-0 text-ios-gray3" strokeWidth={2.5} />
+                            </button>
                         </div>
                         <p className="mt-1.5 px-1 text-[12px] leading-snug text-ios-gray">
                             {isDark
@@ -193,13 +214,13 @@ export function DisplayBrightnessPage({ onBack }: { onBack: () => void }) {
                             <div className="flex flex-col gap-2 px-4 pb-4 pt-4">
                                 <div
                                     className="max-w-[78%] self-start rounded-2xl rounded-bl-md px-[14px] py-[8px] leading-[1.3]"
-                                    style={{ background: isDark ? '#3a3a3c' : '#e9e9eb', color: isDark ? '#fff' : '#000', fontSize: 'calc(19px * var(--chat-text-scale, 1))' }}
+                                    style={{ background: isDark ? 'rgb(var(--control))' : 'rgb(var(--surface))', color: isDark ? '#fff' : '#000', fontSize: 'calc(19px * var(--chat-text-scale, 1))' }}
                                 >
                                     {t('settings.howsThisSize', "How's this size?")}
                                 </div>
                                 <div
                                     className="max-w-[78%] self-end rounded-2xl rounded-br-md px-[14px] py-[8px] leading-[1.3] text-white"
-                                    style={{ background: '#0a84ff', fontSize: 'calc(19px * var(--chat-text-scale, 1))' }}
+                                    style={{ background: 'rgb(var(--ios-blue))', fontSize: 'calc(19px * var(--chat-text-scale, 1))' }}
                                 >
                                     {t('settings.looksGood', 'Looks good 👍')}
                                 </div>
@@ -244,6 +265,7 @@ export function DisplayBrightnessPage({ onBack }: { onBack: () => void }) {
             </div>
             {darkAppearanceOpen && <DarkAppearancePage onBack={() => setDarkAppearanceOpen(false)} />}
             {lightAppearanceOpen && <LightAppearancePage onBack={() => setLightAppearanceOpen(false)} />}
+            {accentOpen && <AccentColourPage onBack={() => setAccentOpen(false)} />}
         </div>
     );
 }
@@ -280,7 +302,7 @@ function PositionPicker({
                 width:      240,
                 height:     150,
                 background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
-                borderColor: isDark ? '#3A3A3C' : '#C6C6C8',
+                borderColor: 'rgb(var(--control))',
             }}
         >
             <div
@@ -306,7 +328,7 @@ function PositionPicker({
                                     style={{
                                         width:  14,
                                         height: 22,
-                                        background: '#0a84ff',
+                                        background: 'rgb(var(--ios-blue))',
                                         boxShadow: '0 0 0 2px rgba(10,132,255,0.22)',
                                     }}
                                 />

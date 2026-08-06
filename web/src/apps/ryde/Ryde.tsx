@@ -26,7 +26,7 @@ function Shell() {
     const g = useRyde();
     const PUSH = 'ios-push 0.34s cubic-bezier(0.32,0.72,0,1)';
     return (
-        <div className="absolute inset-0 flex flex-col bg-[#d4d4d4] font-sf dark:bg-base">
+        <div className="absolute inset-0 flex flex-col bg-base font-sf">
             <div className="relative min-h-0 flex-1">
                 <div key={g.tab} className="absolute inset-0" style={{ animation: PUSH }}>
                     {g.tab === 'home' && <Home />}
@@ -40,7 +40,7 @@ function Shell() {
                         type="button"
                         onClick={() => g.setAccountOpen(true)}
                         aria-label={t('ryde.account', 'Account')}
-                        className="absolute right-4 z-30 flex h-[42px] w-[42px] items-center justify-center rounded-full bg-white text-black shadow-md ring-1 ring-black/5 active:scale-95 dark:bg-surface dark:text-white dark:ring-white/10"
+                        className="absolute right-4 z-30 flex h-[42px] w-[42px] items-center justify-center rounded-full bg-elevated text-black shadow-md ring-1 ring-black/5 active:scale-95 dark:bg-surface dark:text-white dark:ring-white/10"
                         style={{ top: 'calc(var(--safe-top) + 8px)' }}
                     >
                         {g.authed && g.me

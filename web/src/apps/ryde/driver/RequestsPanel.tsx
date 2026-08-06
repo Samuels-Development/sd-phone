@@ -27,7 +27,7 @@ export function RequestsPanel({ onClose }: { onClose: () => void }) {
 
     return (
         <div
-            className="absolute inset-0 z-40 flex flex-col bg-[#d4d4d4] font-sf dark:bg-base"
+            className="absolute inset-0 z-40 flex flex-col bg-base font-sf"
             style={{ transform: shown ? 'translateX(0)' : 'translateX(100%)', transition: 'transform 0.32s cubic-bezier(0.32,0.72,0,1)' }}
         >
             <div className="flex shrink-0 items-center px-3 pb-1" style={{ paddingTop: 'calc(var(--safe-top) + 10px)' }}>
@@ -53,7 +53,7 @@ export function RequestsPanel({ onClose }: { onClose: () => void }) {
                             <button
                                 key={r.id}
                                 onClick={() => setSelected(r)}
-                                className="flex w-full items-center gap-3.5 rounded-[18px] bg-[#e5e5e5] p-3.5 text-left shadow-sm active:opacity-80 dark:bg-surface"
+                                className="flex w-full items-center gap-3.5 rounded-[18px] bg-surface p-3.5 text-left shadow-sm active:opacity-80"
                             >
                                 <InitialsAvatar name={r.riderName ?? t('ryde.rider', 'Rider')} size={48} />
                                 <div className="min-w-0 flex-1">

@@ -10,7 +10,7 @@ export function AllTransactions({ transactions, onBack, onSelectTx }: { transact
     const days = groupTx(transactions);
 
     return (
-        <div className="absolute inset-0 z-20 flex flex-col bg-[#d4d4d4] text-black dark:bg-base dark:text-white" style={pageStyle}>
+        <div className="absolute inset-0 z-20 flex flex-col bg-base text-black dark:text-white" style={pageStyle}>
             <div className="h-[54px] shrink-0" aria-hidden />
 
             <div className="px-2 pb-0.5">

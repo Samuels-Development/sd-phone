@@ -52,8 +52,8 @@ export function Portfolio({ assets, cash, onBack, onOpenAsset }: {
     }, []);
     function back() { exit.current = onBack; setShown(false); }
 
-    const pageBg  = isDark ? 'rgb(var(--base))' : '#d4d4d4';
-    const cardBg  = isDark ? 'rgb(var(--surface))' : '#e5e5e5';
+    const pageBg  = 'rgb(var(--base))';
+    const cardBg  = 'rgb(var(--surface))';
 
     const held     = assets.filter(a => a.units > 0).sort((a, b) => holdingValue(b) - holdingValue(a));
     const invested = held.reduce((s, a) => s + holdingValue(a), 0);

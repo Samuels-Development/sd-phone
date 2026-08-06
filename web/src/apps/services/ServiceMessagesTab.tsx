@@ -188,12 +188,12 @@ function Conversation({ scope, thread, onBack, onSent }: {
         if (m) setLocSheet(m);
     }, [thread.messages]);
 
-    const receivedBg = isDark ? '#262628' : '#c6c6c6';
-    const sentBg     = '#0a84ff';
+    const receivedBg = isDark ? 'rgb(var(--elevated))' : 'rgb(var(--control))';
+    const sentBg     = 'rgb(var(--ios-blue))';
 
     const view = (
         <div
-            className={`absolute inset-0 z-20 flex min-h-0 flex-col bg-[#e5e5e5] font-sf dark:bg-base ${isDark ? 'dark' : ''}`}
+            className={`absolute inset-0 z-20 flex min-h-0 flex-col bg-surface font-sf dark:bg-base ${isDark ? 'dark' : ''}`}
             style={{ ...pageStyle, willChange: 'transform' }}
         >
             <div className="h-[58px] shrink-0" aria-hidden />

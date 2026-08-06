@@ -10,7 +10,7 @@ const PAD_KEYS: { digit: string; letters: string }[] = [
     { digit: '7', letters: 'PQRS' }, { digit: '8', letters: 'TUV'  }, { digit: '9', letters: 'WXYZ' },
 ];
 
-const KEY_CLS   = 'rounded-[14px] bg-[#f1f1f3] py-4 active:opacity-60 dark:bg-elevated';
+const KEY_CLS   = 'rounded-[14px] bg-elevated py-4 active:opacity-60 dark:bg-elevated';
 const DIGIT_CLS = 'text-[34px] font-medium leading-none text-black/80 dark:text-white/90';
 const SUB_CLS   = 'mt-1 min-h-[14px] text-[13px] font-semibold tracking-[0.14em] text-black/65 dark:text-white/75';
 

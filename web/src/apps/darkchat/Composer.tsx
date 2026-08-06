@@ -83,9 +83,9 @@ export function Composer({ onSend, reply, onCancelReply }: {
 
             {reply && (
                 <div className="flex items-center gap-2 px-4 pt-2 pb-1">
-                    <div className="w-[3px] self-stretch rounded-full bg-[#007AFF]" />
+                    <div className="w-[3px] self-stretch rounded-full bg-ios-blue" />
                     <div className="min-w-0 flex-1">
-                        <div className="text-[12px] font-semibold text-[#007AFF]">{t('darkchat.replyTo', 'In reply to {name}', { name: reply.name })}</div>
+                        <div className="text-[12px] font-semibold text-ios-blue">{t('darkchat.replyTo', 'In reply to {name}', { name: reply.name })}</div>
                         <div className="truncate text-[13px] text-white/55">{reply.body}</div>
                     </div>
                     <button
@@ -137,7 +137,7 @@ export function Composer({ onSend, reply, onCancelReply }: {
                             type="button"
                             onClick={sendText}
                             aria-label={t('darkchat.send', 'Send')}
-                            className="flex h-[33px] w-[33px] shrink-0 items-center justify-center rounded-full bg-[#007AFF] active:opacity-70"
+                            className="flex h-[33px] w-[33px] shrink-0 items-center justify-center rounded-full bg-ios-blue active:opacity-70"
                         >
                             <ArrowUp className="h-[19px] w-[19px] text-white" strokeWidth={2.75} />
                         </button>
@@ -167,7 +167,7 @@ export function Composer({ onSend, reply, onCancelReply }: {
                             ) : btn.emoji ? (
                                 <span className="text-[23px] leading-none">{btn.emoji}</span>
                             ) : (
-                                <span className="text-[15px] font-black tracking-tight text-[#007AFF]">{btn.label}</span>
+                                <span className="text-[15px] font-black tracking-tight text-ios-blue">{btn.label}</span>
                             )}
                         </button>
                     );

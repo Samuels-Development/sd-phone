@@ -28,7 +28,7 @@ export function Rating() {
     }
 
     return (
-        <Sheet onClose={g.skipRating} fit="content" className="bg-[#e5e5e5] px-5 pt-3 dark:bg-surface">
+        <Sheet onClose={g.skipRating} fit="content" className="bg-surface px-5 pt-3">
             {() => (
                 <div className="pb-1 text-center">
                     <div className="mb-3 flex items-center justify-center gap-2 text-[20px] font-extrabold tracking-tight text-[#22c55e]">

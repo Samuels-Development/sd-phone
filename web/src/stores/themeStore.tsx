@@ -18,6 +18,7 @@ import { DEFAULT_NOTIFICATION, DEFAULT_RINGTONE } from '@/apps/settings/tones';
 import type { CustomTone, ToneKind } from '@/apps/settings/tones';
 import { warmYouTube } from '@/apps/settings/tonePlayer';
 import { clampRecipe, isCustomPaletteId, MAX_CUSTOM_PALETTES, PALETTE_NAME_MAX } from '@/apps/settings/appearance/paletteRamp';
+import { DEFAULT_ACCENT, isAccentChoice } from '@/apps/settings/appearance/accentRamp';
 import type { PaletteMode, PaletteRecipe } from '@/apps/settings/appearance/paletteRamp';
 
 export type Theme = 'light' | 'dark';
@@ -78,6 +79,16 @@ function savePaletteChoiceLocal(key: string, v: string) {
 }
 const DARK_THEME_KEY = 'sd-phone:darkTheme';
 const LIGHT_THEME_KEY = 'sd-phone:lightTheme';
+const ACCENT_KEY = 'sd-phone:accent';
+function loadAccentLocal(): string {
+    try {
+        const v = window.localStorage.getItem(ACCENT_KEY);
+        return isAccentChoice(v) ? v : DEFAULT_ACCENT;
+    } catch { return DEFAULT_ACCENT; }
+}
+function saveAccentLocal(v: string) {
+    try { window.localStorage.setItem(ACCENT_KEY, v); } catch { /* ignore */ }
+}
 const DARK_THEMES: DarkTheme[] = ['graphite', 'black', 'warm', 'midnight', 'moss', 'plum', 'slate', 'ocean', 'rose', 'clay'];
 const LIGHT_THEMES: LightTheme[] = ['silver', 'snow', 'linen', 'sky', 'mint', 'blush', 'sand', 'lavender', 'stone', 'dusk'];
 function loadLightThemeLocal(): LightTheme {
@@ -224,6 +235,8 @@ interface ThemeState {
     setDarkTheme:      (t: DarkThemeChoice) => void;
     lightTheme:        LightThemeChoice;
     setLightTheme:     (t: LightThemeChoice) => void;
+    accent:            string;
+    setAccent:         (a: string) => void;
     customPalettes:      CustomPalette[];
     saveCustomPalette:   (p: CustomPalette) => Promise<string | null>;
     deleteCustomPalette: (id: CustomPaletteId) => void;
@@ -330,6 +343,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     theme: isFiveM ? 'light' : loadThemeLocal(),
     darkTheme: isFiveM ? 'graphite' : loadDarkThemeLocal(),
     lightTheme: isFiveM ? 'silver' : loadLightThemeLocal(),
+    accent: isFiveM ? DEFAULT_ACCENT : loadAccentLocal(),
     customPalettes: isFiveM ? [] : loadPalettesLocal(),
     wallpaperLock: isFiveM ? lockscreenAsset : (loadWallpaperLocal() ?? devDefaultAsset),
     wallpaperHome: isFiveM ? lockscreenAsset : (loadWallpaperHomeLocal() ?? loadWallpaperLocal() ?? devDefaultAsset),
@@ -427,6 +441,13 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         if (isFiveM) void fetchNui('sd-phone:settings:setLightTheme', { lightTheme: next }).catch(() => {});
         else if (isCustomPaletteId(next)) savePaletteChoiceLocal(LIGHT_THEME_KEY, next);
         else saveLightThemeLocal(next);
+    },
+
+    setAccent: (next) => {
+        if (!isAccentChoice(next)) return;
+        set({ accent: next });
+        if (isFiveM) void fetchNui('sd-phone:settings:setAccent', { accent: next }).catch(() => {});
+        else saveAccentLocal(next);
     },
 
     saveCustomPalette: async (palette) => {
@@ -626,7 +647,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
             }
         };
         const keyAtRequest = wallpaperProfileKey;
-        void fetchNui<{ data?: { ringtone?: string; notificationTone?: string; customRingtones?: CustomTone[]; customNotificationTones?: CustomTone[]; airplaneMode?: boolean; hour24?: boolean; reopenApp?: boolean; setupDone?: boolean; lockClock?: Partial<LockClock>; passcode?: string | null; faceId?: boolean; wallpaper?: string; wallpaperHome?: string; blurLock?: boolean; blurHome?: boolean; islandPet?: string; customWallpapers?: string[]; chatTextScale?: number; phoneScale?: number; brightness?: number; phoneAlign?: string; ringtoneVol?: number; callVol?: number; theme?: string; darkTheme?: string; lightTheme?: string; customPalettes?: unknown; iconTheme?: string; showAppNames?: boolean; customIconThemes?: unknown } }>('sd-phone:settings:get')
+        void fetchNui<{ data?: { ringtone?: string; notificationTone?: string; customRingtones?: CustomTone[]; customNotificationTones?: CustomTone[]; airplaneMode?: boolean; hour24?: boolean; reopenApp?: boolean; setupDone?: boolean; lockClock?: Partial<LockClock>; passcode?: string | null; faceId?: boolean; wallpaper?: string; wallpaperHome?: string; blurLock?: boolean; blurHome?: boolean; islandPet?: string; customWallpapers?: string[]; chatTextScale?: number; phoneScale?: number; brightness?: number; phoneAlign?: string; ringtoneVol?: number; callVol?: number; theme?: string; darkTheme?: string; lightTheme?: string; accent?: string; customPalettes?: unknown; iconTheme?: string; showAppNames?: boolean; customIconThemes?: unknown } }>('sd-phone:settings:get')
             .then(res => {
                 if (!res?.data) { retry(); return; }
                 const d = res.data;
@@ -659,6 +680,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
                 patch.customPalettes = decodePalettes(d.customPalettes);
                 if (isCustomPaletteId(d.darkTheme)) patch.darkTheme = d.darkTheme as CustomPaletteId;
                 if (isCustomPaletteId(d.lightTheme)) patch.lightTheme = d.lightTheme as CustomPaletteId;
+                if (isAccentChoice(d.accent)) patch.accent = d.accent;
                 if (typeof d.chatTextScale === 'number') patch.chatTextScale = clampChatScale(d.chatTextScale);
                 if (typeof d.phoneScale === 'number') patch.phoneScale = clampPhoneScale(d.phoneScale);
                 if (typeof d.brightness === 'number') patch.brightness = clampPhoneScale(d.brightness);

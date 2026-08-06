@@ -20,7 +20,7 @@ export function ThemeCodeSheet({ code, onClose }: { code: string; onClose: () =>
                         {t('settings.iconThemeCodeHint', 'Anyone can paste this code into App Icons to get a copy of this theme. Importing never overwrites a theme they already have.')}
                     </p>
 
-                    <div className="max-h-[168px] overflow-y-auto rounded-[12px] bg-[#e5e5e5] px-3 py-3 no-scrollbar dark:bg-surface">
+                    <div className="max-h-[168px] overflow-y-auto rounded-[12px] bg-surface px-3 py-3 no-scrollbar">
                         <code className="block break-all font-mono text-[12px] leading-[1.45] text-black dark:text-white">
                             {code}
                         </code>

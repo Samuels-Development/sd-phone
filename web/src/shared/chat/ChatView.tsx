@@ -268,9 +268,9 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
 
     const lastSent = useMemo(() => [...messages].reverse().find(m => m.from === 'me'), [messages]);
 
-    const receivedBg    = isDark ? '#262628' : '#c6c6c6';
+    const receivedBg    = isDark ? 'rgb(var(--elevated))' : '#c6c6c6';
     const sentBg        = '#0977e5';
-    const actionBarBg   = isDark ? 'rgb(var(--surface))' : '#d4d4d4';
+    const actionBarBg   = isDark ? 'rgb(var(--surface))' : 'rgb(var(--base))';
     const composerBdr   = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)';
     const actionBtnBg   = isDark ? 'rgb(var(--elevated))' : '#fff';
 
@@ -293,11 +293,11 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
                         <button
                             type="button"
                             onClick={() => setClosing(true)}
-                            className="flex items-center text-[#007AFF] active:opacity-60"
+                            className="flex items-center text-ios-blue active:opacity-60"
                         >
                             <ChevronLeft className="h-[38px] w-[38px]" strokeWidth={2.4} />
                             {totalUnread > 0 && (
-                                <span className="-ml-0.5 flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-[#007AFF] px-1 text-[14px] font-semibold leading-none text-white">
+                                <span className="-ml-0.5 flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-ios-blue px-1 text-[14px] font-semibold leading-none text-white">
                                     {totalUnread}
                                 </span>
                             )}
@@ -323,7 +323,7 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
                         >
                             <ContactAvatar contact={conv.participants[0]} size={72} />
                             <span className="text-[19px] font-semibold leading-none text-black dark:text-white">{name}</span>
-                            <span className="text-[13px] font-medium leading-none text-[#007AFF]">{t('messages.addContact', 'Add Contact')}</span>
+                            <span className="text-[13px] font-medium leading-none text-ios-blue">{t('messages.addContact', 'Add Contact')}</span>
                         </button>
                     ) : (
                         <div className="flex flex-col items-center gap-1.5">
@@ -338,16 +338,16 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
                     <div className="flex flex-1 items-center justify-end gap-[18px] pr-1.5">
                         {!conv.groupName && device.calls && (
                             <>
-                                <button type="button" onClick={() => setCallConfirm('voice')} className="text-[#007AFF] active:opacity-60">
+                                <button type="button" onClick={() => setCallConfirm('voice')} className="text-ios-blue active:opacity-60">
                                     <Phone className="h-[28px] w-[28px]" strokeWidth={2} />
                                 </button>
-                                <button type="button" onClick={() => setCallConfirm('video')} className="text-[#007AFF] active:opacity-60">
+                                <button type="button" onClick={() => setCallConfirm('video')} className="text-ios-blue active:opacity-60">
                                     <Video className="h-[28px] w-[28px]" strokeWidth={2} />
                                 </button>
                             </>
                         )}
                         {conv.groupName && (
-                            <button type="button" onClick={() => setAddingMembers(true)} aria-label={t('messages.addPeopleAria', 'Add people')} className="text-[#007AFF] active:opacity-60">
+                            <button type="button" onClick={() => setAddingMembers(true)} aria-label={t('messages.addPeopleAria', 'Add people')} className="text-ios-blue active:opacity-60">
                                 <UserPlus className="h-[27px] w-[27px]" strokeWidth={2} />
                             </button>
                         )}
@@ -433,9 +433,9 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
 
                 {replyTo && (
                     <div className="flex items-center gap-2 px-4 pt-2 pb-1">
-                        <div className="w-[3px] self-stretch rounded-full bg-[#007AFF]" />
+                        <div className="w-[3px] self-stretch rounded-full bg-ios-blue" />
                         <div className="min-w-0 flex-1">
-                            <div className="text-[12px] font-semibold text-[#007AFF]">{t('messages.replyTo', 'In reply to {name}', { name: replyName(replyTo) })}</div>
+                            <div className="text-[12px] font-semibold text-ios-blue">{t('messages.replyTo', 'In reply to {name}', { name: replyName(replyTo) })}</div>
                             <div className="truncate text-[13px] text-black/55 dark:text-white/55">{msgPreview(replyTo)}</div>
                         </div>
                         <button
@@ -468,7 +468,7 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
 
                 <div className="px-3 pb-2 pt-1.5">
                     <div
-                        className={`flex items-center gap-1 rounded-[22px] bg-[#d4d4d4] py-[9px] pl-4 dark:bg-surface ${draft.trim() || attachments.length ? 'pr-[5px]' : 'pr-4'}`}
+                        className={`flex items-center gap-1 rounded-[22px] bg-base py-[9px] pl-4 dark:bg-surface ${draft.trim() || attachments.length ? 'pr-[5px]' : 'pr-4'}`}
                     >
                         <input
                             ref={inputRef}
@@ -484,7 +484,7 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
                             <button
                                 type="button"
                                 onClick={sendText}
-                                className="flex h-[33px] w-[33px] shrink-0 items-center justify-center rounded-full bg-[#007AFF] active:opacity-70"
+                                className="flex h-[33px] w-[33px] shrink-0 items-center justify-center rounded-full bg-ios-blue active:opacity-70"
                             >
                                 <ArrowUp className="h-[19px] w-[19px] text-white" strokeWidth={2.75} />
                             </button>
@@ -521,7 +521,7 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
                                 ) : btn.emoji ? (
                                     <span className="text-[23px] leading-none">{btn.emoji}</span>
                                 ) : (
-                                    <span className="text-[15px] font-black tracking-tight text-[#007AFF]">
+                                    <span className="text-[15px] font-black tracking-tight text-ios-blue">
                                         {btn.label}
                                     </span>
                                 )}

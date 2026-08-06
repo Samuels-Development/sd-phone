@@ -75,7 +75,7 @@ function TripRiderView({ r }: { r: Ride }) {
     }
 
     return (
-        <div className="absolute inset-0 z-30 flex flex-col bg-[#d4d4d4] font-sf dark:bg-base">
+        <div className="absolute inset-0 z-30 flex flex-col bg-base font-sf">
             <div className="flex shrink-0 items-center px-5 pb-2" style={{ paddingTop: 'calc(var(--safe-top) + 10px)' }}>
                 <h1 className="text-[28px] font-extrabold tracking-tight text-black dark:text-white">Ryde</h1>
             </div>
@@ -89,7 +89,7 @@ function TripRiderView({ r }: { r: Ride }) {
                 </MapView>
             </div>
 
-            <div className="shrink-0 rounded-t-[18px] bg-[#e5e5e5] px-5 pb-[calc(var(--safe-bottom)+16px)] pt-4 shadow-[0_-6px_24px_rgba(0,0,0,0.12)] dark:bg-surface">
+            <div className="shrink-0 rounded-t-[18px] bg-surface px-5 pb-[calc(var(--safe-bottom)+16px)] pt-4 shadow-[0_-6px_24px_rgba(0,0,0,0.12)]">
                 <p className="text-[22px] font-extrabold tracking-tight text-black dark:text-white">
                     {finding ? rideStatusLabel.finding
                         : offered ? rideStatusLabel.offered

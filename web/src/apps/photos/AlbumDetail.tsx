@@ -86,7 +86,7 @@ export function AlbumDetail({
             </div>
 
             {isCustom && selectMode && (
-                <div className={`flex shrink-0 items-center justify-center gap-2 border-t border-black/10 px-4 pb-7 pt-3 dark:border-white/10 ${animating ? 'bg-base' : 'bg-[#f7f7f7]/95 backdrop-blur-xl dark:bg-base/80'}`}>
+                <div className={`flex shrink-0 items-center justify-center gap-2 border-t border-black/10 px-4 pb-7 pt-3 dark:border-white/10 ${animating ? 'bg-base' : 'bg-elevated/95 backdrop-blur-xl dark:bg-base/80'}`}>
                     <button
                         type="button"
                         disabled={selected.size === 0}

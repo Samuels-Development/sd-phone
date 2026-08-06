@@ -38,7 +38,7 @@ export function RouteMap({ request, onClose }: { request: Ride; onClose: () => v
 
     const view = (
         <div
-            className="absolute inset-0 z-[70] flex flex-col bg-[#d4d4d4] font-sf dark:bg-base"
+            className="absolute inset-0 z-[70] flex flex-col bg-base font-sf"
             style={{ transform: shown ? 'translateX(0)' : 'translateX(100%)', transition: 'transform 0.32s cubic-bezier(0.32,0.72,0,1)' }}
         >
             <div className="flex shrink-0 items-center px-3 pb-1" style={{ paddingTop: 'calc(var(--safe-top) + 10px)' }}>
@@ -57,7 +57,7 @@ export function RouteMap({ request, onClose }: { request: Ride; onClose: () => v
                 </MapView>
             </div>
 
-            <div className="shrink-0 rounded-t-[18px] bg-[#e5e5e5] px-5 pb-[calc(var(--safe-bottom)+16px)] pt-3 shadow-[0_-6px_24px_rgba(0,0,0,0.12)] dark:bg-surface">
+            <div className="shrink-0 rounded-t-[18px] bg-surface px-5 pb-[calc(var(--safe-bottom)+16px)] pt-3 shadow-[0_-6px_24px_rgba(0,0,0,0.12)]">
                 <div className="mb-3 space-y-2.5 rounded-2xl bg-black/[0.05] p-4 dark:bg-white/[0.07]">
                     <div className="flex items-center gap-3"><span className="h-3 w-3 shrink-0 rounded-full bg-[#22c55e]" /><span className="truncate text-[16px] font-medium text-black dark:text-white">{r.pickup.name}</span></div>
                     <div className="flex items-center gap-3"><span className="h-3 w-3 shrink-0 rounded-full bg-black dark:bg-white" /><span className="truncate text-[16px] font-medium text-black dark:text-white">{r.dropoff.name}</span></div>

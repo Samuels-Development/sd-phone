@@ -85,7 +85,7 @@ export function ContactsTab({ contacts, myNumber, myName, card, onRequestCall, o
                             <button
                                 type="button"
                                 onClick={() => setShowMyCard(true)}
-                                className="mb-5 flex w-full items-center gap-3.5 rounded-[10px] bg-[#e5e5e5] px-3.5 py-3 text-left active:opacity-80 dark:bg-surface"
+                                className="mb-5 flex w-full items-center gap-3.5 rounded-[10px] bg-surface px-3.5 py-3 text-left active:opacity-80"
                             >
                                 <ContactAvatar contact={myCard} size={60} />
                                 <div className="min-w-0 flex-1">

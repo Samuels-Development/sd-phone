@@ -40,8 +40,8 @@ export function EventEditor({ dayKey, dayDate, existing, onSave, onDelete, onClo
 
     useEffect(() => { if (allDay) setActiveTime(null); }, [allDay]);
 
-    const groupBg = isDark ? 'rgb(var(--surface))' : '#e5e5e5';
-    const pageBg  = isDark ? 'rgb(var(--base))' : '#d4d4d4';
+    const groupBg = 'rgb(var(--surface))';
+    const pageBg  = 'rgb(var(--base))';
     const divider = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
 
     function dismiss(after: () => void) {

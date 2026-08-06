@@ -419,7 +419,7 @@ export function MatchOverlay({ profile, onSend, onClose }: {
                         type="button"
                         onClick={submit}
                         disabled={!text.trim()}
-                        className="shrink-0 px-2 text-[17px] font-bold tracking-wide text-[#007AFF] disabled:opacity-40 active:opacity-60"
+                        className="shrink-0 px-2 text-[17px] font-bold tracking-wide text-ios-blue disabled:opacity-40 active:opacity-60"
                     >
                         {t('cherry.send', 'SEND')}
                     </button>

@@ -62,7 +62,7 @@ export function RewardsView({ state, config, dark, onBack }: {
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar px-4 pb-10">
-                <div className="rounded-3xl px-4 py-2.5" style={{ background: dark ? 'rgb(var(--surface))' : '#e5e5e5' }}>
+                <div className="rounded-3xl px-4 py-2.5" style={{ background: 'rgb(var(--surface))' }}>
                     {days.map((day, i) => {
                         const reached   = current >= day;
                         const passed    = current > day;

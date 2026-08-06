@@ -59,7 +59,7 @@ export function SavedEmailsSheet({ emails, onPick, onClose }: {
                             </div>
                             <div
                                 aria-hidden
-                                className="pointer-events-none absolute inset-x-0 bottom-0 h-10 rounded-b-[12px] bg-gradient-to-t from-[#e5e5e5] to-transparent transition-opacity duration-200 dark:from-surface"
+                                className="pointer-events-none absolute inset-x-0 bottom-0 h-10 rounded-b-[12px] bg-gradient-to-t from-surface to-transparent transition-opacity duration-200 dark:from-surface"
                                 style={{ opacity: moreBelow ? 1 : 0 }}
                             />
                         </div>

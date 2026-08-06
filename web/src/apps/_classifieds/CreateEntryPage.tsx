@@ -65,7 +65,7 @@ export function CreateEntryPage({ pageTitle = t('classifieds.newPost', 'New Post
     return (
         <>
             <div
-                className="absolute inset-0 z-40 flex flex-col bg-[#d4d4d4] font-sf text-black dark:bg-base dark:text-white"
+                className="absolute inset-0 z-40 flex flex-col bg-base font-sf text-black dark:text-white"
                 style={{
                     animation: exiting
                         ? 'ios-pop 0.3s cubic-bezier(0.32,0.72,0,1) forwards'
@@ -97,7 +97,7 @@ export function CreateEntryPage({ pageTitle = t('classifieds.newPost', 'New Post
                         value={title}
                         onChange={e => setTitle(e.target.value)}
                         placeholder={t('classifieds.title', 'Title')}
-                        className="mb-6 w-full rounded-[14px] bg-[#e5e5e5] px-4 py-4 text-[18px] text-black placeholder-black/80 outline-none dark:bg-surface dark:text-white dark:placeholder-white/65"
+                        className="mb-6 w-full rounded-[14px] bg-surface px-4 py-4 text-[18px] text-black placeholder-black/80 outline-none dark:text-white dark:placeholder-white/65"
                     />
 
                     <Label required>{t('classifieds.description', 'Description')}</Label>
@@ -106,7 +106,7 @@ export function CreateEntryPage({ pageTitle = t('classifieds.newPost', 'New Post
                         onChange={e => setBody(e.target.value)}
                         placeholder={bodyPlaceholder}
                         rows={4}
-                        className="ios-scrollbar mb-6 w-full resize-none rounded-[14px] bg-[#e5e5e5] px-4 py-3.5 text-[18px] leading-snug text-black placeholder-black/80 outline-none dark:bg-surface dark:text-white dark:placeholder-white/65"
+                        className="ios-scrollbar mb-6 w-full resize-none rounded-[14px] bg-surface px-4 py-3.5 text-[18px] leading-snug text-black placeholder-black/80 outline-none dark:text-white dark:placeholder-white/65"
                     />
 
                     <Label>{t('classifieds.photos', 'Photos')}</Label>
@@ -129,7 +129,7 @@ export function CreateEntryPage({ pageTitle = t('classifieds.newPost', 'New Post
                                 type="button"
                                 onClick={() => setPicking(true)}
                                 aria-label={t('classifieds.addPhotos', 'Add photos')}
-                                className="flex h-[114px] w-[114px] flex-col items-center justify-center gap-1.5 rounded-[16px] bg-[#e5e5e5] text-ios-blue shadow-sm active:opacity-70 dark:bg-surface"
+                                className="flex h-[114px] w-[114px] flex-col items-center justify-center gap-1.5 rounded-[16px] bg-surface text-ios-blue shadow-sm active:opacity-70"
                             >
                                 <ImagePlus className="h-[30px] w-[30px]" strokeWidth={1.9} />
                                 <span className="text-[13px] font-semibold text-black/45 dark:text-white/45">{images.length}/{MAX_IMAGES}</span>
@@ -140,7 +140,7 @@ export function CreateEntryPage({ pageTitle = t('classifieds.newPost', 'New Post
                     {showPrice && (
                         <>
                             <Label>{t('classifieds.price', 'Price')}</Label>
-                            <div className="mb-6 flex items-center gap-1.5 rounded-[14px] bg-[#e5e5e5] px-4 py-4 dark:bg-surface">
+                            <div className="mb-6 flex items-center gap-1.5 rounded-[14px] bg-surface px-4 py-4">
                                 <span className="text-[18px] font-medium text-black/45 dark:text-white/45">$</span>
                                 <input
                                     value={price}

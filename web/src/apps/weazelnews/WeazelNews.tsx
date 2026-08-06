@@ -87,7 +87,7 @@ export function WeazelNews({ onClose: _onClose }: { onClose: () => void }) {
 
             <div className="shrink-0" style={{ height: SB_H }} />
 
-            <div className="shrink-0 px-4 pb-2 pt-1" style={{ background: dark ? '#000000' : '#d4d4d4' }}>
+            <div className="shrink-0 px-4 pb-2 pt-1" style={{ background: dark ? '#000000' : 'rgb(var(--base))' }}>
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2" aria-label={t('weazelnews.weazelNews', 'Weazel News')}>
                         <span
@@ -289,7 +289,7 @@ function ArticleRow({ article, dark, onOpen }: { article: ArticleT; dark: boolea
             type="button"
             onClick={onOpen}
             className={`flex w-full gap-3.5 rounded-2xl p-3 text-left transition-colors active:opacity-90 ${
-                dark ? 'bg-[#1c1c1e]' : 'bg-[#e5e5e5]'
+                dark ? 'bg-surface' : 'bg-surface'
             } shadow-sm`}
         >
             <div className="relative h-[112px] w-[112px] shrink-0 overflow-hidden rounded-xl">

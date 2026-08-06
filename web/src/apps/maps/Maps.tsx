@@ -249,7 +249,7 @@ export function Maps({ onClose }: { onClose: () => void }) {
     }
 
     return (
-        <div className="absolute inset-0 flex flex-col bg-[#d4d4d4] font-sf dark:bg-base">
+        <div className="absolute inset-0 flex flex-col bg-base font-sf">
             <div className="flex shrink-0 items-center px-5 pb-2" style={{ paddingTop: 'calc(var(--safe-top) + 10px)' }}>
                 <h1 className="text-[28px] font-extrabold tracking-tight text-black dark:text-white">{t('maps.title', 'Maps')}</h1>
             </div>
@@ -335,7 +335,7 @@ export function Maps({ onClose }: { onClose: () => void }) {
 
             </div>
 
-            <div className={`absolute inset-x-0 bottom-0 rounded-t-[16px] border-t border-black/[0.06] bg-[#d4d4d4] dark:border-white/10 dark:bg-base ${
+            <div className={`absolute inset-x-0 bottom-0 rounded-t-[16px] border-t border-black/[0.06] bg-base dark:border-white/10 ${
                 pinsOpen ? 'z-30' : 'pointer-events-none z-[60]'
             }`}>
                 {toast && (
@@ -771,7 +771,7 @@ function NewPinPanel({ pending, onChange, onConfirm, onCancel }: {
             </div>
 
             <div className="no-scrollbar overflow-y-auto px-4 pb-4" style={{ height: 234 }}>
-                <div className="rounded-[12px] bg-[#e5e5e5] p-3 dark:bg-surface">
+                <div className="rounded-[12px] bg-surface p-3">
                     <div className="grid grid-cols-6 justify-items-center gap-2">
                         {ICON_KEYS.map(key => {
                             const K = iconFor(key);

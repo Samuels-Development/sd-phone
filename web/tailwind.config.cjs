@@ -9,7 +9,9 @@ module.exports = {
                 // Used for app-icon accents, status-bar glyphs, and the few
                 // system surfaces that aren't translucent.
                 ios: {
-                    blue:    '#0a84ff',
+                    // User-selectable accent. Channels live in index.css
+                    // :root/.dark and are overridden per choice from App.tsx.
+                    blue:    'rgb(var(--ios-blue) / <alpha-value>)',
                     green:   '#34c759',
                     indigo:  '#5e5ce6',
                     orange:  '#ff9f0a',

@@ -45,7 +45,7 @@ export function SendMoney({ balance, onClose, onSent }: {
 
     return (
         <div
-            className="absolute inset-0 z-30 flex flex-col bg-[#d4d4d4] font-sf dark:bg-base"
+            className="absolute inset-0 z-30 flex flex-col bg-base font-sf"
             style={pageStyle}
         >
             <div className="h-[58px] shrink-0" aria-hidden />
@@ -149,7 +149,7 @@ function AmountStage({ balance, number, toLabel, amount, setAmount, onBack, onSe
 
     return (
         <div
-            className="absolute inset-0 z-10 flex flex-col bg-[#d4d4d4] font-sf dark:bg-base"
+            className="absolute inset-0 z-10 flex flex-col bg-base font-sf"
             style={pageStyle}
         >
             <div className="h-[58px] shrink-0" aria-hidden />

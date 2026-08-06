@@ -44,7 +44,7 @@ export function WidgetGallery({
         <Sheet
             onClose={onClose}
             title={t('widgets.title', 'Add Widget')}
-            className="font-sf bg-[#d4d4d4] text-black dark:bg-base dark:text-white"
+            className="font-sf bg-base text-black dark:text-white"
         >
             {() => (
             <div className="flex min-h-0 flex-1 flex-col">
@@ -128,7 +128,7 @@ export function WidgetGallery({
                                 <button
                                     type="button"
                                     onClick={() => { if (!onAdd(def.kind, size, align, theme)) setFull(def.kind); }}
-                                    className="mt-3 rounded-full bg-[#0a84ff] px-5 py-2 text-[15px] font-semibold text-white active:opacity-70"
+                                    className="mt-3 rounded-full bg-ios-blue px-5 py-2 text-[15px] font-semibold text-white active:opacity-70"
                                 >
                                     {t('widgets.add', 'Add Widget')}
                                 </button>

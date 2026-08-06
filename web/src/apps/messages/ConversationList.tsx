@@ -138,7 +138,7 @@ export function ConversationList({ conversations, onOpen, onCompose, onMarkRead,
             {(editing || barExiting) && (
                 <div
                     onAnimationEnd={e => { if (e.animationName === 'ios-sheet-down') setBarExiting(false); }}
-                    className="flex shrink-0 items-center justify-between border-t border-black/10 bg-[#d4d4d4] px-7 pb-9 pt-3.5 dark:border-white/10 dark:bg-base"
+                    className="flex shrink-0 items-center justify-between border-t border-black/10 bg-base px-7 pb-9 pt-3.5 dark:border-white/10"
                     style={{ animation: barExiting
                         ? 'ios-sheet-down 0.26s cubic-bezier(0.32,0,0.68,1) forwards'
                         : 'ios-sheet-up 0.3s cubic-bezier(0.32,0.72,0,1)' }}

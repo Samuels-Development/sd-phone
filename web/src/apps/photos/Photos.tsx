@@ -257,7 +257,7 @@ export function Photos({ onClose }: { onClose: () => void }) {
     const isEmpty = !loading && photos.length === 0;
 
     return (
-        <div className="absolute inset-0 z-10 flex flex-col bg-[#d4d4d4] text-black dark:bg-base dark:text-white">
+        <div className="absolute inset-0 z-10 flex flex-col bg-base text-black dark:text-white">
             <div className="h-[54px] shrink-0" aria-hidden />
 
             <div className="relative flex-1 min-h-0">
@@ -317,7 +317,7 @@ export function Photos({ onClose }: { onClose: () => void }) {
             </div>
 
             {tab === 'gallery' && gallerySelect ? (
-                <div className="flex shrink-0 items-stretch justify-around border-t border-black/10 bg-[#f7f7f7]/95 px-1 pb-9 pt-2.5 backdrop-blur-xl dark:border-white/10 dark:bg-base/80">
+                <div className="flex shrink-0 items-stretch justify-around border-t border-black/10 bg-elevated/95 px-1 pb-9 pt-2.5 backdrop-blur-xl dark:border-white/10 dark:bg-base/80">
                     <button
                         type="button"
                         disabled={gallerySelected.size === 0}

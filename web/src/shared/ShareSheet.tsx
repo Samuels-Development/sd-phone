@@ -87,7 +87,7 @@ export function ShareSheet({ onClose, onShare, children, top = '55%' }: {
                                             ) : (
                                                 <PlaceholderAvatar size={80} />
                                             )}
-                                            <span className="absolute -bottom-0.5 -right-0.5 flex h-[27px] w-[27px] items-center justify-center rounded-full bg-[#e9e9e9] shadow-sm ring-2 ring-[#d4d4d4] dark:bg-elevated dark:ring-base">
+                                            <span className="absolute -bottom-0.5 -right-0.5 flex h-[27px] w-[27px] items-center justify-center rounded-full bg-surface shadow-sm ring-2 ring-base dark:bg-elevated">
                                                 <Smartphone className="h-[15px] w-[15px] text-black/60 dark:text-white/70" />
                                             </span>
                                         </span>

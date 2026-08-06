@@ -229,7 +229,7 @@ export function MailboxList({
                     <button
                         type="button"
                         onClick={onOpenSavedEmails}
-                        className="mt-6 w-full overflow-hidden rounded-[10px] bg-[#e5e5e5] active:bg-black/5 dark:bg-surface dark:active:bg-white/5"
+                        className="mt-6 w-full overflow-hidden rounded-[10px] bg-surface active:bg-black/5 dark:active:bg-white/5"
                     >
                         <div className="flex w-full items-center gap-4 px-4 py-[15px]">
                             <BookUser className="h-[25px] w-[25px] shrink-0 text-ios-blue" />
@@ -306,7 +306,7 @@ export function MailboxList({
                     <button
                         type="button"
                         onClick={onChangePassword}
-                        className="mt-3 w-full rounded-[10px] bg-[#e5e5e5] py-4 text-center text-[18px] font-semibold text-ios-blue active:bg-black/5 dark:bg-surface dark:active:bg-white/5"
+                        className="mt-3 w-full rounded-[10px] bg-surface py-4 text-center text-[18px] font-semibold text-ios-blue active:bg-black/5 dark:active:bg-white/5"
                     >
                         {t('mail.changePassword', 'Change Password')}
                     </button>
@@ -316,7 +316,7 @@ export function MailboxList({
                     <button
                         type="button"
                         onClick={() => setConfirmOut(true)}
-                        className="mt-3 w-full rounded-[10px] bg-[#e5e5e5] py-4 text-center text-[18px] font-semibold text-ios-red active:bg-black/5 dark:bg-surface dark:active:bg-white/5"
+                        className="mt-3 w-full rounded-[10px] bg-surface py-4 text-center text-[18px] font-semibold text-ios-red active:bg-black/5 dark:active:bg-white/5"
                     >
                         {t('mail.signOut', 'Sign Out')}
                     </button>

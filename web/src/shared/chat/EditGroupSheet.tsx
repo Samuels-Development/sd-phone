@@ -36,7 +36,7 @@ export function EditGroupSheet({ groupName, groupAvatar, participants, onCancel,
                 fit="full"
                 dim={false}
                 grabber={false}
-                className="font-sf bg-[#f2f2f2] text-black dark:bg-surface dark:text-white"
+                className="font-sf bg-elevated text-black dark:bg-surface dark:text-white"
             >
                 {({ close }) => {
                     function save() {
@@ -73,7 +73,7 @@ export function EditGroupSheet({ groupName, groupAvatar, participants, onCancel,
                                         className="relative active:opacity-80"
                                     >
                                         <GroupAvatar contacts={participants} size={112} avatar={avatar} />
-                                        <span className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#f2f2f2] bg-ios-blue dark:border-surface">
+                                        <span className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full border-2 border-elevated bg-ios-blue dark:border-surface">
                                             <Camera className="h-[19px] w-[19px] text-white" strokeWidth={2} />
                                         </span>
                                     </button>
@@ -83,7 +83,7 @@ export function EditGroupSheet({ groupName, groupAvatar, participants, onCancel,
                                 </div>
 
                                 <div className="px-4 pt-6">
-                                    <div className="rounded-[14px] bg-white px-4 py-3 dark:bg-base/40">
+                                    <div className="rounded-[14px] bg-elevated px-4 py-3 dark:bg-base/40">
                                         <input
                                             value={name}
                                             maxLength={40}
@@ -99,7 +99,7 @@ export function EditGroupSheet({ groupName, groupAvatar, participants, onCancel,
                                     <div className="px-1 pb-2 text-[15px] font-semibold uppercase tracking-wide text-black/60 dark:text-white/60">
                                         {t('messages.membersCount', '{count} Members', { count: participants.length + 1 })}
                                     </div>
-                                    <div className="overflow-hidden rounded-[12px] bg-white dark:bg-base/40">
+                                    <div className="overflow-hidden rounded-[12px] bg-elevated dark:bg-base/40">
                                         <MemberRow contact={ME} displayName={t('messages.you', 'You')} />
                                         {participants.map(c => (
                                             <div key={c.id}>

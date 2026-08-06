@@ -108,7 +108,7 @@ function NotificationBanner({ item, onDismiss, onOpen }: {
             onPointerMove={onMove}
             onPointerUp={onUp}
             onPointerCancel={onUp}
-            className="flex cursor-pointer items-start gap-2.5 rounded-[22px] bg-white/75 px-3 py-3 shadow-[0_10px_34px_rgba(0,0,0,0.20)] ring-1 ring-black/[0.06] backdrop-blur-2xl backdrop-saturate-150 dark:bg-elevated/75 dark:ring-white/10"
+            className="flex cursor-pointer items-start gap-2.5 rounded-[22px] bg-elevated/75 px-3 py-3 shadow-[0_10px_34px_rgba(0,0,0,0.20)] ring-1 ring-black/[0.06] backdrop-blur-2xl backdrop-saturate-150 dark:bg-elevated/75 dark:ring-white/10"
             style={{ willChange: 'transform', ...style }}
         >
             <NotifIcon item={item} />

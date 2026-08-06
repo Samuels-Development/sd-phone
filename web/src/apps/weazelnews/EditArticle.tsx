@@ -45,7 +45,7 @@ export function EditArticle({ initial, dark, onClose, onSave }: {
         if (ok) goBack();
     }
 
-    const card  = dark ? 'bg-[#1C1C1E] text-white placeholder:text-white/90' : 'bg-[#e5e5e5] text-black placeholder:text-black/75';
+    const card  = dark ? 'bg-surface text-white placeholder:text-white/90' : 'bg-surface text-black placeholder:text-black/75';
     const sheet = dark ? 'bg-black' : 'bg-[#d4d4d4]';
 
     return (

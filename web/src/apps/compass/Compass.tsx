@@ -95,7 +95,7 @@ export function Compass({ onClose: _onClose }: { onClose: () => void }) {
 
     const heading = ((-rot % 360) + 360) % 360;
 
-    const bg     = dark ? '#000000' : '#d4d4d4';
+    const bg     = dark ? '#000000' : 'rgb(var(--base))';
     const ink    = dark ? '#ffffff' : '#1c1c1e';
     const ringA  = dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.12)';
     const ringB  = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)';

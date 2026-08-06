@@ -437,7 +437,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
                 onPointerUp={e => e.stopPropagation()}
                 onWheel={e => e.stopPropagation()}
             >
-                <div className="flex flex-col overflow-hidden rounded-[10px] bg-white/90 shadow-md ring-1 ring-black/5 dark:bg-elevated/90 dark:ring-white/10">
+                <div className="flex flex-col overflow-hidden rounded-[10px] bg-elevated/90 shadow-md ring-1 ring-black/5 dark:bg-elevated/90 dark:ring-white/10">
                     <CtrlBtn onClick={() => buttonZoom(1)} label={t('maps.zoomIn', 'Zoom in')}><Plus className="h-[18px] w-[18px]" /></CtrlBtn>
                     <div className="h-px w-full bg-black/10 dark:bg-white/10" />
                     <CtrlBtn onClick={() => buttonZoom(-1)} label={t('maps.zoomOut', 'Zoom out')}><Minus className="h-[18px] w-[18px]" /></CtrlBtn>
@@ -445,7 +445,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
                 <button
                     onClick={resetView}
                     aria-label={t('maps.fitMap', 'Fit map')}
-                    className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-white/90 text-ios-blue shadow-md ring-1 ring-black/5 dark:bg-elevated/90 dark:ring-white/10"
+                    className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-elevated/90 text-ios-blue shadow-md ring-1 ring-black/5 dark:bg-elevated/90 dark:ring-white/10"
                 >
                     <Locate className="h-[18px] w-[18px]" />
                 </button>
@@ -455,14 +455,14 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
                     className={'flex h-9 w-9 items-center justify-center rounded-[10px] shadow-md ring-1 transition-colors ' +
                         (layersOpen
                             ? 'bg-ios-blue text-white ring-black/5'
-                            : 'bg-white/90 text-ios-blue ring-black/5 dark:bg-elevated/90 dark:ring-white/10')}
+                            : 'bg-elevated/90 text-ios-blue ring-black/5 dark:bg-elevated/90 dark:ring-white/10')}
                 >
                     <Layers className="h-[18px] w-[18px]" />
                 </button>
 
                 {layersOpen && (
                     <div
-                        className="animate-slide-down-fade overflow-hidden rounded-2xl bg-white/95 p-2.5 shadow-xl ring-1 ring-black/5 dark:bg-surface/95 dark:ring-white/10"
+                        className="animate-slide-down-fade overflow-hidden rounded-2xl bg-elevated/95 p-2.5 shadow-xl ring-1 ring-black/5 dark:bg-surface/95 dark:ring-white/10"
                         onPointerDown={e => e.stopPropagation()}
                     >
                         <p className="px-1 pb-2 pt-0.5 text-[13px] font-semibold uppercase tracking-wider text-ios-gray">{t('maps.mapStyleTitle', 'Map Style')}</p>

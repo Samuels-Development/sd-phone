@@ -122,7 +122,7 @@ export function PromptDialog({
         });
     }
 
-    const fieldCls = 'w-full rounded-[9px] border border-black/15 bg-white px-3 py-2 text-[16px] text-black outline-none focus:border-ios-blue disabled:opacity-60 dark:border-white/20 dark:bg-base/40 dark:text-white';
+    const fieldCls = 'w-full rounded-[9px] border border-black/15 bg-elevated px-3 py-2 text-[16px] text-black outline-none focus:border-ios-blue disabled:opacity-60 dark:border-white/20 dark:bg-base/40 dark:text-white';
     const labelCls = 'mb-1 text-[12.5px] font-semibold uppercase tracking-wide text-black/45 dark:text-white/45';
 
     return (

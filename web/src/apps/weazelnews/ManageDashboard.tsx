@@ -46,7 +46,7 @@ export function ManageDashboard({ articles, ticker, dark, animateIn = true, onRe
         if (ok) await onRefresh();
     }
 
-    const surface = dark ? 'bg-[#1c1c1e]' : 'bg-[#e5e5e5]';
+    const surface = dark ? 'bg-surface' : 'bg-surface';
     const subtle  = dark ? 'text-white/45' : 'text-black/45';
 
     return (

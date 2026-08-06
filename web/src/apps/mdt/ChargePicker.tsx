@@ -250,7 +250,7 @@ export function ChargePicker({ lines, onChange, subjects = [], className = '' }:
                         {shown.map((offence, index) => (
                             <div key={offence.code}>
                                 {(index === 0 || shown[index - 1].class !== offence.class) && (
-                                    <div className="bg-[#e5e5e5] px-4 py-1.5 dark:bg-surface">
+                                    <div className="bg-surface px-4 py-1.5">
                                         <span className={mdtSectionHeader}>{classLabel(offence.class)}</span>
                                     </div>
                                 )}

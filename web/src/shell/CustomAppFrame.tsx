@@ -399,7 +399,7 @@ export function CustomAppFrame({ appId }: { appId: string; onClose: () => void }
                         style={{ colorScheme: theme === 'dark' ? 'dark' : 'light', opacity: ready ? 1 : 0 }}
                     />
                     <div
-                        className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white transition-opacity duration-200 dark:bg-base"
+                        className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-elevated transition-opacity duration-200 dark:bg-base"
                         style={{ opacity: ready ? 0 : 1 }}
                     >
                         <div className="overflow-hidden" style={{ width: 72, height: 72, borderRadius: '22.5%' }}>
@@ -518,7 +518,7 @@ export function CustomAppFrame({ appId }: { appId: string; onClose: () => void }
                                     />
                                 ))}
                             </div>
-                            <label className="flex items-center justify-between rounded-[12px] bg-[#e5e5e5] px-4 py-3 dark:bg-surface">
+                            <label className="flex items-center justify-between rounded-[12px] bg-surface px-4 py-3">
                                 <span className="text-[16px] text-black dark:text-white">{t('customApps.customColor', 'Custom')}</span>
                                 <input
                                     type="color"
@@ -551,7 +551,7 @@ function PopupCard({ data, onButton, onDismiss, onInput }: {
             onPointerDown={e => { if (e.target === e.currentTarget) onDismiss(); }}
         >
             <div
-                className="flex w-[300px] flex-col overflow-hidden rounded-[18px] bg-[#f2f2f2cc] text-center text-black backdrop-blur-2xl dark:bg-[#252527e6] dark:text-white"
+                className="flex w-[300px] flex-col overflow-hidden rounded-[18px] bg-elevated/80 text-center text-black backdrop-blur-2xl dark:bg-elevated/90 dark:text-white"
                 style={{ animation: 'ios-alert-in 0.22s cubic-bezier(0.32,0.72,0,1)' }}
             >
                 <div className="px-5 pb-4 pt-5">

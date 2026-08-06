@@ -29,7 +29,7 @@ export function Leaderboard() {
     const myIndex = rows.findIndex(e => e === localMe || (!!myUsername && !!e.username && e.username === myUsername));
 
     return (
-        <div className="absolute inset-0 flex flex-col bg-[#d4d4d4] font-sf dark:bg-base">
+        <div className="absolute inset-0 flex flex-col bg-base font-sf">
             <div className="shrink-0 px-5 pb-1" style={{ paddingTop: 'calc(var(--safe-top) + 10px)' }}>
                 <h1 className="text-[34px] font-bold tracking-tight text-black dark:text-white">{t('ryde.leaderboard', 'Leaderboard')}</h1>
                 <p className="text-[17px] text-ios-gray">{t('ryde.topRatedDrivers', 'Top-rated drivers in Los Santos')}</p>

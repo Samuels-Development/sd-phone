@@ -87,7 +87,7 @@ export function Pages({ onClose: _onClose }: { onClose: () => void }) {
     }
 
     return (
-        <div className="absolute inset-0 flex flex-col bg-[#d4d4d4] font-sf dark:bg-base">
+        <div className="absolute inset-0 flex flex-col bg-base font-sf">
             <div className="h-[58px] shrink-0" aria-hidden />
 
             <div className="flex flex-1 flex-col overflow-hidden">

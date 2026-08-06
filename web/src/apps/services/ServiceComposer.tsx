@@ -59,9 +59,9 @@ export function ServiceComposer({ isDark, onSend }: {
 
     const hasContent = draft.trim().length > 0 || attachments.length > 0;
 
-    const trayBg  = isDark ? 'rgb(var(--surface))' : '#d4d4d4';
+    const trayBg  = isDark ? 'rgb(var(--surface))' : 'rgb(var(--base))';
     const btnBg   = isDark ? 'rgb(var(--elevated))' : '#fff';
-    const pillBg  = isDark ? 'rgb(var(--surface))' : '#d4d4d4';
+    const pillBg  = isDark ? 'rgb(var(--surface))' : 'rgb(var(--base))';
     const pillBdr = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)';
 
     return (
@@ -111,7 +111,7 @@ export function ServiceComposer({ isDark, onSend }: {
                             type="button"
                             onClick={sendText}
                             aria-label={t('services.send', 'Send')}
-                            className="flex h-[33px] w-[33px] shrink-0 items-center justify-center rounded-full bg-[#007AFF] active:opacity-70"
+                            className="flex h-[33px] w-[33px] shrink-0 items-center justify-center rounded-full bg-ios-blue active:opacity-70"
                         >
                             <ArrowUp className="h-[19px] w-[19px] text-white" strokeWidth={2.75} />
                         </button>

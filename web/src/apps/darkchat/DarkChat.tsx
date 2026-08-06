@@ -267,7 +267,7 @@ export function DarkChat({ onClose: _onClose }: { onClose: () => void }) {
     }
 
     return (
-        <div className="absolute inset-0 flex flex-col bg-[#0b0b0c] font-sf">
+        <div className="dark absolute inset-0 flex flex-col bg-base font-sf">
             <div className="h-[58px] shrink-0" aria-hidden />
 
             <RoomsList

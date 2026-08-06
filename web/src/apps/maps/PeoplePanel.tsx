@@ -232,7 +232,7 @@ export function PeoplePanel({ friends, selectedId, showAvatars, onFocus, onToggl
                                             {showAvatars && f.avatar
                                                 ? <img src={f.avatar} alt="" className="h-full w-full rounded-full object-cover" />
                                                 : initials(f.name)}
-                                            {live && <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#e5e5e5] bg-ios-green dark:border-surface" />}
+                                            {live && <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-surface bg-ios-green" />}
                                         </span>
                                         <span className="flex min-w-0 flex-col leading-tight">
                                             <span className="truncate text-[20px] font-semibold text-black dark:text-white">{f.name}</span>

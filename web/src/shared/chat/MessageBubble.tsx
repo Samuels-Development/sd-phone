@@ -124,7 +124,7 @@ export const MessageBubble = memo(function MessageBubble({
     const cutCorner   = isLast ? (sent ? 'rounded-br-md' : 'rounded-bl-md') : '';
     const bubbleShape = `rounded-2xl ${cutCorner}`;
     const fg          = sent ? '#fff' : (isDark ? '#fff' : '#000');
-    const chip        = isDark ? '#2C2C2E' : '#fff';
+    const chip        = isDark ? 'rgb(var(--elevated))' : '#fff';
     const side        = sent ? 'right-0' : 'left-0';
 
     return (
@@ -161,7 +161,7 @@ export const MessageBubble = memo(function MessageBubble({
                                 key={r}
                                 type="button"
                                 onClick={() => onReact(msg.id, r)}
-                                className={`flex h-9 w-9 items-center justify-center rounded-full text-[22px] leading-none transition-transform hover:scale-125 ${msg.reactions?.some(x => x.mine && x.emoji === r) ? 'bg-[#007AFF]/20' : ''}`}
+                                className={`flex h-9 w-9 items-center justify-center rounded-full text-[22px] leading-none transition-transform hover:scale-125 ${msg.reactions?.some(x => x.mine && x.emoji === r) ? 'bg-ios-blue/20' : ''}`}
                             >
                                 {r}
                             </button>
@@ -240,7 +240,7 @@ export const MessageBubble = memo(function MessageBubble({
                                 </span>
                             </div>
                         </div>
-                        <div className="px-3.5 py-2.5" style={{ background: isDark ? '#262628' : '#c6c6c6' }}>
+                        <div className="px-3.5 py-2.5" style={{ background: isDark ? 'rgb(var(--elevated))' : '#c6c6c6' }}>
                             <div className="text-[15px] font-semibold leading-snug" style={{ color: isDark ? '#fff' : '#000' }}>
                                 {locationCaption ?? (sent ? t('messages.sentLocationRequest', 'You sent a location sharing request') : t('messages.wantsShareLocations', 'Wants to share locations with you'))}
                             </div>
@@ -310,7 +310,7 @@ export const MessageBubble = memo(function MessageBubble({
                             </div>
                         </div>
                         {locationCaption && (
-                            <div className="px-3.5 py-2.5" style={{ background: isDark ? '#262628' : '#c6c6c6' }}>
+                            <div className="px-3.5 py-2.5" style={{ background: isDark ? 'rgb(var(--elevated))' : '#c6c6c6' }}>
                                 <div className="text-[15px] font-semibold leading-snug" style={{ color: isDark ? '#fff' : '#000' }}>{locationCaption}</div>
                                 <div className="mt-0.5 text-[13.5px]" style={{ color: isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.55)' }}>{t('messages.tapToOpenInMaps', 'Tap to open in Maps')}</div>
                             </div>
@@ -384,7 +384,7 @@ function VoiceBubble({ msg, sent, bubbleShape, sentBg, receivedBg, fg }: {
         ? msg.waveform
         : Array(VOICE_BARS).fill(0).map((_, i) => 14 + (i % 3) * 6);
 
-    const litColor = sent ? 'rgba(255,255,255,0.95)' : '#007AFF';
+    const litColor = sent ? 'rgba(255,255,255,0.95)' : 'rgb(var(--ios-blue))';
     const dimColor = sent ? 'rgba(255,255,255,0.40)' : 'rgba(0,122,255,0.32)';
 
     return (
@@ -431,7 +431,7 @@ function TapBtn({ isDark, onClick, children }: { isDark: boolean; onClick: () =>
             type="button"
             onClick={onClick}
             className="flex h-[30px] w-[30px] items-center justify-center rounded-full shadow transition-transform active:scale-90"
-            style={{ background: isDark ? '#2C2C2E' : '#fff', color: isDark ? '#fff' : '#1c1c1e' }}
+            style={{ background: isDark ? 'rgb(var(--elevated))' : '#fff', color: isDark ? '#fff' : '#1c1c1e' }}
         >
             {children}
         </button>

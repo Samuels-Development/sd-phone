@@ -77,7 +77,7 @@ export function ContactPickerSheet({ onPick, onClose }: {
 }
 
 function Card({ children }: { children: ReactNode }) {
-    return <div className="overflow-hidden rounded-[12px] bg-[#e5e5e5] shadow-sm dark:bg-surface">{children}</div>;
+    return <div className="overflow-hidden rounded-[12px] bg-surface shadow-sm">{children}</div>;
 }
 
 function Row({ contact, divider, onChoose }: { contact: Contact; divider: boolean; onChoose: (c: Contact) => void }) {

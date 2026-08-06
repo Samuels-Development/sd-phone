@@ -101,7 +101,7 @@ export function JobsTab({ onJobChanged }: { onJobChanged?: () => void }) {
                                         <div
                                             key={j.job}
                                             ref={el => { if (el) rowEls.current.set(j.job, el); else rowEls.current.delete(j.job); }}
-                                            className="relative border-t border-black/10 bg-[#e5e5e5] first:border-t-0 dark:border-white/10 dark:bg-surface"
+                                            className="relative border-t border-black/10 bg-surface first:border-t-0 dark:border-white/10"
                                         >
                                             <JobRow
                                                 job={j}
@@ -221,7 +221,7 @@ function InviteCard({ invite, disabled, onAccept, onDecline }: {
     onDecline: () => void;
 }) {
     return (
-        <div className="rounded-[16px] bg-[#e5e5e5] px-4 py-4 dark:bg-surface">
+        <div className="rounded-[16px] bg-surface px-4 py-4">
             <div className="flex items-center gap-3.5">
                 <Tile>
                     <Briefcase className="h-[20px] w-[20px] text-white" strokeWidth={2.1} />

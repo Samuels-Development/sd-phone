@@ -167,7 +167,7 @@ export function Streaks({ onClose: _onClose }: { onClose: () => void }) {
         <div className={`absolute inset-0 z-10 flex flex-col select-none ${dark ? 'bg-black text-white' : 'bg-[#d4d4d4] text-black'}`}>
             <div className="shrink-0" style={{ height: SB_H }} />
 
-            <div className="shrink-0 px-5 pb-1 pt-1" style={{ background: dark ? '#000000' : '#d4d4d4' }}>
+            <div className="shrink-0 px-5 pb-1 pt-1" style={{ background: dark ? '#000000' : 'rgb(var(--base))' }}>
                 <h1 className="text-[34px] font-bold tracking-tight">{t('streaks.streaks', 'Streaks')}</h1>
             </div>
 

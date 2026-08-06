@@ -114,7 +114,7 @@ function Card({ accent, icon, title, children }: {
     children: React.ReactNode;
 }) {
     return (
-        <div className="mb-2.5 rounded-[15px] bg-[#e5e5e5] p-3.5 dark:bg-surface">
+        <div className="mb-2.5 rounded-[15px] bg-surface p-3.5">
             <div className="flex items-center gap-1.5 text-[16px] font-semibold" style={{ color: accent }}>
                 <span className="flex h-5 w-5 items-center justify-center">{icon}</span>
                 <span>{title}</span>

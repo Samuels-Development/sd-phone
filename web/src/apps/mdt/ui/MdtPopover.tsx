@@ -17,7 +17,7 @@ export function MdtPopover({ anchor, actions, onClose }: {
     return (
         <div
             ref={hostRef}
-            className="absolute z-20 min-w-[188px] overflow-hidden rounded-[13px] bg-[#f4f4f4] shadow-[0_8px_30px_rgba(0,0,0,0.18)] ring-1 ring-black/[0.08] dark:bg-elevated dark:ring-white/[0.10]"
+            className="absolute z-20 min-w-[188px] overflow-hidden rounded-[13px] bg-elevated shadow-[0_8px_30px_rgba(0,0,0,0.18)] ring-1 ring-black/[0.08] dark:ring-white/[0.10]"
             style={{
                 left:            style?.left ?? 0,
                 top:             style?.top ?? 0,

@@ -18,7 +18,7 @@ export function MoneyPanel({ isDark, peerName, onSend, onRequest, onClose }: Pro
     const [amount,  setAmount]  = useState(0);
     const [confirm, setConfirm] = useState<null | 'send' | 'request'>(null);
     const fg     = isDark ? 'text-white' : 'text-black';
-    const pillBg = isDark ? '#2C2C2E' : '#fff';
+    const pillBg = isDark ? 'rgb(var(--elevated))' : '#fff';
 
     return (
         <Sheet
@@ -26,7 +26,7 @@ export function MoneyPanel({ isDark, peerName, onSend, onRequest, onClose }: Pro
             fit="content"
             dim={false}
             durationMs={260}
-            className={`px-4 border-t-[0.5px] ${isDark ? 'bg-[#1C1C1E] border-white/10' : 'bg-[#d4d4d4] border-black/10'}`}
+            className={`px-4 border-t-[0.5px] ${isDark ? 'bg-surface border-white/10' : 'bg-base border-black/10'}`}
         >
             {({ close }) => (
                 <>

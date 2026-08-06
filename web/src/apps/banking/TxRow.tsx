@@ -53,7 +53,7 @@ function TxRow({ tx, onSelect }: { tx: BankTx; onSelect?: (tx: BankTx) => void }
 
 export function TxRows({ items, onSelect }: { items: BankTx[]; onSelect?: (tx: BankTx) => void }) {
     return (
-        <div className="overflow-hidden rounded-[16px] bg-[#e5e5e5] shadow-sm dark:bg-surface">
+        <div className="overflow-hidden rounded-[16px] bg-surface shadow-sm">
             {items.map((tx, i) => (
                 <div key={tx.id}>
                     <TxRow tx={tx} onSelect={onSelect} />

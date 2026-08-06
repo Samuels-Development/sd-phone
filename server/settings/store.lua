@@ -83,6 +83,7 @@ function store.ensureSchema()
             theme              VARCHAR(8)   NULL,
             dark_theme         VARCHAR(16)  NULL,
             light_theme        VARCHAR(16)  NULL,
+            accent             VARCHAR(16)  NULL,
             palette_custom     LONGTEXT     NULL,
             icon_theme         VARCHAR(16)  NULL,
             icon_custom        LONGTEXT     NULL,
@@ -1153,6 +1154,30 @@ local DARK_THEMES = { graphite = true, black = true, warm = true, midnight = tru
 ---@type table<string, boolean> Selectable light-mode palettes; anything else falls back to silver.
 local LIGHT_THEMES = { silver = true, snow = true, linen = true, sky = true, mint = true, blush = true, sand = true, lavender = true, stone = true, dusk = true }
 
+---@type table<string, boolean> Preset accent colours; mirrors ACCENT_PRESETS in web/src/apps/settings/appearance/accentRamp.ts.
+local ACCENTS = {
+    blue = true, indigo = true, purple = true, pink = true, red = true, orange = true,
+    yellow = true, green = true, mint = true, teal = true, brown = true, gray = true,
+}
+
+---@type string Accent used when the stored value is missing or not storable.
+local ACCENT_DEFAULT = 'blue'
+
+---A custom accent is stored as `custom:<hue>`, hue being 0-359.
+---@param v any client-supplied accent id
+---@return boolean
+local function isCustomAccentId(v)
+    if type(v) ~= 'string' then return false end
+    local hue = v:match('^custom:(%d%d?%d?)$')
+    return hue ~= nil and tonumber(hue) <= 359
+end
+
+---@param v any client-supplied accent id
+---@return boolean
+local function isStorableAccent(v)
+    return type(v) == 'string' and (ACCENTS[v] == true or isCustomAccentId(v))
+end
+
 ---Returns a player's selected dark-mode palette, defaulting to 'graphite'. Read-only.
 ---@param citizenid string framework per-character id
 ---@return string darkTheme a key of DARK_THEMES
@@ -1197,6 +1222,19 @@ function store.setLightTheme(citizenid, theme, device)
         INSERT INTO phone_settings (citizenid, device, light_theme) VALUES (?, ?, ?)
         ON DUPLICATE KEY UPDATE light_theme = VALUES(light_theme)
     ]], { citizenid, device, theme })
+end
+
+---Persists the accent colour applied over whichever palette is active.
+---@param citizenid string framework per-character id
+---@param accent string a key of ACCENTS or `custom:<hue>`
+function store.setAccent(citizenid, accent, device)
+    device = device or 'phone'
+    if not citizenid or citizenid == '' then return end
+    if not isStorableAccent(accent) then accent = ACCENT_DEFAULT end
+    MySQL.update.await([[
+        INSERT INTO phone_settings (citizenid, device, accent) VALUES (?, ?, ?)
+        ON DUPLICATE KEY UPDATE accent = VALUES(accent)
+    ]], { citizenid, device, accent })
 end
 
 -- Mirrors the IconThemeId union in web/src/stores/iconThemeStore.ts.
@@ -1852,6 +1890,8 @@ function store.snapshot(citizenid, device)
     if type(dark) ~= 'string' or not (DARK_THEMES[dark] or isCustomPaletteId(dark)) then dark = 'graphite' end
     local light = row and row.light_theme
     if type(light) ~= 'string' or not (LIGHT_THEMES[light] or isCustomPaletteId(light)) then light = 'silver' end
+    local accent = row and row.accent
+    if not isStorableAccent(accent) then accent = ACCENT_DEFAULT end
     local icons = row and row.icon_theme
     if not isStorableIconTheme(icons) then icons = 'default' end
     local showAppNames = row == nil or isTruthy(row.show_app_names)
@@ -1866,6 +1906,7 @@ function store.snapshot(citizenid, device)
         theme            = (row and row.theme == 'dark') and 'dark' or 'light',
         darkTheme        = dark,
         lightTheme       = light,
+        accent           = accent,
         iconTheme        = icons,
         customIconThemes = shared and decodeCustomIconThemes(shared.icon_custom) or {},
         customPalettes   = shared and decodeCustomPalettes(shared.palette_custom) or {},

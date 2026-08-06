@@ -115,7 +115,7 @@ function PickerSheet({ title, action, children, onClose }: {
     onClose:  () => void;
 }) {
     return (
-        <Sheet onClose={onClose} grabber={false} className="font-sf bg-[#d4d4d4] text-black dark:bg-base dark:text-white">
+        <Sheet onClose={onClose} grabber={false} className="font-sf bg-base text-black dark:text-white">
             {({ close }) => (
                 <>
                     <div className="flex h-12 shrink-0 items-center px-4 pt-1">
@@ -365,7 +365,7 @@ function DocAttachmentSheet({ att, onClose }: { att: DocAttachment; onClose: () 
     }
     return (
         <div
-            className="absolute inset-0 z-50 flex flex-col bg-[#d4d4d4] text-black dark:bg-base dark:text-white"
+            className="absolute inset-0 z-50 flex flex-col bg-base text-black dark:text-white"
             style={{ animation: leaving
                 ? 'ios-sheet-down 0.26s cubic-bezier(0.32,0,0.68,1) forwards'
                 : 'ios-sheet-up 0.34s cubic-bezier(0.32,0.72,0,1)' }}
@@ -406,7 +406,7 @@ function NoteSheet({ title, body, onClose }: { title: string; body: string; onCl
     }
     return (
         <div
-            className="absolute inset-0 z-50 flex flex-col bg-[#d4d4d4] text-black dark:bg-base dark:text-white"
+            className="absolute inset-0 z-50 flex flex-col bg-base text-black dark:text-white"
             style={{ animation: leaving
                 ? 'ios-sheet-down 0.26s cubic-bezier(0.32,0,0.68,1) forwards'
                 : 'ios-sheet-up 0.34s cubic-bezier(0.32,0.72,0,1)' }}

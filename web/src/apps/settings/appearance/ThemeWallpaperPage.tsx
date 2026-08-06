@@ -32,7 +32,7 @@ export function ThemeWallpaperPage({ draft, showAppNames, wallpaper, pinned, onT
     }
 
     return (
-        <div className="absolute inset-0 z-30 flex flex-col bg-[#d4d4d4] text-black dark:bg-base dark:text-white" style={pageStyle}>
+        <div className="absolute inset-0 z-30 flex flex-col bg-base text-black dark:text-white" style={pageStyle}>
             <div className="h-11 shrink-0" aria-hidden />
 
             <NavBar

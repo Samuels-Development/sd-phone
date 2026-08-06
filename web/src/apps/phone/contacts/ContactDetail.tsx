@@ -114,7 +114,7 @@ export function ContactDetail({ contact, onBack, backLabel = t('phone.contacts',
                     <ActionButton label={t('phone.actionShare','share')}   onClick={() => setSharing(true)} icon={<Share className="h-[28px] w-[28px]" strokeWidth={2} />} />
                 </div>
 
-                <div className="mb-4 flex items-center rounded-[10px] bg-[#e5e5e5] px-4 py-3 dark:bg-surface">
+                <div className="mb-4 flex items-center rounded-[10px] bg-surface px-4 py-3">
                     <div className="min-w-0 flex-1">
                         <div className="text-[13px] text-black/80 dark:text-white/80">{t('phone.phoneLabel','phone')}</div>
                         <div className="truncate text-[19px] text-ios-blue">{formatPhone(current.phone)}</div>
@@ -223,8 +223,8 @@ function ActionButton({ icon, label, disabled, onClick }: { icon: ReactNode; lab
             onClick={onClick}
             className={`flex flex-1 flex-col items-center gap-2 rounded-[12px] py-4 ${
                 disabled
-                    ? 'bg-[#e5e5e5]/60 text-ios-gray dark:bg-surface/60'
-                    : 'bg-[#e5e5e5] text-ios-blue active:opacity-70 dark:bg-surface'
+                    ? 'bg-surface/60 text-ios-gray'
+                    : 'bg-surface text-ios-blue active:opacity-70'
             }`}
         >
             {icon}

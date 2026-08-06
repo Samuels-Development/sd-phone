@@ -18,7 +18,7 @@ interface SearchBarProps {
 }
 
 export function SearchBar({ value, onChange, placeholder = t('common.search', 'Search'), className, autoFocus, forceDark, pillClassName, pillStyle, iconClassName, textClassName, caretColor }: SearchBarProps) {
-    const pillTheme = forceDark ? 'bg-[#1c1c1e]'                     : 'bg-[#e5e5e5] dark:bg-white/10';
+    const pillTheme = forceDark ? 'bg-surface'                     : 'bg-surface dark:bg-white/10';
     const iconTheme = forceDark ? 'text-white/60'                   : 'text-black/60 dark:text-white/60';
     const field     = forceDark ? 'text-white placeholder-white/55' : 'text-black placeholder-black/55 dark:text-white dark:placeholder-white/55';
     const clear     = forceDark ? 'text-white/45'                   : 'text-black/40 dark:text-white/45';
@@ -27,7 +27,7 @@ export function SearchBar({ value, onChange, placeholder = t('common.search', 'S
     const icon = iconClassName ?? `h-[18px] w-[18px] ${iconTheme}`;
     const text = textClassName ?? `text-[17px] font-medium ${field}`;
 
-    return (
+    const bar = (
         <div className={`flex items-center ${pill} ${className ?? ''}`} style={pillStyle}>
             <Search className={`shrink-0 ${icon}`} strokeWidth={2.75} />
             <input
@@ -52,4 +52,5 @@ export function SearchBar({ value, onChange, placeholder = t('common.search', 'S
             )}
         </div>
     );
+    return forceDark ? <div className="dark contents">{bar}</div> : bar;
 }

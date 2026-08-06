@@ -61,8 +61,8 @@ export function AssetDetail({ asset, onBack, onBuy, onSell, onRefresh, animateIn
     }
 
 
-    const pageBg = isDark ? 'rgb(var(--base))' : '#d4d4d4';
-    const cardBg = isDark ? 'rgb(var(--surface))' : '#e5e5e5';
+    const pageBg = 'rgb(var(--base))';
+    const cardBg = 'rgb(var(--surface))';
 
     const held  = snap.units > 0;
     const value = holdingValue(snap);
@@ -144,7 +144,7 @@ export function AssetDetail({ asset, onBack, onBuy, onSell, onRefresh, animateIn
                                     <div key={i}>
                                         <div className="px-4 py-3.5">
                                             <div className="flex items-baseline justify-between">
-                                                <span className="text-[16px] font-semibold" style={h.isYou ? { color: '#0a84ff' } : undefined}>{label}</span>
+                                                <span className="text-[16px] font-semibold" style={h.isYou ? { color: 'rgb(var(--ios-blue))' } : undefined}>{label}</span>
                                                 <span className="text-[16px] font-semibold tabular-nums">{pctText}</span>
                                             </div>
                                             <div className="mt-2 h-[7px] w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">

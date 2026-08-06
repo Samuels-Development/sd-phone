@@ -19,7 +19,7 @@ export function SoundHapticsPage({ onBack }: { onBack: () => void }) {
         customRingtones, customNotificationTones, addCustomTone, removeCustomTone,
     } = useTheme('theme', 'ringtoneVol', 'setRingtoneVol', 'callVol', 'setCallVol', 'ringtone', 'setRingtone', 'notificationTone', 'setNotificationTone', 'customRingtones', 'customNotificationTones', 'addCustomTone', 'removeCustomTone');
     const isDark    = theme === 'dark';
-    const trackEmpty = isDark ? '#3A3A3C' : '#E5E5EA';
+    const trackEmpty = isDark ? 'rgb(var(--control))' : 'rgb(var(--surface))';
     const [picking, setPicking] = useState<Picking>(null);
 
     const isRing = picking === 'ringtone';

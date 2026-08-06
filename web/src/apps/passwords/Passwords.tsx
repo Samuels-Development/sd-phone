@@ -52,7 +52,7 @@ export function Passwords({ onClose }: { onClose: () => void }) {
     }
 
     return (
-        <div className="absolute inset-0 z-10 overflow-hidden bg-[#d4d4d4] font-sf text-black dark:bg-base dark:text-white">
+        <div className="absolute inset-0 z-10 overflow-hidden bg-base font-sf text-black dark:text-white">
             <div className="flex h-full flex-col">
                 <div className="h-[54px] shrink-0" aria-hidden />
 
@@ -112,7 +112,7 @@ function Detail({ entry, onBack, onDelete }: { entry: VaultEntry; onBack: () => 
     const [confirmDelete, setConfirmDelete] = useState(false);
 
     return (
-        <div className="flex h-full flex-col bg-[#d4d4d4] text-black dark:bg-base dark:text-white">
+        <div className="flex h-full flex-col bg-base text-black dark:text-white">
             <div className="h-[54px] shrink-0" aria-hidden />
             <header className="flex items-center px-3 py-2">
                 <button type="button" onClick={onBack} className="flex items-center text-ios-blue active:opacity-60">
@@ -150,7 +150,7 @@ function Detail({ entry, onBack, onDelete }: { entry: VaultEntry; onBack: () => 
                 <button
                     type="button"
                     onClick={() => setConfirmDelete(true)}
-                    className="mt-5 w-full rounded-[10px] bg-[#e5e5e5] py-4 text-[18px] font-semibold text-ios-red active:opacity-70 dark:bg-surface"
+                    className="mt-5 w-full rounded-[10px] bg-surface py-4 text-[18px] font-semibold text-ios-red active:opacity-70"
                 >
                     {t('passwords.removeButton', 'Remove Saved Account')}
                 </button>

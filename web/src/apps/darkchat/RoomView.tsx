@@ -82,7 +82,7 @@ export function RoomView({ room, nickname, onBack, onSend, onReact, onLeave, onM
 
     return (
         <div
-            className="absolute inset-0 z-20 flex flex-col bg-[#0b0b0c]"
+            className="dark absolute inset-0 z-20 flex flex-col bg-base"
             style={{ ...pageStyle, willChange: 'transform' }}
         >
             <div className="h-[58px] shrink-0" aria-hidden />

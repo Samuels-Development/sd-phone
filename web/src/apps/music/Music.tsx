@@ -482,7 +482,7 @@ export function Music({ onClose: _onClose }: { onClose: () => void }) {
     const viewKey = top ? `${stack.length}:${top.kind}:${'name' in top ? top.name : 'key' in top ? top.key : 'id' in top ? top.id : ''}` : `root:${tab}`;
 
     return (
-        <div className="absolute inset-0 z-10 flex flex-col bg-[#d4d4d4] font-sf text-black dark:bg-base dark:text-white">
+        <div className="absolute inset-0 z-10 flex flex-col bg-base font-sf text-black dark:text-white">
             <div className="relative min-h-0 flex-1">
                 <div key={viewKey} className="absolute inset-0 flex flex-col bg-base" style={{ animation: navAnim.current }}>
                     {activeView}
@@ -498,7 +498,7 @@ export function Music({ onClose: _onClose }: { onClose: () => void }) {
                 <div className={`shrink-0 overflow-hidden transition-all duration-300 ${stoppingMini ? 'max-h-0 opacity-0' : 'max-h-[88px] opacity-100'}`}>
                     <button onClick={() => setExpanded(true)}
                         style={animateNav && !stoppingMini ? { animation: 'mini-rise 0.34s cubic-bezier(0.32,0.72,0,1)' } : undefined}
-                        className={`flex w-full items-center gap-3.5 bg-gradient-to-b from-[#d4d4d4] to-[#f7f7f7] px-4 py-3 text-left transition-transform duration-300 dark:from-base dark:to-surface ${stoppingMini ? 'translate-y-2' : ''}`}>
+                        className={`flex w-full items-center gap-3.5 bg-gradient-to-b from-base to-elevated px-4 py-3 text-left transition-transform duration-300 dark:to-surface ${stoppingMini ? 'translate-y-2' : ''}`}>
                         <Cover track={m.current} size={56} rounded={9} playing={m.playing} />
                         <span className="flex min-w-0 flex-1 flex-col leading-tight">
                             <span className="truncate text-[17px] font-semibold">{m.current.title}</span>
@@ -670,7 +670,7 @@ function TrackList({ tracks, current, playing, onPlay, onRemove, removeIcon = 't
                         <button onClick={() => { if (!editing) onPlay(track); }} className="flex min-w-0 flex-1 items-center gap-3 text-left">
                             <Cover track={track} size={56} rounded={7} playing={active && playing} />
                             <span className="flex min-w-0 flex-col leading-tight">
-                                <span className="truncate text-[20px] font-semibold" style={active ? { color: '#0a84ff' } : undefined}>{track.title}</span>
+                                <span className="truncate text-[20px] font-semibold" style={active ? { color: 'rgb(var(--ios-blue))' } : undefined}>{track.title}</span>
                                 <span className="truncate text-[16px] text-ios-gray">{track.artist}</span>
                             </span>
                         </button>
@@ -948,7 +948,7 @@ function AddForm({ onAdd, onClose, backLabel }: { onAdd: (url: string, title: st
                         </div>
                         <p className="text-[15px] font-medium text-ios-gray">{t('music.pasteLinkPreview', 'Paste a YouTube link to preview your song.')}</p>
                     </div>
-                    <div className={`absolute inset-0 flex items-center gap-4 rounded-[18px] bg-white px-5 shadow-sm transition-all duration-300 dark:bg-surface ${hasUrl ? 'opacity-100 translate-y-0 scale-100' : 'pointer-events-none opacity-0 translate-y-2 scale-[0.97]'}`}>
+                    <div className={`absolute inset-0 flex items-center gap-4 rounded-[18px] bg-elevated px-5 shadow-sm transition-all duration-300 dark:bg-surface ${hasUrl ? 'opacity-100 translate-y-0 scale-100' : 'pointer-events-none opacity-0 translate-y-2 scale-[0.97]'}`}>
                         <Cover track={shown.track} size={80} rounded={14} />
                         <div className="min-w-0 flex-1">
                             <p className="truncate text-[21px] font-semibold leading-tight">{shown.title}</p>
@@ -972,7 +972,7 @@ function AddForm({ onAdd, onClose, backLabel }: { onAdd: (url: string, title: st
 
 function PickerSheet({ tracks, selected, onToggle, onClose }: { tracks: Track[]; selected: string[]; onToggle: (id: string) => void; onClose: () => void }) {
     return (
-        <Sheet onClose={onClose} top={130} className="bg-[#d4d4d4] text-black dark:bg-base dark:text-white font-sf">
+        <Sheet onClose={onClose} top={130} className="bg-base text-black dark:text-white font-sf">
             {({ close }) => (
                 <div className="flex min-h-0 flex-1 flex-col pb-[calc(var(--safe-bottom)+16px)]">
                     <div className="flex shrink-0 items-center justify-between px-5 pb-2 pt-6">
@@ -1007,7 +1007,7 @@ function PickerSheet({ tracks, selected, onToggle, onClose }: { tracks: Track[];
 function Field({ icon, value, onChange, placeholder, autoFocus, large }: { icon?: React.ReactNode; value: string; onChange: (v: string) => void; placeholder: string; autoFocus?: boolean; large?: boolean }) {
     return (
         <div className={large
-            ? 'mb-3 flex h-[54px] items-center gap-2.5 rounded-[14px] bg-white px-4 shadow-sm dark:bg-surface'
+            ? 'mb-3 flex h-[54px] items-center gap-2.5 rounded-[14px] bg-elevated px-4 shadow-sm dark:bg-surface'
             : 'mb-2 flex h-11 items-center gap-2 rounded-[10px] bg-black/5 px-3 dark:bg-white/10'}>
             {icon}
             <input autoFocus={autoFocus} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}

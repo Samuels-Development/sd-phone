@@ -138,7 +138,7 @@ export function GroupDetail({
                             </div>
                         )}
                         {isLeader && (
-                            <span className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#d4d4d4] bg-ios-blue dark:border-base">
+                            <span className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-base bg-ios-blue">
                                 <Camera className="h-[17px] w-[17px] text-white" strokeWidth={2} />
                             </span>
                         )}

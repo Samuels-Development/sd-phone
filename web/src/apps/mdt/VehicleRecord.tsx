@@ -41,7 +41,7 @@ export function vehicleStatusLabel(status: string): string {
 export function PlateChip({ plate, large }: { plate: string; large?: boolean }) {
     return (
         <span
-            className={`inline-flex shrink-0 items-center rounded-[6px] border border-black/15 bg-white font-bold uppercase tabular-nums tracking-[0.08em] text-black dark:border-white/20 dark:bg-base/50 dark:text-white ${
+            className={`inline-flex shrink-0 items-center rounded-[6px] border border-black/15 bg-elevated font-bold uppercase tabular-nums tracking-[0.08em] text-black dark:border-white/20 dark:bg-base/50 dark:text-white ${
                 large ? 'px-3 py-1.5 text-[19px]' : 'px-2 py-1 text-[13px]'
             }`}
         >

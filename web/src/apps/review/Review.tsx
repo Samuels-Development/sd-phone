@@ -30,7 +30,7 @@ export function Review({ onClose: _onClose }: { onClose: () => void }) {
     const chips = ['All', ...categories];
 
     return (
-        <div className="absolute inset-0 flex flex-col bg-[#f2f2f7] font-sf dark:bg-base">
+        <div className="absolute inset-0 flex flex-col bg-elevated font-sf dark:bg-base">
             <div className="h-[58px] shrink-0" aria-hidden />
 
             <div className="shrink-0 px-4 pb-2">
@@ -74,7 +74,7 @@ export function Review({ onClose: _onClose }: { onClose: () => void }) {
                 {filtered.length === 0 ? (
                     <p className="px-4 pt-10 text-center text-[14px] text-black/45 dark:text-white/45">{t('review.noBusinesses', 'No businesses found.')}</p>
                 ) : (
-                    <div className="mx-3 mt-1 divide-y divide-black/[0.06] overflow-hidden rounded-xl bg-white dark:divide-white/[0.08] dark:bg-surface">
+                    <div className="mx-3 mt-1 divide-y divide-black/[0.06] overflow-hidden rounded-xl bg-elevated dark:divide-white/[0.08] dark:bg-surface">
                         {filtered.map(b => (
                             <BusinessCard key={b.id} b={b} onOpen={() => setOpenId(b.id)} />
                         ))}

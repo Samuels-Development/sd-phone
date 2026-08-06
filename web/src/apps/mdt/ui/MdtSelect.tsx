@@ -134,7 +134,7 @@ export function MdtSelect<T extends string = string>({
             ref={hostRef}
             role="listbox"
             aria-label={ariaLabel}
-            className="absolute z-30 overflow-y-auto overscroll-contain rounded-[12px] bg-[#f4f4f4] py-1 shadow-[0_8px_30px_rgba(0,0,0,0.18)] ring-1 ring-black/[0.08] dark:bg-elevated dark:ring-white/[0.10]"
+            className="absolute z-30 overflow-y-auto overscroll-contain rounded-[12px] bg-elevated py-1 shadow-[0_8px_30px_rgba(0,0,0,0.18)] ring-1 ring-black/[0.08] dark:ring-white/[0.10]"
             style={{
                 left:            style?.left ?? 0,
                 top:             style?.top ?? 0,

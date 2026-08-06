@@ -168,7 +168,7 @@ export function VoicePanel({ onSend, onClose, forceDark = false }: Props) {
             dismissable={!recording && !uploading}
             durationMs={260}
             forceDark={forceDark}
-            className="items-center gap-4 border-t border-black/10 bg-[#d4d4d4] dark:border-white/10 dark:bg-surface"
+            className="items-center gap-4 border-t border-black/10 bg-base dark:border-white/10 dark:bg-surface"
         >
             {() => (
                 <>

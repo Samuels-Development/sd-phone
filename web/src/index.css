@@ -5,6 +5,7 @@
     --safe-top:    44px;
     --safe-bottom: 28px;
     --ios-gray: 84 84 92;
+    --ios-blue: 0 122 255;
     --base:     212 212 212;
     --surface:  229 229 229;
     --elevated: 242 242 242;
@@ -77,6 +78,7 @@
 
 .dark {
     --ios-gray: 161 161 168;
+    --ios-blue: var(--accent-dark, 10 132 255);
     --base:      11 11 13;
     --surface:   28 28 30;
     --elevated:  44 44 46;

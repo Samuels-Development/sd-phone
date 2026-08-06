@@ -71,9 +71,9 @@ export function Calendar({ onClose }: { onClose: () => void }) {
         updateState({ ...state, dayNotes });
     }
 
-    const dividerC  = isDark ? 'rgb(var(--control))'             : '#c6c6c8';
-    const panelBg   = isDark ? 'rgb(var(--surface))'             : '#e5e5e5';
-    const pageBg    = isDark ? 'rgb(var(--base))'             : '#d4d4d4';
+    const dividerC  = 'rgb(var(--control))';
+    const panelBg   = 'rgb(var(--surface))';
+    const pageBg    = 'rgb(var(--base))';
 
     return (
         <div className="absolute inset-0 z-10 flex flex-col" style={{ background: pageBg, color: isDark ? '#fff' : '#000' }}>

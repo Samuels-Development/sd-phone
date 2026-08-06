@@ -28,7 +28,7 @@ export function Activity() {
     const rideStatusLabel = getRideStatusLabel();
 
     return (
-        <div className="absolute inset-0 flex flex-col bg-[#d4d4d4] font-sf dark:bg-base">
+        <div className="absolute inset-0 flex flex-col bg-base font-sf">
             <div className="shrink-0 px-5 pb-2" style={{ paddingTop: 'calc(var(--safe-top) + 10px)' }}>
                 <h1 className="text-[34px] font-bold tracking-tight text-black dark:text-white">{t('ryde.activity', 'Activity')}</h1>
             </div>
@@ -48,7 +48,7 @@ export function Activity() {
                 ) : (
                     <div className="space-y-4">
                         {list.map(r => (
-                            <div key={r.id} className="rounded-[18px] bg-[#e5e5e5] p-[18px] dark:bg-surface">
+                            <div key={r.id} className="rounded-[18px] bg-surface p-[18px]">
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="min-w-0">
                                         <p className="truncate text-[22px] font-bold text-black dark:text-white">{r.dropoff.name}</p>

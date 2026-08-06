@@ -71,7 +71,7 @@ export function Home() {
     const sheetH = (sheetOpen ? grabberH + bodyH : grabberH) + 2;
 
     return (
-        <div className="absolute inset-0 flex flex-col bg-[#d4d4d4] font-sf dark:bg-base">
+        <div className="absolute inset-0 flex flex-col bg-base font-sf">
             <div className="flex shrink-0 items-center px-5 pb-2" style={{ paddingTop: 'calc(var(--safe-top) + 10px)' }}>
                 <h1 className="text-[28px] font-extrabold tracking-tight text-black dark:text-white">Ryde</h1>
             </div>
@@ -97,7 +97,7 @@ export function Home() {
                         <div className="absolute inset-x-0 bottom-0 z-40 flex justify-center" style={{ paddingBottom: 'calc(var(--safe-bottom) + 12px)' }}>
                             <button
                                 onClick={() => setPlacingDrop(false)}
-                                className="rounded-full bg-white px-8 py-3 text-[15px] font-bold text-black shadow-lg active:opacity-80 dark:bg-surface dark:text-white"
+                                className="rounded-full bg-elevated px-8 py-3 text-[15px] font-bold text-black shadow-lg active:opacity-80 dark:bg-surface dark:text-white"
                             >
                                 {t('ryde.cancel', 'Cancel')}
                             </button>
@@ -107,7 +107,7 @@ export function Home() {
             </div>
 
             {idle && (
-                <div className="absolute inset-x-0 bottom-0 z-30 rounded-t-[16px] border-t border-black/[0.06] bg-[#e5e5e5] shadow-[0_-6px_24px_rgba(0,0,0,0.12)] dark:border-white/10 dark:bg-surface">
+                <div className="absolute inset-x-0 bottom-0 z-30 rounded-t-[16px] border-t border-black/[0.06] bg-surface shadow-[0_-6px_24px_rgba(0,0,0,0.12)] dark:border-white/10">
                     <button
                         ref={grabberRef}
                         type="button"
@@ -146,7 +146,7 @@ export function Home() {
             )}
 
             {picking && (
-                <Sheet title={t('ryde.whereTo', 'Where to?')} onClose={() => setPicking(false)} fit="content" className="bg-[#e5e5e5] px-5 pt-3 dark:bg-surface">
+                <Sheet title={t('ryde.whereTo', 'Where to?')} onClose={() => setPicking(false)} fit="content" className="bg-surface px-5 pt-3">
                     {() => (
                         <>
                             <div className="mb-3 flex items-center gap-2.5 rounded-[12px] bg-black/[0.07] px-3.5 dark:bg-white/10">

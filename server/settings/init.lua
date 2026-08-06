@@ -382,6 +382,16 @@ lib.callback.register('sd-phone:server:settings:setLightTheme', function(source,
     return { success = true }
 end)
 
+---Persists the caller's accent colour.
+lib.callback.register('sd-phone:server:settings:setAccent', function(source, payload)
+    local cid = player.getIdentifier(source)
+    if not cid then return { success = false, message = 'Player not found' } end
+    if not writeAllowed(cid, 'accent') then return BUSY end
+    payload = type(payload) == 'table' and payload or {}
+    store.setAccent(cid, payload.accent, deviceOf(payload))
+    return { success = true }
+end)
+
 ---Persists the caller's home-screen icon theme, whitelisted by the store.
 lib.callback.register('sd-phone:server:settings:setIconTheme', function(source, payload)
     local cid = player.getIdentifier(source)

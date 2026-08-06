@@ -104,7 +104,7 @@ export function GlyphPickerSheet({ draft, appId, accent, ownIcon, current, onSel
                         <button
                             type="button"
                             onClick={() => { onClear(); close(); }}
-                            className="mb-4 flex w-full items-center gap-3 rounded-[12px] bg-[#e5e5e5] px-3 py-3 text-left active:opacity-70 dark:bg-surface"
+                            className="mb-4 flex w-full items-center gap-3 rounded-[12px] bg-surface px-3 py-3 text-left active:opacity-70"
                         >
                             <ThemeTile look={look} icon={ownIcon} label={ownIcon} size={44} />
                             <span className="min-w-0 flex-1">

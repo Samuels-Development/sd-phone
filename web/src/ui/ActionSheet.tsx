@@ -38,7 +38,7 @@ export function ActionSheet({ actions, cancelLabel, forceDark = false, onClose }
             />
 
             <div
-                className="absolute inset-x-0 bottom-0 flex flex-col border-t border-black/10 bg-[#d4d4d4] pt-2 text-center dark:border-white/10 dark:bg-surface"
+                className="absolute inset-x-0 bottom-0 flex flex-col border-t border-black/10 bg-base pt-2 text-center dark:border-white/10 dark:bg-surface"
                 style={{
                     paddingBottom: 'calc(var(--safe-bottom) + 10px)',
                     animation: exiting

@@ -66,7 +66,7 @@ export function OffencesPane() {
         >
             {groups.map(group => (
                 <div key={group.cls}>
-                    <div className="sticky top-0 z-10 bg-[#d4d4d4]/95 px-4 py-1 backdrop-blur-sm dark:bg-base/95">
+                    <div className="sticky top-0 z-10 bg-base/95 px-4 py-1 backdrop-blur-sm">
                         <span className={mdtSectionHeader}>{classLabel(group.cls)}</span>
                     </div>
                     <div className="flex flex-col gap-0.5 px-1">

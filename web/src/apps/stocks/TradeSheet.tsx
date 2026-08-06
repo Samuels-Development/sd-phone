@@ -56,7 +56,7 @@ export function TradeSheet({ mode, asset, available, onConfirm, onClose }: {
     }
 
     return (
-        <Sheet onClose={onClose} top={104} className="bg-[#e9e9eb] text-black dark:bg-surface dark:text-white">
+        <Sheet onClose={onClose} top={104} className="bg-surface text-black dark:bg-surface dark:text-white">
             {({ close }) => (
                 <div className="flex flex-1 flex-col px-5 pb-6 pt-8">
                     <div className="flex items-center">

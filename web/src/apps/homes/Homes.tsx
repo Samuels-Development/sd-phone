@@ -48,7 +48,7 @@ export function Homes({ onClose: _onClose }: { onClose: () => void }) {
     useEffect(() => { if (homes.length) didEnter.current = true; }, [homes.length]);
 
     return (
-        <div className="absolute inset-0 flex flex-col bg-[#d4d4d4] font-sf dark:bg-base">
+        <div className="absolute inset-0 flex flex-col bg-base font-sf">
             <div className="h-[58px] shrink-0" aria-hidden />
 
             <div className="px-5 pb-2 pt-1">
@@ -74,7 +74,7 @@ function HomeCard({ h, onOpen }: { h: Home; onOpen: () => void }) {
         <button
             type="button"
             onClick={onOpen}
-            className="block w-full rounded-[18px] bg-[#e5e5e5] px-[18px] py-[17px] text-left shadow-[0_1px_3px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.04] active:bg-black/[0.03] dark:bg-surface dark:shadow-none dark:ring-white/[0.06] dark:active:bg-white/[0.04]"
+            className="block w-full rounded-[18px] bg-surface px-[18px] py-[17px] text-left shadow-[0_1px_3px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.04] active:bg-black/[0.03] dark:shadow-none dark:ring-white/[0.06] dark:active:bg-white/[0.04]"
         >
             <div className="flex items-center gap-3.5">
                 <div className="flex h-[50px] w-[50px] shrink-0 items-center justify-center rounded-[14px]" style={{ background: h.accent }}>
@@ -162,7 +162,7 @@ function HomeDetail({ h, caps, onBack, animateIn = true }: { h: Home; caps: Home
     };
 
     return (
-        <div className="absolute inset-0 z-20 flex flex-col bg-[#d4d4d4] font-sf dark:bg-base" style={pageStyle}>
+        <div className="absolute inset-0 z-20 flex flex-col bg-base font-sf" style={pageStyle}>
             <div className="h-[58px] shrink-0" aria-hidden />
 
             <NavBar backLabel={t('homes.backHomes','Homes')} onBack={goBack} />
@@ -205,7 +205,7 @@ function HomeDetail({ h, caps, onBack, animateIn = true }: { h: Home; caps: Home
                 )}
 
                 <SectionLabel>{t('homes.details','Details')}</SectionLabel>
-                <div className="overflow-hidden rounded-[14px] bg-[#e5e5e5] ring-1 ring-black/[0.04] dark:bg-surface dark:ring-white/[0.06]">
+                <div className="overflow-hidden rounded-[14px] bg-surface ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
                     <Row label={t('homes.location','Location')} value={h.area || '—'} icon={<MapPin className="h-[18px] w-[18px]" strokeWidth={2.2} />} onAction={canWaypoint ? setWaypoint : undefined} />
                     <Row label={t('homes.type','Type')} value={h.type} divider />
                 </div>
@@ -213,7 +213,7 @@ function HomeDetail({ h, caps, onBack, animateIn = true }: { h: Home; caps: Home
                 {caps.keyList && (
                     <>
                         <SectionLabel>{t('homes.keyHolders','Key Holders · {count}', { count: holders.length })}</SectionLabel>
-                        <div className="overflow-hidden rounded-[14px] bg-[#e5e5e5] ring-1 ring-black/[0.04] dark:bg-surface dark:ring-white/[0.06]">
+                        <div className="overflow-hidden rounded-[14px] bg-surface ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
                             {holders.length === 0 ? (
                                 <div className="px-4 py-5 text-center text-[15px] text-ios-gray">{t('homes.noKeyHolders','No one else has a key.')}</div>
                             ) : (
@@ -264,7 +264,7 @@ function ActionButton({ icon, label, onClick }: { icon: React.ReactNode; label: 
         <button
             type="button"
             onClick={onClick}
-            className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-[14px] bg-[#e5e5e5] py-[17px] text-ios-blue ring-1 ring-black/[0.04] active:bg-black/[0.06] dark:bg-surface dark:ring-white/[0.06] dark:active:bg-white/[0.08]"
+            className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-[14px] bg-surface py-[17px] text-ios-blue ring-1 ring-black/[0.04] active:bg-black/[0.06] dark:ring-white/[0.06] dark:active:bg-white/[0.08]"
         >
             {icon}
             <span className="text-[13.5px] font-semibold">{label}</span>

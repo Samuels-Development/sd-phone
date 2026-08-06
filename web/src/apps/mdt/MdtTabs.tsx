@@ -43,7 +43,7 @@ export function MdtTabs() {
                                 'group flex shrink-0 items-center gap-1.5 rounded-[9px] py-[5px] pl-2.5 transition-colors duration-150',
                                 tabs.length > 1 ? 'pr-1' : 'pr-2.5',
                                 isActive
-                                    ? 'bg-[#f2f2f2] shadow-[0_1px_2px_rgba(0,0,0,0.10)] ring-1 ring-black/[0.06] dark:bg-elevated dark:shadow-none dark:ring-white/[0.10]'
+                                    ? 'bg-elevated shadow-[0_1px_2px_rgba(0,0,0,0.10)] ring-1 ring-black/[0.06] dark:shadow-none dark:ring-white/[0.10]'
                                     : 'hover:bg-black/[0.05] dark:hover:bg-white/[0.06]',
                             ].join(' ')}
                         >

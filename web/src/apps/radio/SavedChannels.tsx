@@ -33,7 +33,7 @@ export function SavedChannels({ saved, currentFreq, canSave, activeFreq, onTune,
     const [confirmDel,    setConfirmDel]     = useState<SavedStation | null>(null);
 
     return (
-        <div className="absolute inset-0 z-20 flex flex-col bg-[#d4d4d4] font-sf text-black dark:bg-base dark:text-white" style={pageStyle}>
+        <div className="absolute inset-0 z-20 flex flex-col bg-base font-sf text-black dark:text-white" style={pageStyle}>
             <div className="h-[54px] shrink-0" aria-hidden />
 
             <div className="px-2 pb-0.5">
@@ -54,7 +54,7 @@ export function SavedChannels({ saved, currentFreq, canSave, activeFreq, onTune,
                     type="button"
                     onClick={() => setSavingCurrent(true)}
                     disabled={!canSave}
-                    className="mb-4 flex w-full items-center justify-center gap-2.5 rounded-[16px] bg-[#e5e5e5] py-4 text-[18px] font-semibold text-ios-blue active:opacity-70 disabled:opacity-40 dark:bg-surface"
+                    className="mb-4 flex w-full items-center justify-center gap-2.5 rounded-[16px] bg-surface py-4 text-[18px] font-semibold text-ios-blue active:opacity-70 disabled:opacity-40"
                 >
                     <BookmarkPlus className="h-[21px] w-[21px]" strokeWidth={2.2} /> {t('radio.saveCurrentFrequency', 'Save current frequency ({freq})', { freq: fmtFreq(currentFreq) })}
                 </button>

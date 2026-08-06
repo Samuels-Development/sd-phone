@@ -55,7 +55,7 @@ export function AddToneDialog({ title, message, onCancel, onConfirm }: Props) {
     }
 
     const inputCls =
-        'w-full rounded-[9px] border border-black/15 bg-white px-3 py-2 text-[16px] text-black outline-none focus:border-ios-blue dark:border-white/20 dark:bg-base/40 dark:text-white';
+        'w-full rounded-[9px] border border-black/15 bg-elevated px-3 py-2 text-[16px] text-black outline-none focus:border-ios-blue dark:border-white/20 dark:bg-base/40 dark:text-white';
 
     return (
         <DialogShell

@@ -77,7 +77,7 @@ export function AddMemberSheet({ groupName, contacts, existing, myNumber, onCanc
             top={6}
             dim={false}
             durationMs={320}
-            className="font-sf bg-[#f2f2f2] text-black dark:bg-base dark:text-white"
+            className="font-sf bg-elevated text-black dark:bg-base dark:text-white"
         >
             {({ close }) => {
                 function add() {
@@ -164,7 +164,7 @@ export function AddMemberSheet({ groupName, contacts, existing, myNumber, onCanc
                                 <button
                                     type="button"
                                     onClick={add}
-                                    className="w-full rounded-[14px] bg-[#007AFF] py-3 text-center text-[18px] font-semibold text-white active:opacity-70"
+                                    className="w-full rounded-[14px] bg-ios-blue py-3 text-center text-[18px] font-semibold text-white active:opacity-70"
                                 >
                                     {t('messages.addCount', 'Add {count}', { count: selected.length })}
                                 </button>

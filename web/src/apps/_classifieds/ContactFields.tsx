@@ -49,7 +49,7 @@ function Label({ children, className }: { children: ReactNode; className?: strin
 
 function FieldRow({ children, useMine, mineLabel, mineIcon }: { children: ReactNode; useMine?: () => void; mineLabel: string; mineIcon: ReactNode }) {
     return (
-        <div className="flex items-center gap-2 rounded-[14px] bg-[#e5e5e5] px-4 py-4 dark:bg-surface">
+        <div className="flex items-center gap-2 rounded-[14px] bg-surface px-4 py-4">
             {children}
             {useMine && (
                 <button

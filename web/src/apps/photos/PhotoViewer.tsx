@@ -80,7 +80,7 @@ export function PhotoViewer({
 
     return (
         <div
-            className="absolute inset-0 z-40 flex flex-col bg-[#d4d4d4] text-black dark:bg-base dark:text-white"
+            className="absolute inset-0 z-40 flex flex-col bg-base text-black dark:text-white"
             style={{ animation: leaving ? 'photo-out 0.2s ease-in forwards' : 'photo-in 0.24s cubic-bezier(0.22,1,0.36,1)' }}
         >
             <div className="h-[54px] shrink-0" aria-hidden />
@@ -174,7 +174,7 @@ export function PhotoViewer({
             {menuOpen && (
                 <>
                     <div className="absolute inset-0 z-10" onClick={() => setMenuOpen(false)} />
-                    <div className="absolute right-3 top-[108px] z-20 w-56 overflow-hidden rounded-[14px] bg-white/95 shadow-xl backdrop-blur-xl dark:bg-elevated/95">
+                    <div className="absolute right-3 top-[108px] z-20 w-56 overflow-hidden rounded-[14px] bg-elevated/95 shadow-xl backdrop-blur-xl dark:bg-elevated/95">
                         <button
                             type="button"
                             onClick={() => { setMenuOpen(false); onAddToAlbum(current); }}

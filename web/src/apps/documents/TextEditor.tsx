@@ -652,7 +652,7 @@ function ModeTab({ label, active, onPress }: { label: string; active: boolean; o
             type="button"
             onClick={onPress}
             className={`flex-1 rounded-[8px] py-1.5 text-[14px] font-semibold transition-colors ${
-                active ? 'bg-white text-black shadow-sm dark:bg-elevated dark:text-white' : 'text-ios-gray'
+                active ? 'bg-elevated text-black shadow-sm dark:bg-elevated dark:text-white' : 'text-ios-gray'
             }`}
         >
             {label}

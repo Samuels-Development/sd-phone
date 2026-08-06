@@ -52,7 +52,7 @@ export function LeaderboardTab({ dark }: { dark: boolean }) {
 function Row({ row, dark }: { row: LeaderboardEntry; dark: boolean }) {
     const medal = MEDAL[row.rank];
 
-    const base = dark ? 'bg-[#1c1c1e]' : 'bg-[#e5e5e5]';
+    const base = dark ? 'bg-surface' : 'bg-surface';
     const mineRing = row.isMe ? 'ring-2' : '';
 
     return (

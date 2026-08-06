@@ -21,7 +21,7 @@ export function ManageBusiness({ business, onCancel, onSave }: {
     const preview: Business = { ...business, logo };
 
     return (
-        <div className="absolute inset-0 z-40 flex flex-col bg-[#f2f2f7] font-sf dark:bg-surface animate-sheet-up">
+        <div className="absolute inset-0 z-40 flex flex-col bg-elevated font-sf dark:bg-surface animate-sheet-up">
             <div className="h-[54px] shrink-0" aria-hidden />
 
             <div className="flex h-11 shrink-0 items-center justify-between px-4">
@@ -43,7 +43,7 @@ export function ManageBusiness({ business, onCancel, onSave }: {
                     onChange={e => setHours(e.target.value)}
                     maxLength={40}
                     placeholder={t('review.hoursPlaceholder', 'e.g. 9am – 6pm')}
-                    className="w-full rounded-xl bg-white px-3 py-2.5 text-[15px] text-black outline-none placeholder:text-black/35 dark:bg-elevated dark:text-white dark:placeholder:text-white/35"
+                    className="w-full rounded-xl bg-elevated px-3 py-2.5 text-[15px] text-black outline-none placeholder:text-black/35 dark:bg-elevated dark:text-white dark:placeholder:text-white/35"
                 />
 
                 <Label>{t('review.description', 'Description')}</Label>
@@ -53,11 +53,11 @@ export function ManageBusiness({ business, onCancel, onSave }: {
                     rows={3}
                     maxLength={140}
                     placeholder={t('review.descriptionPlaceholder', 'One-line description')}
-                    className="w-full resize-none rounded-xl bg-white px-3 py-2.5 text-[15px] text-black outline-none placeholder:text-black/35 dark:bg-elevated dark:text-white dark:placeholder:text-white/35"
+                    className="w-full resize-none rounded-xl bg-elevated px-3 py-2.5 text-[15px] text-black outline-none placeholder:text-black/35 dark:bg-elevated dark:text-white dark:placeholder:text-white/35"
                 />
 
                 <Label>{t('review.logoColour', 'Logo Colour')}</Label>
-                <div className="grid grid-cols-6 gap-3 rounded-xl bg-white p-3 dark:bg-elevated">
+                <div className="grid grid-cols-6 gap-3 rounded-xl bg-elevated p-3 dark:bg-elevated">
                     {SWATCHES.map(c => (
                         <button key={c} type="button" onClick={() => setLogo(c)} className="flex items-center justify-center" aria-label={t('review.colourLabel', 'Colour {c}', { c })}>
                             <span

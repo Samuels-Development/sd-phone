@@ -54,7 +54,7 @@ export function InvoicesPage({ onClose }: { onClose: () => void }) {
 
     return (
         <div
-            className="absolute inset-0 z-40 flex flex-col bg-[#d4d4d4] font-sf text-black dark:bg-base dark:text-white"
+            className="absolute inset-0 z-40 flex flex-col bg-base font-sf text-black dark:text-white"
             style={{
                 animation: exiting
                     ? 'ios-pop 0.3s cubic-bezier(0.32,0.72,0,1) forwards'

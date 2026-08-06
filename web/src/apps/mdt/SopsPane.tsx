@@ -70,7 +70,7 @@ export function SopsPane() {
         >
             {groups.map(group => (
                 <div key={group.category}>
-                    <div className="sticky top-0 z-10 bg-[#d4d4d4]/95 px-4 py-1 backdrop-blur-sm dark:bg-base/95">
+                    <div className="sticky top-0 z-10 bg-base/95 px-4 py-1 backdrop-blur-sm">
                         <span className={mdtSectionHeader}>{group.category}</span>
                     </div>
                     <div className="flex flex-col gap-0.5 px-1">

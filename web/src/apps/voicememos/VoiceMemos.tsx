@@ -124,7 +124,7 @@ export function VoiceMemos({ onClose: _onClose }: { onClose: () => void }) {
     const list = q ? memos.filter(m => m.name.toLowerCase().includes(q)) : memos;
 
     return (
-        <div className="absolute inset-0 z-10 flex flex-col bg-[#d4d4d4] font-sf text-black dark:bg-base dark:text-white">
+        <div className="absolute inset-0 z-10 flex flex-col bg-base font-sf text-black dark:text-white">
             <div className="h-[61px] shrink-0" aria-hidden />
             <div className="px-5 pb-1 pt-1 text-[34px] font-bold tracking-tight">{t('voicememos.title', 'Voice Memos')}</div>
 
@@ -158,13 +158,13 @@ export function VoiceMemos({ onClose: _onClose }: { onClose: () => void }) {
                 )}
             </div>
 
-            <div className="shrink-0 border-t border-black/10 bg-[#e5e5e5] px-6 pb-9 pt-5 dark:border-white/10 dark:bg-surface">
+            <div className="shrink-0 border-t border-black/10 bg-surface px-6 pb-9 pt-5 dark:border-white/10">
                 <div className="flex justify-center">
                     <button
                         type="button"
                         aria-label={recording ? t('voicememos.stopRecording', 'Stop recording') : t('voicememos.record', 'Record')}
                         onClick={recording ? stopRec : startRec}
-                        className="flex h-[84px] w-[84px] items-center justify-center rounded-full bg-white ring-[3px] ring-black/15 active:opacity-80 dark:bg-elevated dark:ring-white/20"
+                        className="flex h-[84px] w-[84px] items-center justify-center rounded-full bg-elevated ring-[3px] ring-black/15 active:opacity-80 dark:bg-elevated dark:ring-white/20"
                     >
                         <span
                             className="bg-ios-red transition-all duration-200"

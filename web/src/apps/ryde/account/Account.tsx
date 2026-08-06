@@ -132,7 +132,7 @@ export function Account({ onClose }: { onClose: () => void }) {
     const displayName = me?.name || me?.username || t('ryde.you', 'You');
 
     return (
-        <div className="absolute inset-0 flex flex-col bg-[#d4d4d4] font-sf dark:bg-base">
+        <div className="absolute inset-0 flex flex-col bg-base font-sf">
             <div className="flex shrink-0 items-center justify-between px-5 pb-2" style={{ paddingTop: 'calc(var(--safe-top) + 10px)' }}>
                 <h1 className="text-[34px] font-bold tracking-tight text-black dark:text-white">{t('ryde.account', 'Account')}</h1>
                 <button
@@ -146,7 +146,7 @@ export function Account({ onClose }: { onClose: () => void }) {
             </div>
 
             <div className="no-scrollbar flex-1 overflow-y-auto pb-10">
-                <div className="mx-4 mt-1 flex items-center gap-4 rounded-[12px] bg-[#e5e5e5] p-4 dark:bg-surface">
+                <div className="mx-4 mt-1 flex items-center gap-4 rounded-[12px] bg-surface p-4">
                     <InitialsAvatar name={displayName} color="#111" size={64} />
                     <div className="min-w-0 flex-1">
                         <p className="truncate text-[23px] font-bold tracking-tight text-black dark:text-white">{displayName}</p>
@@ -172,7 +172,7 @@ export function Account({ onClose }: { onClose: () => void }) {
                         onClick={() => setPwOpen(true)}
                         className="relative flex w-full items-center gap-3.5 px-4 py-2.5 text-left active:bg-black/5 dark:active:bg-white/5"
                     >
-                        <div className="flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-[9px] shadow-sm" style={{ background: '#0A84FF' }}>
+                        <div className="flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-[9px] shadow-sm" style={{ background: 'rgb(var(--ios-blue))' }}>
                             <KeyRound className="h-[21px] w-[21px] text-white" strokeWidth={2.2} />
                         </div>
                         <span className="flex-1 text-[18px] font-medium text-black dark:text-white">{t('ryde.changePassword', 'Change password')}</span>
@@ -183,7 +183,7 @@ export function Account({ onClose }: { onClose: () => void }) {
                         onClick={() => setSwitching(true)}
                         className="relative flex w-full items-center gap-3.5 px-4 py-2.5 text-left active:bg-black/5 dark:active:bg-white/5"
                     >
-                        <div className="flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-[9px] shadow-sm" style={{ background: '#0A84FF' }}>
+                        <div className="flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-[9px] shadow-sm" style={{ background: 'rgb(var(--ios-blue))' }}>
                             <Users className="h-[22px] w-[22px] text-white" strokeWidth={2.2} />
                         </div>
                         <span className="flex-1 text-[18px] font-medium text-black dark:text-white">{t('accounts.switchAccount', 'Switch account')}</span>
@@ -284,7 +284,7 @@ export function Account({ onClose }: { onClose: () => void }) {
 
 function Stat({ label, value }: { label: string; value: string }) {
     return (
-        <div className="rounded-[12px] bg-[#e5e5e5] p-3.5 dark:bg-surface">
+        <div className="rounded-[12px] bg-surface p-3.5">
             <p className="text-[26px] font-extrabold tracking-tight text-black dark:text-white">{value}</p>
             <p className="mt-0.5 text-[14px] text-ios-gray">{label}</p>
         </div>

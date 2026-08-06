@@ -58,7 +58,7 @@ export function ChatPane() {
         if (sent) append(sent);
     }
 
-    const receivedBg = dark ? '#2c2c2e' : '#ffffff';
+    const receivedBg = 'rgb(var(--elevated))';
     const sentBg = 'var(--mdt-accent, #0a84ff)';
 
     return (

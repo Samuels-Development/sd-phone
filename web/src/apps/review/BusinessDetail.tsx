@@ -56,7 +56,7 @@ export function BusinessDetail({ businessId, initial, onBack, onMutated }: {
 
     if (!business) {
         return (
-            <div className="absolute inset-0 z-30 flex flex-col bg-[#f2f2f7] font-sf dark:bg-base">
+            <div className="absolute inset-0 z-30 flex flex-col bg-elevated font-sf dark:bg-base">
                 <div className="h-[58px] shrink-0" aria-hidden />
                 <button type="button" onClick={onBack} className="px-4 text-[16px] text-ios-blue">‹ {t('review.title', 'Review')}</button>
                 <p className="px-4 pt-10 text-center text-[14px] text-black/45 dark:text-white/45">{loading ? t('review.loading', 'Loading…') : t('review.businessNotFound', 'Business not found.')}</p>
@@ -67,7 +67,7 @@ export function BusinessDetail({ businessId, initial, onBack, onMutated }: {
     const b = business;
 
     return (
-        <div className="absolute inset-0 z-30 flex flex-col bg-[#f2f2f7] font-sf dark:bg-base animate-swipe-in-left">
+        <div className="absolute inset-0 z-30 flex flex-col bg-elevated font-sf dark:bg-base animate-swipe-in-left">
             <div className="h-[58px] shrink-0" aria-hidden />
 
             <div className="flex h-10 shrink-0 items-center justify-between px-2">
@@ -93,7 +93,7 @@ export function BusinessDetail({ businessId, initial, onBack, onMutated }: {
                     <p className="mt-3 max-w-[260px] text-[14px] text-black/65 dark:text-white/65">{b.blurb}</p>
                 </div>
 
-                <div className="mx-4 mb-4 rounded-xl bg-white px-4 py-1 dark:bg-surface">
+                <div className="mx-4 mb-4 rounded-xl bg-elevated px-4 py-1 dark:bg-surface">
                     <Row label={t('review.address', 'Address')} value={b.address} />
                     <Row label={t('review.hours', 'Hours')} value={b.hours} last={!b.phone} />
                     {b.phone && (

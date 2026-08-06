@@ -161,7 +161,7 @@ export function SketchCanvas({ initial, onSave, onCancel }: Props) {
         startClose(() => onSave(png));
     }
 
-    const pageBg  = isDark ? 'rgb(var(--base))' : '#d4d4d4';
+    const pageBg  = 'rgb(var(--base))';
     // The board stays white in BOTH themes. toDataURL() captures only the canvas bitmap -
     // this background is CSS on the wrapper and is never baked into the saved PNG - so a
     // dark board made strokes look one way while editing and another way once saved, since

@@ -50,7 +50,7 @@ export function CallDetail({ entry, onBack, onAddToContacts }: {
                     <ActionButton label={t('phone.actionShare','share')}   icon={<Share         className="h-[28px] w-[28px]" strokeWidth={2} />} />
                 </div>
 
-                <div className="mb-4 rounded-[10px] bg-[#e5e5e5] px-4 py-3 dark:bg-surface">
+                <div className="mb-4 rounded-[10px] bg-surface px-4 py-3">
                     <div className="text-[15px] font-semibold text-black dark:text-white">{entry.date}</div>
                     <div className="mt-0.5 flex items-center gap-2 text-[15px] text-black/60 dark:text-white/60">
                         <span>{entry.timeOfDay}</span>
@@ -61,7 +61,7 @@ export function CallDetail({ entry, onBack, onAddToContacts }: {
 
                 {entry.number && (
                     <>
-                        <div className="mb-4 rounded-[10px] bg-[#e5e5e5] px-4 py-3 dark:bg-surface">
+                        <div className="mb-4 rounded-[10px] bg-surface px-4 py-3">
                             <div className="text-[13px] text-black/50 dark:text-white/50">{t('phone.phoneLabel','phone')}</div>
                             <div className="text-[19px] text-ios-blue">{formatPhone(entry.number)}</div>
                         </div>
@@ -69,7 +69,7 @@ export function CallDetail({ entry, onBack, onAddToContacts }: {
                             <button
                                 type="button"
                                 onClick={onAddToContacts}
-                                className="w-full rounded-[10px] bg-[#e5e5e5] px-4 py-3.5 text-left text-[19px] text-ios-blue active:bg-black/5 dark:bg-surface dark:active:bg-white/5"
+                                className="w-full rounded-[10px] bg-surface px-4 py-3.5 text-left text-[19px] text-ios-blue active:bg-black/5 dark:active:bg-white/5"
                             >
                                 {t('phone.addToContacts','Add to Contacts')}
                             </button>
@@ -83,7 +83,7 @@ export function CallDetail({ entry, onBack, onAddToContacts }: {
 
 function ActionButton({ icon, label }: { icon: ReactNode; label: string }) {
     return (
-        <button type="button" className="flex flex-1 flex-col items-center gap-2 rounded-[12px] bg-[#e5e5e5] py-4 text-ios-blue active:opacity-70 dark:bg-surface">
+        <button type="button" className="flex flex-1 flex-col items-center gap-2 rounded-[12px] bg-surface py-4 text-ios-blue active:opacity-70">
             {icon}
             <span className="text-[13px] font-medium">{label}</span>
         </button>

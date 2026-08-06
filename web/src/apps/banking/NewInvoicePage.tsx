@@ -62,7 +62,7 @@ export function NewInvoicePage({ onClose, onSent }: {
     return (
         <>
             <div
-                className="absolute inset-0 z-40 flex flex-col bg-[#d4d4d4] font-sf text-black dark:bg-base dark:text-white"
+                className="absolute inset-0 z-40 flex flex-col bg-base font-sf text-black dark:text-white"
                 style={{
                     animation: exiting
                         ? 'ios-pop 0.3s cubic-bezier(0.32,0.72,0,1) forwards'
@@ -98,20 +98,20 @@ export function NewInvoicePage({ onClose, onSent }: {
                             value={number ? (isServerId ? recipientDigits : formatPhonePartial(number)) : ''}
                             onChange={e => setNumber(digits(e.target.value).slice(0, 24))}
                             placeholder={t('banking.recipientPlaceholder', '(555) 123-4567 or server ID')}
-                            className="w-full rounded-[14px] bg-[#e5e5e5] px-4 py-4 text-[18px] text-black placeholder-black/80 outline-none dark:bg-surface dark:text-white dark:placeholder-white/65"
+                            className="w-full rounded-[14px] bg-surface px-4 py-4 text-[18px] text-black placeholder-black/80 outline-none dark:text-white dark:placeholder-white/65"
                         />
                         <button
                             type="button"
                             onClick={() => setPicking(true)}
                             aria-label={t('common.selectContact', 'Select Contact')}
-                            className="flex h-[58px] w-[58px] shrink-0 items-center justify-center rounded-[14px] bg-[#e5e5e5] text-ios-blue shadow-sm active:opacity-70 dark:bg-surface"
+                            className="flex h-[58px] w-[58px] shrink-0 items-center justify-center rounded-[14px] bg-surface text-ios-blue shadow-sm active:opacity-70"
                         >
                             <UserRound className="h-[26px] w-[26px]" strokeWidth={2} />
                         </button>
                     </div>
 
                     <Label required>{t('banking.amount', 'Amount')}</Label>
-                    <div className="mb-6 flex items-center gap-1.5 rounded-[14px] bg-[#e5e5e5] px-4 py-4 dark:bg-surface">
+                    <div className="mb-6 flex items-center gap-1.5 rounded-[14px] bg-surface px-4 py-4">
                         <span className="text-[18px] font-medium text-black/45 dark:text-white/45">$</span>
                         <input
                             value={amount ? amountNum.toLocaleString('en-US') : ''}
@@ -130,7 +130,7 @@ export function NewInvoicePage({ onClose, onSent }: {
                         onChange={e => setNote(e.target.value)}
                         placeholder={t('banking.notePlaceholder', "What's this invoice for?")}
                         rows={3}
-                        className="ios-scrollbar mb-3 w-full resize-none rounded-[14px] bg-[#e5e5e5] px-4 py-3.5 text-[18px] leading-snug text-black placeholder-black/80 outline-none dark:bg-surface dark:text-white dark:placeholder-white/65"
+                        className="ios-scrollbar mb-3 w-full resize-none rounded-[14px] bg-surface px-4 py-3.5 text-[18px] leading-snug text-black placeholder-black/80 outline-none dark:text-white dark:placeholder-white/65"
                     />
 
                     {error ? (

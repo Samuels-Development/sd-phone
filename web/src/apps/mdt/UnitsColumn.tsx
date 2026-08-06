@@ -12,7 +12,7 @@ import { MdtColumn } from './ui/MdtColumn';
 const CODE_DOT: Record<UnitCode, string> = {
     '10-8':  '#34c759',
     '10-6':  '#ff9f0a',
-    '10-90': '#0a84ff',
+    '10-90': 'rgb(var(--ios-blue))',
     '10-7':  '#ff453a',
 };
 

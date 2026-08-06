@@ -19,6 +19,7 @@ local COLUMNS = {
         theme             = 'theme VARCHAR(8) NULL',
         dark_theme        = 'dark_theme VARCHAR(16) NULL',
         light_theme       = 'light_theme VARCHAR(16) NULL',
+        accent            = 'accent VARCHAR(16) NULL',
         reopen_app        = 'reopen_app TINYINT(1) NULL',
         setup_done        = 'setup_done TINYINT(1) NULL',
         custom_wallpapers = 'custom_wallpapers TEXT NULL',

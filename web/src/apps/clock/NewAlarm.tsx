@@ -43,7 +43,7 @@ export function NewAlarm({ isDark, alarm, onSave, onCancel }: {
     }
 
     return (
-        <div className="absolute inset-0 z-20 flex flex-col bg-[#d4d4d4] font-sf text-black dark:bg-base dark:text-white" style={pageStyle}>
+        <div className="absolute inset-0 z-20 flex flex-col bg-base font-sf text-black dark:text-white" style={pageStyle}>
             <div className="flex items-center px-3 pb-2 pt-2">
                 <div className="flex flex-1 justify-start">
                     <button type="button" onClick={goBack} className="flex items-center gap-0.5 text-ios-blue active:opacity-60">

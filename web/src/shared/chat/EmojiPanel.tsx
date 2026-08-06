@@ -74,7 +74,7 @@ export function EmojiPanel({ isDark, onSelect }: Props) {
         if (cur !== activeCat) setActiveCat(cur);
     }
 
-    const fieldBg = isDark ? '#2C2C2E' : '#FFFFFF';
+    const fieldBg = isDark ? 'rgb(var(--elevated))' : '#FFFFFF';
 
     const moodEmoji = hover ?? '😊';
     const moodLabel = hover ? (emojiName(hover) || t('messages.emoji', 'Emoji')) : t('messages.whatsYourMood', "What's Your Mood?");
