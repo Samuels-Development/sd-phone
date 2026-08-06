@@ -906,7 +906,7 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                     />
                 )}
 
-                {hostsIsland && islandPet !== 'none' && (
+                {pillInCutout && islandPet !== 'none' && (
                     <IslandPet
                         id={islandPet}
                         stage={petStageNow}

@@ -292,6 +292,10 @@ function resolveRail(
     return { marks, grips, caps };
 }
 
+export function shellHostsPet(shell: Shell | null): boolean {
+    return chassisMetrics(shell).pillInCutout;
+}
+
 export function chassisMetrics(shell: Shell | null): ChassisMetrics {
     const bez = shell?.bezel ?? device.screen.bezel;
     const BS = typeof bez === 'number' ? bez : bez.side;

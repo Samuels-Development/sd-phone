@@ -28,9 +28,12 @@ export function SettingsRow({ row, divider, onPress }: { row: SettingsRowDef; di
     return (
         <button
             type="button"
-            onClick={onPress}
+            onClick={row.disabled ? undefined : onPress}
+            disabled={row.disabled}
+            aria-disabled={row.disabled}
             className={[
-                'relative flex w-full items-center gap-3.5 px-4 text-left active:bg-black/5 dark:active:bg-white/5',
+                'relative flex w-full items-center gap-3.5 px-4 text-left',
+                row.disabled ? 'opacity-40' : 'active:bg-black/5 dark:active:bg-white/5',
                 hasSubtitle ? 'py-3' : 'py-2.5',
             ].join(' ')}
         >

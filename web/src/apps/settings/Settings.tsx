@@ -23,6 +23,9 @@ import { useSimStore } from '@/stores/simStore';
 import { BluetoothPage } from './bluetooth/BluetoothPage';
 import { WifiPage } from './wifi/WifiPage';
 import { useWifiConfigured, useWifiConnected } from '@/stores/wifiStore';
+import { shellHostsPet } from '@/shell/chassis';
+import { shellFor } from '@/shell/shells';
+import { useTheme } from '@/stores/themeStore';
 import { useBluetoothConfigured } from '@/stores/bluetoothStore';
 
 type SubPage = 'general' | 'display' | 'island-pet' | 'wallpaper' | 'app-icons' | 'notifications' | 'sound-haptics' | 'face-unlock' | 'phone' | 'battery' | 'privacy' | 'sim' | 'wifi' | 'bluetooth' | null;
@@ -35,11 +38,23 @@ export function Settings({ onClose }: { onClose: () => void }) {
     const bluetoothConfigured = useBluetoothConfigured();
     const wifi = useWifiConnected();
 
+    const { shell } = useTheme('shell');
+    const petHost = shellHostsPet(shellFor(shell, device.id));
+
     // The SIM & Backup row only exists while the server runs unique phones.
     const settingsGroups = getSettingsGroups()
         .map(g => simEnabled ? g : { ...g, rows: g.rows.filter(r => r.id !== 'sim') })
         .map(g => device.calls ? g : { ...g, rows: g.rows.filter(r => r.id !== 'phone') })
+        // A device with no shells to choose from (the tablet) simply has no island, so the row
+        // goes. A phone on a chassis whose cutout cannot hold the pill keeps the row, greyed, so
+        // the pets stay discoverable and it is obvious the shell is what put them out of reach.
         .map(g => device.screen.island ? g : { ...g, rows: g.rows.filter(r => r.id !== 'island-pet') })
+        .map(g => petHost ? g : {
+            ...g,
+            rows: g.rows.map(r => (r.id === 'island-pet'
+                ? { ...r, disabled: true, subtitle: t('settings.islandPetNeedsIsland', 'Needs the default Rounded shell') }
+                : r)),
+        })
         .map(g => wifiConfigured ? g : { ...g, rows: g.rows.filter(r => r.id !== 'wifi') })
         .map(g => bluetoothConfigured ? g : { ...g, rows: g.rows.filter(r => r.id !== 'bluetooth') })
         .map(g => ({

@@ -19,6 +19,7 @@ export interface SettingsRowDef {
     status?:   string;
     badge?:    number;
     toggle?:   boolean;
+    disabled?: boolean;
 }
 
 export interface SettingsGroup {

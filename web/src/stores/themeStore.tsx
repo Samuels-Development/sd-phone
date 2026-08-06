@@ -19,7 +19,8 @@ import type { CustomTone, ToneKind } from '@/apps/settings/tones';
 import { warmYouTube } from '@/apps/settings/tonePlayer';
 import { clampRecipe, isCustomPaletteId, MAX_CUSTOM_PALETTES, PALETTE_NAME_MAX } from '@/apps/settings/appearance/paletteRamp';
 import { DEFAULT_ACCENT, isAccentChoice } from '@/apps/settings/appearance/accentRamp';
-import { DEFAULT_SHELL, isShellId, SHELLS } from '@/shell/shells';
+import { DEFAULT_SHELL, isShellId, SHELLS, shellFor } from '@/shell/shells';
+import { shellHostsPet } from '@/shell/chassis';
 import type { PaletteMode, PaletteRecipe } from '@/apps/settings/appearance/paletteRamp';
 
 export type Theme = 'light' | 'dark';
@@ -468,11 +469,17 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         else saveAccentLocal(next);
     },
 
+    // Only a shell whose cutout is big enough to hold the whole island pill can carry a pet. On
+    // any other chassis the pill floats below the status bar, where a pet reads as a loose sprite,
+    // so switching to one puts the pet away rather than leaving it somewhere it does not belong.
     setShell: (next) => {
         if (!isShellId(next)) return;
         set({ shell: next });
         if (isFiveM) void fetchNui('sd-phone:settings:setShell', { shell: next }).catch(() => {});
         else saveShellLocal(next);
+        if (get().islandPet !== 'none' && !shellHostsPet(shellFor(next, device.id))) {
+            get().setIslandPet('none');
+        }
     },
 
     saveCustomPalette: async (palette) => {
