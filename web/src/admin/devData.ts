@@ -2,6 +2,24 @@ import type {
     AdminAuditEntry, AdminBirdyPost, AdminCall, AdminContentItem,
     AdminMessage, AdminMute, AdminNumberRow, AdminOverview, AdminPlayerHit, AdminSimLookup, AdminStats,
 } from './types';
+import bg3 from '@/assets/photos/background3.webp';
+import bg4 from '@/assets/photos/background4.webp';
+import bg5 from '@/assets/photos/background5.webp';
+import bg6 from '@/assets/photos/background6.webp';
+import bg7 from '@/assets/photos/background7.webp';
+import bg8 from '@/assets/photos/background8.webp';
+import bg10 from '@/assets/photos/background10.webp';
+import bg11 from '@/assets/photos/background11.webp';
+import bg12 from '@/assets/photos/background12.webp';
+import bg13 from '@/assets/photos/background13.webp';
+import bg14 from '@/assets/photos/background14.webp';
+import bg15 from '@/assets/photos/background15.webp';
+
+// Real bundled photos rather than a placeholder path: the moderation pages are
+// mostly image grids, and an empty frame makes them look broken.
+const PHOTOS: string[] = [bg3, bg4, bg5, bg6, bg7, bg8, bg10, bg11, bg12, bg13, bg14, bg15];
+
+const photo = (i: number) => PHOTOS[i % PHOTOS.length];
 
 const HOUR = 3600;
 const DAY = 86400;
@@ -185,7 +203,7 @@ export function devBirdyPosts(q?: string, cid?: string): AdminBirdyPost[] {
             authorOnline: p.online,
             body,
             parentId:     i % 5 === 4 ? `post-${i}` : null,
-            images:       i % 4 === 3 ? ['/phone-art/phone-front.webp'] : null,
+            images:       i % 4 === 3 ? [photo(i)] : null,
             views:        420 + i * 137,
             likes:        3 + (i * 7) % 41,
             replies:      (i * 3) % 9,
@@ -262,7 +280,7 @@ export function devContent(app: string, q?: string): { items: AdminContentItem[]
             body:         cfg.bodies[i % Math.max(cfg.bodies.length, 1)] ?? null,
             kind:         app === 'messages' ? (i % 6 === 5 ? 'image' : 'text') : null,
             images:       cfg.imaged ? 1 + (i % 3) : null,
-            imageUrl:     cfg.imaged ? '/phone-art/phone-front.webp' : null,
+            imageUrl:     cfg.imaged ? photo(i) : null,
             price:        cfg.priced ? 1500 + i * 2750 : null,
         };
     });

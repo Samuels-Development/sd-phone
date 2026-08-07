@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 
+import { isDemo } from '@/core/demo';
 import { fetchNui } from '@/core/nui';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { AuditPage } from './pages/AuditPage';
@@ -148,9 +149,17 @@ export function AdminPanel() {
     const contentCfg = CONTENT_PAGES[page];
 
     return (
-        <div className="fixed inset-0 z-[400] flex items-center justify-center p-6 font-sf" onMouseDown={close}>
+        <div
+            className={`fixed inset-0 z-[400] flex items-center justify-center p-6 font-sf${
+                isDemo ? ' bg-[#07080a]' : ''
+            }`}
+            onMouseDown={close}
+        >
             {/* No backdrop-filter here: FiveM's CEF can't sample the game feed behind a
-                transparent NUI page, so backdrop-blur paints a huge black region instead. */}
+                transparent NUI page, so backdrop-blur paints a huge black region instead.
+                The demo build fills instead: on a website there is no game behind the panel,
+                only the phone itself, and a device standing behind a desktop window reads as
+                a bug rather than as context. */}
             <div
                 className="relative flex h-[min(780px,92vh)] w-[min(1180px,94vw)] overflow-hidden rounded-2xl bg-[#101114] shadow-2xl ring-1 ring-white/10"
                 onMouseDown={e => e.stopPropagation()}
