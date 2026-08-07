@@ -2,13 +2,22 @@
 
 # sd-phone (THIS IS A BETA RELEASE, WILL HAVE ISSUES)
 
-**An iOS-themed smartphone for FiveM.** that supports QBOX, QBCORE and ESX. 45+ server-backed apps, real app accounts, a live game-view camera and online multiplayer games. Ships its own custom phone props: eight phone items in eight colours, each tinting both the on-screen frame and the custom prop model held in hand. A unique phone system as well as sim cards can be enabled! I HIGHLY recommend checking out the live demo by clicking on the link/badge below.
+### Try it right now, in your browser
+
+[![Open the live demo](https://img.shields.io/badge/%E2%96%B6%20%20OPEN%20THE%20LIVE%20DEMO-fivem.samueldev.shop%2Fphone-F0E155?style=for-the-badge&labelColor=101114&logoColor=F0E155)](https://fivem.samueldev.shop/phone)
+
+**The real phone and tablet running on sample data. No download, no server, nothing to install.**
+Unlock it, rearrange the home screen, install apps from the App Store, open the police terminal, take it fullscreen.
+
+<sub>[fivem.samueldev.shop/phone](https://fivem.samueldev.shop/phone)</sub>
+
+---
+
+**An iOS-themed smartphone for FiveM.** that supports QBOX, QBCORE and ESX. 49 server-backed apps, real app accounts, a live game-view camera and online multiplayer games. Ships its own custom phone props: eight phone items in eight colours, each tinting both the on-screen frame and the custom prop model held in hand. A unique phone system as well as sim cards can be enabled!
 
 **A drop-in lb-phone replacement.** Scripts and custom apps written against lb-phone's exports and events keep running unmodified, and a first-boot migration carries your players across rather than resetting them: phone numbers and lock passcodes, contacts, blocked numbers, call history, SMS threads including groups and reactions, photos and albums, notes, phone settings, mail accounts with their inboxes, wallet transaction history, voice memos, Photogram and Birdy accounts with their posts, stories, DMs and followers, and the app logins themselves, so players open the phone already signed in.
 
 If sd-phone is useful to you, please ⭐ the repo. Issues and pull requests are always welcome.
-
-[![Live demo](https://img.shields.io/badge/Live%20demo-try%20it%20in%20your%20browser-F0E155?style=for-the-badge)](https://fivem.samueldev.shop/phone)
 
 [![Release](https://img.shields.io/github/v/release/Samuels-Development/sd-phone?label=Release&logo=github)](https://github.com/Samuels-Development/sd-phone)
 [![Stars](https://img.shields.io/github/stars/Samuels-Development/sd-phone?label=Stars&logo=github)](https://github.com/Samuels-Development/sd-phone)
