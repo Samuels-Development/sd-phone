@@ -70,7 +70,7 @@ export function devInjectMockData(): () => void {
             { id: 'mdt',        label: 'MDT',         icon: 'mdt',        route: '/mdt',        accent: '#1D4ED8', base: true },
             { id: 'emsmdt',     label: 'EMS',         icon: 'emsmdt',     route: '/emsmdt',     accent: '#E11D48', base: true },
             { id: 'dojmdt',     label: 'DOJ',         icon: 'dojmdt',     route: '/dojmdt',     accent: '#6D28D9', base: true },
-            { id: 'racing',     label: 'Racing',        icon: 'racing',     route: '/racing',     accent: '#0BF2B4', base: true },
+            { id: 'racing',     label: 'Racing',      icon: 'racing',     route: '/racing',     accent: '#0BF2B4', base: true },
         ],
         locale: new URLSearchParams(window.location.search).get('loc') ?? 'en',
         wifiConfigured: true,

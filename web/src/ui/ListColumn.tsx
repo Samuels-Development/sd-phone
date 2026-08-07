@@ -11,7 +11,8 @@ export interface ListColumnSearch {
 }
 
 export function ListColumn({
-    title, count, action, search, query, onQuery, placeholder, isEmpty, empty, footer, className = '', children,
+    title, count, action, search, query, onQuery, placeholder, isEmpty, empty, footer,
+    minWidth = 268, className = '', children,
 }: {
     title:        string;
     count?:       number;
@@ -23,6 +24,7 @@ export function ListColumn({
     isEmpty?:     boolean;
     empty?:       ReactNode;
     footer?:      ReactNode;
+    minWidth?:    number;
     className?:   string;
     children:     ReactNode;
 }) {
@@ -34,7 +36,7 @@ export function ListColumn({
     const showEmpty = !!empty && (isEmpty ?? Children.count(children) === 0);
 
     return (
-        <div className={`flex min-h-0 min-w-[268px] flex-1 flex-col ${className}`}>
+        <div className={`flex min-h-0 flex-1 flex-col ${className}`} style={{ minWidth }}>
             <div className="flex min-h-[26px] shrink-0 items-center gap-2 px-4 pt-4">
                 <h2 className={`min-w-0 truncate ${columnTitle}`}>{title}</h2>
                 {count !== undefined && (

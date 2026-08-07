@@ -30,12 +30,16 @@ end)
 ---(the phone's AllowMovement mode leaves it on).
 ---@param adminName string acting admin's display name for the panel header
 ---@param simActive boolean|nil unique-phones mode flag (shows the Numbers page)
-RegisterNetEvent('sd-phone:client:admin:open', function(adminName, simActive)
+---@param racingOn boolean|nil whether the racing app runs here (shows the Racing page)
+RegisterNetEvent('sd-phone:client:admin:open', function(adminName, simActive, racingOn)
     if adminOpen then return end
     adminOpen = true
     SetNuiFocus(true, true)
     SetNuiFocusKeepInput(false)
-    SendNUIMessage({ action = 'sd-phone:admin:open', data = { adminName = adminName, sim = simActive == true } })
+    SendNUIMessage({
+        action = 'sd-phone:admin:open',
+        data   = { adminName = adminName, sim = simActive == true, racing = racingOn == true },
+    })
 end)
 
 ---React to Lua: the panel requests to close (X button / Escape). With the phone still open,

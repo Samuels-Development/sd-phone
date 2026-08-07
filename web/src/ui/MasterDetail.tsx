@@ -1,6 +1,8 @@
 import { isValidElement, useEffect, useRef, useState, type ReactNode } from 'react';
 
+import { NavBar } from '@/ui/NavBar';
 import { SlideOver } from '@/ui/SlideOver';
+import { t } from '@/i18n';
 import { ruleY, surfaceBackdrop } from './surfaces';
 
 const DETAIL_MIN = 420;
@@ -13,12 +15,16 @@ export interface MasterDetailProps {
     masterWidth?:   number;
     onCloseDetail?: () => void;
     onBack?:        () => void;
+    backLabel?:     string;
+    detailTitle?:   string;
+    detailRight?:   ReactNode;
     className?:     string;
 }
 
 export function MasterDetail(props: MasterDetailProps) {
     const {
-        master, detail, placeholder, hasDetail, masterWidth = 372, onCloseDetail, onBack, className = '',
+        master, detail, placeholder, hasDetail, masterWidth = 372, onCloseDetail, onBack,
+        backLabel, detailTitle, detailRight, className = '',
     } = props;
 
     const hostRef = useRef<HTMLDivElement>(null);
@@ -48,7 +54,17 @@ export function MasterDetail(props: MasterDetailProps) {
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col">{master}</div>
                 {open && detail && (
                     <SlideOver onClose={() => close?.()} direction="x" className={surfaceBackdrop}>
-                        {() => <div className="flex h-full min-h-0 flex-col">{detail}</div>}
+                        {dismiss => (
+                            <div className="flex h-full min-h-0 flex-col">
+                                <NavBar
+                                    backLabel={backLabel ?? t('common.back', 'Back')}
+                                    onBack={() => dismiss()}
+                                    title={detailTitle}
+                                    right={detailRight}
+                                />
+                                <div className="flex min-h-0 flex-1 flex-col">{detail}</div>
+                            </div>
+                        )}
                     </SlideOver>
                 )}
             </div>

@@ -45,71 +45,26 @@ local court     = require 'server.mdt.court'
 ---@type table MDT config (configs/mdt.lua): the enable switch and the dispatch sweep interval.
 local MDT = config.Mdt
 
----@type boolean Whether this server runs a terminal at all (configs/mdt.lua Enabled). Not taken
----from configs/apps.lua: a companion device enables the MDT in its own catalog, not sd-phone's.
+---@type boolean Whether this server runs a terminal at all (configs/mdt.lua Enabled). Kept apart
+---from configs/apps.lua because that decides which icons a device shows, not whether the backend
+---exists: a companion device carries its own catalog and this server never reads it.
 local ENABLED = MDT.Enabled == true
 
 ---@type integer Seconds between expiry sweeps of the in-memory call board.
 local SWEEP_SECONDS = math.max(5, math.floor(tonumber((MDT.Dispatch or {}).SweepSeconds) or 15))
 
----@type string Companion resource the terminals live on. They are laid out for a tablet and never
----appear on a phone, so with it absent there is no device that could open one.
-local TABLET = 'sd-tablet'
-
----@type integer How long to wait for sd-tablet at boot (ms). It starts AFTER sd-phone, so its
----state while this file loads says nothing at all; a later start is caught by onResourceStart.
-local TABLET_WAIT_MS = 30000
-
----@type boolean Whether a terminal can actually be opened: switched on AND a tablet to open it on.
+---@type boolean Whether the terminals are built and answering. Set once the schema is up.
 local available = false
----@type boolean Guards the bring-up against the boot thread and onResourceStart racing.
-local starting  = false
 
----Whether sd-tablet is running right now.
----@return boolean
-local function tabletStarted()
-    return GetResourceState(TABLET) == 'started'
-end
-
----Creates the MDT tables, seeds the penal code and opens the terminals for business. Idempotent.
----@param late boolean whether sd-tablet turned up after the boot window closed
-local function bringUp(late)
-    if available or starting then return end
-    starting = true
-    local ok, err = pcall(store.ensureSchema)
-    starting = false
-    if not ok then
-        boot.schemaFailed('mdt', err)
-        return
-    end
-    available = true
-    if late then
-        print(('^2[sd-phone:mdt]^0 %s started, terminals are up'):format(TABLET))
-    else
-        boot.schemaReady()
-    end
-end
-
--- Boot: wait for the tablet before building anything. A server running the phone alone creates no
--- MDT tables, seeds no penal code and sweeps no call board, which is what makes the switch above
--- safe to leave on by default.
 if ENABLED then
     CreateThread(function()
-        local waited = 0
-        while not tabletStarted() and waited < TABLET_WAIT_MS do
-            Wait(500)
-            waited = waited + 500
+        local ok, err = pcall(store.ensureSchema)
+        if not ok then
+            boot.schemaFailed('mdt', err)
+            return
         end
-        if tabletStarted() then
-            bringUp(false)
-        else
-            print(('^3[sd-phone:mdt]^0 MDT disabled, could not find %s'):format(TABLET))
-        end
-    end)
-
-    -- Started by hand long after boot, or after the wait above gave up on it.
-    AddEventHandler('onResourceStart', function(res)
-        if res == TABLET then bringUp(true) end
+        available = true
+        boot.schemaReady()
     end)
 end
 
@@ -230,14 +185,17 @@ local function register(action, fn)
     end)
 end
 
----@type string Refusal every callback answers with while the terminal is switched off. The player
----sees the locked screen; the console line below is what names the switch for the server owner.
+---@type string Refusal answered while the terminal is switched off in the config.
 local DISABLED = 'There is no terminal on this network'
 
----@type boolean Whether the switched-off hint has already been printed this session.
+---@type string Refusal answered while the tables are still being built, or after they failed to
+---build. Worded as a retry because the first case clears itself a moment later.
+local NOT_READY = 'The terminal is still starting up'
+
+---@type boolean Whether the refusal hint has already been printed this session.
 local hinted = false
 
----Answers one MDT callback while the terminal is switched off, and says so once. Registering a
+---Answers one MDT callback while the terminal cannot serve, and says why once. Registering a
 ---refusal rather than nothing is the point of it: an unregistered callback never answers at all,
 ---so the terminal would sit on its loading screen forever instead of reaching its locked one.
 ---@return table envelope
@@ -247,10 +205,10 @@ local function refuse()
         if not ENABLED then
             print('^3[sd-phone:mdt]^0 a device opened the MDT, but it is off (configs/mdt.lua Enabled = false)')
         else
-            print(('^3[sd-phone:mdt]^0 a device opened the MDT, but %s is not running'):format(TABLET))
+            print('^3[sd-phone:mdt]^0 a device opened the MDT before its tables were ready, check for a schema error above')
         end
     end
-    return util.fail(DISABLED)
+    return util.fail(ENABLED and NOT_READY or DISABLED)
 end
 
 for i = 1, #ROUTES do
@@ -259,8 +217,10 @@ for i = 1, #ROUTES do
     if not ENABLED then
         register(action, refuse)
     elseif type(fn) == 'function' then
-        -- Checked per call, not at load: whether a tablet exists is not known until it starts.
+        -- Checked per call, not at load: the schema thread may not have finished when a callback
+        -- registers, and a device can open the terminal inside that window.
         register(action, function(src, payload)
+
             if not available then return refuse() end
             return fn(src, payload)
         end)

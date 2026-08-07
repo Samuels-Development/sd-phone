@@ -1,15 +1,19 @@
-import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { Crosshair, Map as MapIcon } from 'lucide-react';
 
+import { device } from '@device';
 import { t } from '@/i18n';
 import { relTimeCompact } from '@/lib/time';
 import { EmptyState } from '@/ui/EmptyState';
+import { Sheet } from '@/ui/Sheet';
 import { MapView, usePinStyle, type MapViewHandle } from '@/apps/maps/MapView';
 
 import { MdtButton } from './ui/MdtButton';
 import { unitCodeLabel } from './UnitsColumn';
 
 import type { Call, MapPoint, Unit } from './data';
+
+const isPhone = device.id === 'phone';
 
 const CALL_TINT: Record<number, string> = {
     1: '#FF3B30',
@@ -26,6 +30,9 @@ const CODE_TINT: Record<string, string> = {
 };
 
 const LEGEND_CLEARANCE = '47px';
+const LEGEND_CLEARANCE_PHONE = '58px';
+
+const legendPill = 'flex items-center rounded-[10px] bg-black/75 px-3 py-[7px]';
 
 function MarkerTip({ title, meta }: { title: string; meta: string }) {
     return (
@@ -47,6 +54,98 @@ function MarkerCard({ children }: { children: ReactNode }) {
         >
             {children}
         </div>
+    );
+}
+
+function CallCardBody({ call, phone, canAttach, attached, busy, onAttach, onWaypoint, onOpen }: {
+    call:       Call;
+    phone:      boolean;
+    canAttach:  boolean;
+    attached:   boolean;
+    busy:       boolean;
+    onAttach:   (on: boolean) => void;
+    onWaypoint: () => void;
+    onOpen:     () => void;
+}) {
+    const tint = CALL_TINT[call.priority] ?? CALL_TINT[4];
+
+    return (
+        <>
+            <div className="flex items-center gap-1.5">
+                <span
+                    className={`shrink-0 rounded-full px-1.5 py-[1px] font-bold uppercase tracking-wide text-white ${phone ? 'text-[11px]' : 'text-[10px]'}`}
+                    style={{ backgroundColor: tint }}
+                >
+                    {t('mdt.priorityShort', 'P{n}', { n: call.priority })}
+                </span>
+                <span className={`font-bold uppercase tracking-wide tabular-nums text-ios-gray ${phone ? 'text-[13px]' : 'text-[12px]'}`}>
+                    {call.code}
+                </span>
+                <span className="flex-1" />
+                <span className={`shrink-0 font-medium text-ios-gray ${phone ? 'text-[12px]' : 'text-[11px]'}`}>
+                    {relTimeCompact(call.createdAt * 1000)}
+                </span>
+            </div>
+            <div className={`mt-1 font-semibold leading-tight text-black dark:text-white ${phone ? 'text-[19px]' : 'text-[15px]'}`}>
+                {call.type}
+            </div>
+            <div className={`mt-0.5 leading-snug text-ios-gray ${phone ? 'text-[14px]' : 'text-[12px]'}`}>{call.location}</div>
+            <div className={`mt-0.5 font-medium text-ios-gray ${phone ? 'text-[13px]' : 'text-[12px]'}`}>
+                {t('mdt.unitsAttached', '{n} units', { n: call.unitCount })}
+            </div>
+            <div className={`flex items-center ${phone ? 'mt-4 gap-3' : 'mt-2.5 gap-x-2'}`}>
+                {canAttach && (
+                    <MdtButton
+                        size={phone ? 'md' : 'sm'}
+                        variant="filled"
+                        className={phone ? 'min-w-[96px]' : 'min-w-[68px]'}
+                        disabled={busy}
+                        onClick={() => onAttach(!attached)}
+                    >
+                        {attached ? t('mdt.detach', 'Detach') : t('mdt.attach', 'Attach')}
+                    </MdtButton>
+                )}
+                <MdtButton size={phone ? 'md' : 'sm'} variant="text" disabled={!call.hasCoords} onClick={onWaypoint}>
+                    {t('mdt.waypointShort', 'Waypoint')}
+                </MdtButton>
+                <MdtButton size={phone ? 'md' : 'sm'} variant="text" onClick={onOpen}>
+                    {t('mdt.openCall', 'Open')}
+                </MdtButton>
+            </div>
+        </>
+    );
+}
+
+function UnitCardBody({ unit, phone, onWaypoint }: {
+    unit:       Unit;
+    phone:      boolean;
+    onWaypoint: () => void;
+}) {
+    const tint = CODE_TINT[unit.code] ?? CODE_TINT['10-8'];
+
+    return (
+        <>
+            <div className="flex items-center gap-1.5">
+                <span
+                    className={`shrink-0 rounded-full px-1.5 py-[1px] font-bold uppercase tracking-wide tabular-nums text-white ${phone ? 'text-[11px]' : 'text-[10px]'}`}
+                    style={{ backgroundColor: tint }}
+                >
+                    {unit.callsign || '--'}
+                </span>
+                <span className={`truncate font-medium text-ios-gray ${phone ? 'text-[12px]' : 'text-[11px]'}`}>
+                    {unitCodeLabel(unit.code)}
+                </span>
+            </div>
+            <div className={`mt-1 truncate font-semibold leading-tight text-black dark:text-white ${phone ? 'text-[19px]' : 'text-[15px]'}`}>
+                {unit.name}
+            </div>
+            <div className={`mt-0.5 truncate text-ios-gray ${phone ? 'text-[14px]' : 'text-[12px]'}`}>{unit.rank}</div>
+            <div className={`flex flex-wrap items-center gap-y-1 ${phone ? 'mt-4 gap-x-3' : 'mt-2.5 gap-x-2'}`}>
+                <MdtButton size={phone ? 'md' : 'sm'} variant="filled" onClick={onWaypoint}>
+                    {t('mdt.setWaypoint', 'Set waypoint')}
+                </MdtButton>
+            </div>
+        </>
     );
 }
 
@@ -79,45 +178,20 @@ function CallPin({ call, selected, open, hovered, onHover, onToggle, canAttach, 
             style={{ ...style, zIndex: open ? 60 : selected ? 30 : 20, pointerEvents: 'none' }}
             className="flex flex-col items-center"
         >
-            {open ? (
+            {open ? (!isPhone && (
                 <MarkerCard>
-                    <div className="flex items-center gap-1.5">
-                        <span
-                            className="shrink-0 rounded-full px-1.5 py-[1px] text-[10px] font-bold uppercase tracking-wide text-white"
-                            style={{ backgroundColor: tint }}
-                        >
-                            {t('mdt.priorityShort', 'P{n}', { n: call.priority })}
-                        </span>
-                        <span className="text-[12px] font-bold uppercase tracking-wide tabular-nums text-ios-gray">
-                            {call.code}
-                        </span>
-                        <span className="flex-1" />
-                        <span className="shrink-0 text-[11px] font-medium text-ios-gray">
-                            {relTimeCompact(call.createdAt * 1000)}
-                        </span>
-                    </div>
-                    <div className="mt-1 text-[15px] font-semibold leading-tight text-black dark:text-white">
-                        {call.type}
-                    </div>
-                    <div className="mt-0.5 text-[12px] leading-snug text-ios-gray">{call.location}</div>
-                    <div className="mt-0.5 text-[12px] font-medium text-ios-gray">
-                        {t('mdt.unitsAttached', '{n} units', { n: call.unitCount })}
-                    </div>
-                    <div className="mt-2.5 flex items-center gap-x-2">
-                        {canAttach && (
-                            <MdtButton size="sm" variant="filled" className="min-w-[68px]" disabled={busy} onClick={() => onAttach(!attached)}>
-                                {attached ? t('mdt.detach', 'Detach') : t('mdt.attach', 'Attach')}
-                            </MdtButton>
-                        )}
-                        <MdtButton size="sm" variant="text" disabled={!call.hasCoords} onClick={onWaypoint}>
-                            {t('mdt.waypointShort', 'Waypoint')}
-                        </MdtButton>
-                        <MdtButton size="sm" variant="text" onClick={onOpen}>
-                            {t('mdt.openCall', 'Open')}
-                        </MdtButton>
-                    </div>
+                    <CallCardBody
+                        call={call}
+                        phone={false}
+                        canAttach={canAttach}
+                        attached={attached}
+                        busy={busy}
+                        onAttach={onAttach}
+                        onWaypoint={onWaypoint}
+                        onOpen={onOpen}
+                    />
                 </MarkerCard>
-            ) : hovered && (
+            )) : hovered && (
                 <MarkerTip title={call.type} meta={call.location} />
             )}
 
@@ -170,30 +244,11 @@ function UnitPin({ unit, selected, open, hovered, onHover, onToggle, onWaypoint 
             style={{ ...style, zIndex: open ? 59 : selected ? 29 : 15, pointerEvents: 'none' }}
             className="flex flex-col items-center"
         >
-            {open ? (
+            {open ? (!isPhone && (
                 <MarkerCard>
-                    <div className="flex items-center gap-1.5">
-                        <span
-                            className="shrink-0 rounded-full px-1.5 py-[1px] text-[10px] font-bold uppercase tracking-wide tabular-nums text-white"
-                            style={{ backgroundColor: tint }}
-                        >
-                            {unit.callsign || '--'}
-                        </span>
-                        <span className="truncate text-[11px] font-medium text-ios-gray">
-                            {unitCodeLabel(unit.code)}
-                        </span>
-                    </div>
-                    <div className="mt-1 truncate text-[15px] font-semibold leading-tight text-black dark:text-white">
-                        {unit.name}
-                    </div>
-                    <div className="mt-0.5 truncate text-[12px] text-ios-gray">{unit.rank}</div>
-                    <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <MdtButton size="sm" variant="filled" onClick={onWaypoint}>
-                            {t('mdt.setWaypoint', 'Set waypoint')}
-                        </MdtButton>
-                    </div>
+                    <UnitCardBody unit={unit} phone={false} onWaypoint={onWaypoint} />
                 </MarkerCard>
-            ) : hovered && (
+            )) : hovered && (
                 <MarkerTip title={unit.name} meta={`${unit.callsign || '--'} · ${unitCodeLabel(unit.code)}`} />
             )}
 
@@ -221,11 +276,12 @@ function UnitPin({ unit, selected, open, hovered, onHover, onToggle, onWaypoint 
 }
 
 export function DispatchMap({
-    calls, units, selectedCall, selectedUnit, onSelectCall, onSelectUnit,
+    calls, units, accent, selectedCall, selectedUnit, onSelectCall, onSelectUnit,
     myCallsign, canAttach, busy, onAttach, onWaypointCall, onWaypointUnit,
 }: {
     calls:          Call[];
     units:          Unit[];
+    accent:         string;
     selectedCall?:  string | null;
     selectedUnit?:  string | null;
     onSelectCall:   (id: string) => void;
@@ -274,13 +330,17 @@ export function DispatchMap({
         );
     }
 
+    const sheetCall = isPhone && open ? plottedCalls.find(c => `c:${c.id}` === open) : undefined;
+    const sheetUnit = isPhone && open ? plottedUnits.find(u => `u:${u.citizenid}` === open) : undefined;
+    const sheetStyle = { '--mdt-accent': accent } as CSSProperties;
+
     return (
         <div className="relative min-h-0 flex-1 overflow-hidden">
             <MapView
                 ref={mapRef}
                 fitTo={initialFrame ?? undefined}
                 centerTo={focus ?? undefined}
-                chromeBottom={LEGEND_CLEARANCE}
+                chromeBottom={isPhone ? LEGEND_CLEARANCE_PHONE : LEGEND_CLEARANCE}
                 onTapEmpty={() => setOpen(null)}
             >
                 {plottedUnits.map(u => (
@@ -330,8 +390,11 @@ export function DispatchMap({
                 <Crosshair className="h-[17px] w-[17px]" strokeWidth={2.2} />
             </button>
 
-            <div className="pointer-events-none absolute bottom-3 left-3 right-3 z-40 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 rounded-[10px] bg-black/60 px-3 py-[7px] backdrop-blur-[2px]">
+            <div className={`pointer-events-none absolute bottom-3 left-3 right-3 z-40 flex items-center justify-between ${
+                isPhone ? 'flex-wrap gap-x-2 gap-y-1.5' : 'gap-3'
+            }`}
+            >
+                <div className={`${legendPill} ${isPhone ? 'gap-2.5' : 'gap-3'}`}>
                     {(['10-8', '10-90', '10-6', '10-7'] as const).map(code => (
                         <span key={code} className="flex items-center gap-[5px]">
                             <span
@@ -344,10 +407,55 @@ export function DispatchMap({
                         </span>
                     ))}
                 </div>
-                <div className="rounded-[10px] bg-black/60 px-3 py-[7px] text-[10.5px] font-semibold tabular-nums tracking-wide text-white/75 backdrop-blur-[2px]">
+                <div className={`${legendPill} text-[10.5px] font-semibold tabular-nums tracking-wide text-white/75`}>
                     {t('mdt.mapCounts', '{c} calls · {u} units', { c: plottedCalls.length, u: plottedUnits.length })}
                 </div>
             </div>
+
+            {sheetCall && (
+                <Sheet
+                    onClose={() => setOpen(null)}
+                    fit="content"
+                    dim={false}
+                    durationMs={240}
+                    className="bg-surface shadow-[0_-8px_30px_rgba(0,0,0,0.22)]"
+                >
+                    {({ close }) => (
+                        <div className="px-5 pb-2 pt-1" style={sheetStyle}>
+                            <CallCardBody
+                                call={sheetCall}
+                                phone
+                                canAttach={canAttach}
+                                attached={!!myCallsign && sheetCall.units.includes(myCallsign)}
+                                busy={busy}
+                                onAttach={on => onAttach(sheetCall.id, on)}
+                                onWaypoint={() => onWaypointCall(sheetCall.id)}
+                                onOpen={() => { onSelectCall(sheetCall.id); close(); }}
+                            />
+                        </div>
+                    )}
+                </Sheet>
+            )}
+
+            {sheetUnit && (
+                <Sheet
+                    onClose={() => setOpen(null)}
+                    fit="content"
+                    dim={false}
+                    durationMs={240}
+                    className="bg-surface shadow-[0_-8px_30px_rgba(0,0,0,0.22)]"
+                >
+                    {() => (
+                        <div className="px-5 pb-2 pt-1" style={sheetStyle}>
+                            <UnitCardBody
+                                unit={sheetUnit}
+                                phone
+                                onWaypoint={() => onWaypointUnit(sheetUnit.citizenid)}
+                            />
+                        </div>
+                    )}
+                </Sheet>
+            )}
         </div>
     );
 }

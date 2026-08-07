@@ -1,23 +1,27 @@
 import type { PillTone } from '@/ui/Pill';
+import { device } from '@device';
 import type { RaceClass, RaceStatus } from './data';
+
+const PHONE_ENTER = device.id === 'phone';
 
 export const RACING_STATUS_RESERVE = 54;
 
 export const RACING_RAIL_W = 236;
 export const RACING_RAIL_W_COLLAPSED = 68;
 
-export const RACING_ACCENT = '#0BF2B4';
-export const RACING_ACCENT_INK = '#046B54';
+export const RACING_ACCENT = 'rgb(var(--ios-blue))';
+export const RACING_ACCENT_INK = 'rgb(var(--ios-blue))';
+export const RACING_ACCENT_SOFT = 'rgb(var(--ios-blue) / 0.08)';
 
-export const racingAccentText = 'text-[#046B54] dark:text-[#0BF2B4]';
-export const racingAccentFill = 'bg-[#0BF2B4] text-black';
-export const racingAccentSoft = 'bg-[#0BF2B4]/[0.14] dark:bg-[#0BF2B4]/[0.16]';
-export const racingAccentRing = 'ring-1 ring-[#046B54]/30 dark:ring-[#0BF2B4]/35';
-export const racingAccentBar = 'bg-[#0BF2B4]';
+export const racingAccentText = 'text-ios-blue';
+export const racingAccentFill = 'bg-ios-blue text-white';
+export const racingAccentSoft = 'bg-ios-blue/[0.14] dark:bg-ios-blue/[0.16]';
+export const racingAccentRing = 'ring-1 ring-ios-blue/30 dark:ring-ios-blue/35';
+export const racingAccentBar = 'bg-ios-blue';
 
 export const racingSegmented = '[&>button]:flex-auto [&>button]:min-w-0 [&>button]:truncate [&>button]:px-2';
-export const racingViewEnter = 'animate-mdt-pane';
-export const racingDetailEnter = 'animate-mdt-detail';
+export const racingViewEnter = PHONE_ENTER ? 'animate-swipe-in-left' : 'animate-mdt-pane';
+export const racingDetailEnter = PHONE_ENTER ? 'animate-swipe-in-left' : 'animate-mdt-detail';
 
 export const racingStat = 'text-[26px] font-bold tabular-nums tracking-tight text-black dark:text-white';
 export const racingStatLabel = 'text-[12px] font-medium uppercase tracking-wider text-ios-gray';

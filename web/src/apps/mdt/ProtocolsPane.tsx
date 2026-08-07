@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ClipboardList, Plus } from 'lucide-react';
 
+import { device } from '@device';
 import { t } from '@/i18n';
 import { EmptyState } from '@/ui/EmptyState';
 import { ListColumn } from '@/ui/ListColumn';
@@ -8,6 +9,7 @@ import { MasterDetail } from '@/ui/MasterDetail';
 import { Pill, type PillTone } from '@/ui/Pill';
 import { Scroller } from '@/ui/Scroller';
 import { SegmentedControl } from '@/ui/SegmentedControl';
+import { Select } from '@/ui/Select';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { useSessionState } from '@/hooks/useSessionState';
 
@@ -28,6 +30,11 @@ const PRIORITY_TONE: Record<ProtocolPriority, PillTone> = {
 };
 
 type CategoryFilter = 'all' | ProtocolCategory;
+
+const isPhone = device.id === 'phone';
+
+const PROTOCOL_CATEGORIES: readonly ProtocolCategory[] =
+    ['assessment', 'airway', 'cardiac', 'trauma', 'medical', 'admin'] as const;
 
 function categoryLabel(category: ProtocolCategory): string {
     switch (category) {
@@ -105,8 +112,7 @@ function ProtocolEditor({ protocol, enter, onCancel, onSaved }: {
                     label={t('mdt.category', 'Category')}
                     value={draft.category}
                     onChange={v => set('category', v as ProtocolCategory)}
-                    options={(['assessment', 'airway', 'cardiac', 'trauma', 'medical', 'admin'] as ProtocolCategory[])
-                        .map(c => ({ value: c, label: categoryLabel(c) }))}
+                    options={PROTOCOL_CATEGORIES.map(c => ({ value: c, label: categoryLabel(c) }))}
                 />
                 <MdtField
                     label={t('mdt.urgency', 'Urgency')}
@@ -226,6 +232,11 @@ export function ProtocolsPane() {
 
     const current = shown.find(p => p.code === selected) ?? rows.find(p => p.code === selected);
 
+    const categoryOptions = [
+        { value: 'all' as CategoryFilter, label: isPhone ? t('mdt.anyCategory', 'Any category') : t('common.all', 'All') },
+        ...PROTOCOL_CATEGORIES.map(c => ({ value: c as CategoryFilter, label: categoryLabel(c) })),
+    ];
+
     const master = (
         <ListColumn
             className="flex-1"
@@ -252,23 +263,28 @@ export function ProtocolsPane() {
                     subtitle={t('mdt.noProtocolMatchesSub', 'No standing order matches that search.')}
                 />
             )}
+            minWidth={isPhone ? 0 : undefined}
         >
-            <div className="px-1 pb-1">
-                <SegmentedControl<CategoryFilter>
-                    className={mdtSegmentedDense}
-                    value={filter}
-                    onChange={setFilter}
-                    options={[
-                        { value: 'all', label: t('common.all', 'All') },
-                        { value: 'assessment', label: categoryLabel('assessment') },
-                        { value: 'airway', label: categoryLabel('airway') },
-                        { value: 'cardiac', label: categoryLabel('cardiac') },
-                        { value: 'trauma', label: categoryLabel('trauma') },
-                        { value: 'medical', label: categoryLabel('medical') },
-                        { value: 'admin', label: categoryLabel('admin') },
-                    ]}
-                />
-            </div>
+            {isPhone ? (
+                <div className="px-3 pb-2">
+                    <Select<CategoryFilter>
+                        value={filter}
+                        onChange={setFilter}
+                        size="sm"
+                        ariaLabel={t('mdt.category', 'Category')}
+                        options={categoryOptions}
+                    />
+                </div>
+            ) : (
+                <div className="px-1 pb-1">
+                    <SegmentedControl<CategoryFilter>
+                        className={mdtSegmentedDense}
+                        value={filter}
+                        onChange={setFilter}
+                        options={categoryOptions}
+                    />
+                </div>
+            )}
             <div className="mdt-stagger flex flex-col gap-0.5">
                 {shown.map(p => (
                     <button
@@ -327,7 +343,8 @@ export function ProtocolsPane() {
                     subtitle={t('mdt.pickProtocolSub', 'Open a standing order to read it in full.')}
                 />
             }
-            onCloseDetail={() => select(null)}
+            onCloseDetail={() => { setEditing(null); select(null); }}
+            backLabel={t('mdt.protocols', 'Protocols')}
         />
     );
 }

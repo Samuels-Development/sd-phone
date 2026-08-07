@@ -4,7 +4,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { t } from '@/i18n';
 import { formatRaceTime } from '@/apps/racing/data';
 import type { HudSector, HudState, HudStyle, Standing } from '@/apps/racing/data';
-import { RACING_ACCENT } from '@/apps/racing/racingTheme';
+import { RACING_ACCENT, RACING_ACCENT_SOFT } from '@/apps/racing/racingTheme';
 
 const TICK_MS       = 50;
 const BOARD_ROWS    = 5;
@@ -18,7 +18,7 @@ const MUTE    = 'rgba(242, 245, 248, 0.46)';
 const FAINT   = 'rgba(242, 245, 248, 0.16)';
 const GAIN    = '#4ADE80';
 const LOSS    = '#FF6B5A';
-const ON_INK  = '#04120E';
+const ON_INK  = '#FFFFFF';
 
 const SLAB: CSSProperties = {
     background: INK,
@@ -77,7 +77,7 @@ function PitBlock({ pos, total }: { pos: number; total: number }) {
             >
                 {pos}
             </span>
-            <Micro tone="rgba(4, 18, 14, 0.62)">{t('racing.hudOf', 'OF {n}', { n: total })}</Micro>
+            <Micro tone="rgba(255, 255, 255, 0.72)">{t('racing.hudOf', 'OF {n}', { n: total })}</Micro>
         </div>
     );
 }
@@ -173,7 +173,7 @@ function NeighbourRow({ glyph, name, gap, ahead, you }: {
     you?:   boolean;
 }) {
     return (
-        <div className="flex items-center gap-2 px-2.5 py-[7px]" style={you ? { background: `${RACING_ACCENT}14` } : undefined}>
+        <div className="flex items-center gap-2 px-2.5 py-[7px]" style={you ? { background: RACING_ACCENT_SOFT } : undefined}>
             <span
                 className="w-[10px] text-center"
                 style={{ fontSize: 10, lineHeight: 1, color: you ? RACING_ACCENT : MUTE }}
@@ -237,7 +237,7 @@ function FullBoard({ racers }: { racers: Standing[] }) {
                 <div
                     key={racer.pos}
                     className="relative flex items-center gap-2 px-2.5 py-[6px]"
-                    style={racer.you ? { background: `${RACING_ACCENT}14` } : undefined}
+                    style={racer.you ? { background: RACING_ACCENT_SOFT } : undefined}
                 >
                     {racer.you && (
                         <span className="absolute bottom-0 left-0 top-0 w-[2px]" style={{ background: RACING_ACCENT }} />

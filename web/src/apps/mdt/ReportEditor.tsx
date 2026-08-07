@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Banknote, FileText, FolderOpen, Gavel, Trash2, UserPlus, X } from 'lucide-react';
 import type { PillTone } from '@/ui/Pill';
@@ -37,6 +37,8 @@ import { MdtRichText } from './ui/MdtRichText';
 
 export const REPORT_TYPES: readonly ReportType[] = ['Incident', 'Traffic', 'Arrest', 'Investigation', 'Warrant'] as const;
 export const INVOLVED_ROLES: readonly InvolvedRole[] = ['suspect', 'victim', 'witness'] as const;
+
+const FIELD_ROW_MIN = 476;
 
 function chargeTotals(charges: readonly Charge[]): { months: number; fine: number } {
     let months = 0;
@@ -249,7 +251,7 @@ export function ReportEditor({ reportRef, onSaved, onDeleted, onClose }: {
     return (
         <Scroller key="read" className={`h-full ${mdtPanePad} ${enter}`}>
             <div className="flex flex-wrap items-start gap-3">
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 grow basis-[280px]">
                     <div className="flex items-center gap-2">
                         <span className={mdtRef}>{report.ref}</span>
                         <Pill tone={reportTypeTone(report.type)}>{reportTypeLabel(report.type)}</Pill>
@@ -263,7 +265,7 @@ export function ReportEditor({ reportRef, onSaved, onDeleted, onClose }: {
                         {formatMediumDate(report.createdAt)}
                     </div>
                 </div>
-                <span className="flex shrink-0 items-center gap-3">
+                <span className="flex flex-wrap items-center gap-3">
                     {bookable && (
                         <>
                             <MdtButton
@@ -449,6 +451,20 @@ function DraftView({ draft, saving, error, enter, onChange, onAddPerson, onSave,
     const byCode = useMemo(() => catalogIndex(offences), [offences]);
     const totals = useMemo(() => inputTotals(draft.charges, byCode), [draft.charges, byCode]);
 
+    const fieldsRef = useRef<HTMLDivElement>(null);
+    const [stackFields, setStackFields] = useState(false);
+
+    useLayoutEffect(() => {
+        const host = fieldsRef.current;
+        if (!host) return;
+        const measure = () => setStackFields(host.clientWidth < FIELD_ROW_MIN);
+        measure();
+        if (typeof ResizeObserver === 'undefined') return;
+        const ro = new ResizeObserver(measure);
+        ro.observe(host);
+        return () => ro.disconnect();
+    }, []);
+
     const suspects = useMemo(
         () => draft.involved
             .filter(person => person.role === 'suspect')
@@ -484,7 +500,11 @@ function DraftView({ draft, saving, error, enter, onChange, onAddPerson, onSave,
                     : t('mdt.newReportTitle', 'New report')}
             </h1>
 
-            <div className="mt-5 grid gap-4" style={{ gridTemplateColumns: 'minmax(240px, 1fr) 220px' }}>
+            <div
+                ref={fieldsRef}
+                className="mt-5 grid gap-4"
+                style={{ gridTemplateColumns: stackFields ? '1fr' : 'minmax(240px, 1fr) 220px' }}
+            >
                 <MdtField
                     label={t('mdt.title', 'Title')}
                     value={draft.title}
@@ -594,7 +614,7 @@ function DraftView({ draft, saving, error, enter, onChange, onAddPerson, onSave,
 
             {error && <div className="mt-4 text-[14px] text-ios-red">{error}</div>}
 
-            <div className="mt-5 flex items-center gap-3 pb-6">
+            <div className="mt-5 flex flex-wrap items-center gap-3 pb-6">
                 <MdtButton variant="filled" disabled={saving} onClick={onSave}>
                     {saving ? t('mdt.saving', 'Saving') : t('mdt.fileReport', 'File report')}
                 </MdtButton>

@@ -12,7 +12,10 @@ import { ListColumn } from '@/ui/ListColumn';
 import { MasterDetail } from '@/ui/MasterDetail';
 import { Pill } from '@/ui/Pill';
 import { SegmentedControl } from '@/ui/SegmentedControl';
-import { rowBody, rowHover, rowMeta, rowTitle } from '@/ui/surfaces';
+import { cardRow, cardRowPad, listStack, rowBody, rowHover, rowMeta, rowTitle } from '@/ui/surfaces';
+import { device } from '@device';
+
+const isPhone = device.id === 'phone';
 
 import type { Race, RaceMode, Standing } from './data';
 import { formatMoney, startsInLabel } from './data';
@@ -66,8 +69,8 @@ function RaceListRow({ race, now, selected, onPress }: {
         <button
             type="button"
             onClick={onPress}
-            className={`flex w-full flex-col gap-1 rounded-[10px] px-3 py-2.5 text-left ${
-                selected ? 'bg-ios-blue/10' : race.joined ? racingAccentSoft : rowHover
+            className={`flex w-full flex-col gap-1 text-left ${isPhone ? `${cardRow} ${cardRowPad}` : 'rounded-[10px] px-3 py-2.5'} ${
+                selected ? 'bg-ios-blue/10' : race.joined ? racingAccentSoft : isPhone ? '' : rowHover
             }`}
         >
             <span className="flex w-full items-center gap-2">
@@ -157,7 +160,7 @@ export function RacesPane() {
             {settled && rows.length === 0 ? (
                 <div className="px-4 pb-6">{empty}</div>
             ) : (
-                <div className="mdt-stagger flex flex-col gap-0.5 px-1">
+                <div className={isPhone ? listStack : "mdt-stagger flex flex-col gap-0.5 px-1"}>
                     {rows.map(row => (
                         <RaceListRow
                             key={row.id}

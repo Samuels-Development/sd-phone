@@ -10,7 +10,10 @@ import { MasterDetail } from '@/ui/MasterDetail';
 import { Pager } from '@/ui/Pager';
 import { Select, type SelectOption } from '@/ui/Select';
 import { Toggle } from '@/ui/Toggle';
-import { rowHover, rowMeta, rowTitle } from '@/ui/surfaces';
+import { cardRow, cardRowPad, listStack, rowHover, rowMeta, rowTitle } from '@/ui/surfaces';
+import { device } from '@device';
+
+const isPhone = device.id === 'phone';
 
 import { TrackDetail, modeLabel } from './TrackDetail';
 import { racingTracks, racingWaypoint } from './racingApi';
@@ -42,11 +45,13 @@ function TrackListRow({ track, selected, onPress, onWaypoint }: {
     ].filter(Boolean).join('  ·  ');
 
     return (
-        <div className={`flex w-full items-center rounded-[10px] ${selected ? 'bg-ios-blue/10' : rowHover}`}>
+        <div className={`flex w-full items-center ${
+            isPhone ? cardRow : `rounded-[10px] ${rowHover}`
+        } ${selected ? 'bg-ios-blue/10' : ''}`}>
             <button
                 type="button"
                 onClick={onPress}
-                className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2.5 text-left"
+                className={`flex min-w-0 flex-1 items-center gap-2.5 text-left ${cardRowPad}`}
             >
                 <span className="min-w-0 flex-1">
                     <span className="flex min-w-0 items-center gap-1.5">
@@ -162,7 +167,7 @@ export function TracksPane() {
             }
             footer={<Pager page={page} pageSize={TRACKS_PER_PAGE} total={total} onPage={setPage} />}
         >
-            <div className="flex flex-col gap-0.5">
+            <div className={isPhone ? listStack : "flex flex-col gap-0.5"}>
                 {rows.map(row => (
                     <TrackListRow
                         key={row.id}

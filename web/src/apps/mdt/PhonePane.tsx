@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import {
     ArrowDownLeft, ArrowUpRight, AtSign, Ban, ChevronRight, FileText, Image as ImageIcon, Mic,
     Paperclip, Play, PhoneOff, Smartphone, User,
@@ -24,7 +24,7 @@ import {
     mdtPersonsSearch, mdtPhoneAccounts, mdtPhoneCalls, mdtPhoneContacts, mdtPhoneMedia,
     mdtPhoneNote, mdtPhoneNotes, mdtPhoneSummary, mdtPhoneThread, mdtPhoneThreads,
 } from './mdtApi';
-import { mdtPanePad, mdtRef, mdtRowHover, mdtRowMeta, mdtRowTitle, mdtSectionHeader, mdtSegmentedDense } from './mdtTheme';
+import { MDT_ACCENT, mdtPanePad, mdtRef, mdtRowHover, mdtRowMeta, mdtRowTitle, mdtSectionHeader, mdtSegmentedDense } from './mdtTheme';
 import { useMdtSession } from './useMdtSession';
 import { MdtCard } from './ui/MdtCard';
 
@@ -39,6 +39,8 @@ const TABS: readonly { value: HandsetTab; label: string }[] = [
     { value: 'notes',    label: t('mdt.hsNotes', 'Notes') },
     { value: 'accounts', label: t('mdt.hsAccounts', 'Accounts') },
 ];
+
+const HANDSET_RAIL_MIN = 560;
 
 function stamp(ts: string | number | null | undefined): string {
     if (ts === null || ts === undefined || ts === '') return '';
@@ -478,17 +480,81 @@ function Accounts({ citizenid }: { citizenid: string }) {
     );
 }
 
-function Handset({ citizenid }: { citizenid: string }) {
-    const [tab, setTab] = useSessionState<HandsetTab>('mdt:phone:tab', 'overview');
+function TabRail({ tab, onTab, accent }: {
+    tab:    HandsetTab;
+    onTab:  (value: HandsetTab) => void;
+    accent: string;
+}) {
+    const railRef = useRef<HTMLDivElement>(null);
+
+    useLayoutEffect(() => {
+        const rail = railRef.current;
+        if (!rail) return;
+        const chip = rail.querySelector<HTMLElement>('[data-active="true"]');
+        if (!chip) return;
+        const lead = chip.offsetLeft - 24;
+        const trail = chip.offsetLeft + chip.offsetWidth + 24;
+        if (lead < rail.scrollLeft) rail.scrollLeft = Math.max(0, lead);
+        else if (trail > rail.scrollLeft + rail.clientWidth) rail.scrollLeft = trail - rail.clientWidth;
+    }, [tab]);
 
     return (
-        <div className={`flex min-h-0 flex-1 flex-col ${mdtPanePad}`}>
-            <SegmentedControl
-                className={`mb-4 shrink-0 ${mdtSegmentedDense}`}
-                value={tab}
-                onChange={setTab}
-                options={TABS}
-            />
+        <div ref={railRef} className="relative -mx-6 mb-4 shrink-0 overflow-x-auto">
+            <div className="flex w-max gap-1.5 px-6">
+                {TABS.map(opt => {
+                    const active = opt.value === tab;
+                    return (
+                        <button
+                            key={opt.value}
+                            type="button"
+                            data-active={active ? 'true' : undefined}
+                            aria-current={active || undefined}
+                            onClick={() => onTab(opt.value)}
+                            className={`shrink-0 rounded-full px-4 py-[9px] text-[14px] font-semibold tracking-tight transition-colors duration-150 ${
+                                active
+                                    ? 'text-white'
+                                    : 'bg-black/[0.06] text-black active:bg-black/[0.11] dark:bg-white/[0.12] dark:text-white dark:active:bg-white/[0.18]'
+                            }`}
+                            style={active ? { background: accent } : undefined}
+                        >
+                            {opt.label}
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+function Handset({ citizenid, accent }: { citizenid: string; accent: string }) {
+    const [tab, setTab] = useSessionState<HandsetTab>('mdt:phone:tab', 'overview');
+
+    const hostRef = useRef<HTMLDivElement>(null);
+    const [narrow, setNarrow] = useState(false);
+
+    useLayoutEffect(() => {
+        const host = hostRef.current;
+        if (!host) return;
+        const measure = () => setNarrow(host.clientWidth < HANDSET_RAIL_MIN);
+        measure();
+        if (typeof ResizeObserver === 'undefined') return;
+        const ro = new ResizeObserver(measure);
+        ro.observe(host);
+        return () => ro.disconnect();
+    }, []);
+
+    return (
+        <div ref={hostRef} className={`flex min-h-0 flex-1 flex-col ${mdtPanePad}`}>
+            {narrow ? (
+                <TabRail tab={tab} onTab={setTab} accent={accent} />
+            ) : (
+                <SegmentedControl
+                    className={`mb-4 shrink-0 ${mdtSegmentedDense}`}
+                    value={tab}
+                    onChange={setTab}
+                    options={TABS}
+                />
+            )}
             <Scroller className="min-h-0 flex-1">
                 {tab === 'overview' && <Overview citizenid={citizenid} />}
                 {tab === 'contacts' && <Contacts citizenid={citizenid} />}
@@ -503,7 +569,7 @@ function Handset({ citizenid }: { citizenid: string }) {
 }
 
 export function PhonePane() {
-    const { selected, select } = useMdtSession();
+    const { selected, select, department } = useMdtSession();
 
     const [query, setQuery] = useSessionState('mdt:phone:query', '');
     const [page, setPage] = useSessionState('mdt:phone:page', 1);
@@ -511,9 +577,13 @@ export function PhonePane() {
     const { data, loading } = useAsyncData(() => mdtPersonsSearch(query.trim(), page), [query, page]);
     const rows = data?.rows ?? [];
 
+    const accent = department?.accent ?? MDT_ACCENT;
+    const openPerson = selected ? rows.find(row => row.citizenid === selected) : undefined;
+
     const master = (
         <ListColumn
             className="flex-1"
+            minWidth={0}
             title={t('mdt.hsHandsets', 'Handsets')}
             count={data?.total ?? 0}
             query={query}
@@ -545,7 +615,10 @@ export function PhonePane() {
     return (
         <MasterDetail
             master={master}
-            detail={selected ? <Handset key={selected} citizenid={selected} /> : undefined}
+            detail={selected ? <Handset key={selected} citizenid={selected} accent={accent} /> : undefined}
+            onCloseDetail={() => select(null)}
+            backLabel={department?.short ?? t('mdt.hsHandsets', 'Handsets')}
+            detailTitle={openPerson?.name}
             placeholder={
                 <EmptyState
                     center

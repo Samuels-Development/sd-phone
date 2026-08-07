@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Eraser, Gavel, UserPlus } from 'lucide-react';
 
+import { device } from '@device';
 import { t } from '@/i18n';
 import { formatListDate, formatMediumDate } from '@/lib/time';
 import { useAsyncData } from '@/hooks/useAsyncData';
@@ -28,6 +29,8 @@ import { MdtRichText } from './ui/MdtRichText';
 type StatusFilter = PetitionStatus | 'all';
 
 const NEW_PETITION = 'new';
+
+const isPhone = device.id === 'phone';
 
 export function petitionStatusLabel(status: string): string {
     if (status === 'granted') return t('mdt.exGranted', 'Granted');
@@ -160,7 +163,7 @@ function PetitionDetail({ petition, onRuled }: { petition: Petition; onRuled: (p
                             <MdtButton variant="destructive" disabled={saving} onClick={() => void rule(false)}>
                                 {t('mdt.exDeny', 'Deny')}
                             </MdtButton>
-                            <span className={`min-w-0 flex-1 ${mdtRowMeta}`}>
+                            <span className={`min-w-[220px] flex-1 ${mdtRowMeta}`}>
                                 {t('mdt.exGrantWarn', 'Granting seals the charge lines from every priors sheet at once.')}
                             </span>
                         </div>
@@ -326,6 +329,7 @@ export function ExpungePane() {
             ) : undefined}
             isEmpty={settled && rows.length === 0}
             empty={empty}
+            minWidth={isPhone ? 0 : undefined}
             footer={<Pager page={data?.page ?? page} pageSize={data?.pageSize ?? 25} total={total} onPage={setPage} />}
         >
             <div className="flex flex-col gap-2 px-3 pb-2">
@@ -371,6 +375,7 @@ export function ExpungePane() {
                 />
             }
             onCloseDetail={() => select(null)}
+            backLabel={t('mdt.expunge', 'Petitions')}
         />
     );
 }

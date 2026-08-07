@@ -1,4 +1,5 @@
 import type { PillTone } from '@/ui/Pill';
+import { device } from '@device';
 import { cardSurface, columnTitle, fieldArea, fieldBase, fieldClass, panePad, refText, rowBody,
          rowHover, rowMeta, rowTitle, ruleX, ruleY, sectionHeader, surfaceBackdrop } from '@/ui/surfaces';
 
@@ -7,7 +8,7 @@ export const MDT_STATUS_RESERVE = 54;
 export const MDT_RAIL_W = 236;
 export const MDT_RAIL_W_COLLAPSED = 68;
 
-export const MDT_ACCENT = '#1d4ed8';
+export const MDT_ACCENT = 'rgb(var(--ios-blue))';
 
 export const mdtBackdrop = surfaceBackdrop;
 
@@ -18,7 +19,7 @@ export const mdtRuleY = ruleY;
 
 export const mdtPanePad = panePad;
 
-export const mdtViewEnter = 'animate-mdt-pane';
+export const mdtViewEnter = device.id === 'phone' ? 'animate-swipe-in-left' : 'animate-mdt-pane';
 
 export const mdtSectionHeader = sectionHeader;
 export const mdtColumnTitle = columnTitle;

@@ -384,7 +384,7 @@ export type NuiMessage =
     | { action: 'sd-phone:racing:board:hide' }
     | { action: 'sd-phone:racing:board:lineup'; data: { state: LineupState | null } }
     | { action: 'sd-phone:wipe' }
-    | { action: 'sd-phone:admin:open'; data: { adminName?: string; sim?: boolean } }
+    | { action: 'sd-phone:admin:open'; data: { adminName?: string; sim?: boolean; racing?: boolean } }
     | { action: 'chess:invited';  data: { fromSrc: string; fromName: string; lobbyId: string } }
     | { action: 'chess:lobby';    data: { id: string; host: string; public: boolean; wager: number; isHost: boolean; canStart: boolean; members: { name: string; you: boolean; host: boolean; color: 'w' | 'b' | 'random'; canAfford: boolean; ready: boolean; returned: boolean }[] } }
     | { action: 'chess:lobbyClosed'; data: Record<string, never> }

@@ -76,18 +76,29 @@ return {
         { id = 'weazelnews', label = 'Weazel News', icon = 'weazelnews', route = '/weazelnews', accent = '#C8102E', base = false, enabled = true },
         { id = 'streaks', label = 'Streaks', icon = 'streaks', route = '/streaks', accent = '#FF7A1A', base = false, enabled = true },
 
-        -- The police terminal is a TABLET app: the row exists here because every id the tablet
-        -- shows is validated against this catalog, and `enabled = false` is what keeps it off
-        -- phones. Keep `base = true` - a disabled entry is never downloadable, so `base = false`
-        -- would leave the app permanently un-installable and unable to reach the tablet at all.
-        { id = 'mdt', label = 'MDT', icon = 'mdt', route = '/mdt', accent = '#1D4ED8', base = true, enabled = false },
-        { id = 'emsmdt', label = 'EMS', icon = 'emsmdt', route = '/emsmdt', accent = '#E11D48', base = true, enabled = false },
-        { id = 'dojmdt', label = 'DOJ', icon = 'dojmdt', route = '/dojmdt', accent = '#6D28D9', base = true, enabled = false },
+        -- The three terminals run on BOTH devices. The same code lays itself out per screen: a
+        -- menu root that pushes one section at a time on the phone, the multi-tab browser on the
+        -- tablet. This catalog is also what the tablet's ids validate against, so these rows are
+        -- what let sd-tablet show them at all.
+        --
+        -- `enabled = true` only says this SERVER has the terminals. Which of them a given player
+        -- sees is decided per open by server/appgate.lua, from the departments in configs/mdt.lua:
+        -- a `leo` department gets `mdt`, `ems` gets `emsmdt`, `doj` gets `dojmdt`, and anyone else
+        -- gets no icon rather than one that refuses them. That gate is asked fresh on every open,
+        -- by both devices, so a job change is picked up with no event to miss. Turning `Enabled`
+        -- off in configs/mdt.lua hides all three everywhere.
+        --
+        -- Keep `base = true`. The job gate is what hands a terminal out, so there is nothing to
+        -- download; `base = false` would strand it behind an App Store entry instead.
+        { id = 'mdt', label = 'MDT', icon = 'mdt', route = '/mdt', accent = '#1D4ED8', base = true, enabled = true },
+        { id = 'emsmdt', label = 'EMS', icon = 'emsmdt', route = '/emsmdt', accent = '#E11D48', base = true, enabled = true },
+        { id = 'dojmdt', label = 'DOJ', icon = 'dojmdt', route = '/dojmdt', accent = '#6D28D9', base = true, enabled = true },
 
-        -- Racing is a TABLET app on the same terms: the row is here so the tablet's ids validate
-        -- against this catalog, and `enabled = false` is what keeps it off phones. Keep
-        -- `base = true` for the same reason the terminals do.
-        { id = 'racing', label = 'Racing', icon = 'racing', route = '/racing', accent = '#0BF2B4', base = true, enabled = false },
+        -- Racing runs on both devices too, and unlike the terminals it carries no job gate: every
+        -- player gets the board. Its backend has its own switch, `Enabled` in configs/racing.lua;
+        -- with that off this row shows an app with nothing behind it, so turn both off together.
+        -- Keep `base = true` so the board is there the moment a race is posted.
+        { id = 'racing', label = 'Racing', icon = 'racing', route = '/racing', accent = '#0BF2B4', base = true, enabled = true },
 
         -- Add `wifi` to any entry above to keep its download to one network, e.g. Dark Chat only
         -- handed out inside the bank:

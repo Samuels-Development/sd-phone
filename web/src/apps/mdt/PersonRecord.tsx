@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Car, FileText, Fingerprint, Gavel, Landmark, Scale, ShieldAlert, User } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
+import { device } from '@device';
 import { getLocaleTag, t } from '@/i18n';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { EmptyState } from '@/ui/EmptyState';
@@ -23,6 +24,8 @@ import { MdtField } from './ui/MdtField';
 import { PERSON_FLAGS, type ChargeClass, type PersonDetail, type PersonFlag, type VehicleStatus } from './data';
 
 const MAX_NOTES = 2000;
+
+const STACK_HEADER = device.id === 'phone';
 
 const FLAG_TONE: Record<PersonFlag, PillTone> = {
     wanted:        'red',
@@ -199,9 +202,18 @@ export function PersonRecord({ citizenid }: { citizenid: string }) {
         if (next) setPerson(next);
     }
 
+    const facts = (
+        <div className="mt-4 grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
+            <Fact label={t('mdt.dob', 'Date of birth')} value={person.dob} />
+            <Fact label={t('mdt.sex', 'Sex')} value={person.sex} />
+            <Fact label={t('mdt.phone', 'Phone')} value={person.phone} />
+            <Fact label={t('mdt.occupation', 'Occupation')} value={person.job} />
+        </div>
+    );
+
     return (
         <Scroller className={`h-full ${mdtPanePad}`}>
-            <div className="flex items-start gap-5">
+            <div className={`flex items-start ${STACK_HEADER ? 'gap-4' : 'gap-5'}`}>
                 <div className="shrink-0">
                     {person.mugshot ? (
                         <button
@@ -237,20 +249,19 @@ export function PersonRecord({ citizenid }: { citizenid: string }) {
 
                 <div className="min-w-0 flex-1 pt-1">
                     <div className="flex flex-wrap items-center gap-2">
-                        <h1 className="truncate text-[28px] font-bold tracking-ios-display text-black dark:text-white">
+                        <h1 className={`text-[28px] font-bold tracking-ios-display text-black dark:text-white ${
+                            STACK_HEADER ? 'min-w-0 break-words leading-tight' : 'truncate'
+                        }`}>
                             {person.name}
                         </h1>
                         {person.wanted && <Pill tone="red">{t('mdt.wanted', 'Wanted')}</Pill>}
                     </div>
                     <div className="mt-1 text-[14px] tabular-nums text-ios-gray">{person.citizenid}</div>
-                    <div className="mt-4 grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
-                        <Fact label={t('mdt.dob', 'Date of birth')} value={person.dob} />
-                        <Fact label={t('mdt.sex', 'Sex')} value={person.sex} />
-                        <Fact label={t('mdt.phone', 'Phone')} value={person.phone} />
-                        <Fact label={t('mdt.occupation', 'Occupation')} value={person.job} />
-                    </div>
+                    {!STACK_HEADER && facts}
                 </div>
             </div>
+
+            {STACK_HEADER && facts}
 
             <div className="mt-6 grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
                 <Section title={t('mdt.identity', 'Identity')} icon={Fingerprint}>

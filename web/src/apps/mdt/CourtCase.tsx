@@ -1,14 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Gavel, Landmark, Link2, Send, UserPlus } from 'lucide-react';
 
-import { t } from '@/i18n';
-import { formatListDate, formatMediumDate } from '@/lib/time';
+import { getLocaleTag, t } from '@/i18n';
+import { format12h, formatListDate, formatMediumDate } from '@/lib/time';
 import { useAsyncData } from '@/hooks/useAsyncData';
+import { DrumWheel } from '@/ui/DrumWheel';
 import { EmptyState } from '@/ui/EmptyState';
 import { Pill } from '@/ui/Pill';
 import { Scroller } from '@/ui/Scroller';
 import type { PillTone } from '@/ui/Pill';
 import { Select } from '@/ui/Select';
+import { Sheet } from '@/ui/Sheet';
+import { TimeWheel } from '@/ui/TimeWheel';
 
 import { ChargePicker } from './ChargePicker';
 import {
@@ -20,7 +23,8 @@ import { mdtCourtFile, mdtCourtGet, mdtCourtManage, mdtCourtNote, mdtCourtRule }
 import { PersonPicker } from './PersonPicker';
 import { ReportLinker } from './ReportEditor';
 import { useMdtSession } from './useMdtSession';
-import { mdtFieldArea, mdtPanePad, mdtRef, mdtRowMeta, mdtSectionHeader, STATUS_TONE } from './mdtTheme';
+import { mdtFieldArea, mdtFieldBase, mdtPanePad, mdtRef, mdtRowMeta, mdtRuleX, mdtSectionHeader,
+         STATUS_TONE } from './mdtTheme';
 import { MdtButton } from './ui/MdtButton';
 import { MdtCard } from './ui/MdtCard';
 import { MdtEvidence } from './ui/MdtEvidence';
@@ -90,11 +94,194 @@ const EMPTY_DRAFT: Draft = {
     citizenid: '', defendant: '', title: '', reportRef: '', charges: [], summary: '', evidence: [],
 };
 
-function toLocalInput(at: number | null): string {
-    if (!at) return '';
+type SeatKey = 'judge' | 'prosecutor' | 'defence';
+
+const SEAT_COLUMNS = 'repeat(auto-fit, minmax(200px, 1fr))';
+const JUDGMENT_COLUMNS = 'repeat(auto-fit, minmax(200px, 1fr))';
+
+const SEATS_ROW_LIST_BELOW = 640;
+
+const WHEEL_BAND = 34;
+const HEARING_DAYS_BEFORE = 7;
+const HEARING_DAYS_AFTER = 90;
+const DEFAULT_HEARING_TIME = '09:00';
+
+function pad2(n: number): string {
+    return String(n).padStart(2, '0');
+}
+
+function startOfDay(ms: number): Date {
+    const d = new Date(ms);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function hearingDays(at: number | null): Date[] {
+    const today = startOfDay(Date.now()).getTime();
+    const current = at ? startOfDay(at * 1000).getTime() : today;
+
+    const first = new Date(Math.min(today, current));
+    first.setDate(first.getDate() - HEARING_DAYS_BEFORE);
+    const last = new Date(Math.max(today, current));
+    last.setDate(last.getDate() + HEARING_DAYS_AFTER);
+
+    const days: Date[] = [];
+    for (const cur = new Date(first); cur.getTime() <= last.getTime(); cur.setDate(cur.getDate() + 1)) {
+        days.push(new Date(cur));
+    }
+    return days;
+}
+
+function dayLabel(day: Date, today: number): string {
+    if (day.getTime() === today) return t('mdt.courtToday', 'Today');
+    return day.toLocaleDateString(getLocaleTag(), { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function hearingLabel(at: number | null): string {
+    if (!at) return t('mdt.courtNoDate', 'Not listed');
     const d = new Date(at * 1000);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return `${formatMediumDate(at)}, ${format12h(d.getHours(), d.getMinutes())}`;
+}
+
+function HearingSheet({ at, accent, onPick, onClose }: {
+    at:      number | null;
+    accent?: string;
+    onPick:  (at: number | null) => void;
+    onClose: () => void;
+}) {
+    const days = useMemo(() => hearingDays(at), [at]);
+    const today = startOfDay(Date.now()).getTime();
+    const labels = useMemo(() => days.map(day => dayLabel(day, today)), [days, today]);
+
+    const [dayIndex, setDayIndex] = useState(() => {
+        const target = startOfDay(at ? at * 1000 : Date.now()).getTime();
+        const found = days.findIndex(day => day.getTime() === target);
+        return found < 0 ? 0 : found;
+    });
+    const [time, setTime] = useState(() => {
+        if (!at) return DEFAULT_HEARING_TIME;
+        const d = new Date(at * 1000);
+        return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+    });
+
+    function commit(close: () => void) {
+        const day = days[Math.min(Math.max(dayIndex, 0), days.length - 1)];
+        const [hh, mm] = time.split(':');
+        const when = new Date(day.getFullYear(), day.getMonth(), day.getDate(), Number(hh) || 0, Number(mm) || 0);
+        onPick(Math.floor(when.getTime() / 1000));
+        close();
+    }
+
+    return (
+        <Sheet
+            onClose={onClose}
+            fit="content"
+            title={t('mdt.courtListed', 'Listed for')}
+            className="bg-base font-sf"
+        >
+            {({ close }) => (
+                <>
+                    <div className="relative px-4 pt-1">
+                        <div
+                            className="pointer-events-none absolute inset-x-4 rounded-[8px] bg-[rgba(120,120,128,0.16)] dark:bg-[rgba(120,120,128,0.24)]"
+                            style={{ top: 4 + WHEEL_BAND, height: WHEEL_BAND }}
+                        />
+                        <div className="relative flex justify-center">
+                            <DrumWheel
+                                values={labels}
+                                index={dayIndex}
+                                onChange={setDayIndex}
+                                width={264}
+                                bandHeight={WHEEL_BAND}
+                                fontSize={20}
+                                fontWeight={400}
+                                showBand={false}
+                            />
+                        </div>
+                    </div>
+
+                    <TimeWheel value={time} onChange={setTime} open />
+
+                    <div className="flex items-center gap-3 px-5 pb-1 pt-3">
+                        {at !== null && (
+                            <MdtButton variant="destructive" size="sm" onClick={() => { onPick(null); close(); }}>
+                                {t('mdt.courtClearDate', 'Clear date')}
+                            </MdtButton>
+                        )}
+                        <span className="flex-1" />
+                        <MdtButton variant="text" size="sm" onClick={close}>
+                            {t('common.cancel', 'Cancel')}
+                        </MdtButton>
+                        <MdtButton size="sm" accent={accent} onClick={() => commit(close)}>
+                            {t('common.save', 'Save')}
+                        </MdtButton>
+                    </div>
+                </>
+            )}
+        </Sheet>
+    );
+}
+
+function BarSeats({ seats, canManage, onSeat }: {
+    seats:     { key: SeatKey; label: string; name: string | null }[];
+    canManage: boolean;
+    onSeat:    (key: SeatKey) => void;
+}) {
+    const hostRef = useRef<HTMLDivElement>(null);
+    const [rows, setRows] = useState(false);
+
+    useEffect(() => {
+        const el = hostRef.current;
+        if (!el) return;
+        const measure = () => setRows(el.clientWidth < SEATS_ROW_LIST_BELOW);
+        measure();
+        if (typeof ResizeObserver === 'undefined') return;
+        const ro = new ResizeObserver(measure);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+
+    if (rows) {
+        return (
+            <div ref={hostRef}>
+                <MdtCard className="overflow-hidden">
+                    {seats.map((seat, i) => (
+                        <div key={seat.key}>
+                            {i > 0 && <div className={mdtRuleX} />}
+                            <div className="flex items-center gap-3 px-4 py-3">
+                                <span className={`w-[86px] shrink-0 truncate ${mdtSectionHeader}`}>{seat.label}</span>
+                                <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-black dark:text-white">
+                                    {seat.name || t('mdt.courtVacant', 'Vacant')}
+                                </span>
+                                {canManage && (
+                                    <MdtButton variant="text" size="sm" onClick={() => onSeat(seat.key)}>
+                                        {seat.name ? t('mdt.change', 'Change') : t('mdt.courtSeat', 'Seat')}
+                                    </MdtButton>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </MdtCard>
+            </div>
+        );
+    }
+
+    return (
+        <div ref={hostRef} className="grid gap-3" style={{ gridTemplateColumns: SEAT_COLUMNS }}>
+            {seats.map(seat => (
+                <MdtCard key={seat.key} className="flex flex-col gap-1 p-4">
+                    <span className={mdtSectionHeader}>{seat.label}</span>
+                    <span className="truncate text-[15px] font-semibold text-black dark:text-white">
+                        {seat.name || t('mdt.courtVacant', 'Vacant')}
+                    </span>
+                    {canManage && (
+                        <MdtButton variant="text" size="sm" className="self-start" onClick={() => onSeat(seat.key)}>
+                            {seat.name ? t('mdt.change', 'Change') : t('mdt.courtSeat', 'Seat')}
+                        </MdtButton>
+                    )}
+                </MdtCard>
+            ))}
+        </div>
+    );
 }
 
 export function CourtCase({ caseRef, onSaved, onClose, onChanged }: {
@@ -109,7 +296,8 @@ export function CourtCase({ caseRef, onSaved, onClose, onChanged }: {
     const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
     const [picking, setPicking] = useState(false);
     const [linking, setLinking] = useState(false);
-    const [seating, setSeating] = useState<'judge' | 'prosecutor' | 'defence' | null>(null);
+    const [seating, setSeating] = useState<SeatKey | null>(null);
+    const [listing, setListing] = useState(false);
     const [saving, setSaving] = useState(false);
 
     const [note, setNote] = useState('');
@@ -310,7 +498,7 @@ export function CourtCase({ caseRef, onSaved, onClose, onChanged }: {
     const months2 = file.charges.reduce((sum, c) => sum + c.months * c.count, 0);
     const fine2 = file.charges.reduce((sum, c) => sum + c.fine * c.count, 0);
 
-    const seats: { key: 'judge' | 'prosecutor' | 'defence'; label: string; name: string | null }[] = [
+    const seats: { key: SeatKey; label: string; name: string | null }[] = [
         { key: 'judge',      label: t('mdt.courtJudge', 'Bench'),       name: file.judge },
         { key: 'prosecutor', label: t('mdt.courtProsecutor', 'State'),  name: file.prosecutor },
         { key: 'defence',    label: t('mdt.courtDefence', 'Defence'),   name: file.defence },
@@ -367,43 +555,25 @@ export function CourtCase({ caseRef, onSaved, onClose, onChanged }: {
                 <div className={`mb-2 mt-5 px-1 ${mdtSectionHeader}`}>{t('mdt.courtHearing', 'Hearing')}</div>
                 <MdtCard className="flex flex-wrap items-center gap-4 p-4">
                     {canManage ? (
-                        <label className="flex items-center gap-3">
-                            <span className={mdtSectionHeader}>{t('mdt.courtListed', 'Listed for')}</span>
-                            <input
-                                type="datetime-local"
-                                value={toLocalInput(file.hearingAt)}
-                                onChange={e => {
-                                    const at = e.target.value ? Math.floor(new Date(e.target.value).getTime() / 1000) : null;
-                                    void manage({ ref: file.ref, hearingAt: at });
-                                }}
-                                className={`px-3 py-1.5 text-[14px] ${mdtFieldArea}`}
-                            />
-                        </label>
+                        <button
+                            type="button"
+                            onClick={() => setListing(true)}
+                            className="flex min-w-0 items-center gap-3 text-left transition-opacity duration-150 active:opacity-60"
+                        >
+                            <span className={`shrink-0 ${mdtSectionHeader}`}>{t('mdt.courtListed', 'Listed for')}</span>
+                            <span className={`min-w-0 px-3 py-1.5 text-[14px] ${mdtFieldBase}`}>
+                                {hearingLabel(file.hearingAt)}
+                            </span>
+                        </button>
                     ) : (
-                        <span className="text-[15px] text-black dark:text-white">
-                            {file.hearingAt ? formatMediumDate(file.hearingAt) : t('mdt.courtNoDate', 'Not listed')}
-                        </span>
+                        <span className="text-[15px] text-black dark:text-white">{hearingLabel(file.hearingAt)}</span>
                     )}
                     <span className="flex-1" />
                     {file.reportRef && <Pill tone="blue">{file.reportRef}</Pill>}
                 </MdtCard>
 
                 <div className={`mb-2 mt-5 px-1 ${mdtSectionHeader}`}>{t('mdt.courtBar', 'At the bar')}</div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    {seats.map(seat => (
-                        <MdtCard key={seat.key} className="flex flex-col gap-1 p-4">
-                            <span className={mdtSectionHeader}>{seat.label}</span>
-                            <span className="truncate text-[15px] font-semibold text-black dark:text-white">
-                                {seat.name || t('mdt.courtVacant', 'Vacant')}
-                            </span>
-                            {canManage && (
-                                <MdtButton variant="text" size="sm" className="self-start" onClick={() => setSeating(seat.key)}>
-                                    {seat.name ? t('mdt.change', 'Change') : t('mdt.courtSeat', 'Seat')}
-                                </MdtButton>
-                            )}
-                        </MdtCard>
-                    ))}
-                </div>
+                <BarSeats seats={seats} canManage={canManage} onSeat={setSeating} />
 
                 <div className={`mb-2 mt-5 px-1 ${mdtSectionHeader}`}>{t('mdt.charges', 'Charges')}</div>
                 <MdtCard className="p-4">
@@ -531,7 +701,7 @@ export function CourtCase({ caseRef, onSaved, onClose, onChanged }: {
                         <span className="text-[15px] text-ios-gray">{t('mdt.courtUndecided', 'This case has not been decided.')}</span>
                     ) : ruling ? (
                         <>
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                            <div className="grid gap-4" style={{ gridTemplateColumns: JUDGMENT_COLUMNS }}>
                                 <MdtField
                                     label={t('mdt.courtVerdict', 'Verdict')}
                                     value={verdict}
@@ -597,6 +767,15 @@ export function CourtCase({ caseRef, onSaved, onClose, onChanged }: {
                         setSeating(null);
                     }}
                     onClose={() => setSeating(null)}
+                />
+            )}
+
+            {listing && (
+                <HearingSheet
+                    at={file.hearingAt}
+                    accent={department?.accent}
+                    onPick={hearingAt => void manage({ ref: file.ref, hearingAt })}
+                    onClose={() => setListing(false)}
                 />
             )}
         </>

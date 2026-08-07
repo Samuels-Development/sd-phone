@@ -1,4 +1,4 @@
-import { Flag, Route, ShieldCheck, Trophy, UserRound, type LucideIcon } from 'lucide-react';
+import { Flag, Route, Trophy, UserRound, type LucideIcon } from 'lucide-react';
 
 import { t } from '@/i18n';
 import type { RacingSection } from './data';
@@ -15,6 +15,5 @@ export function navItems(): Record<RacingSection, RacingNavItem> {
         tracks:   { id: 'tracks',   label: t('racing.navTracks', 'Tracks'),     icon: Route },
         rankings: { id: 'rankings', label: t('racing.navRankings', 'Rankings'), icon: Trophy },
         driver:   { id: 'driver',   label: t('racing.navDriver', 'Driver'),     icon: UserRound },
-        admin:    { id: 'admin',    label: t('racing.navAdmin', 'Admin'),       icon: ShieldCheck },
     };
 }

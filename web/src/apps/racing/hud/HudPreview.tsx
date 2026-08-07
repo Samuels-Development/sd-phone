@@ -2,12 +2,20 @@ import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 
 import { t } from '@/i18n';
+import { HUD_SCALE_MAX } from '@/apps/racing/data';
 import type { HudMarker, HudSettings, HudState } from '@/apps/racing/data';
 import { hudAnchor, HUD_EDGE_PX } from './anchor';
 import { CheckpointMarkers } from './CheckpointMarkers';
 import { RaceHud } from './RaceHud';
 
 const REFERENCE_W = 1100;
+const LEGIBLE_SHRINK = 0.55;
+const HUD_TALLEST_PX = 310;
+const HUD_SPAN_PX = HUD_EDGE_PX * 2 + HUD_TALLEST_PX * HUD_SCALE_MAX;
+const WIDE_RATIO = 9 / 16;
+const MAX_BOX_RATIO = 0.85;
+const MARKERS_WIDE: readonly [number, number] = [0.30, 0.64];
+const MARKERS_NARROW: readonly [number, number] = [0.24, 0.72];
 const SAMPLE_ELAPSED_MS = 96_400;
 const SAMPLE_LAP_START_MS = 64_220;
 
@@ -36,10 +44,39 @@ const SAMPLE_STATE: HudState = {
     totalRacers: 8,
 };
 
-function sampleMarkers(scale: number): HudMarker[] {
+const MARKER_PIVOT = 130;
+const MARKER_SCALE_MIN = 0.4;
+const MARKER_SCALE_MAX = 1;
+
+const SAMPLE_FAR_DIST = 212;
+const SAMPLE_NEAR_DIST = 74;
+
+function markerScale(dist: number): number {
+    return Math.max(MARKER_SCALE_MIN, Math.min(MARKER_SCALE_MAX, MARKER_PIVOT / Math.max(dist, 1)));
+}
+
+function sampleMarkers(base: number, spread: readonly [number, number]): HudMarker[] {
     return [
-        { label: 8, dist: 212, x: 0.30, y: 0.30, stem: 0, scale, on: true, primary: false },
-        { label: 7, dist: 74,  x: 0.64, y: 0.24, stem: 0, scale, on: true, primary: true  },
+        {
+            label:   8,
+            dist:    SAMPLE_FAR_DIST,
+            x:       spread[0],
+            y:       0.20,
+            stem:    0,
+            scale:   base * markerScale(SAMPLE_FAR_DIST),
+            on:      true,
+            primary: false,
+        },
+        {
+            label:   7,
+            dist:    SAMPLE_NEAR_DIST,
+            x:       spread[1],
+            y:       0.46,
+            stem:    0,
+            scale:   base * markerScale(SAMPLE_NEAR_DIST),
+            on:      true,
+            primary: true,
+        },
     ];
 }
 
@@ -96,7 +133,14 @@ export function HudPreview({ settings, youName }: { settings: HudSettings; youNa
         return () => observer.disconnect();
     }, []);
 
-    const shrink = width > 0 ? width / REFERENCE_W : 0;
+    const ready        = width > 0;
+    const proportional = ready ? width / REFERENCE_W : 0;
+    const wanted       = Math.max(proportional, LEGIBLE_SHRINK);
+    const needed       = HUD_SPAN_PX * wanted;
+    const boxed        = ready && needed > width * WIDE_RATIO;
+    const boxHeight    = Math.round(Math.min(needed, width * MAX_BOX_RATIO));
+    const shrink       = !ready ? 0 : boxed ? boxHeight / HUD_SPAN_PX : wanted;
+
     const anchor = hudAnchor(settings.position, 'absolute', HUD_EDGE_PX * shrink);
 
     const state = youName
@@ -106,14 +150,15 @@ export function HudPreview({ settings, youName }: { settings: HudSettings; youNa
     return (
         <div
             ref={hostRef}
-            className="relative aspect-video w-full select-none overflow-hidden bg-[#14171c]"
+            className={`relative w-full select-none overflow-hidden bg-[#14171c] ${boxed ? '' : 'aspect-video'}`}
+            style={boxed ? { height: boxHeight } : undefined}
         >
             <Scene />
             {shrink > 0 && (
                 <div className="pointer-events-none absolute inset-0">
                     {settings.inAirWaypoints && (
                         <CheckpointMarkers
-                            markers={sampleMarkers(shrink * 1.45)}
+                            markers={sampleMarkers(shrink * 1.45, boxed ? MARKERS_NARROW : MARKERS_WIDE)}
                             color={settings.checkpointColor}
                             colorClosest={settings.closestColor}
                         />

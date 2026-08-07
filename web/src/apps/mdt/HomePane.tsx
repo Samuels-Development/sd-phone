@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FileText, Plus } from 'lucide-react';
 
+import { device } from '@device';
 import { t } from '@/i18n';
 import { EmptyState } from '@/ui/EmptyState';
 import { ListColumn } from '@/ui/ListColumn';
 import { Pill, type PillTone } from '@/ui/Pill';
+import { SegmentedControl } from '@/ui/SegmentedControl';
 import { relTimeCompact } from '@/lib/time';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
+import { useSessionState } from '@/hooks/useSessionState';
 import type { Bulletin, ReportSummary, Unit } from './data';
 import { BulletinsColumn } from './BulletinsColumn';
 import { UnitsColumn } from './UnitsColumn';
-import { mdtPanePad, mdtRef, mdtRowHover, mdtRowMeta, mdtRowTitle, mdtRuleY } from './mdtTheme';
+import { mdtPanePad, mdtRef, mdtRowHover, mdtRowMeta, mdtRowTitle, mdtRuleY, mdtSegmented } from './mdtTheme';
 import { mdtHome } from './mdtApi';
 import { MdtButton } from './ui/MdtButton';
 import { MdtCard } from './ui/MdtCard';
@@ -25,6 +28,10 @@ const REPORT_TONE: Record<string, PillTone> = {
     evidence:      'green',
 };
 
+type HomeBoard = 'reports' | 'bulletins' | 'units';
+
+const isPhone = device.id === 'phone';
+
 export function HomePane() {
     const { can, open } = useMdtSession();
 
@@ -33,6 +40,7 @@ export function HomePane() {
     const [units, setUnits] = useState<Unit[]>([]);
     const [loaded, setLoaded] = useState(false);
     const [query, setQuery] = useState('');
+    const [board, setBoard] = useSessionState<HomeBoard>('mdt:homeBoard', 'reports');
 
     const refresh = useCallback(async () => {
         const data = await mdtHome();
@@ -57,67 +65,99 @@ export function HomePane() {
             || r.type.toLowerCase().includes(q));
     }, [reports, query]);
 
+    const reportsColumn = (
+        <ListColumn
+            minWidth={isPhone ? 0 : undefined}
+            title={t('mdt.recentReports', 'Recent Reports')}
+            count={reports.length || undefined}
+            search={{
+                value:       query,
+                onChange:    setQuery,
+                placeholder: t('mdt.searchReports', 'Search reports'),
+            }}
+            action={can('reports.create') ? (
+                <MdtButton
+                    size="sm"
+                    icon={<Plus className="h-[13px] w-[13px]" strokeWidth={3} />}
+                    onClick={() => open('reports', 'new')}
+                >
+                    {t('mdt.create', 'Create')}
+                </MdtButton>
+            ) : undefined}
+            isEmpty={loaded && shownReports.length === 0}
+            empty={(
+                <EmptyState
+                    center
+                    icon={FileText}
+                    title={query.trim()
+                        ? t('mdt.noReportMatches', 'No Matches')
+                        : t('mdt.noReports', 'No Reports Filed')}
+                    subtitle={query.trim()
+                        ? t('mdt.noReportMatchesSub', 'No recent report matches that search.')
+                        : t('mdt.noReportsSub', 'Paperwork filed by the department shows up here first.')}
+                />
+            )}
+        >
+            {shownReports.map((r, i) => (
+                <button
+                    key={r.ref}
+                    type="button"
+                    onClick={() => open('reports', r.ref)}
+                    className={`relative w-full px-4 py-3 text-left ${mdtRowHover}`}
+                >
+                    <div className="flex items-center gap-2">
+                        <span className={mdtRef}>{r.ref}</span>
+                        <Pill tone={REPORT_TONE[r.type.toLowerCase()] ?? 'blue'}>{r.type}</Pill>
+                        <span className="flex-1" />
+                        <span className={`shrink-0 ${mdtRowMeta}`}>{relTimeCompact(r.createdAt * 1000)}</span>
+                    </div>
+                    <div className={`mt-1 truncate ${mdtRowTitle}`}>{r.title}</div>
+                    <div className={`mt-0.5 truncate ${mdtRowMeta}`}>
+                        {r.callsign ? `${r.callsign} ${r.author}` : r.author}
+                    </div>
+                    {i < shownReports.length - 1 && (
+                        <span
+                            className="pointer-events-none absolute inset-x-4 bottom-0 bg-ios-gray4 dark:bg-control"
+                            style={{ height: '0.5px' }}
+                        />
+                    )}
+                </button>
+            ))}
+        </ListColumn>
+    );
+
+    if (isPhone) {
+        return (
+            <div className={`flex min-h-0 flex-1 flex-col ${mdtPanePad}`}>
+                <MdtCard className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                    <div className="shrink-0 px-4 pt-4">
+                        <SegmentedControl<HomeBoard>
+                            className={mdtSegmented}
+                            value={board}
+                            onChange={setBoard}
+                            options={[
+                                { value: 'reports',   label: t('mdt.homeReports', 'Reports') },
+                                { value: 'bulletins', label: t('mdt.homeBulletins', 'Bulletins') },
+                                { value: 'units',     label: t('mdt.homeUnits', 'Units') },
+                            ]}
+                        />
+                    </div>
+
+                    {board === 'reports' && reportsColumn}
+                    {board === 'bulletins' && (
+                        <BulletinsColumn minWidth={0} bulletins={bulletins} onChanged={setBulletins} />
+                    )}
+                    {board === 'units' && <UnitsColumn minWidth={0} units={units} />}
+                </MdtCard>
+            </div>
+        );
+    }
+
     return (
         <div className={`flex min-h-0 flex-1 flex-col ${mdtPanePad}`}>
             <MdtCard className="flex min-h-0 flex-1 overflow-hidden">
                 <div className="ios-scrollbar flex min-h-0 min-w-0 flex-1 overflow-x-auto">
-                    <ListColumn
-                        title={t('mdt.recentReports', 'Recent Reports')}
-                        count={reports.length || undefined}
-                        search={{
-                            value:       query,
-                            onChange:    setQuery,
-                            placeholder: t('mdt.searchReports', 'Search reports'),
-                        }}
-                        action={can('reports.create') ? (
-                            <MdtButton
-                                size="sm"
-                                icon={<Plus className="h-[13px] w-[13px]" strokeWidth={3} />}
-                                onClick={() => open('reports', 'new')}
-                            >
-                                {t('mdt.create', 'Create')}
-                            </MdtButton>
-                        ) : undefined}
-                        isEmpty={loaded && shownReports.length === 0}
-                        empty={(
-                            <EmptyState
-                                center
-                                icon={FileText}
-                                title={query.trim()
-                                    ? t('mdt.noReportMatches', 'No Matches')
-                                    : t('mdt.noReports', 'No Reports Filed')}
-                                subtitle={query.trim()
-                                    ? t('mdt.noReportMatchesSub', 'No recent report matches that search.')
-                                    : t('mdt.noReportsSub', 'Paperwork filed by the department shows up here first.')}
-                            />
-                        )}
-                    >
-                        {shownReports.map((r, i) => (
-                            <button
-                                key={r.ref}
-                                type="button"
-                                onClick={() => open('reports', r.ref)}
-                                className={`relative w-full px-4 py-3 text-left ${mdtRowHover}`}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <span className={mdtRef}>{r.ref}</span>
-                                    <Pill tone={REPORT_TONE[r.type.toLowerCase()] ?? 'blue'}>{r.type}</Pill>
-                                    <span className="flex-1" />
-                                    <span className={`shrink-0 ${mdtRowMeta}`}>{relTimeCompact(r.createdAt * 1000)}</span>
-                                </div>
-                                <div className={`mt-1 truncate ${mdtRowTitle}`}>{r.title}</div>
-                                <div className={`mt-0.5 truncate ${mdtRowMeta}`}>
-                                    {r.callsign ? `${r.callsign} ${r.author}` : r.author}
-                                </div>
-                                {i < shownReports.length - 1 && (
-                                    <span
-                                        className="pointer-events-none absolute inset-x-4 bottom-0 bg-ios-gray4 dark:bg-control"
-                                        style={{ height: '0.5px' }}
-                                    />
-                                )}
-                            </button>
-                        ))}
-                    </ListColumn>
+                    {reportsColumn}
 
                     <div className={mdtRuleY} />
 

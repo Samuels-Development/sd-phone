@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Radio } from 'lucide-react';
 
+import { device } from '@device';
 import { t } from '@/i18n';
 import { colorFor } from '@/lib/format';
 import { AlertDialog } from '@/ui/AlertDialog';
@@ -16,6 +17,8 @@ import { mdtAffairsForOfficer, mdtDismiss, mdtPageUnit, mdtSetCallsign, mdtSetGr
 import { MdtButton } from './ui/MdtButton';
 import { MdtField } from './ui/MdtField';
 import { useMdtSession } from './useMdtSession';
+
+const STAT_MIN = device.id === 'phone' ? 150 : 210;
 
 function Stat({ label, value }: { label: string; value: string }) {
     return (
@@ -112,7 +115,7 @@ export function OfficerCard({ officer, grades = [], onChanged, onDismissed }: {
 
     return (
         <div className="flex min-h-0 flex-1 flex-col">
-            <div className="flex shrink-0 items-center gap-4 px-6 pb-4 pt-5">
+            <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-3 px-6 pb-4 pt-5">
                 {officer.avatar
                     ? (
                         <FadeImage
@@ -122,7 +125,7 @@ export function OfficerCard({ officer, grades = [], onChanged, onDismissed }: {
                         />
                     )
                     : <InitialsAvatar name={officer.name} color={colorFor(officer.citizenid)} size={60} />}
-                <div className="min-w-0 flex-1">
+                <div className="min-w-[200px] flex-1">
                     <h2 className="truncate text-[21px] font-bold leading-tight tracking-tight text-black dark:text-white">
                         {officer.name}
                     </h2>
@@ -145,7 +148,10 @@ export function OfficerCard({ officer, grades = [], onChanged, onDismissed }: {
             <div className={mdtRuleX} />
 
             <Scroller className="min-h-0 flex-1 px-6 py-4">
-                <div className="grid grid-cols-3 gap-x-6 gap-y-4">
+                <div
+                    className="grid gap-x-6 gap-y-4"
+                    style={{ gridTemplateColumns: `repeat(auto-fit, minmax(${STAT_MIN}px, 1fr))` }}
+                >
                     <Stat label={t('mdt.badge', 'Badge')} value={officer.badge || '--'} />
                     <Stat label={t('mdt.radio', 'Radio')} value={officer.radio || '--'} />
                     <Stat label={t('mdt.hoursOnShift', 'Hours')} value={officer.hours.toFixed(1)} />

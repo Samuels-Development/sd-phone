@@ -68,7 +68,11 @@ export function UnitRow({ unit, onPress, selected = false, divider = true }: {
     );
 }
 
-export function UnitsColumn({ units, className = '' }: { units: Unit[]; className?: string }) {
+export function UnitsColumn({ units, minWidth = 268, className = '' }: {
+    units:      Unit[];
+    minWidth?:  number;
+    className?: string;
+}) {
     const [query, setQuery] = useState('');
 
     const rows = useMemo(() => {
@@ -83,6 +87,7 @@ export function UnitsColumn({ units, className = '' }: { units: Unit[]; classNam
     return (
         <ListColumn
             className={className}
+            minWidth={minWidth}
             title={t('mdt.activeUnits', 'Active Units')}
             count={units.length || undefined}
             search={{

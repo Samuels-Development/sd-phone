@@ -10,14 +10,13 @@ import { RACING_RAIL_W, RACING_RAIL_W_COLLAPSED, racingAccentFill } from './raci
 import { useRacingSession } from './useRacingSession';
 
 export function RacingRail({ compact = false }: { compact?: boolean }) {
-    const { admin, section, setSection } = useRacingSession();
+    const { section, setSection } = useRacingSession();
     const [railOpen, setRailOpen] = useSessionState('racing:railOpen', true);
 
     const open = railOpen && !compact;
     const catalog = navItems();
     const visible = RACING_SECTIONS
-        .map(id => catalog[id])
-        .filter(item => item.id !== 'admin' || admin);
+        .map(id => catalog[id]);
 
     return (
         <div className="relative flex shrink-0">

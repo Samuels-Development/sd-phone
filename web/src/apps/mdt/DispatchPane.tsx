@@ -1,19 +1,24 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { MapPin, RadioTower, Siren, X } from 'lucide-react';
 
+import { device } from '@device';
 import { t } from '@/i18n';
 import { relTimeCompact } from '@/lib/time';
 import { EmptyState } from '@/ui/EmptyState';
 import { ListColumn } from '@/ui/ListColumn';
 import { MasterDetail } from '@/ui/MasterDetail';
+import { NavBar } from '@/ui/NavBar';
 import { Pill } from '@/ui/Pill';
 import { Scroller } from '@/ui/Scroller';
 import { SegmentedControl } from '@/ui/SegmentedControl';
+import { useIosPush } from '@/hooks/useIosPush';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useSessionState } from '@/hooks/useSessionState';
 import { UNIT_CODES, type Call, type Unit, type UnitCode } from './data';
 import { DispatchMap } from './DispatchMap';
-import { mdtRef, mdtRowHover, mdtRowMeta, mdtRowTitle, mdtRuleX, mdtSectionHeader, mdtSegmented } from './mdtTheme';
+import {
+    MDT_ACCENT, mdtRef, mdtRowHover, mdtRowMeta, mdtRowTitle, mdtRuleX, mdtSectionHeader, mdtSegmented,
+} from './mdtTheme';
 import {
     mdtAttach, mdtDetach, mdtDispatchState, mdtLocate, mdtSetStatus, mdtSetWaypoint,
 } from './mdtApi';
@@ -22,6 +27,10 @@ import { UnitRow, unitCodeLabel, waypointToUnit } from './UnitsColumn';
 import { useDeckRefresh, useMdtSession } from './useMdtSession';
 
 const FLASH_MS = 6000;
+
+const isPhone = device.id === 'phone';
+
+type PhoneBoard = 'calls' | 'map' | 'units';
 
 function PriorityChip({ priority }: { priority: number }) {
     const label = t('mdt.priorityShort', 'P{n}', { n: priority });
@@ -46,8 +55,22 @@ function Field({ label, value }: { label: string; value?: string }) {
     );
 }
 
+function CallPage({ backLabel, onBack, children }: {
+    backLabel: string;
+    onBack:    () => void;
+    children:  ReactNode;
+}) {
+    const { goBack, pageStyle } = useIosPush(onBack);
+    return (
+        <div className="absolute inset-0 z-20 flex flex-col bg-base" style={pageStyle}>
+            <NavBar backLabel={backLabel} onBack={goBack} />
+            <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+        </div>
+    );
+}
+
 export function DispatchPane() {
-    const { me, can, selected, select } = useMdtSession();
+    const { me, can, department, selected, select } = useMdtSession();
 
     const [units, setUnits] = useState<Unit[]>([]);
     const [calls, setCalls] = useState<Call[]>([]);
@@ -55,6 +78,7 @@ export function DispatchPane() {
     const [flashId, setFlashId] = useState<string | null>(null);
     const [notice, setNotice] = useState('');
     const [board, setBoard] = useSessionState<'map' | 'units'>('mdt:dispatch:board', 'map');
+    const [phoneBoard, setPhoneBoard] = useSessionState<PhoneBoard>('mdt:dispatch:phoneBoard', 'calls');
     const [focusUnit, setFocusUnit] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
 
@@ -134,9 +158,11 @@ export function DispatchPane() {
         setNotice(t('mdt.waypointSet', 'Waypoint set.'));
     }, []);
 
+    const listMinWidth = isPhone ? 0 : undefined;
+
     const master = (
         <div className="flex min-h-0 flex-1 flex-col">
-            <div className="shrink-0 px-4 pb-3 pt-4">
+            <div className={`shrink-0 px-4 pb-3 ${isPhone ? 'pt-2' : 'pt-4'}`}>
                 <div className={mdtSectionHeader}>{t('mdt.myStatus', 'My status')}</div>
                 <SegmentedControl
                     className="mt-2"
@@ -146,12 +172,14 @@ export function DispatchPane() {
                     options={UNIT_CODES.map(c => ({ value: c, label: c }))}
                 />
                 <div className={`mt-2 ${mdtRowMeta}`}>{unitCodeLabel(myCode)}</div>
+                {isPhone && notice && <div className={`mt-2 ${mdtRowMeta}`}>{notice}</div>}
             </div>
 
             <div className={mdtRuleX} />
 
             <ListColumn
                 className="min-h-0 flex-1"
+                minWidth={listMinWidth}
                 title={t('mdt.activeCalls', 'Active Calls')}
                 count={calls.length || undefined}
                 isEmpty={loaded && calls.length === 0}
@@ -203,9 +231,54 @@ export function DispatchPane() {
         </div>
     );
 
+    const unitsBoard = (
+        <ListColumn
+            className="min-h-0 flex-1"
+            minWidth={listMinWidth}
+            title={t('mdt.unitsOnAir', 'Units On Air')}
+            count={units.length || undefined}
+            isEmpty={loaded && units.length === 0}
+            empty={(
+                <EmptyState
+                    center
+                    icon={RadioTower}
+                    title={t('mdt.noUnits', 'No Units On Duty')}
+                    subtitle={t('mdt.noUnitsSub', 'Units appear here the moment an officer brings a terminal up.')}
+                />
+            )}
+        >
+            {units.map((u, i) => (
+                <UnitRow
+                    key={u.citizenid}
+                    unit={u}
+                    divider={i < units.length - 1}
+                    onPress={() => { void waypointToUnit(u.citizenid); }}
+                />
+            ))}
+        </ListColumn>
+    );
+
+    const mapBoard = (
+        <DispatchMap
+            calls={calls}
+            units={units}
+            accent={department?.accent ?? MDT_ACCENT}
+            selectedCall={selected}
+            selectedUnit={focusUnit}
+            onSelectCall={id => select(id)}
+            onSelectUnit={cid => setFocusUnit(cid === focusUnit ? null : cid)}
+            myCallsign={myCallsign}
+            canAttach={can('dispatch.attach')}
+            busy={busy}
+            onAttach={(callId, on) => { void toggleAttach(callId, on); }}
+            onWaypointCall={callId => { void waypointToCall(callId); }}
+            onWaypointUnit={cid => { void waypointToUnit(cid); }}
+        />
+    );
+
     const detail = current ? (
         <div className="flex min-h-0 flex-1 flex-col">
-            <div className="shrink-0 px-6 pb-4 pt-5">
+            <div className={`shrink-0 pb-4 ${isPhone ? 'px-4 pt-1' : 'px-6 pt-5'}`}>
                 <div className="flex flex-wrap items-center gap-2">
                     <PriorityChip priority={current.priority} />
                     <span className="text-[21px] font-bold tabular-nums tracking-tight text-black dark:text-white">
@@ -213,14 +286,16 @@ export function DispatchPane() {
                     </span>
                     <span className="flex-1" />
                     <span className={mdtRowMeta}>{relTimeCompact(current.createdAt * 1000)}</span>
-                    <button
-                        type="button"
-                        onClick={() => select(null)}
-                        aria-label={t('mdt.closeCall', 'Back to dispatch board')}
-                        className="-mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ios-gray transition-colors hover:text-black active:opacity-50 dark:hover:text-white"
-                    >
-                        <X className="h-[17px] w-[17px]" strokeWidth={2.5} />
-                    </button>
+                    {!isPhone && (
+                        <button
+                            type="button"
+                            onClick={() => select(null)}
+                            aria-label={t('mdt.closeCall', 'Back to dispatch board')}
+                            className="-mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ios-gray transition-colors hover:text-black active:opacity-50 dark:hover:text-white"
+                        >
+                            <X className="h-[17px] w-[17px]" strokeWidth={2.5} />
+                        </button>
+                    )}
                 </div>
                 <h2 className="mt-1 text-[21px] font-bold leading-tight tracking-tight text-black dark:text-white">
                     {current.type}
@@ -249,8 +324,8 @@ export function DispatchPane() {
 
             <div className={mdtRuleX} />
 
-            <Scroller className="min-h-0 flex-1 px-6 py-4">
-                <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+            <Scroller className={`min-h-0 flex-1 ${isPhone ? 'px-4 pb-10 pt-4' : 'px-6 py-4'}`}>
+                <div className={`grid grid-cols-2 gap-y-4 ${isPhone ? 'gap-x-4' : 'gap-x-6'}`}>
                     <Field label={t('mdt.location', 'Location')} value={current.location} />
                     <Field label={t('mdt.direction', 'Direction')} value={current.direction} />
                     <Field label={t('mdt.suspect', 'Suspect')} value={current.suspect} />
@@ -280,6 +355,37 @@ export function DispatchPane() {
         </div>
     ) : undefined;
 
+    if (isPhone) {
+        return (
+            <div className="relative flex min-h-0 flex-1 flex-col">
+                <div className="shrink-0 px-4 pb-1 pt-3">
+                    <SegmentedControl<PhoneBoard>
+                        className={mdtSegmented}
+                        value={phoneBoard}
+                        onChange={setPhoneBoard}
+                        options={[
+                            { value: 'calls', label: t('mdt.boardCalls', 'Calls'), badge: calls.length || undefined },
+                            { value: 'map',   label: t('mdt.boardMap', 'Map') },
+                            { value: 'units', label: t('mdt.boardUnits', 'Units On Air') },
+                        ]}
+                    />
+                </div>
+
+                {phoneBoard === 'calls' ? master : phoneBoard === 'map' ? mapBoard : unitsBoard}
+
+                {current && detail && (
+                    <CallPage
+                        key={current.id}
+                        backLabel={t('mdt.navDispatch', 'Dispatch')}
+                        onBack={() => select(null)}
+                    >
+                        {detail}
+                    </CallPage>
+                )}
+            </div>
+        );
+    }
+
     return (
         <MasterDetail
             master={master}
@@ -300,46 +406,7 @@ export function DispatchPane() {
                         />
                     </div>
 
-                    {board === 'map' ? (
-                        <DispatchMap
-                            calls={calls}
-                            units={units}
-                            selectedCall={selected}
-                            selectedUnit={focusUnit}
-                            onSelectCall={id => select(id)}
-                            onSelectUnit={cid => setFocusUnit(cid === focusUnit ? null : cid)}
-                            myCallsign={myCallsign}
-                            canAttach={can('dispatch.attach')}
-                            busy={busy}
-                            onAttach={(callId, on) => { void toggleAttach(callId, on); }}
-                            onWaypointCall={callId => { void waypointToCall(callId); }}
-                            onWaypointUnit={cid => { void waypointToUnit(cid); }}
-                        />
-                    ) : (
-                        <ListColumn
-                            className="min-h-0 flex-1"
-                            title={t('mdt.unitsOnAir', 'Units On Air')}
-                            count={units.length || undefined}
-                            isEmpty={loaded && units.length === 0}
-                            empty={(
-                                <EmptyState
-                                    center
-                                    icon={RadioTower}
-                                    title={t('mdt.noUnits', 'No Units On Duty')}
-                                    subtitle={t('mdt.noUnitsSub', 'Units appear here the moment an officer brings a terminal up.')}
-                                />
-                            )}
-                        >
-                            {units.map((u, i) => (
-                                <UnitRow
-                                    key={u.citizenid}
-                                    unit={u}
-                                    divider={i < units.length - 1}
-                                    onPress={() => { void waypointToUnit(u.citizenid); }}
-                                />
-                            ))}
-                        </ListColumn>
-                    )}
+                    {board === 'map' ? mapBoard : unitsBoard}
                 </div>
             )}
         />

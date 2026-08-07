@@ -4,7 +4,7 @@ export type RaceMode = 'circuit' | 'sprint';
 
 export type RaceStatus = 'registering' | 'live';
 
-export type RacingSection = 'races' | 'tracks' | 'rankings' | 'driver' | 'admin';
+export type RacingSection = 'races' | 'tracks' | 'rankings' | 'driver';
 
 export type PhasingMode = 'off' | 'full' | 'timed';
 
@@ -258,7 +258,7 @@ export interface Page<T> {
 }
 
 export const RACING_SECTIONS: readonly RacingSection[] = [
-    'races', 'tracks', 'rankings', 'driver', 'admin',
+    'races', 'tracks', 'rankings', 'driver',
 ] as const;
 
 export const CLASS_ORDER: readonly RaceClass[] = ['S', 'A', 'B', 'C', 'D'] as const;

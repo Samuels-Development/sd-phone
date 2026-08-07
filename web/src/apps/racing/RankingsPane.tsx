@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Trophy } from 'lucide-react';
 
 import { t } from '@/i18n';
@@ -9,7 +9,8 @@ import { ListColumn } from '@/ui/ListColumn';
 import { Pager } from '@/ui/Pager';
 import { Pill } from '@/ui/Pill';
 import { Select } from '@/ui/Select';
-import { cardSurface, panePad, rowHover, rowMeta, rowTitle, ruleX, sectionHeader } from '@/ui/surfaces';
+import { cardRow, cardRowPad, cardSurface, listStack, panePad, rowHover, rowMeta, rowTitle, ruleX, sectionHeader } from '@/ui/surfaces';
+import { device } from '@device';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { useSessionState } from '@/hooks/useSessionState';
 
@@ -20,6 +21,10 @@ import { racingRankings } from './racingApi';
 import { CLASS_COLOR, RACING_ACCENT_INK, racingAccentFill, racingAccentSoft } from './racingTheme';
 
 type RankSort = 'rank' | 'name' | 'races' | 'wins';
+
+const isPhone = device.id === 'phone';
+
+const NARROW_PANE = 600;
 
 const MEDAL_COLORS: readonly string[] = [CLASS_COLOR.S, CLASS_COLOR.D, '#cd7f32'];
 const PLINTH_HEIGHTS: readonly number[] = [88, 64, 50];
@@ -74,16 +79,24 @@ function PodiumStand({ row, onPress }: { row: RankRow; onPress: () => void }) {
     );
 }
 
-function RankListRow({ row, onPress }: { row: RankRow; onPress: () => void }) {
+function RankListRow({ row, narrow, onPress }: { row: RankRow; narrow: boolean; onPress: () => void }) {
     const medal = row.rank <= 3 ? MEDAL_COLORS[row.rank - 1] : undefined;
+
+    const meta = narrow
+        ? [
+            t('racing.racesCount', '{n} races', { n: row.races }),
+            t('racing.winsCount', '{n} wins', { n: row.wins }),
+            row.citizenid,
+        ].join('  ·  ')
+        : row.citizenid;
 
     return (
         <button
             type="button"
             onClick={onPress}
-            className={`flex w-full items-center gap-3 rounded-[10px] px-3 py-2 text-left ${
-                row.you ? racingAccentSoft : rowHover
-            }`}
+            className={`flex w-full items-center gap-3 text-left ${
+                isPhone ? `${cardRow} ${cardRowPad}` : `rounded-[10px] px-3 py-2 ${rowHover}`
+            } ${row.you ? racingAccentSoft : ''}`}
         >
             <span
                 className={`w-10 shrink-0 text-right text-[15px] font-bold tabular-nums ${medal ? '' : 'text-ios-gray'}`}
@@ -99,16 +112,24 @@ function RankListRow({ row, onPress }: { row: RankRow; onPress: () => void }) {
                     <span className={`min-w-0 truncate ${rowTitle}`}>{row.name}</span>
                     {row.you && <Pill tone="blue">{t('racing.you', 'You')}</Pill>}
                 </span>
-                <span className={`block truncate ${rowMeta}`}>{row.citizenid}</span>
+                <span className={`block truncate ${rowMeta}`}>{meta}</span>
             </span>
 
-            <span className="w-16 shrink-0 text-right text-[14px] font-medium tabular-nums text-ios-gray">
-                {row.races}
-            </span>
-            <span className="w-16 shrink-0 text-right text-[14px] font-medium tabular-nums text-ios-gray">
-                {row.wins}
-            </span>
-            <span className="w-20 shrink-0 text-right text-[15px] font-bold tabular-nums text-black dark:text-white">
+            {!narrow && (
+                <>
+                    <span className="w-16 shrink-0 text-right text-[14px] font-medium tabular-nums text-ios-gray">
+                        {row.races}
+                    </span>
+                    <span className="w-16 shrink-0 text-right text-[14px] font-medium tabular-nums text-ios-gray">
+                        {row.wins}
+                    </span>
+                </>
+            )}
+            <span
+                className={`shrink-0 text-right text-[15px] font-bold tabular-nums text-black dark:text-white ${
+                    narrow ? '' : 'w-20'
+                }`}
+            >
                 {row.mmr}
             </span>
         </button>
@@ -122,10 +143,24 @@ export function RankingsPane() {
     const [sort, setSort]   = useSessionState<RankSort>('racing:rankings:sort', 'rank');
     const [term, setTerm]   = useState(query.trim().toLowerCase());
 
+    const hostRef = useRef<HTMLDivElement>(null);
+    const [narrow, setNarrow] = useState(false);
+
     useEffect(() => {
         const id = window.setTimeout(() => setTerm(query.trim().toLowerCase()), 200);
         return () => window.clearTimeout(id);
     }, [query]);
+
+    useLayoutEffect(() => {
+        const host = hostRef.current;
+        if (!host) return;
+        const measure = () => setNarrow(host.clientWidth < NARROW_PANE);
+        measure();
+        if (typeof ResizeObserver === 'undefined') return;
+        const ro = new ResizeObserver(measure);
+        ro.observe(host);
+        return () => ro.disconnect();
+    }, []);
 
     const { data, loading, settled } = useAsyncData(() => racingRankings(page), [page]);
     const rows  = useMemo(() => data?.rows ?? [], [data]);
@@ -169,10 +204,11 @@ export function RankingsPane() {
     );
 
     return (
-        <div className={`flex min-h-0 flex-1 flex-col ${panePad}`}>
-            <div className={`${cardSurface} flex min-h-0 flex-1 flex-col overflow-hidden`}>
+        <div ref={hostRef} className={`flex min-h-0 flex-1 flex-col ${panePad}`}>
+            <div className={`${isPhone ? "" : cardSurface} flex min-h-0 flex-1 flex-col overflow-hidden`}>
                 <ListColumn
                     className="flex-1"
+                    minWidth={narrow ? 0 : undefined}
                     title={t('racing.rankings', 'Rankings')}
                     count={total}
                     query={query}
@@ -196,7 +232,11 @@ export function RankingsPane() {
                                 <>
                                     <div className={ruleX} />
                                     <div className="px-2 py-1.5">
-                                        <RankListRow row={pinned} onPress={() => setOpen(pinned.citizenid)} />
+                                        <RankListRow
+                                            row={pinned}
+                                            narrow={narrow}
+                                            onPress={() => setOpen(pinned.citizenid)}
+                                        />
                                     </div>
                                 </>
                             )}
@@ -220,14 +260,25 @@ export function RankingsPane() {
                             <span className="w-10 shrink-0 text-right">{t('racing.rank', 'Rank')}</span>
                             <span className="w-[34px] shrink-0" />
                             <span className="min-w-0 flex-1">{t('racing.racer', 'Racer')}</span>
-                            <span className="w-16 shrink-0 text-right">{t('racing.races', 'Races')}</span>
-                            <span className="w-16 shrink-0 text-right">{t('racing.wins', 'Wins')}</span>
-                            <span className="w-20 shrink-0 text-right">{t('racing.mmr', 'MMR')}</span>
+                            {!narrow && (
+                                <>
+                                    <span className="w-16 shrink-0 text-right">{t('racing.races', 'Races')}</span>
+                                    <span className="w-16 shrink-0 text-right">{t('racing.wins', 'Wins')}</span>
+                                </>
+                            )}
+                            <span className={`shrink-0 text-right ${narrow ? '' : 'w-20'}`}>
+                                {t('racing.mmr', 'MMR')}
+                            </span>
                         </div>
 
-                        <div className="flex flex-col gap-0.5">
+                        <div className={isPhone ? listStack : "flex flex-col gap-0.5"}>
                             {shown.map(row => (
-                                <RankListRow key={row.citizenid} row={row} onPress={() => setOpen(row.citizenid)} />
+                                <RankListRow
+                                    key={row.citizenid}
+                                    row={row}
+                                    narrow={narrow}
+                                    onPress={() => setOpen(row.citizenid)}
+                                />
                             ))}
                         </div>
                     </div>

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronLeft, Flag } from 'lucide-react';
 
 import { t } from '@/i18n';
@@ -16,6 +16,8 @@ import {
     CLASS_ORDER, DEFAULT_SETUP, classAtOrBelow, formatMoney,
     type CameraMode, type PhasingMode, type RaceClass, type RaceSetupDraft, type TrackRow,
 } from './data';
+
+const STACK_WIDTH = 560;
 
 function clamp(value: number, min: number, max: number): number {
     if (!Number.isFinite(value)) return min;
@@ -46,20 +48,23 @@ function cameraOptions(): SelectOption<CameraMode>[] {
     ];
 }
 
-function Row({ label, hint, disabled, children }: {
+function Row({ label, hint, stacked, disabled, children }: {
     label:     string;
     hint?:     string;
+    stacked?:  boolean;
     disabled?: boolean;
     children:  ReactNode;
 }) {
     return (
-        <div className={`flex items-center gap-5 px-4 py-3 ${disabled ? 'opacity-40' : ''}`}>
-            <div className="min-w-0 flex-1">
-                <div className="text-[15px] font-semibold leading-tight text-black dark:text-white">{label}</div>
-                {hint && <div className={`mt-0.5 ${rowMeta}`}>{hint}</div>}
-            </div>
-            <div className={`flex w-[260px] shrink-0 items-center justify-end gap-3 ${disabled ? 'pointer-events-none' : ''}`}>
-                {children}
+        <div className={`px-4 py-3 ${disabled ? 'opacity-40' : ''}`}>
+            <div className={stacked ? 'flex flex-col gap-2.5' : 'flex items-center gap-5'}>
+                <div className={stacked ? 'min-w-0' : 'min-w-0 flex-1'}>
+                    <div className="text-[15px] font-semibold leading-tight text-black dark:text-white">{label}</div>
+                    {hint && <div className={`mt-0.5 ${rowMeta}`}>{hint}</div>}
+                </div>
+                <div className={`flex items-center gap-3 ${stacked ? 'w-full' : 'w-[260px] shrink-0 justify-end'} ${disabled ? 'pointer-events-none' : ''}`}>
+                    {children}
+                </div>
             </div>
         </div>
     );
@@ -77,6 +82,20 @@ export function RaceSetup({ track, onBack }: { track: TrackRow; onBack: () => vo
     const [buyInText, setBuyInText] = useState(() => String(draft.buyIn));
     const [busy, setBusy]   = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const hostRef = useRef<HTMLDivElement | null>(null);
+    const [stacked, setStacked] = useState(false);
+
+    useEffect(() => {
+        const host = hostRef.current;
+        if (!host) return;
+        const measure = () => setStacked(host.clientWidth < STACK_WIDTH);
+        measure();
+        if (typeof ResizeObserver === 'undefined') return;
+        const ro = new ResizeObserver(measure);
+        ro.observe(host);
+        return () => ro.disconnect();
+    }, []);
 
     const { data: vehicle } = useAsyncData(() => racingVehicle(), []);
 
@@ -138,7 +157,7 @@ export function RaceSetup({ track, onBack }: { track: TrackRow; onBack: () => vo
     }
 
     return (
-        <div className="flex min-h-0 flex-1 flex-col">
+        <div ref={hostRef} className="flex min-h-0 flex-1 flex-col">
             <div className="flex shrink-0 items-center gap-2 px-4 pb-2 pt-4">
                 <button
                     type="button"
@@ -155,7 +174,10 @@ export function RaceSetup({ track, onBack }: { track: TrackRow; onBack: () => vo
 
             <Scroller className="min-h-0 flex-1 px-6 pb-6 pt-2">
                 <div className={`rounded-[16px] bg-black/[0.03] px-5 py-4 dark:bg-white/[0.05] ${racingAccentRing}`}>
-                    <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+                    <div className={stacked
+                        ? 'grid grid-cols-2 gap-x-6 gap-y-3.5'
+                        : 'flex flex-wrap items-center gap-x-8 gap-y-3'}
+                    >
                         <div className="min-w-0">
                             <div className={racingStatLabel}>{t('racing.gridOpensIn', 'Grid opens in')}</div>
                             <div className="text-[17px] font-bold tabular-nums text-black dark:text-white">
@@ -202,9 +224,10 @@ export function RaceSetup({ track, onBack }: { track: TrackRow; onBack: () => vo
                     <Row
                         label={t('racing.delay', 'Start delay')}
                         hint={t('racing.delayHint', 'How long racers have to reach the grid.')}
+                        stacked={stacked}
                     >
                         <Slider
-                            className="w-[168px]"
+                            className={stacked ? 'flex-1' : 'w-[168px]'}
                             value={clamp(draft.delay, limits.delayMin, limits.delayMax)}
                             min={limits.delayMin}
                             max={limits.delayMax}
@@ -222,10 +245,11 @@ export function RaceSetup({ track, onBack }: { track: TrackRow; onBack: () => vo
                         hint={sprint
                             ? t('racing.lapsSprintHint', 'Sprints run point to point, so they are always a single lap.')
                             : t('racing.lapsHint', 'Each lap repeats the full checkpoint list.')}
+                        stacked={stacked}
                         disabled={sprint}
                     >
                         <Slider
-                            className="w-[168px]"
+                            className={stacked ? 'flex-1' : 'w-[168px]'}
                             value={laps}
                             min={limits.lapsMin}
                             max={limits.lapsMax}
@@ -241,10 +265,11 @@ export function RaceSetup({ track, onBack }: { track: TrackRow; onBack: () => vo
                     <Row
                         label={t('racing.phasing', 'Phasing')}
                         hint={t('racing.phasingHint', 'Whether racers can drive through each other.')}
+                        stacked={stacked}
                     >
                         <Select
                             size="sm"
-                            className="w-[240px]"
+                            className={stacked ? 'w-full' : 'w-[240px]'}
                             value={draft.phasing}
                             onChange={value => patch({ phasing: value })}
                             options={phasingOptions()}
@@ -257,10 +282,11 @@ export function RaceSetup({ track, onBack }: { track: TrackRow; onBack: () => vo
                     <Row
                         label={t('racing.phasingSeconds', 'Phasing window')}
                         hint={t('racing.phasingSecondsHint', 'How long phasing lasts once the lights go green.')}
+                        stacked={stacked}
                         disabled={!timed}
                     >
                         <Slider
-                            className="w-[168px]"
+                            className={stacked ? 'flex-1' : 'w-[168px]'}
                             value={clamp(draft.phasingSeconds, limits.phaseSecMin, limits.phaseSecMax)}
                             min={limits.phaseSecMin}
                             max={limits.phaseSecMax}
@@ -276,6 +302,7 @@ export function RaceSetup({ track, onBack }: { track: TrackRow; onBack: () => vo
                     <Row
                         label={t('racing.buyIn', 'Buy-in')}
                         hint={t('racing.buyInHint', 'Every entry is charged this, and the winner takes the pot.')}
+                        stacked={stacked}
                     >
                         <span className="text-[15px] font-semibold text-ios-gray">$</span>
                         <input
@@ -284,7 +311,7 @@ export function RaceSetup({ track, onBack }: { track: TrackRow; onBack: () => vo
                             aria-label={t('racing.buyIn', 'Buy-in')}
                             onChange={event => onBuyIn(event.target.value)}
                             onBlur={commitBuyIn}
-                            className={`w-[132px] text-right tabular-nums ${fieldSm}`}
+                            className={`${stacked ? 'min-w-0 flex-1' : 'w-[132px]'} text-right tabular-nums ${fieldSm}`}
                         />
                     </Row>
 
@@ -293,10 +320,11 @@ export function RaceSetup({ track, onBack }: { track: TrackRow; onBack: () => vo
                     <Row
                         label={t('racing.classCeiling', 'Class ceiling')}
                         hint={t('racing.classCeilingHint', 'The highest class allowed on the grid.')}
+                        stacked={stacked}
                     >
                         <Select
                             size="sm"
-                            className="w-[240px]"
+                            className={stacked ? 'w-full' : 'w-[240px]'}
                             value={draft.vehicleClass}
                             onChange={value => patch({ vehicleClass: value })}
                             options={classOptions}
@@ -309,10 +337,11 @@ export function RaceSetup({ track, onBack }: { track: TrackRow; onBack: () => vo
                     <Row
                         label={t('racing.camera', 'Camera')}
                         hint={t('racing.cameraHint', 'Force a view for every racer, or leave it to them.')}
+                        stacked={stacked}
                     >
                         <Select
                             size="sm"
-                            className="w-[240px]"
+                            className={stacked ? 'w-full' : 'w-[240px]'}
                             value={draft.camera}
                             onChange={value => patch({ camera: value })}
                             options={cameraOptions()}

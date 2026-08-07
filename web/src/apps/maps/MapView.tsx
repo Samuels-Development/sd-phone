@@ -73,6 +73,7 @@ interface MapViewProps {
     fit?:        boolean;
     fitTo?:      { x: number; y: number }[];
     centerTo?:   { x: number; y: number };
+    chrome?:       boolean;
     chromeTop?:    string;
     chromeBottom?: string;
     insetBottom?: number;
@@ -80,7 +81,7 @@ interface MapViewProps {
 }
 
 export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
-    { children, placing = false, onPlace, onTapEmpty, overlay, stageOverlay, fit = false, fitTo, centerTo, chromeTop, chromeBottom, insetBottom = 0, insetTop = 0 }, ref,
+    { children, placing = false, onPlace, onTapEmpty, overlay, stageOverlay, fit = false, fitTo, centerTo, chrome = true, chromeTop, chromeBottom, insetBottom = 0, insetTop = 0 }, ref,
 ) {
     const viewportRef = useRef<HTMLDivElement | null>(null);
     const stageRef    = useRef<HTMLDivElement | null>(null);
@@ -429,6 +430,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
                 </MapTransformContext.Provider>
             </div>
 
+            {chrome && (
             <div
                 className="absolute right-3 z-30 flex flex-col items-end gap-2"
                 style={{ top: chromeTop ?? '12px' }}
@@ -497,10 +499,13 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
                     </div>
                 )}
             </div>
+            )}
 
+            {chrome && (
             <div className="absolute left-3 z-20 rounded-full bg-black/60 px-2.5 py-1 text-[12px] font-bold tracking-[0.06em] text-white/95" style={{ bottom: chromeBottom ?? '12px', transition: 'bottom 300ms cubic-bezier(0.22,0.61,0.36,1)' }}>
                 {Math.round(scale * 100)}%
             </div>
+            )}
 
             {overlay}
         </div>

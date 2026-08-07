@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Flag, Map as MapIcon, MapPin, Timer, Trophy } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -22,6 +22,9 @@ import {
 import { formatLapTime, type RaceMode, type TrackDetail as TrackDetailData, type TrackRecord } from './data';
 
 type TrackView = 'detail' | 'map' | 'setup';
+
+const NARROW_DETAIL = 600;
+const STAT_MIN      = 132;
 
 const MODE_TONE: Record<RaceMode, PillTone> = {
     circuit: 'blue',
@@ -73,7 +76,7 @@ function DetailAction({ icon: Icon, label, onPress, disabled }: {
 
 function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
     return (
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0">
             <div className={`truncate ${racingStat} ${accent ? racingAccentText : ''}`}>{value}</div>
             <div className={`mt-0.5 truncate ${racingStatLabel}`}>{label}</div>
         </div>
@@ -144,18 +147,45 @@ function PlaysChart({ chart }: { chart: number[] }) {
     );
 }
 
-function RecordRow({ record, onRacer }: { record: TrackRecord; onRacer: () => void }) {
+function RecordRow({ record, narrow, onRacer }: { record: TrackRecord; narrow: boolean; onRacer: () => void }) {
+    const rank = (
+        <span className="w-[22px] shrink-0 text-[13px] font-bold tabular-nums text-ios-gray">{record.rank}</span>
+    );
+    const racer = (
+        <button
+            type="button"
+            onClick={onRacer}
+            className="min-w-0 flex-1 truncate text-left text-[15px] font-semibold text-ios-blue transition-opacity duration-150 hover:opacity-85 active:opacity-60"
+        >
+            {record.racer}
+        </button>
+    );
+    const badge = <Pill tone={CLASS_TONE[record.class] ?? 'blue'}>{record.class}</Pill>;
+
+    if (narrow) {
+        return (
+            <div className="flex flex-col gap-1 px-4 py-2.5">
+                <div className="flex items-center gap-3">
+                    {rank}
+                    {racer}
+                    <span className="shrink-0 text-right text-[15px] font-bold tabular-nums text-black dark:text-white">
+                        {formatLapTime(record.timeSec)}
+                    </span>
+                </div>
+                <div className="flex items-center gap-2 pl-[34px]">
+                    {badge}
+                    <span className={`min-w-0 flex-1 truncate ${rowMeta}`}>{record.vehicle}</span>
+                    <span className={`shrink-0 ${rowMeta}`}>{relTimeCompact(record.at * 1000)}</span>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="flex items-center gap-3 px-4 py-2.5">
-            <span className="w-[22px] shrink-0 text-[13px] font-bold tabular-nums text-ios-gray">{record.rank}</span>
-            <button
-                type="button"
-                onClick={onRacer}
-                className="min-w-0 flex-1 truncate text-left text-[15px] font-semibold text-ios-blue transition-opacity duration-150 hover:opacity-85 active:opacity-60"
-            >
-                {record.racer}
-            </button>
-            <Pill tone={CLASS_TONE[record.class] ?? 'blue'}>{record.class}</Pill>
+            {rank}
+            {racer}
+            {badge}
             <span className={`w-[132px] shrink-0 truncate text-right ${rowMeta}`}>{record.vehicle}</span>
             <span className={`w-[70px] shrink-0 text-right ${rowMeta}`}>{relTimeCompact(record.at * 1000)}</span>
             <span className="w-[92px] shrink-0 text-right text-[15px] font-bold tabular-nums text-black dark:text-white">
@@ -168,10 +198,27 @@ function RecordRow({ record, onRacer }: { record: TrackRecord; onRacer: () => vo
 function DetailBody({ detail, onRacer }: { detail: TrackDetailData; onRacer: (citizenid: string) => void }) {
     const fastest = detail.fastestSec > 0 ? formatLapTime(detail.fastestSec) : '--';
 
+    const hostRef = useRef<HTMLDivElement>(null);
+    const [narrow, setNarrow] = useState(false);
+
+    useLayoutEffect(() => {
+        const host = hostRef.current;
+        if (!host) return;
+        const measure = () => setNarrow(host.clientWidth < NARROW_DETAIL);
+        measure();
+        if (typeof ResizeObserver === 'undefined') return;
+        const ro = new ResizeObserver(measure);
+        ro.observe(host);
+        return () => ro.disconnect();
+    }, []);
+
     return (
         <Scroller className="min-h-0 flex-1 pb-8">
-            <div className="flex flex-col gap-5 px-6 pt-4">
-                <div className={`${cardSurface} flex items-start gap-4 px-5 py-4`}>
+            <div ref={hostRef} className="flex flex-col gap-5 px-6 pt-4">
+                <div
+                    className={`${cardSurface} grid items-start gap-4 px-5 py-4`}
+                    style={{ gridTemplateColumns: `repeat(auto-fit, minmax(${STAT_MIN}px, 1fr))` }}
+                >
                     <Stat label={t('racing.timesPlayed', 'Times played')} value={String(detail.timesPlayed)} />
                     <Stat label={t('racing.totalTime', 'Total time')} value={totalTimeLabel(detail.totalTimeSec)} />
                     <Stat label={t('racing.fastestTime', 'Fastest')} value={fastest} accent />
@@ -194,7 +241,11 @@ function DetailBody({ detail, onRacer }: { detail: TrackDetailData; onRacer: (ci
                         detail.records.map((record, index) => (
                             <div key={`${record.citizenid}:${record.rank}`}>
                                 {index > 0 && <div className={ruleX} />}
-                                <RecordRow record={record} onRacer={() => onRacer(record.citizenid)} />
+                                <RecordRow
+                                    record={record}
+                                    narrow={narrow}
+                                    onRacer={() => onRacer(record.citizenid)}
+                                />
                             </div>
                         ))
                     )}

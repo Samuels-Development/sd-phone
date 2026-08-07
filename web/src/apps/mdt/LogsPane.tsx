@@ -168,7 +168,7 @@ export function LogsPane() {
                     value={entityType}
                     onChange={setEntityType}
                     options={typeOptions}
-                    className="w-[136px]"
+                    className="w-[136px] min-w-[104px]"
                     fieldClassName="py-[3px] text-[13px]"
                 />
             )}
@@ -274,6 +274,7 @@ export function LogsPane() {
             detail={detail}
             hasDetail={!!current}
             onCloseDetail={() => select(null)}
+            backLabel={t('mdt.activityLog', 'Activity')}
             placeholder={(
                 <div className="flex min-h-0 flex-1 items-center justify-center px-6">
                     <EmptyState
@@ -291,9 +292,9 @@ export function LogsPane() {
 function Entry({ label, value, onOpen }: { label: string; value: string; onOpen?: () => void }) {
     if (!value) return null;
     return (
-        <div className="flex items-start gap-4 border-b border-black/[0.06] py-2.5 last:border-b-0 dark:border-white/[0.08]">
+        <div className="flex flex-wrap items-start gap-x-4 gap-y-1 border-b border-black/[0.06] py-2.5 last:border-b-0 dark:border-white/[0.08]">
             <dt className="w-[160px] shrink-0 text-[13px] font-medium text-ios-gray">{label}</dt>
-            <dd className="min-w-0 flex-1 text-[14px] leading-snug text-black dark:text-white">
+            <dd className="min-w-[240px] flex-1 text-[14px] leading-snug text-black dark:text-white">
                 {onOpen ? (
                     <button
                         type="button"

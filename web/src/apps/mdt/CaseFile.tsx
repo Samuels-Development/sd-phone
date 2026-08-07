@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FolderOpen, Link2, Send, Trash2, UserPlus, X } from 'lucide-react';
 
+import { device } from '@device';
 import { t } from '@/i18n';
 import { colorFor } from '@/lib/format';
 import { formatListDate, formatMediumDate } from '@/lib/time';
@@ -26,6 +27,8 @@ import { MdtEvidence } from './ui/MdtEvidence';
 import { MdtRichField } from './ui/MdtRichField';
 import { MdtRichText } from './ui/MdtRichText';
 import { MdtField } from './ui/MdtField';
+
+const STACK_OFFICERS = device.id === 'phone';
 
 export const CASE_STATUSES: readonly CaseStatus[] = ['open', 'in_progress', 'closed'] as const;
 export const CASE_PRIORITIES: readonly CasePriority[] = ['low', 'medium', 'high'] as const;
@@ -337,41 +340,66 @@ export function CaseFile({ caseRef, onSaved, onDeleted, onClose, onChanged }: {
                                 <div className="px-4 py-5 text-center text-[14px] text-ios-gray">
                                     {t('mdt.noOfficersAssigned', 'Nobody is assigned to this case.')}
                                 </div>
-                            ) : file.officers.map(officer => (
-                                <div key={officer.citizenid} className="flex items-center gap-3 px-4 py-2.5">
-                                    <InitialsAvatar name={officer.name} color={colorFor(officer.citizenid)} size={32} />
-                                    <span className="min-w-0 flex-1">
-                                        <span className={`block truncate ${mdtRowTitle}`}>{officer.name}</span>
-                                        {officer.callsign && (
-                                            <span className={`block truncate ${mdtRowMeta}`}>{officer.callsign}</span>
+                            ) : file.officers.map(officer => {
+                                const identity = (
+                                    <>
+                                        <InitialsAvatar name={officer.name} color={colorFor(officer.citizenid)} size={32} />
+                                        <span className="min-w-0 flex-1">
+                                            <span className={`block truncate ${mdtRowTitle}`}>{officer.name}</span>
+                                            {officer.callsign && (
+                                                <span className={`block truncate ${mdtRowMeta}`}>{officer.callsign}</span>
+                                            )}
+                                        </span>
+                                    </>
+                                );
+
+                                const controls = (
+                                    <>
+                                        {editable ? (
+                                            <Select<CaseRole>
+                                                value={officer.role}
+                                                onChange={role => void apply(mdtCaseAssign(
+                                                    file.ref, officer.citizenid, role, true))}
+                                                options={CASE_ROLES.map((role: CaseRole) => ({ value: role, label: caseRoleLabel(role) }))}
+                                                size={STACK_OFFICERS ? 'sm' : 'xs'}
+                                                ariaLabel={t('mdt.role', 'Role')}
+                                                className="shrink-0"
+                                            />
+                                        ) : (
+                                            <Pill tone={STATUS_TONE[officer.role] ?? 'blue'}>{caseRoleLabel(officer.role)}</Pill>
                                         )}
-                                    </span>
-                                    {editable ? (
-                                        <Select<CaseRole>
-                                            value={officer.role}
-                                            onChange={role => void apply(mdtCaseAssign(
-                                                file.ref, officer.citizenid, role, true))}
-                                            options={CASE_ROLES.map((role: CaseRole) => ({ value: role, label: caseRoleLabel(role) }))}
-                                            size="xs"
-                                            ariaLabel={t('mdt.role', 'Role')}
-                                            className="shrink-0"
-                                        />
-                                    ) : (
-                                        <Pill tone={STATUS_TONE[officer.role] ?? 'blue'}>{caseRoleLabel(officer.role)}</Pill>
-                                    )}
-                                    {editable && (
-                                        <button
-                                            type="button"
-                                            onClick={() => void apply(mdtCaseAssign(
-                                                file.ref, officer.citizenid, officer.role, false))}
-                                            aria-label={t('mdt.unassign', 'Unassign')}
-                                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ios-gray active:opacity-50"
-                                        >
-                                            <X className="h-[16px] w-[16px]" strokeWidth={2.5} />
-                                        </button>
-                                    )}
-                                </div>
-                            ))}
+                                        {editable && (
+                                            <button
+                                                type="button"
+                                                onClick={() => void apply(mdtCaseAssign(
+                                                    file.ref, officer.citizenid, officer.role, false))}
+                                                aria-label={t('mdt.unassign', 'Unassign')}
+                                                className={`flex shrink-0 items-center justify-center rounded-full text-ios-gray active:opacity-50 ${
+                                                    STACK_OFFICERS ? 'h-9 w-9' : 'h-7 w-7'
+                                                }`}
+                                            >
+                                                <X className="h-[16px] w-[16px]" strokeWidth={2.5} />
+                                            </button>
+                                        )}
+                                    </>
+                                );
+
+                                if (STACK_OFFICERS) {
+                                    return (
+                                        <div key={officer.citizenid} className="px-4 py-2.5">
+                                            <div className="flex items-center gap-3">{identity}</div>
+                                            <div className="mt-2 flex items-center gap-3 pl-11">{controls}</div>
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <div key={officer.citizenid} className="flex items-center gap-3 px-4 py-2.5">
+                                        {identity}
+                                        {controls}
+                                    </div>
+                                );
+                            })}
                         </MdtCard>
                     </div>
 

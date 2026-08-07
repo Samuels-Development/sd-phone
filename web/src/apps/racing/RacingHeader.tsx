@@ -10,7 +10,7 @@ import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { RACING_ACCENT } from './racingTheme';
 import { useRacingSession } from './useRacingSession';
 
-export function RacingHeader({ compact = false }: { compact?: boolean }) {
+export function RacingHeader({ compact = false, phone = false }: { compact?: boolean; phone?: boolean }) {
     const { me, setSection } = useRacingSession();
     const [liveRace, setLiveRace] = useState(false);
 
@@ -18,6 +18,58 @@ export function RacingHeader({ compact = false }: { compact?: boolean }) {
     useNuiEvent('sd-phone:racing:raceResult', () => setLiveRace(false));
 
     const driverName = me?.alias?.trim() || me?.name || '';
+
+    if (phone) {
+        return (
+            <div className="shrink-0">
+                <div className="flex items-center gap-3 px-4 pb-3 pt-1">
+                    <span
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px]"
+                        style={{ background: RACING_ACCENT }}
+                    >
+                        <Flag className="h-[19px] w-[19px] text-black" strokeWidth={2.4} />
+                    </span>
+
+                    <div className="flex min-w-0 flex-1 flex-col">
+                        <h1 className="min-w-0 truncate text-[20px] font-bold leading-tight tracking-tight text-black dark:text-white">
+                            {t('racing.wordmark', 'Racing')}
+                        </h1>
+                        <span className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-ios-gray">
+                            {t('racing.terminalName', 'Street Racing Network')}
+                        </span>
+                    </div>
+
+                    {liveRace && (
+                        <Pill tone="red" className="gap-1.5">
+                            <span className="h-[6px] w-[6px] animate-pulse rounded-full bg-current" />
+                            {t('racing.liveShort', 'Live')}
+                        </Pill>
+                    )}
+
+                    {me && (
+                        <button
+                            type="button"
+                            onClick={() => setSection('driver')}
+                            aria-label={t('racing.openDriver', 'Open my driver profile')}
+                            className="shrink-0 rounded-full transition-opacity duration-150 active:opacity-60"
+                        >
+                            <ContactAvatar
+                                size={34}
+                                contact={{
+                                    name:     driverName,
+                                    initials: initialsFor(driverName),
+                                    color:    colorFor(me.citizenid),
+                                    avatar:   me.avatar ?? undefined,
+                                }}
+                            />
+                        </button>
+                    )}
+                </div>
+
+                <div className={ruleX} />
+            </div>
+        );
+    }
 
     return (
         <div className="shrink-0">

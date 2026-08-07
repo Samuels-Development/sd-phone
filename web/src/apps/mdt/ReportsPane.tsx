@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FileText } from 'lucide-react';
 
+import { device } from '@device';
 import { t } from '@/i18n';
 import { formatListDate } from '@/lib/time';
 import { useAsyncData } from '@/hooks/useAsyncData';
@@ -11,6 +12,7 @@ import { MasterDetail } from '@/ui/MasterDetail';
 import { Pager } from '@/ui/Pager';
 import { Pill } from '@/ui/Pill';
 import { SegmentedControl } from '@/ui/SegmentedControl';
+import { Select } from '@/ui/Select';
 
 import type { ReportSummary, ReportType } from './data';
 import { mdtReports } from './mdtApi';
@@ -22,6 +24,8 @@ import { MdtButton } from './ui/MdtButton';
 type TypeFilter = ReportType | 'All';
 
 const NEW_REPORT = 'new';
+
+const isPhone = device.id === 'phone';
 
 function ReportListRow({ report, selected, onPress }: {
     report:   ReportSummary;
@@ -82,6 +86,11 @@ export function ReportsPane() {
     const total = data?.total ?? 0;
     const pageSize = data?.pageSize ?? 25;
 
+    const typeOptions = [
+        { value: 'All' as TypeFilter, label: isPhone ? t('mdt.anyType', 'Any type') : t('common.all', 'All') },
+        ...REPORT_TYPES.map((type: ReportType) => ({ value: type as TypeFilter, label: reportTypeLabel(type) })),
+    ];
+
     const empty = (
         <EmptyState
             center
@@ -110,19 +119,29 @@ export function ReportsPane() {
             ) : undefined}
             isEmpty={settled && rows.length === 0}
             empty={empty}
+            minWidth={isPhone ? 0 : undefined}
             footer={<Pager page={data?.page ?? page} pageSize={pageSize} total={total} onPage={setPage} />}
         >
-            <div className="px-3 pb-2">
-                <SegmentedControl<TypeFilter>
-                    className={mdtSegmentedDense}
-                    value={filter}
-                    onChange={setFilter}
-                    options={[
-                        { value: 'All', label: t('common.all', 'All') },
-                        ...REPORT_TYPES.map((type: ReportType) => ({ value: type as TypeFilter, label: reportTypeLabel(type) })),
-                    ]}
-                />
-            </div>
+            {isPhone ? (
+                <div className="px-3 pb-2">
+                    <Select<TypeFilter>
+                        value={filter}
+                        onChange={setFilter}
+                        size="sm"
+                        ariaLabel={t('mdt.type', 'Type')}
+                        options={typeOptions}
+                    />
+                </div>
+            ) : (
+                <div className="px-3 pb-2">
+                    <SegmentedControl<TypeFilter>
+                        className={mdtSegmentedDense}
+                        value={filter}
+                        onChange={setFilter}
+                        options={typeOptions}
+                    />
+                </div>
+            )}
 
             <div className="mdt-stagger flex flex-col gap-0.5 px-1">
                 {rows.map(row => (
@@ -159,6 +178,7 @@ export function ReportsPane() {
                 />
             }
             onCloseDetail={() => select(null)}
+            backLabel={t('mdt.reports', 'Reports')}
         />
     );
 }

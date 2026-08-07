@@ -14,7 +14,7 @@ const LINE   = 'rgba(255, 255, 255, 0.10)';
 const TEXT   = '#F2F5F8';
 const MUTE   = 'rgba(242, 245, 248, 0.48)';
 const WARN   = '#FFD60A';
-const ON_INK = '#04120E';
+const ON_INK = '#FFFFFF';
 
 const SLAB: CSSProperties = {
     background: INK,
@@ -80,7 +80,7 @@ export function RaceStartBoard({ board, x, y, lineup }: {
                         <span style={{ fontSize: 26, fontWeight: 800, lineHeight: 0.9, color: ON_INK, letterSpacing: '-0.04em' }}>
                             {board.class}
                         </span>
-                        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.13em', color: 'rgba(4, 18, 14, 0.62)' }}>
+                        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.13em', color: 'rgba(255, 255, 255, 0.72)' }}>
                             {t('racing.boardClass', 'CLASS')}
                         </span>
                     </div>

@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Flag } from 'lucide-react';
 
+import { device } from '@device';
 import { NavContext } from '@/hooks/useIosPush';
 import { MenuRootProvider } from '@/ui/menuRoot';
 import { surfaceBackdrop } from '@/ui/surfaces';
 import type { RacingSection } from './data';
-import { AdminPane } from './AdminPane';
 import { DriverPane } from './DriverPane';
 import { RacesPane } from './RacesPane';
 import { RankingsPane } from './RankingsPane';
 import { TracksPane } from './TracksPane';
 import { RacingHeader } from './RacingHeader';
+import { RacingPhone } from './RacingPhone';
 import { RacingRail } from './RacingRail';
 import { RACING_ACCENT, RACING_STATUS_RESERVE, racingViewEnter } from './racingTheme';
 import { RacingSessionProvider, useRacingSession, useRacingSessionState } from './useRacingSession';
@@ -20,7 +21,6 @@ function pane(section: RacingSection) {
         case 'tracks':   return <TracksPane />;
         case 'rankings': return <RankingsPane />;
         case 'driver':   return <DriverPane />;
-        case 'admin':    return <AdminPane />;
         default:         return <RacesPane />;
     }
 }
@@ -28,9 +28,9 @@ function pane(section: RacingSection) {
 const COMPACT_WIDTH = 900;
 
 function RacingTerminal() {
-    const { ready, admin, section } = useRacingSession();
+    const { ready, section } = useRacingSession();
 
-    const active: RacingSection = section === 'admin' && !admin ? 'races' : section;
+    const active: RacingSection = section;
 
     const rootRef = useRef<HTMLDivElement | null>(null);
     const [root, setRoot] = useState<HTMLDivElement | null>(null);
@@ -94,7 +94,7 @@ export function Racing({ onClose: _onClose }: { onClose: () => void }) {
     return (
         <RacingSessionProvider value={session}>
             <NavContext.Provider value={{ onWillBack: () => {} }}>
-                <RacingTerminal />
+                {device.id === 'phone' ? <RacingPhone pane={pane} /> : <RacingTerminal />}
             </NavContext.Provider>
         </RacingSessionProvider>
     );

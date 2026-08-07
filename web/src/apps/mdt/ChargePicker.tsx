@@ -153,10 +153,10 @@ export function ChargePicker({ lines, onChange, subjects = [], className = '' }:
                             return (
                                 <div
                                     key={`${line.code}:${line.citizenid ?? ''}:${index}`}
-                                    className="flex items-center gap-2 px-3 py-2.5"
+                                    className="flex flex-wrap items-center gap-x-2 gap-y-1.5 px-3 py-2.5"
                                 >
                                     <Pill tone={STATUS_TONE[cls] ?? 'blue'}>{line.code}</Pill>
-                                    <span className="min-w-0 flex-1">
+                                    <span className="min-w-0 grow basis-[200px]">
                                         <span className={`block truncate ${mdtRowTitle}`}>
                                             {offence?.label ?? line.code}
                                         </span>
@@ -167,50 +167,52 @@ export function ChargePicker({ lines, onChange, subjects = [], className = '' }:
                                         </span>
                                     </span>
 
-                                    {subjects.length > 1 && (
-                                        <Select
-                                            value={line.citizenid ?? ''}
-                                            onChange={next => setSubject(index, next)}
-                                            options={[
-                                                ...subjects.map(subject => ({ value: subject.citizenid, label: subject.name })),
-                                                { value: ALL_SUSPECTS, label: t('mdt.allSuspects', 'All suspects') },
-                                            ]}
-                                            size="xs"
-                                            ariaLabel={t('mdt.attributeCharge', 'Attribute charge')}
-                                            className="max-w-[150px] shrink-0"
-                                        />
-                                    )}
+                                    <span className="ml-auto flex shrink-0 items-center gap-2">
+                                        {subjects.length > 1 && (
+                                            <Select
+                                                value={line.citizenid ?? ''}
+                                                onChange={next => setSubject(index, next)}
+                                                options={[
+                                                    ...subjects.map(subject => ({ value: subject.citizenid, label: subject.name })),
+                                                    { value: ALL_SUSPECTS, label: t('mdt.allSuspects', 'All suspects') },
+                                                ]}
+                                                size="xs"
+                                                ariaLabel={t('mdt.attributeCharge', 'Attribute charge')}
+                                                className="max-w-[150px] shrink-0"
+                                            />
+                                        )}
 
-                                    <span className="flex shrink-0 items-center gap-1 rounded-full bg-black/[0.06] px-1 py-0.5 dark:bg-white/[0.12]">
-                                        <button
-                                            type="button"
-                                            onClick={() => setCount(index, line.count - 1)}
-                                            aria-label={t('mdt.decreaseCount', 'Decrease count')}
-                                            className="flex h-6 w-6 items-center justify-center rounded-full text-black active:opacity-50 dark:text-white"
-                                        >
-                                            <Minus className="h-[14px] w-[14px]" strokeWidth={2.75} />
-                                        </button>
-                                        <span className="min-w-[18px] text-center text-[15px] font-semibold tabular-nums text-black dark:text-white">
-                                            {line.count}
+                                        <span className="flex shrink-0 items-center gap-1 rounded-full bg-black/[0.06] px-1 py-0.5 dark:bg-white/[0.12]">
+                                            <button
+                                                type="button"
+                                                onClick={() => setCount(index, line.count - 1)}
+                                                aria-label={t('mdt.decreaseCount', 'Decrease count')}
+                                                className="flex h-6 w-6 items-center justify-center rounded-full text-black active:opacity-50 dark:text-white"
+                                            >
+                                                <Minus className="h-[14px] w-[14px]" strokeWidth={2.75} />
+                                            </button>
+                                            <span className="min-w-[18px] text-center text-[15px] font-semibold tabular-nums text-black dark:text-white">
+                                                {line.count}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setCount(index, line.count + 1)}
+                                                aria-label={t('mdt.increaseCount', 'Increase count')}
+                                                className="flex h-6 w-6 items-center justify-center rounded-full text-black active:opacity-50 dark:text-white"
+                                            >
+                                                <Plus className="h-[14px] w-[14px]" strokeWidth={2.75} />
+                                            </button>
                                         </span>
+
                                         <button
                                             type="button"
-                                            onClick={() => setCount(index, line.count + 1)}
-                                            aria-label={t('mdt.increaseCount', 'Increase count')}
-                                            className="flex h-6 w-6 items-center justify-center rounded-full text-black active:opacity-50 dark:text-white"
+                                            onClick={() => setCount(index, 0)}
+                                            aria-label={t('mdt.removeCharge', 'Remove charge')}
+                                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ios-gray active:opacity-50"
                                         >
-                                            <Plus className="h-[14px] w-[14px]" strokeWidth={2.75} />
+                                            <X className="h-[16px] w-[16px]" strokeWidth={2.5} />
                                         </button>
                                     </span>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => setCount(index, 0)}
-                                        aria-label={t('mdt.removeCharge', 'Remove charge')}
-                                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ios-gray active:opacity-50"
-                                    >
-                                        <X className="h-[16px] w-[16px]" strokeWidth={2.5} />
-                                    </button>
                                 </div>
                             );
                         })}

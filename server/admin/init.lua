@@ -55,9 +55,11 @@ lib.addCommand('phoneadmin', {
         return
     end
     if not permissions.isAllowed(source) then return end
-    -- The sim flag drives the panel's Numbers nav visibility.
+    -- The sim flag drives the panel's Numbers nav visibility; the racing flag drives its Racing
+    -- section, which is the only place track moderation lives.
     TriggerClientEvent('sd-phone:client:admin:open', source, player.getName(source),
-        require('server.sim.state').active)
+        require('server.sim.state').active,
+        (require('configs.config').Racing or {}).Enabled == true)
 end)
 
 ---/birdyverify <handle> <blue|gold|grey|none> - sets or clears a Birdy badge without opening the

@@ -22,6 +22,8 @@ const ALIAS_MIN = 3;
 const ALIAS_MAX = 16;
 const AVATAR_MAX = 500;
 
+const NARROW_WIDTH = 560;
+
 const INERT_POSITION: HudPosition = 'middle-center';
 const SCALE_STEP = 0.05;
 const SCALE_SAVE_DELAY = 400;
@@ -50,20 +52,21 @@ function positionLabel(position: HudPosition): string {
     }
 }
 
-function SettingRow({ label, hint, divider, children }: {
+function SettingRow({ label, hint, stacked, divider, children }: {
     label:    string;
     hint?:    string;
+    stacked?: boolean;
     divider?: boolean;
     children: ReactNode;
 }) {
     return (
         <div className="relative px-4 py-3">
-            <div className="flex items-center gap-4">
-                <div className="flex min-w-0 flex-1 flex-col">
+            <div className={stacked ? 'flex flex-col gap-3' : 'flex items-center gap-4'}>
+                <div className={`flex min-w-0 flex-col ${stacked ? '' : 'flex-1'}`}>
                     <span className="text-[17px] font-normal text-black dark:text-white">{label}</span>
                     {hint && <span className="text-[13.5px] text-ios-gray">{hint}</span>}
                 </div>
-                <div className="shrink-0">{children}</div>
+                <div className={stacked ? '' : 'shrink-0'}>{children}</div>
             </div>
             {divider && (
                 <div
@@ -75,9 +78,16 @@ function SettingRow({ label, hint, divider, children }: {
     );
 }
 
-function HudPositionGrid({ value, onChange }: { value: HudPosition; onChange: (position: HudPosition) => void }) {
+function HudPositionGrid({ value, stacked, onChange }: {
+    value:    HudPosition;
+    stacked?: boolean;
+    onChange: (position: HudPosition) => void;
+}) {
     return (
-        <div className="grid w-[186px] grid-cols-3 gap-1.5">
+        <div className={stacked
+            ? 'grid w-full max-w-[300px] grid-cols-3 gap-2'
+            : 'grid w-[186px] grid-cols-3 gap-1.5'}
+        >
             {HUD_POSITIONS.map(position => {
                 const inert = position === INERT_POSITION;
                 const active = position === value;
@@ -94,7 +104,7 @@ function HudPositionGrid({ value, onChange }: { value: HudPosition; onChange: (p
                         aria-label={positionLabel(position)}
                         aria-pressed={active}
                         onClick={() => onChange(position)}
-                        className={`flex h-9 items-center justify-center rounded-[7px] transition-colors duration-150 ${tone}`}
+                        className={`flex items-center justify-center rounded-[7px] transition-colors duration-150 ${stacked ? 'h-[52px]' : 'h-9'} ${tone}`}
                     >
                         {inert && <span className="h-[4px] w-[4px] rounded-full bg-black/25 dark:bg-white/30" />}
                     </button>
@@ -104,16 +114,17 @@ function HudPositionGrid({ value, onChange }: { value: HudPosition; onChange: (p
     );
 }
 
-function HudColourRow({ label, value, divider, onChange }: {
+function HudColourRow({ label, value, stacked, divider, onChange }: {
     label:    string;
     value:    string;
+    stacked?: boolean;
     divider?: boolean;
     onChange: (color: string) => void;
 }) {
     const current = value.trim().toUpperCase();
     return (
-        <SettingRow label={label} divider={divider}>
-            <div className="flex items-center gap-2">
+        <SettingRow label={label} stacked={stacked} divider={divider}>
+            <div className={stacked ? 'flex flex-wrap items-center gap-2.5' : 'flex items-center gap-2'}>
                 {HUD_COLORS.map(color => {
                     const active = color.toUpperCase() === current;
                     return (
@@ -123,7 +134,7 @@ function HudColourRow({ label, value, divider, onChange }: {
                             aria-label={t('racing.colourSwatch', 'Colour {hex}', { hex: color })}
                             aria-pressed={active}
                             onClick={() => onChange(color)}
-                            className="h-[26px] w-[26px] shrink-0 rounded-full ring-1 ring-inset ring-black/15 transition-transform duration-150 hover:scale-110 dark:ring-white/20"
+                            className={`shrink-0 rounded-full ring-1 ring-inset ring-black/15 transition-transform duration-150 hover:scale-110 dark:ring-white/20 ${stacked ? 'h-[30px] w-[30px]' : 'h-[26px] w-[26px]'}`}
                             style={{
                                 background: color,
                                 boxShadow:  active ? `0 0 0 2.5px ${color}, 0 0 0 4px rgba(0,0,0,0.4)` : undefined,
@@ -146,8 +157,22 @@ export function DriverPane() {
     const pendingRef = useRef<HudSettings | null>(null);
     const timerRef = useRef<number | null>(null);
 
+    const hostRef = useRef<HTMLDivElement | null>(null);
+    const [stacked, setStacked] = useState(false);
+
     useEffect(() => () => {
         if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    }, []);
+
+    useEffect(() => {
+        const host = hostRef.current;
+        if (!host) return;
+        const measure = () => setStacked(host.clientWidth < NARROW_WIDTH);
+        measure();
+        if (typeof ResizeObserver === 'undefined') return;
+        const ro = new ResizeObserver(measure);
+        ro.observe(host);
+        return () => ro.disconnect();
     }, []);
 
     const changeHud = useCallback((next: HudSettings, delay = 0) => {
@@ -184,7 +209,8 @@ export function DriverPane() {
     const avatarValue = me?.avatar?.trim() ?? '';
 
     return (
-        <Scroller className={`min-h-0 flex-1 ${panePad} pb-8`}>
+        <div ref={hostRef} className="flex min-h-0 flex-1 flex-col">
+        <Scroller className={`min-h-0 flex-1 ${stacked ? 'pt-5' : panePad} pb-8`}>
             <div className="mx-auto flex w-full max-w-[680px] flex-col gap-6">
                 <div className="flex items-center gap-5 px-4">
                     <ContactAvatar
@@ -263,9 +289,9 @@ export function DriverPane() {
                         />
                     </div>
 
-                    <SettingRow label={t('racing.hudStyle', 'Style')} divider>
+                    <SettingRow label={t('racing.hudStyle', 'Style')} stacked={stacked} divider>
                         <SegmentedControl
-                            className={`w-[268px] ${racingSegmented}`}
+                            className={`${stacked ? 'w-full' : 'w-[268px]'} ${racingSegmented}`}
                             value={settings.style}
                             onChange={style => changeHud({ ...settings, style })}
                             options={HUD_STYLES.map(style => ({ value: style, label: styleLabel(style) }))}
@@ -275,10 +301,12 @@ export function DriverPane() {
                     <SettingRow
                         label={t('racing.hudPosition', 'Screen position')}
                         hint={positionLabel(settings.position)}
+                        stacked={stacked}
                         divider
                     >
                         <HudPositionGrid
                             value={settings.position}
+                            stacked={stacked}
                             onChange={position => changeHud({ ...settings, position })}
                         />
                     </SettingRow>
@@ -286,10 +314,11 @@ export function DriverPane() {
                     <SettingRow
                         label={t('racing.hudScale', 'Size')}
                         hint={t('racing.hudScaleValue', '{scale}x', { scale: settings.scale.toFixed(2) })}
+                        stacked={stacked}
                         divider
                     >
                         <Slider
-                            className="w-[220px]"
+                            className={stacked ? 'w-full' : 'w-[220px]'}
                             value={settings.scale}
                             min={HUD_SCALE_MIN}
                             max={HUD_SCALE_MAX}
@@ -302,6 +331,7 @@ export function DriverPane() {
                     <HudColourRow
                         label={t('racing.hudCheckpointColour', 'Checkpoint colour')}
                         value={settings.checkpointColor}
+                        stacked={stacked}
                         divider
                         onChange={checkpointColor => changeHud({ ...settings, checkpointColor })}
                     />
@@ -309,6 +339,7 @@ export function DriverPane() {
                     <HudColourRow
                         label={t('racing.hudClosestColour', 'Next checkpoint colour')}
                         value={settings.closestColor}
+                        stacked={stacked}
                         divider
                         onChange={closestColor => changeHud({ ...settings, closestColor })}
                     />
@@ -368,5 +399,6 @@ export function DriverPane() {
                 />
             )}
         </Scroller>
+        </div>
     );
 }
