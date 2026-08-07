@@ -33,6 +33,9 @@ local CID_SINGLE = {
     { 'phone_timer_recents',         'citizenid' },
     { 'phone_stock_holdings',        'citizenid' },
     { 'phone_stock_wallet',          'citizenid' },
+    { 'phone_racing_tracks',         'citizenid' },
+    { 'phone_racing_profiles',       'citizenid' },
+    { 'phone_racing_results',        'citizenid' },
     { 'phone_service_prefs',         'citizenid' },
     { 'marketplace_listings',        'citizenid' },
     { 'pages_posts',                 'citizenid' },
@@ -82,6 +85,9 @@ local function wipeCid(cid)
     local rows = 0
 
     rows = rows + del('DELETE FROM phone_photo_album_items WHERE album_id IN (SELECT id FROM phone_photo_albums WHERE citizenid = ?)', { cid })
+    -- Every racer's results on a track this character built, since the track row itself goes below
+    -- and a leaderboard pointing at a track that no longer exists is unreadable.
+    rows = rows + del('DELETE FROM phone_racing_results WHERE track_id IN (SELECT id FROM phone_racing_tracks WHERE citizenid = ?)', { cid })
 
     for _, t in ipairs(CID_SINGLE) do
         rows = rows + del(('DELETE FROM %s WHERE %s = ?'):format(t[1], t[2]), { cid })

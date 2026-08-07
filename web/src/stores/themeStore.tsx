@@ -222,8 +222,8 @@ const clampPhoneScale = (n: number) => Math.min(100, Math.max(0, Math.round(n)))
 function loadPhoneScaleLocal(): number {
     try {
         const n = parseFloat(window.localStorage.getItem(PHONE_SCALE_KEY) ?? '');
-        return Number.isFinite(n) ? clampPhoneScale(n) : 50;
-    } catch { return 50; }
+        return Number.isFinite(n) ? clampPhoneScale(n) : device.defaultScale;
+    } catch { return device.defaultScale; }
 }
 function savePhoneScaleLocal(v: number) {
     try { window.localStorage.setItem(PHONE_SCALE_KEY, String(v)); } catch { /* ignore */ }
@@ -380,7 +380,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     blurHome: isFiveM ? false : loadBlurLocal(BLUR_HOME_KEY),
     islandPet: isFiveM ? 'none' : loadIslandPetLocal(),
     brightness: 100,
-    phoneScale: isFiveM ? 50 : loadPhoneScaleLocal(),
+    phoneScale: isFiveM ? device.defaultScale : loadPhoneScaleLocal(),
     chatTextScale: isFiveM ? 1 : loadChatScaleLocal(),
     phoneAlign: isFiveM && device.id === 'phone' ? device.defaultAlign : loadPhoneAlignLocal(),
     ringtoneVol: 40,

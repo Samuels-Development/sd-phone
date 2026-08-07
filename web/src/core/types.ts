@@ -4,6 +4,9 @@ import type { BirdyMessage } from '@/apps/birdy/data';
 import type { DocFile } from '@/apps/documents/data';
 import type { Bulletin, Call, ChatMsg, Unit } from '@/apps/mdt/data';
 import type { DMsg as PhotogramDM, User as PhotogramUser } from '@/apps/photogram/data';
+import type {
+    HudMarker, HudPosition, HudState, HudStyle, LineupState, RaceResult, StartBoard, Standing,
+} from '@/apps/racing/data';
 import type { VUser as VibezUser } from '@/apps/vibez/data';
 import type { Reaction } from '@/shared/chat/data';
 
@@ -367,6 +370,19 @@ export type NuiMessage =
     | { action: 'sd-phone:mdt:chat';     data: { message: ChatMsg } }
     | { action: 'sd-phone:mdt:bulletin'; data: { bulletins: Bulletin[] } }
     | { action: 'sd-phone:mdt:warrant';  data: { citizenid: string; wanted: boolean } }
+    | { action: 'sd-phone:racing:racesChanged' }
+    | { action: 'sd-phone:racing:standings';  data: { raceId: string; entries: Standing[] } }
+    | { action: 'sd-phone:racing:raceResult'; data: RaceResult }
+    | { action: 'sd-phone:racing:hud:show';   data: { style: HudStyle; position: HudPosition; scale: number } }
+    | { action: 'sd-phone:racing:hud:hide' }
+    | { action: 'sd-phone:racing:hud:state';  data: Partial<HudState> }
+    | { action: 'sd-phone:racing:hud:countdown'; data: { from: number } }
+    | { action: 'sd-phone:racing:hud:dnf';    data: { seconds: number } }
+    | { action: 'sd-phone:racing:markers';    data: { markers: HudMarker[]; color: string; colorClosest: string } }
+    | { action: 'sd-phone:racing:board:show'; data: StartBoard }
+    | { action: 'sd-phone:racing:board:pos';  data: { on: boolean; x: number; y: number; joined: boolean } }
+    | { action: 'sd-phone:racing:board:hide' }
+    | { action: 'sd-phone:racing:board:lineup'; data: { state: LineupState | null } }
     | { action: 'sd-phone:wipe' }
     | { action: 'sd-phone:admin:open'; data: { adminName?: string; sim?: boolean } }
     | { action: 'chess:invited';  data: { fromSrc: string; fromName: string; lobbyId: string } }

@@ -4,16 +4,16 @@ import { Search } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { EmptyState } from '@/ui/EmptyState';
+import { useMenuRoot } from '@/ui/menuRoot';
+import { Pager } from '@/ui/Pager';
 import { Scroller } from '@/ui/Scroller';
 import { SearchBar } from '@/ui/SearchBar';
 import { useAsyncData } from '@/hooks/useAsyncData';
 
 import { CitizenRow } from './ProfilesPane';
-import { useMdtRoot } from './mdtRoot';
 import { mdtPersonsSearch } from './mdtApi';
 import { MdtButton } from './ui/MdtButton';
 import { MdtCard } from './ui/MdtCard';
-import { MdtPager } from './ui/MdtPager';
 
 export interface PickedPerson {
     citizenid: string;
@@ -46,7 +46,7 @@ export function PersonPicker({ title, onPick, onClose }: {
     const rows     = data?.rows ?? [];
     const total    = data?.total ?? 0;
     const pageSize = data?.pageSize ?? 25;
-    const root = useMdtRoot();
+    const root = useMenuRoot();
 
     const overlay = (
         <div
@@ -98,7 +98,7 @@ export function PersonPicker({ title, onPick, onClose }: {
                         )}
                     </Scroller>
 
-                    <MdtPager page={data?.page ?? page} pageSize={pageSize} total={total} onPage={setPage} />
+                    <Pager page={data?.page ?? page} pageSize={pageSize} total={total} onPage={setPage} />
                 </MdtCard>
             </div>
         </div>

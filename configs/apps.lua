@@ -84,6 +84,11 @@ return {
         { id = 'emsmdt', label = 'EMS', icon = 'emsmdt', route = '/emsmdt', accent = '#E11D48', base = true, enabled = false },
         { id = 'dojmdt', label = 'DOJ', icon = 'dojmdt', route = '/dojmdt', accent = '#6D28D9', base = true, enabled = false },
 
+        -- Racing is a TABLET app on the same terms: the row is here so the tablet's ids validate
+        -- against this catalog, and `enabled = false` is what keeps it off phones. Keep
+        -- `base = true` for the same reason the terminals do.
+        { id = 'racing', label = 'Racing', icon = 'racing', route = '/racing', accent = '#0BF2B4', base = true, enabled = false },
+
         -- Add `wifi` to any entry above to keep its download to one network, e.g. Dark Chat only
         -- handed out inside the bank:
         -- { id = 'darkchat', label = 'Dark Chat', icon = 'darkchat', route = '/darkchat', accent = '#1c1c1e', base = false, enabled = true, wifi = 'mazebank' },

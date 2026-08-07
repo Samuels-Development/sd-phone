@@ -10,6 +10,7 @@ import { AlertDialog } from '@/ui/AlertDialog';
 import { EmptyState } from '@/ui/EmptyState';
 import { Pill } from '@/ui/Pill';
 import { Scroller } from '@/ui/Scroller';
+import { Select } from '@/ui/Select';
 
 import type { CaseDetail, CasePriority, CaseRole, CaseStatus, EvidenceItem } from './data';
 import {
@@ -25,7 +26,6 @@ import { MdtEvidence } from './ui/MdtEvidence';
 import { MdtRichField } from './ui/MdtRichField';
 import { MdtRichText } from './ui/MdtRichText';
 import { MdtField } from './ui/MdtField';
-import { MdtSelect } from './ui/MdtSelect';
 
 export const CASE_STATUSES: readonly CaseStatus[] = ['open', 'in_progress', 'closed'] as const;
 export const CASE_PRIORITIES: readonly CasePriority[] = ['low', 'medium', 'high'] as const;
@@ -248,14 +248,14 @@ export function CaseFile({ caseRef, onSaved, onDeleted, onClose, onChanged }: {
                 <div className="mt-4 flex flex-wrap items-center gap-3">
                     {editable ? (
                         <>
-                            <MdtSelect<CaseStatus>
+                            <Select<CaseStatus>
                                 value={file.status}
                                 onChange={status => void patch({ status })}
                                 options={CASE_STATUSES.map((s: CaseStatus) => ({ value: s, label: caseStatusLabel(s) }))}
                                 size="sm"
                                 ariaLabel={t('mdt.status', 'Status')}
                             />
-                            <MdtSelect<CasePriority>
+                            <Select<CasePriority>
                                 value={file.priority}
                                 onChange={priority => void patch({ priority })}
                                 options={CASE_PRIORITIES.map((p: CasePriority) => ({ value: p, label: casePriorityLabel(p) }))}
@@ -347,7 +347,7 @@ export function CaseFile({ caseRef, onSaved, onDeleted, onClose, onChanged }: {
                                         )}
                                     </span>
                                     {editable ? (
-                                        <MdtSelect<CaseRole>
+                                        <Select<CaseRole>
                                             value={officer.role}
                                             onChange={role => void apply(mdtCaseAssign(
                                                 file.ref, officer.citizenid, role, true))}

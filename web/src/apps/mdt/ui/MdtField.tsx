@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 
+import { Select } from '@/ui/Select';
+
 import { mdtFieldClass, mdtSectionHeader } from '../mdtTheme';
-import { MdtSelect } from './MdtSelect';
 
 interface MdtFieldProps {
     label?:       string;
@@ -44,7 +45,7 @@ export function MdtField({
     return (
         <Labelled label={label} hint={hint} className={className}>
             {options ? (
-                <MdtSelect
+                <Select
                     value={value}
                     onChange={onChange}
                     options={options}

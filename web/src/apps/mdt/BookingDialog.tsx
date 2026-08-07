@@ -6,15 +6,15 @@ import { t } from '@/i18n';
 import { formatMoney } from '@/lib/money';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { DialogShell } from '@/ui/DialogShell';
+import { useMenuRoot } from '@/ui/menuRoot';
+import { Select } from '@/ui/Select';
 import { Slider } from '@/ui/Slider';
 
 import { sentenceLabel } from './ChargePicker';
 import type { ArrestRow } from './data';
 import { mdtBook, mdtJailQuote, mdtReport } from './mdtApi';
 import { ReportLinker } from './ReportEditor';
-import { useMdtRoot } from './mdtRoot';
 import { mdtSectionHeader } from './mdtTheme';
-import { MdtSelect } from './ui/MdtSelect';
 
 export function BookingDialog({ onClose, onBooked, fromReport, fromCitizen, mode }: {
     onClose:      () => void;
@@ -23,7 +23,7 @@ export function BookingDialog({ onClose, onBooked, fromReport, fromCitizen, mode
     fromCitizen?: string;
     mode?:        'jail' | 'fine';
 }) {
-    const host = useMdtRoot();
+    const host = useMenuRoot();
     const [reportRef, setReportRef] = useState<string | null>(fromReport ?? null);
     const [citizenid, setCitizenid] = useState(fromCitizen ?? '');
     const [jail, setJail] = useState(mode !== 'fine');
@@ -171,7 +171,7 @@ export function BookingDialog({ onClose, onBooked, fromReport, fromCitizen, mode
         >
             <div className="mt-4 text-left">
                 {suspects.length > 1 && (
-                    <MdtSelect
+                    <Select
                         value={citizenid}
                         onChange={setCitizenid}
                         options={suspects.map(suspect => ({ value: suspect.citizenid, label: suspect.name }))}

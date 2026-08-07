@@ -3,46 +3,46 @@ import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 
 import { isFiveM } from '@/core/nui';
-import { useMdtRoot } from '../mdtRoot';
-import { mdtFieldClass, mdtFieldSm, mdtFieldXs } from '../mdtTheme';
+import { useMenuRoot } from './menuRoot';
+import { fieldClass, fieldSm, fieldXs } from './surfaces';
 import { useAnchoredMenu } from './useAnchoredMenu';
 
-export interface MdtSelectOption<T extends string = string> {
+export interface SelectOption<T extends string = string> {
     value:     T;
     label:     string;
     disabled?: boolean;
 }
 
-type MdtSelectSize = 'md' | 'sm' | 'xs';
+export type SelectSize = 'md' | 'sm' | 'xs';
 
-const TRIGGER: Record<MdtSelectSize, string> = {
-    md: mdtFieldClass,
-    sm: mdtFieldSm,
-    xs: mdtFieldXs,
+const TRIGGER: Record<SelectSize, string> = {
+    md: fieldClass,
+    sm: fieldSm,
+    xs: fieldXs,
 };
 
-const ROW: Record<MdtSelectSize, string> = {
+const ROW: Record<SelectSize, string> = {
     md: 'px-3 py-[9px] text-[15px]',
     sm: 'px-3 py-2 text-[14px]',
     xs: 'px-2.5 py-1.5 text-[13px]',
 };
 
-const CHEVRON: Record<MdtSelectSize, string> = {
+const CHEVRON: Record<SelectSize, string> = {
     md: 'h-[15px] w-[15px]',
     sm: 'h-[14px] w-[14px]',
     xs: 'h-[13px] w-[13px]',
 };
 
-export function MdtSelect<T extends string = string>({
+export function Select<T extends string = string>({
     value, onChange, options, size = 'md', disabled = false, className = '', ariaLabel, placeholder,
 }: {
-    value:       T;
-    onChange:    (value: T) => void;
-    options:     readonly MdtSelectOption<T>[];
-    size?:       MdtSelectSize;
-    disabled?:   boolean;
-    className?:  string;
-    ariaLabel?:  string;
+    value:        T;
+    onChange:     (value: T) => void;
+    options:      readonly SelectOption<T>[];
+    size?:        SelectSize;
+    disabled?:    boolean;
+    className?:   string;
+    ariaLabel?:   string;
     placeholder?: string;
 }) {
     const [open, setOpen] = useState(false);
@@ -63,7 +63,7 @@ export function MdtSelect<T extends string = string>({
     const selectedIndex = useMemo(() => options.findIndex(o => o.value === value), [options, value]);
     const selected = selectedIndex >= 0 ? options[selectedIndex] : undefined;
 
-    const host = useMdtRoot();
+    const host = useMenuRoot();
 
     useEffect(() => {
         if (open) setActive(selectedIndex >= 0 ? selectedIndex : 0);

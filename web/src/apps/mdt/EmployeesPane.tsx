@@ -3,13 +3,13 @@ import { Users } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { EmptyState } from '@/ui/EmptyState';
+import { ListColumn } from '@/ui/ListColumn';
+import { MasterDetail } from '@/ui/MasterDetail';
+import { Pager } from '@/ui/Pager';
 import { Pill } from '@/ui/Pill';
 import type { GradeOption, OfficerRow } from './data';
 import { mdtRowHover, mdtRowMeta } from './mdtTheme';
 import { mdtRoster } from './mdtApi';
-import { MdtColumn } from './ui/MdtColumn';
-import { MdtMaster } from './ui/MdtMaster';
-import { MdtPager } from './ui/MdtPager';
 import { OfficerCard } from './OfficerCard';
 import { useDeckRefresh, useMdtSession } from './useMdtSession';
 
@@ -83,7 +83,7 @@ export function EmployeesPane() {
     }, [refresh, select]);
 
     const master = (
-        <MdtColumn
+        <ListColumn
             className="min-h-0 flex-1"
             title={t('mdt.employees', 'Employees')}
             count={total || undefined}
@@ -105,7 +105,7 @@ export function EmployeesPane() {
                         : t('mdt.noOfficersSub', 'Members appear here as soon as they are hired into the department.')}
                 />
             )}
-            footer={<MdtPager page={page} pageSize={pageSize} total={total} onPage={setPage} />}
+            footer={<Pager page={page} pageSize={pageSize} total={total} onPage={setPage} />}
         >
             {rows.map((o, i) => (
                 <button
@@ -144,11 +144,11 @@ export function EmployeesPane() {
                     )}
                 </button>
             ))}
-        </MdtColumn>
+        </ListColumn>
     );
 
     return (
-        <MdtMaster
+        <MasterDetail
             master={master}
             detail={current
                 ? (

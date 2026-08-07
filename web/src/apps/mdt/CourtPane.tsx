@@ -6,7 +6,11 @@ import { formatMediumDate } from '@/lib/time';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { useSessionState } from '@/hooks/useSessionState';
 import { EmptyState } from '@/ui/EmptyState';
+import { ListColumn } from '@/ui/ListColumn';
+import { MasterDetail } from '@/ui/MasterDetail';
+import { Pager } from '@/ui/Pager';
 import { Pill } from '@/ui/Pill';
+import { Select } from '@/ui/Select';
 
 import { CourtCase, courtStatusLabel, courtStatusTone, courtVerdictLabel } from './CourtCase';
 import { COURT_STATUSES, type CourtStatus, type CourtSummary } from './data';
@@ -14,10 +18,6 @@ import { mdtCourt } from './mdtApi';
 import { useMdtSession } from './useMdtSession';
 import { mdtRef, mdtRowHover, mdtRowMeta, mdtRowTitle } from './mdtTheme';
 import { MdtButton } from './ui/MdtButton';
-import { MdtColumn } from './ui/MdtColumn';
-import { MdtMaster } from './ui/MdtMaster';
-import { MdtPager } from './ui/MdtPager';
-import { MdtSelect } from './ui/MdtSelect';
 
 type StatusFilter = CourtStatus | 'all';
 
@@ -99,7 +99,7 @@ export function CourtPane() {
     );
 
     const master = (
-        <MdtColumn
+        <ListColumn
             className="flex-1"
             title={t('mdt.court', 'Docket')}
             count={total}
@@ -113,10 +113,10 @@ export function CourtPane() {
             ) : undefined}
             isEmpty={settled && rows.length === 0}
             empty={empty}
-            footer={<MdtPager page={data?.page ?? page} pageSize={data?.pageSize ?? 25} total={total} onPage={setPage} />}
+            footer={<Pager page={data?.page ?? page} pageSize={data?.pageSize ?? 25} total={total} onPage={setPage} />}
         >
             <div className="flex flex-col gap-2 px-3 pb-2">
-                <MdtSelect<StatusFilter>
+                <Select<StatusFilter>
                     value={status}
                     onChange={setStatus}
                     size="sm"
@@ -138,11 +138,11 @@ export function CourtPane() {
                     />
                 ))}
             </div>
-        </MdtColumn>
+        </ListColumn>
     );
 
     return (
-        <MdtMaster
+        <MasterDetail
             master={master}
             hasDetail={selected !== null}
             detail={selected ? (

@@ -1358,6 +1358,47 @@ function MdtIcon() {
     );
 }
 
+const RACING_CLOTH =
+    'M15.5 12.5C21.26 9.03 25.74 9.03 31.5 12.5C37.26 15.97 41.74 15.97 47.5 12.5'
+    + 'V34.5C41.74 37.97 37.26 37.97 31.5 34.5C25.74 31.03 21.26 31.03 15.5 34.5Z';
+
+const RACING_CHECKS = [-1.3, -2.6, -1.3, 1.3, 2.6, 1.3].flatMap((lift, col) =>
+    [0, 1, 2, 3]
+        .filter(row => (col + row) % 2 === 0)
+        .map(row => ({
+            id:     `${col}-${row}`,
+            x:      15.5 + col * 5.3333,
+            y:      12.5 + row * 5.5 + lift - (row === 0 ? 3 : 0),
+            height: row === 0 || row === 3 ? 8.5 : 5.5,
+        })),
+);
+
+function RacingIcon() {
+    return (
+        <svg viewBox={`0 0 ${S} ${S}`} width={S} height={S}>
+            <defs>
+                <LinearGrad id="apxbg" top="#3BF7CB" mid="#0BF2B4" bot="#027358" angle={160} />
+                <LinearGrad id="apxcloth" top="#FFFFFF" bot="#E4FFF6" angle={0} />
+                <clipPath id="apxclip"><path d={RACING_CLOTH} /></clipPath>
+                <filter id="apxsh" x="-30%" y="-30%" width="160%" height="160%">
+                    <feDropShadow dx="0" dy="1.2" stdDeviation="1.2" floodColor="#013428" floodOpacity="0.45" />
+                </filter>
+            </defs>
+            <rect width={S} height={S} fill="url(#apxbg)" />
+            <path d={`M0 0 H${S} V19 Q${S / 2} 27 0 19 Z`} fill="rgba(255,255,255,0.13)" />
+            <g filter="url(#apxsh)">
+                <rect x="12.8" y="9" width="3.2" height="42" rx="1.6" fill="#0A2B25" />
+                <path d={RACING_CLOTH} fill="url(#apxcloth)" />
+                <g clipPath="url(#apxclip)">
+                    {RACING_CHECKS.map(cell => (
+                        <rect key={cell.id} x={cell.x} y={cell.y} width="5.3334" height={cell.height} fill="#0A2B25" />
+                    ))}
+                </g>
+            </g>
+        </svg>
+    );
+}
+
 const ICON_MAP: Record<string, IconComponent> = {
     phone:    PhoneIcon,
     messages: MessagesIcon,
@@ -1412,6 +1453,7 @@ const ICON_MAP: Record<string, IconComponent> = {
     mdt:         MdtIcon,
     emsmdt:      EmsMdtIcon,
     dojmdt:      DojMdtIcon,
+    racing:      RacingIcon,
 };
 
 export type IconId = string;

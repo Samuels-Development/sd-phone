@@ -3,6 +3,7 @@ import { ShieldAlert } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { EmptyState } from '@/ui/EmptyState';
+import { MenuRootProvider } from '@/ui/menuRoot';
 import { NavContext } from '@/hooks/useIosPush';
 import type { DepartmentType, MdtSection } from './data';
 import { AffairsPane } from './AffairsPane';
@@ -28,7 +29,6 @@ import { ProtocolsPane } from './ProtocolsPane';
 import { ReportsPane } from './ReportsPane';
 import { VehiclesPane } from './VehiclesPane';
 import { WarrantsPane } from './WarrantsPane';
-import { MdtRootProvider } from './mdtRoot';
 import { MDT_ACCENT, MDT_STATUS_RESERVE, mdtBackdrop } from './mdtTheme';
 import { MdtSessionProvider, useMdtSession, useMdtSessionState } from './useMdtSession';
 
@@ -87,7 +87,7 @@ function MdtTerminal() {
     }, []);
 
     return (
-        <MdtRootProvider value={root}>
+        <MenuRootProvider value={root}>
         <div
             ref={attachRoot}
             data-mdt-root=""
@@ -124,7 +124,7 @@ function MdtTerminal() {
                 </>
             )}
         </div>
-        </MdtRootProvider>
+        </MenuRootProvider>
     );
 }
 

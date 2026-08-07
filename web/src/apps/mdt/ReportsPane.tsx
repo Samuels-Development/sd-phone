@@ -6,6 +6,9 @@ import { formatListDate } from '@/lib/time';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { useSessionState } from '@/hooks/useSessionState';
 import { EmptyState } from '@/ui/EmptyState';
+import { ListColumn } from '@/ui/ListColumn';
+import { MasterDetail } from '@/ui/MasterDetail';
+import { Pager } from '@/ui/Pager';
 import { Pill } from '@/ui/Pill';
 import { SegmentedControl } from '@/ui/SegmentedControl';
 
@@ -15,9 +18,6 @@ import { REPORT_TYPES, ReportEditor, reportTypeLabel, reportTypeTone } from './R
 import { useMdtSession } from './useMdtSession';
 import { mdtRef, mdtRowHover, mdtRowMeta, mdtRowTitle, mdtSegmentedDense } from './mdtTheme';
 import { MdtButton } from './ui/MdtButton';
-import { MdtColumn } from './ui/MdtColumn';
-import { MdtMaster } from './ui/MdtMaster';
-import { MdtPager } from './ui/MdtPager';
 
 type TypeFilter = ReportType | 'All';
 
@@ -96,7 +96,7 @@ export function ReportsPane() {
     );
 
     const master = (
-        <MdtColumn
+        <ListColumn
             className="flex-1"
             title={t('mdt.reports', 'Reports')}
             count={total}
@@ -110,7 +110,7 @@ export function ReportsPane() {
             ) : undefined}
             isEmpty={settled && rows.length === 0}
             empty={empty}
-            footer={<MdtPager page={data?.page ?? page} pageSize={pageSize} total={total} onPage={setPage} />}
+            footer={<Pager page={data?.page ?? page} pageSize={pageSize} total={total} onPage={setPage} />}
         >
             <div className="px-3 pb-2">
                 <SegmentedControl<TypeFilter>
@@ -134,11 +134,11 @@ export function ReportsPane() {
                     />
                 ))}
             </div>
-        </MdtColumn>
+        </ListColumn>
     );
 
     return (
-        <MdtMaster
+        <MasterDetail
             master={master}
             hasDetail={selected !== null}
             detail={selected ? (

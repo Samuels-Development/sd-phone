@@ -8,6 +8,9 @@ import { t } from '@/i18n';
 import { isVideoUrl } from '@/core/photosApi';
 import { EmptyState } from '@/ui/EmptyState';
 import { ImageLightbox } from '@/ui/ImageLightbox';
+import { ListColumn } from '@/ui/ListColumn';
+import { MasterDetail } from '@/ui/MasterDetail';
+import { Pager } from '@/ui/Pager';
 import { Pill } from '@/ui/Pill';
 import { Scroller } from '@/ui/Scroller';
 import { SegmentedControl } from '@/ui/SegmentedControl';
@@ -24,9 +27,6 @@ import {
 import { mdtPanePad, mdtRef, mdtRowHover, mdtRowMeta, mdtRowTitle, mdtSectionHeader, mdtSegmentedDense } from './mdtTheme';
 import { useMdtSession } from './useMdtSession';
 import { MdtCard } from './ui/MdtCard';
-import { MdtColumn } from './ui/MdtColumn';
-import { MdtMaster } from './ui/MdtMaster';
-import { MdtPager } from './ui/MdtPager';
 
 type HandsetTab = 'overview' | 'contacts' | 'calls' | 'messages' | 'media' | 'notes' | 'accounts';
 
@@ -145,7 +145,7 @@ function Contacts({ citizenid }: { citizenid: string }) {
                     {c.favorite && <Pill tone="orange">{t('mdt.hsFavourite', 'Favourite')}</Pill>}
                 </Row>
             ))}
-            <MdtPager page={data?.page ?? page} pageSize={data?.pageSize ?? 30} total={data?.total ?? 0} onPage={setPage} />
+            <Pager page={data?.page ?? page} pageSize={data?.pageSize ?? 30} total={data?.total ?? 0} onPage={setPage} />
         </MdtCard>
     );
 }
@@ -178,7 +178,7 @@ function Calls({ citizenid }: { citizenid: string }) {
                     </Row>
                 );
             })}
-            <MdtPager page={data?.page ?? page} pageSize={data?.pageSize ?? 30} total={data?.total ?? 0} onPage={setPage} />
+            <Pager page={data?.page ?? page} pageSize={data?.pageSize ?? 30} total={data?.total ?? 0} onPage={setPage} />
         </MdtCard>
     );
 }
@@ -246,7 +246,7 @@ function Messages({ citizenid }: { citizenid: string }) {
                     </button>
                 );
             })}
-            <MdtPager page={data?.page ?? page} pageSize={data?.pageSize ?? 30} total={data?.total ?? 0} onPage={setPage} />
+            <Pager page={data?.page ?? page} pageSize={data?.pageSize ?? 30} total={data?.total ?? 0} onPage={setPage} />
         </MdtCard>
     );
 }
@@ -292,7 +292,7 @@ function Media({ citizenid }: { citizenid: string }) {
                             );
                         })}
                     </div>
-                    <MdtPager page={data?.page ?? page} pageSize={data?.pageSize ?? 30} total={data?.total ?? 0} onPage={setPage} />
+                    <Pager page={data?.page ?? page} pageSize={data?.pageSize ?? 30} total={data?.total ?? 0} onPage={setPage} />
                 </MdtCard>
             )}
             {memos.length > 0 && (
@@ -425,7 +425,7 @@ function Notes({ citizenid }: { citizenid: string }) {
                         onView={setViewing}
                     />
                 ))}
-                <MdtPager page={data?.page ?? page} pageSize={data?.pageSize ?? 30} total={data?.total ?? 0} onPage={setPage} />
+                <Pager page={data?.page ?? page} pageSize={data?.pageSize ?? 30} total={data?.total ?? 0} onPage={setPage} />
             </MdtCard>
             {viewing && <ImageLightbox src={viewing} onClose={() => setViewing(null)} />}
         </>
@@ -512,7 +512,7 @@ export function PhonePane() {
     const rows = data?.rows ?? [];
 
     const master = (
-        <MdtColumn
+        <ListColumn
             className="flex-1"
             title={t('mdt.hsHandsets', 'Handsets')}
             count={data?.total ?? 0}
@@ -527,7 +527,7 @@ export function PhonePane() {
                     title={loading ? t('mdt.loading', 'Loading') : t('mdt.noMatches', 'No matches')}
                 />
             }
-            footer={<MdtPager page={data?.page ?? page} pageSize={data?.pageSize ?? 25} total={data?.total ?? 0} onPage={setPage} />}
+            footer={<Pager page={data?.page ?? page} pageSize={data?.pageSize ?? 25} total={data?.total ?? 0} onPage={setPage} />}
         >
             <div className="mdt-stagger flex flex-col gap-0.5">
                 {rows.map(row => (
@@ -539,11 +539,11 @@ export function PhonePane() {
                     />
                 ))}
             </div>
-        </MdtColumn>
+        </ListColumn>
     );
 
     return (
-        <MdtMaster
+        <MasterDetail
             master={master}
             detail={selected ? <Handset key={selected} citizenid={selected} /> : undefined}
             placeholder={

@@ -6,6 +6,8 @@ import { formatMoney } from '@/lib/money';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { useSessionState } from '@/hooks/useSessionState';
 import { EmptyState } from '@/ui/EmptyState';
+import { ListColumn } from '@/ui/ListColumn';
+import { MasterDetail } from '@/ui/MasterDetail';
 import { Pill } from '@/ui/Pill';
 import { Scroller } from '@/ui/Scroller';
 
@@ -15,8 +17,6 @@ import { mdtOffences } from './mdtApi';
 import { useViewEnter } from './useMdtSession';
 import { mdtPanePad, mdtRowHover, mdtRowMeta, mdtSectionHeader, STATUS_TONE } from './mdtTheme';
 import { MdtCard } from './ui/MdtCard';
-import { MdtColumn } from './ui/MdtColumn';
-import { MdtMaster } from './ui/MdtMaster';
 
 export function OffencesPane() {
     const [query, setQuery] = useSessionState('mdt:offences:query', '');
@@ -54,7 +54,7 @@ export function OffencesPane() {
     );
 
     const master = (
-        <MdtColumn
+        <ListColumn
             className="flex-1"
             title={t('mdt.offences', 'Offences')}
             count={offences.length}
@@ -95,11 +95,11 @@ export function OffencesPane() {
                     </div>
                 </div>
             ))}
-        </MdtColumn>
+        </ListColumn>
     );
 
     return (
-        <MdtMaster
+        <MasterDetail
             master={master}
             hasDetail={selected !== null}
             detail={selected ? <OffenceDetail key={selected.code} offence={selected} /> : undefined}

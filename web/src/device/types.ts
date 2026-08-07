@@ -94,5 +94,6 @@ export interface DeviceProfile {
     excludedApps: readonly string[];
     /** Where it sits before the player moves it in Settings. */
     defaultAlign: DeviceAlign;
+    defaultScale: number;
     screen: DeviceScreen;
 }

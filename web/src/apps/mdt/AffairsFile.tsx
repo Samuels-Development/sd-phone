@@ -7,6 +7,7 @@ import { useAsyncData } from '@/hooks/useAsyncData';
 import { EmptyState } from '@/ui/EmptyState';
 import { Pill } from '@/ui/Pill';
 import { Scroller } from '@/ui/Scroller';
+import { Select } from '@/ui/Select';
 
 import {
     IA_CATEGORIES, IA_DISCIPLINE, IA_DISPOSITIONS, IA_SEVERITIES, IA_STATUSES,
@@ -23,7 +24,6 @@ import { MdtEvidence } from './ui/MdtEvidence';
 import { MdtField } from './ui/MdtField';
 import { MdtRichField } from './ui/MdtRichField';
 import { MdtRichText } from './ui/MdtRichText';
-import { MdtSelect } from './ui/MdtSelect';
 
 export function iaStatusLabel(status: string): string {
     if (status === 'investigating') return t('mdt.iaStatusInvestigating', 'Investigating');
@@ -288,14 +288,14 @@ export function AffairsFile({ fileRef, onSaved, onClose, onChanged }: {
             <div className="mt-4 flex flex-wrap items-center gap-3">
                 {canWork ? (
                     <>
-                        <MdtSelect<IaStatus>
+                        <Select<IaStatus>
                             value={file.status}
                             onChange={status => void patch({ ref: file.ref, status })}
                             options={IA_STATUSES.filter(s => s !== 'closed').map((s: IaStatus) => ({ value: s, label: iaStatusLabel(s) }))}
                             size="sm"
                             ariaLabel={t('mdt.status', 'Status')}
                         />
-                        <MdtSelect<IaSeverity>
+                        <Select<IaSeverity>
                             value={file.severity}
                             onChange={severity => void patch({ ref: file.ref, severity })}
                             options={IA_SEVERITIES.map((s: IaSeverity) => ({ value: s, label: iaSeverityLabel(s) }))}

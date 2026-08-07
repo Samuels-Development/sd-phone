@@ -3,6 +3,9 @@ import { Car, Search } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { EmptyState } from '@/ui/EmptyState';
+import { ListColumn } from '@/ui/ListColumn';
+import { MasterDetail } from '@/ui/MasterDetail';
+import { Pager } from '@/ui/Pager';
 import { Pill } from '@/ui/Pill';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { useSessionState } from '@/hooks/useSessionState';
@@ -11,9 +14,6 @@ import { PlateChip, VEHICLE_TONE, VehicleRecord, vehicleStatusLabel } from './Ve
 import { mdtVehiclesSearch } from './mdtApi';
 import { useMdtSession } from './useMdtSession';
 import { mdtRowHover, mdtRowMeta, mdtRowTitle } from './mdtTheme';
-import { MdtColumn } from './ui/MdtColumn';
-import { MdtMaster } from './ui/MdtMaster';
-import { MdtPager } from './ui/MdtPager';
 import type { VehicleRow } from './data';
 
 function VehicleListRow({ vehicle, selected, onPress }: {
@@ -79,7 +79,7 @@ export function VehiclesPane() {
     );
 
     const master = (
-        <MdtColumn
+        <ListColumn
             className="flex-1"
             title={t('mdt.vehicles', 'Vehicles')}
             count={total}
@@ -88,7 +88,7 @@ export function VehiclesPane() {
             placeholder={t('mdt.searchVehicles', 'Plate or model')}
             isEmpty={settled && rows.length === 0}
             empty={empty}
-            footer={<MdtPager page={data?.page ?? page} pageSize={pageSize} total={total} onPage={setPage} />}
+            footer={<Pager page={data?.page ?? page} pageSize={pageSize} total={total} onPage={setPage} />}
         >
             <div className="mdt-stagger flex flex-col gap-0.5">
                 {rows.map(row => (
@@ -100,11 +100,11 @@ export function VehiclesPane() {
                     />
                 ))}
             </div>
-        </MdtColumn>
+        </ListColumn>
     );
 
     return (
-        <MdtMaster
+        <MasterDetail
             master={master}
             detail={selected ? <VehicleRecord key={selected} plate={selected} /> : undefined}
             placeholder={

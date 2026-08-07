@@ -6,6 +6,7 @@ import { isCustomPaletteId, rampFor, rampVars } from '@/apps/settings/appearance
 import { accentVars } from '@/apps/settings/appearance/accentRamp';
 import { AdminPanel } from '@/admin/AdminPanel';
 import { PayphoneUI } from '@/payphone/PayphoneUI';
+import { RaceOverlay } from '@/apps/racing/hud/RaceOverlay';
 import { CallLayer } from '@/apps/phone/CallLayer';
 import { NotificationHost, type NotificationItem } from '@/shell/Notifications';
 import { AirShareCard, type AirShareRequest } from '@/shared/AirShare';
@@ -170,6 +171,7 @@ export function App() {
                 <AppContent />
                 {device.admin && <AdminPanel />}
                 {device.payphone && <PayphoneUI />}
+                {device.id === 'phone' && <RaceOverlay />}
             </MusicProvider>
         </ThemeProvider>
     );

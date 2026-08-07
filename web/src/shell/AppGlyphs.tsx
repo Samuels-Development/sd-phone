@@ -81,6 +81,7 @@ const APP_GLYPHS: Record<string, LucideIcon> = {
     mdt:         Shield,
     emsmdt:      HeartPulse,
     dojmdt:      Landmark,
+    racing:      Flag,
 
     appstore_cloud:     CloudDownload,
     appstore_download:  Download,

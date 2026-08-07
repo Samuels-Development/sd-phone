@@ -3,6 +3,7 @@ import { FileText, Plus } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { EmptyState } from '@/ui/EmptyState';
+import { ListColumn } from '@/ui/ListColumn';
 import { Pill, type PillTone } from '@/ui/Pill';
 import { relTimeCompact } from '@/lib/time';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
@@ -13,7 +14,6 @@ import { mdtPanePad, mdtRef, mdtRowHover, mdtRowMeta, mdtRowTitle, mdtRuleY } fr
 import { mdtHome } from './mdtApi';
 import { MdtButton } from './ui/MdtButton';
 import { MdtCard } from './ui/MdtCard';
-import { MdtColumn } from './ui/MdtColumn';
 import { useDeckRefresh, useMdtSession } from './useMdtSession';
 
 const REPORT_TONE: Record<string, PillTone> = {
@@ -61,7 +61,7 @@ export function HomePane() {
         <div className={`flex min-h-0 flex-1 flex-col ${mdtPanePad}`}>
             <MdtCard className="flex min-h-0 flex-1 overflow-hidden">
                 <div className="ios-scrollbar flex min-h-0 min-w-0 flex-1 overflow-x-auto">
-                    <MdtColumn
+                    <ListColumn
                         title={t('mdt.recentReports', 'Recent Reports')}
                         count={reports.length || undefined}
                         search={{
@@ -117,7 +117,7 @@ export function HomePane() {
                                 )}
                             </button>
                         ))}
-                    </MdtColumn>
+                    </ListColumn>
 
                     <div className={mdtRuleY} />
 

@@ -12,9 +12,11 @@ import { useSessionState } from '@/hooks/useSessionState';
 import { InitialsAvatar } from '@/shared/ContactAvatar';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { EmptyState } from '@/ui/EmptyState';
+import { useMenuRoot } from '@/ui/menuRoot';
 import { Pill } from '@/ui/Pill';
 import { Scroller } from '@/ui/Scroller';
 import { SearchBar } from '@/ui/SearchBar';
+import { Select } from '@/ui/Select';
 
 import { BookingDialog } from './BookingDialog';
 import { catalogIndex, ChargePicker, inputTotals, sentenceLabel } from './ChargePicker';
@@ -25,7 +27,6 @@ import type {
 import { mdtDeleteReport, mdtReport, mdtReports, mdtSaveReport } from './mdtApi';
 import { PersonPicker } from './PersonPicker';
 import { useMdtSession, useViewEnter } from './useMdtSession';
-import { useMdtRoot } from './mdtRoot';
 import { mdtPanePad, mdtRef, mdtRowHover, mdtRowMeta, mdtRowTitle, mdtSectionHeader, STATUS_TONE } from './mdtTheme';
 import { MdtButton } from './ui/MdtButton';
 import { MdtCard } from './ui/MdtCard';
@@ -33,7 +34,6 @@ import { MdtField } from './ui/MdtField';
 import { MdtEvidence } from './ui/MdtEvidence';
 import { MdtRichField } from './ui/MdtRichField';
 import { MdtRichText } from './ui/MdtRichText';
-import { MdtSelect } from './ui/MdtSelect';
 
 export const REPORT_TYPES: readonly ReportType[] = ['Incident', 'Traffic', 'Arrest', 'Investigation', 'Warrant'] as const;
 export const INVOLVED_ROLES: readonly InvolvedRole[] = ['suspect', 'victim', 'witness'] as const;
@@ -543,7 +543,7 @@ function DraftView({ draft, saving, error, enter, onChange, onAddPerson, onSave,
                                     className="w-full bg-transparent text-[12.5px] font-medium text-ios-gray outline-none placeholder:text-ios-gray/70"
                                 />
                             </div>
-                            <MdtSelect<AnyInvolvedRole>
+                            <Select<AnyInvolvedRole>
                                 value={person.role}
                                 onChange={role => setPerson(index, { role })}
                                 options={(medical ? EMS_INVOLVED_ROLES : INVOLVED_ROLES).map(role => ({
@@ -633,7 +633,7 @@ export function ReportLinker({ linked = [], title, onPick, onClose }: {
 
     const { data, loading } = useAsyncData(() => mdtReports({ query: term, page: 1 }), [term]);
     const rows: ReportSummary[] = (data?.rows ?? []).filter(row => !linked.includes(row.ref));
-    const root = useMdtRoot();
+    const root = useMenuRoot();
 
     const overlay = (
         <div

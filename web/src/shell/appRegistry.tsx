@@ -92,6 +92,7 @@ const APP_REGISTRY = {
     mdt:         entry(() => import('@/apps/mdt/Mdt').then(m => ({ default: m.Mdt }))),
     emsmdt:      entry(() => import('@/apps/mdt/Mdt').then(m => ({ default: m.EmsMdt }))),
     dojmdt:      entry(() => import('@/apps/mdt/Mdt').then(m => ({ default: m.DojMdt }))),
+    racing:      entry(() => import('@/apps/racing/Racing').then(m => ({ default: m.Racing }))),
     appstore: {
         load: () => import('@/apps/appstore/AppStore').then(m => { appStoreReady = m.AppStore; return m; }),
         render: (ctx) => (

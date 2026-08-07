@@ -5,6 +5,9 @@ import { t } from '@/i18n';
 import { colorFor } from '@/lib/format';
 import { InitialsAvatar } from '@/shared/ContactAvatar';
 import { EmptyState } from '@/ui/EmptyState';
+import { ListColumn } from '@/ui/ListColumn';
+import { MasterDetail } from '@/ui/MasterDetail';
+import { Pager } from '@/ui/Pager';
 import { Pill } from '@/ui/Pill';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { useSessionState } from '@/hooks/useSessionState';
@@ -13,9 +16,6 @@ import { PatientRecord } from './PatientRecord';
 import { mdtPatientsSearch } from './mdtApi';
 import { useMdtSession } from './useMdtSession';
 import { mdtRowHover, mdtRowMeta, mdtRowTitle } from './mdtTheme';
-import { MdtColumn } from './ui/MdtColumn';
-import { MdtMaster } from './ui/MdtMaster';
-import { MdtPager } from './ui/MdtPager';
 import type { PatientRow } from './data';
 
 function PatientListRow({ patient, selected, onPress }: {
@@ -77,7 +77,7 @@ export function PatientsPane() {
     );
 
     const master = (
-        <MdtColumn
+        <ListColumn
             className="flex-1"
             title={t('mdt.patients', 'Patients')}
             count={total}
@@ -86,7 +86,7 @@ export function PatientsPane() {
             placeholder={t('mdt.searchPatients', 'Name, citizen ID or phone')}
             isEmpty={settled && rows.length === 0}
             empty={empty}
-            footer={<MdtPager page={data?.page ?? page} pageSize={pageSize} total={total} onPage={setPage} />}
+            footer={<Pager page={data?.page ?? page} pageSize={pageSize} total={total} onPage={setPage} />}
         >
             <div className="mdt-stagger flex flex-col gap-0.5">
                 {rows.map(row => (
@@ -98,11 +98,11 @@ export function PatientsPane() {
                     />
                 ))}
             </div>
-        </MdtColumn>
+        </ListColumn>
     );
 
     return (
-        <MdtMaster
+        <MasterDetail
             master={master}
             detail={selected ? <PatientRecord key={selected} citizenid={selected} /> : undefined}
             placeholder={

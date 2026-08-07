@@ -8,6 +8,7 @@ import { EmptyState } from '@/ui/EmptyState';
 import { Pill } from '@/ui/Pill';
 import { Scroller } from '@/ui/Scroller';
 import type { PillTone } from '@/ui/Pill';
+import { Select } from '@/ui/Select';
 
 import { ChargePicker } from './ChargePicker';
 import {
@@ -26,7 +27,6 @@ import { MdtEvidence } from './ui/MdtEvidence';
 import { MdtField } from './ui/MdtField';
 import { MdtRichField } from './ui/MdtRichField';
 import { MdtRichText } from './ui/MdtRichText';
-import { MdtSelect } from './ui/MdtSelect';
 
 export function courtStatusLabel(status: string): string {
     switch (status) {
@@ -332,7 +332,7 @@ export function CourtCase({ caseRef, onSaved, onClose, onChanged }: {
 
                 <div className="mt-4 flex flex-wrap items-center gap-3">
                     {canManage ? (
-                        <MdtSelect<CourtStatus>
+                        <Select<CourtStatus>
                             value={file.status}
                             onChange={status => void manage({ ref: file.ref, status })}
                             options={COURT_STATUSES.filter(s => s !== 'closed' && s !== 'dismissed')
@@ -345,7 +345,7 @@ export function CourtCase({ caseRef, onSaved, onClose, onChanged }: {
                     )}
 
                     {canManage ? (
-                        <MdtSelect<CourtPlea>
+                        <Select<CourtPlea>
                             value={file.plea ?? 'not_guilty'}
                             onChange={plea => void manage({ ref: file.ref, plea })}
                             options={COURT_PLEAS.map((p: CourtPlea) => ({ value: p, label: courtPleaLabel(p) }))}
@@ -476,7 +476,7 @@ export function CourtCase({ caseRef, onSaved, onClose, onChanged }: {
                     {can('court.file') && live && (
                         <div className="mt-4 flex flex-col gap-2">
                             <div className="max-w-[200px]">
-                                <MdtSelect<CourtNoteKind>
+                                <Select<CourtNoteKind>
                                     value={kind}
                                     onChange={setKind}
                                     options={COURT_NOTE_KINDS

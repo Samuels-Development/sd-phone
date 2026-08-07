@@ -1,4 +1,4 @@
-import { useAnchoredMenu } from './useAnchoredMenu';
+import { useAnchoredMenu } from '@/ui/useAnchoredMenu';
 
 export interface MdtPopoverAction {
     label:        string;

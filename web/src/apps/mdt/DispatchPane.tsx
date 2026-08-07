@@ -4,6 +4,8 @@ import { MapPin, RadioTower, Siren, X } from 'lucide-react';
 import { t } from '@/i18n';
 import { relTimeCompact } from '@/lib/time';
 import { EmptyState } from '@/ui/EmptyState';
+import { ListColumn } from '@/ui/ListColumn';
+import { MasterDetail } from '@/ui/MasterDetail';
 import { Pill } from '@/ui/Pill';
 import { Scroller } from '@/ui/Scroller';
 import { SegmentedControl } from '@/ui/SegmentedControl';
@@ -16,8 +18,6 @@ import {
     mdtAttach, mdtDetach, mdtDispatchState, mdtLocate, mdtSetStatus, mdtSetWaypoint,
 } from './mdtApi';
 import { MdtButton } from './ui/MdtButton';
-import { MdtColumn } from './ui/MdtColumn';
-import { MdtMaster } from './ui/MdtMaster';
 import { UnitRow, unitCodeLabel, waypointToUnit } from './UnitsColumn';
 import { useDeckRefresh, useMdtSession } from './useMdtSession';
 
@@ -150,7 +150,7 @@ export function DispatchPane() {
 
             <div className={mdtRuleX} />
 
-            <MdtColumn
+            <ListColumn
                 className="min-h-0 flex-1"
                 title={t('mdt.activeCalls', 'Active Calls')}
                 count={calls.length || undefined}
@@ -199,7 +199,7 @@ export function DispatchPane() {
                         )}
                     </button>
                 ))}
-            </MdtColumn>
+            </ListColumn>
         </div>
     );
 
@@ -281,7 +281,7 @@ export function DispatchPane() {
     ) : undefined;
 
     return (
-        <MdtMaster
+        <MasterDetail
             master={master}
             detail={detail}
             hasDetail={!!current}
@@ -316,7 +316,7 @@ export function DispatchPane() {
                             onWaypointUnit={cid => { void waypointToUnit(cid); }}
                         />
                     ) : (
-                        <MdtColumn
+                        <ListColumn
                             className="min-h-0 flex-1"
                             title={t('mdt.unitsOnAir', 'Units On Air')}
                             count={units.length || undefined}
@@ -338,7 +338,7 @@ export function DispatchPane() {
                                     onPress={() => { void waypointToUnit(u.citizenid); }}
                                 />
                             ))}
-                        </MdtColumn>
+                        </ListColumn>
                     )}
                 </div>
             )}

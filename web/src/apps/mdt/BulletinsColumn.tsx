@@ -4,6 +4,7 @@ import { Megaphone, MoreHorizontal, Plus } from 'lucide-react';
 import { t } from '@/i18n';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { EmptyState } from '@/ui/EmptyState';
+import { ListColumn } from '@/ui/ListColumn';
 import { Scroller } from '@/ui/Scroller';
 import { formatListDate } from '@/lib/time';
 import { isFiveM } from '@/core/nui';
@@ -12,7 +13,6 @@ import type { Bulletin } from './data';
 import { mdtColumnTitle, mdtRowBody, mdtRowHover, mdtRowMeta, mdtRowTitle } from './mdtTheme';
 import { mdtDeleteBulletin, mdtSaveBulletin } from './mdtApi';
 import { MdtButton } from './ui/MdtButton';
-import { MdtColumn } from './ui/MdtColumn';
 import { MdtField } from './ui/MdtField';
 import { MdtPopover } from './ui/MdtPopover';
 import { useMdtSession } from './useMdtSession';
@@ -143,7 +143,7 @@ export function BulletinsColumn({ bulletins, onChanged, className = '' }: {
 
     return (
         <div className={`relative flex min-h-0 min-w-[268px] flex-1 flex-col ${className}`}>
-            <MdtColumn
+            <ListColumn
                 title={t('mdt.bulletinBoard', 'Bulletin Board')}
                 count={bulletins.length || undefined}
                 search={{
@@ -222,7 +222,7 @@ export function BulletinsColumn({ bulletins, onChanged, className = '' }: {
                         )}
                     </div>
                 ))}
-            </MdtColumn>
+            </ListColumn>
 
             {menu && (
                 <MdtPopover

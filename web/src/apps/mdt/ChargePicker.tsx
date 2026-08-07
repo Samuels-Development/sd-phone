@@ -4,15 +4,15 @@ import { Minus, Plus, Scale, X } from 'lucide-react';
 import { t } from '@/i18n';
 import { formatMoney } from '@/lib/money';
 import { EmptyState } from '@/ui/EmptyState';
+import { Pager } from '@/ui/Pager';
 import { Pill } from '@/ui/Pill';
 import { SearchBar } from '@/ui/SearchBar';
+import { Select } from '@/ui/Select';
 
 import { CHARGE_CLASSES, type ChargeClass, type ChargeInput, type Offence } from './data';
 import { useMdtSession } from './useMdtSession';
 import { mdtRowHover, mdtRowMeta, mdtRowTitle, mdtSectionHeader, STATUS_TONE } from './mdtTheme';
 import { MdtCard } from './ui/MdtCard';
-import { MdtPager } from './ui/MdtPager';
-import { MdtSelect } from './ui/MdtSelect';
 
 const OFFENCE_PAGE = 8;
 
@@ -168,7 +168,7 @@ export function ChargePicker({ lines, onChange, subjects = [], className = '' }:
                                     </span>
 
                                     {subjects.length > 1 && (
-                                        <MdtSelect
+                                        <Select
                                             value={line.citizenid ?? ''}
                                             onChange={next => setSubject(index, next)}
                                             options={[
@@ -276,7 +276,7 @@ export function ChargePicker({ lines, onChange, subjects = [], className = '' }:
                         ))}
                     </div>
                 )}
-                <MdtPager page={current} pageSize={OFFENCE_PAGE} total={catalogue.length} onPage={setPage} />
+                <Pager page={current} pageSize={OFFENCE_PAGE} total={catalogue.length} onPage={setPage} />
             </MdtCard>
         </div>
     );

@@ -61,6 +61,7 @@ function getDescriptions(): Record<string, string> {
         chess:       t('appstore.descChess', 'Outplay and checkmate'),
         battleship:  t('appstore.descBattleship', 'Sink the enemy fleet'),
         streaks:     t('appstore.descStreaks', 'A photo a day, keep your streak'),
+        racing:      t('appstore.descRacing', 'Race tracks, rankings and events'),
     };
 }
 

@@ -3,6 +3,8 @@ import { ClipboardList, Plus } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { EmptyState } from '@/ui/EmptyState';
+import { ListColumn } from '@/ui/ListColumn';
+import { MasterDetail } from '@/ui/MasterDetail';
 import { Pill, type PillTone } from '@/ui/Pill';
 import { Scroller } from '@/ui/Scroller';
 import { SegmentedControl } from '@/ui/SegmentedControl';
@@ -17,8 +19,6 @@ import {
     mdtPanePad, mdtRef, mdtRowHover, mdtRowMeta, mdtRowTitle, mdtSectionHeader, mdtSegmentedDense,
 } from './mdtTheme';
 import { MdtCard } from './ui/MdtCard';
-import { MdtColumn } from './ui/MdtColumn';
-import { MdtMaster } from './ui/MdtMaster';
 import type { Protocol, ProtocolCategory, ProtocolPriority } from './data';
 
 const PRIORITY_TONE: Record<ProtocolPriority, PillTone> = {
@@ -227,7 +227,7 @@ export function ProtocolsPane() {
     const current = shown.find(p => p.code === selected) ?? rows.find(p => p.code === selected);
 
     const master = (
-        <MdtColumn
+        <ListColumn
             className="flex-1"
             title={t('mdt.protocols', 'Protocols')}
             count={shown.length || undefined}
@@ -288,7 +288,7 @@ export function ProtocolsPane() {
                     </button>
                 ))}
             </div>
-        </MdtColumn>
+        </ListColumn>
     );
 
     const done = () => { setEditing(null); refetch(); };
@@ -316,7 +316,7 @@ export function ProtocolsPane() {
             : undefined;
 
     return (
-        <MdtMaster
+        <MasterDetail
             master={master}
             detail={detail}
             placeholder={
