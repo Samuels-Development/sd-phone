@@ -1,80 +1,128 @@
 import { apiCall, type Envelope } from '@/core/api';
+import { isFiveM } from '@/core/nui';
 import type {
     AdminAuditEntry, AdminBirdyPost, AdminCall, AdminContentItem,
     AdminMessage, AdminMute, AdminNumberRow, AdminOverview, AdminPlayerHit, AdminSimLookup, AdminStats,
 } from './types';
+import {
+    DEV_AUDIT, DEV_MUTES, DEV_PLAYERS, DEV_STATS, devBirdyPosts, devCalls, devContent,
+    devMessages, devNumbers, devOverview, devSearch, devSimLookup,
+} from './devData';
 
 function call<T>(event: string, payload?: unknown): Promise<Envelope<T>> {
     return apiCall<T>(event, payload);
 }
 
+// Outside FiveM every callback would answer `{ ok: true }`, which reads as a
+// failed envelope and leaves every page empty. The browser demo is the only
+// place the panel is ever seen by someone who cannot open a real one, so it
+// serves a full dataset instead: every page populated, every action a no-op
+// that reports success.
+function seed<T>(data: T): Promise<Envelope<T>> {
+    return Promise.resolve({ success: true, data });
+}
+
+const ok = () => Promise.resolve({ success: true } as Envelope<void>);
+
 export const adminStats = () =>
-    call<AdminStats>('sd-phone:admin:stats');
+    isFiveM ? call<AdminStats>('sd-phone:admin:stats') : seed(DEV_STATS);
 
 // Empty q lists the most recently active phones (string keyset cursor); a real
 // query searches with a numeric offset cursor. Both return 20 per page.
 export const adminSearch = (q: string, cursor?: string | number | null) =>
-    call<{ players: AdminPlayerHit[]; nextCursor?: string | number | null }>('sd-phone:admin:search', { q, cursor });
+    isFiveM
+        ? call<{ players: AdminPlayerHit[]; nextCursor?: string | number | null }>('sd-phone:admin:search', { q, cursor })
+        : seed({ players: devSearch(q), nextCursor: null });
 
 export const adminOverview = (cid: string) =>
-    call<AdminOverview>('sd-phone:admin:overview', { cid });
+    isFiveM ? call<AdminOverview>('sd-phone:admin:overview', { cid }) : seed(devOverview(cid));
 
 export const adminSetNumber = (cid: string, number: string) =>
-    call<{ number: string }>('sd-phone:admin:setNumber', { cid, number });
+    isFiveM ? call<{ number: string }>('sd-phone:admin:setNumber', { cid, number }) : seed({ number });
 
 export const adminSimLookup = (number: string) =>
-    call<AdminSimLookup>('sd-phone:admin:simLookup', { number });
+    isFiveM ? call<AdminSimLookup>('sd-phone:admin:simLookup', { number }) : seed(devSimLookup(number));
 
 export const adminNumbers = (q: string, cursor?: number | null) =>
-    call<{ numbers: AdminNumberRow[]; nextCursor?: number | null }>('sd-phone:admin:numbers', { q, cursor });
+    isFiveM
+        ? call<{ numbers: AdminNumberRow[]; nextCursor?: number | null }>('sd-phone:admin:numbers', { q, cursor })
+        : seed({ numbers: devNumbers(q), nextCursor: null });
 
 export const adminGiveSim = (cid: string, bind: boolean) =>
-    call<{ number: string }>('sd-phone:admin:giveSim', { cid, bind });
+    isFiveM ? call<{ number: string }>('sd-phone:admin:giveSim', { cid, bind }) : seed({ number: '5551204' });
 
 export const adminResetPasscode = (cid: string) =>
-    call<void>('sd-phone:admin:resetPasscode', { cid });
+    isFiveM ? call<void>('sd-phone:admin:resetPasscode', { cid }) : ok();
 
 export const adminSetApp = (cid: string, id: string, install: boolean) =>
-    call<{ installed: string[] }>('sd-phone:admin:setApp', { cid, id, install });
+    isFiveM
+        ? call<{ installed: string[] }>('sd-phone:admin:setApp', { cid, id, install })
+        : seed({ installed: (devOverview(cid).settings?.installedApps ?? []).concat(install ? [id] : []) });
 
 export const adminResetAccountPassword = (accountId: number, password: string) =>
-    call<void>('sd-phone:admin:resetAccountPassword', { accountId, password });
+    isFiveM ? call<void>('sd-phone:admin:resetAccountPassword', { accountId, password }) : ok();
 
 export const adminForceLogout = (cid: string, app?: string) =>
-    call<void>('sd-phone:admin:forceLogout', { cid, app });
+    isFiveM ? call<void>('sd-phone:admin:forceLogout', { cid, app }) : ok();
 
 export const adminBirdyPosts = (opts: { cursor?: string | null; q?: string; cid?: string }) =>
-    call<{ posts: AdminBirdyPost[]; nextCursor?: string | null }>('sd-phone:admin:birdyPosts', opts);
+    isFiveM
+        ? call<{ posts: AdminBirdyPost[]; nextCursor?: string | null }>('sd-phone:admin:birdyPosts', opts)
+        : seed({ posts: devBirdyPosts(opts.q, opts.cid), nextCursor: null });
 
 export const adminBirdyDeletePost = (id: string) =>
-    call<void>('sd-phone:admin:birdyDeletePost', { id });
+    isFiveM ? call<void>('sd-phone:admin:birdyDeletePost', { id }) : ok();
 
 export const adminBirdySetVerified = (handle: string, type: string | null) =>
-    call<void>('sd-phone:admin:birdySetVerified', { handle, type });
+    isFiveM ? call<void>('sd-phone:admin:birdySetVerified', { handle, type }) : ok();
 
 export const adminContent = (app: string, cursor?: string | null, q?: string) =>
-    call<{ items: AdminContentItem[]; nextCursor?: string | null; deletable: boolean }>('sd-phone:admin:content', { app, cursor, q });
+    isFiveM
+        ? call<{ items: AdminContentItem[]; nextCursor?: string | null; deletable: boolean }>('sd-phone:admin:content', { app, cursor, q })
+        : seed({ ...devContent(app, q), nextCursor: null });
 
 export const adminContentDelete = (app: string, id: string) =>
-    call<void>('sd-phone:admin:contentDelete', { app, id });
+    isFiveM ? call<void>('sd-phone:admin:contentDelete', { app, id }) : ok();
 
 export const adminMessages = (cid: string, cursor?: string | null) =>
-    call<{ messages: AdminMessage[]; nextCursor?: string | null }>('sd-phone:admin:messages', { cid, cursor });
+    isFiveM
+        ? call<{ messages: AdminMessage[]; nextCursor?: string | null }>('sd-phone:admin:messages', { cid, cursor })
+        : seed({ messages: devMessages(cid), nextCursor: null });
 
 export const adminCalls = (cid: string, cursor?: string | null) =>
-    call<{ calls: AdminCall[]; nextCursor?: string | null }>('sd-phone:admin:calls', { cid, cursor });
+    isFiveM
+        ? call<{ calls: AdminCall[]; nextCursor?: string | null }>('sd-phone:admin:calls', { cid, cursor })
+        : seed({ calls: devCalls(), nextCursor: null });
 
 export const adminMute = (cid: string, scopes: string[], duration: number | null, reason: string) =>
-    call<{ mutes: AdminMute[] }>('sd-phone:admin:mute', { cid, scopes, duration, reason });
+    isFiveM
+        ? call<{ mutes: AdminMute[] }>('sd-phone:admin:mute', { cid, scopes, duration, reason })
+        : seed({
+            mutes: scopes.map((scope, i) => ({
+                id:        900 + i,
+                citizenid: cid,
+                name:      DEV_PLAYERS.find(p => p.citizenid === cid)?.name,
+                online:    false,
+                scope,
+                reason,
+                adminName: 'Demo Admin',
+                expiresAt: duration ? Math.floor(Date.now() / 1000) + duration : null,
+                createdAt: Math.floor(Date.now() / 1000),
+            })),
+        });
 
 export const adminUnmute = (cid: string, scope?: string) =>
-    call<{ mutes: AdminMute[] }>('sd-phone:admin:unmute', { cid, scope });
+    isFiveM ? call<{ mutes: AdminMute[] }>('sd-phone:admin:unmute', { cid, scope }) : seed({ mutes: [] });
 
 export const adminMutes = (cursor?: number | null) =>
-    call<{ mutes: AdminMute[]; nextCursor?: number | null }>('sd-phone:admin:mutes', { cursor });
+    isFiveM
+        ? call<{ mutes: AdminMute[]; nextCursor?: number | null }>('sd-phone:admin:mutes', { cursor })
+        : seed({ mutes: DEV_MUTES, nextCursor: null });
 
 export const adminWipePhone = (cid: string, confirm: string) =>
-    call<{ rows: number }>('sd-phone:admin:wipePhone', { cid, confirm });
+    isFiveM ? call<{ rows: number }>('sd-phone:admin:wipePhone', { cid, confirm }) : seed({ rows: 1284 });
 
 export const adminAudit = (cursor?: number | null) =>
-    call<{ entries: AdminAuditEntry[]; nextCursor?: number | null }>('sd-phone:admin:audit', { cursor });
+    isFiveM
+        ? call<{ entries: AdminAuditEntry[]; nextCursor?: number | null }>('sd-phone:admin:audit', { cursor })
+        : seed({ entries: DEV_AUDIT, nextCursor: null });
