@@ -52,12 +52,12 @@ local PHONE_RESOURCE = GetCurrentResourceName():lower()
 ---@type table Public module surface; the table returned at end of file.
 local M = {}
 
----Prints debug output when config.Debug is enabled.
+---Debug breadcrumb; config.Debug prints at info so it needs no further setup, while
+---`setr ox:printlevel:sd-phone debug` turns the same output on live without a restart.
 ---@param ... any values to print
 local function debugPrint(...)
-    if config.Debug then
-        print('[sd-phone:client]', ...)
-    end
+    if config.Debug then return lib.print.info(...) end
+    lib.print.debug(...)
 end
 
 ---Reduces a widget name to an identifier the saved home-screen layout can key a placement on.

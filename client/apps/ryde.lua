@@ -27,7 +27,7 @@ RegisterNUICallback('sd-phone:ryde:nearPoint', function(payload, cb)
     payload = payload or {}
     local px, py = tonumber(payload.x), tonumber(payload.y)
     if not (px and py) then cb({ near = false, distance = -1 }); return end
-    local c = GetEntityCoords(PlayerPedId())
+    local c = GetEntityCoords(cache.ped)
     local dx, dy = c.x - (px + 0.0), c.y - (py + 0.0)
     local dist = math.sqrt(dx * dx + dy * dy)
     cb({ near = dist <= (tonumber(payload.radius) or 100.0), distance = math.floor(dist + 0.5) })
@@ -57,7 +57,7 @@ local GENERIC_LABELS = {
 ---@param payload table ride request draft from the UI (dropoff label/coords)
 RegisterNUICallback('sd-phone:ryde:requestRide', function(payload, cb)
     payload = payload or {}
-    local coords = GetEntityCoords(PlayerPedId())
+    local coords = GetEntityCoords(cache.ped)
     payload.pickup = { label = zoneName(coords.x, coords.y, coords.z), x = coords.x, y = coords.y }
     local d = payload.dropoff
     if d and d.x and d.y and GENERIC_LABELS[d.label or ''] then

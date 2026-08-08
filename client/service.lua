@@ -83,7 +83,7 @@ end
 ---and no messages at all.
 ---@param force boolean|nil push even when nothing changed (used on open)
 local function refresh(force)
-    local pos = GetEntityCoords(PlayerPedId())
+    local pos = GetEntityCoords(cache.ped)
     local level = celltowers.level(pos.x, pos.y, TOWERS)
     local bars  = celltowers.bars(level, CUTOFFS)
     local data  = celltowers.allows(level, 'data', THRESHOLDS)

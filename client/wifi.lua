@@ -217,7 +217,7 @@ function wifiClient.connect(id, password)
 
     joined = net
     declined[net.id] = nil
-    local pos = GetEntityCoords(PlayerPedId())
+    local pos = GetEntityCoords(cache.ped)
     joinedStrength = wifi.strength(pos.x, pos.y, pos.z, net)
     remembered[net.id] = supplied or true
     push(true)
@@ -254,7 +254,7 @@ function refresh(force)
         return
     end
 
-    local pos = GetEntityCoords(PlayerPedId())
+    local pos = GetEntityCoords(cache.ped)
     scanned = wifi.scan(pos.x, pos.y, pos.z, NETWORKS, DROP_BELOW)
     local inReach = {}
     for i = 1, #scanned do

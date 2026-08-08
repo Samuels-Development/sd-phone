@@ -68,6 +68,8 @@ local color = config.Phone.DefaultColor or 'black'
 local prop
 ---@type boolean True while a text field in the phone has focus
 local typing = false
+---@type table<integer, true> Prop models this client has already failed to stream.
+local unavailableModels = {}
 
 ---Whether our pose applies: the phone is out (or the torch is lit), and the native cell cam is not
 ---the one framing. That native animates its own pose and spawns its own phone, so ours stands down
@@ -81,7 +83,11 @@ end
 
 ---The clip that should be held right now. Every caller reads the pose through this, so adding a
 ---clip can never leave the watchdog hunting for one the player was never given.
----@return { dict: string, anim: string, blendIn: number, blendOut: number }
+---
+---The vehicle test stays a native rather than `cache.vehicle`: the `true` argument counts a ped
+---climbing in, and the cache only fills once they are seated. Swapping the clip on the way in is
+---the point of asking.
+---@return { dict: string, anim: string, blendIn: number, blendOut: number, flags: integer }
 local function currentClip()
     -- One camera pose covers both lenses: the native cell cam swapped pose on flip, but no
     -- outward-facing clip outside that native is verified to exist. Landscape is the exception:
@@ -92,7 +98,7 @@ local function currentClip()
     elseif typing then
         action = "typing"
     end
-    return CLIPS[action][IsPedInAnyVehicle(PlayerPedId(), true) and 'inCar' or 'onFoot']
+    return CLIPS[action][IsPedInAnyVehicle(cache.ped, true) and 'inCar' or 'onFoot']
 end
 
 ---Where the prop sits in the hand. Landscape lays the phone on its side for the wide viewfinder.
@@ -108,16 +114,26 @@ end
 
 ---Creates a colour-matched local phone prop, disables its collision, and rigidly welds it to the
 ---ped's hand bone.
+---
+---lib.requestModel raises rather than returning on a bad or slow model, and it runs the
+---IsModelValid / IsModelInCdimage pre-check itself, so one pcall covers both failures. The result
+---is memoised because a server running no phone props would otherwise retry on every re-weld, and
+---the model is released on the failure path too, or that branch leaks a streaming reference each
+---time it is taken.
 ---@param ped integer ped to attach the prop to
 ---@param frame string frame colour; must be a key of FRAME_COLORS
 ---@param wide boolean|nil weld it in the landscape grip
 ---@return integer? prop the welded prop entity, or nil if the model wouldn't stream
 function pose.createProp(ped, frame, wide)
     local model = joaat(config.Phone.PropPrefix .. frame)
-    RequestModel(model)
-    local started = GetGameTimer()
-    while not HasModelLoaded(model) and GetGameTimer() - started < 1000 do Wait(0) end
-    if not HasModelLoaded(model) then return nil end
+    if unavailableModels[model] then return nil end
+
+    if not pcall(lib.requestModel, model, 1000) then
+        SetModelAsNoLongerNeeded(model)
+        unavailableModels[model] = true
+        return nil
+    end
+
     local coords = GetEntityCoords(ped)
     local obj = CreateObject(model, coords.x, coords.y, coords.z, false, true, true)
     SetEntityCollision(obj, false, false)
@@ -144,18 +160,28 @@ end
 
 ---Plays the clip the current action calls for and welds the prop, on its own thread: the pose is
 ---cosmetic and must never gate the phone opening.
+---
+---lib.requestAnimDict rather than lib.playAnim, which would load, play and release in one call and
+---forfeit the shouldHold re-check: the load yields, and a phone closed during it must not be
+---answered with a clip that then has to be stopped again. The dict goes back as soon as the task
+---has it, since the task holds its own reference; the hand-rolled path never released and leaked
+---one per clip for the session.
 local function play()
     CreateThread(function()
         local clip = currentClip()
-        RequestAnimDict(clip.dict)
-        local started = GetGameTimer()
-        while not HasAnimDictLoaded(clip.dict) and GetGameTimer() - started < 1000 do Wait(0) end
-        -- The player may have closed the phone, or the native cam taken the pose, during the load.
-        if not pose.shouldHold() then return end
-        local ped = PlayerPedId()
+
+        if not pcall(lib.requestAnimDict, clip.dict, 1000) then return end
+        if not pose.shouldHold() then
+            RemoveAnimDict(clip.dict)
+            return
+        end
+
+        local ped = cache.ped
         if not IsEntityPlayingAnim(ped, clip.dict, clip.anim, 3) then
             TaskPlayAnim(ped, clip.dict, clip.anim, clip.blendIn, clip.blendOut, -1, clip.flags, 0.0, false, false, false)
         end
+        RemoveAnimDict(clip.dict)
+
         attachProp(ped)
     end)
 end
@@ -163,7 +189,7 @@ end
 ---Stops whichever of our clips is playing and removes the prop. Every clip is checked because
 ---entering the viewfinder or a vehicle swaps which one is up.
 function pose.stop()
-    local ped = PlayerPedId()
+    local ped = cache.ped
     for _, contexts in pairs(CLIPS) do
         for _, clip in pairs(contexts) do
             if IsEntityPlayingAnim(ped, clip.dict, clip.anim, 3) then
@@ -190,7 +216,7 @@ end
 function pose.reweld()
     if not pose.shouldHold() then return end
     pose.removeProp()
-    attachProp(PlayerPedId())
+    attachProp(cache.ped)
 end
 
 ---Turns the phone on its side for the landscape viewfinder, or stands it back up. Swaps the held
@@ -219,13 +245,22 @@ end
 CreateThread(function()
     while true do
         if phonecam.rearActive() then
-            SetEntityLocallyInvisible(PlayerPedId())
+            SetEntityLocallyInvisible(cache.ped)
             if prop and DoesEntityExist(prop) then SetEntityLocallyInvisible(prop) end
             Wait(0)
         else
             Wait(200)
         end
     end
+end)
+
+-- A respawn or a ped-model change hands the player a NEW ped, and the prop is still welded to the
+-- old one, which the game does not necessarily delete. The clip re-applies itself on the watchdog
+-- below, but the orphaned prop never would: nothing else ever reads that handle again. ox_lib
+-- already tracks the ped for `cache.ped`, so this subscribes to the change rather than adding a poll.
+lib.onCache('ped', function()
+    pose.removeProp()
+    if pose.shouldHold() then play() end
 end)
 
 -- Re-applies the held clip on a 500ms poll if the game clears it. Movement is what clears it: an
@@ -235,7 +270,7 @@ CreateThread(function()
     while true do
         if pose.shouldHold() then
             local clip = currentClip()
-            if not IsEntityPlayingAnim(PlayerPedId(), clip.dict, clip.anim, 3) then
+            if not IsEntityPlayingAnim(cache.ped, clip.dict, clip.anim, 3) then
                 play()
             end
         end

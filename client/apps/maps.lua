@@ -52,7 +52,7 @@ RegisterNUICallback('sd-phone:maps:route', function(data, cb)
     end
 
     local nav = config.Navigation or {}
-    local ped = PlayerPedId()
+    local ped = cache.ped
     local c   = GetEntityCoords(ped)
 
     local dist = GetGpsBlipRouteLength()
@@ -63,7 +63,7 @@ RegisterNUICallback('sd-phone:maps:route', function(data, cb)
         dist = #(vector3(c.x, c.y, c.z) - vector3(tx + 0.0, ty + 0.0, c.z))
     end
 
-    local inVeh = IsPedInAnyVehicle(ped, false)
+    local inVeh = cache.vehicle and true or false
     local speed = inVeh and (nav.DriveSpeed or 16.0) or (nav.WalkSpeed or 1.7)
     if speed <= 0 then speed = 16.0 end
 
@@ -80,7 +80,7 @@ end)
 
 ---React -> Lua: the player's current world coords. Read-only.
 RegisterNUICallback('sd-phone:maps:here', function(_, cb)
-    local c = GetEntityCoords(PlayerPedId())
+    local c = GetEntityCoords(cache.ped)
     cb({ success = true, data = { x = c.x, y = c.y } })
 end)
 
@@ -100,7 +100,7 @@ local function startLocationStream()
     streamRunning = true
     CreateThread(function()
         while watching and exports['sd-phone']:isOpen() do
-            local ped = PlayerPedId()
+            local ped = cache.ped
             local c = GetEntityCoords(ped)
             SendNUIMessage({
                 action = 'sd-phone:maps:location',
@@ -147,7 +147,7 @@ RegisterCommand('mapcal', function()
     calArmed = true
     calIndex = calIndex % #CAL_POINTS + 1
     local p = CAL_POINTS[calIndex]
-    local ped = PlayerPedId()
+    local ped = cache.ped
     RequestCollisionAtCoord(p.x, p.y, p.z)
     SetEntityCoords(ped, p.x, p.y, p.z, false, false, false, false)
     notify.show({

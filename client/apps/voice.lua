@@ -42,7 +42,7 @@ local talkLoopGen = 0
 ---talking) when the Mumble native is unavailable.
 ---@return boolean transmitting
 local function isTransmitting()
-    local ok, talking = pcall(MumbleIsPlayerTalking, PlayerId())
+    local ok, talking = pcall(MumbleIsPlayerTalking, cache.playerId)
     if not ok then return true end
     return talking == true or talking == 1
 end

@@ -82,7 +82,7 @@ end
 ---either side, gateWidth apart, both snapped to the ground.
 ---@return { a: vector3, b: vector3 } gate
 local function currentGate()
-    local ped = PlayerPedId()
+    local ped = cache.ped
     local veh = GetVehiclePedIsIn(ped, false)
     local ent = veh ~= 0 and veh or ped
     local pos = GetEntityCoords(ent)
@@ -269,7 +269,7 @@ local function startCreator()
             local ghost = currentGate()
             drawGatePosts(ghost.a, ghost.b, 80, 230, 140, 110)
 
-            local at = GetEntityCoords(PlayerPedId())
+            local at = GetEntityCoords(cache.ped)
             local previous
             for i = 1, #gates do
                 local gate   = gates[i]

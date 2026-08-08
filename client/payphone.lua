@@ -42,9 +42,12 @@ AddEventHandler('sd-phone:client:openState', function(open)
     end
 end)
 
----Config-gated console print for the interaction/prop-swap path.
+---Console trace for the interaction/prop-swap path. cfg.Debug prints it at info so the switch
+---still works on its own; `setr ox:printlevel:sd-phone debug` reaches the same output live.
 local function dbg(fmt, ...)
-    if cfg.Debug then print(('[sd-phone:payphone] ' .. fmt):format(...)) end
+    local line = ('payphone: ' .. fmt):format(...)
+    if cfg.Debug then return lib.print.info(line) end
+    lib.print.debug(line)
 end
 
 ---Reverse model lookup for readable debug output.
@@ -92,15 +95,20 @@ for model, variant in pairs((cfg.Scene and cfg.Scene.AnimProps) or {}) do
     animVariants[joaat(model)] = variant
 end
 
+---Both ox_lib requests raise rather than returning, hence the pcalls. They also load in sequence
+---where the hand-rolled pair loaded side by side, so the 3s budget is carried between them rather
+---than handed to each: two 3s waits would stall the booth grab for six on a bad stream.
 ---@param variant string|nil animatable model to load alongside the dict, when swapping
 ---@return boolean loaded
 local function loadSceneAssets(variant)
     local scene = cfg.Scene
-    RequestAnimDict(scene.Dict)
-    if variant then RequestModel(joaat(variant)) end
     local deadline = GetGameTimer() + 3000
-    while (not HasAnimDictLoaded(scene.Dict) or (variant and not HasModelLoaded(joaat(variant)))) and GetGameTimer() < deadline do Wait(10) end
-    return HasAnimDictLoaded(scene.Dict) and (not variant or HasModelLoaded(joaat(variant)))
+
+    if not pcall(lib.requestAnimDict, scene.Dict, 3000) then return false end
+    if not variant then return true end
+
+    local left = deadline - GetGameTimer()
+    return left > 0 and pcall(lib.requestModel, joaat(variant), left)
 end
 
 ---Grabs the booth: hides the world prop, spawns our animatable copy over it, and plays the
@@ -130,7 +138,7 @@ local function beginBoothAnim(entity)
         return
     end
 
-    local ped    = PlayerPedId()
+    local ped    = cache.ped
     local booth  = GetEntityCoords(entity)
     local pos    = GetOffsetFromEntityInWorldCoords(entity, -0.10, -0.85, 0.0)
 
@@ -160,7 +168,7 @@ local function loopBoothAnim()
     local scene = cfg.Scene
     if not animEntity or not scene or scene.Enabled == false then return end
     if not HasAnimDictLoaded(scene.Dict) then return end
-    TaskPlayAnim(PlayerPedId(), scene.Dict, scene.Idle, 8.0, 8.0, -1, 1, 0, false, false, false)
+    TaskPlayAnim(cache.ped, scene.Dict, scene.Idle, 8.0, 8.0, -1, 1, 0, false, false, false)
 end
 
 ---Hangs the handset back up: exit clip on the ped, prop anim stopped, then our copy is
@@ -174,7 +182,7 @@ local function endBoothAnim()
     -- clearing tasks here would cancel whatever the player was actually doing.
     if not worldEntity and not animProp then return end
 
-    local ped = PlayerPedId()
+    local ped = cache.ped
     if scene and scene.Enabled ~= false and HasAnimDictLoaded(scene.Dict) and worldEntity then
         TaskPlayAnim(ped, scene.Dict, scene.Exit, 8.0, 8.0, -1, 1, 0, false, false, false)
         if animProp and DoesEntityExist(animProp) then
@@ -190,7 +198,7 @@ local function endBoothAnim()
         dbg('endBoothAnim cleanup: deleting prop=%s, restoring entity=%s', tostring(prop), tostring(worldEntity))
         if prop and DoesEntityExist(prop) then DeleteEntity(prop) end
         if worldEntity and DoesEntityExist(worldEntity) then SetEntityVisible(worldEntity, true, false) end
-        ClearPedTasks(PlayerPedId())
+        ClearPedTasks(cache.ped)
     end)
 end
 
@@ -469,7 +477,7 @@ end)
 RegisterNetEvent('sd-phone:client:payphone:ringStart', function(data)
     if not cfg.Enabled or not data or not data.location or not data.channel then return end
     local coords = coordsFromKey(data.location)
-    if not coords or #(GetEntityCoords(PlayerPedId()) - coords) > 50.0 then return end
+    if not coords or #(GetEntityCoords(cache.ped) - coords) > 50.0 then return end
 
     local entry = { coords = coords, location = data.location, soundId = nil }
     local booth = boothAt(coords)
@@ -542,7 +550,7 @@ end
 ---Public export: opens the payphone dial UI at the player's position (no booth prop needed),
 ---for any script that wants payphone calling - exports['sd-phone']:openPayphone().
 exports('openPayphone', function()
-    openPayphone(nil, GetEntityCoords(PlayerPedId()))
+    openPayphone(nil, GetEntityCoords(cache.ped))
 end)
 
 ---Public export: true while the payphone UI is up - exports['sd-phone']:isPayphoneOpen().

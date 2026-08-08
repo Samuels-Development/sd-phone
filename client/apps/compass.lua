@@ -23,7 +23,7 @@ end
 ---Live readout the React app polls while the Compass screen is open: clockwise compass bearing,
 ---anchored lat/lon and altitude.
 RegisterNUICallback('sd-phone:compass:get', function(_, cb)
-    local ped = PlayerPedId()
+    local ped = cache.ped
     local bearing  = (360.0 - GetEntityHeading(ped)) % 360.0
     local c        = GetEntityCoords(ped)
     local lat, lon = gtaToLatLon(c.x, c.y)

@@ -44,7 +44,7 @@ end
 ---Zone name at the player's current position, for pre-filling the New Post location field.
 ---Read-only; ignores its payload entirely.
 RegisterNUICallback('sd-phone:photogram:currentZone', function(_, cb)
-    local coords = GetEntityCoords(PlayerPedId())
+    local coords = GetEntityCoords(cache.ped)
     cb({ success = true, data = { name = zoneName(coords.x, coords.y, coords.z) } })
 end)
 

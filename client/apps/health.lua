@@ -3,7 +3,7 @@
 ---@return 'dead'|'vehicle'|'sprinting'|'running'|'walking'|'idle'
 local function detectState(ped)
     if IsEntityDead(ped) or IsPedDeadOrDying(ped, true) then return 'dead' end
-    if IsPedInAnyVehicle(ped, false) then return 'vehicle' end
+    if cache.vehicle then return 'vehicle' end
     if IsPedSprinting(ped) then return 'sprinting' end
     if IsPedRunning(ped)   then return 'running' end
     if IsPedWalking(ped)   then return 'walking' end
@@ -66,7 +66,7 @@ CreateThread(function()
 
     while true do
         Wait(TICK_MS)
-        local ped = PlayerPedId()
+        local ped = cache.ped
         if DoesEntityExist(ped) then
             local now = GetGameTimer()
             local dt  = (now - lastTickMs) / 1000.0

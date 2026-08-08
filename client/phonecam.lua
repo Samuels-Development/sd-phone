@@ -197,14 +197,14 @@ end
 local function clearFaceCam()
     faceCam = false
     lastLookAt = 0
-    TaskClearLookAt(PlayerPedId())
+    TaskClearLookAt(cache.ped)
 end
 
 ---Places the lens for this frame. When the body is free to turn the player faces whatever the lens
 ---is aimed at, so bystanders see them point the phone at what they are shooting; when it is pinned,
 ---seated or locked, the lens swings off the body within a limit instead.
 local function place()
-    local ped    = PlayerPedId()
+    local ped    = cache.ped
     local view   = GetGameplayCamRot(2)
     local head   = GetPedBoneCoords(ped, HEAD_BONE, 0.0, 0.0, 0.0)
     -- Seated and locked are the same constraint: the body is not going to turn, so the lens has to.

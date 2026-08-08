@@ -171,7 +171,7 @@ end
 ---decides the class from it; the client never names a class the server has to trust.
 ---@return integer hash
 function race.currentModelHash()
-    local vehicle = GetVehiclePedIsIn(PlayerPedId(), false)
+    local vehicle = GetVehiclePedIsIn(cache.ped, false)
     return vehicle ~= 0 and GetEntityModel(vehicle) or 0
 end
 
@@ -180,7 +180,7 @@ end
 ---@return string class one of 'D' | 'C' | 'B' | 'A' | 'S'
 function race.currentClass()
     local fallback = vehicleCfg.Default or 'D'
-    local vehicle  = GetVehiclePedIsIn(PlayerPedId(), false)
+    local vehicle  = GetVehiclePedIsIn(cache.ped, false)
     if vehicle == 0 then return fallback end
 
     local override = CLASS_BY_MODEL[GetEntityModel(vehicle)]
@@ -191,7 +191,7 @@ end
 ---Display name of the vehicle the player is in.
 ---@return string label
 function race.currentVehicleLabel()
-    local vehicle = GetVehiclePedIsIn(PlayerPedId(), false)
+    local vehicle = GetVehiclePedIsIn(cache.ped, false)
     if vehicle == 0 then return 'On Foot' end
 
     local display = GetDisplayNameFromVehicleModel(GetEntityModel(vehicle))
@@ -260,19 +260,14 @@ end
 
 ---Streams the gate prop in, giving up after the budget rather than holding the grid on a model that
 ---is not coming.
+---
+---lib.requestModel runs its own validity pre-check and raises on both that and the timeout, so the
+---pcall covers what the IsModelValid guard and the poll did between them.
 ---@return integer|nil hash model hash, or nil when it did not load
 local function ensureGateModel()
     local hash = joaat(GATE_PROP)
-    if not IsModelValid(hash) then return nil end
-    if HasModelLoaded(hash) then return hash end
-
-    RequestModel(hash)
-    local waited = 0
-    while not HasModelLoaded(hash) and waited < MODEL_BUDGET do
-        Wait(20)
-        waited = waited + 20
-    end
-    return HasModelLoaded(hash) and hash or nil
+    if not pcall(lib.requestModel, hash, MODEL_BUDGET) then return nil end
+    return hash
 end
 
 ---Plants a frozen stack of gate props at one gate edge.
@@ -350,7 +345,7 @@ local function startForcedCamera(mode)
                 SetCinematicModeActive(false)
             end
 
-            if GetVehiclePedIsIn(PlayerPedId(), false) ~= 0 then
+            if GetVehiclePedIsIn(cache.ped, false) ~= 0 then
                 local view = GetFollowVehicleCamViewMode()
                 if forcedCamera == 'first' then
                     if view ~= CAM_FIRST_PERSON then SetFollowVehicleCamViewMode(CAM_FIRST_PERSON) end
@@ -396,12 +391,12 @@ local function startPhasing(data)
         while active and active.id == data.id do
             if endsAt and GetGameTimer() >= endsAt then expired = true break end
 
-            local myPed = PlayerPedId()
+            local myPed = cache.ped
             local myVeh = GetVehiclePedIsIn(myPed, false)
 
             for _, serverId in ipairs(racers) do
                 local player = GetPlayerFromServerId(serverId)
-                if player ~= -1 and player ~= PlayerId() then
+                if player ~= -1 and player ~= cache.playerId then
                     local ped = GetPlayerPed(player)
                     if ped and ped > 0 and DoesEntityExist(ped) then
                         local veh = GetVehiclePedIsIn(ped, false)
@@ -529,7 +524,7 @@ end
 local function runLoop(state)
     CreateThread(function()
         while active and active.id == state.id do
-            local ped = PlayerPedId()
+            local ped = cache.ped
             if IsEntityDead(ped) then
                 race.stop(false)
                 break
@@ -601,7 +596,7 @@ function race.begin(data)
     local mine = epoch
 
     CreateThread(function()
-        local ped     = PlayerPedId()
+        local ped     = cache.ped
         local vehicle = GetVehiclePedIsIn(ped, false)
         local held    = vehicle ~= 0 and vehicle or ped
 

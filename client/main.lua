@@ -164,12 +164,14 @@ function phoneState.isOpen() return phoneState.open end
 ---@return boolean true while the lockscreen is shown (re-armed on every open)
 function phoneState.isLocked() return phoneState.locked end
 
----Prints debug output when config.Debug is enabled.
+---Debug breadcrumb. Two ways to turn it on, because they answer different questions: config.Debug
+---is the resource's own switch and prints at info so it shows with no further setup, while
+---`setr ox:printlevel:sd-phone debug` turns the same output on live, without editing a config and
+---restarting.
 ---@param ... any values to print
 local function debugPrint(...)
-    if config.Debug then
-        print('[sd-phone:client]', ...)
-    end
+    if config.Debug then return lib.print.info(...) end
+    lib.print.debug(...)
 end
 
 ---@type fun()|nil Weather snapshot push into the NUI (assigned with the weather feed below).
@@ -227,62 +229,102 @@ local function updatePose()
     broadcastHoldState()
 end
 
----@type boolean True while the movement-suppression thread is running.
-local movementThreadRunning = false
+-- The four control sets the phone suppresses, as data. They are handed to ox_lib's
+-- lib.disableControls, which keeps ONE refcounted set and re-asserts all of it in a single call per
+-- frame - so the thread below toggles a group when the state changes rather than reissuing the same
+-- two dozen DisableControlAction calls every frame regardless of whether anything moved.
 
----Runs one thread per open that suppresses combat, mouse-look, weapon-wheel and chat controls
----each frame, and closes the phone when the pause menu activates.
-local function startMovementThread()
-    if not config.Phone.AllowMovement or movementThreadRunning then return end
-    movementThreadRunning = true
+---@type integer[] INPUT_FRONTEND_PAUSE and its alternate; held whenever the phone is on screen.
+local CONTROLS_PAUSE <const> = { 199, 200 }
+
+---@type integer[] Combat, melee, weapon-wheel, cover, chat - and the scroll-wheel fall-throughs
+---under keep-input, because the phone owns the wheel and vehicle radio cycling must not react.
+local CONTROLS_MOVEMENT <const> = {
+    24, 25, 37, 106, 245, 246, 257, 263, 264, 140, 141, 142, 143,
+    14, 15, 16, 17, 81, 82, 83, 84, 85, 99, 100,
+}
+
+---@type integer[] Mouse-look. Dropped while the Camera app aims the lens, or it would be immovable.
+local CONTROLS_LOOK <const> = { 1, 2 }
+
+---@type integer[] The number row, which GTA binds to weapon slots while a digit field is focused.
+local CONTROLS_DIGITS <const> = { 157, 158, 159, 160, 161, 162, 163, 164, 165, 166 }
+
+---@type table<table, true> Groups currently added to lib.disableControls.
+local appliedControls = {}
+
+---Adds or removes a group exactly once per state change. Add/Remove are refcounted, so an
+---unbalanced pair would leave a control disabled for the rest of the session.
+---@param group integer[]
+---@param wanted boolean
+local function setControlGroup(group, wanted)
+    if wanted == (appliedControls[group] or false) then return end
+    appliedControls[group] = wanted or nil
+    if wanted then
+        lib.disableControls:Add(group)
+    else
+        lib.disableControls:Remove(group)
+    end
+end
+
+---@type boolean True while the per-frame input thread is running.
+local inputThreadRunning = false
+
+---Runs ONE per-frame thread per open: holds the pause control down unconditionally, and with
+---AllowMovement on also suppresses combat, mouse-look, weapon-wheel and chat.
+---
+---The mouse-look group is dropped while the Camera app's Alt toggle has the lens, because
+---suppressing it there makes the lens immovable. DisablePlayerFiring is not a control, so it stays
+---a native and stays inside the frame loop.
+---
+---The pause group is held for a few frames past the close, or the closing keypress opens the escape
+---menu. The outer loop exists so a reopen DURING that trailing hold rejoins rather than dying with
+---the flag about to clear, which would leave an open phone suppressing nothing; nothing yields
+---between the break and the flag clearing, so an open can never be refused by a thread on its way
+---out.
+local function startInputThread()
+    if inputThreadRunning then return end
+    inputThreadRunning = true
     CreateThread(function()
-        while phoneState.open do
-            if IsPauseMenuActive() then
-                if ClosePhone then ClosePhone() end
-            elseif (not typingInPhone or typingNumeric) and not cameraFrozen() then
-                DisablePlayerFiring(PlayerId(), true)
-                -- The Camera app's Alt toggle hands the mouse to the game to aim the lens, so
-                -- leave mouse-look alone while it has: suppressing it makes the lens immovable.
-                if not lookMode and not cameraCursorFree then
-                    DisableControlAction(0, 1, true)
-                    DisableControlAction(0, 2, true)
-                end
-                DisableControlAction(0, 24, true)
-                DisableControlAction(0, 25, true)
-                DisableControlAction(0, 257, true)
-                DisableControlAction(0, 263, true)
-                DisableControlAction(0, 264, true)
-                DisableControlAction(0, 140, true)
-                DisableControlAction(0, 141, true)
-                DisableControlAction(0, 142, true)
-                DisableControlAction(0, 143, true)
-                DisableControlAction(0, 37, true)
-                DisableControlAction(0, 106, true)
-                DisableControlAction(0, 245, true)
-                DisableControlAction(0, 246, true)
-                -- Scroll-wheel fall-throughs under keep-input: the phone owns the wheel, so
-                -- vehicle radio cycling, the radio wheel and weapon cycling must not react.
-                DisableControlAction(0, 14, true)
-                DisableControlAction(0, 15, true)
-                DisableControlAction(0, 16, true)
-                DisableControlAction(0, 17, true)
-                DisableControlAction(0, 81, true)
-                DisableControlAction(0, 82, true)
-                DisableControlAction(0, 83, true)
-                DisableControlAction(0, 84, true)
-                DisableControlAction(0, 85, true)
-                DisableControlAction(0, 99, true)
-                DisableControlAction(0, 100, true)
-                if typingNumeric then
-                    -- Digit pad up: the number row must not fire GTA weapon-slot binds.
-                    for control = 157, 166 do
-                        DisableControlAction(0, control, true)
+        while true do
+            while phoneState.open do
+                setControlGroup(CONTROLS_PAUSE, true)
+
+                ---@type boolean Whether the movement suppression applies this frame.
+                local suppress = false
+                if config.Phone.AllowMovement then
+                    if IsPauseMenuActive() then
+                        if ClosePhone then ClosePhone() end
+                    else
+                        suppress = (not typingInPhone or typingNumeric) and not cameraFrozen()
                     end
                 end
+
+                setControlGroup(CONTROLS_MOVEMENT, suppress)
+                setControlGroup(CONTROLS_LOOK, suppress and not lookMode and not cameraCursorFree)
+                setControlGroup(CONTROLS_DIGITS, suppress and typingNumeric)
+
+                if suppress then DisablePlayerFiring(cache.playerId, true) end
+
+                lib.disableControls()
+                Wait(0)
             end
-            Wait(0)
+
+            setControlGroup(CONTROLS_PAUSE, true)
+            setControlGroup(CONTROLS_MOVEMENT, false)
+            setControlGroup(CONTROLS_LOOK, false)
+            setControlGroup(CONTROLS_DIGITS, false)
+
+            local held = 0
+            while held < 15 and not phoneState.open do
+                lib.disableControls()
+                held = held + 1
+                Wait(0)
+            end
+            if not phoneState.open then break end
         end
-        movementThreadRunning = false
+        setControlGroup(CONTROLS_PAUSE, false)
+        inputThreadRunning = false
     end)
 end
 
@@ -349,7 +391,7 @@ local function OpenPhone()
 
     local visibleAppList, visibleDock = visibleApps()
 
-    local ped = PlayerPedId()
+    local ped = cache.ped
 
     if config.Phone.BlockWhileDead and IsEntityDead(ped) then
         notify.show({ description = 'You can\'t use your phone right now.', type = 'error' })
@@ -369,19 +411,6 @@ local function OpenPhone()
     companion.phoneOpen = true
     gameclock.push()
 
-    CreateThread(function()
-        while phoneState.open do
-            DisableControlAction(0, 199, true) -- INPUT_FRONTEND_PAUSE
-            DisableControlAction(0, 200, true) -- INPUT_FRONTEND_PAUSE_ALTERNATE
-            Wait(0)
-        end
-        for i = 1, 15 do
-            DisableControlAction(0, 199, true)
-            DisableControlAction(0, 200, true)
-            Wait(0)
-        end
-    end)
-
     updatePose()
 
     TriggerEvent('sd-phone:client:openState', true)
@@ -392,8 +421,8 @@ local function OpenPhone()
         typingInPhone = false
         typingNumeric = false
         SetNuiFocusKeepInput(true)
-        startMovementThread()
     end
+    startInputThread()
     SendNUIMessage({
         action = 'sd-phone:open',
         data   = {
@@ -502,38 +531,56 @@ local function TogglePhone()
     OpenPhone()
 end
 
--- Keybind wiring; the `-` command is the no-op release half of the +command mapping.
-RegisterCommand('+sdphone_toggle', TogglePhone, false)
-RegisterCommand('-sdphone_toggle', function() end, false)
-RegisterKeyMapping('+sdphone_toggle', 'Toggle Phone', 'keyboard', config.Phone.Keybind)
+-- Keybind wiring. lib.addKeybind registers the +/- command pair and the mapping together, refuses
+-- to fire while the pause menu is up, and clears both halves out of the chat suggestion list. It
+-- invokes the handlers as METHODS, so each is handed the keybind table as a first argument; all of
+-- these take none, so it falls away.
+lib.addKeybind({
+    name        = 'sdphone_toggle',
+    description = 'Toggle Phone',
+    defaultKey  = config.Phone.Keybind,
+    onPressed   = TogglePhone,
+})
 
--- Hold-to-look: the +command frees the mouse for camera rotation, the -command restores the cursor.
-RegisterCommand('+sdphone_look', enterLookMode, false)
-RegisterCommand('-sdphone_look', exitLookMode, false)
-RegisterKeyMapping('+sdphone_look', 'Phone: Hold to look around', 'keyboard', config.Phone.LookKeybind)
+-- Hold-to-look: press frees the mouse for camera rotation, release restores the cursor.
+lib.addKeybind({
+    name        = 'sdphone_look',
+    description = 'Phone: Hold to look around',
+    defaultKey  = config.Phone.LookKeybind,
+    onPressed   = enterLookMode,
+    onReleased  = exitLookMode,
+})
 
 -- Angle lock: stops the body turning with the selfie lens, so the shot can swing around the player
 -- for something other than head-on. Walking is untouched. toggleLock returns nil on the outward
 -- lens, which frames the world and gains nothing from it.
-RegisterCommand('sdphone_camlock', function()
-    if not cameraActive then return end
-    local locked = phonecam.toggleLock()
-    if locked == nil then return end
-    -- The viewfinder's own hint carries the state, so it flips to "Unlock Angle" rather than a
-    -- toast interrupting the shot.
-    SendNUIMessage({ action = 'sd-phone:camera:lock', data = { on = locked } })
-end, false)
-RegisterKeyMapping('sdphone_camlock', 'Phone: Move the selfie camera instead of yourself', 'keyboard', config.Phone.CameraLockKeybind)
+-- The viewfinder's own hint carries the lock state, so it flips to "Unlock Angle" rather than a
+-- toast interrupting the shot.
+lib.addKeybind({
+    name        = 'sdphone_camlock',
+    description = 'Phone: Move the selfie camera instead of yourself',
+    defaultKey  = config.Phone.CameraLockKeybind,
+    onPressed   = function()
+        if not cameraActive then return end
+        local locked = phonecam.toggleLock()
+        if locked == nil then return end
+        SendNUIMessage({ action = 'sd-phone:camera:lock', data = { on = locked } })
+    end,
+})
 
 -- Head tracking: turns the face back toward the lens so an angled selfie still looks at the camera.
 -- Opt-in, because it reads as posed rather than candid and not every shot wants that.
-RegisterCommand('sdphone_camface', function()
-    if not cameraActive then return end
-    local facing = phonecam.toggleFaceCam()
-    if facing == nil then return end
-    SendNUIMessage({ action = 'sd-phone:camera:faceCam', data = { on = facing } })
-end, false)
-RegisterKeyMapping('sdphone_camface', 'Phone: Look at the selfie camera', 'keyboard', config.Phone.CameraFaceKeybind)
+lib.addKeybind({
+    name        = 'sdphone_camface',
+    description = 'Phone: Look at the selfie camera',
+    defaultKey  = config.Phone.CameraFaceKeybind,
+    onPressed   = function()
+        if not cameraActive then return end
+        local facing = phonecam.toggleFaceCam()
+        if facing == nil then return end
+        SendNUIMessage({ action = 'sd-phone:camera:faceCam', data = { on = facing } })
+    end,
+})
 
 ---Opens the phone after a phone item is used, adopting the item variant's frame colour when it
 ---passes the FRAME_COLORS whitelist.
@@ -735,7 +782,7 @@ CreateThread(function()
     local fl = config.Phone.Flashlight
     while true do
         if flashlightOn then
-            local ped = PlayerPedId()
+            local ped = cache.ped
             local pos = GetPedBoneCoords(ped, config.Phone.PropBone, 0.0, 0.0, 0.0)
             local fwd = GetEntityForwardVector(ped)
             DrawSpotLight(
@@ -776,7 +823,7 @@ if config.Phone.PropVisibleToOthers then
 
     AddStateBagChangeHandler('sdPhone', nil, function(bagName, _key, value)
         local source, ped = bagOwner(bagName)
-        if not source or source == GetPlayerServerId(PlayerId()) then return end
+        if not source or source == cache.serverId then return end
         if not value or ped == 0 then
             removeRemoteProp(source)
             return

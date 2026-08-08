@@ -49,7 +49,7 @@ end
 ---class; a class letter is never sent from the client.
 ---@return integer hash
 local function vehicleModelHash()
-    local veh = GetVehiclePedIsIn(PlayerPedId(), false)
+    local veh = GetVehiclePedIsIn(cache.ped, false)
     if veh == 0 then return 0 end
     return GetEntityModel(veh)
 end
@@ -100,7 +100,7 @@ RegisterNUICallback('sd-phone:racing:vehicle', function(_payload, cb)
         data = {
             model  = race.currentVehicleLabel(),
             class  = race.currentClass(),
-            onFoot = GetVehiclePedIsIn(PlayerPedId(), false) == 0,
+            onFoot = not cache.vehicle,
         },
     })
 end)

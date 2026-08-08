@@ -91,7 +91,7 @@ end
 
 ---@return number|nil hash joaat of the vehicle the player is in, nil on foot
 local function currentModel()
-    local vehicle = GetVehiclePedIsIn(PlayerPedId(), false)
+    local vehicle = GetVehiclePedIsIn(cache.ped, false)
     if vehicle == 0 then return nil end
     return GetEntityModel(vehicle)
 end
@@ -138,7 +138,7 @@ end
 ---@param entry table board
 ---@return string verdict one of ready, vehicle, turn, backup
 local function readiness(entry)
-    local ped = PlayerPedId()
+    local ped = cache.ped
     if GetVehiclePedIsIn(ped, false) == 0 then return 'vehicle' end
 
     local start = entry.start
@@ -214,7 +214,7 @@ local function drawLoop()
                     SendNUIMessage({ action = 'sd-phone:racing:board:hide' })
                 end
             else
-                local here = GetEntityCoords(PlayerPedId())
+                local here = GetEntityCoords(cache.ped)
                 local entry, distance = nearest(here)
 
                 if entry and distance <= SHOW_DIST then
@@ -270,7 +270,7 @@ local function readyLoop()
 
             local mine = nil
             if not race.active() then
-                local here = GetEntityCoords(PlayerPedId())
+                local here = GetEntityCoords(cache.ped)
                 for i = 1, #Boards do
                     local entry = Boards[i]
                     local start = entry.start

@@ -159,7 +159,7 @@ RegisterNUICallback('sd-phone:garages:mileage', function(payload, cb)
     if type(plate) ~= 'string' or plate == '' then return cb({ success = false }) end
 
     local km
-    local veh = GetVehiclePedIsIn(PlayerPedId(), false)
+    local veh = GetVehiclePedIsIn(cache.ped, false)
     if veh ~= 0 and plateMatches(GetVehicleNumberPlateText(veh), plate) then
         local ok, v = pcall(function() return exports['jg-vehiclemileage']:getMileage() end)
         if ok and type(v) == 'number' then km = v end
@@ -207,10 +207,10 @@ local lastHurt = 0
 
 if VALET.Enabled == true and COMBAT_BLOCK > 0 then
     CreateThread(function()
-        local last = GetEntityHealth(PlayerPedId())
+        local last = GetEntityHealth(cache.ped)
         while true do
             Wait(1000)
-            local hp = GetEntityHealth(PlayerPedId())
+            local hp = GetEntityHealth(cache.ped)
             if hp < last then lastHurt = GetGameTimer() end
             last = hp
         end
@@ -265,7 +265,7 @@ end
 ---@return number dist metres from the player (0 when nothing was found)
 ---@return boolean facing whether the chosen road actually points at the player
 local function findSpawn(minDist)
-    local at = GetEntityCoords(PlayerPedId())
+    local at = GetEntityCoords(cache.ped)
 
     local bestPos, bestHead, bestDist, bestMiss, bestScore
 
@@ -351,16 +351,19 @@ local PROGRESS_STEP = 5.0
 
 ---Drive the delivered car to the player with a valet at the wheel, blipped and re-pointed as they
 ---move. The ped leaves on arrival; a stall or timeout keeps the blip on the abandoned car.
+---
+---lib.requestModel raises rather than returning on a model that never streams, hence the pcall; the
+---2s budget matches the 40x50ms poll it replaces. The vehicle is re-checked after, because the load
+---yields and a car deleted during it would leave the valet spawning into nothing.
 ---@param veh number vehicle entity
 local function driveToPlayer(veh)
     CreateThread(function()
         local model = joaat(VALET_PED)
-        RequestModel(model)
-        for _ = 1, 40 do
-            if HasModelLoaded(model) then break end
-            Wait(50)
+        if not pcall(lib.requestModel, model, 2000) then return end
+        if not DoesEntityExist(veh) then
+            SetModelAsNoLongerNeeded(model)
+            return
         end
-        if not HasModelLoaded(model) or not DoesEntityExist(veh) then return end
 
         local ped = CreatePedInsideVehicle(veh, 4, model, -1, true, false)
         SetModelAsNoLongerNeeded(model)
@@ -377,7 +380,7 @@ local function driveToPlayer(veh)
             TaskVehicleDriveToCoord(ped, veh, to.x, to.y, to.z, 25.0, 0, GetEntityModel(veh), 786603, 3.0, 1)
         end
 
-        local target = GetEntityCoords(PlayerPedId())
+        local target = GetEntityCoords(cache.ped)
         driveTo(target)
 
         local blip = AddBlipForEntity(veh)
@@ -393,7 +396,7 @@ local function driveToPlayer(veh)
         local arrived   = false
 
         while DoesEntityExist(ped) and DoesEntityExist(veh) and GetGameTimer() < deadline do
-            local player = GetEntityCoords(PlayerPedId())
+            local player = GetEntityCoords(cache.ped)
             local gap    = #(GetEntityCoords(veh) - player)
             if gap <= ARRIVE_DIST then arrived = true break end
 

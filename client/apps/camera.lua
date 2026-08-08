@@ -69,29 +69,31 @@ local function sendKey(key)
     SendNUIMessage({ action = 'sd-phone:camera:key', data = { key = key } })
 end
 
+---@type integer[] Every viewfinder key, suppressed for as long as the app is up whether the cursor
+---is on or not: with movement allowed the game still reads them, so E would fire interact scripts
+---and Alt the character wheel while the player reaches for the flash.
+local CONTROLS_VIEWFINDER <const> = {
+    CTRL_CURSOR, CTRL_FLASH, CTRL_SHOOT, CTRL_FLIP, CTRL_PREV,
+    CTRL_NEXT, CTRL_DOWN, CTRL_ZOOM_IN, CTRL_ZOOM_OUT,
+}
+
 ---Runs the viewfinder keyboard loop: disables each control's default action for as long as the
 ---app is up, and relays presses into the NUI while the cursor is off.
+---
+---The set is added once and dropped on the way out rather than reissued per frame, but
+---lib.disableControls still has to be CALLED every frame: IsDisabledControlJustPressed below only
+---reads a control that was disabled this frame. The relays run only while the mouse belongs to the
+---game; with the cursor up the page receives these events itself and the wheel zooms from its own
+---handler.
 local function startInputLoop()
     if inputLoopRunning then return end
     inputLoopRunning = true
     CreateThread(function()
+        lib.disableControls:Add(CONTROLS_VIEWFINDER)
         while active do
             Wait(0)
-            -- Suppress the game's own action on every viewfinder key for as long as the app is up,
-            -- cursor or not: with movement on the game still reads them, so E would fire interact
-            -- scripts and Alt the character wheel while the player reaches for the flash.
-            DisableControlAction(0, CTRL_CURSOR, true)
-            DisableControlAction(0, CTRL_FLASH, true)
-            DisableControlAction(0, CTRL_SHOOT, true)
-            DisableControlAction(0, CTRL_FLIP, true)
-            DisableControlAction(0, CTRL_PREV, true)
-            DisableControlAction(0, CTRL_NEXT, true)
-            DisableControlAction(0, CTRL_DOWN, true)
-            DisableControlAction(0, CTRL_ZOOM_IN, true)
-            DisableControlAction(0, CTRL_ZOOM_OUT, true)
+            lib.disableControls()
 
-            -- Relays only run while the mouse belongs to the game; with the cursor up the page
-            -- receives these events itself, and the wheel zooms from its own handler.
             if not cursorOn then
                 if IsDisabledControlJustPressed(0, CTRL_ZOOM_IN) then
                     sendKey('zoomIn')
@@ -113,6 +115,7 @@ local function startInputLoop()
                 end
             end
         end
+        lib.disableControls:Remove(CONTROLS_VIEWFINDER)
         inputLoopRunning = false
     end)
 end
