@@ -200,9 +200,7 @@ end
 ---@param event string event suffix under sd-phone:client:photogram:
 ---@param data table payload
 local function relay(session, event, data)
-    for _, dst in ipairs(participants(session)) do
-        TriggerClientEvent('sd-phone:client:photogram:' .. event, dst, data)
-    end
+    util.pushMany('sd-phone:client:photogram:' .. event, participants(session), data)
 end
 
 ---Push the current (real) viewer count to everyone in the session.

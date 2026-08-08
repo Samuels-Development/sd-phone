@@ -319,9 +319,7 @@ function dispatch.createCall(data)
     trimBoard()
 
     local fresh = callPublic(calls[id])
-    for _, src in ipairs(access.audience()) do
-        TriggerClientEvent('sd-phone:client:mdt:call', src, { call = fresh })
-    end
+    util.pushMany('sd-phone:client:mdt:call', access.audience(), { call = fresh })
     markDirty()
 
     SetTimeout(ttl * 1000, function() expire(id) end)

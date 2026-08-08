@@ -66,10 +66,7 @@ end
 ---@param citizenid string
 ---@param wanted boolean
 local function announce(citizenid, wanted)
-    local audience = access.audience()
-    for i = 1, #audience do
-        TriggerClientEvent(WANTED_EVENT, audience[i], { citizenid = citizenid, wanted = wanted })
-    end
+    util.pushMany(WANTED_EVENT, access.audience(), { citizenid = citizenid, wanted = wanted })
 end
 
 ---Decodes a stored charge blob back into warrant charge lines.

@@ -19,6 +19,9 @@ local TITLE       = 'Racing'
 local FLAG_MODEL  = joaat(type(CREATOR_CFG.FlagModel) == 'string' and CREATOR_CFG.FlagModel or 'prop_beachflag_01')
 ---@type integer Alpha of a placed flag: transparent, not invisible, so gates read as guides.
 local FLAG_ALPHA  = 130
+---@type integer Milliseconds allowed for the flag prop to stream, matching race.lua's MODEL_BUDGET
+---for the same prop. Named rather than inlined so the two stay visibly paired.
+local MODEL_BUDGET <const> = 3000
 ---@type integer Fewest gates a saveable track may hold.
 local MIN_GATES   = math.max(2, math.floor(tonumber(CREATOR_CFG.MinGates) or 2))
 ---@type integer Most gates one track may hold.
@@ -240,12 +243,28 @@ end
 
 ---Opens the recorder and runs the per-frame loop: keys, the ghost gate, the placed gates, and the
 ---key guide.
+---
+---lib.requestModel runs its own validity pre-check and raises on both that and the timeout, so the
+---pcall keeps a bad FlagModel in configs/racing.lua from aborting the open with the recorder already
+---flagged active and no draw thread behind it. The flag is claimed before the streaming wait so a
+---second toggle closes the recorder instead of starting a rival one, and is released again on the
+---failure path.
 local function startCreator()
     if active then return end
     active = true
     gates = {}
     gateWidth = DEF_WIDTH
-    lib.requestModel(FLAG_MODEL)
+
+    if not pcall(lib.requestModel, FLAG_MODEL, MODEL_BUDGET) then
+        active = false
+        notify.show({
+            title = TITLE,
+            description = 'The gate flag prop could not be loaded.',
+            type = 'error',
+        })
+        return
+    end
+
     notify.show({
         title = TITLE,
         description = 'Track creator open. Drive to a start line and press E.',

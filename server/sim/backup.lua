@@ -276,11 +276,7 @@ function backup.restore(fromId, toId, toNumber, liveFromId)
             run('INSERT IGNORE INTO phone_mail_sessions (citizenid, email) VALUES (?, ?)', { toId, m.email })
 
             local arr = json.decode(m.logged_in_citizens or '[]') or {}
-            local present = false
-            for _, c in ipairs(arr) do
-                if c == toId then present = true break end
-            end
-            if not present then
+            if not lib.table.contains(arr, toId) then
                 arr[#arr + 1] = toId
                 rows = rows + run(
                     'UPDATE phone_mail_accounts SET logged_in_citizens = ? WHERE email = ?',

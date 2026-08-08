@@ -234,11 +234,12 @@ end)
 
 registerLbExport('GetFlashlight', function() return flashlightOn end)
 
----Inbound lb-phone:usePhoneItem: opens the phone; the item payload is ignored.
+---Inbound lb-phone:usePhoneItem: opens the phone; the item payload is ignored. config.Debug
+---prints the breadcrumb at info so the switch still works on its own, while
+---`setr ox:printlevel:sd-phone debug` reaches the same line live without a restart.
 eventCookies[#eventCookies + 1] = RegisterNetEvent('lb-phone:usePhoneItem', function(_item)
-    if config.Debug then
-        print('[sd-phone:lbcompat] usePhoneItem received; opening the phone (item payload ignored)')
-    end
+    local trace = 'lbcompat: usePhoneItem received; opening the phone (item payload ignored)'
+    if config.Debug then lib.print.info(trace) else lib.print.debug(trace) end
     sd:open()
 end)
 

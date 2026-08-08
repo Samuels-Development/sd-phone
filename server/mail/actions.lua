@@ -465,11 +465,9 @@ function actions.send(source, payload)
     local sender = store.getAccount(fromEmail)
     if not sender then return fail('Sender account not found') end
 
-    local owns = false
-    for i = 1, #sender.logged_in_citizens do
-        if sender.logged_in_citizens[i] == me.cid then owns = true; break end
+    if not lib.table.contains(sender.logged_in_citizens, me.cid) then
+        return fail('You are not signed into that account')
     end
-    if not owns then return fail('You are not signed into that account') end
 
     local toRaw = payload.to or {}
     if type(toRaw) ~= 'table' or #toRaw == 0 then return fail('At least one recipient is required') end
@@ -669,11 +667,9 @@ function actions.saveDraft(source, payload)
     local sender = store.getAccount(fromEmail)
     if not sender then return fail('Sender account not found') end
 
-    local owns = false
-    for i = 1, #sender.logged_in_citizens do
-        if sender.logged_in_citizens[i] == me.cid then owns = true; break end
+    if not lib.table.contains(sender.logged_in_citizens, me.cid) then
+        return fail('You are not signed into that account')
     end
-    if not owns then return fail('You are not signed into that account') end
 
     local recipients = {}
     local seen = {}
@@ -725,9 +721,7 @@ local function requireOwnership(source, accountEmail)
         return nil, fail('Slow down')
     end
     local acc = store.getAccount(accountEmail); if not acc then return nil, fail('Account not found') end
-    for i = 1, #acc.logged_in_citizens do
-        if acc.logged_in_citizens[i] == me.cid then return me.cid, nil end
-    end
+    if lib.table.contains(acc.logged_in_citizens, me.cid) then return me.cid, nil end
     return nil, fail('You are not signed into that account')
 end
 

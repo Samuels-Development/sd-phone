@@ -70,13 +70,15 @@ local ok, fail, digits, trim, finite = util.ok, util.fail, util.digits, util.tri
 local invoices = {}
 
 ---Formats an amount as "$1,234" with thousands separators, sign dropped, for notification copy.
+---
+---Non-finite input falls back to zero. lib.math.groupdigits matches on a digit and indexes the
+---capture, so an infinity or a NaN reaching it raises rather than returning the "$inf" the
+---hand-rolled gsub used to produce.
 ---@param amount number
 ---@return string
 local function formatMoney(amount)
-    local s = tostring(math.floor(math.abs(tonumber(amount) or 0)))
-    local k
-    repeat s, k = s:gsub('^(%d+)(%d%d%d)', '%1,%2') until k == 0
-    return '$' .. s
+    local n = tonumber(amount)
+    return '$' .. lib.math.groupdigits(finite(n) and math.floor(math.abs(n)) or 0, ',')
 end
 
 ---A business's display label: the configured company label, then the framework label, then the

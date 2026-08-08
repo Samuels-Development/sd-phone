@@ -20,7 +20,6 @@ local function chooseBackend()
     if lib ~= nil and USE_OX_LIB then
         return function(data)
             lib.notify({
-                id          = math.random(1, 999999),
                 title       = data.title,
                 description = data.description,
                 type        = data.type or 'inform',

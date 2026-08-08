@@ -1230,12 +1230,7 @@ function store.setShell(citizenid, shell, device)
     device = device or 'phone'
     if not citizenid or citizenid == '' then return end
     if not SHELL_IDS[shell] then return end
-    local allowed = allowedShells()
-    local ok = false
-    for i = 1, #allowed do
-        if allowed[i] == shell then ok = true break end
-    end
-    if not ok then return end
+    if not lib.table.contains(allowedShells(), shell) then return end
     MySQL.update.await([[
         INSERT INTO phone_settings (citizenid, device, shell) VALUES (?, ?, ?)
         ON DUPLICATE KEY UPDATE shell = VALUES(shell)

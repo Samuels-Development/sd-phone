@@ -93,9 +93,7 @@ end
 ---@return table profile { best, coins, totalCoins, plays, unlocked, selected }
 local function profileOf(r)
     local unlocked = decodeUnlocked(r.unlocked)
-    local hasDefault = false
-    for _, id in ipairs(unlocked) do if id == DEFAULT_SKIN then hasDefault = true break end end
-    if not hasDefault then table.insert(unlocked, 1, DEFAULT_SKIN) end
+    if not lib.table.contains(unlocked, DEFAULT_SKIN) then table.insert(unlocked, 1, DEFAULT_SKIN) end
     return {
         best       = r.best or 0,
         coins      = r.coins or 0,
@@ -149,7 +147,7 @@ function rr.buy(src, skin)
     if cost == nil then return nil, 'Unknown item' end
     local r = ensureRow(cid, nameOf(src))
     local unlocked = decodeUnlocked(r.unlocked)
-    for _, id in ipairs(unlocked) do if id == skin then return nil, 'Already owned' end end
+    if lib.table.contains(unlocked, skin) then return nil, 'Already owned' end
     if (r.coins or 0) < cost then return nil, 'Not enough coins' end
     unlocked[#unlocked + 1] = skin
     local affected = MySQL.update.await(
@@ -157,7 +155,7 @@ function rr.buy(src, skin)
         { cost, json.encode(unlocked), cid, cost, r.unlocked or '' })
     if not affected or affected == 0 then
         r = ensureRow(cid, nameOf(src))
-        for _, id in ipairs(decodeUnlocked(r.unlocked)) do if id == skin then return nil, 'Already owned' end end
+        if lib.table.contains(decodeUnlocked(r.unlocked), skin) then return nil, 'Already owned' end
         return nil, 'Not enough coins'
     end
     return profileOf(ensureRow(cid, nameOf(src)))
@@ -173,8 +171,7 @@ function rr.select(src, skin)
     local cid = cidOf(src); if not cid then return nil, 'Player not found' end
     if SKINS[skin] == nil then return nil, 'Unknown item' end
     local r = ensureRow(cid, nameOf(src))
-    local owned = skin == DEFAULT_SKIN
-    for _, id in ipairs(decodeUnlocked(r.unlocked)) do if id == skin then owned = true break end end
+    local owned = skin == DEFAULT_SKIN or lib.table.contains(decodeUnlocked(r.unlocked), skin)
     if not owned then return nil, 'Not unlocked' end
     MySQL.update.await('UPDATE phone_railrunner SET selected = ? WHERE citizenid = ?', { skin, cid })
     return profileOf(ensureRow(cid, nameOf(src)))

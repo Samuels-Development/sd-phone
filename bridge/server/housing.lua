@@ -463,9 +463,7 @@ ADAPTERS['LNS_Housing'] = function(source, id)
         local isOwner = (p.owner == id)
         local isKeyholder = false
         if not isOwner and p.permissions and type(p.permissions.entry) == 'table' then
-            for _, cid in ipairs(p.permissions.entry) do
-                if cid == id then isKeyholder = true; break end
-            end
+            isKeyholder = lib.table.contains(p.permissions.entry, id)
         end
         if isOwner or isKeyholder then
             local coords = nil
@@ -730,9 +728,7 @@ function housing.keyHolders(src, id)
         local isOwner  = (prop.owner == callerCid)
         local isHolder = false
         if not isOwner and prop.permissions and type(prop.permissions.entry) == 'table' then
-            for _, cid in ipairs(prop.permissions.entry) do
-                if cid == callerCid then isHolder = true; break end
-            end
+            isHolder = lib.table.contains(prop.permissions.entry, callerCid)
         end
         if not isOwner and not isHolder then return {} end
 

@@ -88,13 +88,13 @@ local function estimate(rows)
     return ('~%dm'):format(math.max(1, math.floor(secs / 60 + 0.5)))
 end
 
----Thousands-separated, so six and seven figure counts stay readable in a console.
+---Thousands-separated, so six and seven figure counts stay readable in a console. lib.math groups
+---outward from the first digit rather than inward from the end of the string, so a sign stays
+---ahead of the leading group instead of collecting a separator of its own.
 ---@param n integer
 ---@return string
 local function comma(n)
-    local s = tostring(math.floor(n))
-    local out = s:reverse():gsub('(%d%d%d)', '%1,'):reverse()
-    return (out:gsub('^,', ''))
+    return lib.math.groupdigits(math.floor(n), ',')
 end
 
 ---`3 contacts` / `1 contact`. Nouns ending in a consonant + y, or in a sibilant, do not take a
