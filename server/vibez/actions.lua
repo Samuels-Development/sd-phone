@@ -110,9 +110,8 @@ end
 ---@param target string profile being (un)followed
 ---@param following boolean new state
 local function pushFollowStatus(follower, target, following)
-    for _, dst in ipairs(sourcesFor(follower)) do
-        TriggerClientEvent('sd-phone:client:vibez:followChanged', dst, { target = target, following = following })
-    end
+    lib.triggerClientEvent('sd-phone:client:vibez:followChanged', sourcesFor(follower),
+        { target = target, following = following })
 end
 
 ---UI user card from any row carrying profile columns (author/username, avatar, verified,
@@ -232,16 +231,14 @@ local function notify(recipient, kind, actor, postId, preview, ctx)
         actorName = (actorRow and actorRow.display_name ~= '' and actorRow.display_name) or actor
         thumb     = postId and store.thumbsFor({ postId })[postId] or nil
     end
-    for _, src in ipairs(sources) do
-        TriggerClientEvent('sd-phone:client:vibez:notification', src, {})
-        TriggerClientEvent('sd-phone:client:notify', src, {
-            app = 'vibez', appId = 'vibez', title = 'Vibez',
-            body = ('%s %s'):format(actorName, notifSuffix(kind, preview)), image = thumb,
-            time = 'now', quietInApp = true,
-            link = { ['vibez:tab'] = 'inbox' },
-        })
-        badges.pushApp(src, 'vibez')
-    end
+    lib.triggerClientEvent('sd-phone:client:vibez:notification', sources, {})
+    lib.triggerClientEvent('sd-phone:client:notify', sources, {
+        app = 'vibez', appId = 'vibez', title = 'Vibez',
+        body = ('%s %s'):format(actorName, notifSuffix(kind, preview)), image = thumb,
+        time = 'now', quietInApp = true,
+        link = { ['vibez:tab'] = 'inbox' },
+    })
+    for _, src in ipairs(sources) do badges.pushApp(src, 'vibez') end
 end
 
 ---Refreshes the badge for a user's online sources.

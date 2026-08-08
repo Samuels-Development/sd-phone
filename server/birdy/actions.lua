@@ -651,17 +651,19 @@ function actions.create(source, payload)
     -- One pass over the connected players for the whole fan-out; this resolved each follower
     -- separately, and every resolution re-scanned every player on the server.
     local activeSrcs = player.activeCidMap()
+    local targets = {}
     for _, handle in ipairs(followers) do
-        for _, src in ipairs(sourcesFor(handle, activeSrcs)) do
-            TriggerClientEvent('sd-phone:client:birdy:notification', src, {})
-            TriggerClientEvent('sd-phone:client:notify', src, {
-                app = 'birdy', appId = 'birdy', title = 'Squawk',
-                body = ('%s posted: %s'):format(prof.displayName, preview),
-                time = 'now', quietInApp = true,
-            })
-            badges.pushApp(src, 'birdy')
-        end
+        for _, src in ipairs(sourcesFor(handle, activeSrcs)) do targets[#targets + 1] = src end
     end
+
+    lib.triggerClientEvent('sd-phone:client:birdy:notification', targets, {})
+    lib.triggerClientEvent('sd-phone:client:notify', targets, {
+        app = 'birdy', appId = 'birdy', title = 'Squawk',
+        body = ('%s posted: %s'):format(prof.displayName, preview),
+        time = 'now', quietInApp = true,
+    })
+
+    for _, src in ipairs(targets) do badges.pushApp(src, 'birdy') end
 
     return ok({ post = serializePost(store.getPost(id, prof.handle)) })
 end

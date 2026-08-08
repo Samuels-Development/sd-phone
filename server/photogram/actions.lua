@@ -130,9 +130,7 @@ local function broadcastPost(author, event, data)
     local names = store.followerUsernames(author)
     names[#names + 1] = author
     for _, u in ipairs(names) do
-        for _, dst in ipairs(sourcesFor(u)) do
-            TriggerClientEvent('sd-phone:client:photogram:' .. event, dst, data)
-        end
+        lib.triggerClientEvent('sd-phone:client:photogram:' .. event, sourcesFor(u), data)
     end
 end
 
@@ -141,9 +139,8 @@ end
 ---@param target string owner handle
 ---@param status string new follow status ('accepted'/'none')
 local function pushFollowStatus(follower, target, status)
-    for _, dst in ipairs(sourcesFor(follower)) do
-        TriggerClientEvent('sd-phone:client:photogram:followChanged', dst, { target = target, status = status })
-    end
+    lib.triggerClientEvent('sd-phone:client:photogram:followChanged', sourcesFor(follower),
+        { target = target, status = status })
 end
 
 ---UI user card from any row carrying profile columns (author/username, avatar, verified,
@@ -317,20 +314,18 @@ local function notify(recipient, kind, actor, postId, preview, ctx)
         actorName = (actorRow and actorRow.display_name ~= '' and actorRow.display_name) or actor
         thumb     = postId and store.postThumb(postId) or nil
     end
-    for _, src in ipairs(sources) do
-        TriggerClientEvent('sd-phone:client:photogram:notification', src, {})
-        TriggerClientEvent('sd-phone:client:notify', src, {
-            app = 'photogram', appId = 'photogram', title = 'Photogram',
-            body = notifBanner(actorName, kind, preview), image = thumb,
-            time = 'now', quietInApp = true,
-            link = {
-                ['photogram:tab'] = 'activity',
-                ['photogram:dmOpen'] = false, ['photogram:commentId'] = false,
-                ['photogram:viewHandle'] = false, ['photogram:detail'] = false, ['photogram:follows'] = false,
-            },
-        })
-        badges.pushApp(src, 'photogram')
-    end
+    lib.triggerClientEvent('sd-phone:client:photogram:notification', sources, {})
+    lib.triggerClientEvent('sd-phone:client:notify', sources, {
+        app = 'photogram', appId = 'photogram', title = 'Photogram',
+        body = notifBanner(actorName, kind, preview), image = thumb,
+        time = 'now', quietInApp = true,
+        link = {
+            ['photogram:tab'] = 'activity',
+            ['photogram:dmOpen'] = false, ['photogram:commentId'] = false,
+            ['photogram:viewHandle'] = false, ['photogram:detail'] = false, ['photogram:follows'] = false,
+        },
+    })
+    for _, src in ipairs(sources) do badges.pushApp(src, 'photogram') end
 end
 
 ---Refreshes the badge for a user's online sources.
