@@ -220,10 +220,17 @@ end)
 ---
 ---Narrower than wipeCid on purpose, and safer in the one place wipeCid is not: an account another
 ---character is still signed into is SKIPPED rather than deleted, because both of these are shared
----objects. A mail account carries its own messages in the row, so removing it is self-contained;
----an app account is only reachable through phone_app_sessions, so ownership is "nobody else holds
----a session". App CONTENT keyed to the handle (posts, photos, matches) is deliberately left alone
----so this stays predictable; /wipemyphone is the full reset.
+---objects.
+---
+---Ownership is read from the creator COLUMN on both tables, never inferred from a session. Signing
+---out drops the session row, so a session join finds nothing and would leave the account behind
+---forever while it still counts against the per-app cap - which is the whole reason a signed-out
+---account looks unwipeable. phone_app_accounts.created_by is added by util.ensureColumns rather
+---than the CREATE TABLE, so it is easy to miss when reading the schema. Sessions are still unioned
+---in, to catch an account this character uses but did not create.
+---
+---App CONTENT keyed to the handle (posts, photos, matches) is deliberately left alone so this stays
+---predictable; /wipemyphone is the full reset.
 ---@param cid string|nil citizenid whose accounts are removed
 ---@return table|nil result { mail: string[], apps: string[], skipped: string[] }, nil when unresolvable
 local function wipeAccountsFor(cid)
@@ -247,22 +254,25 @@ local function wipeAccountsFor(cid)
         end
     end
 
-    local sessions = MySQL.query.await([[
-        SELECT s.account_id, s.app, a.username
+    local apps = MySQL.query.await([[
+        SELECT id, app, username FROM phone_app_accounts WHERE created_by = ?
+        UNION
+        SELECT a.id, a.app, a.username
         FROM phone_app_sessions s
         JOIN phone_app_accounts a ON a.id = s.account_id
         WHERE s.citizenid = ?
-    ]], { cid }) or {}
-    for _, s in ipairs(sessions) do
+    ]], { cid, cid }) or {}
+    for _, a in ipairs(apps) do
         local shared = tonumber(MySQL.scalar.await(
             'SELECT COUNT(*) FROM phone_app_sessions WHERE account_id = ? AND citizenid <> ?',
-            { s.account_id, cid })) or 0
+            { a.id, cid })) or 0
 
         if shared > 0 then
-            result.skipped[#result.skipped + 1] = ('%s:%s (%d other session(s))'):format(s.app, s.username, shared)
+            result.skipped[#result.skipped + 1] = ('%s:%s (%d other session(s))'):format(a.app, a.username, shared)
         else
-            del('DELETE FROM phone_app_accounts WHERE id = ?', { s.account_id })
-            result.apps[#result.apps + 1] = ('%s:%s'):format(s.app, s.username)
+            del('DELETE FROM phone_app_sessions WHERE account_id = ?', { a.id })
+            del('DELETE FROM phone_app_accounts WHERE id = ?', { a.id })
+            result.apps[#result.apps + 1] = ('%s:%s'):format(a.app, a.username)
         end
     end
 
