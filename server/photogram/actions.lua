@@ -130,7 +130,7 @@ local function broadcastPost(author, event, data)
     local names = store.followerUsernames(author)
     names[#names + 1] = author
     for _, u in ipairs(names) do
-        lib.triggerClientEvent('sd-phone:client:photogram:' .. event, sourcesFor(u), data)
+        util.pushMany('sd-phone:client:photogram:' .. event, sourcesFor(u), data)
     end
 end
 
@@ -139,7 +139,7 @@ end
 ---@param target string owner handle
 ---@param status string new follow status ('accepted'/'none')
 local function pushFollowStatus(follower, target, status)
-    lib.triggerClientEvent('sd-phone:client:photogram:followChanged', sourcesFor(follower),
+    util.pushMany('sd-phone:client:photogram:followChanged', sourcesFor(follower),
         { target = target, status = status })
 end
 
@@ -314,8 +314,8 @@ local function notify(recipient, kind, actor, postId, preview, ctx)
         actorName = (actorRow and actorRow.display_name ~= '' and actorRow.display_name) or actor
         thumb     = postId and store.postThumb(postId) or nil
     end
-    lib.triggerClientEvent('sd-phone:client:photogram:notification', sources, {})
-    lib.triggerClientEvent('sd-phone:client:notify', sources, {
+    util.pushMany('sd-phone:client:photogram:notification', sources, {})
+    util.pushMany('sd-phone:client:notify', sources, {
         app = 'photogram', appId = 'photogram', title = 'Photogram',
         body = notifBanner(actorName, kind, preview), image = thumb,
         time = 'now', quietInApp = true,

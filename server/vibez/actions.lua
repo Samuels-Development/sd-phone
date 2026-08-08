@@ -110,7 +110,7 @@ end
 ---@param target string profile being (un)followed
 ---@param following boolean new state
 local function pushFollowStatus(follower, target, following)
-    lib.triggerClientEvent('sd-phone:client:vibez:followChanged', sourcesFor(follower),
+    util.pushMany('sd-phone:client:vibez:followChanged', sourcesFor(follower),
         { target = target, following = following })
 end
 
@@ -231,8 +231,8 @@ local function notify(recipient, kind, actor, postId, preview, ctx)
         actorName = (actorRow and actorRow.display_name ~= '' and actorRow.display_name) or actor
         thumb     = postId and store.thumbsFor({ postId })[postId] or nil
     end
-    lib.triggerClientEvent('sd-phone:client:vibez:notification', sources, {})
-    lib.triggerClientEvent('sd-phone:client:notify', sources, {
+    util.pushMany('sd-phone:client:vibez:notification', sources, {})
+    util.pushMany('sd-phone:client:notify', sources, {
         app = 'vibez', appId = 'vibez', title = 'Vibez',
         body = ('%s %s'):format(actorName, notifSuffix(kind, preview)), image = thumb,
         time = 'now', quietInApp = true,

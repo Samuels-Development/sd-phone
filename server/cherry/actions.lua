@@ -335,7 +335,7 @@ function actions.saveProfile(src, payload)
     -- Push the fresh card to matched partners so their app doesn't keep the old photo.
     local card = partnerCard(acc.username, store.getProfile(acc.username))
     for _, m in ipairs(store.matchesFor(acc.username)) do
-        lib.triggerClientEvent('sd-phone:client:cherry:partner', sourcesFor(partnerOf(m, acc.username)),
+        util.pushMany('sd-phone:client:cherry:partner', sourcesFor(partnerOf(m, acc.username)),
             { username = acc.username, partner = card })
     end
 
@@ -369,7 +369,7 @@ function actions.swipe(src, payload)
 
     if not existing then
         local matched = sourcesFor(target)
-        lib.triggerClientEvent('sd-phone:client:cherry:match', matched, serializeMatch(matchRow, target))
+        util.pushMany('sd-phone:client:cherry:match', matched, serializeMatch(matchRow, target))
         for _, tsrc in ipairs(matched) do
             if not watchers[tsrc] then
                 notify(tsrc, ("It's a match! You and %s liked each other."):format(partnerCard(acc.username).name))
@@ -474,7 +474,7 @@ function actions.send(src, payload)
     local msg = serializeMessage(store.getMessage(id), acc.username)
     local myName = partnerCard(acc.username).name
     local peers = sourcesFor(partner)
-    lib.triggerClientEvent('sd-phone:client:cherry:message', peers, { matchId = m.id, message = msg })
+    util.pushMany('sd-phone:client:cherry:message', peers, { matchId = m.id, message = msg })
     for _, tsrc in ipairs(peers) do
         notify(tsrc, ('%s: %s'):format(myName, previewFor(kind, body, meta)))
     end

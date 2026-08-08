@@ -596,4 +596,37 @@ AddEventHandler('playerDropped', function()
     for i = 1, #cleanups do pcall(cleanups[i], src, ok and cid or nil) end
 end)
 
+---@type boolean Whether this server's ox_lib carries the triggerClientEvent module.
+---
+---Probed by reading the file, NOT by testing `lib.triggerClientEvent` for nil. ox_lib's loader
+---(`@ox_lib/init.lua`, the `call` metamethod) answers a MISSING module with a stub that forwards to
+---an ox_lib export of the same name, so the field is always truthy and a nil check would pass on
+---every version and then fail at the call with "No such export".
+---
+---sd-phone declares `dependencies { 'ox_lib' }` with no version floor and ships to servers running
+---whatever they already had, and the module carries its own "may be deprecated" note upstream - so
+---the probe guards both directions in time.
+local HAS_BATCHED_PUSH = LoadResourceFile('ox_lib', 'imports/triggerClientEvent/server.lua') ~= nil
+
+---Sends one event to many players. Prefers ox_lib's batched push, which msgpacks the arguments once
+---and reuses the buffer per target instead of re-packing them for each; falls back to a plain loop
+---of TriggerClientEvent, which is what the batched version does internally anyway.
+---
+---Every fan-out in the resource goes through here, so an ox_lib that drops the module is one edit
+---to absorb rather than ten.
+---@param event string client event name
+---@param targets integer[] player server ids; an empty list is a no-op
+---@param ... any event arguments
+function util.pushMany(event, targets, ...)
+    if type(targets) ~= 'table' or not targets[1] then return end
+
+    if HAS_BATCHED_PUSH then
+        return lib.triggerClientEvent(event, targets, ...)
+    end
+
+    for i = 1, #targets do
+        TriggerClientEvent(event, targets[i], ...)
+    end
+end
+
 return util

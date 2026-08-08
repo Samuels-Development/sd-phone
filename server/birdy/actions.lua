@@ -656,8 +656,8 @@ function actions.create(source, payload)
         for _, src in ipairs(sourcesFor(handle, activeSrcs)) do targets[#targets + 1] = src end
     end
 
-    lib.triggerClientEvent('sd-phone:client:birdy:notification', targets, {})
-    lib.triggerClientEvent('sd-phone:client:notify', targets, {
+    util.pushMany('sd-phone:client:birdy:notification', targets, {})
+    util.pushMany('sd-phone:client:notify', targets, {
         app = 'birdy', appId = 'birdy', title = 'Squawk',
         body = ('%s posted: %s'):format(prof.displayName, preview),
         time = 'now', quietInApp = true,

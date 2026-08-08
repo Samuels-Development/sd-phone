@@ -27,7 +27,7 @@ end)
 ---@param payload any
 local function pushTo(handle, event, payload)
     if not handle then return end
-    lib.triggerClientEvent(event, actions.sourcesFor(handle), payload)
+    util.pushMany(event, actions.sourcesFor(handle), payload)
 end
 
 ---Forwards an action result, pinging the `notify` account (wherever it is open) with a
