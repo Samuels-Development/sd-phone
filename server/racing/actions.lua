@@ -220,7 +220,7 @@ local function hudFrom(v)
     return {
         style           = HUD_STYLES[t.style] and t.style or HUD_DEFAULT.style,
         position        = HUD_ANCHORS[t.position] and t.position or HUD_DEFAULT.position,
-        scale           = math.min(HUD_SCALE_MAX, math.max(HUD_SCALE_MIN, scale)),
+        scale           = lib.math.clamp(scale, HUD_SCALE_MIN, HUD_SCALE_MAX),
         checkpointColor = hexColor(t.checkpointColor, HUD_DEFAULT.checkpointColor),
         closestColor    = hexColor(t.closestColor, HUD_DEFAULT.closestColor),
         inAirWaypoints  = t.inAirWaypoints ~= false,

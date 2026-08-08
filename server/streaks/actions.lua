@@ -157,7 +157,7 @@ function actions.post(src, payload)
     if not cid then return fail('Not signed in') end
 
     local imageUrl = trim(payload.imageUrl)
-    if imageUrl:sub(1, 4) ~= 'http' then return fail('Invalid image') end
+    if not lib.string.startsWith(imageUrl, 'http') then return fail('Invalid image') end
     imageUrl = imageUrl:sub(1, 512)
 
     local caption = trim(payload.caption):sub(1, CFG.MaxCaptionLength)

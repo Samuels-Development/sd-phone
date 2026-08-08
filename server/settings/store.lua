@@ -769,7 +769,7 @@ end
 local function clampSlider(v)
     local n = tonumber(v)
     if not n or n ~= n then return nil end
-    n = math.floor(n + 0.5)
+    n = lib.math.round(n)
     if n < 0 then n = 0 elseif n > 100 then n = 100 end
     return n
 end
@@ -867,7 +867,7 @@ end
 local function clampVolume(v)
     local n = tonumber(v)
     if not n or n ~= n then return nil end
-    n = math.floor(n + 0.5)
+    n = lib.math.round(n)
     if n < 0 then n = 0 elseif n > 100 then n = 100 end
     return n
 end
@@ -1723,9 +1723,9 @@ local function sanitizeCustomPalette(v)
         id    = v.id,
         name  = name,
         mode  = v.mode,
-        hue   = math.floor(math.min(math.max(hue, 0), 359) + 0.5),
-        tint  = math.floor(math.min(math.max(tint, 0), 100) + 0.5),
-        depth = math.floor(math.min(math.max(depth, 0), 100) + 0.5),
+        hue   = lib.math.round(lib.math.clamp(hue, 0, 359)),
+        tint  = lib.math.round(lib.math.clamp(tint, 0, 100)),
+        depth = lib.math.round(lib.math.clamp(depth, 0, 100)),
     }
 end
 

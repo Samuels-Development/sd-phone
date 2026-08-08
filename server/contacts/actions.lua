@@ -388,7 +388,7 @@ function actions.logCall(source, payload)
 
     local duration = tonumber(payload.duration) or 0
     if duration ~= duration or duration == math.huge or duration == -math.huge then duration = 0 end
-    duration = math.min(math.max(0, math.floor(duration)), 2147483647)
+    duration = lib.math.clamp(math.floor(duration), 0, 2147483647)
 
     local id = store.newId()
     local call = {

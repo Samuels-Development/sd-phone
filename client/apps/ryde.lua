@@ -30,7 +30,7 @@ RegisterNUICallback('sd-phone:ryde:nearPoint', function(payload, cb)
     local c = GetEntityCoords(cache.ped)
     local dx, dy = c.x - (px + 0.0), c.y - (py + 0.0)
     local dist = math.sqrt(dx * dx + dy * dy)
-    cb({ near = dist <= (tonumber(payload.radius) or 100.0), distance = math.floor(dist + 0.5) })
+    cb({ near = dist <= (tonumber(payload.radius) or 100.0), distance = lib.math.round(dist) })
 end)
 
 ---Returns a friendly area name for a world point, falling back to the raw zone code, then

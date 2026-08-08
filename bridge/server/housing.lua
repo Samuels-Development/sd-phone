@@ -44,7 +44,7 @@ end
 ---@return table|nil decoded
 local function decodeJson(raw)
     if type(raw) == 'table' then return raw end
-    if type(raw) == 'string' and (raw:sub(1, 1) == '{' or raw:sub(1, 1) == '[') then
+    if type(raw) == 'string' and (lib.string.startsWith(raw, '{') or lib.string.startsWith(raw, '[')) then
         local ok, d = pcall(json.decode, raw)
         if ok and type(d) == 'table' then return d end
     end

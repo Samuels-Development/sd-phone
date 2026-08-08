@@ -78,7 +78,7 @@ local function billboard(target, coords, label, primary)
 
     return {
         label = label,
-        dist  = math.floor(dist + 0.5),
+        dist  = lib.math.round(dist),
         x     = sx,
         y     = sy,
         stem  = stem,

@@ -311,10 +311,10 @@ function races.computeMmrDelta(run, citizenid, place)
             end
         end
         if opponents == 0 then return 0 end
-        return math.floor(K * surprise / opponents + 0.5)
+        return lib.math.round(K * surprise / opponents)
     end
 
-    return math.floor(K * (fieldSize - 2 * place + 1) / (fieldSize - 1) + 0.5)
+    return lib.math.round(K * (fieldSize - 2 * place + 1) / (fieldSize - 1))
 end
 
 ---Rating change for a racer who did not finish, whether they timed out or left the server. Same
@@ -342,7 +342,7 @@ function races.computeDnfDelta(run, citizenid)
             end
         end
         if opponents == 0 then return 0 end
-        return math.floor(K * surprise / opponents + 0.5)
+        return lib.math.round(K * surprise / opponents)
     end
 
     return -K
@@ -545,7 +545,7 @@ function races.finish(src, raceId, modelHash, clientMs)
     local payout = 0
     local share  = races.prizeShare(run.isCustom, place)
     if share > 0 and run.prizePool > 0 then
-        payout = math.floor(run.prizePool * share + 0.5)
+        payout = lib.math.round(run.prizePool * share)
         if payout > 0 then money.add(src, CURRENCY, payout, 'Race prize') end
     end
 

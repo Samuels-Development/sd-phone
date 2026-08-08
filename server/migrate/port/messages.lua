@@ -75,7 +75,7 @@ end
 ---@return string
 local function waypointCode(x, y)
     return 'SDW1:' .. b64url(json.encode({
-        l = 'Shared location', x = math.floor(x + 0.5), y = math.floor(y + 0.5),
+        l = 'Shared location', x = lib.math.round(x), y = lib.math.round(y),
         i = 'MapPin', c = '#5c6cf3',
     }))
 end

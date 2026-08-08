@@ -22,7 +22,7 @@ local COUNT_CAP = 5000
 ---@param value any
 ---@return integer
 local function pageOf(value)
-    return math.max(1, math.min(MAX_PAGE, math.floor(tonumber(value) or 1)))
+    return lib.math.clamp(math.floor(tonumber(value) or 1), 1, MAX_PAGE)
 end
 
 ---The citizenid a payload is asking about, or nil when it is not a usable id.

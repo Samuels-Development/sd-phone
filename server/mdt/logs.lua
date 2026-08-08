@@ -71,7 +71,7 @@ logs.list = access.gated('logs.view', function(_src, payload, me)
     local total = math.floor(tonumber(
         MySQL.scalar.await('SELECT COUNT(*) FROM phone_mdt_audit a' .. clause, params)) or 0)
 
-    local pages = math.min(MAX_PAGE, math.max(1, math.ceil(total / PAGE_SIZE)))
+    local pages = lib.math.clamp(math.ceil(total / PAGE_SIZE), 1, MAX_PAGE)
     local page = math.floor(tonumber(payload.page) or 1)
     if page < 1 then page = 1 end
     if page > pages then page = pages end

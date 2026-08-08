@@ -205,16 +205,16 @@ local function sanitizeMeta(kind, payload)
     elseif kind == 'money' then
         local amount = tonumber(payload.amount) or 0
         if amount ~= amount or amount == math.huge or amount == -math.huge then amount = 0 end
-        meta.amount = math.max(0, math.min(1000000000, math.floor(amount)))
+        meta.amount = lib.math.clamp(math.floor(amount), 0, 1000000000)
         if payload.requested == true then meta.requested = true end
     elseif kind == 'voice' then
-        meta.duration = math.max(0, math.min(36000, math.floor(tonumber(payload.duration) or 0)))
+        meta.duration = lib.math.clamp(math.floor(tonumber(payload.duration) or 0), 0, 36000)
         local audio = trim(payload.audioUrl)
         if audio ~= '' then meta.audio = audio:sub(1, 512) end
         if type(payload.waveform) == 'table' then
             local bars = {}
             for i = 1, math.min(#payload.waveform, 64) do
-                bars[i] = math.max(0, math.min(100, math.floor(tonumber(payload.waveform[i]) or 0)))
+                bars[i] = lib.math.clamp(math.floor(tonumber(payload.waveform[i]) or 0), 0, 100)
             end
             if #bars > 0 then meta.waveform = bars end
         end
@@ -318,13 +318,13 @@ function actions.saveProfile(src, payload)
     if type(payload.photos) == 'table' then
         for i = 1, math.min(#payload.photos, 6) do
             local url = trim(payload.photos[i])
-            if url:sub(1, 4) == 'http' then photos[#photos + 1] = url:sub(1, 512) end
+            if lib.string.startsWith(url, 'http') then photos[#photos + 1] = url:sub(1, 512) end
         end
     end
 
     store.upsertProfile(acc.username, {
         name       = name,
-        age        = math.max(18, math.min(99, math.floor(tonumber(payload.age) or 21))),
+        age        = lib.math.clamp(math.floor(tonumber(payload.age) or 21), 18, 99),
         about      = trim(payload.about):sub(1, 300),
         gender     = GENDERS[payload.gender] and payload.gender or 'Man',
         interested = INTERESTS[payload.interestedIn] and payload.interestedIn or 'Everyone',

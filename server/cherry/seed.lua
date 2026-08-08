@@ -60,7 +60,7 @@ lib.addCommand('cherryseed', {
         { name = 'count', type = 'number', help = 'How many profiles (default 8, max 50)', optional = true },
     },
 }, function(source, args)
-    local n = math.min(50, math.max(1, math.floor(tonumber(args and args.count) or 8)))
+    local n = lib.math.clamp(math.floor(tonumber(args and args.count) or 8), 1, 50)
     local made = 0
 
     for _ = 1, n do

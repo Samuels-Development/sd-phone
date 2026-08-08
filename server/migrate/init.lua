@@ -84,8 +84,8 @@ local ROWS_PER_SECOND = 8000
 ---@return string
 local function estimate(rows)
     local secs = rows / ROWS_PER_SECOND
-    if secs < 90 then return ('~%ds'):format(math.max(1, math.floor(secs + 0.5))) end
-    return ('~%dm'):format(math.max(1, math.floor(secs / 60 + 0.5)))
+    if secs < 90 then return ('~%ds'):format(math.max(1, lib.math.round(secs))) end
+    return ('~%dm'):format(math.max(1, lib.math.round(secs / 60)))
 end
 
 ---Thousands-separated, so six and seven figure counts stay readable in a console. lib.math groups

@@ -123,7 +123,7 @@ local function merge(settings)
 
         local scale = tonumber(settings.scale)
         if scale then
-            hud.scale = math.min(HUD_SCALE_MAX, math.max(HUD_SCALE_MIN, scale))
+            hud.scale = lib.math.clamp(scale, HUD_SCALE_MIN, HUD_SCALE_MAX)
         end
     end
     markers.setStyle(hud.checkpointColor, hud.closestColor, hud.inAirWaypoints)
@@ -446,7 +446,7 @@ local function pushState(state)
         totalLaps         = state.totalLaps,
         cp                = math.min(state.current, state.cpPerLap),
         cpTotal           = state.cpPerLap,
-        progress          = math.floor((state.doneCount / math.max(1, state.cpPerLap * state.totalLaps)) * 100 + 0.5),
+        progress          = lib.math.round((state.doneCount / math.max(1, state.cpPerLap * state.totalLaps)) * 100),
         bestLapMs         = state.bestLapMs,
         lapStartElapsedMs = state.lapStartedAt - state.startedAt,
         sectors           = sectors,

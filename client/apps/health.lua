@@ -109,7 +109,7 @@ local function pushSnapshot()
         data = {
             steps     = math.floor(stats.steps),
             distanceM = stats.distanceM,
-            heartRate = math.floor(stats.heartRate + 0.5),
+            heartRate = lib.math.round(stats.heartRate),
             state     = stats.state,
         },
     })

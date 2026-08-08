@@ -199,7 +199,7 @@ lib.addCommand('seedcontacts', {
 }, function(source, args)
     local cid = player.getIdentifier(source)
     if not cid then return end
-    local count = math.min(math.max(tonumber(args.count) or 12, 1), 30)
+    local count = lib.math.clamp(tonumber(args.count) or 12, 1, 30)
     local made = seedContacts(cid, count)
     print(('^2[sd-phone]^0 seeded %d contacts for %s'):format(#made, cid))
     TriggerClientEvent('sd-phone:client:notify', source, {
@@ -217,7 +217,7 @@ lib.addCommand('seedmessages', {
 }, function(source, args)
     local cid = player.getIdentifier(source)
     if not cid then return end
-    local convoCount = math.min(math.max(tonumber(args.count) or 6, 1), 15)
+    local convoCount = lib.math.clamp(tonumber(args.count) or 6, 1, 15)
 
     local partners = {}
     for _, row in ipairs(contactsStore.listContacts(cid)) do

@@ -134,7 +134,7 @@ local function officerRow(member, profile, labels, onlineSrc, seconds, reports, 
         avatar     = profile and profile.avatar or nil,
         online     = onlineSrc ~= nil,
         duty       = duty,
-        hours      = math.floor((seconds / 3600) * 10 + 0.5) / 10,
+        hours      = lib.math.round((seconds / 3600), 1),
         reports    = reports,
         arrests    = arrests,
     }

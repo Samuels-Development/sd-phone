@@ -20,7 +20,7 @@ local function pct(v)
     local n = tonumber(v)
     if not n then return nil end
     if n <= 1 then n = n * 100 end
-    n = math.floor(n + 0.5)
+    n = lib.math.round(n)
     if n < 0 then return 0 end
     if n > 100 then return 100 end
     return n

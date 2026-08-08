@@ -98,16 +98,9 @@ local function pick(t)
     return t[math.random(#t)]
 end
 
----Fisher-Yates shuffle, in place.
----@param t table
----@return table t
-local function shuffle(t)
-    for i = #t, 2, -1 do
-        local j = math.random(i)
-        t[i], t[j] = t[j], t[i]
-    end
-    return t
-end
+---@type fun(t: table): table Fisher-Yates shuffle, in place, returning the same table. ox_lib's is
+---the same algorithm down to the draw order, so the sequence for a given RNG state is unchanged.
+local shuffle = lib.table.shuffle
 
 ---Applies one of the Config.RateLimits budgets. A block the config does not define never refuses.
 ---@param cid string|nil citizenid the budget is keyed on
@@ -159,7 +152,7 @@ local function circuitLaps(gates)
     local target = tonumber(laps.TargetCheckpoints)
     if not target or gates <= 0 then return rnd(low, high) end
 
-    local count = math.floor(target / gates + 0.5)
+    local count = lib.math.round(target / gates)
     if count < low then return low end
     if count > high then return high end
     return count
@@ -180,7 +173,7 @@ local function rankedPrizePool(class, gates, laps)
 
     local jitter = tonumber(prize.Jitter) or 0
     if jitter > 0 then pool = pool * (1 + (math.random() * 2 - 1) * jitter) end
-    return math.max(0, math.floor(pool / 50 + 0.5) * 50)
+    return math.max(0, lib.math.round(pool / 50) * 50)
 end
 
 ---Rough race length in kilometres, from the gate count. Cosmetic: the tablet shows it next to the
@@ -265,7 +258,7 @@ local function generateBatch()
 
     local low   = math.max(1, int(GEN.StartsInMinMinutes, 10))
     local high  = math.max(low, int(GEN.StartsInMaxMinutes, 75))
-    local count = math.min(math.max(0, int(GEN.RacesPerBatch, 10)), #pool)
+    local count = lib.math.clamp(int(GEN.RacesPerBatch, 10), 0, #pool)
     for i = 1, count do
         createRace(pool[i], rnd(low, high) * 60)
     end

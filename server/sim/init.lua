@@ -349,7 +349,7 @@ lib.callback.register('sd-phone:server:sim:get', function(source)
     local profiles = {}
     local restorable = false
     for _, p in ipairs(simStore.listProfiles(realCid)) do
-        local isCloud = p.identity:sub(1, 6) == 'cloud:'
+        local isCloud = lib.string.startsWith(p.identity, 'cloud:')
         local thisPhone = s ~= nil and s.identity == p.deviceIdentity
         local canUse = (isCloud and p.syncedAt ~= nil)
             or (not isCloud and (s == nil or s.identity ~= p.identity))
@@ -424,7 +424,7 @@ end)
 ---@param identity string|nil
 ---@return boolean
 local function isCloudIdentity(identity)
-    return type(identity) == 'string' and identity:sub(1, 6) == 'cloud:'
+    return type(identity) == 'string' and lib.string.startsWith(identity, 'cloud:')
 end
 
 ---@type integer Auto-sync throttle: the enrolled phone re-snapshots at most this often (seconds).

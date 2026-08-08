@@ -172,11 +172,11 @@ end)
 ---@return boolean accepted false when the callback or payload shape is unusable
 exports('uploadMedia', function(dataUrl, filename, cb)
     if type(cb) ~= 'function' then return false end
-    if type(dataUrl) ~= 'string' or dataUrl:sub(1, 5) ~= 'data:' then
+    if type(dataUrl) ~= 'string' or not lib.string.startsWith(dataUrl, 'data:') then
         cb(nil, 'Expected a base64 data: URL')
         return false
     end
-    local cap = dataUrl:sub(1, 11) == 'data:video/' and MAX_VIDEO_BYTES or MAX_PHOTO_BYTES
+    local cap = lib.string.startsWith(dataUrl, 'data:video/') and MAX_VIDEO_BYTES or MAX_PHOTO_BYTES
     if #dataUrl > cap then
         cb(nil, ('Payload too large (%d bytes, cap %d)'):format(#dataUrl, cap))
         return false

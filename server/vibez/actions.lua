@@ -252,7 +252,7 @@ end
 ---@return string|nil url
 local function sanitizeUrl(value)
     local url = trim(value)
-    if url:sub(1, 4) ~= 'http' then return nil end
+    if not lib.string.startsWith(url, 'http') then return nil end
     return url:sub(1, 512)
 end
 

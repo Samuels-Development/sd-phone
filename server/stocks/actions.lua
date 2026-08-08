@@ -179,7 +179,7 @@ function actions.buy(src, payload)
         local price = engine.priceOf(symbol)
         if not price or price <= 0 then return { success = false, message = 'No price available' } end
 
-        local fee       = math.floor(amount * (ST.Commission or 0) + 0.5)
+        local fee       = lib.math.round(amount * (ST.Commission or 0))
         local totalCost = amount + fee
 
         local cash = store.ensureWallet(cid, ST.StartingCash)
@@ -247,8 +247,8 @@ function actions.sell(src, payload)
         if fill <= 0 then return { success = false, message = 'No price available' } end
 
         local gross = unitsToSell * fill
-        local fee   = math.floor(gross * (ST.Commission or 0) + 0.5)
-        local net   = math.floor(gross - fee + 0.5)
+        local fee   = lib.math.round(gross * (ST.Commission or 0))
+        local net   = lib.math.round(gross - fee)
 
         local remaining = heldQty - unitsToSell
         if remaining <= 1e-8 then

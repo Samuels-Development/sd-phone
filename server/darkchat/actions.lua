@@ -248,11 +248,11 @@ function actions.send(src, roomId, payload)
         local url = sanitizeStr(raw.audioUrl, 1024)
         if not url then return { success = false, message = 'Missing audio' } end
         meta.audioUrl = url
-        meta.duration = math.max(1, math.min(600, math.floor(tonumber(raw.duration) or 1)))
+        meta.duration = lib.math.clamp(math.floor(tonumber(raw.duration) or 1), 1, 600)
         if type(raw.waveform) == 'table' then
             local bars = {}
             for i = 1, math.min(#raw.waveform, 64) do
-                bars[i] = math.max(0, math.min(100, math.floor(tonumber(raw.waveform[i]) or 0)))
+                bars[i] = lib.math.clamp(math.floor(tonumber(raw.waveform[i]) or 0), 0, 100)
             end
             if #bars > 0 then meta.waveform = bars end
         end

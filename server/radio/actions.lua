@@ -43,7 +43,7 @@ local function clampFreq(f)
     f = tonumber(f) or DEFAULT_FREQ
     if f ~= f then f = DEFAULT_FREQ end
     if f < 1.0 then f = 1.0 elseif f > 999.9 then f = 999.9 end
-    return math.floor(f * 10 + 0.5) / 10
+    return lib.math.round(f, 1)
 end
 
 ---Clamp a client-supplied volume to an integer 0-100. NaN collapses to the default.

@@ -536,7 +536,7 @@ function actions.complete(src, payload)
 
     local riderSrc  = srcOf(trip.riderCid)
     local driverSrc = srcOf(trip.driverCid)
-    local driverEarn = math.floor(trip.fare * (config.DriverCut or 1.0) + 0.5)
+    local driverEarn = lib.math.round(trip.fare * (config.DriverCut or 1.0))
 
     local paid = false
     if riderSrc and money.get(riderSrc, 'bank') >= trip.fare then
@@ -830,7 +830,7 @@ function actions.leaderboard()
         out[i] = {
             username = r.username,
             name   = (r.display_name and r.display_name ~= '') and r.display_name or r.username,
-            rating = math.floor((tonumber(r.avg_rating) or 5) * 100 + 0.5) / 100,
+            rating = lib.math.round((tonumber(r.avg_rating) or 5), 2),
             trips  = tonumber(r.trips) or 0,
             color  = r.color,
         }
@@ -852,7 +852,7 @@ function actions.me(src)
         name     = acc.name,
         driver   = d and {
             vehicle = d.vehicle, plate = d.plate, color = d.color,
-            rating = math.floor(rating * 100 + 0.5) / 100,
+            rating = lib.math.round(rating, 2),
             trips = d.trips, earnings = d.earnings_total,
         } or nil,
         online = online[acc.username] ~= nil,

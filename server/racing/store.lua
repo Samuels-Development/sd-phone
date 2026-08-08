@@ -148,7 +148,7 @@ end
 ---@return integer
 local function sizeOf(value, fallback)
     local n = math.floor(tonumber(value) or fallback)
-    return math.max(1, math.min(MAX_PER_PAGE, n))
+    return lib.math.clamp(n, 1, MAX_PER_PAGE)
 end
 
 ---A positive row id, or nil when the value is not one.
@@ -815,7 +815,7 @@ function store.racerProfile(citizenid, currentMmr)
         racesCompleted  = math.floor(tonumber(agg.races) or 0),
         racesWon        = math.floor(tonumber(agg.wins) or 0),
         racesDnf        = math.floor(tonumber(agg.dnfs) or 0),
-        avgPosition     = avgPos and math.floor(avgPos * 10 + 0.5) / 10 or 0,
+        avgPosition     = avgPos and lib.math.round(avgPos, 1) or 0,
         mostUsedVehicle = (topVehicle and topVehicle.vehicle) or 'Unknown',
         totalTimeSec    = math.floor((tonumber(agg.total_ms) or 0) / 1000),
         chart           = chart,

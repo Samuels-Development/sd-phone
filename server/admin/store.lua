@@ -785,7 +785,7 @@ function store.listContent(app, cursor, limit, query)
             label     = r.room_id and ('#' .. r.room_id .. ' as ' .. tostring(r.author))
                 or (r.author and ('@' .. r.author))
                 or (r.username and ('@' .. r.username .. (r.name and (' · ' .. r.name .. ', ' .. tostring(r.age)) or '')))
-                or (r.conversation and ((r.conversation:sub(1, 2) == 'g-') and ('group ' .. r.conversation) or ('to ' .. util.formatNumber(r.conversation))))
+                or (r.conversation and ((lib.string.startsWith(r.conversation, 'g-')) and ('group ' .. r.conversation) or ('to ' .. util.formatNumber(r.conversation))))
                 or nil,
         }
     end

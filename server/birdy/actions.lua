@@ -470,7 +470,7 @@ function actions.updateProfile(source, payload)
 
     local function imageUrl(v, fallback)
         local u = trimmed(v)
-        if u and u:sub(1, 4) == 'http' then return u:sub(1, 512) end
+        if u and lib.string.startsWith(u, 'http') then return u:sub(1, 512) end
         if v == false then return nil end
         return fallback
     end
@@ -949,13 +949,13 @@ local function sanitizeDmMeta(kind, payload)
         meta.amount = math.max(0, math.floor(amount))
         if payload.requested == true then meta.requested = true end
     elseif kind == 'voice' then
-        meta.duration = math.max(0, math.min(36000, math.floor(tonumber(payload.duration) or 0)))
+        meta.duration = lib.math.clamp(math.floor(tonumber(payload.duration) or 0), 0, 36000)
         local audio = trimmed(payload.audioUrl) or ''
         if audio ~= '' then meta.audio = audio:sub(1, 512) end
         if type(payload.waveform) == 'table' then
             local bars = {}
             for i = 1, math.min(#payload.waveform, 64) do
-                bars[i] = math.max(0, math.min(100, math.floor(tonumber(payload.waveform[i]) or 0)))
+                bars[i] = lib.math.clamp(math.floor(tonumber(payload.waveform[i]) or 0), 0, 100)
             end
             if #bars > 0 then meta.waveform = bars end
         end

@@ -76,8 +76,8 @@ function actions.saveAlarm(src, payload)
         alarmCount[cid] = held + 1
     end
 
-    local hour    = math.max(0, math.min(23, math.floor(tonumber(payload.hour)   or 0)))
-    local minute  = math.max(0, math.min(59, math.floor(tonumber(payload.minute) or 0)))
+    local hour    = lib.math.clamp(math.floor(tonumber(payload.hour)   or 0), 0, 23)
+    local minute  = lib.math.clamp(math.floor(tonumber(payload.minute) or 0), 0, 59)
     local label   = type(payload.label) == 'string' and payload.label:sub(1, 60) or ''
     local days    = type(payload.days)  == 'string' and payload.days:sub(1, 40)  or ''
     local enabled = payload.enabled
@@ -85,7 +85,7 @@ function actions.saveAlarm(src, payload)
     local sound = payload.sound
     if sound == nil then sound = true end
     local snooze     = payload.snooze == true
-    local snoozeSecs = math.max(1, math.min(3600, math.floor(tonumber(payload.snoozeSecs) or 60)))
+    local snoozeSecs = lib.math.clamp(math.floor(tonumber(payload.snoozeSecs) or 60), 1, 3600)
 
     store.upsertAlarm(cid, {
         id = id, hour = hour, minute = minute, label = label, days = days,

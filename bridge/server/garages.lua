@@ -98,7 +98,7 @@ end
 local function decodeProps(row)
     for _, col in ipairs({ 'mods', 'vehicle', 'modifications' }) do
         local raw = row[col]
-        if type(raw) == 'string' and (raw:sub(1, 1) == '{' or raw:sub(1, 1) == '[') then
+        if type(raw) == 'string' and (lib.string.startsWith(raw, '{') or lib.string.startsWith(raw, '[')) then
             local ok, decoded = pcall(json.decode, raw)
             if ok and type(decoded) == 'table' then return decoded end
         elseif type(raw) == 'table' then
@@ -115,7 +115,7 @@ end
 ---@return string|number|nil model spawn name or hash
 local function modelOf(row, props)
     local raw = row.vehicle
-    if type(raw) == 'string' and raw:sub(1, 1) ~= '{' then return raw end
+    if type(raw) == 'string' and not lib.string.startsWith(raw, '{') then return raw end
     return (props and (props.model or props.modelName)) or row.hash or nil
 end
 
@@ -127,7 +127,7 @@ local function clampPct(n)
     if type(n) ~= 'number' then return nil end
     if n > 100 then n = n / 10 end
     if n < 0 then n = 0 elseif n > 100 then n = 100 end
-    return math.floor(n + 0.5)
+    return lib.math.round(n)
 end
 
 ---Resolve one condition metric (fuel/engine/body): dedicated column first (tried in order,

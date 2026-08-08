@@ -31,7 +31,7 @@ local MIN_WIDTH   = tonumber(CREATOR_CFG.MinWidth) or 2.0
 ---@type number Widest gate, in metres.
 local MAX_WIDTH   = math.max(tonumber(CREATOR_CFG.MaxWidth) or 50.0, MIN_WIDTH)
 ---@type number Width the recorder opens at, in metres.
-local DEF_WIDTH   = math.min(MAX_WIDTH, math.max(MIN_WIDTH, tonumber(CREATOR_CFG.DefaultWidth) or 12.0))
+local DEF_WIDTH   = lib.math.clamp(tonumber(CREATOR_CFG.DefaultWidth) or 12.0, MIN_WIDTH, MAX_WIDTH)
 ---@type number Metres of width gained or lost per frame while an arrow key is held.
 local WIDTH_STEP  = tonumber(CREATOR_CFG.WidthStep) or 0.15
 ---@type number Metres past which a placed gate stops being drawn.
@@ -62,7 +62,7 @@ local gateWidth = DEF_WIDTH
 ---@param value number
 ---@return number rounded two decimals, which keeps the stored gate JSON compact
 local function round2(value)
-    return math.floor(value * 100 + 0.5) / 100
+    return lib.math.round(value, 2)
 end
 
 ---Ground height at a point near the caller's own z. The probe traces downward from where it

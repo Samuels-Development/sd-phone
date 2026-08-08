@@ -38,7 +38,7 @@ local function nameOf(src) return (player.getName(src) or ('Player ' .. tostring
 local function clampRun(v, cap)
     local n = tonumber(v)
     if not n or n ~= n or n == math.huge or n == -math.huge then return 0 end
-    return math.max(0, math.min(cap, math.floor(n)))
+    return lib.math.clamp(math.floor(n), 0, cap)
 end
 
 ---Creates the profile table if it doesn't exist. Runs once at boot.

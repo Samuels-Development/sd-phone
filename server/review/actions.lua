@@ -134,7 +134,7 @@ end
 ---Round to one decimal place for the displayed star average.
 ---@param n number raw average
 ---@return number rounded
-local function round1(n) return math.floor(n * 10 + 0.5) / 10 end
+local function round1(n) return lib.math.round(n, 1) end
 
 ---Review row -> UI shape. `mine` is computed against the caller's citizenid; the citizenid itself
 ---is dropped here.

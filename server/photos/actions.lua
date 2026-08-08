@@ -90,9 +90,9 @@ local function hostMatchesList(host, list)
     if type(list) ~= 'table' then return false end
     for _, raw in ipairs(list) do
         local entry = tostring(raw):lower()
-        if entry:sub(1, 2) == '*.' then
+        if lib.string.startsWith(entry, '*.') then
             local suffix = entry:sub(2) -- '.domain.com'
-            if host:sub(-#suffix) == suffix or host == entry:sub(3) then return true end
+            if lib.string.endsWith(host, suffix) or host == entry:sub(3) then return true end
         elseif entry ~= '' and host == entry then
             return true
         end
@@ -133,7 +133,7 @@ function actions.saveFromUrl(source, url)
         print('^1[sd-phone:photos]^0 saveFromUrl: empty url')
         return fail('No URL')
     end
-    if not (url:sub(1, 8) == 'https://' or url:sub(1, 7) == 'http://') then
+    if not (lib.string.startsWith(url, 'https://') or lib.string.startsWith(url, 'http://')) then
         print('^1[sd-phone:photos]^0 saveFromUrl: url not http(s)')
         return fail('Invalid URL')
     end

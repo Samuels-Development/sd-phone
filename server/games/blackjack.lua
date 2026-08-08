@@ -32,11 +32,7 @@ local function freshDeck()
     for _, s in ipairs(SUITS) do
         for _, r in ipairs(RANKS) do n = n + 1; deck[n] = { rank = r, suit = s } end
     end
-    for i = n, 2, -1 do
-        local j = math.random(i)
-        deck[i], deck[j] = deck[j], deck[i]
-    end
-    return deck
+    return lib.table.shuffle(deck)
 end
 
 ---Draws the top card off a deck (mutates it).
@@ -96,7 +92,7 @@ end
 ---@return integer credit chips to add back to the wallet
 ---@return integer net signed profit (credit - bet)
 local function payoutFor(bet, outcome)
-    if outcome == 'blackjack' then local w = math.floor(bet * 1.5 + 0.5); return bet + w, w end
+    if outcome == 'blackjack' then local w = lib.math.round(bet * 1.5); return bet + w, w end
     if outcome == 'win'  then return bet * 2, bet end
     if outcome == 'push' then return bet, 0 end
     return 0, -bet

@@ -55,7 +55,7 @@ RegisterNetEvent('sd-phone:server:voice:upload', function(payload)
     payload = type(payload) == 'table' and payload or {}
     local audio = payload.audio
 
-    if type(audio) ~= 'string' or audio:sub(1, 11) ~= 'data:audio/' then
+    if type(audio) ~= 'string' or not lib.string.startsWith(audio, 'data:audio/') then
         TriggerClientEvent('sd-phone:client:voice:uploadFailed', src, 'Bad audio payload')
         return
     end

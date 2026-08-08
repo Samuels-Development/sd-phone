@@ -6,7 +6,7 @@ local function freqToChannel(freq)
     local f = tonumber(freq) or 0
     if f < 1.0 then return 0 end
     if f > 999.9 then f = 999.9 end
-    return math.floor(f * 10 + 0.5)
+    return lib.math.round(f * 10)
 end
 
 -- Live session state, seeded from the player's saved prefs on first read. `standby` = left the
@@ -73,7 +73,7 @@ RegisterNUICallback('sd-phone:radio:set', function(payload, cb)
     if payload.freq ~= nil then
         local f = tonumber(payload.freq) or state.freq
         if f < 1.0 then f = 1.0 elseif f > 999.9 then f = 999.9 end
-        newFreq = math.floor(f * 10 + 0.5) / 10
+        newFreq = lib.math.round(f, 1)
     end
     local newOn = state.on
     if payload.on ~= nil then newOn = payload.on == true end

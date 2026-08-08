@@ -118,7 +118,7 @@ function stats.record(cid, game, mode, result, name, amount)
     name = type(name) == 'string' and name:sub(1, 64) or nil
     amount = tonumber(amount)
     if not amount or amount ~= amount or amount == math.huge or amount == -math.huge then amount = 0 end
-    amount = math.max(-AMOUNT_MAX, math.min(AMOUNT_MAX, math.floor(amount)))
+    amount = lib.math.clamp(math.floor(amount), -AMOUNT_MAX, AMOUNT_MAX)
     local won  = math.max(amount, 0)
     local lost = math.max(-amount, 0)
     MySQL.query.await((
@@ -141,7 +141,7 @@ function stats.submitScore(cid, game, score, name)
     name = type(name) == 'string' and name:sub(1, 64) or nil
     score = tonumber(score)
     if not score or score ~= score or score == math.huge or score == -math.huge then score = 0 end
-    score = math.max(0, math.min(SCORE_MAX, math.floor(score)))
+    score = lib.math.clamp(math.floor(score), 0, SCORE_MAX)
 
     local prevRow = MySQL.single.await(
         'SELECT high_score, plays FROM phone_game_stats WHERE citizenid = ? AND game = ?', { cid, game })
