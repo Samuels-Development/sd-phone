@@ -541,6 +541,27 @@ ADAPTERS['nolag_properties'] = function(source, id)
     return out
 end
 
+ADAPTERS['kartik-properties'] = function(source, id)
+    local ok, raw = pcall(function() return exports['kartik-properties']:GetPlayerHousingData(id) end)
+    if not ok or type(raw) ~= 'table' then return {} end
+    local out = {}
+    for _, p in ipairs(raw) do
+        local coords = asXY(p.coords)
+        local isOwner = (tostring(p.owner) == tostring(id))
+        out[#out + 1] = home{
+            id      = p.houseId,
+            address = s(p.label),
+            type    = isOwner and 'House' or 'Leased',
+            area    = '',
+            value   = 0,
+            status  = isOwner and 'owned' or 'rented',
+            coords  = coords,
+            locked  = p.locked,
+        }
+    end
+    return out
+end
+
 -- Capability map: which detail-view actions each system supports.
 ---@type table<string, { lock: boolean, keyList: boolean, keyManage: boolean }> Per-system action support.
 local CAPS = {
@@ -555,6 +576,7 @@ local CAPS = {
     ['loaf_housing']   = { lock = false, keyList = false, keyManage = false },
     ['LNS_Housing']    = { lock = true,  keyList = true,  keyManage = true  },
     ['nolag_properties'] = { lock = true,  keyList = true,  keyManage = true  },
+    ['kartik-properties'] = { lock = true,  keyList = true,  keyManage = true  },
 }
 
 ---Capability flags for the active system, all-false when none is detected.
@@ -683,6 +705,12 @@ function housing.lock(src, id, want)
             refreshHomes(src)
             return want
         end
+    elseif ACTIVE == 'kartik-properties' then
+        local ok = pcall(function() exports['kartik-properties']:SetPropertyLocked(p, want) end)
+        if ok then
+            refreshHomes(src)
+            return want
+        end
     end
     return nil
 end
@@ -768,6 +796,17 @@ function housing.keyHolders(src, id)
             cids[#cids + 1] = cid
         end
         return resolveCids(cids)
+    elseif ACTIVE == 'kartik-properties' then
+        if not ownsProperty(src, id) then return {} end
+        local ok, house = pcall(function() return exports['kartik-properties']:GetPropertyHousingData(p) end)
+        if not ok or type(house) ~= 'table' or not house.keyholders then return {} end
+        local out = {}
+        for _, kh in ipairs(house.keyholders) do
+            if not kh.isowner then
+                out[#out + 1] = { id = tostring(kh.identifier), name = kh.name or 'Resident' }
+            end
+        end
+        return out
     end
     return {}
 end
@@ -816,6 +855,16 @@ function housing.giveKey(src, id, targetSrc)
             refreshHomes(src, targetSrc)
             return true
         end
+    elseif ACTIVE == 'kartik-properties' then
+        local cid = player.getIdentifier(targetSrc)
+        local ownerCid = player.getIdentifier(src)
+        if not cid then return false end
+        local ok, res = pcall(function() return exports['kartik-properties']:GrantHousingKey(p, cid, ownerCid) end)
+        if ok and res and res.success then
+            refreshHomes(src, targetSrc)
+            return true
+        end
+        return false
     end
     return false
 end
@@ -865,6 +914,14 @@ function housing.removeKey(src, id, holderId)
             refreshHomes(src, holderId)
             return true
         end
+    elseif ACTIVE == 'kartik-properties' then
+        local ownerCid = player.getIdentifier(src)
+        local ok, res = pcall(function() return exports['kartik-properties']:RevokeHousingKey(p, tostring(holderId), ownerCid) end)
+        if ok and res and res.success then
+            refreshHomes(src, holderId)
+            return true
+        end
+        return false
     end
     return false
 end
