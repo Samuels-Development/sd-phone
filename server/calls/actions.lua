@@ -604,15 +604,28 @@ function actions.dial(source, payload)
     return ok({ channel = channel })
 end
 
+---The party a given member sees as the call's title: their opposite leg on a 1:1, and the original
+---caller for anyone merged in. The roster lists everyone EXCEPT this one and the member themselves,
+---so an ordinary two-party call reports an empty roster rather than naming the person already on
+---screen - the phone reads a non-empty roster as "this is a conference".
+---@param s table session from `sessions`
+---@param me table the member being addressed
+---@return table party
+local function titlePartyFor(s, me)
+    if s.caller.src == me.src then return s.callee end
+    return s.caller
+end
+
 ---Pushes the current conference roster to every live member, so each phone can name who else is
----on the line. Each recipient gets the OTHER members, never themselves.
+---on the line. Each recipient gets the members that are neither themselves nor their title party.
 ---@param s table session from `sessions`
 local function pushRoster(s)
     local members = membersOf(s)
     for _, me in ipairs(members) do
+        local title  = titlePartyFor(s, me)
         local others = {}
         for _, p in ipairs(members) do
-            if p.src ~= me.src then
+            if p.src ~= me.src and p.src ~= title.src then
                 others[#others + 1] = {
                     name   = contactNameFor(me.cid, p.number) or p.name,
                     number = p.number,
@@ -1137,9 +1150,11 @@ function actions.current(source)
     local phase = s.state == 'active' and 'active' or (meCaller and 'outgoing' or 'incoming')
     local elapsed = (s.state == 'active' and s.startedAt) and (os.time() - s.startedAt) or 0
 
+    -- Everyone except this player and whoever the title already names, so a plain 1:1 call hydrates
+    -- with an empty roster and the Video / Add call buttons stay live.
     local others = {}
     for _, p in ipairs(membersOf(s)) do
-        if p.src ~= source then
+        if p.src ~= source and p.src ~= peer.src then
             others[#others + 1] = { name = contactNameFor(cid, p.number) or p.name, number = p.number }
         end
     end

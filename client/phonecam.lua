@@ -91,6 +91,16 @@ local zoomTarget = 1.0
 local fov = CAM_FOV
 ---@type integer|nil View mode the player was on before the lens borrowed a third-person one.
 local savedViewMode = nil
+---@type integer The ped's ROOT bone. The selfie lens hangs off this rather than the head: the root
+---carries smooth locomotion with none of the walk cycle's bob, so the shot holds still and the
+---player animates inside it - which is what a phone held at arm's length actually does, since the
+---arm rides the body and not the skull.
+local ROOT_BONE <const> = 0
+---@type number Metres the face sits above the root bone, measured per ped when the lens opens so a
+---tall model is framed like a short one.
+local faceHeight = 0.65
+---@type boolean True while the selfie lens is attached to the ped by the engine.
+local selfieAttached = false
 
 ---Whether a surface may keep the player moving, which decides scripted cam vs native cell cam.
 ---The native pins the ped at engine level regardless of NUI keep-input, so free movement and the
@@ -221,8 +231,43 @@ local function place()
     -- an angle on yourself other than head-on.
     selfieSwing = pinned and clamp(selfieSwing + turn, SELFIE_YAW_LIMIT) or 0.0
 
-    local yaw   = GetEntityHeading(ped) + selfieSwing
     local pitch = clamp(view.x, SELFIE_PITCH_LIMIT)
+
+    -- The lens is handed to the engine, welded to the ROOT bone with its rotation supplied as part
+    -- of the attachment. Two things fall out of that, and both were what shook the old shot:
+    --
+    --  * the root carries locomotion without the walk cycle's bob, so nothing the animation does
+    --    to the head can move the camera, and
+    --  * the aim is a fixed rotation rather than a point-at constraint chasing a bone that moves
+    --    every frame, so it cannot oscillate no matter when the script thread happens to run.
+    --
+    -- The player is then free to bob naturally inside a still frame, which is how a phone held at
+    -- arm's length behaves - the arm rides the body, not the skull.
+    if selfieAttached then
+        local p    = math.rad(pitch)
+        local rad  = math.rad(selfieSwing)
+        local out  = math.cos(p) * SELFIE_REACH
+        local rise = math.sin(p) * SELFIE_REACH
+
+        AttachCamToPedBone_2(cam, ped, ROOT_BONE,
+            -pitch, 0.0, 180.0 + selfieSwing,
+            math.sin(rad) * out + math.cos(rad) * SELFIE_RIGHT,
+            math.cos(rad) * out - math.sin(rad) * SELFIE_RIGHT,
+            faceHeight + rise - SELFIE_DROP,
+            true)
+
+        if faceCam then
+            local now = GetGameTimer()
+            if now - lastLookAt >= LOOK_REFRESH then
+                lastLookAt = now
+                local at = GetFinalRenderedCamCoord()
+                TaskLookAtCoord(ped, at.x, at.y, at.z, LOOK_HOLD, 2048, 3)
+            end
+        end
+        return
+    end
+
+    local yaw   = GetEntityHeading(ped) + selfieSwing
     local rad   = math.rad(yaw)
     local right = vector3(math.cos(rad), math.sin(rad), 0.0)
     -- The lens rides the head bone itself, and aims at the very point it hangs off. That makes the
@@ -293,6 +338,9 @@ end
 function phonecam.stop()
     if not cam then return end
     clearFaceCam()
+    selfieAttached = false
+    DetachCam(cam)
+    StopCamPointing(cam)
     RenderScriptCams(false, false, 0, true, true)
     SetCamActive(cam, false)
     DestroyCam(cam, false)
@@ -310,6 +358,20 @@ end
 function phonecam.setSelfie(on)
     if not cam then return end
     selfie = on and true or false
+    selfieAttached = selfie
+    if selfie then
+        -- Measured per flip: the offset is a property of this ped's skeleton, and a model swap
+        -- between shots would otherwise frame the next one at the wrong height.
+        local ped  = cache.ped
+        local head = GetPedBoneCoords(ped, HEAD_BONE, 0.0, 0.0, 0.0)
+        local root = GetWorldPositionOfEntityBone(ped, ROOT_BONE)
+        local rise = head.z - root.z
+        if rise > 0.3 and rise < 1.2 then faceHeight = rise end
+    else
+        -- The rear lens drives its own coord and rotation, which an attachment silently overrides.
+        DetachCam(cam)
+        StopCamPointing(cam)
+    end
     selfieSwing = 0.0
     rearSwing = 0.0
     lastViewYaw = nil
@@ -318,10 +380,6 @@ function phonecam.setSelfie(on)
     -- describe a lens that is no longer behaving that way.
     locked = false
     clearFaceCam()
-    -- The selfie lens aims with PointCamAtCoord, which leaves a standing point-at target on the
-    -- camera. Left in place the rear lens fights it: the constraint and SetCamRot both write the
-    -- rotation every frame, so the view jitters and drags toward wherever the head last was.
-    if not selfie then StopCamPointing(cam) end
 end
 
 ---Stops the body turning with the selfie lens, or hands it back. Walking is untouched: the point is
