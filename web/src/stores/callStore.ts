@@ -5,8 +5,8 @@ type Phase = 'incoming' | 'outgoing' | 'active';
 
 export interface CallParty { name?: string; number: string }
 
-interface CallInfo { channel: number; name?: string; number: string }
-interface CurrentCall { channel: number; phase: Phase; name?: string; number: string; elapsed: number; others?: CallParty[]; pending?: CallParty | null }
+interface CallInfo { channel: number; name?: string; number: string; video?: boolean }
+interface CurrentCall { channel: number; phase: Phase; name?: string; number: string; elapsed: number; video?: boolean; others?: CallParty[]; pending?: CallParty | null }
 interface Roster { channel?: number; others?: CallParty[]; pending?: CallParty | null }
 
 interface CallState {
@@ -15,6 +15,7 @@ interface CallState {
     name:      string;
     number:    string;
     startedAt: number | null;
+    video:     boolean;
     others:    CallParty[];
     pending:   CallParty | null;
     incoming:  (d: CallInfo) => void;
@@ -25,14 +26,14 @@ interface CallState {
     hydrate:   (cur: CurrentCall) => void;
 }
 
-const RESET: Pick<CallState, 'phase' | 'channel' | 'name' | 'number' | 'startedAt' | 'others' | 'pending'> = {
-    phase: null, channel: null, name: '', number: '', startedAt: null, others: [], pending: null,
+const RESET: Pick<CallState, 'phase' | 'channel' | 'name' | 'number' | 'startedAt' | 'video' | 'others' | 'pending'> = {
+    phase: null, channel: null, name: '', number: '', startedAt: null, video: false, others: [], pending: null,
 };
 
 export const useCallStore = create<CallState>((set, get) => ({
     ...RESET,
-    incoming:  (d) => set({ ...RESET, phase: 'incoming', channel: d.channel, name: d.name ?? '', number: d.number }),
-    outgoing:  (d) => set({ ...RESET, phase: 'outgoing', channel: d.channel, name: d.name ?? '', number: d.number }),
+    incoming:  (d) => set({ ...RESET, phase: 'incoming', channel: d.channel, name: d.name ?? '', number: d.number, video: d.video === true }),
+    outgoing:  (d) => set({ ...RESET, phase: 'outgoing', channel: d.channel, name: d.name ?? '', number: d.number, video: d.video === true }),
     connected: (d) => { if (get().channel === d.channel) set({ phase: 'active', startedAt: Date.now() }); },
     roster:    (d) => set({ others: d.others ?? [], pending: d.pending ?? null }),
     ended:     () => set({ ...RESET }),
@@ -42,6 +43,7 @@ export const useCallStore = create<CallState>((set, get) => ({
         name:      cur.name ?? '',
         number:    cur.number,
         startedAt: cur.phase === 'active' ? Date.now() - cur.elapsed * 1000 : null,
+        video:     cur.video === true,
         others:    cur.others ?? [],
         pending:   cur.pending ?? null,
     }),

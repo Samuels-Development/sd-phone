@@ -14,7 +14,7 @@ import { requestOpenMessages } from '@/shell/deeplink';
 import { EditContact } from './EditContact';
 import { isNumberBlockedApi, setBlockedApi, shareContactApi } from '../contactsApi';
 import { formatPhone, type Contact } from '../data';
-import { requestVideoOnConnect } from '../calls/webrtc';
+
 import { encodeWaypoint } from '@/lib/waypointCode';
 import { sendMessageApi } from '@/shared/chat/messagesApi';
 import { t } from '@/i18n';
@@ -23,7 +23,7 @@ export function ContactDetail({ contact, onBack, backLabel = t('phone.contacts',
     contact:           Contact;
     onBack:            () => void;
     backLabel?:        string;
-    onCall?:           (target: { number: string; name?: string }) => void;
+    onCall?:           (target: { number: string; name?: string; video?: boolean }) => void;
     onUpdate?:         (c: Contact) => void;
     onDelete?:         (id: string) => void;
     onToggleFavorite?: (id: string, favorite: boolean) => void;
@@ -110,7 +110,7 @@ export function ContactDetail({ contact, onBack, backLabel = t('phone.contacts',
                 <div className="mb-7 flex gap-3">
                     <ActionButton label={t('phone.actionMessage','message')} disabled={minimal} onClick={() => requestOpenMessages({ number: current.phone, name: current.name })} icon={<MessageSquare className="h-[28px] w-[28px]" strokeWidth={2} fill="currentColor" />} />
                     {device.calls && <ActionButton label={t('phone.actionCall','call')}    disabled={minimal} onClick={() => onCall?.({ number: current.phone, name: current.name })} icon={<Phone className="h-[28px] w-[28px]" strokeWidth={2} fill="currentColor" />} />}
-                    {device.calls && <ActionButton label={t('phone.actionVideo','video')}   disabled={minimal} onClick={() => { requestVideoOnConnect(); onCall?.({ number: current.phone, name: current.name }); }} icon={<Video className="h-[28px] w-[28px]" strokeWidth={2} fill="currentColor" />} />}
+                    {device.calls && <ActionButton label={t('phone.actionVideo','video')}   disabled={minimal} onClick={() => onCall?.({ number: current.phone, name: current.name, video: true })} icon={<Video className="h-[28px] w-[28px]" strokeWidth={2} fill="currentColor" />} />}
                     <ActionButton label={t('phone.actionShare','share')}   onClick={() => setSharing(true)} icon={<Share className="h-[28px] w-[28px]" strokeWidth={2} />} />
                 </div>
 

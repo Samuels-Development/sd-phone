@@ -18,6 +18,7 @@ export interface CurrentCall {
     number:   string;
     name?:    string;
     elapsed:  number;
+    video?:   boolean;
     others?:  CallParty[];
     pending?: CallParty | null;
 }
@@ -34,15 +35,15 @@ function devPost(action: string, data: unknown): void {
     window.postMessage({ action, data }, '*');
 }
 
-export async function dialCall(number: string, name?: string): Promise<DialResult> {
+export async function dialCall(number: string, name?: string, video = false): Promise<DialResult> {
     if (!isFiveM) {
         const channel = ++devChannel;
         clearDevTimers();
-        devPost('sd-phone:call:outgoing', { channel, number, name });
+        devPost('sd-phone:call:outgoing', { channel, number, name, video });
         devTimers.push(window.setTimeout(() => devPost('sd-phone:call:connected', { channel }), 2400));
         return { success: true, channel };
     }
-    const res = await apiCall<{ channel: number }>('sd-phone:call:dial', { number });
+    const res = await apiCall<{ channel: number }>('sd-phone:call:dial', { number, video });
     return { success: res.success, message: res.message, channel: res.data?.channel };
 }
 

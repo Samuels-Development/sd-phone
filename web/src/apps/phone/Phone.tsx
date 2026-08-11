@@ -17,7 +17,7 @@ import { dialCall } from './callsApi';
 import { useContacts, useContactsStore, saveNewContact } from '@/stores/contactsStore';
 import { t } from '@/i18n';
 
-interface CallTarget { number: string; name?: string }
+interface CallTarget { number: string; name?: string; video?: boolean }
 
 export function Phone({ onClose: _onClose }: { onClose: () => void }) {
     const [tab,        setTab]        = useSessionState<PhoneTab>('phone:tab', 'contacts');
@@ -79,7 +79,7 @@ export function Phone({ onClose: _onClose }: { onClose: () => void }) {
     }, []));
     async function placeCall(target: CallTarget) {
         if (!target.number) return;
-        const res = await dialCall(target.number, target.name);
+        const res = await dialCall(target.number, target.name, target.video === true);
         if (!res.success) setDialError(res.message ?? t('phone.unableToPlaceCall','Unable to place call'));
     }
 
@@ -139,10 +139,14 @@ export function Phone({ onClose: _onClose }: { onClose: () => void }) {
 
             {callTarget !== null && (
                 <AlertDialog
-                    title={t('phone.callName','Call {name}',{ name: callTarget.name || formatPhone(callTarget.number) })}
-                    message={t('phone.callConfirm','Call {name}?',{ name: callTarget.name || formatPhone(callTarget.number) })}
+                    title={callTarget.video
+                        ? t('phone.faceTimeName','FaceTime {name}',{ name: callTarget.name || formatPhone(callTarget.number) })
+                        : t('phone.callName','Call {name}',{ name: callTarget.name || formatPhone(callTarget.number) })}
+                    message={callTarget.video
+                        ? t('phone.faceTimeConfirm','Start a FaceTime with {name}?',{ name: callTarget.name || formatPhone(callTarget.number) })
+                        : t('phone.callConfirm','Call {name}?',{ name: callTarget.name || formatPhone(callTarget.number) })}
                     cancelLabel={t('phone.cancel','Cancel')}
-                    confirmLabel={t('phone.call','Call')}
+                    confirmLabel={callTarget.video ? t('phone.faceTime','FaceTime') : t('phone.call','Call')}
                     onCancel={() => setCallTarget(null)}
                     onConfirm={() => { void placeCall(callTarget); setCallTarget(null); }}
                 />

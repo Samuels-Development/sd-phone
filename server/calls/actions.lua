@@ -500,7 +500,7 @@ local DIAL_PER_WINDOW = 10
 ---Starts a call to a dialed number. Rejects when the caller is mid-call/ring or in airplane
 ---mode, the number is unassigned, or the callee is unreachable, blocked, or busy.
 ---@param source number caller server id
----@param payload { number?: string }
+---@param payload { number?: string, video?: boolean } video places it as a FaceTime rather than a voice call
 ---@return table
 function actions.dial(source, payload)
     if type(payload) ~= 'table' then payload = {} end
@@ -571,10 +571,16 @@ function actions.dial(source, payload)
     local channel = nextChannel
     nextChannel = nextChannel + 1
 
+    -- A video call is a call placed AS a video call, not one upgraded partway through: the callee
+    -- is told at ring time so their phone can present it as a FaceTime, and answering opens the
+    -- picture straight away rather than asking a second time.
+    local wantsVideo = payload.video == true
+
     sessions[channel] = {
         channel   = channel,
         state     = 'ringing',
         startedAt = nil,
+        video     = wantsVideo,
         caller    = { src = source,    cid = cid,       name = player.getName(source),    number = digits(myNumber) },
         callee    = { src = targetSrc, cid = targetCid, name = player.getName(targetSrc), number = dialed },
     }
@@ -583,11 +589,13 @@ function actions.dial(source, payload)
         channel = channel,
         name    = contactNameFor(cid, dialed),
         number  = dialed,
+        video   = wantsVideo,
     })
     TriggerClientEvent('sd-phone:client:call:incoming', targetSrc, {
         channel = channel,
         name    = contactNameFor(targetCid, sessions[channel].caller.number),
         number  = sessions[channel].caller.number,
+        video   = wantsVideo,
     })
 
     -- Server-local lifecycle event: a 1:1 call started ringing.
@@ -934,6 +942,15 @@ function actions.accept(source, payload)
     TriggerClientEvent('sd-phone:client:call:connected', s.caller.src, { channel = channel })
     TriggerClientEvent('sd-phone:client:call:connected', s.callee.src, { channel = channel })
 
+    -- Answered FaceTime: both sides open the picture immediately, with no request/accept round
+    -- trip, because placing the call WAS the request. Driven from here rather than from the
+    -- Accept button's own handler, so answering through any other path - an export, a companion
+    -- device - still opens video, and so the two ends can never disagree on who offers.
+    if s.video then
+        TriggerClientEvent('sd-phone:client:call:video:begin', s.caller.src, { initiator = true })
+        TriggerClientEvent('sd-phone:client:call:video:begin', s.callee.src, { initiator = false })
+    end
+
     -- Server-local lifecycle event: the call was answered.
     local call = eventCall(s)
     call.startedAt = s.startedAt
@@ -1133,6 +1150,7 @@ function actions.current(source)
         number  = peer.number,
         name    = contactNameFor(cid, peer.number),
         elapsed = elapsed,
+        video   = s.video == true,
         others  = others,
         pending = s.pending and {
             name   = contactNameFor(cid, s.pending.number) or s.pending.name,

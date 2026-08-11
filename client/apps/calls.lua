@@ -275,6 +275,8 @@ end)
 -- Server to NUI relays: the peer's video request/accept/stop and signaling messages forward
 -- unchanged into the React call overlay.
 RegisterNetEvent('sd-phone:client:call:video:request', function()      pushCall('sd-phone:video:request', nil) end)
+---An answered FaceTime opens on both ends at once; `initiator` decides which side makes the offer.
+RegisterNetEvent('sd-phone:client:call:video:begin',   function(data)  pushCall('sd-phone:video:begin',    data) end)
 RegisterNetEvent('sd-phone:client:call:video:accept',  function()      pushCall('sd-phone:video:accept',  nil) end)
 RegisterNetEvent('sd-phone:client:call:video:stop',    function()      pushCall('sd-phone:video:stop',    nil) end)
 RegisterNetEvent('sd-phone:client:call:video:signal',  function(data)  pushCall('sd-phone:video:signal',  data) end)

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Phone, SwitchCamera, Video } from 'lucide-react';
 
 import { useNuiEvent } from '@/hooks/useNuiEvent';
-import { fetchIceConfig, setVideoCamera, setVideoCursor, stopVideo, VideoPeer, type Signal } from './webrtc';
+import { fetchIceConfig, setVideoCamera, setVideoCursor, stopVideo, VideoPeer, VIDEO_CAPTURE_FPS, VIDEO_CAPTURE_WIDTH, type Signal } from './webrtc';
 import { getGameRender, PORTRAIT_CROP, type GameRender } from '@/render';
 import { HINT_DEFAULTS, KeyHints, type HintConfig } from '@/ui/KeyHints';
 import { t } from '@/i18n';
@@ -46,9 +46,13 @@ export function VideoCall({ peerName, initiator, onEndVideo, onHangup }: {
                 render.setZoom(1);
 
                 const aspect = (PORTRAIT_CROP.width * window.innerWidth) / window.innerHeight || 0.747;
-                out.width  = 540;
+                out.width  = VIDEO_CAPTURE_WIDTH;
                 out.height = Math.max(1, Math.round(out.width / aspect));
                 const octx = out.getContext('2d');
+                if (octx) {
+                    octx.imageSmoothingEnabled = true;
+                    octx.imageSmoothingQuality = 'high';
+                }
 
                 const pump = () => {
                     if (dead) return;
@@ -57,7 +61,8 @@ export function VideoCall({ peerName, initiator, onEndVideo, onHangup }: {
                 };
                 pump();
 
-                try { local = out.captureStream(30); } catch { local = null; }
+                try { local = out.captureStream(VIDEO_CAPTURE_FPS); } catch { local = null; }
+                local?.getVideoTracks().forEach(t => { t.contentHint = 'detail'; });
             }
 
             const cfg  = await fetchIceConfig();

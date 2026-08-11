@@ -15,7 +15,7 @@ import { startRingtone } from '@/apps/settings/tonePlayer';
 import { resolveTone } from '@/apps/settings/tones';
 import { useTheme } from '@/stores/themeStore';
 import { VideoCall } from './calls/VideoCall';
-import { acceptVideo, consumePendingVideo, requestVideo, stopVideo } from './calls/webrtc';
+import { acceptVideo, requestVideo, stopVideo } from './calls/webrtc';
 import { useCallStore } from '@/stores/callStore';
 import { t } from '@/i18n';
 import { formatDuration } from '@/lib/time';
@@ -34,6 +34,7 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
     const startedAt = useCallStore(s => s.startedAt);
     const others    = useCallStore(s => s.others);
     const pending   = useCallStore(s => s.pending);
+    const isVideo   = useCallStore(s => s.video);
     const [muted, setMuted]     = useState(false);
     const [speaker, setSpeaker] = useState(false);
     const [keypadOpen, setKeypadOpen]     = useState(false);
@@ -68,11 +69,9 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
 
     useNuiEvent('sd-phone:call:connected', useCallback((data) => {
         useCallStore.getState().connected(data);
-        if (consumePendingVideo()) { requestVideo(); setVideoPhase('requesting'); }
     }, []));
 
     useNuiEvent('sd-phone:call:ended', useCallback(() => {
-        consumePendingVideo();
         useCallStore.getState().ended();
         resetControls();
     }, [resetControls]));
@@ -83,6 +82,11 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
 
     useNuiEvent('sd-phone:call:roster', useCallback((data) => {
         useCallStore.getState().roster(data ?? {});
+    }, []));
+
+    useNuiEvent('sd-phone:video:begin', useCallback((data) => {
+        setVideoInitiator(data?.initiator === true);
+        setVideoPhase('active');
     }, []));
 
     useNuiEvent('sd-phone:video:request', useCallback(() => setVideoPhase('incoming'), []));
@@ -137,7 +141,11 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
 
     const title    = name || formatPhone(number) || t('phone.unknown','Unknown');
     const elapsed  = startedAt ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
-    const subtitle = phase === 'outgoing' ? t('phone.calling','Calling…') : phase === 'incoming' ? t('phone.incomingCallStatus','Incoming call') : fmtElapsed(elapsed);
+    const subtitle = phase === 'active'
+        ? fmtElapsed(elapsed)
+        : phase === 'outgoing'
+            ? (isVideo ? t('phone.faceTimeCalling','FaceTime…') : t('phone.calling','Calling…'))
+            : (isVideo ? t('phone.faceTimeIncoming','FaceTime Video') : t('phone.incomingCallStatus','Incoming call'));
 
     return (
         <div className="absolute inset-0 z-[60] overflow-hidden font-sf">
@@ -155,6 +163,12 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
 
             <div className="relative z-10 flex h-full flex-col items-center">
                 <div className="flex shrink-0 flex-col items-center px-8 pt-[120px]">
+                    {isVideo && phase !== 'active' && (
+                        <div className="mb-3 flex items-center gap-2 rounded-full bg-white/15 px-3.5 py-1.5 backdrop-blur-md">
+                            <Video className="h-[16px] w-[16px] text-white" strokeWidth={2.2} />
+                            <span className="text-[13px] font-semibold tracking-wide text-white">{t('phone.faceTime','FaceTime')}</span>
+                        </div>
+                    )}
                     <div className="text-center text-[34px] font-semibold leading-tight text-white">{title}</div>
                     <div className="mt-1 text-[18px] font-light tabular-nums text-white/60">{subtitle}</div>
                     {(others.length > 0 || pending) && (
@@ -184,7 +198,9 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
                         <RoundAction
                             label={t('phone.accept','Accept')}
                             tone="green"
-                            icon={<Phone className="h-[30px] w-[30px]" fill="currentColor" strokeWidth={0} />}
+                            icon={isVideo
+                                ? <Video className="h-[30px] w-[30px]" fill="currentColor" strokeWidth={0} />
+                                : <Phone className="h-[30px] w-[30px]" fill="currentColor" strokeWidth={0} />}
                             onClick={() => void acceptCall(channel!)}
                         />
                     </div>

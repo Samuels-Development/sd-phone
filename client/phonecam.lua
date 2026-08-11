@@ -48,12 +48,6 @@ local MIN_FOV <const> = 10.0
 ---@type number Fraction of the remaining gap to the target field of view the lens closes each
 ---frame. Zooming optically means the game renders the tighter view, so it stays sharp.
 local ZOOM_EASE <const> = 0.2
----@type number Fraction of the gap to the head's true offset the selfie anchor closes each frame.
----Slow against a step cycle, so the sway of a walk is flattened out of the shot.
-local HEAD_EASE <const> = 0.04
----@type number Metres of offset change taken as a jump rather than a stride, so the anchor snaps
----across a teleport or a vehicle entry instead of sliding there.
-local HEAD_SNAP <const> = 0.6
 ---@type integer Follow-ped view mode for first person. The game swaps the ped onto the first-person
 ---locomotion set there, which is authored to be seen from inside the head and reads as a lurch from
 ---the front, so the lens stands it down while it owns the view.
@@ -97,9 +91,6 @@ local zoomTarget = 1.0
 local fov = CAM_FOV
 ---@type integer|nil View mode the player was on before the lens borrowed a third-person one.
 local savedViewMode = nil
----@type vector3|nil Head offset from the body in the body's own axes (forward, right, up), eased.
----The selfie lens hangs off this rather than the bone, so a stride does not swing the whole shot.
-local steadyOffset = nil
 
 ---Whether a surface may keep the player moving, which decides scripted cam vs native cell cam.
 ---The native pins the ped at engine level regardless of NUI keep-input, so free movement and the
@@ -120,28 +111,6 @@ local function forward(pitch, yaw)
     local p, y = math.rad(pitch), math.rad(yaw)
     local horiz = math.abs(math.cos(p))
     return vector3(-math.sin(y) * horiz, math.cos(y) * horiz, math.sin(p))
-end
-
----The head with the sway of the walk cycle taken out, for the selfie lens to hang off. The offset
----is eased in the body's own axes, so the anchor holds through a turn instead of lagging round it.
----@param ped integer
----@param head vector3
----@return vector3
-local function steadyHead(ped, head)
-    local base = GetEntityCoords(ped)
-    local rad  = math.rad(GetEntityHeading(ped))
-    local fwd  = vector3(-math.sin(rad), math.cos(rad), 0.0)
-    local rgt  = vector3(math.cos(rad), math.sin(rad), 0.0)
-    local off  = head - base
-    local want = vector3(off.x * fwd.x + off.y * fwd.y, off.x * rgt.x + off.y * rgt.y, off.z)
-
-    if not steadyOffset or #(want - steadyOffset) > HEAD_SNAP then
-        steadyOffset = want
-    else
-        steadyOffset = steadyOffset + (want - steadyOffset) * HEAD_EASE
-    end
-
-    return base + fwd * steadyOffset.x + rgt * steadyOffset.y + vector3(0.0, 0.0, steadyOffset.z)
 end
 
 ---Shortest signed turn from `from` to `to`, in degrees (-180..180].
@@ -256,9 +225,13 @@ local function place()
     local pitch = clamp(view.x, SELFIE_PITCH_LIMIT)
     local rad   = math.rad(yaw)
     local right = vector3(math.cos(rad), math.sin(rad), 0.0)
-    -- Off the steadied head, not the bone. Hung off the bone the lens inherits the head's sway and
-    -- aims at it too, which pins the head dead centre and rocks the body under it every stride.
-    local anchor = steadyHead(ped, head)
+    -- The lens rides the head bone itself, and aims at the very point it hangs off. That makes the
+    -- lens-to-face vector depend on pitch and heading alone, so the face keeps ONE spot in frame no
+    -- matter how the walk cycle bobs. Smoothing this anchor instead holds the lens still while the
+    -- head goes on bobbing, and the ~9 degrees a stride between the two is what threw the player
+    -- around the shot. The street does not pay for it: the lens direction is unchanged by the bob,
+    -- so scenery only parallaxes by the 13 cm the head actually travels.
+    local anchor = head
     local pos   = anchor + forward(pitch, yaw) * SELFIE_REACH
                         + right * SELFIE_RIGHT
                         - vector3(0.0, 0.0, SELFIE_DROP)
@@ -267,8 +240,7 @@ local function place()
     -- Aim at the head instead of deriving a rotation. The hand offsets above push the lens off the
     -- face's axis, and any fixed rotation leaves the player sitting off-centre in frame; pointing
     -- at the head keeps them centred whatever the offsets are, and lets pitch raise and lower the
-    -- phone around the face rather than tilting them out of shot. The steadied head again: aiming
-    -- at the bone swings the lens a few degrees a stride, which throws the whole street about.
+    -- phone around the face rather than tilting them out of shot.
     PointCamAtCoord(cam, anchor.x, anchor.y, anchor.z)
 
     -- Head tracking rides on top of the pose: the body keeps the angle the swing gave it while the
@@ -293,7 +265,6 @@ function phonecam.start()
     zoomTarget = 1.0
     fov = CAM_FOV
     locked = false
-    steadyOffset = nil
     clearFaceCam()
     -- Borrowed for as long as the lens owns the view, and handed straight back on stop.
     if GetFollowPedCamViewMode() == FIRST_PERSON_VIEW then
@@ -327,7 +298,6 @@ function phonecam.stop()
     DestroyCam(cam, false)
     cam = nil
     selfie = false
-    steadyOffset = nil
     if savedViewMode then
         SetFollowPedCamViewMode(savedViewMode)
         savedViewMode = nil
@@ -344,7 +314,6 @@ function phonecam.setSelfie(on)
     rearSwing = 0.0
     lastViewYaw = nil
     zoomTarget = 1.0
-    steadyOffset = nil
     -- Cleared on every flip so the page, which resets its own copy on the same event, can never
     -- describe a lens that is no longer behaving that way.
     locked = false

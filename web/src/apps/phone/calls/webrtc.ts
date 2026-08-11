@@ -7,6 +7,10 @@ export type Signal = { kind: 'offer' | 'answer' | 'ice'; sdp?: string; candidate
 
 const FALLBACK: IceConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
+export const VIDEO_CAPTURE_WIDTH = 900;
+export const VIDEO_CAPTURE_FPS   = 30;
+const VIDEO_MAX_BITRATE = 3_000_000;
+
 export async function fetchIceConfig(): Promise<IceConfig> {
     if (!isFiveM) return FALLBACK;
     const r = await fetchNui<IceConfig>('sd-phone:video:config');
@@ -24,10 +28,6 @@ export function acceptVideo()                           { void fetchNui('sd-phon
 export function stopVideo()                             { void fetchNui('sd-phone:video:stop'); }
 export function setVideoCamera(on: boolean, front = true) { return fetchNui<VideoCameraInfo>('sd-phone:video:camera', { on, front }); }
 export function setVideoCursor(on: boolean)             { void fetchNui('sd-phone:video:cursor', { on }); }
-
-let pendingVideo = false;
-export function requestVideoOnConnect() { pendingVideo = true; }
-export function consumePendingVideo(): boolean { const v = pendingVideo; pendingVideo = false; return v; }
 
 export class VideoPeer {
     private pc: RTCPeerConnection;
@@ -47,11 +47,27 @@ export class VideoPeer {
 
     async start(local: MediaStream | null) {
         if (local) local.getTracks().forEach(t => this.pc.addTrack(t, local));
+        await this.tuneVideoSender();
         if (this.initiator) {
             const offer = await this.pc.createOffer();
             await this.pc.setLocalDescription(offer);
             sendVideoSignal({ kind: 'offer', sdp: this.pc.localDescription?.sdp });
         }
+    }
+
+    private async tuneVideoSender() {
+        const sender = this.pc.getSenders().find(s => s.track?.kind === 'video');
+        if (!sender) return;
+        try {
+            const params = sender.getParameters();
+            params.encodings = params.encodings?.length ? params.encodings : [{}];
+            for (const e of params.encodings) {
+                e.maxBitrate = VIDEO_MAX_BITRATE;
+                e.scaleResolutionDownBy = 1;
+            }
+            params.degradationPreference = 'maintain-resolution';
+            await sender.setParameters(params);
+        } catch { /* older CEF rejects some fields; the default encoding still works */ }
     }
 
     async handle(sig: Signal) {
