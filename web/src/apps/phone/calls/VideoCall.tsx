@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Phone, SwitchCamera, Video } from 'lucide-react';
 
 import { useNuiEvent } from '@/hooks/useNuiEvent';
-import { fetchIceConfig, setVideoCamera, stopVideo, VideoPeer, type Signal } from './webrtc';
+import { fetchIceConfig, setVideoCamera, setVideoCursor, stopVideo, VideoPeer, type Signal } from './webrtc';
 import { getGameRender, PORTRAIT_CROP, type GameRender } from '@/render';
+import { HINT_DEFAULTS, KeyHints, type HintConfig } from '@/ui/KeyHints';
 import { t } from '@/i18n';
 
 export function VideoCall({ peerName, initiator, onEndVideo, onHangup }: {
@@ -19,11 +20,17 @@ export function VideoCall({ peerName, initiator, onEndVideo, onHangup }: {
     const pending     = useRef<Signal[]>([]);
     const [front, setFront]   = useState(true);
     const [hasRemote, setHasRemote] = useState(false);
+    const [walkable, setWalkable]   = useState(false);
+    const [hintCfg,  setHintCfg]    = useState<HintConfig>(HINT_DEFAULTS);
 
     useEffect(() => {
         let dead = false;
         let raf = 0;
-        setVideoCamera(true, true);
+        void setVideoCamera(true, true).then((res) => {
+            if (dead) return;
+            setWalkable(res?.walkable === true);
+            setHintCfg({ ...HINT_DEFAULTS, ...(res?.hints ?? {}) });
+        });
 
         (async () => {
             const render = await getGameRender();
@@ -72,7 +79,7 @@ export function VideoCall({ peerName, initiator, onEndVideo, onHangup }: {
             peerRef.current?.close();
             peerRef.current = null;
             renderRef.current?.stop();
-            setVideoCamera(false);
+            void setVideoCamera(false);
             // Walking with the phone open means Esc can close it mid-call, which unmounts this
             // view; tell the peer or their end sits on a frozen frame. Dropped server-side once
             // the call is gone, so the ordinary teardown paths are unaffected.
@@ -85,14 +92,36 @@ export function VideoCall({ peerName, initiator, onEndVideo, onHangup }: {
         else pending.current.push(data);
     }, []));
 
+    useNuiEvent('sd-phone:video:key', (data) => {
+        if (data?.key === 'flip') flip();
+    });
+
+    useEffect(() => {
+        if (!walkable) return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.code === 'AltLeft' || e.key === 'Alt') {
+                e.preventDefault();
+                setVideoCursor(false);
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [walkable]);
+
     function flip() {
         const next = !front;
         setFront(next);
-        setVideoCamera(true, next);
+        void setVideoCamera(true, next);
     }
+
+    const hints = [
+        { keys: ['Alt'], label: t('phone.hintToggleCursor', 'Toggle Cursor') },
+        { keys: ['↑'],   label: t('phone.hintFlipCamera', 'Flip Camera') },
+    ];
 
     return (
         <div className="absolute inset-0 z-[70] overflow-hidden bg-black font-sf">
+            {walkable && <KeyHints hints={hints} config={hintCfg} />}
             <video
                 ref={remoteVideo}
                 autoPlay

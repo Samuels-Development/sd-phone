@@ -1,5 +1,5 @@
----@type table sd-phone config root (configs/config.lua).
-local config = require 'configs.config'
+---@type table On-screen keybind hints (client.hints): placement config shared with FaceTime.
+local hints = require 'client.hints'
 ---@type table Scripted phone camera (client.phonecam): owns the view whenever this surface is
 ---allowed to keep the player moving, since the native cell cam pins the ped at engine level.
 local phonecam = require 'client.phonecam'
@@ -257,30 +257,12 @@ RegisterNUICallback('sd-phone:camera:landscape', function(data, cb)
     cb({ success = true })
 end)
 
----@type table<string, boolean> Corners the hint list may sit in.
-local HINT_CORNERS <const> = {
-    ['top-right'] = true, ['top-left'] = true, ['bottom-right'] = true, ['bottom-left'] = true,
-}
-
----The viewfinder hint settings, normalised so the page never has to defend against a typo in
----configs/phone.lua.
----@return { enabled: boolean, corner: string, columns: integer }
-local function hintConfig()
-    local hints = config.Phone.CameraHints or {}
-    local corner = hints.Corner
-    return {
-        enabled = hints.Enabled ~= false,
-        corner  = HINT_CORNERS[corner] and corner or 'top-right',
-        columns = hints.Columns == 1 and 1 or 2,
-    }
-end
-
 ---React -> Lua: the Camera app mounted - take the viewfinder view. Reports which camera took it,
 ---because the viewfinder's selfie crop bias only compensates the native one, and where the keybind
 ---hints belong.
 RegisterNUICallback('sd-phone:camera:open', function(_, cb)
     enterCameraView()
-    cb({ success = true, walkable = phonecam.active(), hints = hintConfig() })
+    cb({ success = true, walkable = phonecam.active(), hints = hints.config() })
 end)
 
 ---React -> Lua: the Camera app unmounted - kill the flash and restore the normal view.

@@ -49,12 +49,37 @@ local ok, fail, digits = util.ok, util.fail, util.digits
 
 
 
----Find the channel + session a source is currently part of (as caller or callee).
+---Every live party of a session in one list: the two primary legs first, then anyone merged in.
+---The order is stable so the phone can render a conference the same way twice running.
+---@param s table session from `sessions`
+---@return table[] parties
+local function membersOf(s)
+    local list = { s.caller, s.callee }
+    if s.merged then
+        for _, p in pairs(s.merged) do list[#list + 1] = p end
+    end
+    return list
+end
+
+---True when `src` is one of a session's live parties, merged third parties included.
+---@param s table session from `sessions`
+---@param src number
+---@return boolean
+local function isMember(s, src)
+    if s.caller.src == src or s.callee.src == src then return true end
+    return (s.merged and s.merged[src]) ~= nil
+end
+
+---Find the channel + session a source is currently part of, as either primary leg, a merged third
+---party, or the one still ringing into the conference.
 ---@param src number
 ---@return number|nil channel, table|nil session
 local function sessionForSource(src)
     for channel, session in pairs(sessions) do
-        if session.caller.src == src or session.callee.src == src then
+        -- Merged third parties and the pending ringer count as being on this call: every
+        -- busy-guard in this file reads through here, so leaving them out would let a merged
+        -- player be dialed into a second call at the same time.
+        if isMember(session, src) or (session.pending and session.pending.src == src) then
             return channel, session
         end
     end
@@ -205,7 +230,10 @@ local function sweepSpeakers()
                 want[channel] = want[channel] or {}
                 for _, pidStr in ipairs(GetPlayers()) do
                     local psrc = tonumber(pidStr)
-                    if psrc and psrc ~= s.caller.src and psrc ~= s.callee.src
+                    -- isMember rather than the two legs by hand: a merged third party is already
+                    -- on the channel, and re-adding them as a speaker guest would drop them out
+                    -- of voice the moment they stepped away from the speaker holder.
+                    if psrc and not isMember(s, psrc)
                         and not sessionForSource(psrc) and not ringForSource(psrc) then
                         local pped = GetPlayerPed(psrc)
                         if pped and pped ~= 0 and #(GetEntityCoords(pped) - at) <= SPEAKER_RANGE then
@@ -281,14 +309,24 @@ end
 
 ---Builds the shared payload for the first-party 'sd-phone:server:call:*' lifecycle events from
 ---a stored session table. company is nil on a plain 1:1 call.
+---
+---caller/callee keep meaning exactly what they always did - the two original legs - so a resource
+---listening for these events reads a merged call the same way it reads any other. `merged` is
+---additive and stays nil until somebody is actually conferenced in.
 ---@param s table session from `sessions`
 ---@return table
 local function eventCall(s)
+    local merged
+    if s.merged then
+        merged = {}
+        for _, m in pairs(s.merged) do merged[#merged + 1] = eventParty(m) end
+    end
     return {
         channel = s.channel,
         company = s.company,
         caller  = eventParty(s.caller),
         callee  = eventParty(s.callee),
+        merged  = merged,
     }
 end
 
@@ -327,6 +365,26 @@ local function endCall(channel, reason, endedBy)
 
     local answered = s.state == 'active'
     local duration = (answered and s.startedAt) and (os.time() - s.startedAt) or 0
+
+    -- Merged third parties are torn down first and on their own terms: they joined partway
+    -- through, so their recents row is timed from when THEY answered rather than the call's own
+    -- start, and their leg leaves the primary two logged exactly as a 1:1 call always was.
+    if s.merged then
+        for msrc, m in pairs(s.merged) do
+            setVoice(msrc, 0)
+            speakerOn[msrc] = nil
+            TriggerClientEvent('sd-phone:client:call:ended', msrc, { channel = channel, reason = reason })
+            logCall(m.cid, m.addedNumber or s.caller.number, m.addedName or s.caller.name,
+                    'incoming', m.joinedAt and (os.time() - m.joinedAt) or 0)
+        end
+    end
+
+    -- A third party still ringing when the call dies never joined, so it is a missed call for
+    -- them and nothing at all for the conference.
+    if s.pending then
+        TriggerClientEvent('sd-phone:client:call:ended', s.pending.src, { channel = channel, reason = reason })
+        badges.pushApp(s.pending.src, 'phone')
+    end
 
     -- The booth side of a payphone call logs nothing; withheld numbers leave no trace anywhere.
     if s.payphoneSide ~= 'caller' then
@@ -538,6 +596,103 @@ function actions.dial(source, payload)
     return ok({ channel = channel })
 end
 
+---Pushes the current conference roster to every live member, so each phone can name who else is
+---on the line. Each recipient gets the OTHER members, never themselves.
+---@param s table session from `sessions`
+local function pushRoster(s)
+    local members = membersOf(s)
+    for _, me in ipairs(members) do
+        local others = {}
+        for _, p in ipairs(members) do
+            if p.src ~= me.src then
+                others[#others + 1] = {
+                    name   = contactNameFor(me.cid, p.number) or p.name,
+                    number = p.number,
+                }
+            end
+        end
+        TriggerClientEvent('sd-phone:client:call:roster', me.src, {
+            channel = s.channel,
+            others  = others,
+            pending = s.pending and {
+                name   = contactNameFor(me.cid, s.pending.number) or s.pending.name,
+                number = s.pending.number,
+            } or nil,
+        })
+    end
+end
+
+actions.pushRoster = pushRoster
+
+---@type integer Most parties one conference may hold, the two original legs included. Three is
+---what the phone's UI is built to name and what a voice channel stays intelligible at.
+local MAX_CONFERENCE <const> = 3
+
+---Rings a third party into a call that is already live, the conference equivalent of dial. Only a
+---member of the call may add, the call has to be answered, and one add may be in flight at a time.
+---The target rings on the SAME channel, so answering drops them straight into the conversation
+---rather than opening a second call that then has to be merged.
+---@param source number adding member's server id
+---@param payload { number?: string }
+---@return table
+function actions.addCall(source, payload)
+    if type(payload) ~= 'table' then payload = {} end
+    local cid = player.getIdentifier(source)
+    if not cid then return fail('Player not found') end
+
+    local channel, s = sessionForSource(source)
+    if not s or not channel then return fail('You are not on a call') end
+    if not isMember(s, source) then return fail('You are not on a call') end
+    if s.state ~= 'active' then return fail('Wait for the call to connect') end
+    if s.pending then return fail('Already adding someone') end
+    if #membersOf(s) >= MAX_CONFERENCE then return fail('This call is full') end
+
+    local dialed = digits(payload.number)
+    if dialed == '' then return fail('No number dialed') end
+    if not util.rateLimit(cid, 'call:dial', DIAL_WINDOW, DIAL_PER_WINDOW) then return fail('Slow down') end
+    if settings.isAirplane(cid) then return fail('Airplane Mode is on') end
+    if not service.allows(source, 'call') then return fail('No Service') end
+    local muted = moderation.guard(cid, 'calls'); if muted then return muted end
+
+    local myNumber = digits(settings.ensurePhoneNumber(cid) or '')
+    if myNumber == '' then return fail('No service. Install a SIM card to place calls.') end
+    if myNumber == dialed then return fail('You can\'t add yourself') end
+
+    -- Anyone already on this call, dialed by their own number, is the commonest mis-add and
+    -- reads as "line busy" through the generic guard below, which is the wrong explanation.
+    for _, p in ipairs(membersOf(s)) do
+        if p.number ~= '' and p.number == dialed then return fail('They are already on this call') end
+    end
+
+    local targetCid = settings.getCitizenByNumber(dialed)
+    if not targetCid then return fail('Number not in service') end
+
+    local targetSrc = player.getAnySourceByIdentifier(targetCid)
+    if not targetSrc then return fail('This number is currently unavailable') end
+    if not reachable(targetSrc) then return fail('This number is currently unavailable') end
+    if settings.isAirplane(targetCid) then return fail('This number is currently unavailable') end
+    if not service.allows(targetSrc, 'call') then return fail('This number is currently unavailable') end
+    if contacts.isBlocked(targetCid, myNumber) then return fail('This number is currently unavailable') end
+    if sessionForSource(targetSrc) or ringForSource(targetSrc) or boothRingForSource(targetSrc) then return fail('Line busy') end
+
+    s.pending = {
+        src    = targetSrc,
+        cid    = targetCid,
+        name   = player.getName(targetSrc),
+        number = dialed,
+        by     = source,
+    }
+
+    TriggerClientEvent('sd-phone:client:call:incoming', targetSrc, {
+        channel = channel,
+        name    = contactNameFor(targetCid, myNumber),
+        number  = myNumber,
+    })
+    pushRoster(s)
+
+    return ok({ channel = channel })
+end
+
 ---Places a 1:1 call with a caller identity that isn't the player's phone (a street payphone).
 ---The caller needs no phone number; the callee sees callerName/callerNumber. An empty
 ---callerNumber rings as withheld and leaves no recents row.
@@ -733,6 +888,40 @@ function actions.accept(source, payload)
 
     local s = channel and sessions[channel]
     if not s then return fail('Call no longer active') end
+
+    -- Conference join: the call is already up and this is the third party being added to it, so
+    -- there is no state change to make - they simply come onto the channel everyone else is on.
+    if s.pending and s.pending.src == source then
+        local joiner = s.pending
+        s.pending = nil
+        joiner.joinedAt = os.time()
+        -- Who they answered, kept for their recents row: the conference outlives whoever added
+        -- them, so reading it back off the session at teardown could name someone who has left.
+        joiner.addedName   = s.caller.name
+        joiner.addedNumber = s.caller.number
+
+        s.merged = s.merged or {}
+        s.merged[source] = joiner
+
+        setVoice(source, channel)
+        TriggerClientEvent('sd-phone:client:call:connected', source, { channel = channel })
+
+        -- Video is two-ended and peerSrc stops resolving the moment a conference forms, so any
+        -- picture already running has to be closed rather than left on a frame that will never
+        -- update again. Harmless for the two originals when no video was up.
+        TriggerClientEvent('sd-phone:client:call:video:stop', s.caller.src)
+        TriggerClientEvent('sd-phone:client:call:video:stop', s.callee.src)
+
+        pushRoster(s)
+
+        local call = eventCall(s)
+        call.startedAt = s.startedAt
+        call.joined    = eventParty(joiner)
+        TriggerEvent('sd-phone:server:call:merged', call)
+
+        return ok({ channel = channel })
+    end
+
     if s.callee.src ~= source then return fail('Not your call') end
     if s.state ~= 'ringing' then return fail('Call not ringing') end
 
@@ -786,10 +975,50 @@ function actions.decline(source, payload)
 
     local s = channel and sessions[channel]
     if not s then return ok() end
+
+    -- A third party turning down a conference invite leaves the original call untouched: only
+    -- the invite is cancelled, and the members are told so the "adding..." row clears.
+    if s.pending and s.pending.src == source then
+        local declined = s.pending
+        s.pending = nil
+        TriggerClientEvent('sd-phone:client:call:ended', source, { channel = channel, reason = 'declined' })
+        logCall(declined.cid, s.caller.number, s.caller.name, 'missed', 0)
+        badges.pushApp(source, 'phone')
+        pushRoster(s)
+        return ok()
+    end
+
     if s.callee.src ~= source then return fail('Not your call') end
 
     endCall(channel, 'declined', source)
     return ok()
+end
+
+---Removes a merged third party from a live conference without touching the call itself: they drop
+---out of voice, the remaining members keep talking, and their recents row is written now rather
+---than at teardown. No-op unless `src` really is merged into `s`.
+---@param s table session from `sessions`
+---@param src number leaving member's server id
+---@param reason string
+---@return boolean left true when someone was actually removed
+local function leaveConference(s, src, reason)
+    local m = s.merged and s.merged[src]
+    if not m then return false end
+
+    s.merged[src] = nil
+    if next(s.merged) == nil then s.merged = nil end
+
+    setVoice(src, 0)
+    dropSpeaker(src)
+    TriggerClientEvent('sd-phone:client:call:ended', src, { channel = s.channel, reason = reason })
+    logCall(m.cid, m.addedNumber or s.caller.number, m.addedName or s.caller.name,
+            'incoming', m.joinedAt and (os.time() - m.joinedAt) or 0)
+    pushRoster(s)
+
+    local call = eventCall(s)
+    call.left = eventParty(m)
+    TriggerEvent('sd-phone:server:call:left', call, src)
+    return true
 end
 
 ---Either party hangs up. A group-ring caller hanging up cancels the whole ring; a recipient
@@ -832,6 +1061,16 @@ function actions.hangup(source, payload)
 
     local s = channel and sessions[channel]
     if not s then return ok() end
+
+    -- A third party hanging up is the same thing as declining the invite.
+    if s.pending and s.pending.src == source then
+        return actions.decline(source, payload)
+    end
+
+    -- A merged member leaves; the two original legs keep their call. Only an original leg
+    -- hanging up ends it for everyone, which is the rule the recents logging already assumes.
+    if leaveConference(s, source, 'hangup') then return ok() end
+
     if s.caller.src ~= source and s.callee.src ~= source then return fail('Not your call') end
 
     endCall(channel, 'hangup', source)
@@ -858,17 +1097,47 @@ function actions.current(source)
         return ok(nil)
     end
 
+    local cid = player.getIdentifier(source)
+
+    -- Being rung into a live conference looks like any other incoming call from here: the adder
+    -- is who the phone should name, and the channel is the one already in progress.
+    if s.pending and s.pending.src == source then
+        local by = (isMember(s, s.pending.by) and s.pending.by == s.callee.src) and s.callee or s.caller
+        return ok({
+            channel = channel,
+            phase   = 'incoming',
+            number  = by.number,
+            name    = contactNameFor(cid, by.number),
+            elapsed = 0,
+        })
+    end
+
     local meCaller = s.caller.src == source
-    local peer = meCaller and s.callee or s.caller
+    local merged   = s.merged and s.merged[source]
+    -- A merged third party has no opposite leg of their own, so they are titled by whoever's call
+    -- they joined - the same party their ring named.
+    local peer = merged and s.caller or (meCaller and s.callee or s.caller)
     local phase = s.state == 'active' and 'active' or (meCaller and 'outgoing' or 'incoming')
     local elapsed = (s.state == 'active' and s.startedAt) and (os.time() - s.startedAt) or 0
+
+    local others = {}
+    for _, p in ipairs(membersOf(s)) do
+        if p.src ~= source then
+            others[#others + 1] = { name = contactNameFor(cid, p.number) or p.name, number = p.number }
+        end
+    end
 
     return ok({
         channel = channel,
         phase   = phase,
         number  = peer.number,
-        name    = contactNameFor(player.getIdentifier(source), peer.number),
+        name    = contactNameFor(cid, peer.number),
         elapsed = elapsed,
+        others  = others,
+        pending = s.pending and {
+            name   = contactNameFor(cid, s.pending.number) or s.pending.name,
+            number = s.pending.number,
+        } or nil,
     })
 end
 
@@ -876,11 +1145,16 @@ end
 -- peer-to-peer WebRTC stream; the server only relays signaling to the sender's session peer.
 
 ---The source of the other party in `src`'s current call, or nil outside a live 1:1 session.
+---
+---A conference has no single peer, and the picture is a plain two-ended WebRTC connection with
+---nowhere to put a third stream, so video is refused for as long as anyone is merged in. The call
+---UI hides the Video button on the same condition; this is the half that cannot be lied to.
 ---@param src number
 ---@return number|nil
 local function peerSrc(src)
     local _, s = sessionForSource(src)
     if not s then return nil end
+    if s.merged then return nil end
     if s.caller.src == src then return s.callee.src end
     if s.callee.src == src then return s.caller.src end
     return nil
@@ -952,8 +1226,19 @@ end
 ---dropping ring caller cancels the whole ring, and a dropping ringer is removed.
 ---@param src number
 function actions.onDrop(src)
-    local channel = sessionForSource(src)
-    if channel then endCall(channel, 'disconnected'); return end
+    local channel, s = sessionForSource(src)
+    if channel and s then
+        -- A merged third party or a pending invite dropping takes only their own leg with them;
+        -- the call they joined carries on between the two originals.
+        if s.pending and s.pending.src == src then
+            s.pending = nil
+            pushRoster(s)
+            return
+        end
+        if leaveConference(s, src, 'disconnected') then return end
+        endCall(channel, 'disconnected')
+        return
+    end
 
     local bchannel = boothRingForSource(src)
     if bchannel then cancelBoothRing(bchannel, 'disconnected'); return end

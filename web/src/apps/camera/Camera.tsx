@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
 import { LayoutGrid, Play, RotateCw, Sparkles, X, Zap, ZapOff } from 'lucide-react';
 
 import { useNuiEvent } from '@/hooks/useNuiEvent';
@@ -17,6 +16,7 @@ import { t } from '@/i18n';
 import { formatDuration } from '@/lib/time';
 import shutterSfx from '@/assets/camera/shutter.mp3';
 import { useSessionState } from '@/hooks/useSessionState';
+import { HINT_DEFAULTS, KeyHints, type HintConfig } from '@/ui/KeyHints';
 import { CAMERA_FILTERS, filterCss, filterLabel } from './filters';
 import { FilterDefs } from './FilterDefs';
 
@@ -60,25 +60,6 @@ function playShutter() {
         void a.play().catch(() => {});
     } catch { /* audio unavailable — silent */ }
 }
-
-type HintCorner = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
-
-interface HintConfig {
-    enabled: boolean;
-    corner:  HintCorner;
-    columns: number;
-}
-
-// Matches configs/phone.lua CameraHints, and stands in until Lua answers so the list does not
-// jump from one corner to another on open.
-const HINT_DEFAULTS: HintConfig = { enabled: true, corner: 'top-right', columns: 2 };
-
-const HINT_CORNER_CLASS: Record<HintCorner, string> = {
-    'top-right':    'right-4 top-4',
-    'top-left':     'left-4 top-4',
-    'bottom-right': 'right-4 bottom-4',
-    'bottom-left':  'left-4 bottom-4',
-};
 
 // `selfieOnly` hints stay mounted and collapse instead of unmounting, so they can animate out.
 const CONTROL_HINTS: { keys: string[]; label: string; selfieOnly?: boolean }[] = [
@@ -602,73 +583,16 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
     const latestPhoto = photos[0];
     const latestIsVideo = latestPhoto ? isVideoUrl(latestPhoto.url) : false;
 
-    const hints = photoOnly ? CONTROL_HINTS.filter(h => h.label !== 'Change Mode') : CONTROL_HINTS;
-
-    // The column nearest the chosen edge fills first and the overflow sits inboard of it, so the
-    // list reads outward-in. Rendering order is left-to-right, hence the flip when anchored right.
-    const hintEdgeRight = hintCfg.corner.endsWith('right');
-    const hintColumns: typeof hints[] = (() => {
-        if (hintCfg.columns < 2) return [hints];
-        const split = Math.ceil(hints.length / 2);
-        const edge  = hints.slice(0, split);
-        const inner = hints.slice(split);
-        return hintEdgeRight ? [inner, edge] : [edge, inner];
-    })();
+    const hints = (photoOnly ? CONTROL_HINTS.filter(h => h.label !== 'Change Mode') : CONTROL_HINTS)
+        .map(h => ({
+            keys:  h.keys,
+            label: hintLabel(h.label, angleLocked, facingCam),
+            shown: !h.selfieOnly || selfie,
+        }));
 
     return (
         <div className="absolute inset-0 z-10 flex flex-col text-white">
-            {hintCfg.enabled && createPortal(
-                <div
-                    // Row spacing lives on the rows, not as a gap here: a collapsed row would keep
-                    // its gap and leave a hole where the hidden hint used to be.
-                    className={`pointer-events-none fixed z-[2147483647] flex items-start gap-x-5 ${HINT_CORNER_CLASS[hintCfg.corner]}`}
-                    style={{ textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}
-                >
-                    {hintColumns.map((column, columnIndex) => (
-                        <div
-                            key={columnIndex}
-                            className={`flex flex-col ${hintEdgeRight ? 'items-end' : 'items-start'}`}
-                        >
-                            {column.map(hint => {
-                                // Selfie-only hints stay mounted and collapse their own height, so
-                                // they slide and fade both ways instead of appearing from nothing.
-                                const shown = !hint.selfieOnly || selfie;
-                                return (
-                                    <div
-                                        key={hint.label}
-                                        className="flex items-center gap-2 overflow-hidden transition-all duration-200 ease-out"
-                                        style={{
-                                            opacity: shown ? 1 : 0,
-                                            maxHeight: shown ? 24 : 0,
-                                            marginBottom: shown ? 6 : 0,
-                                            // Slides in from whichever edge it is anchored to.
-                                            transform: shown
-                                                ? 'translateX(0)'
-                                                : `translateX(${hintEdgeRight ? 8 : -8}px)`,
-                                        }}
-                                        aria-hidden={!shown}
-                                    >
-                                        <span className="whitespace-nowrap text-[13px] font-medium text-white">
-                                            {hintLabel(hint.label, angleLocked, facingCam)}
-                                        </span>
-                                        <span className="flex gap-1">
-                                            {hint.keys.map(k => (
-                                                <kbd
-                                                    key={k}
-                                                    className="flex h-6 min-w-[26px] items-center justify-center rounded-[6px] border border-white/25 bg-black/55 px-1.5 text-[12px] font-semibold text-white backdrop-blur-sm"
-                                                >
-                                                    {k}
-                                                </kbd>
-                                            ))}
-                                        </span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    ))}
-                </div>,
-                document.body,
-            )}
+            <KeyHints hints={hints} config={hintCfg} />
 
             <div className="relative min-h-[128px] shrink-0 bg-black">
                 <div className="flex items-center justify-between px-5 pb-2 pt-[58px]">

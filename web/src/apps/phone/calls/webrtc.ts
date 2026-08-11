@@ -1,4 +1,5 @@
 import { fetchNui, isFiveM } from '@/core/nui';
+import type { HintConfig } from '@/ui/KeyHints';
 
 
 export interface IceConfig { iceServers: RTCIceServer[] }
@@ -12,11 +13,17 @@ export async function fetchIceConfig(): Promise<IceConfig> {
     return r && Array.isArray(r.iceServers) && r.iceServers.length ? r : FALLBACK;
 }
 
+export interface VideoCameraInfo {
+    walkable?: boolean;
+    hints?:    Partial<HintConfig>;
+}
+
 function sendVideoSignal(sig: Signal)            { void fetchNui('sd-phone:video:signal', sig); }
 export function requestVideo()                          { void fetchNui('sd-phone:video:request'); }
 export function acceptVideo()                           { void fetchNui('sd-phone:video:accept'); }
 export function stopVideo()                             { void fetchNui('sd-phone:video:stop'); }
-export function setVideoCamera(on: boolean, front = true) { void fetchNui('sd-phone:video:camera', { on, front }); }
+export function setVideoCamera(on: boolean, front = true) { return fetchNui<VideoCameraInfo>('sd-phone:video:camera', { on, front }); }
+export function setVideoCursor(on: boolean)             { void fetchNui('sd-phone:video:cursor', { on }); }
 
 let pendingVideo = false;
 export function requestVideoOnConnect() { pendingVideo = true; }

@@ -7,7 +7,7 @@ import { resolveWallpaper } from '@/shell/wallpapers';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { fetchNui } from '@/core/nui';
 import { useContacts } from '@/stores/contactsStore';
-import { acceptCall, declineCall, getCurrentCall, hangupCall } from './callsApi';
+import { acceptCall, addToCall, declineCall, getCurrentCall, hangupCall } from './callsApi';
 import { formatPhone } from './data';
 import { playDtmf } from './keypad/dtmf';
 import { startRing } from './calls/ringtone';
@@ -32,10 +32,16 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
     const name      = useCallStore(s => s.name);
     const number    = useCallStore(s => s.number);
     const startedAt = useCallStore(s => s.startedAt);
+    const others    = useCallStore(s => s.others);
+    const pending   = useCallStore(s => s.pending);
     const [muted, setMuted]     = useState(false);
     const [speaker, setSpeaker] = useState(false);
     const [keypadOpen, setKeypadOpen]     = useState(false);
     const [contactsOpen, setContactsOpen] = useState(false);
+    const [addOpen, setAddOpen]           = useState(false);
+    const [addKeypad, setAddKeypad]       = useState(false);
+    const [addDigits, setAddDigits]       = useState('');
+    const [addError, setAddError]         = useState<string | null>(null);
     const [dtmfDialed, setDtmfDialed]     = useState('');
     const [droppedLost, setDroppedLost]   = useState<boolean | null>(null);
     const [now, setNow]         = useState(() => Date.now());
@@ -47,6 +53,7 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
     const resetControls = useCallback(() => {
         setMuted(false); setSpeaker(false); setVideoPhase('off');
         setKeypadOpen(false); setContactsOpen(false); setDtmfDialed('');
+        setAddOpen(false); setAddKeypad(false); setAddDigits(''); setAddError(null);
     }, []);
 
     useNuiEvent('sd-phone:call:incoming', useCallback((data) => {
@@ -72,6 +79,10 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
 
     useNuiEvent('sd-phone:call:dropped', useCallback((data) => {
         setDroppedLost(data?.lost === true);
+    }, []));
+
+    useNuiEvent('sd-phone:call:roster', useCallback((data) => {
+        useCallStore.getState().roster(data ?? {});
     }, []));
 
     useNuiEvent('sd-phone:video:request', useCallback(() => setVideoPhase('incoming'), []));
@@ -100,6 +111,14 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
         const id = window.setInterval(() => setNow(Date.now()), 1000);
         return () => window.clearInterval(id);
     }, [phase]);
+
+    async function submitAdd(target: string) {
+        const digits = target.replace(/\D/g, '');
+        if (!digits) return;
+        const res = await addToCall(digits);
+        if (!res.success) { setAddError(res.message ?? t('phone.couldNotAdd','Could not add that number')); return; }
+        setAddOpen(false); setAddKeypad(false); setAddDigits(''); setAddError(null);
+    }
 
     const dropNotice = droppedLost === null ? null : (
         <AlertDialog
@@ -135,9 +154,23 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
             <div className="absolute inset-0 bg-black/35" />
 
             <div className="relative z-10 flex h-full flex-col items-center">
-                <div className="flex shrink-0 flex-col items-center pt-[120px]">
-                    <div className="text-[34px] font-semibold leading-tight text-white">{title}</div>
+                <div className="flex shrink-0 flex-col items-center px-8 pt-[120px]">
+                    <div className="text-center text-[34px] font-semibold leading-tight text-white">{title}</div>
                     <div className="mt-1 text-[18px] font-light tabular-nums text-white/60">{subtitle}</div>
+                    {(others.length > 0 || pending) && (
+                        <div className="mt-3 flex w-full flex-col items-center gap-1">
+                            {others.map(p => (
+                                <div key={p.number} className="text-[16px] font-medium text-white/85">
+                                    {p.name || formatPhone(p.number)}
+                                </div>
+                            ))}
+                            {pending && (
+                                <div className="text-[16px] font-light text-white/45">
+                                    {t('phone.addingParty','Calling {name}…',{ name: pending.name || formatPhone(pending.number) })}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {phase === 'incoming' ? (
@@ -175,15 +208,46 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
                                     <ControlButton
                                         label={t('phone.video','Video')}
                                         active={videoPhase === 'requesting'}
+                                        disabled={others.length > 0}
                                         onClick={() => { if (phase === 'active' && videoPhase === 'off') { requestVideo(); setVideoPhase('requesting'); } }}
                                         icon={<Video className="h-[31px] w-[31px]" strokeWidth={2} />}
                                     />
-                                    <ControlButton label={t('phone.addCall','Add call')} icon={<Plus className="h-[34px] w-[34px]" strokeWidth={2} />} />
+                                    <ControlButton
+                                        label={t('phone.addCall','Add call')}
+                                        active={addOpen}
+                                        disabled={phase !== 'active' || pending !== null || others.length > 0}
+                                        onClick={() => { setAddError(null); setAddDigits(''); setAddKeypad(false); setAddOpen(true); void loadContacts(); }}
+                                        icon={<Plus className="h-[34px] w-[34px]" strokeWidth={2} />}
+                                    />
                                     <ControlButton label={t('phone.keypad','Keypad')} active={keypadOpen} onClick={() => setKeypadOpen(true)} icon={<KeypadDots />} />
                                     <ControlButton label={t('phone.contacts','Contacts')} active={contactsOpen} onClick={() => { setContactsOpen(true); void loadContacts(); }} icon={<User className="h-[31px] w-[31px]" strokeWidth={2} />} />
                                 </div>
                             </div>
                         </div>
+
+                        {videoPhase === 'incoming' && phase === 'active' && (
+                            <div className="flex shrink-0 flex-col items-center gap-3 px-8 pb-7">
+                                <div className="text-center text-[15px] text-white/85">
+                                    {t('phone.wantsToSwitchToVideo','{name} wants to switch to video',{ name: title })}
+                                </div>
+                                <div className="flex gap-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => { stopVideo(); setVideoPhase('off'); }}
+                                        className="rounded-full bg-white/15 px-6 py-2.5 text-[15px] font-semibold text-white backdrop-blur-md active:opacity-70"
+                                    >
+                                        {t('phone.decline','Decline')}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => { acceptVideo(); setVideoInitiator(false); setVideoPhase('active'); }}
+                                        className="rounded-full bg-ios-green px-6 py-2.5 text-[15px] font-semibold text-white active:opacity-80"
+                                    >
+                                        {t('phone.accept','Accept')}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         <div className="flex shrink-0 justify-center pb-[120px]">
                             <button
@@ -226,6 +290,89 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
                 </div>
             )}
 
+            {addOpen && (
+                <div className="absolute inset-0 z-[66] flex flex-col bg-black/75 backdrop-blur-2xl">
+                    <div className="flex items-center justify-between px-6 pb-2 pt-[70px]">
+                        <span className="text-[22px] font-bold text-white">{t('phone.addCall','Add call')}</span>
+                        <button
+                            type="button"
+                            onClick={() => setAddOpen(false)}
+                            className="text-[17px] font-semibold text-ios-blue active:opacity-60"
+                        >
+                            {t('phone.cancel','Cancel')}
+                        </button>
+                    </div>
+
+                    {addError && (
+                        <p className="px-6 pb-1 text-center text-[14px] text-ios-red">{addError}</p>
+                    )}
+
+                    {addKeypad ? (
+                        <div className="flex flex-1 flex-col items-center justify-center pb-8">
+                            <div className="mb-5 flex h-[40px] items-center text-[30px] font-light tracking-wider text-white tabular-nums">
+                                {addDigits || <span className="text-[17px] font-normal text-white/40">{t('phone.enterNumber','Enter a number')}</span>}
+                            </div>
+                            <div className="grid grid-cols-3 gap-x-6 gap-y-4">
+                                {KEYPAD_KEYS.map(k => (
+                                    <button
+                                        key={k}
+                                        type="button"
+                                        onClick={() => { playDtmf(k); setAddDigits(d => (d + k).slice(0, 15)); }}
+                                        className="flex h-[70px] w-[70px] items-center justify-center rounded-full bg-white/[0.14] text-[30px] font-light text-white active:bg-white/35"
+                                    >
+                                        {k}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="mt-6 flex items-center gap-6">
+                                <button
+                                    type="button"
+                                    onClick={() => { setAddKeypad(false); setAddError(null); }}
+                                    className="text-[17px] font-semibold text-white/85 active:opacity-60"
+                                >
+                                    {t('phone.contacts','Contacts')}
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={addDigits.length === 0}
+                                    onClick={() => void submitAdd(addDigits)}
+                                    className="rounded-full bg-ios-green px-7 py-2.5 text-[15px] font-semibold text-white active:opacity-80 disabled:opacity-35"
+                                >
+                                    {t('phone.add','Add')}
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex-1 overflow-y-auto no-scrollbar px-6 pb-10">
+                            <button
+                                type="button"
+                                onClick={() => { setAddKeypad(true); setAddError(null); }}
+                                className="flex w-full items-center gap-3 border-b border-white/[0.08] py-3 text-left active:opacity-60"
+                            >
+                                <span className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-white/15 text-white">
+                                    <KeypadDots />
+                                </span>
+                                <span className="text-[17px] font-medium text-white">{t('phone.dialNumber','Dial a number')}</span>
+                            </button>
+                            {contactList.length === 0 && (
+                                <p className="pt-8 text-center text-[15px] text-white/50">{t('phone.noContacts','No contacts yet')}</p>
+                            )}
+                            {contactList.map(c => (
+                                <button
+                                    key={c.id}
+                                    type="button"
+                                    onClick={() => void submitAdd(c.phone)}
+                                    className="block w-full border-b border-white/[0.08] py-3 text-left active:opacity-60"
+                                >
+                                    <div className="text-[17px] font-medium text-white">{c.name}</div>
+                                    <div className="text-[14px] tabular-nums text-white/55">{formatPhone(c.phone)}</div>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
             {contactsOpen && (
                 <div className="absolute inset-0 z-[66] flex flex-col bg-black/75 backdrop-blur-2xl">
                     <div className="flex items-center justify-between px-6 pb-2 pt-[70px]">
@@ -252,28 +399,6 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
                 </div>
             )}
 
-            {videoPhase === 'incoming' && phase === 'active' && (
-                <div className="absolute inset-x-0 bottom-[150px] z-[65] flex flex-col items-center gap-3 px-8">
-                    <div className="text-[15px] text-white/85">{t('phone.wantsToSwitchToVideo','{name} wants to switch to video',{ name: title })}</div>
-                    <div className="flex gap-4">
-                        <button
-                            type="button"
-                            onClick={() => { stopVideo(); setVideoPhase('off'); }}
-                            className="rounded-full bg-white/15 px-6 py-2.5 text-[15px] font-semibold text-white backdrop-blur-md active:opacity-70"
-                        >
-                            {t('phone.decline','Decline')}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => { acceptVideo(); setVideoInitiator(false); setVideoPhase('active'); }}
-                            className="rounded-full bg-ios-green px-6 py-2.5 text-[15px] font-semibold text-white active:opacity-80"
-                        >
-                            {t('phone.accept','Accept')}
-                        </button>
-                    </div>
-                </div>
-            )}
-
             {videoPhase === 'active' && (
                 <VideoCall
                     peerName={title}
@@ -296,14 +421,20 @@ function KeypadDots() {
     );
 }
 
-function ControlButton({ icon, label, active, onClick }: {
-    icon:     ReactNode;
-    label:    string;
-    active?:  boolean;
-    onClick?: () => void;
+function ControlButton({ icon, label, active, disabled, onClick }: {
+    icon:      ReactNode;
+    label:     string;
+    active?:   boolean;
+    disabled?: boolean;
+    onClick?:  () => void;
 }) {
     return (
-        <button type="button" onClick={onClick} className="flex flex-col items-center gap-2 active:opacity-70">
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={disabled}
+            className={`flex flex-col items-center gap-2 ${disabled ? 'opacity-35' : 'active:opacity-70'}`}
+        >
             <span
                 className={`flex h-[78px] w-[78px] items-center justify-center rounded-full transition-colors ${
                     active ? 'bg-white text-black' : 'bg-white/15 text-white'

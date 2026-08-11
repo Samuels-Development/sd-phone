@@ -11,6 +11,7 @@ lib.callback.register('sd-phone:server:call:dial', function(src, payload) return
 lib.callback.register('sd-phone:server:call:accept', function(src, payload) return actions.accept(src, payload) end)
 lib.callback.register('sd-phone:server:call:decline', function(src, payload) return actions.decline(src, payload) end)
 lib.callback.register('sd-phone:server:call:hangup', function(src, payload) return actions.hangup(src, payload) end)
+lib.callback.register('sd-phone:server:call:add', function(src, payload) return actions.addCall(src, payload) end)
 lib.callback.register('sd-phone:server:call:current', function(src) return actions.current(src) end)
 
 ---Speakerphone toggle from the call UI (fire-and-forget): joins nearby players into the call
