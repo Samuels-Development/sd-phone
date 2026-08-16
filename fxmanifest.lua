@@ -31,6 +31,7 @@ files {
     'shared/**.lua',
     'configs/*.lua',
     'client/**.lua',
+    'vrp/*.lua',
     'locales/*.json',
     'web/build/index.html',
     'web/build/components.js',
