@@ -6,17 +6,14 @@ local framework = require 'bridge.shared.framework'
 ---never leaks into server/mdt/. Nothing here writes, and no framework table is ever ALTERed.
 local records = {}
 
----@type { table: string, idCol: string } Framework citizen table: QBCore/QBox key characters by
----citizenid in `players`, ESX by identifier in `users`.
-local PEOPLE = framework.name == 'esx'
-    and { table = 'users',   idCol = 'identifier' }
-    or  { table = 'players', idCol = 'citizenid' }
-
----@type { table: string, idCol: string } Framework ownership table, picked the same way
----bridge/server/garages.lua picks it.
-local VEHICLES = framework.name == 'esx'
-    and { table = 'owned_vehicles',  idCol = 'owner' }
-    or  { table = 'player_vehicles', idCol = 'citizenid' }
+---@type { table: string, idCol: string }|nil Framework ownership table, picked the same way
+---bridge/server/garages.lua picks it. Nil on a framework whose vehicle schema this module does not
+---know: every read below treats that as "records unavailable" and returns empty, rather than
+---querying `player_vehicles` on a server that has no such table.
+local VEHICLES =
+    framework.name == 'esx' and { table = 'owned_vehicles',  idCol = 'owner' }
+    or framework.qb         and { table = 'player_vehicles', idCol = 'citizenid' }
+    or nil
 
 ---@type string[] Columns a model name may live in, in preference order.
 local MODEL_COLS = { 'vehicle', 'model', 'vehicle_name', 'name' }
@@ -27,6 +24,36 @@ local MIN_TERM <const> = 2
 
 ---@type table<string, table<string, boolean>>|nil Present columns per table, resolved on first use.
 local columnCache = {}
+
+---One row, or nil when the query raised. Every read in this module goes through these three
+---helpers: they run against the FRAMEWORK's own tables, whose shape this resource does not control,
+---so a missing table or a renamed column must return an empty page rather than propagate out of the
+---MDT callback that asked.
+---@param sql string
+---@param params? table
+---@return table|nil row
+local function single(sql, params)
+    local ok, row = pcall(function() return MySQL.single.await(sql, params) end)
+    return (ok and type(row) == 'table') and row or nil
+end
+
+---Rows, or an empty list when the query raised.
+---@param sql string
+---@param params? table
+---@return table[] rows
+local function query(sql, params)
+    local ok, rows = pcall(function() return MySQL.query.await(sql, params) end)
+    return (ok and type(rows) == 'table') and rows or {}
+end
+
+---A scalar, or 0 when the query raised.
+---@param sql string
+---@param params? table
+---@return number
+local function scalar(sql, params)
+    local ok, value = pcall(function() return MySQL.scalar.await(sql, params) end)
+    return (ok and tonumber(value)) or 0
+end
 
 ---The set of columns a table actually has, read once per table and memoised. An unknown table
 ---resolves to an empty set, which every caller treats as "that column is not available".
@@ -64,9 +91,11 @@ local function citizenOrder(tbl, recent, fallback)
 end
 
 ---The column a vehicle's model name lives in on this framework, or nil when none of the known
----candidates exist (ESX forks that keep the model inside the `vehicle` JSON blob).
+---candidates exist (ESX forks that keep the model inside the `vehicle` JSON blob), or when this
+---framework has no known ownership table at all.
 ---@return string|nil
 local function modelColumn()
+    if not VEHICLES then return nil end
     local have = columnsOf(VEHICLES.table)
     for i = 1, #MODEL_COLS do
         if have[MODEL_COLS[i]] then return MODEL_COLS[i] end
@@ -173,16 +202,20 @@ function records.getCitizen(cid)
     if type(cid) ~= 'string' or cid == '' then return nil end
 
     if framework.qb then
-        local row = MySQL.single.await(
+        local row = single(
             ('SELECT %s FROM players WHERE citizenid = ? LIMIT 1'):format(QB_CITIZEN_COLS), { cid })
         return row and qbCitizen(row) or nil
     end
 
-    local have = columnsOf('users')
-    local cols = have.metadata and (ESX_CITIZEN_COLS .. ', metadata') or ESX_CITIZEN_COLS
-    local row  = MySQL.single.await(
-        ('SELECT %s FROM users WHERE identifier = ? LIMIT 1'):format(cols), { cid })
-    return row and esxCitizen(row) or nil
+    if framework.name == 'esx' then
+        local have = columnsOf('users')
+        local cols = have.metadata and (ESX_CITIZEN_COLS .. ', metadata') or ESX_CITIZEN_COLS
+        local row  = single(
+            ('SELECT %s FROM users WHERE identifier = ? LIMIT 1'):format(cols), { cid })
+        return row and esxCitizen(row) or nil
+    end
+
+    return nil
 end
 
 ---Citizen names for a set of identifiers as `{ [citizenid] = name }`. One query, offline
@@ -198,8 +231,8 @@ function records.namesFor(cids)
     local inClause = table.concat(marks, ',')
 
     if framework.qb then
-        local rows = MySQL.query.await(
-            ('SELECT citizenid, charinfo FROM players WHERE citizenid IN (%s)'):format(inClause), cids) or {}
+        local rows = query(
+            ('SELECT citizenid, charinfo FROM players WHERE citizenid IN (%s)'):format(inClause), cids)
         for i = 1, #rows do
             local info = decode(rows[i].charinfo)
             local name = str(str(info.firstname) .. ' ' .. str(info.lastname))
@@ -208,12 +241,15 @@ function records.namesFor(cids)
         return out
     end
 
-    local rows = MySQL.query.await(
-        ('SELECT identifier, firstname, lastname FROM users WHERE identifier IN (%s)'):format(inClause), cids) or {}
-    for i = 1, #rows do
-        local name = str(str(rows[i].firstname) .. ' ' .. str(rows[i].lastname))
-        out[rows[i].identifier] = name ~= '' and name or rows[i].identifier
+    if framework.name == 'esx' then
+        local rows = query(
+            ('SELECT identifier, firstname, lastname FROM users WHERE identifier IN (%s)'):format(inClause), cids)
+        for i = 1, #rows do
+            local name = str(str(rows[i].firstname) .. ' ' .. str(rows[i].lastname))
+            out[rows[i].identifier] = name ~= '' and name or rows[i].identifier
+        end
     end
+
     return out
 end
 
@@ -248,32 +284,36 @@ function records.searchCitizens(term, page, pageSize)
             args = { like, like, like, like }
         end
         local order = citizenOrder('players', 'last_updated', 'citizenid')
-        local total = MySQL.scalar.await(('SELECT COUNT(*) FROM players %s'):format(where), args)
-        local rows  = MySQL.query.await(
+        local total = scalar(('SELECT COUNT(*) FROM players %s'):format(where), args)
+        local rows  = query(
             ('SELECT %s FROM players %s ORDER BY %s LIMIT %d OFFSET %d')
-                :format(QB_CITIZEN_COLS, where, order, limit, offset), args) or {}
+                :format(QB_CITIZEN_COLS, where, order, limit, offset), args)
 
         local out = {}
         for i = 1, #rows do out[i] = qbCitizen(rows[i]) end
-        return out, tonumber(total) or 0
+        return out, total
     end
 
-    local where, args = '', {}
-    if not browse then
-        where = 'WHERE identifier LIKE ? OR firstname LIKE ? OR lastname LIKE ? OR phone_number LIKE ?'
-        args  = { like, like, like, like }
-    end
-    local have  = columnsOf('users')
-    local cols  = have.metadata and (ESX_CITIZEN_COLS .. ', metadata') or ESX_CITIZEN_COLS
-    local order = citizenOrder('users', 'last_seen', 'identifier')
-    local total = MySQL.scalar.await(('SELECT COUNT(*) FROM users %s'):format(where), args)
-    local rows  = MySQL.query.await(
-        ('SELECT %s FROM users %s ORDER BY %s LIMIT %d OFFSET %d')
-            :format(cols, where, order, limit, offset), args) or {}
+    if framework.name == 'esx' then
+        local where, args = '', {}
+        if not browse then
+            where = 'WHERE identifier LIKE ? OR firstname LIKE ? OR lastname LIKE ? OR phone_number LIKE ?'
+            args  = { like, like, like, like }
+        end
+        local have  = columnsOf('users')
+        local cols  = have.metadata and (ESX_CITIZEN_COLS .. ', metadata') or ESX_CITIZEN_COLS
+        local order = citizenOrder('users', 'last_seen', 'identifier')
+        local total = scalar(('SELECT COUNT(*) FROM users %s'):format(where), args)
+        local rows  = query(
+            ('SELECT %s FROM users %s ORDER BY %s LIMIT %d OFFSET %d')
+                :format(cols, where, order, limit, offset), args)
 
-    local out = {}
-    for i = 1, #rows do out[i] = esxCitizen(rows[i]) end
-    return out, tonumber(total) or 0
+        local out = {}
+        for i = 1, #rows do out[i] = esxCitizen(rows[i]) end
+        return out, total
+    end
+
+    return {}, 0
 end
 
 ---Builds the normalised vehicle shape from an ownership row.
@@ -292,7 +332,7 @@ local function vehicleOf(row, modelCol)
     return {
         plate  = str(row.plate):upper(),
         model  = model,
-        owner  = row[VEHICLES.idCol],
+        owner  = VEHICLES and row[VEHICLES.idCol] or nil,
         garage = garage,
         state  = tonumber(state) or (state == true and 1) or 0,
     }
@@ -304,9 +344,9 @@ end
 ---@return table|nil vehicle
 function records.vehicleByPlate(plate)
     plate = str(plate):upper()
-    if plate == '' then return nil end
+    if plate == '' or not VEHICLES then return nil end
 
-    local row = MySQL.single.await(
+    local row = single(
         ('SELECT * FROM `%s` WHERE REPLACE(UPPER(plate), " ", "") = ? LIMIT 1'):format(VEHICLES.table),
         { (plate:gsub('%s', '')) })
     if not row then return nil end
@@ -317,11 +357,11 @@ end
 ---@param cid string owner identifier
 ---@return table[] vehicles
 function records.vehiclesByOwner(cid)
-    if type(cid) ~= 'string' or cid == '' then return {} end
+    if type(cid) ~= 'string' or cid == '' or not VEHICLES then return {} end
 
-    local rows = MySQL.query.await(
+    local rows = query(
         ('SELECT * FROM `%s` WHERE `%s` = ? ORDER BY plate ASC LIMIT 60'):format(VEHICLES.table, VEHICLES.idCol),
-        { cid }) or {}
+        { cid })
 
     local modelCol, out = modelColumn(), {}
     for i = 1, #rows do out[i] = vehicleOf(rows[i], modelCol) end
@@ -337,6 +377,7 @@ end
 ---@return integer total matching rows
 function records.searchVehicles(term, page, pageSize)
     term = str(term)
+    if not VEHICLES then return {}, 0 end
 
     local limit  = math.max(1, math.floor(tonumber(pageSize) or 25))
     local offset = math.max(0, (math.max(1, math.floor(tonumber(page) or 1)) - 1) * limit)
@@ -354,15 +395,15 @@ function records.searchVehicles(term, page, pageSize)
         end
     end
 
-    local total = MySQL.scalar.await(
+    local total = scalar(
         ('SELECT COUNT(*) FROM `%s` %s'):format(VEHICLES.table, where), args)
-    local rows = MySQL.query.await(
+    local rows = query(
         ('SELECT * FROM `%s` %s ORDER BY plate ASC LIMIT %d OFFSET %d')
-            :format(VEHICLES.table, where, limit, offset), args) or {}
+            :format(VEHICLES.table, where, limit, offset), args)
 
     local out = {}
     for i = 1, #rows do out[i] = vehicleOf(rows[i], modelCol) end
-    return out, tonumber(total) or 0
+    return out, total
 end
 
 return records
