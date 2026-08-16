@@ -1,4 +1,5 @@
----@type table Framework detection (bridge.shared.framework): name ('qb'|'esx') + live core handle.
+---@type table Framework detection (bridge.shared.framework): name ('qb'|'esx'|'vrp') + live core
+---handle.
 local framework = require 'bridge.shared.framework'
 
 ---@type table Records module; the table returned at end of file. Read-only reads of the
@@ -9,7 +10,9 @@ local records = {}
 ---@type { table: string, idCol: string }|nil Framework ownership table, picked the same way
 ---bridge/server/garages.lua picks it. Nil on a framework whose vehicle schema this module does not
 ---know: every read below treats that as "records unavailable" and returns empty, rather than
----querying `player_vehicles` on a server that has no such table.
+---querying `player_vehicles` on a server that has no such table. vRP is deliberately one of those:
+---`vrp_user_vehicles` is (user_id, vehicle) with no plate column and vRP 2 core has no vehicle table
+---at all, so MDT vehicle records and plate search stay unavailable there while citizen records work.
 local VEHICLES =
     framework.name == 'esx' and { table = 'owned_vehicles',  idCol = 'owner' }
     or framework.qb         and { table = 'player_vehicles', idCol = 'citizenid' }
@@ -190,13 +193,46 @@ local function esxCitizen(row)
     }
 end
 
+---Builds the normalised citizen shape from a vRP identity row.
+---
+---vRP's identity table carries only firstname, name, age, phone and registration, so DOB, sex,
+---nationality, job, licences and every metadata field come back blank: those MDT fields render
+---empty rather than showing a value vRP never stored. The citizenid is the sd-phone identifier the
+---identity was read under, which is the key every other module already addresses the character by.
+---@param identity table normalised identity from bridge.server.vrp.core
+---@return table citizen
+local function vrpCitizen(identity)
+    local key   = str(identity.key)
+    local first = str(identity.firstname)
+    local last  = str(identity.lastname)
+    local name  = str(first .. ' ' .. last)
+
+    return {
+        citizenid   = key,
+        name        = name ~= '' and name or key,
+        firstname   = first,
+        lastname    = last,
+        dob         = '',
+        sex         = '',
+        phone       = str(identity.phone),
+        nationality = '',
+        job         = '',
+        jobGrade    = 0,
+        licences    = {},
+        fingerprint = '',
+        bloodtype   = '',
+        callsign    = '',
+    }
+end
+
 ---@type string QBCore/QBox citizen projection.
 local QB_CITIZEN_COLS = 'citizenid, charinfo, metadata, job'
 ---@type string ESX citizen projection.
 local ESX_CITIZEN_COLS = 'identifier, firstname, lastname, dateofbirth, sex, phone_number, job, job_grade'
 
----One citizen by their framework identifier, or nil. Read-only.
----@param cid string citizenid on QBCore/QBox, identifier on ESX
+---One citizen by their framework identifier, or nil. Read-only. On vRP the row comes from the
+---identity table, so DOB, sex, nationality, job and every metadata field are blank.
+---@param cid string citizenid on QBCore/QBox, identifier on ESX, sd-phone key ('vrp:c17') on vRP
 ---@return table|nil citizen
 function records.getCitizen(cid)
     if type(cid) ~= 'string' or cid == '' then return nil end
@@ -215,6 +251,15 @@ function records.getCitizen(cid)
         return row and esxCitizen(row) or nil
     end
 
+    if framework.name == 'vrp' then
+        ---@type table vRP facade (bridge.server.vrp.core). Required inside the branch, never at file
+        ---scope: this module loads on every framework, and the vRP tree must not be pulled onto a
+        ---qb, qbx or esx boot.
+        local core = require 'bridge.server.vrp.core'
+        local identity = core.offlineIdentity(cid)
+        return identity and vrpCitizen(identity) or nil
+    end
+
     return nil
 end
 
@@ -225,6 +270,14 @@ end
 function records.namesFor(cids)
     local out = {}
     if type(cids) ~= 'table' or #cids == 0 then return out end
+
+    if framework.name == 'vrp' then
+        ---@type table vRP facade (bridge.server.vrp.core), required inside the branch so the vRP
+        ---tree never reaches a qb, qbx or esx boot. It reads vRP's own identity table, so offline
+        ---characters are included exactly as they are on the qb and esx paths.
+        local core = require 'bridge.server.vrp.core'
+        return core.offlineNames(cids)
+    end
 
     local marks = {}
     for i = 1, #cids do marks[i] = '?' end
@@ -254,8 +307,8 @@ function records.namesFor(cids)
 end
 
 ---A page of citizens matching a free-text term across first name, last name, identifier and
----phone. A term under two characters returns an empty page rather than the whole server.
----Read-only.
+---phone. A term under two characters returns an empty page rather than the whole server. On vRP the
+---match is over vRP's own identity table and the page is capped there. Read-only.
 ---@param term string search term
 ---@param page integer 1-based page number
 ---@param pageSize integer rows per page
@@ -313,7 +366,77 @@ function records.searchCitizens(term, page, pageSize)
         return out, total
     end
 
+    if framework.name == 'vrp' then
+        ---@type table vRP facade (bridge.server.vrp.core), required inside the branch so the vRP
+        ---tree never reaches a qb, qbx or esx boot. It owns the wildcard wrapping, the escaping and
+        ---the same two-character floor enforced above, and caps the page hard: neither lineage
+        ---indexes the name columns and a substring LIKE could not use such an index anyway, so every
+        ---search is a table scan and the page size is the only thing bounding its cost. vRP splits a
+        ---name across `firstname` and `name` and matches them separately, so a two-word term like
+        ---"john doe" finds nothing there.
+        local core = require 'bridge.server.vrp.core'
+        local rows, total = core.searchIdentities(term, limit, offset)
+
+        local out = {}
+        for i = 1, #rows do out[i] = vrpCitizen(rows[i]) end
+        return out, total
+    end
+
     return {}, 0
+end
+
+---Citizenids whose FULL character name matches a free-text term, in the framework's own table.
+---Takes a RAW term, not a LIKE pattern: this function owns its own wildcard wrapping and escaping,
+---so a caller that pre-wrapped would search for a literal percent sign. The predicate is
+---CONCAT(first, ' ', last) rather than per-column, so a two-word term like "john doe" keeps matching
+---the way server/admin/store.lua's own SQL did before this replaced it. Ids only: callers that want
+---the whole citizen shape use records.searchCitizens. Read-only.
+---@param term string raw search text
+---@param limit integer maximum rows
+---@return string[] cids
+function records.searchCitizenIds(term, limit)
+    term = str(term)
+    if term == '' then return {} end
+
+    local cap  = math.max(1, math.floor(tonumber(limit) or 25))
+    local like = '%' .. term:gsub('([%%_\\])', '\\%1') .. '%'
+    local out  = {}
+
+    if framework.qb then
+        local rows = query(([[
+            SELECT citizenid FROM players
+            WHERE CONCAT(
+                JSON_UNQUOTE(JSON_EXTRACT(charinfo, '$.firstname')), ' ',
+                JSON_UNQUOTE(JSON_EXTRACT(charinfo, '$.lastname'))
+            ) LIKE ?
+            LIMIT %d
+        ]]):format(cap), { like })
+        for i = 1, #rows do out[i] = rows[i].citizenid end
+        return out
+    end
+
+    if framework.name == 'esx' then
+        local rows = query(([[
+            SELECT identifier FROM users
+            WHERE CONCAT(firstname, ' ', lastname) LIKE ?
+            LIMIT %d
+        ]]):format(cap), { like })
+        for i = 1, #rows do out[i] = rows[i].identifier end
+        return out
+    end
+
+    if framework.name == 'vrp' then
+        ---@type table vRP facade (bridge.server.vrp.core). Required inside the branch, never at file
+        ---scope: this module loads on every framework, and the vRP tree must not be pulled onto a
+        ---qb, qbx or esx boot. vRP keeps the two halves of a name in separate columns and matches
+        ---them separately, so a two-word term finds nothing there.
+        local core = require 'bridge.server.vrp.core'
+        local rows = core.searchIdentities(term, cap, 0)
+        for i = 1, #rows do out[i] = rows[i].key end
+        return out
+    end
+
+    return out
 end
 
 ---Builds the normalised vehicle shape from an ownership row.
@@ -339,7 +462,8 @@ local function vehicleOf(row, modelCol)
 end
 
 ---One vehicle by plate, or nil. The plate is matched case- and space-insensitively because the
----framework stores it exactly as the game formatted it. Read-only.
+---framework stores it exactly as the game formatted it. Always nil on a framework with no known
+---ownership table, vRP included. Read-only.
 ---@param plate string
 ---@return table|nil vehicle
 function records.vehicleByPlate(plate)
@@ -353,7 +477,8 @@ function records.vehicleByPlate(plate)
     return vehicleOf(row, modelColumn())
 end
 
----Every vehicle owned by a citizen. Read-only.
+---Every vehicle owned by a citizen. Empty on a framework with no known ownership table, vRP
+---included. Read-only.
 ---@param cid string owner identifier
 ---@return table[] vehicles
 function records.vehiclesByOwner(cid)
@@ -369,7 +494,8 @@ function records.vehiclesByOwner(cid)
 end
 
 ---A page of vehicles matching a plate or model fragment. A term under two characters is not a
----filter, so the whole fleet is paged back in plate order. Read-only.
+---filter, so the whole fleet is paged back in plate order. An empty page on a framework with no
+---known ownership table, vRP included. Read-only.
 ---@param term string search term
 ---@param page integer 1-based page number
 ---@param pageSize integer rows per page

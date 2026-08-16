@@ -1,4 +1,5 @@
----@type table Framework detection (bridge.shared.framework): name ('qb'|'esx') + live core handle.
+---@type table Framework detection (bridge.shared.framework): name ('qb'|'esx'|'vrp') + live core
+---handle.
 local framework   = require 'bridge.shared.framework'
 ---@type table Inventory resource detection (bridge.shared.inventory_id): first-started candidate.
 local inventoryId = require 'bridge.shared.inventory_id'
@@ -8,10 +9,29 @@ local player_mod  = require 'bridge.server.player'
 ---@type table Money module; the table returned at end of file. Personal money + black-money
 ---operations. Black money is the black_money item on ox_inventory, the markedbills item with
 ---metadata worth on QBCore, and a true account on ESX; each path is dispatched once at module load.
+---vRP has no black-money account or item of its own, so unless a dedicated inventory is detected it
+---takes the same "no supported path" degradation ESX-less servers already take: 0, false, false.
 local money = {}
 
+---Bind the vRP facade once at module load, and only on a vRP server.
+---
+---The require lives inside this branch on purpose: nothing under bridge/server/vrp/ may be pulled
+---onto a QBox, QBCore or ESX boot, where its configs/vrp.lua would be missing and the load would take
+---the whole resource down. Every branch below reads nil as "not a vRP server".
+---@return table|nil core bridge.server.vrp.core, or nil off vRP
+local function chooseVrp()
+    if framework.name ~= 'vrp' then return nil end
+    return require 'bridge.server.vrp.core'
+end
+
+---@type table|nil vRP facade (bridge.server.vrp.core), bound once at load; nil on every other
+---framework.
+local vrp = chooseVrp()
+
 ---Normalise caller-passed money type names across frameworks. ESX wants `money` for cash, QBCore
----wants `cash`; both accept `bank` as-is.
+---wants `cash`; both accept `bank` as-is. The vRP branches never reach here: vRP's own account
+---resolver already accepts `cash`, `money`, `wallet` and `bank`, so the caller's type is passed
+---through untouched.
 ---@param t string
 ---@return string
 local function convertType(t)
@@ -21,12 +41,18 @@ local function convertType(t)
 end
 
 ---Credit one of the player's framework accounts (cash, bank, ...). Returns nothing by contract;
----a no-op when the player can't be resolved.
+---a no-op when the player can't be resolved. On vRP the credit is vRP's own giveMoney/giveBankMoney
+---and `reason` is dropped, because vRP has no money log to write it to.
 ---@param source number
 ---@param moneyType string
 ---@param amount number
 ---@param reason? string Optional reason string passed to the framework's logger.
 function money.add(source, moneyType, amount, reason)
+    if vrp then
+        vrp.addMoney(source, moneyType, amount)
+        return
+    end
+
     local p = player_mod.get(source)
     if not p then return end
 
@@ -38,13 +64,17 @@ function money.add(source, moneyType, amount, reason)
 end
 
 ---Debit one of the player's framework accounts. False when the player could not be resolved or the
----framework declined the debit; callers must still pre-check money.get(src, type) >= amount.
+---framework declined the debit; callers must still pre-check money.get(src, type) >= amount. On vRP
+---the debit is composed inside the facade - vRP 1 has no bank-debit primitive at all - and true
+---still means the full amount left the player, with nothing partially consumed on a false.
 ---@param source number
 ---@param moneyType string
 ---@param amount number
 ---@param reason? string Optional reason string passed to the framework's logger.
 ---@return boolean removed
 function money.remove(source, moneyType, amount, reason)
+    if vrp then return vrp.removeMoney(source, moneyType, amount) end
+
     local p = player_mod.get(source)
     if not p then return false end
 
@@ -58,11 +88,14 @@ function money.remove(source, moneyType, amount, reason)
 end
 
 ---The player's current balance for one of their accounts. Read-only; 0 when the player or
----account can't be resolved.
+---account can't be resolved. vRP has exactly two accounts, wallet and bank, so any other type reads
+---0 there - the same shape ESX degrades to for an account it was never given.
 ---@param source number
 ---@param moneyType string
 ---@return number
 function money.get(source, moneyType)
+    if vrp then return vrp.balance(source, moneyType) end
+
     local p = player_mod.get(source)
     if not p then return 0 end
 
@@ -76,7 +109,8 @@ function money.get(source, moneyType)
 end
 
 ---Pick the "read black-money balance" implementation once at module load: ox counts black_money,
----qb-inventory sums markedbills `info.worth`, ESX reads the account. 0 with no supported path.
+---qb-inventory sums markedbills `info.worth`, ESX reads the account. 0 with no supported path, which
+---is where vRP lands unless it runs ox_inventory: vRP has no black-money account of its own.
 ---@return fun(source: number): number
 local function chooseGetBlack()
     if inventoryId.name == 'ox_inventory' then
@@ -115,7 +149,8 @@ local getBlack = chooseGetBlack()
 function money.getBlack(source) return getBlack(source) end
 
 ---Pick the "credit black money" implementation once at module load: ox adds black_money, qb mints
----one markedbills with the amount in `info.worth`, ESX credits the account. False with no path.
+---one markedbills with the amount in `info.worth`, ESX credits the account. False with no path,
+---which is where vRP lands unless it runs ox_inventory.
 ---@return fun(source: number, amount: number): boolean
 local function chooseAddBlack()
     if inventoryId.name == 'ox_inventory' then
@@ -149,6 +184,7 @@ function money.addBlack(source, amount) return addBlack(source, amount) end
 
 ---Pick the "debit black money" implementation once at module load; true only when the full amount
 ---left the player. The qb path removes bills by slot, re-adding a reduced bill on a partial consume.
+---False with no path, which is where vRP lands unless it runs ox_inventory.
 ---@return fun(source: number, amount: number): boolean
 local function chooseRemoveBlack()
     if inventoryId.name == 'ox_inventory' then

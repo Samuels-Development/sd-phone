@@ -9,8 +9,8 @@ local actions = require 'server.groups.actions'
 local player  = require 'bridge.server.player'
 ---@type table Badge engine (server.badges.init): recomputes + pushes home-screen unread counts.
 local badges  = require 'server.badges.init'
----@type table Framework bridge (bridge.shared.framework): active framework name for the loaded hook.
-local framework = require 'bridge.shared.framework'
+---@type table Lifecycle bridge (bridge.server.lifecycle): framework-agnostic character load/unload edges.
+local lifecycle = require 'bridge.server.lifecycle'
 
 ---Schema bootstrap, run in a thread.
 CreateThread(function()
@@ -90,15 +90,9 @@ local function pushOnline(src)
     end)
 end
 
-if framework.name == 'qb' then
-    AddEventHandler('QBCore:Server:PlayerLoaded', function(pl)
-        pushOnline(pl and pl.PlayerData and pl.PlayerData.source)
-    end)
-elseif framework.name == 'esx' then
-    AddEventHandler('esx:playerLoaded', function(playerId)
-        pushOnline(playerId)
-    end)
-end
+-- The co-member push runs on every framework's character-load edge, QBox included, which the old
+-- `framework.name == 'qb'` test never reached.
+lifecycle.onCharacterLoaded(pushOnline)
 
 ---Uninstalling Groups leaves every membership behind: groups the player leads are disbanded,
 ---plain memberships are removed, the active pointer and pending invites are cleared, and

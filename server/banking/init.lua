@@ -14,15 +14,19 @@ local bank = require 'bridge.server.banking'
 ---@type table Player bridge (bridge.server.player): citizenid resolution for the logger.
 local player = require 'bridge.server.player'
 
----Any script's bank movement lands in the Wallet log as a generic row (qb/qbox server money
----event; ESX has no server broadcast). Phone-driven movements are skipped since their richer
----rows are already written; 'set' rebalances carry no delta here, so they never log.
-AddEventHandler('QBCore:Server:OnMoneyChange', function(src, moneyType, amount, actionType, reason)
-    if moneyType ~= 'bank' then return end
-    if actionType ~= 'add' and actionType ~= 'remove' then return end
-    amount = math.floor(tonumber(amount) or 0)
-    if amount <= 0 then return end
-    local minus = actionType == 'remove'
+---Write one externally-driven bank movement to the Wallet log as a generic row. Shared by every
+---framework relay below, which each normalise their own payload before calling in, so the row a
+---player sees is identical whichever framework produced the movement.
+---
+---consumeExpected belongs HERE and not in a relay. The registration it consumes is single use, so
+---consuming it during normalisation would leave this logger with nothing to match and reinstate the
+---duplicate row it exists to prevent: a phone-initiated transfer would appear twice, once as its
+---rich phone row and once as a generic Bank Credit.
+---@param src number player server id
+---@param amount number positive whole magnitude of the movement
+---@param minus boolean true when the movement debited the account
+---@param reason? string framework-supplied reason, used as the row label when it carries one
+local function logExternal(src, amount, minus, reason)
     if bank.consumeExpected(src, amount, minus) then return end
     local cid = player.getIdentifier(src)
     if not cid then return end
@@ -38,6 +42,35 @@ AddEventHandler('QBCore:Server:OnMoneyChange', function(src, moneyType, amount, 
         amount   = minus and -amount or amount,
         category = minus and 'transfer' or 'income',
     })
+end
+
+---Any script's bank movement lands in the Wallet log as a generic row (qb/qbox server money
+---event; ESX has no server broadcast). Phone-driven movements are skipped since their richer
+---rows are already written; 'set' rebalances carry no delta here, so they never log.
+AddEventHandler('QBCore:Server:OnMoneyChange', function(src, moneyType, amount, actionType, reason)
+    if moneyType ~= 'bank' then return end
+    if actionType ~= 'add' and actionType ~= 'remove' then return end
+    amount = math.floor(tonumber(amount) or 0)
+    if amount <= 0 then return end
+    logExternal(src, amount, actionType == 'remove', reason)
+end)
+
+---The vRP 2 counterpart. vRP publishes absolute wallet and bank balances, so
+---bridge/server/vrp/impl_v2.lua diffs them against its own per-source snapshot and re-emits one
+---signed delta per account; by the time it reaches here the shape matches the QBCore relay's. vRP
+---carries no reason with a money change, so these always take the generic label. vRP 1 emits no
+---money signal at all, which is why an external movement leaves no row there.
+---@param source number player server id
+---@param account 'wallet'|'bank'
+---@param delta number signed movement; negative is a debit
+AddEventHandler('sd-phone:server:moneyChanged', function(source, account, delta)
+    if account ~= 'bank' then return end
+    local src = tonumber(source)
+    if not src then return end
+    local signed = tonumber(delta) or 0
+    local amount = math.floor(math.abs(signed))
+    if amount <= 0 then return end
+    logExternal(src, amount, signed < 0, nil)
 end)
 
 -- Schema bootstrap.

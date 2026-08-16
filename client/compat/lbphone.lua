@@ -33,6 +33,17 @@ local customApps = require 'client.customapps'
 ---@type table Cell service (client.service): level, bars + the SetServiceBars override.
 local service = require 'client.service'
 
+---@type table Lifecycle bridge (bridge.client.lifecycle): framework-agnostic character load/unload edges.
+local lifecycle = require 'bridge.client.lifecycle'
+
+---@type table Job bridge (bridge.client.job): the live job name/grade + its change subscription.
+local job = require 'bridge.client.job'
+
+---@type boolean False once the real lb-phone starts and the shim tears itself down. The bridge
+---subscriptions below are for the resource's lifetime and hand back no cookie to remove, so this
+---is what stops them running after the teardown that RemoveEventHandler performs for the rest.
+local shimActive = true
+
 ---@type any[] AddEventHandler cookies for every registered export handler.
 local exportCookies = {}
 
@@ -142,10 +153,8 @@ local numberCache = { value = nil, at = 0 }
 local function clearNumberCache()
     numberCache.value, numberCache.at = nil, 0
 end
-RegisterNetEvent('QBCore:Client:OnPlayerLoaded', clearNumberCache)
-RegisterNetEvent('QBCore:Client:OnPlayerUnload', clearNumberCache)
-RegisterNetEvent('esx:playerLoaded', clearNumberCache)
-RegisterNetEvent('esx:onPlayerLogout', clearNumberCache)
+lifecycle.onCharacterLoaded(function() if shimActive then clearNumberCache() end end)
+lifecycle.onCharacterUnloaded(function() if shimActive then clearNumberCache() end end)
 
 registerLbExport('GetEquippedPhoneNumber', function()
     if numberCache.value and GetGameTimer() - numberCache.at < 60000 then
@@ -215,15 +224,15 @@ eventCookies[#eventCookies + 1] = AddEventHandler('sd-phone:client:cameraMode', 
     TriggerEvent('lb-phone:toggleHud', on and true or false)
 end)
 
----Mirrors framework job changes as lb-phone:jobUpdated with { job = <name>, grade = <number> }.
----Malformed payloads are dropped.
-eventCookies[#eventCookies + 1] = RegisterNetEvent('QBCore:Client:OnJobUpdate', function(job)
-    if type(job) ~= 'table' or type(job.grade) ~= 'table' then return end
-    TriggerEvent('lb-phone:jobUpdated', { job = job.name, grade = job.grade.level })
-end)
-eventCookies[#eventCookies + 1] = RegisterNetEvent('esx:setJob', function(job)
-    if type(job) ~= 'table' then return end
-    TriggerEvent('lb-phone:jobUpdated', { job = job.name, grade = job.grade })
+---Mirrors job changes as lb-phone:jobUpdated with { job = <name>, grade = <number> }. Taken off
+---bridge/client/job's own subscription rather than the framework events directly: those are the
+---qb and esx names only, so on vRP every hosted lb app would have kept the job it first saw
+---forever. The bridge already normalises the two payload shapes and only fires on a real change,
+---so a repeated write no longer re-announces. A nil name is the unloaded state, not a job, and is
+---dropped the way the malformed payloads were.
+job.onChange(function(name, grade)
+    if not shimActive or name == nil then return end
+    TriggerEvent('lb-phone:jobUpdated', { job = name, grade = grade })
 end)
 
 ---@type boolean Tracked lockscreen beam state, fed by the announcement below.
@@ -312,7 +321,7 @@ end
 -- join the load-time read answers before the character is picked and would otherwise leave the
 -- cache empty for the whole session. Switching characters matters just as much: without this the
 -- cache keeps serving the PREVIOUS character's settings until the new one happens to write one.
--- Same four events the number cache above already tracks, for the same reason.
+-- Same two lifecycle edges the number cache above already tracks, for the same reason.
 --
 -- Note this runs on every server, not only ones with an lb-phone consumer: the compat convar
 -- defaults to on, and nothing can detect whether anyone listens to lb-phone:settingsUpdated. So
@@ -320,10 +329,8 @@ end
 -- (writes are user-paced, and slider persists are already debounced to one per gesture), but the
 -- only way to pay nothing is sd_phone_lbcompat=false, which turns off the whole shim.
 CreateThread(refreshSettings)
-eventCookies[#eventCookies + 1] = RegisterNetEvent('QBCore:Client:OnPlayerLoaded', refreshAndAnnounce)
-eventCookies[#eventCookies + 1] = RegisterNetEvent('esx:playerLoaded', refreshAndAnnounce)
-eventCookies[#eventCookies + 1] = RegisterNetEvent('QBCore:Client:OnPlayerUnload', clearSettingsCache)
-eventCookies[#eventCookies + 1] = RegisterNetEvent('esx:onPlayerLogout', clearSettingsCache)
+lifecycle.onCharacterLoaded(function() if shimActive then refreshAndAnnounce() end end)
+lifecycle.onCharacterUnloaded(function() if shimActive then clearSettingsCache() end end)
 
 ---Mirrors an accepted sd-phone settings write as lb-phone's settingsUpdated.
 eventCookies[#eventCookies + 1] = AddEventHandler('sd-phone:client:settingsUpdated', refreshAndAnnounce)
@@ -480,9 +487,11 @@ CreateThread(function()
 end)
 
 ---Removes every shim handler, exports and event bridge alike, when the real lb-phone starts
----mid-session.
+---mid-session. The bridge lifecycle and job subscriptions cannot be removed, so `shimActive`
+---silences them instead, leaving the same net effect: nothing the shim owns fires again.
 AddEventHandler('onClientResourceStart', function(resource)
     if resource ~= 'lb-phone' or isShimLbPhone() then return end
+    shimActive = false
     for i = 1, #exportCookies do
         RemoveEventHandler(exportCookies[i])
     end

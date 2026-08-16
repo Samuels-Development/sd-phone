@@ -1,4 +1,4 @@
----@type table Framework detection (bridge.shared.framework): name ('qb'|'esx') + live core handle.
+---@type table Framework detection (bridge.shared.framework): name ('qb'|'esx'|'vrp') + live core handle.
 local framework   = require 'bridge.shared.framework'
 ---@type table Inventory resource detection (bridge.shared.inventory_id): first-started candidate.
 local inventoryId = require 'bridge.shared.inventory_id'
@@ -33,6 +33,9 @@ local active = inventoryId.name
 
 ---Pick the inventory backend's AddItem implementation once at module load. Dedicated backends
 ---return their own success signal; framework paths cover the rest; with no backend, always false.
+---The vRP path ignores `metadata`: vRP's inventory is a flat idname -> amount map with no slots and
+---no metadata, and it suppresses vRP's own move notification inside the facade so the phone does not
+---toast twice for one movement.
 ---@return fun(source: number, item: string, count: number, metadata?: table): boolean
 local function chooseAdd()
     if active == OX then
@@ -75,6 +78,13 @@ local function chooseAdd()
             if not p then return false end
             return p.Functions.AddItem(item, count, nil, metadata)
         end
+    end
+    if framework.name == 'vrp' then
+        ---@type table vRP primitive facade (bridge.server.vrp.core). Required INSIDE the branch: a
+        ---top-level require would drag the whole vRP stack and its config onto a QBox, QBCore or ESX
+        ---boot, where configs/vrp.lua need not exist.
+        local core = require 'bridge.server.vrp.core'
+        return function(src, item, count) return core.addItem(src, item, count) end
     end
     return function() return false end
 end
@@ -119,6 +129,12 @@ local function chooseCount()
             return data and (data.amount or data.count) or 0
         end
     end
+    if framework.name == 'vrp' then
+        ---@type table vRP primitive facade (bridge.server.vrp.core), required inside the branch so
+        ---the vRP tree is never loaded on a non-vRP server.
+        local core = require 'bridge.server.vrp.core'
+        return function(src, item) return core.itemCount(src, item) end
+    end
     return function() return 0 end
 end
 
@@ -138,6 +154,8 @@ end
 
 ---Pick the inventory backend's RemoveItem implementation once at module load. Dedicated backends
 ---report their own result; the ESX path verifies the held count first; with no backend, always false.
+---The vRP path ignores `metadata` (no slots, no metadata) and is true only when the full amount was
+---taken; vRP's own move notification is suppressed inside the facade.
 ---@return fun(source: number, item: string, count: number, metadata?: table): boolean
 local function chooseRemove()
     if active == OX then
@@ -182,14 +200,21 @@ local function chooseRemove()
             return p.Functions.RemoveItem(item, count)
         end
     end
+    if framework.name == 'vrp' then
+        ---@type table vRP primitive facade (bridge.server.vrp.core), required inside the branch so
+        ---the vRP tree is never loaded on a non-vRP server.
+        local core = require 'bridge.server.vrp.core'
+        return function(src, item, count) return core.removeItem(src, item, count) end
+    end
     return function() return false end
 end
 
 ---@type fun(source: number, item: string, count: number, metadata?: table): boolean Backend RemoveItem, bound once at load.
 inventory.remove = chooseRemove()
 
----Pick the backend's carry check once at module load. codem always allows, ESX is answered with
----weight maths, and with no backend the answer is always false.
+---Pick the backend's carry check once at module load. codem always allows, ESX and vRP are answered
+---with weight maths, and with no backend the answer is always false. vRP has no slots, so the vRP
+---path ignores `slot`.
 ---@return fun(source: number, item: string, count: number, slot?: any): boolean
 local function chooseCanCarry()
     if active == CD then
@@ -233,6 +258,12 @@ local function chooseCanCarry()
             return p.Functions.CanAddItem(item, count, slot)
         end
     end
+    if framework.name == 'vrp' then
+        ---@type table vRP primitive facade (bridge.server.vrp.core), required inside the branch so
+        ---the vRP tree is never loaded on a non-vRP server.
+        local core = require 'bridge.server.vrp.core'
+        return function(src, item, count) return core.canCarry(src, item, count) end
+    end
     return function() return false end
 end
 
@@ -241,6 +272,10 @@ inventory.canCarry = chooseCanCarry()
 
 ---Pick the "register a usable item" implementation once at module load. The ox path derives a
 ---per-item export ('phone' -> 'usePhone'); with no path at all, registration errors at boot.
+---The vRP path accepts the registration on vRP 2, where the injected adapter queues it and applies
+---it once the handshake lands, and warns once on vRP 1, where an item's menu choice is a Lua function
+---held inside vRP's own state and no function can cross the proxy boundary. It never errors, so the
+---resource still boots with the phone item merely unusable.
 ---@return fun(item: string, cb: fun(source: number, item?: any, inv?: table, slot?: any, data?: any)): nil
 local function chooseRegisterUsable()
     if active == OX then
@@ -268,6 +303,20 @@ local function chooseRegisterUsable()
     end
     if framework.qb then
         return function(item, cb) return framework.core.Functions.CreateUseableItem(item, cb) end
+    end
+    if framework.name == 'vrp' then
+        ---@type table vRP primitive facade (bridge.server.vrp.core), required inside the branch so
+        ---the vRP tree is never loaded on a non-vRP server.
+        local core = require 'bridge.server.vrp.core'
+        ---@type boolean Latched once the vRP 1 refusal has been reported, so a server carrying
+        ---several usable items prints one line rather than one per item.
+        local warned = false
+        return function(item, cb)
+            if core.registerUsable(item, cb) then return end
+            if warned then return end
+            warned = true
+            print(('^3[SD-PHONE]^0 vRP 1 cannot make %q usable from another resource. Open the phone with its command or keybind, or run a dedicated inventory such as ox_inventory.'):format(item))
+        end
     end
 
     return function(item)
@@ -304,6 +353,12 @@ local function chooseLabel()
     end
     if framework.name == 'esx' then
         return function(itemName) return framework.core.GetItemLabel(itemName) or itemName end
+    end
+    if framework.name == 'vrp' then
+        ---@type table vRP primitive facade (bridge.server.vrp.core), required inside the branch so
+        ---the vRP tree is never loaded on a non-vRP server.
+        local core = require 'bridge.server.vrp.core'
+        return function(itemName) return core.itemLabel(itemName) or itemName end
     end
     return function(itemName) return itemName end
 end
@@ -350,7 +405,9 @@ local slotOx = active == OX
 local QBCORE = 'qb-core'
 
 ---The slot-API backend for this call: the SLOT_BACKENDS key to dispatch to, or nil when no
----slot-metadata path exists (plain ESX inventory).
+---slot-metadata path exists (plain ESX inventory, and vRP, whose inventory is a flat idname to
+---amount map with neither slots nor metadata). A vRP server running a dedicated inventory still
+---resolves to that inventory: detection is framework-independent.
 ---@return string|nil
 local function slotBackend()
     if slotOx then return OX end
@@ -687,7 +744,9 @@ local function slotImpl()
     return backend and SLOT_BACKENDS[backend] or nil
 end
 
----True when the running inventory supports per-slot metadata reads/writes.
+---True when the running inventory supports per-slot metadata reads/writes. False on vRP unless a
+---dedicated inventory is running, which is what keeps the unique-phone and SIM-card features dormant
+---there: vRP stores no slots and no metadata to hang a phone's identity on.
 ---@return boolean
 function inventory.supportsSlotMetadata()
     local impl = slotImpl()

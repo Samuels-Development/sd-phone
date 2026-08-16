@@ -2,6 +2,8 @@
 local config = require 'configs.config'
 ---@type table Pure Wi-Fi maths (shared.wifi): strength, bars, scan and password checks.
 local wifi = require 'shared.wifi'
+---@type table Lifecycle bridge (bridge.client.lifecycle): framework-agnostic character load/unload edges.
+local lifecycle = require 'bridge.client.lifecycle'
 
 ---@type table Wi-Fi settings (configs/wifi.lua): networks, capabilities, scan cadence.
 local cfg = config.Wifi or {}
@@ -386,9 +388,8 @@ AddEventHandler('sd-phone:client:openState', function(open)
 end)
 
 -- The same signals client/main.lua rebuilds its character state on. characterLoaded only ever
--- travels to the NUI, so the framework events it is pushed from are what this side listens to.
-RegisterNetEvent('QBCore:Client:OnPlayerLoaded', resetForCharacter)
-RegisterNetEvent('esx:playerLoaded', resetForCharacter)
+-- travels to the NUI, so the load edge it is pushed from is what this side listens to.
+lifecycle.onCharacterLoaded(resetForCharacter)
 RegisterNetEvent('sd-phone:client:rehydrate', resetForCharacter)
 
 CreateThread(function()

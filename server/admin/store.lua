@@ -1,5 +1,6 @@
----@type table Framework detection (bridge.shared.framework): name ('qb'|'esx').
-local framework = require 'bridge.shared.framework'
+---@type table Framework character reads (bridge.server.records): the one place that knows the qb,
+---qbx, esx and vRP citizen shapes, and pcall-hardened so a customised schema degrades to empty.
+local records = require 'bridge.server.records'
 ---@type table Shared server helpers (server.util): digits + index bootstrap.
 local util = require 'server.util'
 
@@ -59,73 +60,46 @@ function store.audit(adminCid, adminName, action, targetCid, detail)
     if not okIns then print(('^1[sd-phone:admin]^0 audit insert failed: %s'):format(err)) end
 end
 
--- ---------------------------------------------------------------------------
--- Framework character-name lookups. Table/column names follow the stock QBCore/
--- QBox (`players`) and ESX (`users`) schemas; every query is pcall-guarded so a
--- customised schema degrades to citizenid-only display instead of erroring.
--- ---------------------------------------------------------------------------
-
----Batch-resolves citizenids to character names from the framework's own table.
+---Batch-resolves citizenids to character names, delegating to the bridge so this file holds no
+---framework schema knowledge. The SQL that used to live here matched only `framework.name == 'qb'`,
+---which QBox never reports, so the admin panel listed raw citizenids on every QBox server; the
+---bridge branches on `framework.qb` and covers vRP too.
 ---@param cids string[] citizenids to resolve
 ---@return table<string, string> cid -> "First Last"
 function store.namesFor(cids)
     if type(cids) ~= 'table' or #cids == 0 then return {} end
+
+    -- De-duplicated before delegating, and the bridge's citizenid fallback is stripped after, so the
+    -- two things this function promised before it delegated still hold: one placeholder per DISTINCT
+    -- id rather than one per element, and an absent entry when no real name is on file. The bridge
+    -- answers `out[cid] = cid` for a nameless row, which reads as a character literally called by
+    -- their citizenid; the admin panel wants the key missing so its own placeholder shows instead.
     local seen, list = {}, {}
-    for _, c in ipairs(cids) do
-        if c and c ~= '' and not seen[c] then seen[c] = true; list[#list + 1] = c end
+    for i = 1, #cids do
+        local c = cids[i]
+        if type(c) == 'string' and c ~= '' and not seen[c] then
+            seen[c] = true
+            list[#list + 1] = c
+        end
     end
     if #list == 0 then return {} end
-    local placeholders = ('?,'):rep(#list):sub(1, -2)
 
-    local out = {}
-    pcall(function()
-        if framework.name == 'qb' then
-            local rows = MySQL.query.await(
-                ('SELECT citizenid, charinfo FROM players WHERE citizenid IN (%s)'):format(placeholders), list) or {}
-            for _, r in ipairs(rows) do
-                local info = json.decode(r.charinfo or '{}') or {}
-                if info.firstname then
-                    out[r.citizenid] = ('%s %s'):format(info.firstname, info.lastname or '')
-                end
-            end
-        elseif framework.name == 'esx' then
-            local rows = MySQL.query.await(
-                ('SELECT identifier, firstname, lastname FROM users WHERE identifier IN (%s)'):format(placeholders), list) or {}
-            for _, r in ipairs(rows) do
-                out[r.identifier] = ('%s %s'):format(r.firstname or '', r.lastname or '')
-            end
-        end
-    end)
+    local out = records.namesFor(list)
+    for cid, name in pairs(out) do
+        if name == cid then out[cid] = nil end
+    end
     return out
 end
 
----Finds citizenids whose character name matches a LIKE pattern in the framework's own table.
----@param like string SQL LIKE pattern (already escaped/wrapped by the caller)
+---Finds citizenids whose full character name matches a free-text term, in the framework's own table.
+---Takes the RAW term: the bridge owns the wildcard wrapping and escaping, and keeps the
+---CONCAT(firstname, ' ', lastname) predicate, so a two-word query like "john doe" matches exactly as
+---it did before this delegated.
+---@param term string raw search text
 ---@param limit integer maximum rows
 ---@return string[] cids
-function store.searchByName(like, limit)
-    local out = {}
-    pcall(function()
-        if framework.name == 'qb' then
-            local rows = MySQL.query.await([[
-                SELECT citizenid FROM players
-                WHERE CONCAT(
-                    JSON_UNQUOTE(JSON_EXTRACT(charinfo, '$.firstname')), ' ',
-                    JSON_UNQUOTE(JSON_EXTRACT(charinfo, '$.lastname'))
-                ) LIKE ?
-                LIMIT ?
-            ]], { like, limit }) or {}
-            for _, r in ipairs(rows) do out[#out + 1] = r.citizenid end
-        elseif framework.name == 'esx' then
-            local rows = MySQL.query.await([[
-                SELECT identifier FROM users
-                WHERE CONCAT(firstname, ' ', lastname) LIKE ?
-                LIMIT ?
-            ]], { like, limit }) or {}
-            for _, r in ipairs(rows) do out[#out + 1] = r.identifier end
-        end
-    end)
-    return out
+function store.searchByName(term, limit)
+    return records.searchCitizenIds(term, limit)
 end
 
 -- ---------------------------------------------------------------------------
@@ -188,7 +162,7 @@ function store.searchPlayers(query, limit, offset)
     ]], { like, depth }) or {}
     for _, r in ipairs(accountRows) do add(r.citizenid, ('%s:%s'):format(r.app, r.username)) end
 
-    for _, cid in ipairs(store.searchByName(like, depth)) do add(cid, 'name') end
+    for _, cid in ipairs(store.searchByName(query, depth)) do add(cid, 'name') end
 
     local out = {}
     for i = offset + 1, math.min(#order, offset + limit) do

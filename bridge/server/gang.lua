@@ -1,13 +1,16 @@
----@type table Framework detection (bridge.shared.framework): name ('qb'|'esx') + live core handle.
+---@type table Framework detection (bridge.shared.framework): name ('qb'|'esx'|'vrp') + live core
+---handle.
 local framework  = require 'bridge.shared.framework'
 ---@type table Player bridge (bridge.server.player): framework-native player object resolution.
 local player_mod = require 'bridge.server.player'
 
 ---@type table Gang module; the table returned at end of file. QBCore/QBox gang lookups; every
----helper returns its zero/false default on ESX.
+---helper returns its zero/false default on ESX and on vRP, neither of which has a gang concept.
+---vRP needs no branch of its own here: the framework.qb guard every helper already opens with is
+---false there, so each one falls through to the same nil/0/false the ESX path returns.
 local gang = {}
 
----The player's current gang name (QBCore only). Nil when unresolvable or on ESX.
+---The player's current gang name (QBCore only). Nil when unresolvable, or on ESX and vRP.
 ---@param source number player server id
 ---@return string|nil
 function gang.getName(source)

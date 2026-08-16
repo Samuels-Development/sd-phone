@@ -1,9 +1,28 @@
----@type table Framework detection (bridge.shared.framework): name ('qb'|'esx') + live core handle.
+---@type FrameworkInfo Framework detection (bridge.shared.framework): name ('qbx'|'qb'|'esx'|'vrp')
+---+ live core handle.
 local framework = require 'bridge.shared.framework'
+
+---@type table|nil Character lifecycle edges (bridge.server.lifecycle). Required on every framework
+---EXCEPT vRP, where lifecycle requires this module and drives player.forget itself: gating the
+---require here is what keeps that one-way dependency from closing into a cycle.
+local lifecycle = framework.name ~= 'vrp' and require 'bridge.server.lifecycle' or nil
 
 ---@type table Player module; the table returned at end of file. Player resolution + identity
 ---helpers for the server bridge.
 local player = {}
+
+---@type table|nil The vRP facade (bridge.server.vrp.core), bound by vrp() the first time a vRP
+---branch below reaches for it. Deliberately not a top-level require: sd-phone also runs on QBox,
+---QBCore and ESX, where loading the vRP tree would pull in configs/vrp.lua for nothing.
+local vrpCore
+
+---The vRP facade, required on first use. Only ever called from a `framework.name == 'vrp'` branch,
+---so nothing under bridge/server/vrp/ is ever loaded on another framework.
+---@return table bridge.server.vrp.core
+local function vrp()
+    vrpCore = vrpCore or require 'bridge.server.vrp.core'
+    return vrpCore
+end
 
 ---Pick the framework's GetPlayer implementation once at module load; the unsupported fallback
 ---raises an error.
@@ -17,6 +36,15 @@ local function chooseGet()
     end
     if framework.name == 'esx' then
         return function(src) return framework.core.GetPlayerFromId(src) end
+    end
+    if framework.name == 'vrp' then
+        ---@type table vRP facade, bound here because this branch only ever runs on a vRP server.
+        local core = vrp()
+        -- The shim table, not a native player object: vRP has none. It carries no PlayerData and
+        -- no .job on purpose, so a call site missed in the audit reads nil there and takes its
+        -- existing "unsupported framework" branch instead of acting on a wrong value. Still nil
+        -- for a source with no loaded character, which is the universal "not a player" signal.
+        return function(src) return core.player(src) end
     end
     return function(src)
         error(('Unsupported framework — cannot resolve player for source %s'):format(src))
@@ -40,6 +68,15 @@ local function chooseIdentifier()
     end
     if framework.name == 'esx' then
         return function(p) return p.identifier end
+    end
+    if framework.name == 'vrp' then
+        -- 'vrp:u<user_id>' on vRP 1 and in the account scope, 'vrp:c<cid>' on vRP 2 in the default
+        -- character scope. The prefix is mandatory: it keeps the two key spaces disjoint, so a
+        -- server that migrates vRP 1 -> vRP 2 cannot collapse user_id 5 onto cid 5 and hand a
+        -- character the account's messages. The shim carries the key core.keyFor already built, so
+        -- an online key can never drift from the offline reads that share that one formatter, and
+        -- both forms satisfy the '^[%w%-_:%.]+$' constraint server/racing/actions.lua enforces.
+        return function(p) return p.key end
     end
     return function() return nil end
 end
@@ -99,18 +136,19 @@ end
 AddEventHandler('playerDropped', function() player.forget(source) end)
 
 -- Character lifecycle: both edges matter. Load clears a negative entry cached while the player
--- was still connecting; unload clears the outgoing character before the next one is resolved.
-if framework.qb then
-    AddEventHandler('QBCore:Server:PlayerLoaded', function(p)
-        player.forget(p and p.PlayerData and p.PlayerData.source)
-    end)
-    AddEventHandler('QBCore:Server:OnPlayerUnload', function(src) player.forget(src) end)
-elseif framework.name == 'esx' then
-    AddEventHandler('esx:playerLoaded', function(src) player.forget(src) end)
-    AddEventHandler('esx:playerLogout', function(src) player.forget(src) end)
+-- was still connecting; unload clears the outgoing character before the next one is resolved. The
+-- event NAMES live in bridge/server/lifecycle.lua now, which fires both edges with a bare source
+-- on every framework. On vRP that module holds this one instead, calling forget from the same two
+-- edges before it notifies anyone else: vRP 2 re-keys a player mid-session with no reconnect, so
+-- the source is unchanged while the character behind it is not, and a cache entry that survived
+-- would serve the previous character's identity for the length of its TTL.
+if lifecycle then
+    lifecycle.onCharacterLoaded(player.forget)
+    lifecycle.onCharacterUnloaded(player.forget)
 end
 
----The player's persistent per-character identifier (citizenid on QBCore/QBox, identifier on ESX).
+---The player's persistent per-character identifier (citizenid on QBCore/QBox, identifier on ESX,
+---the prefixed 'vrp:u<user_id>' / 'vrp:c<cid>' key on vRP).
 ---Nil when offline. NOTE: when unique phones are enabled, server/sim/init.lua rewraps this to
 ---return the acting SIM identity instead - use getRealIdentifier for character-scoped concerns.
 ---@param source number player server id
@@ -127,7 +165,9 @@ function player.getRealIdentifier(source)
     return cachedIdentifier(source)
 end
 
----A friendly "First Last" name for the player; 'Unknown' when the player can't be resolved.
+---A friendly "First Last" name for the player; 'Unknown' when the player can't be resolved. On vRP
+---the name comes from the identity row, so it is also 'Unknown' while that row is unreadable -
+---the identity module can be switched off entirely on a vRP install.
 ---@param source number player server id
 ---@return string
 function player.getName(source)
@@ -138,10 +178,13 @@ function player.getName(source)
     if framework.qb then
         return ('%s %s'):format(p.PlayerData.charinfo.firstname, p.PlayerData.charinfo.lastname)
     end
+    if framework.name == 'vrp' then return vrp().name(source) or 'Unknown' end
     return 'Unknown'
 end
 
----The player's current job name. Nil when unresolvable. Read-only.
+---The player's current job name. Nil when unresolvable. On vRP there is no job field to read: the
+---name is whichever configs/vrp.lua job the player's vRP groups translate to, and nil when none of
+---them do, which fails closed exactly as an unresolvable player already does. Read-only.
 ---@param source number player server id
 ---@return string|nil
 function player.getJob(source)
@@ -149,16 +192,19 @@ function player.getJob(source)
     if not p then return nil end
     if framework.name == 'esx'  then return p.job and p.job.name or nil end
     if framework.qb then return p.PlayerData.job and p.PlayerData.job.name or nil end
+    if framework.name == 'vrp' then return vrp().getJob(source) end
     return nil
 end
 
----The player's current gang name. QBCore-only; always nil on ESX.
+---The player's current gang name. QBCore and vRP only; always nil on ESX. On vRP it is the gang
+---half of the same group translator, so a server with no configured Gangs always answers nil.
 ---@param source number player server id
 ---@return string|nil
 function player.getGang(source)
     local p = resolveGet(source)
     if not p then return nil end
     if framework.qb then return p.PlayerData.gang and p.PlayerData.gang.name or nil end
+    if framework.name == 'vrp' then return vrp().getJob(source, 'gang') end
     return nil
 end
 

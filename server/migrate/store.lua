@@ -176,10 +176,19 @@ end
 
 ---Loads the framework's persistent character roster: qb/QBox reads `players` (citizenid + license),
 ---ESX reads `users` (identifier). A non-standard schema degrades to empty maps.
----@param frameworkName 'qb'|'esx'
+---
+---vRP returns an empty roster and says so once: lb-phone does not run on vRP, so there is nothing to
+---import and no character table of either shape to read. Falling through to the qb query would ask
+---for `players` on a server that has no such table.
+---@param frameworkName 'qbx'|'qb'|'esx'|'vrp'
 ---@return { cids: table<string, boolean>, licenseToCids: table<string, string[]> }
 function store.loadRoster(frameworkName)
     local cids, licenseToCids = {}, {}
+    if frameworkName == 'vrp' then
+        print('^3[sd-phone:migrate]^0 vRP detected: lb-phone does not run on vRP, nothing to import.')
+        return { cids = cids, licenseToCids = licenseToCids }
+    end
+
     local ok, rows = pcall(function()
         if frameworkName == 'esx' then
             return MySQL.query.await('SELECT identifier AS citizenid, NULL AS license FROM users') or {}

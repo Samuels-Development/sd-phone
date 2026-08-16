@@ -15,7 +15,10 @@ local actions   = require 'server.services.actions'
 local jobs      = require 'server.services.jobs'
 ---@type table Business-invoices handlers (server.services.invoices): create/list/cancel/received/pay.
 local invoices  = require 'server.services.invoices'
----@type table Framework detection (bridge.shared.framework): name is 'qb' or 'esx'.
+---@type table Lifecycle bridge (bridge.server.lifecycle): framework-agnostic character load/unload edges.
+local lifecycle = require 'bridge.server.lifecycle'
+---@type table Framework detection (bridge.shared.framework): read only to hold the job reconcile to
+---the frameworks it already ran on. See the subscription below for why that scope is preserved.
 local framework = require 'bridge.shared.framework'
 ---@type table Shared server helpers (server.util): the { success, message? } envelope constructors.
 local util      = require 'server.util'
@@ -35,17 +38,20 @@ CreateThread(function()
     boot.schemaReady()
 end)
 
--- Reconciles phone-managed offline job changes when a player loads in (actions.reconcileJobs).
-if framework.name == 'qb' then
-    AddEventHandler('QBCore:Server:PlayerLoaded', function(pl)
-        local src = pl and pl.PlayerData and pl.PlayerData.source
-        if src then SetTimeout(1500, function() actions.reconcileJobs(src) end) end
-    end)
-elseif framework.name == 'esx' then
-    AddEventHandler('esx:playerLoaded', function(playerId)
-        if playerId then SetTimeout(1500, function() actions.reconcileJobs(playerId) end) end
-    end)
-end
+-- Reconciles phone-managed offline job changes when a player loads in (actions.reconcileJobs),
+-- after the same 1500ms settle the per-framework handlers this replaced always waited for.
+--
+-- The scope test below looks redundant now that the subscription is framework-agnostic, and it is
+-- deliberate. The handler this replaced was gated on `framework.name == 'qb'`, which QBox never
+-- matched because it reports 'qbx', so reconcile has never run on a QBox server. Letting the new
+-- subscription reach QBox would not merely widen coverage: reconcileJobs applies pending FIRES, so
+-- every QBox server would fire whatever backlog of them the Services app has recorded but never
+-- applied, on the affected players' next login. That is a defensible change to make, and it is not
+-- one to make silently inside a framework-adapter branch. Widen it in its own change, with a note.
+lifecycle.onCharacterLoaded(function(src)
+    if framework.name ~= 'qb' and framework.name ~= 'esx' and framework.name ~= 'vrp' then return end
+    SetTimeout(1500, function() actions.reconcileJobs(src) end)
+end)
 
 ---Refreshes a disconnecting player's company rosters.
 AddEventHandler('playerDropped', function()

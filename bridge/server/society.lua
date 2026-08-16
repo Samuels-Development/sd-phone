@@ -1,4 +1,5 @@
----@type table Framework detection (bridge.shared.framework): name ('qb'|'esx') + live core handle.
+---@type table Framework detection (bridge.shared.framework): name ('qb'|'esx'|'vrp') + live core
+---handle.
 local framework = require 'bridge.shared.framework'
 ---@type table Job bridge (bridge.server.job): job.set powers the online-only hire/fire paths.
 local job       = require 'bridge.server.job'
@@ -7,7 +8,10 @@ local player    = require 'bridge.server.player'
 
 ---@type table Society module; the table returned at end of file. Reads and moves a company's
 ---shared balance and reads its employee roster across the supported money + management resources;
----a provider decline propagates as false.
+---a provider decline propagates as false. vRP has no society account of its own and none of the
+---supported providers runs on it, so the money half degrades there to the same 0/false a server with
+---no provider started already answers, while the grade ladder and the roster read vRP's own config
+---and groups.
 local society = {}
 
 -- Society money provider export shapes:
@@ -59,7 +63,8 @@ local function accName(jobName, override)
     return override or ('society_' .. jobName)
 end
 
----True when a society money provider is running.
+---True when a society money provider is running. False on vRP, which has no society or company
+---account and no supported provider that could hold one, so company banking stays hidden there.
 ---@return boolean
 function society.available()
     return provider() ~= nil
@@ -171,10 +176,20 @@ function society.removeMoney(jobName, amount, reason, override)
 end
 
 ---A job's grade ladder as `{ {level, label}, ... }` ordered by level. Read-only. On 'qb' the
----definition comes from Shared.Jobs, then the qbx_core GetJob export; on ESX from job_grades.
+---definition comes from Shared.Jobs, then the qbx_core GetJob export; on ESX from job_grades. On vRP
+---it comes from configs/vrp.lua: there is no grade table to query, so the job's configured rank list
+---IS the ladder and it arrives already ordered by level.
 ---@param jobName string
 ---@return { level: number, label: string }[]
 function society.getGrades(jobName)
+    if framework.name == 'vrp' then
+        ---@type table vRP facade (bridge.server.vrp.core). Required inside the branch, never at file
+        ---scope: this module loads on every framework, and the vRP tree must not be pulled onto a
+        ---qb, qbx or esx boot.
+        local core = require 'bridge.server.vrp.core'
+        return core.grades(jobName)
+    end
+
     local out = {}
 
     if framework.qb then
@@ -222,11 +237,62 @@ function society.gradeLabel(jobName, level)
     return 'Grade ' .. tostring(level or 0)
 end
 
+---A company's roster on vRP: every ONLINE player the group translator resolves onto `jobName`,
+---merged with the offline group scan whenever this install can serve one.
+---
+---The scan is keyed by a vRP GROUP name while the phone only knows the job name, so it looks for a
+---group named exactly like the job, which is the common convention. A config whose ranks carry other
+---names matches nothing and the roster is online-only - the same place a scan that is unavailable or
+---that failed outright degrades to, and the same one ESX reaches when its query raises.
+---
+---An offline member's grade cannot be read, so it reports 0: the rank lives in a group set this scan
+---does not decode per rank, and every management action (hire, fire, promote, demote) addresses an
+---online source anyway. The online half carries the player's real grade.
+---@param core table bridge.server.vrp.core
+---@param jobName string
+---@return { citizenid: string, name: string, grade: number }[]
+local function vrpEmployees(core, jobName)
+    local out, seen = {}, {}
+
+    for key, src in pairs(core.online()) do
+        if core.getJob(src) == jobName then
+            seen[key] = true
+            out[#out + 1] = { citizenid = key, name = core.name(src) or key, grade = core.getGrade(src) }
+        end
+    end
+
+    local offline = core.groupMembers(jobName)
+    if not offline then return out end
+
+    local pending = {}
+    for i = 1, #offline do
+        if not seen[offline[i]] then pending[#pending + 1] = offline[i] end
+    end
+    if #pending == 0 then return out end
+
+    local names = core.offlineNames(pending)
+    for i = 1, #pending do
+        local key = pending[i]
+        out[#out + 1] = { citizenid = key, name = names[key] or key, grade = 0 }
+    end
+    return out
+end
+
 ---A company's employees from the framework's player table as `{ {citizenid, name, grade}, ... }`,
 ---offline employees included. Read-only; malformed charinfo/job JSON degrades a row to citizenid + grade 0.
+---On vRP the roster is read from vRP's groups instead, and can be online-only there - see
+---vrpEmployees.
 ---@param jobName string
 ---@return { citizenid: string, name: string, grade: number }[]
 function society.listEmployees(jobName)
+    if framework.name == 'vrp' then
+        ---@type table vRP facade (bridge.server.vrp.core). Required inside the branch, never at file
+        ---scope: this module loads on every framework, and the vRP tree must not be pulled onto a
+        ---qb, qbx or esx boot.
+        local core = require 'bridge.server.vrp.core'
+        return vrpEmployees(core, jobName)
+    end
+
     local out = {}
 
     if framework.qb then
@@ -278,6 +344,14 @@ function society.namesByCids(cids)
     local out = {}
     if not cids or #cids == 0 then return out end
 
+    if framework.name == 'vrp' then
+        ---@type table vRP facade (bridge.server.vrp.core). Required inside the branch, never at file
+        ---scope: this module loads on every framework, and the vRP tree must not be pulled onto a
+        ---qb, qbx or esx boot. It reads vRP's own identity table, so offline characters resolve too.
+        local core = require 'bridge.server.vrp.core'
+        return core.offlineNames(cids)
+    end
+
     local placeholders = {}
     for i = 1, #cids do placeholders[i] = '?' end
     local inClause = table.concat(placeholders, ',')
@@ -312,6 +386,18 @@ function society.namesByCids(cids)
     return out
 end
 
+---Drop the cached vRP offline rosters after a write, so the boss who just hired, fired, promoted or
+---demoted sees the change on their next roster read instead of up to a minute of stale membership.
+---A no-op on every other framework, whose rosters are read from the player table each time.
+local function forgetVrpRosters()
+    if framework.name ~= 'vrp' then return end
+    ---@type table vRP facade (bridge.server.vrp.core). Required inside the branch, never at file
+    ---scope: this module loads on every framework, and the vRP tree must not be pulled onto a qb,
+    ---qbx or esx boot.
+    local core = require 'bridge.server.vrp.core'
+    core.forgetRosters()
+end
+
 ---Set an online target's job to `jobName` at `grade`. Returns false when the target isn't
 ---currently connected. No permission checks here.
 ---@param jobName string
@@ -321,7 +407,9 @@ end
 function society.hire(jobName, targetCid, grade)
     local src = player.getSourceByIdentifier(targetCid)
     if not src then return false end
-    return job.set(src, jobName, grade or 0) == true
+    local done = job.set(src, jobName, grade or 0) == true
+    if done then forgetVrpRosters() end
+    return done
 end
 
 ---Reset an online target to the unemployed job. Returns false when offline. No permission checks
@@ -332,7 +420,9 @@ end
 function society.fire(targetCid, unemployedJob)
     local src = player.getSourceByIdentifier(targetCid)
     if not src then return false end
-    return job.set(src, unemployedJob, 0) == true
+    local done = job.set(src, unemployedJob, 0) == true
+    if done then forgetVrpRosters() end
+    return done
 end
 
 return society

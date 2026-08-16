@@ -1,5 +1,7 @@
 ---@type table sd-phone config root (configs/config.lua).
 local config = require 'configs.config'
+---@type table Lifecycle bridge (bridge.client.lifecycle): framework-agnostic character load/unload edges.
+local lifecycle = require 'bridge.client.lifecycle'
 
 ---@type table Bluetooth module; the table returned at end of file.
 local bluetoothClient = {}
@@ -79,8 +81,7 @@ RegisterNetEvent('sd-phone:client:bluetooth', apply)
 
 -- The same signals client/main.lua rebuilds its character state on: a live character switch has to
 -- drop the outgoing character's connections before the incoming one's land on top of them.
-RegisterNetEvent('QBCore:Client:OnPlayerLoaded', sync)
-RegisterNetEvent('esx:playerLoaded', sync)
+lifecycle.onCharacterLoaded(sync)
 RegisterNetEvent('sd-phone:client:rehydrate', sync)
 
 -- A restart puts this script beside a player who is already loaded, so nothing above would fire.

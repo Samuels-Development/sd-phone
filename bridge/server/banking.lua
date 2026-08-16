@@ -1,4 +1,5 @@
----@type table Framework detection (bridge.shared.framework): name ('qb'|'esx') + live core handle.
+---@type table Framework detection (bridge.shared.framework): name ('qb'|'esx'|'vrp') + live core
+---handle.
 local framework = require 'bridge.shared.framework'
 ---@type table Money bridge (bridge.server.money): framework personal-account operations.
 local money     = require 'bridge.server.money'
@@ -7,8 +8,21 @@ local player    = require 'bridge.server.player'
 
 ---@type table Banking module; the table returned at end of file. Multi-banking adapter: reads and
 ---moves a player's personal bank balance through a dedicated provider path where one exists, else
----the framework bank account.
+---the framework bank account. On vRP that framework account is vRP's own `bank`, reached through
+---bridge.server.money, so the online half of this module needs no vRP branch of its own.
 local banking = {}
+
+---Bind the vRP facade once at module load, and only on a vRP server. The require lives inside this
+---branch because nothing under bridge/server/vrp/ may be pulled onto a QBox, QBCore or ESX boot.
+---@return table|nil core bridge.server.vrp.core, or nil off vRP
+local function chooseVrp()
+    if framework.name ~= 'vrp' then return nil end
+    return require 'bridge.server.vrp.core'
+end
+
+---@type table|nil vRP facade (bridge.server.vrp.core), bound once at load; nil on every other
+---framework.
+local vrp = chooseVrp()
 
 -- Dedicated-path export shapes:
 --   wasabi_banking : AddMoney/RemoveMoney/GetAccountBalance(identifier, amount, reason)
@@ -207,10 +221,18 @@ end
 
 ---Best-effort credit to an offline character's framework bank account via a parameterized DB
 ---write against each framework's default schema. True only when a row was actually updated.
----@param citizenid string
+---
+---vRP answers through the facade, which already encodes the lineage split: vRP 1 has a real
+---`vrp_user_moneys` table whose save tick only writes connected users, so the credit is safe there,
+---while vRP 2 keeps money inside a msgpack blob that tick rewrites wholesale and refuses outright
+---rather than racing the server. A false on vRP 2 is therefore expected, not exceptional, and the
+---caller must refund the sender - which it already does.
+---@param citizenid string recipient's sd-phone identifier
 ---@param amount number
 ---@return boolean ok
 function banking.addOffline(citizenid, amount)
+    if vrp then return vrp.addOfflineBank(citizenid, amount) end
+
     if framework.qb then
         local ok, affected = pcall(function()
             return MySQL.update.await(

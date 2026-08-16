@@ -1,6 +1,8 @@
----@type table Framework bridge (bridge.shared.framework): detected core name ('qb'/'esx') + live core object.
+---@type table Framework bridge (bridge.shared.framework): detected core name ('qb'/'esx'/'vrp') + live core object.
 local framework    = require 'bridge.shared.framework'
 ---@type table Shared inventory detection (bridge.shared.inventory_id): first started supported inventory's name + candidate list.
+---Framework-independent by design: it probes resource state only, so a vRP server running
+---ox_inventory takes the ox paths below exactly as a QBox one does.
 local inventoryId  = require 'bridge.shared.inventory_id'
 
 ---@type table Inventory module; the table returned at end of file. Client-side inventory bridge:
@@ -9,7 +11,8 @@ local inventoryId  = require 'bridge.shared.inventory_id'
 local inventory = { system = inventoryId.name }
 
 ---Picks the image-path resolver for the active inventory, once at module load. With no inventory
----detected, every lookup resolves to nil.
+---detected, every lookup resolves to nil, which is also the vRP answer: vRP ships no item images and
+---no client-side data API, so item art is absent unless a dedicated inventory is running.
 ---@return fun(item: string): string|nil
 local function chooseImageResolver()
     local active = inventoryId.name
@@ -94,6 +97,8 @@ end
 
 ---Picks the item-label resolver for the active inventory, once at module load. Falls back to
 ---qb-core's Shared.Items table when no supported inventory export exists, then to a constant nil.
+---That constant is the vRP answer: vRP publishes no client-side data API and this bridge makes no
+---client RPC, so labels are absent unless a dedicated inventory is running.
 ---@return fun(itemName: string): string|nil
 local function chooseLabelResolver()
     local active = inventoryId.name
@@ -145,7 +150,9 @@ function inventory.label(itemName)
 end
 
 ---Picks the item-count resolver for the active inventory, once at module load. Falls back to
----walking the framework's own player-data item list, then to a constant 0.
+---walking the framework's own player-data item list, then to a constant 0. vRP takes that constant:
+---it has no client-side data API and this bridge deliberately makes no client RPC, so UI item counts
+---read 0 there unless a dedicated inventory is running. Server-side item checks are unaffected.
 ---@return fun(item: string): number
 local function chooseCountResolver()
     local active = inventoryId.name

@@ -1,6 +1,7 @@
 ---@type table sd-phone config root (configs/config.lua).
 local config = require 'configs.config'
----@type table Framework detection (bridge.shared.framework): name ('qb'|'esx') + live core handle.
+---@type table Framework detection (bridge.shared.framework): name ('qb'|'esx'|'vrp') + live core
+---handle.
 local framework = require 'bridge.shared.framework'
 ---@type table Player bridge (bridge.server.player): identifier/name lookups from a trusted source.
 local player = require 'bridge.server.player'
@@ -89,11 +90,20 @@ end
 ---@return any id a number when numeric, else unchanged
 local function pid(id) return tonumber(id) or id end
 
----Resolve an offline player's character name from the framework DB by citizenid.
----Returns nil when no row is found or the name cannot be extracted.
+---Resolve an offline player's character name from the framework DB by citizenid. On vRP the name
+---comes from vRP's own identity table through the facade, since there is no `players` or `users`
+---table to read. Returns nil when no row is found or the name cannot be extracted.
 ---@param cid string citizenid to look up
 ---@return string|nil name or nil
 local function offlineName(cid)
+    if framework.name == 'vrp' then
+        ---@type table vRP facade (bridge.server.vrp.core). Required inside the branch, never at file
+        ---scope: this module loads on every framework, and the vRP tree must not be pulled onto a
+        ---qb, qbx or esx boot.
+        local core = require 'bridge.server.vrp.core'
+        return core.offlineNames({ cid })[cid]
+    end
+
     if framework.name == 'esx' then
         local ok, rows = pcall(function()
             return MySQL.query.await(

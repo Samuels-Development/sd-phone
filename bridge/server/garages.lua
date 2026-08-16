@@ -1,6 +1,7 @@
 ---@type table sd-phone config root (configs/config.lua).
 local config = require 'configs.config'
----@type table Framework detection (bridge.shared.framework): name ('qb'|'esx') + live core handle.
+---@type table Framework detection (bridge.shared.framework): name ('qb'|'esx'|'vrp') + live core
+---handle.
 local framework = require 'bridge.shared.framework'
 ---@type table Player bridge (bridge.server.player): identifier lookups from a trusted source.
 local player = require 'bridge.server.player'
@@ -15,7 +16,9 @@ local garages = {}
 local G = config.Garages or { Enabled = false }
 
 ---@type { table: string, idCol: string } Framework ownership table: QBCore/Qbox key owned
----vehicles by citizenid in `player_vehicles`, ESX by owner identifier in `owned_vehicles`.
+---vehicles by citizenid in `player_vehicles`, ESX by owner identifier in `owned_vehicles`. vRP is
+---neither and has no plate-keyed ownership table at all, so every public function below answers
+---empty on it before this is ever read - see vrpUnsupported().
 local BASE = framework.name == 'esx'
     and { table = 'owned_vehicles',  idCol = 'owner' }
     or  { table = 'player_vehicles', idCol = 'citizenid' }
@@ -467,12 +470,39 @@ end
 ---@return string|nil
 function garages.activeSystem() return ACTIVE end
 
+---@type boolean Whether the vRP notice below has already been printed.
+local vrpWarned = false
+
+---True on vRP, where the Garages app cannot work at all; the reason is printed exactly once.
+---
+---Every read here is keyed on a plate and vRP has none: `vrp_user_vehicles` is (user_id, vehicle),
+---and vRP 2's core carries no vehicle table whatsoever. takeOut needs more still - a state column
+---with an "out" value, a garage column and the prop/condition keys that only a third-party garage
+---resource defines - so no config could close the gap either. A partial implementation would hand
+---the app rows it cannot act on, so the app is told the garage is empty instead.
+---
+---The notice exists because that emptiness is otherwise completely silent: the query never runs, so
+---there is nothing in the console for a server owner to find.
+---@return boolean unsupported
+local function vrpUnsupported()
+    if framework.name ~= 'vrp' then return false end
+    if not vrpWarned then
+        vrpWarned = true
+        print('^3[sd-phone:garages]^0 the Garages app cannot work on vRP: vRP stores no vehicle '
+            .. 'plate, so an owned vehicle can never be matched. The app will show an empty garage. '
+            .. 'Set Garages.Enabled = false in configs/garages.lua to hide it.')
+    end
+    return true
+end
+
 ---Normalised list of the caller's owned vehicles: stored/out/impound status, condition fields,
----waypoints on stored/impounded rows, and mileage while jg-vehiclemileage runs. Read-only.
+---waypoints on stored/impounded rows, and mileage while jg-vehiclemileage runs. Read-only. Always
+---empty on vRP, which cannot support the app at all.
 ---@param source number caller server id
----@return table[] vehicles (empty when disabled / no character / table missing)
+---@return table[] vehicles (empty when disabled / unsupported / no character / table missing)
 function garages.list(source)
     if not G.Enabled then return {} end
+    if vrpUnsupported() then return {} end
 
     local id = player.getIdentifier(source)
     if not id then return {} end
@@ -546,12 +576,14 @@ local function pickName(row, names)
 end
 
 ---One of the caller's own vehicles by plate, with the same status the app list shows. Ownership
----resolves from the caller's identifier.
+---resolves from the caller's identifier. Always nil on vRP, which stores no plate to match on, so
+---garages.takeOut refuses there too.
 ---@param source number caller server id
 ---@param plate string
 ---@return table|nil vehicle { row, status, model, props, plate }
 function garages.vehicleFor(source, plate)
     if not G.Enabled then return nil end
+    if vrpUnsupported() then return nil end
 
     local id   = player.getIdentifier(source)
     local want = normPlate(plate)
@@ -581,6 +613,7 @@ end
 
 ---Mark one of the caller's vehicles as out of its garage: the profile's state column to its
 ---`outState`, plus the garage column on systems carrying `outGarage`. The one write in this bridge.
+---Always false on vRP, where the ownership lookup it gates on can never resolve a vehicle.
 ---@param source number caller server id
 ---@param plate string
 ---@param netId number|nil network id of the spawned entity, for systems that track it

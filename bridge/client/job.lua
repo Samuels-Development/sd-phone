@@ -1,8 +1,13 @@
----@type FrameworkInfo Framework detection (bridge.shared.framework): name ('qbx'|'qb'|'esx') + live core handle.
+---@type FrameworkInfo Framework detection (bridge.shared.framework): name ('qbx'|'qb'|'esx'|'vrp')
+---+ live core handle.
 local framework = require 'bridge.shared.framework'
+---@type table Client lifecycle bridge (bridge.client.lifecycle): the single owner of the framework
+---character load/unload event names on this side.
+local lifecycle = require 'bridge.client.lifecycle'
 
 ---@type table Job module; the table returned at end of file. Client-side job identity, kept live off
----the framework's own job-change events so callers never poll.
+---the framework's own job-change events so callers never poll. vRP has no client-side data API at
+---all, so there the same cache is fed entirely by the server bridge's push.
 local job = {}
 
 ---@type string|nil Active job name, nil until the player loads.
@@ -61,8 +66,10 @@ local function apply(name, grade)
 end
 
 ---Re-reads the job straight off the framework. Used at load, and whenever an event arrives without
----a usable payload.
+---a usable payload. A deliberate no-op on vRP: there is nothing to re-read there, and clearing the
+---cache on the load edge would throw away a jobState push that had already landed.
 local function refresh()
+    if framework.name == 'vrp' then return end
     local data = playerData()
     apply(readJob(data and data.job))
 end
@@ -97,21 +104,42 @@ function job.onChange(callback)
     listeners[#listeners + 1] = callback
 end
 
+-- RegisterNetEvent(name) is what whitelists a name for NETWORK delivery, per resource;
+-- AddEventHandler alone never receives a server-triggered event. Every job-change name below is
+-- server-triggered, so all of them are registered unconditionally, for every framework, before
+-- anything branches on which one is actually running. Registering a name the running framework
+-- never fires is free; omitting one silently stops job updates ever arriving on that framework.
+-- The character load and unload names are NOT registered here any more: bridge/client/lifecycle
+-- owns them now, and it registers all of them the same unconditional way.
+RegisterNetEvent('QBCore:Client:OnJobUpdate')
+RegisterNetEvent('esx:setJob')
+RegisterNetEvent('sd-phone:client:vrp:jobState')
+
 if framework.qb then
-    RegisterNetEvent('QBCore:Client:OnJobUpdate', function(raw)
+    AddEventHandler('QBCore:Client:OnJobUpdate', function(raw)
         if type(raw) == 'table' then apply(readJob(raw)) else refresh() end
     end)
-    RegisterNetEvent('QBCore:Client:OnPlayerLoaded', refresh)
-    RegisterNetEvent('QBCore:Client:OnPlayerUnload', function() apply(nil, 0) end)
 elseif framework.name == 'esx' then
-    RegisterNetEvent('esx:setJob', function(raw)
+    AddEventHandler('esx:setJob', function(raw)
         if type(raw) == 'table' then apply(readJob(raw)) else refresh() end
     end)
-    RegisterNetEvent('esx:playerLoaded', refresh)
-    RegisterNetEvent('esx:onPlayerLogout', function() apply(nil, 0) end)
+elseif framework.name == 'vrp' then
+    -- vRP has no job field and no client-side data API, so nothing here can be re-read or verified:
+    -- the server bridge resolves the job out of the player's vRP groups and pushes the resolved
+    -- pair on character load and on every group change. It is applied verbatim rather than through
+    -- readJob, which only knows the qb and esx payload shapes.
+    AddEventHandler('sd-phone:client:vrp:jobState', function(name, grade)
+        apply(type(name) == 'string' and name or nil, tonumber(grade) or 0)
+    end)
 end
 
--- A resource restart lands mid-session, where no load event is coming.
+-- The character edges come from the lifecycle bridge, the single owner of every framework's load
+-- and unload event names, vRP's server-driven pair included.
+lifecycle.onCharacterLoaded(refresh)
+lifecycle.onCharacterUnloaded(function() apply(nil, 0) end)
+
+-- A resource restart lands mid-session, where no load event is coming. Nothing to re-read on vRP,
+-- where the cache stays empty until the server's next push.
 CreateThread(refresh)
 
 return job

@@ -127,6 +127,42 @@ return {
             dutyPermission = nil,
             dutyGroup      = nil,
         },
+
+        -- The five entries below are COMMENTED OUT on purpose, and they are the ones
+        -- most servers need next. configs/mdt.lua ships six departments and
+        -- configs/services.lua ships several companies, but a job with no entry in
+        -- this table resolves to no job at all: that is the intended fail-closed
+        -- behaviour, and it also means a stock vRP install looks broken rather than
+        -- unconfigured. The MDT terminal for a department whose job is unmapped never
+        -- appears, and its Services company is unreachable.
+        --
+        -- Uncomment the ones your server runs and change the group names to match your
+        -- own cfg/groups.lua. The group names here are only plausible defaults; vRP
+        -- servers hand-write their groups, so there is no convention to guess at.
+        --
+        -- { job = 'sheriff',   label = 'Sheriff',
+        --   groups      = { 'sheriff', 'sheriff_sergeant', 'sheriff_chief' },
+        --   gradeLabels = { 'Deputy', 'Sergeant', 'Sheriff' },
+        --   bossGroups  = { 'sheriff_chief' } },
+        --
+        -- { job = 'sasp',      label = 'State Police',
+        --   groups      = { 'sasp', 'sasp_sergeant', 'sasp_commander' },
+        --   gradeLabels = { 'Trooper', 'Sergeant', 'Commander' },
+        --   bossGroups  = { 'sasp_commander' } },
+        --
+        -- { job = 'ambulance', label = 'EMS',
+        --   groups      = { 'emergency', 'emergency_senior', 'emergency_chief' },
+        --   gradeLabels = { 'Paramedic', 'Senior Paramedic', 'Chief' },
+        --   bossGroups  = { 'emergency_chief' } },
+        --
+        -- { job = 'judge',     label = 'Judge',
+        --   groups      = { 'judge' },
+        --   gradeLabels = { 'Judge' },
+        --   bossGroups  = { 'judge' } },
+        --
+        -- { job = 'lawyer',    label = 'Lawyer',
+        --   groups      = { 'lawyer' },
+        --   gradeLabels = { 'Attorney' } },
     },
 
     -- Gangs, in exactly the same shape as Jobs and read under GangGtype. Nothing in

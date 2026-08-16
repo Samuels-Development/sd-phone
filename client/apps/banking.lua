@@ -40,3 +40,5 @@ end
 RegisterNetEvent('hud:client:OnMoneyChange', nudgeWallet)
 RegisterNetEvent('QBCore:Client:OnMoneyChange', nudgeWallet)
 RegisterNetEvent('esx:setAccountMoney', nudgeWallet)
+-- vRP has no client-visible money event of its own, so the server bridge pushes this one instead.
+RegisterNetEvent('sd-phone:client:moneyChanged', nudgeWallet)

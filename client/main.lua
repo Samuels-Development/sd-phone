@@ -6,6 +6,8 @@ local companion = require 'client.companion'
 local config = require 'configs.config'
 ---@type table Notify bridge (bridge.client.notify): backend-agnostic on-screen toasts.
 local notify = require 'bridge.client.notify'
+---@type table Lifecycle bridge (bridge.client.lifecycle): framework-agnostic character load/unload edges.
+local lifecycle = require 'bridge.client.lifecycle'
 
 -- Apps disabled in configs/apps.lua never reach the NUI, so neither the home screen nor the
 -- App Store can show them. Built once - the catalog is static per boot.
@@ -1041,8 +1043,7 @@ local function pushCharacterLoaded()
     -- phone's frame colour (closed-shell peeks, hand prop) is right before the first open.
     SetTimeout(2000, function() TriggerServerEvent('sd-phone:server:sim:requestPush') end)
 end
-RegisterNetEvent('QBCore:Client:OnPlayerLoaded', pushCharacterLoaded)
-RegisterNetEvent('esx:playerLoaded', pushCharacterLoaded)
+lifecycle.onCharacterLoaded(pushCharacterLoaded)
 
 ---Server-side settings appeared after the UI had already hydrated, so pull them again. The
 ---lb-phone import writes phone_settings partway through boot, long after the resource-start
@@ -1050,8 +1051,8 @@ RegisterNetEvent('esx:playerLoaded', pushCharacterLoaded)
 ---the resource is restarted a second time.
 RegisterNetEvent('sd-phone:client:rehydrate', pushCharacterLoaded)
 
----Resource restart with the character already in: the framework load events above won't
----re-fire, but the freshly reloaded NUI still needs the character signal and a SIM snapshot
+---Resource restart with the character already in: the load edge above won't re-fire,
+---but the freshly reloaded NUI still needs the character signal and a SIM snapshot
 ---(closed-shell frame colour before the first open). On a fresh join this fires before any
 ---character exists - the server ignores the SIM request then, and the real load event follows.
 AddEventHandler('onClientResourceStart', function(resource)
