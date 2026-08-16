@@ -1,0 +1,24 @@
+name: Sync with upstream
+
+on:
+  schedule:
+    # Cada 15 minutos
+    - cron: "7,22,37,52 * * * *"
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Sync upstream
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh repo sync "${{ github.repository }}" \
+            --source Samuels-Development/sd-phone \
+            --branch main
