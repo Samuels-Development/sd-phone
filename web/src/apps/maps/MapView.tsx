@@ -167,13 +167,23 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     }, [clampPan, tx, ty, vw, vh, minScale, side]);
 
     const lastWheelStep = useRef(0);
-    function onWheel(e: React.WheelEvent) {
+
+    const wheelRef = useRef<(e: WheelEvent) => void>(() => {});
+    wheelRef.current = (e: WheelEvent) => {
         e.preventDefault();
         const now = performance.now();
         if (now - lastWheelStep.current < 160) return;
         lastWheelStep.current = now;
         zoomAround(e.clientX, e.clientY, stepScale(e.deltaY < 0 ? 1 : -1));
-    }
+    };
+
+    useEffect(() => {
+        const el = viewportRef.current;
+        if (!el) return;
+        const onWheel = (e: WheelEvent) => wheelRef.current(e);
+        el.addEventListener('wheel', onWheel, { passive: false });
+        return () => el.removeEventListener('wheel', onWheel);
+    }, []);
     function buttonZoom(dir: 1 | -1) {
         const vp = viewportRef.current;
         if (!vp) return;
@@ -385,7 +395,6 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
             ref={viewportRef}
             className="relative h-full w-full touch-none overflow-hidden"
             style={{ background: style.bg, transition: 'background 400ms ease', cursor: dragging ? 'grabbing' : placing ? 'crosshair' : 'grab' }}
-            onWheel={onWheel}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
