@@ -116,6 +116,7 @@ export function CustomAppFrame({ appId, onClose }: { appId: string; onClose: () 
 
     const sdkReadyRef = useRef(false);
     const outboxRef   = useRef<unknown[]>([]);
+    const typingRef   = useRef(false);
 
     const postToApp = useCallback((message: unknown) => {
         if (!sdkReadyRef.current) {
@@ -297,6 +298,7 @@ export function CustomAppFrame({ appId, onClose }: { appId: string; onClose: () 
                 createCall(data ?? {});
                 return Promise.resolve(null);
             case 'toggleInput':
+                typingRef.current = !!data;
                 void fetchNui('sd-phone:typing', { typing: !!data });
                 return Promise.resolve(null);
             case 'OpenMedia': {
@@ -421,14 +423,33 @@ export function CustomAppFrame({ appId, onClose }: { appId: string; onClose: () 
         };
     }, [fetchPhone, showComponent, uploadMedia, settleEmoji, settleGif]);
 
+    useEffect(() => () => {
+        if (!typingRef.current) return;
+        typingRef.current = false;
+        void fetchNui('sd-phone:typing', { typing: false });
+    }, []);
+
+    const closeFromFrame = useCallback(() => {
+        if (typingRef.current) {
+            typingRef.current = false;
+            void fetchNui('sd-phone:typing', { typing: false });
+        }
+        onClose();
+    }, [onClose]);
+
     const setApp = useCallback((target: string | { name?: string; data?: unknown } | null | undefined) => {
-        const name = typeof target === 'string' ? target : target?.name;
-        if (!name || name === 'home' || name === 'null' || name === '') {
-            onClose();
+        if (target === null || target === undefined) {
+            closeFromFrame();
+            return;
+        }
+        const name = typeof target === 'string' ? target : (typeof target === 'object' ? target.name : undefined);
+        if (typeof name !== 'string' || name === '') return;
+        if (name === 'home') {
+            closeFromFrame();
             return;
         }
         window.postMessage({ action: 'sd-phone:launchApp', data: { id: name } }, '*');
-    }, [onClose]);
+    }, [closeFromFrame]);
 
     const onLoad = useCallback(() => {
         const iframe = iframeRef.current;
@@ -471,9 +492,9 @@ export function CustomAppFrame({ appId, onClose }: { appId: string; onClose: () 
             win.components        = bridge;
 
             doc.addEventListener('keydown', (e: KeyboardEvent) => {
-                if (e.key === 'Escape') {
-                    onClose();
-                }
+                if (e.key !== 'Escape') return;
+                e.preventDefault();
+                window.postMessage({ action: 'sd-phone:escape' }, '*');
             });
 
             const rootMarkup = doc.getElementById('root')?.innerHTML.length ?? -1;
@@ -502,7 +523,7 @@ export function CustomAppFrame({ appId, onClose }: { appId: string; onClose: () 
             console.warn('[sd-phone] custom-app iframe injection failed (expected outside FiveM)', err);
         }
         setReady(true);
-    }, [theme, bridge, setApp, markSdkReady, onClose]);
+    }, [theme, bridge, setApp, markSdkReady]);
 
     useEffect(() => {
         if (!loadedRef.current) return;
@@ -521,11 +542,11 @@ export function CustomAppFrame({ appId, onClose }: { appId: string; onClose: () 
             if (!msg || typeof msg.type !== 'string') return;
             if (msg.type === 'sdphoneDebug' && typeof msg.message === 'string') { frameDebug(msg.message); return; }
             if (msg.type === 'sdphoneSdkReady') markSdkReady();
-            if (msg.type === 'sdphoneCloseApp' || msg.type === 'closeApp') onClose();
+            if (msg.type === 'sdphoneCloseApp') closeFromFrame();
         }
         window.addEventListener('message', onFrameMessage);
         return () => window.removeEventListener('message', onFrameMessage);
-    }, [markSdkReady, onClose]);
+    }, [markSdkReady, closeFromFrame]);
 
     useNuiEvent('customApps:message', useCallback((data) => {
         if (!data || (data.id !== appId && data.id !== 'any')) return;

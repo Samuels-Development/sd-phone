@@ -260,6 +260,7 @@ export type NuiMessage =
     | { action: 'sd-phone:profileReset' }
     | { action: 'sd-phone:client:characterLoaded' }
     | { action: 'sd-phone:launchApp'; data: { id: string; link?: Record<string, unknown> } }
+    | { action: 'sd-phone:escape' }
     | { action: 'sd-phone:battery'; data: number }
     | { action: 'sd-phone:service'; data: { bars: number; level: number; data: boolean } }
     | { action: 'sd-phone:wifi'; data: WifiState }
