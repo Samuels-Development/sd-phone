@@ -89,7 +89,9 @@ end
 ---@param nuiAction string NUI action name the React app fetches
 ---@param serverEvent string server callback name to await
 ---@param onAccepted? fun() ran only when the server accepted the write, never on a rejection
-local function proxy(nuiAction, serverEvent, onAccepted)
+---@param transform? fun(res: table) mutates a successful envelope before the NUI and the cache see
+---it, for the few answers only a client native can complete
+local function proxy(nuiAction, serverEvent, onAccepted, transform)
     ---@type string|nil '<app>:<action>', nil for anything not shaped like one
     local action = serverEvent:match('^sd%-phone:server:(.+)$')
     ---@type boolean Whether this action's answers are worth keeping.
@@ -113,6 +115,7 @@ local function proxy(nuiAction, serverEvent, onAccepted)
 
         local res = lib.callback.await(serverEvent, false, payload)
         if onAccepted and type(res) == 'table' and res.success == true then onAccepted() end
+        if transform and type(res) == 'table' and res.success == true then transform(res) end
         if key and type(res) == 'table' and res.success == true then remember(key, res) end
         cb(res or { success = false, message = 'No response from server' })
     end)

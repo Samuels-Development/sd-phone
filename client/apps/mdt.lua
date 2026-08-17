@@ -1,7 +1,10 @@
----@type fun(nuiAction: string, serverEvent: string) NUI->server pass-through registrar (client.nui).
+---@type fun(nuiAction: string, serverEvent: string, onAccepted?: function, transform?: fun(res: table))
+---NUI->server pass-through registrar (client.nui).
 local proxyCallback = require 'client.nui'
 ---@type table Notify bridge (bridge.client.notify): backend-agnostic toast notifications.
 local notify = require 'bridge.client.notify'
+---@type fun(raw: any): string Model hash or spawn name to a readable vehicle name (client.vehiclename).
+local vehicleName = require 'client.vehiclename'
 
 ---@type string[] NUI action suffixes proxied 1:1 to sd-phone:server:mdt:<action>. Every MDT
 ---action except the waypoint below is a pass-through; identity, permissions and clamping all live
@@ -32,8 +35,37 @@ local ACTIONS = {
     'expunge:list', 'expunge:file', 'expunge:rule',
 }
 
+---@type table<string, boolean> Actions whose answer carries vehicle rows. ESX stores a model hash
+---rather than a name, and only a client native can turn one back into words, so these are completed
+---here on the way through instead of arriving as a number the operator cannot read.
+local VEHICLE_ACTIONS = {
+    ['vehicles:search'] = true,
+    ['vehicles:get']    = true,
+    ['persons:get']     = true,
+    ['patients:get']    = true,
+}
+
+---@type integer How deep the walk looks for vehicle rows. The MDT nests them a couple of levels at
+---most; the cap is what stops a cyclic or unexpectedly deep answer costing the frame.
+local NAME_DEPTH <const> = 6
+
+---Names every vehicle row in a response, wherever the shape puts them. A row is anything carrying
+---both a plate and a model, which is true of every vehicle the MDT returns and of nothing else.
+---@param node any
+---@param depth integer
+local function nameVehicles(node, depth)
+    if type(node) ~= 'table' or depth > NAME_DEPTH then return end
+    if node.plate ~= nil and node.model ~= nil then node.model = vehicleName(node.model) end
+    for _, value in pairs(node) do nameVehicles(value, depth + 1) end
+end
+
 for _, action in ipairs(ACTIONS) do
-    proxyCallback('sd-phone:mdt:' .. action, 'sd-phone:server:mdt:' .. action)
+    proxyCallback(
+        'sd-phone:mdt:' .. action,
+        'sd-phone:server:mdt:' .. action,
+        nil,
+        VEHICLE_ACTIONS[action] and function(res) nameVehicles(res, 0) end or nil
+    )
 end
 
 ---React -> Lua: drops a GPS waypoint at coords the server resolved. The only MDT action that is
