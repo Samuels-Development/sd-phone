@@ -142,11 +142,6 @@ export function AppAuth({ appName, tagline, icon, theme, fields, onAuthed, onDis
 
     return (
         <div
-            onScroll={e => {
-                const el = e.currentTarget;
-                if (el.scrollTop !== 0) el.scrollTop = 0;
-                if (el.scrollLeft !== 0) el.scrollLeft = 0;
-            }}
             className={`absolute inset-0 z-10 overflow-hidden ${modal ? 'rounded-t-[14px] shadow-[0_-8px_28px_rgba(0,0,0,0.28)]' : ''}`}
             style={modal ? {
                 animation: dismissing
