@@ -107,3 +107,8 @@ return {
         -- { id = 'darkchat', label = 'Dark Chat', icon = 'darkchat', route = '/darkchat', accent = '#1c1c1e', base = false, enabled = true, wifi = 'mazebank' },
     },
 }
+
+-- Want an app that never shows here or in the App Store, and only reaches a phone when a player
+-- uses a specific inventory item? That's a `secretapp`, not an entry in the table above - define
+-- it in configs/secret_apps.lua with a `secretapp = '<item id>'` field instead. See that file's
+-- header for the full field list, and server/secretapps/init.lua for how the item hooks in.

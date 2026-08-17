@@ -43,6 +43,7 @@ require 'server.services.init'
 require 'server.voicememos.init'
 require 'server.music.init'
 require 'server.share.init'
+require 'server.secretapps.init'
 require 'server.devseed'
 -- Optional local-only helpers; absent on every install but a developer's, so a missing file is
 -- expected rather than an error.
