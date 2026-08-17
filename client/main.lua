@@ -9,6 +9,10 @@ local notify = require 'bridge.client.notify'
 
 -- Apps disabled in configs/apps.lua never reach the NUI, so neither the home screen nor the
 -- App Store can show them. Built once - the catalog is static per boot.
+---@type integer Apps seeded onto page one of a brand-new phone; 0 fills the page. The home screen
+---clamps it to the grid, so an oversized value cannot invent slots.
+local FIRST_PAGE_APPS = math.max(0, math.floor(tonumber(config.Apps.FirstPageApps) or 12))
+
 ---@type table[] Enabled app entries, config order preserved.
 local ENABLED_APPS = {}
 ---@type string[] Dock ids with disabled apps dropped.
@@ -480,6 +484,7 @@ local function OpenPhone()
             showDate  = config.Lockscreen.ShowDate,
             dock      = visibleDock,
             apps      = visibleAppList,
+            firstPageApps = FIRST_PAGE_APPS,
             mailDomain = config.Mail.Domain,
             number    = NUMBER_FORMAT,
             music     = MUSIC_SOURCES,

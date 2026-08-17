@@ -24,6 +24,7 @@ export interface OpenPayload {
     showDate: boolean;
     dock: string[];
     apps: AppDef[];
+    firstPageApps?: number;
     installedApps?: string[];
     homeLayout?: string;
     mailDomain?: string;

@@ -140,6 +140,7 @@ function newFolderKey(): string { folderSeq += 1; return `f${Date.now().toString
 export interface HomescreenProps {
     apps:         AppDef[];
     dock:         string[];
+    firstPageApps?: number;
     wallpaper:    string;
     onLaunchApp:  (app: AppDef, origin: { x: number; y: number }) => void;
     onUninstall?: (id: string) => void;
@@ -150,7 +151,7 @@ export interface HomescreenProps {
     bloomOnMount?: boolean;
 }
 
-export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, savedLayout, onLayoutChange, onEditingChange, bloomOnMount = true }: HomescreenProps) {
+export function Homescreen({ apps, dock, firstPageApps, wallpaper, onLaunchApp, onUninstall, savedLayout, onLayoutChange, onEditingChange, bloomOnMount = true }: HomescreenProps) {
     const { blurHome, dockStyle, wallpaperParallax } = useTheme('blurHome', 'dockStyle', 'wallpaperParallax');
     const grid = useGrid();
     const { cols: COLS, rows: ROWS, icon: ICON, rowY0: ROW_Y0, rowStride: ROW_STRIDE, stripTop } = grid;
@@ -195,8 +196,10 @@ export function Homescreen({ apps, dock, wallpaper, onLaunchApp, onUninstall, sa
         const seeded = new Set(Object.values(folders).flatMap(f => f.appIds));
         const loose = apps.filter(a => !dockIds.includes(a.id) && !seeded.has(a.id)).map(a => a.id);
         // A seeding count, not a grid measure: how many apps land on page one before it spills.
-        const FIRST_PAGE = 12;
-        const arr: (string | null)[] = Array(itemsPerPage() * 2).fill(null);
+        const wanted = firstPageApps ?? 12;
+        const FIRST_PAGE = Math.min(wanted > 0 ? wanted : itemsPerPage(), itemsPerPage());
+        const pages = Math.max(2, Math.ceil(loose.length / itemsPerPage()) + 1);
+        const arr: (string | null)[] = Array(itemsPerPage() * pages).fill(null);
         loose.slice(0, FIRST_PAGE).forEach((id, i) => { arr[i] = id; });
         loose.slice(FIRST_PAGE).forEach((id, i) => { arr[itemsPerPage() + i] = id; });
         return normalize(arr);

@@ -125,6 +125,7 @@ function saveSetup(s: SetupSaved): void {
 interface ViewState {
     apps:          AppDef[];
     dock:          string[];
+    firstPageApps: number;
     wallpaperHome: string;
     wallpaperLock: string;
     carrier:       string;
@@ -446,6 +447,7 @@ function AppContent() {
         const nextView: ViewState = {
             apps:          data.apps,
             dock:          data.dock,
+            firstPageApps: typeof data.firstPageApps === 'number' ? data.firstPageApps : 12,
             wallpaperHome: data.wallpaper.home,
             wallpaperLock: data.wallpaper.lock,
             carrier:       data.carrier,
@@ -1584,6 +1586,7 @@ function AppContent() {
                             key={`${homeDensity}:${dockStyle}`}
                             apps={effectiveApps}
                             dock={view.dock}
+                            firstPageApps={view.firstPageApps}
                             wallpaper={homeWallpaper}
                             onLaunchApp={launchApp}
                             onUninstall={handleUninstallApp}
