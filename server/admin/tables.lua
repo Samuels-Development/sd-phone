@@ -111,6 +111,7 @@ return {
     'phone_ryde_drivers',
     'phone_ryde_rides',
     'phone_saved_jobs',
+    'phone_secret_apps',
     'phone_service_invoices',
     'phone_service_messages',
     'phone_service_msg_reads',

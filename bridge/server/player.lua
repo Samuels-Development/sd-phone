@@ -162,6 +162,30 @@ function player.getGang(source)
     return nil
 end
 
+---One framework metadata value for the player. Nil when the player is unresolvable, the framework
+---keeps no metadata, or the key was never set - callers cannot tell those apart, so a gate reading
+---this fails closed on all three.
+---@param source number player server id
+---@param key string metadata key
+---@return any
+function player.getMetadata(source, key)
+    if type(key) ~= 'string' or key == '' then return nil end
+
+    local p = resolveGet(source)
+    if not p then return nil end
+
+    if framework.qb then
+        local meta = p.PlayerData and p.PlayerData.metadata
+        return meta and meta[key] or nil
+    end
+    -- ESX only grew getMeta in 1.10; older builds have no metadata store to read at all.
+    if framework.name == 'esx' and type(p.getMeta) == 'function' then
+        local ok, value = pcall(p.getMeta, key)
+        return ok and value or nil
+    end
+    return nil
+end
+
 ---Resolves a source from an identifier: an indexed lookup when the index knows it, otherwise the
 ---scan, which repairs the index on the way out. The index is only ever a hint - the answer is
 ---verified against a still-connected player whose identifier still matches - so a lifecycle event

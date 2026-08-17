@@ -10,6 +10,42 @@
 --                     from configs/wifi.lua. The server re-checks the connection from its own
 --                     coords, so the App Store dimming it is presentation only. An id no
 --                     configured network carries leaves the app permanently undownloadable.
+--   requires = {}     the app is hidden from this player until every condition below is met. The
+--                     server answers all of them and the client is only ever told the result, so
+--                     the app's id never reaches a phone that cannot see it. Re-checked on every
+--                     phone open and on every job change.
+--
+-- `requires` conditions, all of which must pass:
+--   item     = 'usb'              hold at least one. `{ name = 'usb', count = 2 }` for more, and
+--                                 `{ name = 'usb', metadata = { tier = 3 } }` to match per-slot
+--                                 metadata (inventories without slot metadata fall back to a plain
+--                                 count rather than refusing everyone).
+--   metadata = { vip = true }     framework player metadata, each key compared to the value given.
+--                                 QBCore/QBox read PlayerData.metadata; ESX needs getMeta (1.10+).
+--   jobs     = { police = 2 }     any one job at that grade or above. A name or an array of names
+--                                 works too, both meaning grade 0.
+--   check    = 'res.exportName'   a server export called as (source, appId); only a literal true
+--                                 opens the gate. Anything else - export errors, resource stopped -
+--                                 keeps the app hidden. Use this for conditions not listed above.
+--   consume  = true               makes the unlock PERMANENT instead of live: using `item` spends it
+--                                 once and the app stays forever, even with nothing in the bag. The
+--                                 item is removed by the phone after the other conditions pass, so
+--                                 do NOT also set `consume` on the item in your inventory's own
+--                                 config, or a refused use still eats it. On ox_inventory point the
+--                                 item at `server = { export = 'sd-phone.use<Item>' }` - `usb_tool`
+--                                 becomes `sd-phone.useUsb_tool`.
+--
+-- A gate decides whether an ICON IS DRAWN. It authorises nothing: a player can still fire the app's
+-- callbacks directly, so anything worth protecting has to be checked server-side by the app itself.
+--
+-- Third-party apps take the same `requires` through exports['sd-phone']:addCustomApp. Grant and
+-- revoke a `consume` unlock from anywhere with exports['sd-phone']:unlockApp(src, appId) /
+-- :revokeApp(src, appId), or the /appunlock command.
+--
+-- Example - a Dark Chat that only exists for someone carrying a burner, and a hidden app earned once
+-- by using a USB:
+--   { id = 'darkchat', ..., requires = { item = 'burner_phone' } },
+--   { id = 'darkweb',  ..., requires = { item = 'usb_tool', consume = true } },
 return {
     -- Wallpaper name. Same registry as the lockscreen - see
     -- `web/src/wallpapers.ts`.
@@ -107,8 +143,3 @@ return {
         -- { id = 'darkchat', label = 'Dark Chat', icon = 'darkchat', route = '/darkchat', accent = '#1c1c1e', base = false, enabled = true, wifi = 'mazebank' },
     },
 }
-
--- Want an app that never shows here or in the App Store, and only reaches a phone when a player
--- uses a specific inventory item? That's a `secretapp`, not an entry in the table above - define
--- it in configs/secret_apps.lua with a `secretapp = '<item id>'` field instead. See that file's
--- header for the full field list, and server/secretapps/init.lua for how the item hooks in.

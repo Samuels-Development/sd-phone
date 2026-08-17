@@ -2,6 +2,8 @@
 local config = require 'configs.config'
 ---@type table Job bridge (bridge.server.job): the player's live framework job.
 local job    = require 'bridge.server.job'
+---@type table Gate evaluator (server.gates): reads the `requires` spec both app catalogs share.
+local gates  = require 'server.gates'
 
 ---@type table App gate; the table returned at end of file. Answers one question for the client:
 ---which apps must NOT appear on this player's home screen right now.
@@ -10,6 +12,11 @@ local job    = require 'bridge.server.job'
 ---and it exists because the answer changes with the job they are holding. The client has no job
 ---awareness of its own, so it asks on every open and gets the answer for the character that is
 ---actually loaded.
+---
+---Two things feed the answer: the terminal rule below, which derives itself from configs/mdt.lua so
+---a new department cannot silently have no app, and any `requires` an entry carries, which
+---server.gates evaluates. The terminal rule stays hand-written because it is derived rather than
+---declared - there is no `requires` to put in configs/apps.lua that knows the MDT's departments.
 local appgate = {}
 
 ---@type table MDT config (configs/mdt.lua).
@@ -48,6 +55,17 @@ function appgate.hidden(src)
     local domain = MDT_ENABLED and TERMINAL_JOBS[job.getName(src) or ''] or nil
     for id, needs in pairs(TERMINAL_APPS) do
         if needs ~= domain then out[#out + 1] = id end
+    end
+
+    -- Anything an entry gates for itself. A terminal app could also carry a `requires`, so this
+    -- appends rather than replaces and the list is deduplicated on the way out.
+    local seen = {}
+    for i = 1, #out do seen[out[i]] = true end
+    for _, id in ipairs(gates.hiddenBaseApps(src)) do
+        if not seen[id] then
+            seen[id] = true
+            out[#out + 1] = id
+        end
     end
 
     table.sort(out)

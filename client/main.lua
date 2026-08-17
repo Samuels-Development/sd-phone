@@ -167,7 +167,6 @@ require 'client.apps.sim'
 require 'client.admin'
 require 'client.payphone'
 require 'client.celltowerblips'
-require 'client.secretapps'
 
 ---@type table Phone visibility state: open/locked flags + cosmetic battery percentage.
 local phoneState = {
@@ -429,6 +428,9 @@ local function OpenPhone()
     end
 
     local visibleAppList, visibleDock = visibleApps()
+    -- Same question for the other catalog: the built-in apps were just filtered server-side, so the
+    -- third-party ones re-ask about their own gates on the same open.
+    customApps.refreshGates()
 
     local ped = cache.ped
 
@@ -989,9 +991,14 @@ exports('getConnectedDevices', function() return bluetoothClient.devices() end)
 ---
 ---`devices` limits which devices list the app ('phone', 'tablet'); absent means all of them.
 ---`job` limits who sees it, as a name, an array of names, or a name->minimum-grade map.
+---`requires` hides it until the player clears a gate - an item, framework metadata, a job, or your
+---own server export - in the same shape configs/apps.lua documents for built-in apps. The server
+---answers it, so an app the player cannot see never reaches their phone at all. `consume = true`
+---makes it a permanent unlock instead of a live check; award one with
+---exports['sd-phone']:unlockApp(source, appId) from your server side.
 ---
----Both only decide whether an icon is DRAWN. Neither authorises anything: a player can still fire
----your resource's events and callbacks directly, so keep checking the job server-side.
+---All three only decide whether an icon is DRAWN. None of them authorises anything: a player can
+---still fire your resource's events and callbacks directly, so keep checking server-side.
 ---@param data table lb-phone-shaped app definition
 ---@return boolean ok, string? err
 exports('addCustomApp', function(data)
