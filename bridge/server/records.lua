@@ -18,8 +18,10 @@ local VEHICLES = framework.name == 'esx'
     and { table = 'owned_vehicles',  idCol = 'owner' }
     or  { table = 'player_vehicles', idCol = 'citizenid' }
 
----@type string[] Columns a model name may live in, in preference order.
-local MODEL_COLS = { 'vehicle', 'model', 'vehicle_name', 'name' }
+---@type string[] Columns a model name may live in, in preference order. `vehicle` is last on
+---purpose: qb/QBox keep a plain name there, but ESX keeps the whole properties blob under the same
+---name, so a fork carrying a real model column should win over it.
+local MODEL_COLS = { 'model', 'vehicle_name', 'name', 'vehicle' }
 
 ---@type integer Characters below which a term is not a filter at all, so the caller is browsing and
 ---the list comes back unfiltered rather than empty.
@@ -276,14 +278,20 @@ function records.searchCitizens(term, page, pageSize)
     return out, tonumber(total) or 0
 end
 
----Builds the normalised vehicle shape from an ownership row.
+---Builds the normalised vehicle shape from an ownership row. The model is the chosen column when it
+---holds a plain name, else the saved-properties model key, else the row's stored hash - ESX keeps the
+---whole properties blob under `vehicle`, so a value opening with a brace is a row rather than a name
+---and printing it verbatim puts the entire blob in the MDT. Same rule as garages.lua's modelOf.
 ---@param row table raw ownership row
 ---@param modelCol string|nil column carrying the model name
 ---@return table vehicle
 local function vehicleOf(row, modelCol)
     local props = decode(row.vehicle)
     local model = modelCol and str(row[modelCol]) or ''
-    if model == '' then model = str(props.model) end
+
+    if model:sub(1, 1) == '{' then model = '' end
+    if model == '' then model = str(props.model or props.modelName) end
+    if model == '' then model = str(row.hash) end
 
     local garage = str(row.garage) ~= '' and str(row.garage) or str(row.parking)
     local state  = row.state

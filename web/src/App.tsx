@@ -623,6 +623,16 @@ function AppContent() {
     }, []);
 
     const handleSwitcherDismiss  = useCallback(() => setSwitcherClosing(true), []);
+
+    const escapeLadder = useCallback(() => {
+        if (switcherOpen)            { setSwitcherClosing(true); return; }
+        if (currentApp && !isClosing) { handleCloseApp();        return; }
+        void fetchNui('sd-phone:close');
+        setLeaving(true);
+    }, [switcherOpen, currentApp, isClosing, handleCloseApp]);
+
+    useNuiEvent('sd-phone:escape', escapeLadder);
+
     const handleSwitcherReady    = useCallback(() => setSwitcherReady(true), []);
     const handleSwitcherDone     = useCallback(() => {
         if (!switcherClosing) return;
@@ -1250,10 +1260,8 @@ function AppContent() {
             ));
 
             if (e.key === 'Escape') {
-                if (switcherOpen)            { handleSwitcherDismiss(); return; }
-                if (currentApp && !isClosing) { handleCloseApp();        return; }
-                void fetchNui('sd-phone:close');
-                setLeaving(true);
+                escapeLadder();
+                return;
             }
             if ((e.key === 'l' || e.key === 'L') && !locked && !typing) {
                 setLocked(true);
@@ -1266,7 +1274,7 @@ function AppContent() {
         }
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [locked, currentApp, isClosing, switcherOpen, handleCloseApp, handleSwitcherDismiss]);
+    }, [locked, escapeLadder]);
 
     useEffect(() => {
         if (!isFiveM) return;

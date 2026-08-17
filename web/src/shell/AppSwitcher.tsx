@@ -88,18 +88,26 @@ export function AppSwitcher({
         return () => clearTimeout(t);
     }, []);
 
-    function onWheel(e: React.WheelEvent) {
-        e.preventDefault();
-        const now = Date.now();
-        if (now - lastWheelRef.current < 280) return;
-        lastWheelRef.current = now;
+    const rootRef = useRef<HTMLDivElement>(null);
 
-        if (e.deltaY < 0) {
-            setFocusedIdx(f => Math.min(f + 1, recents.length - 1));
-        } else if (e.deltaY > 0) {
-            setFocusedIdx(f => Math.max(f - 1, 0));
+    useEffect(() => {
+        const el = rootRef.current;
+        if (!el) return;
+        function onWheel(e: WheelEvent) {
+            e.preventDefault();
+            const now = Date.now();
+            if (now - lastWheelRef.current < 280) return;
+            lastWheelRef.current = now;
+
+            if (e.deltaY < 0) {
+                setFocusedIdx(f => Math.min(f + 1, recents.length - 1));
+            } else if (e.deltaY > 0) {
+                setFocusedIdx(f => Math.max(f - 1, 0));
+            }
         }
-    }
+        el.addEventListener('wheel', onWheel, { passive: false });
+        return () => el.removeEventListener('wheel', onWheel);
+    }, [recents.length]);
 
     function onPointerDown(e: React.PointerEvent) {
         startXRef.current     = e.clientX;
@@ -161,6 +169,7 @@ export function AppSwitcher({
 
     return (
         <div
+            ref={rootRef}
             data-switcher-ignore="1"
             className="absolute inset-0 z-30"
             style={{
@@ -174,7 +183,6 @@ export function AppSwitcher({
                 if (closing) onDone();
                 else onReady();
             }}
-            onWheel={onWheel}
             onClick={e => {
                 if (!suppressMount.current && !suppressClick.current) onDismiss();
                 e.stopPropagation();
