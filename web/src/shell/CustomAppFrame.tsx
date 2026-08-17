@@ -103,7 +103,7 @@ const SWATCHES = [
     '#5856D6', '#AF52DE', '#FF2D55', '#A2845E', '#8E8E93', '#1C1C1E', '#FFFFFF',
 ];
 
-export function CustomAppFrame({ appId }: { appId: string; onClose: () => void }) {
+export function CustomAppFrame({ appId, onClose }: { appId: string; onClose: () => void }) {
     const def = useCustomAppsStore(s => s.apps.find(a => a.id === appId));
     const { theme, airplaneMode, hour24, brightness } = useTheme('theme', 'airplaneMode', 'hour24', 'brightness');
     const active = useDeckActive();
@@ -421,11 +421,14 @@ export function CustomAppFrame({ appId }: { appId: string; onClose: () => void }
         };
     }, [fetchPhone, showComponent, uploadMedia, settleEmoji, settleGif]);
 
-    const setApp = useCallback((target: string | { name?: string; data?: unknown }) => {
+    const setApp = useCallback((target: string | { name?: string; data?: unknown } | null | undefined) => {
         const name = typeof target === 'string' ? target : target?.name;
-        if (!name) return;
+        if (!name || name === 'home' || name === 'null' || name === '') {
+            onClose();
+            return;
+        }
         window.postMessage({ action: 'sd-phone:launchApp', data: { id: name } }, '*');
-    }, []);
+    }, [onClose]);
 
     const onLoad = useCallback(() => {
         const iframe = iframeRef.current;
@@ -466,6 +469,13 @@ export function CustomAppFrame({ appId }: { appId: string; onClose: () => void }
             win.formatPhoneNumber = (n: string) => formatPhone(n);
             win.setApp            = setApp;
             win.components        = bridge;
+
+            doc.addEventListener('keydown', (e: KeyboardEvent) => {
+                if (e.key === 'Escape') {
+                    onClose();
+                }
+            });
+
             const rootMarkup = doc.getElementById('root')?.innerHTML.length ?? -1;
             frameDebug(`${d.id}: globals set, #root markup ${rootMarkup} chars, injecting ${COMPONENTS_URL}`);
             const script = doc.createElement('script');
@@ -492,7 +502,7 @@ export function CustomAppFrame({ appId }: { appId: string; onClose: () => void }
             console.warn('[sd-phone] custom-app iframe injection failed (expected outside FiveM)', err);
         }
         setReady(true);
-    }, [theme, bridge, setApp, markSdkReady]);
+    }, [theme, bridge, setApp, markSdkReady, onClose]);
 
     useEffect(() => {
         if (!loadedRef.current) return;
@@ -511,10 +521,11 @@ export function CustomAppFrame({ appId }: { appId: string; onClose: () => void }
             if (!msg || typeof msg.type !== 'string') return;
             if (msg.type === 'sdphoneDebug' && typeof msg.message === 'string') { frameDebug(msg.message); return; }
             if (msg.type === 'sdphoneSdkReady') markSdkReady();
+            if (msg.type === 'sdphoneCloseApp' || msg.type === 'closeApp') onClose();
         }
         window.addEventListener('message', onFrameMessage);
         return () => window.removeEventListener('message', onFrameMessage);
-    }, [markSdkReady]);
+    }, [markSdkReady, onClose]);
 
     useNuiEvent('customApps:message', useCallback((data) => {
         if (!data || (data.id !== appId && data.id !== 'any')) return;
