@@ -3,8 +3,8 @@
 local proxyCallback = require 'client.nui'
 ---@type table Notify bridge (bridge.client.notify): backend-agnostic toast notifications.
 local notify = require 'bridge.client.notify'
----@type fun(raw: any): string Model hash or spawn name to a readable vehicle name (client.vehiclename).
-local vehicleName = require 'client.vehiclename'
+---@type fun(raw: any): VehicleModel Stored model value to hash/spawn/display (client.vehiclename).
+local vehicleModel = require 'client.vehiclename'
 
 ---@type string[] NUI action suffixes proxied 1:1 to sd-phone:server:mdt:<action>. Every MDT
 ---action except the waypoint below is a pass-through; identity, permissions and clamping all live
@@ -55,7 +55,7 @@ local NAME_DEPTH <const> = 6
 ---@param depth integer
 local function nameVehicles(node, depth)
     if type(node) ~= 'table' or depth > NAME_DEPTH then return end
-    if node.plate ~= nil and node.model ~= nil then node.model = vehicleName(node.model) end
+    if node.plate ~= nil and node.model ~= nil then node.model = vehicleModel(node.model).display end
     for _, value in pairs(node) do nameVehicles(value, depth + 1) end
 end
 

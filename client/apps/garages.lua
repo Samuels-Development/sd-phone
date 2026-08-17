@@ -1,5 +1,7 @@
 ---@type table Notify bridge (bridge.client.notify): local notification popups.
 local notify = require 'bridge.client.notify'
+---@type fun(raw: any): VehicleModel Stored model value to hash/spawn/display (client.vehiclename).
+local vehicleModel = require 'client.vehiclename'
 
 ---@type table<integer, string> GTA vehicle-class id -> display label for the app's class chip.
 local CLASS_NAMES = {
@@ -28,33 +30,18 @@ local IMAGE_TEMPLATE  = type(GARAGES_CFG.VehicleImageUrl) == 'string' and GARAGE
 ---@param v table vehicle row from the server list callback (mutated in place)
 ---@return table v the same row, for call-through convenience
 local function enrich(v)
-    local raw  = v.model
-    local hash = nil
-    if type(raw) == 'number' then
-        hash = raw
-    elseif type(raw) == 'string' and raw ~= '' then
-        hash = GetHashKey(raw)
-    end
+    local model = vehicleModel(v.model)
 
-    local display = type(raw) == 'string' and raw or nil
-    local spawn = type(raw) == 'string' and raw ~= '' and raw:lower() or nil
-
-    if hash then
-        local dn = GetDisplayNameFromVehicleModel(hash)
-        if dn and dn ~= '' and dn ~= 'CARNOTFOUND' then
-            local label = GetLabelText(dn)
-            display = (label and label ~= 'NULL' and label) or dn
-            spawn = spawn or dn:lower()
-        end
-        local cls = GetVehicleClassFromName(hash)
+    if model.hash then
+        local cls = GetVehicleClassFromName(model.hash)
         v.class = CLASS_NAMES[cls] or v.class
     end
 
-    if IMAGES_POSSIBLE and spawn and IMAGE_TEMPLATE ~= '' then
-        v.image = (IMAGE_TEMPLATE:gsub('{model}', spawn))
+    if IMAGES_POSSIBLE and model.spawn and IMAGE_TEMPLATE ~= '' then
+        v.image = (IMAGE_TEMPLATE:gsub('{model}', model.spawn))
     end
 
-    v.model = display or 'Vehicle'
+    v.model = model.display ~= '' and model.display or 'Vehicle'
     if not v.class or v.class == '' then
         v.class = v.garageType == 'boat' and 'Boat'
             or v.garageType == 'air' and 'Aircraft'

@@ -468,13 +468,16 @@ end
 function garages.activeSystem() return ACTIVE end
 
 ---Normalised list of the caller's owned vehicles: stored/out/impound status, condition fields,
----waypoints on stored/impounded rows, and mileage while jg-vehiclemileage runs. Read-only.
+---waypoints on stored/impounded rows, and mileage while jg-vehiclemileage runs. Read-only. Keyed on
+---the framework identifier rather than the acting SIM identity server/sim/init.lua installs over
+---getIdentifier, because ownership belongs to the character and a phone swap must not change whose
+---vehicles come back.
 ---@param source number caller server id
 ---@return table[] vehicles (empty when disabled / no character / table missing)
 function garages.list(source)
     if not G.Enabled then return {} end
 
-    local id = player.getIdentifier(source)
+    local id = player.getRealIdentifier(source)
     if not id then return {} end
 
     local ok, rows = pcall(function()
@@ -546,14 +549,15 @@ local function pickName(row, names)
 end
 
 ---One of the caller's own vehicles by plate, with the same status the app list shows. Ownership
----resolves from the caller's identifier.
+---resolves from the framework identifier, the same one garages.list reads, so a SIM swap cannot
+---turn someone else's plate into a match.
 ---@param source number caller server id
 ---@param plate string
 ---@return table|nil vehicle { row, status, model, props, plate }
 function garages.vehicleFor(source, plate)
     if not G.Enabled then return nil end
 
-    local id   = player.getIdentifier(source)
+    local id   = player.getRealIdentifier(source)
     local want = normPlate(plate)
     if not id or not want or want == '' then return nil end
 

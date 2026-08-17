@@ -27,7 +27,7 @@ end
 ---Owned-vehicle list for the caller. Read-only; a disabled/undetected system degrades to an
 ---empty array. Repeat calls inside LIST_TTL are served from the last result.
 lib.callback.register('sd-phone:server:garages:list', function(src)
-    local cid = player.getIdentifier(src)
+    local cid = player.getRealIdentifier(src)
     local hit = cid and listCache[cid]
     if hit and (os.time() - hit.at) < LIST_TTL then return { success = true, data = hit.data } end
     sweep(os.time())
