@@ -1,7 +1,7 @@
 /**
- * Type definitions for the sd-phone custom-app SDK (components.js).
+ * Type definitions for the sd-phone custom-app SDK (sdphone-sdk.js).
  *
- * sd-phone injects components.js into your app's iframe AFTER the page has loaded, so nothing here
+ * sd-phone injects sdphone-sdk.js into your app's iframe AFTER the page has loaded, so nothing here
  * exists at parse time. Wait for it before calling anything:
  *
  *     function whenReady() {
@@ -62,13 +62,13 @@ declare global {
         buttons: PopUpButton[];
     }
 
-    /** Identity of the app, injected by the host before components.js runs. */
+    /** Identity of the app, injected by the host before sdphone-sdk.js runs. */
     const appName: string;
     const appIdentifier: string;
     const resourceName: string;
     const settings: PhoneSettings;
 
-    /** True once components.js has finished installing. Poll this; see the header. */
+    /** True once sdphone-sdk.js has finished installing. Poll this; see the header. */
     const componentsLoaded: boolean;
     /** Bumped whenever the SDK surface changes. */
     const componentsVersion: number;

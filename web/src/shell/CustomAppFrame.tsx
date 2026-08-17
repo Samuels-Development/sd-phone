@@ -24,7 +24,7 @@ import type { Contact } from '@/apps/phone/data';
 
 // The SDK ships with whichever resource serves this page - a companion device may not reach
 // sd-phone's own files.
-const COMPONENTS_URL = `https://cfx-nui-${hostResource}/web/build/components.js`;
+const COMPONENTS_URL = `https://cfx-nui-${hostResource}/web/build/sdphone-sdk.js`;
 
 let frameDebugEnabled: boolean | null = null;
 
@@ -502,11 +502,11 @@ export function CustomAppFrame({ appId, onClose }: { appId: string; onClose: () 
             const script = doc.createElement('script');
             script.src = COMPONENTS_URL;
             script.onload = () => {
-                frameDebug(`${d.id}: components.js ran, componentsLoaded=${!!win.componentsLoaded}, fetchNui=${typeof win.fetchNui}`);
+                frameDebug(`${d.id}: sdphone-sdk.js ran, componentsLoaded=${!!win.componentsLoaded}, fetchNui=${typeof win.fetchNui}`);
                 markSdkReady();
             };
             script.onerror = () => {
-                frameDebug(`${d.id}: components.js FAILED to load from ${COMPONENTS_URL}`);
+                frameDebug(`${d.id}: sdphone-sdk.js FAILED to load from ${COMPONENTS_URL}`);
                 markSdkReady();
             };
             (doc.body ?? doc.documentElement).appendChild(script);
