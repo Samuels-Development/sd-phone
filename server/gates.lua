@@ -317,10 +317,24 @@ end
 ---@type table<string, any> App id -> its raw `requires`, for every configs/apps.lua entry carrying
 ---one. Built once; the catalog is static per boot.
 local BASE_GATES = {}
+
+---@type table<string, string> App id -> the label configs/apps.lua gives it, so a toast can say
+---"Health" where the catalog says `health`.
+local BASE_LABELS = {}
+
 for _, app in ipairs(config.Apps.Apps or {}) do
-    if type(app.id) == 'string' and app.id ~= '' and app.requires ~= nil then
-        BASE_GATES[app.id] = app.requires
+    if type(app.id) == 'string' and app.id ~= '' then
+        if app.requires ~= nil then BASE_GATES[app.id] = app.requires end
+        if type(app.label) == 'string' and app.label ~= '' then BASE_LABELS[app.id] = app.label end
     end
+end
+
+---An app's display name. Falls back to the id, which is all there is for a third-party app the
+---built-in catalog has never heard of.
+---@param appId string
+---@return string
+function gates.label(appId)
+    return BASE_LABELS[appId] or appId
 end
 
 ---Every built-in app id this player must not be shown, folded into server/appgate.lua's answer.
@@ -341,27 +355,28 @@ end
 ---@param spec table sanitised spec, known to carry `consume` and `item`
 ---@param src integer player server id
 local function spendUnlockItem(appId, spec, src)
+    local label = gates.label(appId)
+
     if gates.isUnlocked(src, appId) then
-        notify.to(src, ('%s is already installed'):format(appId), 'inform')
+        notify.to(src, ('The %s app is already on your phone.'):format(label), 'info')
         return
     end
-    if spec.jobs and not jobAllows(src, spec.jobs) then
-        notify.to(src, 'This is not for you', 'error')
+
+    -- One deliberately vague refusal for every condition. Naming the one that failed would tell a
+    -- player exactly which job or item to go and get, which is the opposite of what a hidden app is
+    -- for; the console line above each check is where a server owner debugs it instead.
+    if (spec.jobs and not jobAllows(src, spec.jobs))
+        or (spec.metadata and not metadataAllows(src, spec.metadata))
+        or (spec.check and not checkAllows(src, appId, spec.check)) then
+        notify.to(src, 'Nothing happens.', 'info')
         return
     end
-    if spec.metadata and not metadataAllows(src, spec.metadata) then
-        notify.to(src, 'This is not for you', 'error')
-        return
-    end
-    if spec.check and not checkAllows(src, appId, spec.check) then
-        notify.to(src, 'This is not for you', 'error')
-        return
-    end
+
     if not inventory.has(src, spec.item.name, spec.item.count) then return end
     if not inventory.remove(src, spec.item.name, spec.item.count) then return end
 
     gates.grant(src, appId)
-    notify.to(src, ('%s installed'):format(appId), 'success')
+    notify.to(src, ("You've installed the %s app on your phone."):format(label), 'success')
 end
 
 -- Built-in apps whose gate is earned by using an item register that item as usable. Backends with no

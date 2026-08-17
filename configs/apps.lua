@@ -8,44 +8,18 @@
 --                     untouched, so switching it back on picks up where it left off.
 --   wifi = '<id>'     the app only downloads while the phone is on that Wi-Fi network, an `id`
 --                     from configs/wifi.lua. The server re-checks the connection from its own
---                     coords, so the App Store dimming it is presentation only. An id no
---                     configured network carries leaves the app permanently undownloadable.
---   requires = {}     the app is hidden from this player until every condition below is met. The
---                     server answers all of them and the client is only ever told the result, so
---                     the app's id never reaches a phone that cannot see it. Re-checked on every
---                     phone open and on every job change.
---
--- `requires` conditions, all of which must pass:
---   item     = 'usb'              hold at least one. `{ name = 'usb', count = 2 }` for more, and
---                                 `{ name = 'usb', metadata = { tier = 3 } }` to match per-slot
---                                 metadata (inventories without slot metadata fall back to a plain
---                                 count rather than refusing everyone).
---   metadata = { vip = true }     framework player metadata, each key compared to the value given.
---                                 QBCore/QBox read PlayerData.metadata; ESX needs getMeta (1.10+).
---   jobs     = { police = 2 }     any one job at that grade or above. A name or an array of names
---                                 works too, both meaning grade 0.
---   check    = 'res.exportName'   a server export called as (source, appId); only a literal true
---                                 opens the gate. Anything else - export errors, resource stopped -
---                                 keeps the app hidden. Use this for conditions not listed above.
---   consume  = true               makes the unlock PERMANENT instead of live: using `item` spends it
---                                 once and the app stays forever, even with nothing in the bag. The
---                                 item is removed by the phone after the other conditions pass, so
---                                 do NOT also set `consume` on the item in your inventory's own
---                                 config, or a refused use still eats it. On ox_inventory point the
---                                 item at `server = { export = 'sd-phone.use<Item>' }` - `usb_tool`
---                                 becomes `sd-phone.useUsb_tool`.
---
--- A gate decides whether an ICON IS DRAWN. It authorises nothing: a player can still fire the app's
--- callbacks directly, so anything worth protecting has to be checked server-side by the app itself.
---
--- Third-party apps take the same `requires` through exports['sd-phone']:addCustomApp. Grant and
--- revoke a `consume` unlock from anywhere with exports['sd-phone']:unlockApp(src, appId) /
--- :revokeApp(src, appId), or the /appunlock command.
---
--- Example - a Dark Chat that only exists for someone carrying a burner, and a hidden app earned once
--- by using a USB:
---   { id = 'darkchat', ..., requires = { item = 'burner_phone' } },
---   { id = 'darkweb',  ..., requires = { item = 'usb_tool', consume = true } },
+--                     coords, so the App Store dimming it is presentation only. Needs
+--                     `base = false`, since it gates the download and a base app never downloads.
+--   requires = {}     hide the app until this player clears a gate. Every condition must pass, the
+--                     server answers them, and a hidden app's id never reaches the phone:
+--                       item     = 'usb'            or { name = 'usb', count = 2, metadata = {...} }
+--                       metadata = { vip = true }   framework player metadata
+--                       jobs     = { police = 2 }   a name, an array, or name = minimum grade
+--                       check    = 'res.export'     called as (source, appId); only true opens it
+--                       consume  = true             using `item` unlocks it permanently instead
+--                     Re-checked on every phone open and job change. A gate draws an icon - it
+--                     authorises nothing, so gate the app's own callbacks server-side too.
+--                     Full reference: https://docs.samueldev.shop/resources/phone/configuration
 return {
     -- Wallpaper name. Same registry as the lockscreen - see
     -- `web/src/wallpapers.ts`.
@@ -80,36 +54,36 @@ return {
         { id = 'bank', label = 'Bank', icon = 'bank', route = '/bank', accent = '#00b894', base = true, enabled = true },
         { id = 'health', label = 'Health', icon = 'health', route = '/health', accent = '#ff2d55', base = true, enabled = true },
         { id = 'documents', label = 'Files', icon = 'documents', route = '/documents', accent = '#3478F6', base = true, enabled = true },
-        { id = 'groups', label = 'Groups', icon = 'groups', route = '/groups', accent = '#6C63FF', base = false, enabled = true },
-        { id = 'birdy', label = 'Squawk', icon = 'birdy', route = '/birdy', accent = '#1d9bf0', base = false, enabled = true },
-        { id = 'services', label = 'Services', icon = 'services', route = '/services', accent = '#16B8A6', base = false, enabled = true },
-        { id = 'pages', label = 'Pages', icon = 'pages', route = '/pages', accent = '#FBC02D', base = false, enabled = true },
-        { id = 'review', label = 'Review', icon = 'review', route = '/review', accent = '#E03131', base = false, enabled = false },
-        { id = 'marketplace', label = 'Marketplace', icon = 'marketplace', route = '/marketplace', accent = '#0a84ff', base = false, enabled = true },
-        { id = 'darkchat', label = 'Dark Chat', icon = 'darkchat', route = '/darkchat', accent = '#1c1c1e', base = false, enabled = true },
-        { id = 'cherry', label = 'Cherry', icon = 'cherry', route = '/cherry', accent = '#F0285A', base = false, enabled = true },
-        { id = 'photogram', label = 'Photogram', icon = 'photogram', route = '/photogram', accent = '#D62976', base = false, enabled = true },
-        { id = 'garages', label = 'Garages', icon = 'garages', route = '/garages', accent = '#6E5CF2', base = false, enabled = true },
-        { id = 'homes', label = 'Homes', icon = 'homes', route = '/homes', accent = '#12B866', base = false, enabled = true },
-        { id = 'ryde', label = 'Ryde', icon = 'ryde', route = '/ryde', accent = '#1c1c1e', base = false, enabled = true },
-        { id = 'radio', label = 'Radio', icon = 'radio', route = '/radio', accent = '#30B0C7', base = false, enabled = true },
-        { id = 'stocks', label = 'Stocks', icon = 'stocks', route = '/stocks', accent = '#16C784', base = false, enabled = true },
+        { id = 'groups', label = 'Groups', icon = 'groups', route = '/groups', accent = '#6C63FF', base = true, enabled = true },
+        { id = 'birdy', label = 'Squawk', icon = 'birdy', route = '/birdy', accent = '#1d9bf0', base = true, enabled = true },
+        { id = 'services', label = 'Services', icon = 'services', route = '/services', accent = '#16B8A6', base = true, enabled = true },
+        { id = 'pages', label = 'Pages', icon = 'pages', route = '/pages', accent = '#FBC02D', base = true, enabled = true },
+        { id = 'review', label = 'Review', icon = 'review', route = '/review', accent = '#E03131', base = true, enabled = false },
+        { id = 'marketplace', label = 'Marketplace', icon = 'marketplace', route = '/marketplace', accent = '#0a84ff', base = true, enabled = true },
+        { id = 'darkchat', label = 'Dark Chat', icon = 'darkchat', route = '/darkchat', accent = '#1c1c1e', base = true, enabled = true },
+        { id = 'cherry', label = 'Cherry', icon = 'cherry', route = '/cherry', accent = '#F0285A', base = true, enabled = true },
+        { id = 'photogram', label = 'Photogram', icon = 'photogram', route = '/photogram', accent = '#D62976', base = true, enabled = true },
+        { id = 'garages', label = 'Garages', icon = 'garages', route = '/garages', accent = '#6E5CF2', base = true, enabled = true },
+        { id = 'homes', label = 'Homes', icon = 'homes', route = '/homes', accent = '#12B866', base = true, enabled = true },
+        { id = 'ryde', label = 'Ryde', icon = 'ryde', route = '/ryde', accent = '#1c1c1e', base = true, enabled = true },
+        { id = 'radio', label = 'Radio', icon = 'radio', route = '/radio', accent = '#30B0C7', base = true, enabled = true },
+        { id = 'stocks', label = 'Stocks', icon = 'stocks', route = '/stocks', accent = '#16C784', base = true, enabled = true },
         { id = 'settings', label = 'Settings', icon = 'settings', route = '/settings', accent = '#8e8e93', base = true, enabled = true },
         { id = 'appstore', label = 'App Store', icon = 'appstore', route = '/appstore', accent = '#0a84ff', base = true, enabled = true },
         { id = 'calculator', label = 'Calculator', icon = 'calculator', route = '/calculator', accent = '#333335', base = true, enabled = true },
         { id = 'passwords', label = 'Passwords', icon = 'passwords', route = '/passwords', accent = '#1c1c1e', base = true, enabled = true },
-        { id = 'cookie', label = 'Cookie', icon = 'cookie', route = '/cookie', accent = '#C77D2E', base = false, enabled = true },
-        { id = 'wordle', label = 'Penta', icon = 'wordle', route = '/wordle', accent = '#6AAA64', base = false, enabled = true },
-        { id = 'flappy', label = 'Flappy', icon = 'flappy', route = '/flappy', accent = '#4EC0CA', base = false, enabled = true },
-        { id = 'blocks', label = 'Blocks', icon = 'blocks', route = '/blocks', accent = '#7C4DFF', base = false, enabled = true },
-        { id = 'blackjack', label = 'Blackjack', icon = 'blackjack', route = '/blackjack', accent = '#157347', base = false, enabled = true },
-        { id = 'climber', label = 'Climber', icon = 'climber', route = '/climber', accent = '#8BC34A', base = false, enabled = true },
-        { id = 'connectfour', label = 'Connect 4', icon = 'connectfour', route = '/connectfour', accent = '#1E66D0', base = false, enabled = true },
-        { id = 'chess', label = 'Chess', icon = 'chess', route = '/chess', accent = '#3B3B3B', base = false, enabled = true },
-        { id = 'battleship', label = 'Battleship', icon = 'battleship', route = '/battleship', accent = '#17A0B5', base = false, enabled = true },
-        { id = 'vibez', label = 'Vibez', icon = 'vibez', route = '/vibez', accent = '#A855F7', base = false, enabled = false },
-        { id = 'weazelnews', label = 'Weazel News', icon = 'weazelnews', route = '/weazelnews', accent = '#C8102E', base = false, enabled = true },
-        { id = 'streaks', label = 'Streaks', icon = 'streaks', route = '/streaks', accent = '#FF7A1A', base = false, enabled = true },
+        { id = 'cookie', label = 'Cookie', icon = 'cookie', route = '/cookie', accent = '#C77D2E', base = true, enabled = true },
+        { id = 'wordle', label = 'Penta', icon = 'wordle', route = '/wordle', accent = '#6AAA64', base = true, enabled = true },
+        { id = 'flappy', label = 'Flappy', icon = 'flappy', route = '/flappy', accent = '#4EC0CA', base = true, enabled = true },
+        { id = 'blocks', label = 'Blocks', icon = 'blocks', route = '/blocks', accent = '#7C4DFF', base = true, enabled = true },
+        { id = 'blackjack', label = 'Blackjack', icon = 'blackjack', route = '/blackjack', accent = '#157347', base = true, enabled = true },
+        { id = 'climber', label = 'Climber', icon = 'climber', route = '/climber', accent = '#8BC34A', base = true, enabled = true },
+        { id = 'connectfour', label = 'Connect 4', icon = 'connectfour', route = '/connectfour', accent = '#1E66D0', base = true, enabled = true },
+        { id = 'chess', label = 'Chess', icon = 'chess', route = '/chess', accent = '#3B3B3B', base = true, enabled = true },
+        { id = 'battleship', label = 'Battleship', icon = 'battleship', route = '/battleship', accent = '#17A0B5', base = true, enabled = true },
+        { id = 'vibez', label = 'Vibez', icon = 'vibez', route = '/vibez', accent = '#A855F7', base = true, enabled = false },
+        { id = 'weazelnews', label = 'Weazel News', icon = 'weazelnews', route = '/weazelnews', accent = '#C8102E', base = true, enabled = true },
+        { id = 'streaks', label = 'Streaks', icon = 'streaks', route = '/streaks', accent = '#FF7A1A', base = true, enabled = true },
 
         -- The three terminals run on BOTH devices. The same code lays itself out per screen: a
         -- menu root that pushes one section at a time on the phone, the multi-tab browser on the
@@ -138,8 +112,22 @@ return {
         -- Keep `base = true` so the board is there the moment a race is posted.
         { id = 'racing', label = 'Racing', icon = 'racing', route = '/racing', accent = '#0A8C72', base = true, enabled = true },
 
-        -- Add `wifi` to any entry above to keep its download to one network, e.g. Dark Chat only
-        -- handed out inside the bank:
+        -- Every row above ships `base = true`, so the phone arrives with the full set installed and
+        -- the App Store lists nothing. Flip a row to `base = false` to put it behind a download,
+        -- which is also what `wifi` needs to mean anything:
         -- { id = 'darkchat', label = 'Dark Chat', icon = 'darkchat', route = '/darkchat', accent = '#1c1c1e', base = false, enabled = true, wifi = 'mazebank' },
+
+        -- `requires` examples, none of them live - copy the tail of one onto a real row.
+        -- { id = 'darkchat', ..., requires = { item = 'burner_phone' } },
+        -- { id = 'stocks',   ..., requires = { metadata = { vip = true } } },
+        -- { id = 'mdt',      ..., requires = { jobs = { police = 3, ambulance = 0 } } },
+        -- { id = 'darkchat', ..., requires = { check = 'myserver.canSeeDarkweb' } },
+        -- { id = 'health',   ..., requires = { item = 'health_usb', consume = true } },
+
+        -- A `consume` gate spends the item itself, so leave `consume = 0` on the ox_inventory entry
+        -- and point it at the export the phone makes - `health_usb` becomes `sd-phone.useHealth_usb`:
+        --   ['health_usb'] = { label = 'Medical Data Key', stack = false, close = true,
+        --                      consume = 0, server = { export = 'sd-phone.useHealth_usb' } },
+        -- With no `item` at all, hand it out yourself: exports['sd-phone']:unlockApp(source, appId).
     },
 }
