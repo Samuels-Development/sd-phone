@@ -554,6 +554,11 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                 >
                     <div
                         data-phone-screen
+                        onScroll={e => {
+                            const el = e.currentTarget;
+                            if (el.scrollTop !== 0) el.scrollTop = 0;
+                            if (el.scrollLeft !== 0) el.scrollLeft = 0;
+                        }}
                         className="absolute overflow-hidden"
                         style={{
                             left: SX, top: SY, width: SW, height: SH,

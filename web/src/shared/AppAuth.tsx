@@ -142,6 +142,11 @@ export function AppAuth({ appName, tagline, icon, theme, fields, onAuthed, onDis
 
     return (
         <div
+            onScroll={e => {
+                const el = e.currentTarget;
+                if (el.scrollTop !== 0) el.scrollTop = 0;
+                if (el.scrollLeft !== 0) el.scrollLeft = 0;
+            }}
             className={`absolute inset-0 z-10 overflow-hidden ${modal ? 'rounded-t-[14px] shadow-[0_-8px_28px_rgba(0,0,0,0.28)]' : ''}`}
             style={modal ? {
                 animation: dismissing
@@ -609,8 +614,8 @@ function AuthForm({ mode, appName, icon, theme, fields, notice, myNumber, myEmai
             setFieldErrors(errs);
             setError(null);
             const el = inputs.current[firstBad.key];
-            el?.scrollIntoView({ block: 'center' });
-            el?.focus();
+            el?.scrollIntoView({ block: 'nearest' });
+            el?.focus({ preventScroll: true });
             return;
         }
         setFieldErrors({});
@@ -624,12 +629,12 @@ function AuthForm({ mode, appName, icon, theme, fields, notice, myNumber, myEmai
                 if (key) {
                     setFieldErrors({ [key]: res.message ?? t('common.pleaseCheckField', 'Please check this field') });
                     const el = inputs.current[key];
-                    el?.scrollIntoView({ block: 'center' });
-                    el?.focus();
+                    el?.scrollIntoView({ block: 'nearest' });
+                    el?.focus({ preventScroll: true });
                 } else if (!isCreate) {
                     setFieldErrors(Object.fromEntries(shown.map(f => [f.key, t('common.notValidLogin', 'Not a valid login')])));
                     const pw = shown.find(f => f.type === 'password');
-                    if (pw) inputs.current[pw.key]?.focus();
+                    if (pw) inputs.current[pw.key]?.focus({ preventScroll: true });
                 } else {
                     setError(res.message ?? t('common.somethingWentWrong', 'Something went wrong. Please try again.'));
                 }
