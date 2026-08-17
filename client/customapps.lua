@@ -7,8 +7,9 @@ local appIds = require 'client.appids'
 ---@type table Client job bridge (bridge.client.job): live job name/grade plus a change hook.
 local job = require 'bridge.client.job'
 
----@type table<string, {def: table, resource: string, onOpen: function?, onClose: function?, onDelete: function?}>
----Registered third-party apps keyed by identifier. onOpen also covers lb-phone's onUse alias.
+---@type table<string, {def: table, resource: string, jobs: table?, requires: table?, onOpen: function?, onClose: function?, onDelete: function?}>
+---Registered third-party apps keyed by identifier. onOpen also covers lb-phone's onUse alias, and
+---`jobs`/`requires` are the two gates that never reach the def - see the note in add().
 local registry = {}
 
 ---@type string[] Identifiers in registration order, so the pushed list is stable.
@@ -226,14 +227,30 @@ local function jobAllows(entry)
     return false
 end
 
----The sanitized def array in registration order, job gate applied. The device gate is not applied
----here: one client serves both the phone and the tablet, so only the UI knows which is asking.
+---@type table<string, boolean> Identifier -> the server's last verdict on its `requires` gate. Only
+---the server can answer what an item or a framework metadata key says, so this caches its reply
+---between refreshes. An identifier with no entry has not been answered for yet.
+local verdicts = {}
+
+---Whether the server's gate verdict clears an entry. Ungated entries always pass; a gated one that
+---has not been answered for yet fails closed, so a hidden app never flashes on screen while the
+---first refresh is still in flight.
+---@param entry table
+---@return boolean
+local function gateAllows(entry)
+    if not entry.requires then return true end
+    return verdicts[entry.def.id] == true
+end
+
+---The sanitized def array in registration order, job and `requires` gates applied. The device gate
+---is not applied here: one client serves both the phone and the tablet, so only the UI knows which
+---is asking.
 ---@return table[] list
 local function currentList()
     local list = {}
     for i = 1, #order do
         local entry = registry[order[i]]
-        if entry and jobAllows(entry) then list[#list + 1] = entry.def end
+        if entry and jobAllows(entry) and gateAllows(entry) then list[#list + 1] = entry.def end
     end
     return list
 end
@@ -241,6 +258,33 @@ end
 ---Pushes the full sanitized app list to the NUI.
 local function pushSet()
     SendNUIMessage({ action = 'customApps:set', data = currentList() })
+end
+
+---Re-asks the server about every gated app and re-pushes when an answer changed. Called on every
+---phone open and whenever the server says an unlock moved, which is the same contract the built-in
+---catalog already has - the client never decides an item question for itself.
+function M.refreshGates()
+    local specs, gated = {}, false
+    for id, entry in pairs(registry) do
+        if entry.requires then
+            specs[id] = entry.requires
+            gated = true
+        end
+    end
+    if not gated then return end
+
+    local answers = lib.callback.await('sd-phone:server:gates:custom', false, specs)
+    if type(answers) ~= 'table' then return end
+
+    local changed = false
+    for id in pairs(specs) do
+        local allowed = answers[id] == true
+        if verdicts[id] ~= allowed then
+            verdicts[id] = allowed
+            changed = true
+        end
+    end
+    if changed then pushSet() end
 end
 
 ---Whether an exact identifier is currently registered.
@@ -294,23 +338,31 @@ function M.add(data, resource)
     local widgets = readWidgets(data.widgets, identifier)
     if #widgets > 0 then def.widgets = widgets end
 
-    -- Devices ride on the def because the UI does that matching; the job gate does not, so a job
-    -- the player cannot hold never reaches the page at all.
+    -- Devices ride on the def because the UI does that matching; the job and `requires` gates do
+    -- not, so a job the player cannot hold, or an app they have not unlocked, never reaches the
+    -- page at all - not its id, not its name, not the item that would unlock it.
     local devices = readDevices(data.devices)
     if devices then def.devices = devices end
 
     local onOpen = data.onOpen
     if type(onOpen) ~= 'function' then onOpen = data.onUse end
-    registry[identifier] = {
+    local entry = {
         def      = def,
         resource = resource,
         jobs     = readJobs(data.job),
+        -- Kept raw: server.gates is the only thing that reads a spec, and it sanitises what it is
+        -- given. Two readers would be two chances to disagree about what a gate means.
+        requires = type(data.requires) == 'table' and data.requires or nil,
         onOpen   = type(onOpen) == 'function' and onOpen or nil,
         onClose  = type(data.onClose) == 'function' and data.onClose or nil,
         onDelete = type(data.onDelete) == 'function' and data.onDelete or nil,
     }
+    registry[identifier] = entry
     addOrder(identifier)
     pushSet()
+    -- Deferred: add() answers an export call, and refreshGates awaits the server. Registering an app
+    -- must not block the calling resource on a round trip.
+    if entry.requires then CreateThread(M.refreshGates) end
     debugPrint(('registered custom app %s from %s'):format(identifier, resource))
     return true
 end
@@ -334,6 +386,9 @@ function M.remove(identifier, resource)
         return false, ('custom app %s is owned by %s'):format(identifier, entry.resource)
     end
     registry[identifier] = nil
+    -- Dropped with the app: a verdict left behind would let the same identifier come back visible
+    -- for the moment between a re-registration and the refresh that answers for it.
+    verdicts[identifier] = nil
     removeOrder(identifier)
     pushSet()
     debugPrint(('removed custom app %s'):format(identifier))
@@ -425,6 +480,7 @@ AddEventHandler('onResourceStop', function(stopped)
     for id, entry in pairs(registry) do
         if entry.resource == stopped then
             registry[id] = nil
+            verdicts[id] = nil
             removeOrder(id)
             changed = true
         end
@@ -433,6 +489,16 @@ AddEventHandler('onResourceStop', function(stopped)
 end)
 
 ---Job-gated apps appear and disappear with the player's job, so every change re-pushes the list.
-job.onChange(function() pushSet() end)
+job.onChange(function()
+    pushSet()
+    -- A `requires` may name jobs too, and only the server evaluates those, so the cached verdicts
+    -- are stale the moment the job moves.
+    CreateThread(M.refreshGates)
+end)
+
+-- The server says an unlock moved. Sent to one player, so it costs nothing to re-ask on receipt.
+RegisterNetEvent('sd-phone:client:gates:refresh', function()
+    M.refreshGates()
+end)
 
 return M
