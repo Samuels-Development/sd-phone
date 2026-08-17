@@ -113,11 +113,15 @@ return {
         { id = 'emsmdt', label = 'EMS', icon = 'emsmdt', route = '/emsmdt', accent = '#E11D48', base = true, enabled = true },
         { id = 'dojmdt', label = 'DOJ', icon = 'dojmdt', route = '/dojmdt', accent = '#6D28D9', base = true, enabled = true },
 
-        -- Racing runs on both devices too, and unlike the terminals it carries no job gate: every
-        -- player gets the board. Its backend has its own switch, `Enabled` in configs/racing.lua;
-        -- with that off this row shows an app with nothing behind it, so turn both off together.
-        -- Keep `base = true` so the board is there the moment a race is posted.
-        { id = 'racing', label = 'Racing', icon = 'racing', route = '/racing', accent = '#0A8C72', base = true, enabled = true },
+        -- Racing runs on both devices too, and unlike the terminals it carries no job gate. Its
+        -- backend has its own switch, `Enabled` in configs/racing.lua; with that off this row shows
+        -- an app with nothing behind it, so turn both off together.
+        --
+        -- It ships earned rather than given: `consume` means using a `racing_usb` spends the item
+        -- and installs the board on that character for good. The item has to exist in your inventory
+        -- config or nobody can unlock it - see the snippet in the header above, and drop `requires`
+        -- entirely if you would rather every player just have it.
+        { id = 'racing', label = 'Racing', icon = 'racing', route = '/racing', accent = '#0A8C72', base = true, enabled = true, requires = { item = 'racing_usb', consume = true } },
 
         -- `base = false` rows are the App Store's catalog; flip one to `true` to ship it installed
         -- instead. `wifi` only means anything on a downloadable row, since it gates the download:
