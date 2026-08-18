@@ -1,5 +1,8 @@
 ---@type table Framework detection (bridge.shared.framework): name ('qb'|'esx') + live core handle.
 local framework = require 'bridge.shared.framework'
+---@type table Garage bridge (bridge.server.garages): the active system's column profile, so a
+---vehicle's garage and state are read the same way here as in the Garages app.
+local garages = require 'bridge.server.garages'
 
 ---@type table Records module; the table returned at end of file. Read-only reads of the
 ---FRAMEWORK's own citizen and vehicle tables, so framework-shape knowledge stays in bridge/ and
@@ -293,16 +296,17 @@ local function vehicleOf(row, modelCol)
     if model == '' then model = str(props.model or props.modelName) end
     if model == '' then model = str(row.hash) end
 
-    local garage = str(row.garage) ~= '' and str(row.garage) or str(row.parking)
-    local state  = row.state
-    if state == nil then state = row.stored end
+    -- Resolved through the garage bridge's column profile rather than a guess at `garage`/`state`:
+    -- which columns hold the garage and its state depends entirely on the garage system running.
+    local garage, stored, impound = garages.locationOf(row)
 
     return {
-        plate  = str(row.plate):upper(),
-        model  = model,
-        owner  = row[VEHICLES.idCol],
-        garage = garage,
-        state  = tonumber(state) or (state == true and 1) or 0,
+        plate   = str(row.plate):upper(),
+        model   = model,
+        owner   = row[VEHICLES.idCol],
+        garage  = garage,
+        state   = stored and 1 or 0,
+        impound = impound,
     }
 end
 

@@ -228,6 +228,30 @@ local function displayStatus(row, spawned)
     return 'out'
 end
 
+---Where a vehicle row says it is, resolved through the active system's column profile. Exists so
+---the MDT reads garages the same way the Garages app does: it used to look only at `garage`,
+---`parking`, `state` and `stored`, which meant every system keeping them elsewhere (jg and cd_garage
+---in `garage_id`/`in_garage`, op_garages in `vehicleGarage`) showed as "Not on file" there while the
+---Garages app read them correctly.
+---@param row table|nil vehicle DB row
+---@return string garage garage name, '' when unknown or the row is out
+---@return boolean stored parked in a garage
+---@return boolean impound explicitly impound-flagged
+function garages.locationOf(row)
+    if type(row) ~= 'table' then return '', false, false end
+
+    local status, impound = statusOf(row)
+
+    local name = pick(row, PROFILE.garage)
+    name = name ~= nil and trim(tostring(name)) or ''
+
+    -- qs-advancedgarages parks the word OUT in the garage column instead of a garage name, so the
+    -- column holds a state there, not a place. Printing it would read as a garage called "OUT".
+    if PROFILE.outGarage and name:upper() == tostring(PROFILE.outGarage):upper() then name = '' end
+
+    return name, status == 'stored', impound
+end
+
 ---True when jg-vehiclemileage is running. Checked at call time.
 ---@return boolean
 local function mileageActive()

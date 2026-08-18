@@ -10,7 +10,10 @@ local genNumber = util.randomNumber
 
 ---Creates the SIM registry and cloud-backup tables.
 function store.ensureSchema()
-    MySQL.query.await([[
+    -- `identity` rather than the primary key: other unique-phone scripts name a table
+    -- phone_sim_cards and key it on the number too, so `number` proves nothing about who built it.
+    -- The per-SIM identity is sd-phone's own concept, and it has been here since the table was.
+    util.ensureTable('phone_sim_cards', 'identity', [[
         CREATE TABLE IF NOT EXISTS phone_sim_cards (
             number     VARCHAR(20) NOT NULL,
             identity   VARCHAR(64) NOT NULL,

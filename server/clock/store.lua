@@ -1,6 +1,9 @@
 ---@type table Store module; the table returned at end of file.
 local store = {}
 
+---@type table Shared server helpers (server.util): ensureTable.
+local util = require 'server.util'
+
 ---@type integer How many recent timer durations recentsFor returns (newest first).
 local RECENTS_LIMIT = 8
 
@@ -18,7 +21,7 @@ end
 ---Creates the clock tables if they don't exist and back-fills later alarm columns. `phone_alarms`
 ---is keyed (citizenid, id); `phone_timer_recents` holds one row per distinct duration. Runs once at boot.
 function store.ensureSchema()
-    MySQL.query.await([[
+    util.ensureTable('phone_alarms', 'citizenid', [[
         CREATE TABLE IF NOT EXISTS `phone_alarms` (
             `citizenid` VARCHAR(60)      NOT NULL,
             `id`        VARCHAR(40)      NOT NULL,

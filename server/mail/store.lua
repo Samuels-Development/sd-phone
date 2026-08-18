@@ -183,7 +183,7 @@ function store.ensureSchema()
     -- slow query, on a database whose accounts table drifted to MariaDB's newer default.
     util.ensureCollation('phone_mail_accounts')
 
-    MySQL.query.await([[
+    util.ensureTable('phone_mail_sessions', 'citizenid', [[
         CREATE TABLE IF NOT EXISTS phone_mail_sessions (
             citizenid VARCHAR(64) NOT NULL,
             email     VARCHAR(64) NOT NULL,
@@ -192,7 +192,7 @@ function store.ensureSchema()
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
 
-    MySQL.query.await([[
+    util.ensureTable('phone_mail_saved_emails', 'citizenid', [[
         CREATE TABLE IF NOT EXISTS phone_mail_saved_emails (
             citizenid  VARCHAR(64)  NOT NULL,
             email      VARCHAR(128) NOT NULL,

@@ -7,7 +7,7 @@ local store = {}
 ---Creates the phone_voice_memos table if it doesn't exist. One row per recording; only the
 ---Fivemanage-hosted URL is stored. Runs once at boot.
 function store.ensureSchema()
-    MySQL.query.await([[
+    util.ensureTable('phone_voice_memos', 'citizenid', [[
         CREATE TABLE IF NOT EXISTS `phone_voice_memos` (
             `id`         INT AUTO_INCREMENT PRIMARY KEY,
             `citizenid`  VARCHAR(64)  NOT NULL,

@@ -200,19 +200,54 @@ function util.finite(n)
     return type(n) == 'number' and n == n and n ~= math.huge and n ~= -math.huge
 end
 
+---@type table<string, boolean> Tables whose schema work failed this boot, keyed to dedupe: one
+---bad table usually fails several statements and is still one line in the summary.
+local degradedTables = {}
+---@type string[] The same names in the order they first failed.
+local degradedOrder = {}
+
+---Records a table whose schema work could not be completed, and prints why. Schema statements are
+---survivable precisely BECAUSE this exists: a shape sd-phone does not own has to leave a name in
+---the boot summary, or a non-fatal failure is just a silent one.
+---@param tbl string table the statement targeted
+---@param what string the step that failed, e.g. 'index idx_foo'
+---@param err any error raised
+function util.schemaWarn(tbl, what, err)
+    if not degradedTables[tbl] then
+        degradedTables[tbl] = true
+        degradedOrder[#degradedOrder + 1] = tbl
+    end
+    print(('^3[sd-phone]^0 %s: skipped %s (%s)'):format(tbl, what, err))
+end
+
+---Every table degraded this boot, in first-failure order. Read by the boot summary.
+---@return string[] table names
+function util.degraded()
+    return degradedOrder
+end
+
 ---Adds an index to a table if it isn't already present; a no-op when it exists. Call from
----ensureSchema after the CREATE TABLE.
+---ensureSchema after the CREATE TABLE. A failure is recorded and skipped rather than raised: the
+---statement runs against whatever table already carries the name, and a foreign shape missing the
+---key column used to abandon every table declared after it in the same ensureSchema.
 ---@param tableName string
 ---@param indexName string
 ---@param columnsDDL string column list incl. parens, e.g. "(recipient, seen)"
+---@return boolean created true when the index was added on this call
 function util.ensureIndex(tableName, indexName, columnsDDL)
     local present = MySQL.scalar.await([[
         SELECT COUNT(*) FROM information_schema.statistics
         WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?
     ]], { tableName, indexName })
-    if (tonumber(present) or 0) == 0 then
-        MySQL.query.await(('ALTER TABLE `%s` ADD INDEX %s %s'):format(tableName, indexName, columnsDDL))
+    if (tonumber(present) or 0) > 0 then return false end
+
+    local ok, err = pcall(MySQL.query.await,
+        ('ALTER TABLE `%s` ADD INDEX %s %s'):format(tableName, indexName, columnsDDL))
+    if not ok then
+        util.schemaWarn(tableName, 'index ' .. indexName, err)
+        return false
     end
+    return true
 end
 
 ---Adds a UNIQUE index if absent. Distinct from ensureIndex because a unique index is a constraint,
@@ -252,9 +287,11 @@ end
 ---Replaces the per-column probe-then-alter pattern: a table with twenty back-filled columns used
 ---to cost twenty information_schema queries on every boot, forever, including on fresh installs
 ---where the CREATE TABLE already declares them all. Self-correcting - no version stamp to drift.
+---A failing ALTER is recorded and skipped rather than raised, so a table sd-phone does not own
+---cannot abandon the tables its store declares after this one.
 ---@param tbl string table name
 ---@param defs table<string, string> column name -> full DDL fragment, e.g. `locale VARCHAR(8) NULL`
----@return boolean added true when at least one column was created
+---@return boolean added true when at least one column was created, false when none were or the ALTER failed
 function util.ensureColumns(tbl, defs)
     local rows = MySQL.query.await([[
         SELECT COLUMN_NAME AS name FROM information_schema.columns
@@ -270,17 +307,22 @@ function util.ensureColumns(tbl, defs)
     end
     if #add == 0 then return false end
 
-    MySQL.query.await(('ALTER TABLE `%s` %s'):format(tbl, table.concat(add, ', ')))
+    local ok, err = pcall(MySQL.query.await, ('ALTER TABLE `%s` %s'):format(tbl, table.concat(add, ', ')))
+    if not ok then
+        util.schemaWarn(tbl, 'column back-fill', err)
+        return false
+    end
     return true
 end
 
 ---Widens a VARCHAR column that is shorter than a new format needs. A no-op once the column is
----already wide enough, so it costs one information_schema read per boot.
+---already wide enough, so it costs one information_schema read per boot. A failing MODIFY is
+---recorded and skipped rather than raised, the same as the other schema helpers.
 ---@param tbl string table name
 ---@param col string column name
 ---@param ddl string full column definition to MODIFY to
 ---@param want integer minimum CHARACTER_MAXIMUM_LENGTH required
----@return boolean widened
+---@return boolean widened false when already wide enough or the MODIFY failed
 function util.ensureColumnWidth(tbl, col, ddl, want)
     local have = MySQL.scalar.await([[
         SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.columns
@@ -288,7 +330,11 @@ function util.ensureColumnWidth(tbl, col, ddl, want)
     ]], { tbl, col })
     if not have or tonumber(have) == nil or tonumber(have) >= want then return false end
 
-    MySQL.query.await(('ALTER TABLE `%s` MODIFY COLUMN %s'):format(tbl, ddl))
+    local ok, err = pcall(MySQL.query.await, ('ALTER TABLE `%s` MODIFY COLUMN %s'):format(tbl, ddl))
+    if not ok then
+        util.schemaWarn(tbl, 'widening ' .. col, err)
+        return false
+    end
     return true
 end
 
@@ -396,9 +442,25 @@ function util.rescueLegacyTable(tbl, markerColumn)
     return true
 end
 
+---Declares a table: moves a foreign-shaped one aside, then runs the CREATE. The pair belongs
+---together, because a CREATE TABLE IF NOT EXISTS on its own silently keeps whatever table already
+---owns the name, and every read afterwards fails on columns that table never had. Taking the
+---marker column as an argument is the point: it forces each store to say which column proves a
+---table is sd-phone's, rather than leaving the question unasked.
+---@param name string table name
+---@param markerColumn string column that only sd-phone's version of this table has
+---@param ddl string the full CREATE TABLE IF NOT EXISTS statement
+---@return boolean rescued true when a foreign table was moved aside first
+function util.ensureTable(name, markerColumn, ddl)
+    local rescued = util.rescueLegacyTable(name, markerColumn)
+    MySQL.query.await(ddl)
+    return rescued
+end
+
 ---Converts a table to utf8mb4_unicode_ci when its collation differs. Newer MariaDB defaults to
 ---utf8mb4_uca1400_ai_ci, and a CREATE without an explicit COLLATE then can't be joined against
----the explicitly-collated tables. A no-op when the table is absent or already matches.
+---the explicitly-collated tables. A no-op when the table is absent or already matches, and a
+---failing conversion is recorded and skipped rather than raised.
 ---@param tbl string table name
 function util.ensureCollation(tbl)
     local collation = MySQL.scalar.await([[
@@ -406,7 +468,13 @@ function util.ensureCollation(tbl)
         WHERE table_schema = DATABASE() AND table_name = ?
     ]], { tbl })
     if not collation or collation == 'utf8mb4_unicode_ci' then return end
-    MySQL.query.await(('ALTER TABLE `%s` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'):format(tbl))
+
+    local ok, err = pcall(MySQL.query.await,
+        ('ALTER TABLE `%s` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'):format(tbl))
+    if not ok then
+        util.schemaWarn(tbl, 'collation conversion', err)
+        return
+    end
     print(('^3[sd-phone]^0 converted %s from %s to utf8mb4_unicode_ci'):format(tbl, collation))
 end
 

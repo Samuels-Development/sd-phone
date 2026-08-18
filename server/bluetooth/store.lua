@@ -11,7 +11,7 @@ local store = {}
 ---Creates phone_bluetooth: one row per character, holding the radio switch and every device that
 ---character has paired. Mirrors phone_wifi rather than adding a junction table.
 function store.ensureSchema()
-    MySQL.query.await([[
+    util.ensureTable('phone_bluetooth', 'citizenid', [[
         CREATE TABLE IF NOT EXISTS phone_bluetooth (
             citizenid  VARCHAR(64) NOT NULL,
             enabled    TINYINT(1)  NOT NULL DEFAULT 1,

@@ -1,5 +1,7 @@
 ---@type table Version bridge (bridge.server.version): manifest version + latest GitHub release.
 local version = require 'bridge.server.version'
+---@type table Shared server helpers (server.util): the degraded-table registry.
+local util = require 'server.util'
 
 ---@type string GitHub repo the update check reads releases from.
 local UPDATE_REPO = 'Samuels-Development/sd-phone'
@@ -46,6 +48,15 @@ CreateThread(function()
 
     if #failures > 0 then
         print(('^1[sd-phone]^0 %d schema(s) failed: %s'):format(#failures, table.concat(failures, ', ')))
+    end
+
+    -- Tables another resource already owns under the same name. The statements against them are
+    -- skipped rather than fatal, so this line is the only thing standing between a half-built
+    -- schema and an owner who never finds out which table to rename.
+    local degraded = util.degraded()
+    if #degraded > 0 then
+        print(('^3[sd-phone]^0 %d table(s) degraded: %s'):format(#degraded, table.concat(degraded, ', ')))
+        print('^3[sd-phone]^0 these names are already used by another resource. Rename them (or drop them if unused) and restart.')
     end
 
     if not current then return end

@@ -12,7 +12,7 @@ local store = {}
 ---Creates phone_wifi: one row per character, holding the radio switch, every network that character
 ---has joined and the ones they declined. `declined` shipped later, so it is added separately too.
 function store.ensureSchema()
-    MySQL.query.await([[
+    util.ensureTable('phone_wifi', 'citizenid', [[
         CREATE TABLE IF NOT EXISTS phone_wifi (
             citizenid  VARCHAR(64) NOT NULL,
             enabled    TINYINT(1)  NOT NULL DEFAULT 1,
