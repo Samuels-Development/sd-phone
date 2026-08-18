@@ -6,6 +6,13 @@ local util = require 'server.util'
 ---@type string GitHub repo the update check reads releases from.
 local UPDATE_REPO = 'Samuels-Development/sd-phone'
 
+---@type string Oldest ox_lib this release is known to work against. Every ox_lib function
+---sd-phone calls predates 2025 apart from the string helpers, and those are filled in by
+---bridge/shared/oxcompat.lua when absent; v3.30.5 is the oldest release ox_lib still publishes.
+---Below this the phone may still run - the point is that a missing lib.* function otherwise
+---surfaces as "attempt to call a nil value" somewhere unrelated, with nothing naming ox_lib.
+local OXLIB_FLOOR = '3.30.5'
+
 ---@type integer Milliseconds between quiescence checks while modules bootstrap.
 local TICK_MS = 1000
 ---@type integer Consecutive quiet ticks before the summary prints. Waiting for the count to stop
@@ -57,6 +64,13 @@ CreateThread(function()
     if #degraded > 0 then
         print(('^3[sd-phone]^0 %d table(s) degraded: %s'):format(#degraded, table.concat(degraded, ', ')))
         print('^3[sd-phone]^0 these names are already used by another resource. Rename them (or drop them if unused) and restart.')
+    end
+
+    local oxlib = version.ofResource('ox_lib')
+    if oxlib and version.isNewer(oxlib, OXLIB_FLOOR) then
+        print(('^3[sd-phone]^0 ox_lib v%s is older than the v%s this release is tested against.')
+            :format(oxlib, OXLIB_FLOOR))
+        print('^3[sd-phone]^0 update it before reporting a `nil value` error from a lib.* call.')
     end
 
     if not current then return end

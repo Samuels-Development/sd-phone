@@ -37,6 +37,18 @@ function version.current()
     return raw and raw:match('%d+%.%d+%.%d+') or nil
 end
 
+---Another resource's declared version as bare x.y.z, or nil when it is not started, declares no
+---version, or declares one that cannot be parsed. Never raises: a dependency check has to degrade
+---into silence rather than take the boot with it.
+---@param name string resource name
+---@return string|nil version
+function version.ofResource(name)
+    if type(name) ~= 'string' or name == '' then return nil end
+    local raw = GetResourceMetadata(name, 'version', 0)
+              or GetResourceMetadata(name, 'Version', 0)
+    return raw and raw:match('%d+%.%d+%.%d+') or nil
+end
+
 ---@type integer Seconds a latest-release answer (or failure) stays cached.
 local LATEST_TTL = 3600
 
