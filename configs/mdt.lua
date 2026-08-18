@@ -15,7 +15,7 @@ return {
     --
     -- To run a terminal on the phone itself, set `mdt` to `enabled = true` in
     -- configs/apps.lua as well.
-    Enabled = false,
+    Enabled = true,
 
     -- Departments whose members reach the MDT. A player's ACTIVE framework job
     -- must appear here or every callback refuses, including the reads.
@@ -275,9 +275,9 @@ return {
         --
         -- Three systems cannot be mirrored automatically, because they publish alerts through an
         -- export rather than an event and an export call cannot be observed from outside the
-        -- resource that made it: tk_dispatch, codem-dispatch and fd_dispatch. README.md carries a
-        -- copy-paste snippet that forwards those to the same board through the
-        -- exports['sd-phone']:mdtMirrorCall export, which is quarantined, rate limited and
+        -- resource that made it: tk_dispatch, codem-dispatch and fd_dispatch. Forward those from
+        -- your own resource, wherever you already raise the alert, by calling
+        -- exports['sd-phone']:mdtMirrorCall(alert), which is quarantined, rate limited and
         -- de-duplicated exactly like the events above. That export answers to the switches here
         -- too, under the key 'export': Enabled = false turns it off with everything else, and
         -- adding ['export'] = false to Systems below turns off only it.

@@ -518,10 +518,10 @@ local ADAPTERS = {
 }
 
 ---@type table Adapter behind the mdtMirrorCall export. No `event` and no `relay`, so nothing routes
----to it on its own: it is reached only through ingest.mirrorCall. That export is what every README
----snippet for an export-only dispatch resource (tk_dispatch, codem-dispatch, fd_dispatch) calls, and
----those snippets run in an operator's own resource and forward a payload their CLIENT half handed
----them. What arrives is therefore exactly as untrusted as anything on the five events above, and it
+---to it on its own: it is reached only through ingest.mirrorCall. That export is what an operator's
+---own forwarder calls for an export-only dispatch resource (tk_dispatch, codem-dispatch,
+---fd_dispatch), and that forwarder runs in their resource and passes on a payload their CLIENT half
+---handed it. What arrives is therefore exactly as untrusted as anything on the five events above, and it
 ---takes the same quarantine, rate limit and dedupe. mdtCreateCall stays trusted and unchanged for
 ---genuine server-side callers.
 ---@type { key: string, normalise: fun(payload: table): table? }
