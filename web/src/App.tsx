@@ -398,6 +398,7 @@ function AppContent() {
             if (prevKey && prevKey !== key) switched = true;
             lastSimNumberRef.current = key;
             if (!prevKey) {
+                useThemeStore.getState().hydrate();
                 // First profile application this NUI session (fresh rejoin): collect banners
                 // parked for this phone by pocket buzzes that arrived before its first open.
                 const parked = lockNotifBankRef.current[key];

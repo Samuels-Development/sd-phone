@@ -199,7 +199,7 @@ Prefer the full walkthrough? [docs.samueldev.shop/resources/phone/installation](
 
 | Resource | What it is for |
 | --- | --- |
-| [ox_lib](https://github.com/CommunityOx/ox_lib) | Shared library |
+| [ox_lib](https://github.com/CommunityOx/ox_lib) | Shared library. **v3.39.0 or newer recommended** |
 | [oxmysql](https://github.com/CommunityOx/oxmysql) | Database access |
 | [sd-phone-props](https://github.com/Samuels-Development/sd-phone-props) | Streams the in-hand phone models |
 

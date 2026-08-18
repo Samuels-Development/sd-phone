@@ -89,6 +89,10 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     const [scale, setScale] = useState(1);
     const [tx, setTx] = useState(0);
     const [ty, setTy] = useState(0);
+    const viewRef = useRef({ scale: 1, tx: 0, ty: 0 });
+    viewRef.current.scale = scale;
+    viewRef.current.tx = tx;
+    viewRef.current.ty = ty;
     const [vw, setVw] = useState(0);
     const [vh, setVh] = useState(0);
     const [dragging, setDragging] = useState(false);
@@ -128,7 +132,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     const minScale = side ? Math.min(1, vw / (side * 0.72)) : 1;
 
     const stepScale = (dir: 1 | -1): number => {
-        const lvl = Math.log2(scale);
+        const lvl = Math.log2(viewRef.current.scale);
         if (dir > 0) {
             const up = Math.floor(lvl + 1e-6) + 1;
             return up <= 0 ? 1 : 2 ** Math.min(maxLevelFor(side), up);
@@ -157,14 +161,14 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         const z = ancestorZoom(vp);
         const cx = (clientX / z - rect.left) - vw / 2;
         const cy = (clientY / z - rect.top)  - vh / 2;
-        setScale(prevS => {
-            const s = Math.max(minScale, Math.min(maxScaleFor(side), nextScale));
-            const ratio = s / prevS;
-            setTx(prevTx => clampPan(cx - (cx - prevTx) * ratio, ty, s).x);
-            setTy(prevTy => clampPan(tx, cy - (cy - prevTy) * ratio, s).y);
-            return s;
-        });
-    }, [clampPan, tx, ty, vw, vh, minScale, side]);
+        const view = viewRef.current;
+        const s = Math.max(minScale, Math.min(maxScaleFor(side), nextScale));
+        if (s === view.scale) return;
+        const ratio = s / view.scale;
+        const c = clampPan(cx - (cx - view.tx) * ratio, cy - (cy - view.ty) * ratio, s);
+        viewRef.current = { scale: s, tx: c.x, ty: c.y };
+        setScale(s); setTx(c.x); setTy(c.y);
+    }, [clampPan, vw, vh, minScale, side]);
 
     const lastWheelStep = useRef(0);
 
