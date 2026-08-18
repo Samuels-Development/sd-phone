@@ -8,6 +8,7 @@ import { AlertDialog } from '@/ui/AlertDialog';
 import { fetchNui, isFiveM } from '@/core/nui';
 import type { Envelope } from '@/core/api';
 import { useAsyncData } from '@/hooks/useAsyncData';
+import { useDeckActive } from '@/shell/deckActive';
 import { useIosPush } from '@/hooks/useIosPush';
 import { useSessionState } from '@/hooks/useSessionState';
 import { VEHICLES, type ValetInfo, type Vehicle, type VehicleStatus } from './data';
@@ -51,6 +52,16 @@ export function Garages({ onClose: _onClose }: { onClose: () => void }) {
         },
     );
     const vehicles = list?.vehicles ?? (isFiveM ? [] : VEHICLES);
+
+    const deckActive = useDeckActive();
+    const wasActive  = useRef(deckActive);
+    useEffect(() => {
+        const rising = deckActive && !wasActive.current;
+        wasActive.current = deckActive;
+        if (!rising) return;
+        const id = window.setTimeout(refetch, 420);
+        return () => window.clearTimeout(id);
+    }, [deckActive, refetch]);
 
     const showImages = imgCfg.allowToggle ? (imgPref ?? imgCfg.default) : imgCfg.default;
     const toggleImages = () => {
