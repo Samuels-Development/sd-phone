@@ -252,6 +252,102 @@ return {
         -- purpose: the map wants to know roughly where a unit is, and a tighter tick pushes the
         -- whole board to every terminal that much more often. Skipped entirely with nobody on air.
         PositionMs     = 4000,
+
+        -- Mirroring a third-party dispatch resource onto this board. When a supported system
+        -- raises an alert, the same call appears on the CAD, addressed to the police or the
+        -- medical board. It is one-way: the MDT never answers, acknowledges or attaches back, so
+        -- both boards keep working side by side.
+        --
+        -- Every event a dispatch resource raises an alert on is a NET event, which means a
+        -- modified client can fire it with whatever it likes. That is true of those resources with
+        -- or without sd-phone, and nothing here can fix their end of it. What is guaranteed is
+        -- this end: a mirrored call is quarantined, so it can never cost a call your own officers
+        -- or the mdtCreateCall export raised anything. Mirrored calls hold a share of the board of
+        -- their own and are the first thing evicted from it, and they can never be filed at
+        -- priority 1 however urgent the alert claims to be. A forged alert therefore chooses only
+        -- which board it appears on, and cannot evict, outrank or displace a call of yours there.
+        --
+        -- Nothing has to be installed for this to be safe. A handler is registered for every
+        -- supported system that publishes a SERVER event, and one that is not running simply
+        -- never fires. The one system that publishes to clients instead (aty_dispatchv2) needs a
+        -- relay across a client, and that relay is registered only while that resource is actually
+        -- running: on a server without it, no such entry point exists at all.
+        --
+        -- Three systems cannot be mirrored automatically, because they publish alerts through an
+        -- export rather than an event and an export call cannot be observed from outside the
+        -- resource that made it: tk_dispatch, codem-dispatch and fd_dispatch. README.md carries a
+        -- copy-paste snippet that forwards those to the same board through the
+        -- exports['sd-phone']:mdtMirrorCall export, which is quarantined, rate limited and
+        -- de-duplicated exactly like the events above. That export answers to the switches here
+        -- too, under the key 'export': Enabled = false turns it off with everything else, and
+        -- adding ['export'] = false to Systems below turns off only it.
+        Ingest = {
+            Enabled = true,
+
+            -- Set one to false to stop mirroring it, which also closes its entry point rather
+            -- than merely ignoring what arrives on it: aty_dispatchv2 set to false means the
+            -- client relay is never registered at all. Anything not listed here is on, so a
+            -- config written before a system was supported keeps working.
+            --   ps-dispatch       ps-dispatch:server:notify
+            --   qb-dispatch       dispatch:server:notify (and its many forks)
+            --   cd_dispatch       cd_dispatch:AddNotification
+            --   qs-dispatch       qs-dispatch:server:CreateDispatchCall
+            --   rcore_dispatch    rcore_dispatch:server:sendAlert
+            --   aty_dispatchv2    aty_dispatchv2:client:sendDispatch, relayed by the client half
+            Systems = {
+                ['ps-dispatch']    = true,
+                ['qb-dispatch']    = true,
+                ['cd_dispatch']    = true,
+                ['qs-dispatch']    = true,
+                ['rcore_dispatch'] = true,
+                ['aty_dispatchv2'] = true,
+            },
+
+            -- How long the same alert is swallowed for. Half of these systems re-fire one incident
+            -- several times (a shootout is one call and six alerts), and the client-relayed one
+            -- arrives once per player who received it. An alert repeats when its whole body - the
+            -- code, the headline, the location, the suspect line and the priority - matches one
+            -- already on the board from the same 25 metre cell. Capped at 5 minutes.
+            DedupeSeconds = 45,
+
+            -- Flood ceiling: at most RateMax alerts accepted from one source in any RateWindow
+            -- milliseconds. Every one of these entry points is an event a modified client can
+            -- trigger with whatever it likes, so this is what keeps a 60-call board from being
+            -- buried by one script. A source is a CHARACTER for a client-sent alert and the firing
+            -- RESOURCE for a server-sent one, so reconnecting does not reset a budget and two
+            -- dispatch resources never spend each other's.
+            --
+            -- A source holds ONE budget covering every system at once, so firing five systems'
+            -- events in rotation buys nothing beyond RateMax. Two dispatch resources are kept out
+            -- of each other's budget by being separate sources, not by counting them separately.
+            --
+            -- Note that RateMax alone cannot bound the board: over one CallTTL a single source may
+            -- spend its budget many times over. Mirrored calls are therefore also held to half of
+            -- MaxCalls at once, and past that share the OLDEST MIRRORED call is evicted to make
+            -- room - never a call of yours, and never the new alert either, because refusing that
+            -- one would black the mirror out for a whole CallTTL and take the genuine alerts down
+            -- with it. Set RateMax above that share and the server warns at startup: at that point
+            -- one window can cycle every slot mirroring is allowed, so nothing on it survives long
+            -- enough to be read.
+            RateWindow    = 10000,
+            RateMax       = 12,
+
+            -- Board an alert lands on when the jobs it names are not departments this server runs.
+            -- Police, because that is what nearly every dispatch alert is.
+            --
+            -- Every other alert is routed by the jobs its payload names, which is how all six of
+            -- these systems address one and is what puts medical alerts on the medical terminal:
+            -- they raise their alerts from the client that witnessed the incident, so refusing a
+            -- client-sourced job list would route the whole of EMS onto the police board. A forged
+            -- list can only pick which board a call appears on, and the quarantine above already
+            -- guarantees it costs that board nothing.
+            --
+            -- This is ALSO the board the client RELAY always lands on, whatever its payload names.
+            -- Only aty_dispatchv2 takes that path, and it is the one payload no dispatch resource
+            -- ever raises on this server: a client rebuilds it field by field, so it is the one
+            -- shape where the job list carries no information at all.
+            DefaultDomain = 'leo',
+        },
     },
 
     -- Department radio channel. In-memory ring buffer, nothing persisted.

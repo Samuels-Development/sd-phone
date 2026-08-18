@@ -23,6 +23,10 @@ local jail      = require 'server.mdt.jail'
 local roster    = require 'server.mdt.roster'
 ---@type table CAD (server.mdt.dispatch): in-memory units and calls.
 local dispatch  = require 'server.mdt.dispatch'
+---@type table Dispatch ingest (bridge.server.dispatch): the quarantined path onto the call board,
+---behind the mdtMirrorCall export below. Already loaded by bridge/server/init.lua, so this resolves
+---the cached module rather than registering a second set of handlers.
+local ingest    = require 'bridge.server.dispatch'
 ---@type table Department channel (server.mdt.chat).
 local chat      = require 'server.mdt.chat'
 ---@type table Bulletin board (server.mdt.bulletins).
@@ -256,18 +260,35 @@ if ENABLED then
     end)
 end
 
--- Both exports stay registered with the terminal off, answering inertly. A caller that reaches for
+-- Every export stays registered with the terminal off, answering inertly. A caller that reaches for
 -- a missing export errors where it stands, and a dispatch script has no business dying because
 -- this server does not run an MDT.
 
 ---Pushes a call onto the CAD from another resource (exports['sd-phone']:mdtCreateCall). Bypasses
 ---the officer gate because the caller is a resource rather than a player, while keeping every
----clamp. Returns the new call id, or nil when the payload was unusable.
+---clamp. This is the TRUSTED path: the call it files ranks and evicts exactly like one an officer
+---raised, so it belongs to alerts a resource decides on by itself. Anything a client handed the
+---caller goes through mdtMirrorCall instead. Returns the new call id, or nil when the payload was
+---unusable.
 ---@param call table { code, type, priority, location, coords, suspect?, weapon?, ttl? }
 ---@return string|nil callId
 exports('mdtCreateCall', function(call)
     if not ENABLED then return nil end
     return dispatch.createCall(call)
+end)
+
+---Mirrors a third-party dispatch alert onto the CAD (exports['sd-phone']:mdtMirrorCall), for the
+---systems that publish alerts through an export instead of an event and so cannot be picked up
+---automatically. Same payload shape as mdtCreateCall, and everything else is different: the call is
+---marked as mirrored, so it holds the mirrored share of the board rather than the whole board, is
+---the first thing evicted from it and can never be filed at priority 1, and it takes the ingest's
+---rate limit and dedupe on the way in. That is what makes it safe for a snippet whose payload
+---reached the server across a client, which is what every one of those systems hands an operator.
+---@param call table { code, type, priority, location, coords, domain?, jobs?, suspect?, weapon? }
+---@return boolean mirrored true when the alert reached at least one board
+exports('mdtMirrorCall', function(call)
+    if not ENABLED then return false end
+    return ingest.mirrorCall(call)
 end)
 
 ---Whether a citizen has an active warrant (exports['sd-phone']:mdtIsWanted). The cheap predicate

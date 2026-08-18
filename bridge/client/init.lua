@@ -4,3 +4,6 @@
 require 'bridge.client.notify'
 require 'bridge.client.target'
 require 'bridge.client.inventory'
+-- Relays the one supported dispatch system that announces its alerts to clients rather than through
+-- a server event; the server half discards what it cannot use.
+require 'bridge.client.dispatch'

@@ -15,6 +15,15 @@ local DISPATCH = (config.Mdt.Dispatch or {})
 local CALL_TTL = math.max(30, math.floor(tonumber(DISPATCH.CallTTL) or 900))
 ---@type integer Calls the board holds at once; creating past this drops the least urgent.
 local MAX_CALLS = math.max(1, math.floor(tonumber(DISPATCH.MaxCalls) or 60))
+---@type integer Mirrored calls - the ones bridge/server/dispatch.lua files from a third-party
+---dispatch resource - the board holds at once. A ceiling of their own, trimmed before the board's:
+---every entry point that produces one is a net event a client can forge, so mirroring is strictly
+---additive and may only ever evict itself. Half the board, so a genuine call is never short of room.
+local MAX_INGESTED = math.max(1, math.floor(MAX_CALLS / 2))
+
+---@type integer The mirrored ceiling above, read by the ingest bridge so the figure it warns about
+---at load is the figure this board actually enforces rather than a second copy of the same sum.
+dispatch.ingestBudget = MAX_INGESTED
 ---@type integer Milliseconds a full-state broadcast is coalesced over.
 local FLUSH_MS = 150
 ---@type integer Minimum gap between accepted 10-code changes, in ms.
@@ -251,25 +260,85 @@ function dispatch.sweep()
     return changed
 end
 
----Drops the least urgent, oldest call once the board is over its cap.
+---Mirrored calls on the board, counted by ALERT rather than by row: one alert addressed to both
+---services is two rows and one mirrored call, and charging it twice would spend a share meant for
+---two separate alerts.
+---@return integer live mirrored alerts currently on the board
+---@return string|nil oldest ingest id of the oldest of them, nil when the board holds none
+local function ingestedLoad()
+    local groups, live, oldest, oldestAt, oldestSeq = {}, 0, nil, nil, nil
+    for _, c in pairs(calls) do
+        if c.ingested then
+            local group = c.ingestId or c.id
+            if not groups[group] then
+                groups[group] = true
+                live = live + 1
+            end
+            -- `at` is os.time(), one-second resolution, so a burst inside one second ties on it and
+            -- the winner used to be whatever order pairs() walked the hash in: a new alert could
+            -- pick ITSELF as the oldest and evict the row it had just been called for, which is the
+            -- refuse-the-new-one behaviour the eviction rule exists to remove. `seq` is the board's
+            -- own monotonic counter, so a tie always breaks towards the call really filed first.
+            local seq = c.seq or 0
+            if not oldestAt or c.at < oldestAt or (c.at == oldestAt and seq < oldestSeq) then
+                oldest, oldestAt, oldestSeq = group, c.at, seq
+            end
+        end
+    end
+    return live, oldest
+end
+
+---Whether `c` should be evicted before `other`: a mirrored call ahead of any genuine one, then the
+---least urgent, then the oldest. On a board holding no mirrored call this is the priority-then-age
+---rule the board has always trimmed by, unchanged.
+---@param c table candidate call
+---@param other table worst call found so far
+---@return boolean worse
+local function worseThan(c, other)
+    if (c.ingested == true) ~= (other.ingested == true) then return c.ingested == true end
+    if c.priority ~= other.priority then return c.priority > other.priority end
+    if c.at ~= other.at then return c.at < other.at end
+    -- Same second, which a burst of calls always is: the monotonic counter decides rather than
+    -- pairs() order, so the trim picks the same victim every time instead of a call filed after the
+    -- one it is being compared against.
+    return (c.seq or 0) < (other.seq or 0)
+end
+
+---Holds mirrored calls to their own share of the board, then drops the least urgent, oldest call
+---once the board itself is over its cap. A mirrored alert past that share evicts the OLDEST
+---MIRRORED one rather than being refused: refusing blacks the mirror out for a whole TTL and takes
+---the genuine alerts a dispatch resource raises down with it.
+---@return nil
 local function trimBoard()
+    local live, oldest = ingestedLoad()
+    while live > MAX_INGESTED and oldest do
+        -- Both copies of a two-service alert go together, so the count above always falls and this
+        -- loop always ends.
+        for id, c in pairs(calls) do
+            if c.ingested and (c.ingestId or c.id) == oldest then calls[id] = nil end
+        end
+        live, oldest = ingestedLoad()
+    end
+
     local n = 0
     for _ in pairs(calls) do n = n + 1 end
     if n <= MAX_CALLS then return end
 
     local worstId, worst
     for id, c in pairs(calls) do
-        if not worst or c.priority > worst.priority or (c.priority == worst.priority and c.at < worst.at) then
-            worstId, worst = id, c
-        end
+        if not worst or worseThan(c, worst) then worstId, worst = id, c end
     end
     if worstId then calls[worstId] = nil end
 end
 
----Pushes a call onto the board from a trusted caller (the mdtCreateCall export). Every field is
----clamped and the id, timestamps and expiry are stamped here.
----@param data any { code, type, priority, location, coords, direction?, suspect?, weapon?, ttl? }
----@return string|nil callId nil when the payload carried neither a code nor a type
+---Pushes a call onto the board. Every field is clamped and the id, timestamps and expiry are
+---stamped here. Two callers reach it: a trusted one (the mdtCreateCall export, and the terminal
+---behind it), and the dispatch ingest, which marks what it files with `ingested` so the board can
+---quarantine it.
+---@param data any { code, type, priority, location, coords, direction?, suspect?, weapon?, ttl?,
+---ingested?, ingestId? }
+---@return string|nil callId nil when the payload carried neither a code nor a type, or when the
+---call was trimmed off the board again the moment it was put there
 function dispatch.createCall(data)
     if type(data) ~= 'table' then return nil end
 
@@ -277,9 +346,18 @@ function dispatch.createCall(data)
     local kind = util.limitedString(data.type, 64)
     if not code and not kind then return nil end
 
+    ---@type boolean Whether this call is MIRRORED from a third-party dispatch resource. The mark is
+    ---the whole quarantine: it holds mirrored traffic to its own share of the board, puts it first
+    ---in line for eviction and floors its priority. Only the ingest bridge sets it.
+    local ingested = data.ingested == true
+
     local priority = math.floor(tonumber(data.priority) or 3)
     if priority < 1 then priority = 1 end
     if priority > 4 then priority = 4 end
+    -- A mirrored alert may never claim the top tier. Every event one arrives on is a net event a
+    -- client can forge, and priority 1 is both the head of the board order and the last thing
+    -- eviction reaches, so a forged "officer down" must not be able to outrank a real one.
+    if ingested and priority < 2 then priority = 2 end
 
     local ttl = math.floor(tonumber(data.ttl) or CALL_TTL)
     if ttl < 30 then ttl = 30 end
@@ -303,6 +381,10 @@ function dispatch.createCall(data)
 
     calls[id] = {
         id        = id,
+        -- The counter behind the id, kept as a field so eviction can break a tie on it. `at` is
+        -- os.time() and every call in one second shares a value, which left the trim picking its
+        -- victim by pairs() order.
+        seq       = callSeq,
         code      = code or '10-00',
         type      = kind or 'Call for Service',
         priority  = priority,
@@ -315,11 +397,35 @@ function dispatch.createCall(data)
         attached  = {},
         at        = now,
         expiresAt = now + ttl,
+        -- Absent rather than false on a genuine call, so a board with nothing mirrored on it holds
+        -- exactly the rows it always has.
+        ingested  = ingested or nil,
+        -- One id per mirrored ALERT, shared by both rows of a two-service one, so the mirrored
+        -- share is counted in alerts and an alert is evicted whole.
+        ingestId  = ingested and (util.limitedString(data.ingestId, 32) or id) or nil,
     }
     trimBoard()
 
+    -- The trim can evict the call it was just called for - a mirrored one past its share, or the
+    -- least urgent row on a full board - and there is nothing to push or return when it does.
+    if not calls[id] then return nil end
+
     local fresh = callPublic(calls[id])
-    util.pushMany('sd-phone:client:mdt:call', access.audience(), { call = fresh })
+    -- Addressed the same way the full-state broadcast is: each terminal is handed the board for its
+    -- OWN domain, and this push has to agree with it. Pushed to the whole audience it put medical
+    -- calls on police terminals and the other way round, for a row the receiving terminal never sees
+    -- again on any later read. With one shared board every terminal is on the same board, so that
+    -- path stays exactly as it was and pays nothing for a filter that would keep everyone anyway.
+    if SHARED then
+        util.pushMany('sd-phone:client:mdt:call', access.audience(), { call = fresh })
+    else
+        local targets = {}
+        for _, src in ipairs(access.audience()) do
+            local me = access.identity(src)
+            if me and onBoard(domain, access.domain(me)) then targets[#targets + 1] = src end
+        end
+        util.pushMany('sd-phone:client:mdt:call', targets, { call = fresh })
+    end
     markDirty()
 
     SetTimeout(ttl * 1000, function() expire(id) end)
