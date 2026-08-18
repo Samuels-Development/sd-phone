@@ -1,7 +1,7 @@
 import { memo, useRef, useState, type ReactNode } from 'react';
 import { MapPin, Pause, Play, Reply, Smile } from 'lucide-react';
 
-import { projectPct, styleMaxZoom, tileUrl } from '@/apps/maps/data';
+import { LocationMapPreview } from '@/shared/map/LocationMapPreview';
 import { decodeWaypoint } from '@/lib/waypointCode';
 import { isVideoUrl } from '@/core/photosApi';
 import type { Message } from './data';
@@ -9,74 +9,11 @@ import { t } from '@/i18n';
 
 const REACTIONS = ['❤️', '👍', '👎', '😂'];
 
-const TILE_PX    = 256;
-const PREVIEW_W  = 230;
 const PREVIEW_H  = 140;
-
-const BACKDROP_Z = 2;
 
 function locationCoords(msg: Message): { x: number; y: number } {
     const wp = msg.wpCode ? decodeWaypoint(msg.wpCode) : null;
     return wp ? { x: wp.x, y: wp.y } : { x: 150, y: -950 };
-}
-
-function LocationMapPreview({ x, y }: { x: number; y: number }) {
-    const zMax = styleMaxZoom('satellite');
-    const n = 2 ** zMax;
-    const { left, top } = projectPct(x, y);
-    const px = (left / 100) * n * TILE_PX;
-    const py = (top  / 100) * n * TILE_PX;
-    const originX = PREVIEW_W / 2 - px;
-    const originY = PREVIEW_H / 2 - py;
-
-    const layer = (z: number): ReactNode[] => {
-        const span = TILE_PX * 2 ** (zMax - z);
-        const nz   = 2 ** z;
-        const clampIdx = (v: number) => Math.max(0, Math.min(nz - 1, v));
-        const iMin = clampIdx(Math.floor((px - PREVIEW_W / 2) / span));
-        const iMax = clampIdx(Math.floor((px + PREVIEW_W / 2) / span));
-        const jMin = clampIdx(Math.floor((py - PREVIEW_H / 2) / span));
-        const jMax = clampIdx(Math.floor((py + PREVIEW_H / 2) / span));
-
-        const tiles: ReactNode[] = [];
-        for (let j = jMin; j <= jMax; j++) {
-            for (let i = iMin; i <= iMax; i++) {
-                tiles.push(
-                    <img
-                        key={`${z}-${i}-${j}`}
-                        src={tileUrl('satellite', z, i, j)}
-                        alt=""
-                        draggable={false}
-                        decoding="async"
-                        onError={e => {
-                            const imgEl = e.currentTarget as HTMLImageElement;
-                            imgEl.style.opacity = '0';
-                            const tries = Number(imgEl.dataset.retry ?? '0');
-                            if (tries < 2) {
-                                imgEl.dataset.retry = String(tries + 1);
-                                const base = imgEl.src.replace(/&r=\d+$/, '');
-                                window.setTimeout(() => { imgEl.src = `${base}&r=${tries + 1}`; }, 900 * (tries + 1));
-                            }
-                        }}
-                        // Reveal with opacity, not visibility, so a loaded image can't override the
-                        // AppDeck hidden-pool's visibility:hidden and leak onto the homescreen while
-                        // this chat app is backgrounded (same reason as the map tiles in MapView).
-                        onLoad={e => { (e.currentTarget as HTMLImageElement).style.opacity = '1'; }}
-                        className="absolute max-w-none select-none"
-                        style={{
-                            left: originX + i * span,
-                            top:  originY + j * span,
-                            width:  span + 0.6,   // hairline overlap hides seams
-                            height: span + 0.6,
-                        }}
-                    />,
-                );
-            }
-        }
-        return tiles;
-    };
-
-    return <>{layer(BACKDROP_Z)}{layer(zMax - 1)}{layer(zMax)}</>;
 }
 
 const EMOJI_RE = new RegExp(

@@ -15,7 +15,7 @@ return {
     --
     -- To run a terminal on the phone itself, set `mdt` to `enabled = true` in
     -- configs/apps.lua as well.
-    Enabled = true,
+    Enabled = false,
 
     -- Departments whose members reach the MDT. A player's ACTIVE framework job
     -- must appear here or every callback refuses, including the reads.

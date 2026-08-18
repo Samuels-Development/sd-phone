@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { MapPin, RadioTower, Siren, X } from 'lucide-react';
 
 import { device } from '@device';
@@ -16,6 +16,7 @@ import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useSessionState } from '@/hooks/useSessionState';
 import { UNIT_CODES, type Call, type Unit, type UnitCode } from './data';
 import { DispatchMap } from './DispatchMap';
+import { LocationMapPreview } from '@/shared/map/LocationMapPreview';
 import {
     MDT_ACCENT, mdtRef, mdtRowHover, mdtRowMeta, mdtRowTitle, mdtRuleX, mdtSectionHeader, mdtSegmented,
 } from './mdtTheme';
@@ -27,6 +28,9 @@ import { UnitRow, unitCodeLabel, waypointToUnit } from './UnitsColumn';
 import { useDeckRefresh, useMdtSession } from './useMdtSession';
 
 const FLASH_MS = 6000;
+
+const PREVIEW_H = 150;
+const PREVIEW_W_FALLBACK = 320;
 
 const isPhone = device.id === 'phone';
 
@@ -147,6 +151,38 @@ export function DispatchPane() {
         }
         void refresh();
     }, [refresh]);
+
+    const [previewCoords, setPreviewCoords] = useState<{ x: number; y: number } | null>(null);
+    const coordCache = useRef<Record<string, { x: number; y: number } | null>>({});
+    const previewRef = useRef<HTMLButtonElement | null>(null);
+    const [previewW, setPreviewW] = useState(PREVIEW_W_FALLBACK);
+
+    useEffect(() => {
+        const el = previewRef.current;
+        if (!el) return;
+        const apply = () => setPreviewW(el.offsetWidth || PREVIEW_W_FALLBACK);
+        apply();
+        const ro = new ResizeObserver(apply);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, [previewCoords]);
+
+    useEffect(() => {
+        const call = current;
+        if (!call || !call.hasCoords) { setPreviewCoords(null); return; }
+
+        const cached = coordCache.current[call.id];
+        if (cached !== undefined) { setPreviewCoords(cached); return; }
+
+        let live = true;
+        setPreviewCoords(null);
+        void mdtLocate({ callId: call.id }).then(coords => {
+            const point = coords ? { x: coords.x, y: coords.y } : null;
+            coordCache.current[call.id] = point;
+            if (live) setPreviewCoords(point);
+        }).catch(() => { coordCache.current[call.id] = null; });
+        return () => { live = false; };
+    }, [current]);
 
     const waypointToCall = useCallback(async (callId: string) => {
         const coords = await mdtLocate({ callId });
@@ -325,6 +361,22 @@ export function DispatchPane() {
             <div className={mdtRuleX} />
 
             <Scroller className={`min-h-0 flex-1 ${isPhone ? 'px-4 pb-10 pt-4' : 'px-6 py-4'}`}>
+                {previewCoords && (
+                    <button
+                        ref={previewRef}
+                        type="button"
+                        onClick={() => { void waypointToCall(current.id); }}
+                        aria-label={t('mdt.setWaypoint', 'Set waypoint')}
+                        className="relative mb-4 block w-full overflow-hidden rounded-[14px] transition-opacity active:opacity-80"
+                        style={{ height: PREVIEW_H, background: 'linear-gradient(145deg,#3a4a52,#2c3a42)' }}
+                    >
+                        <LocationMapPreview x={previewCoords.x} y={previewCoords.y} width={previewW} height={PREVIEW_H} />
+                        <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-[100%]">
+                            <MapPin className="h-7 w-7 drop-shadow-[0_1px_2px_rgba(0,0,0,.55)]" strokeWidth={2.4} fill={MDT_ACCENT} color="#fff" />
+                        </span>
+                    </button>
+                )}
+
                 <div className={`grid grid-cols-2 gap-y-4 ${isPhone ? 'gap-x-4' : 'gap-x-6'}`}>
                     <Field label={t('mdt.location', 'Location')} value={current.location} />
                     <Field label={t('mdt.direction', 'Direction')} value={current.direction} />
