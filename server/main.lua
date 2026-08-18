@@ -15,6 +15,9 @@ local inv       = require 'bridge.server.inventory'
 -- captures a callback against it (they all resolve identity at call time, but keep it first for
 -- clarity - the wrapper must also be live before the boot-time registrations below).
 require 'server.sim.init'
+-- ESX only, and only without a dedicated inventory resource: puts the phone items in the `items`
+-- table so ESX will honour them. Reads config.Sim, so it sits after the SIM module.
+require 'server.esxitems'
 require 'server.settings.init'
 require 'server.service'
 require 'server.wifi'

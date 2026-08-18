@@ -227,6 +227,8 @@ phone_pink    phone_purple   phone_red     phone_yellow
 
 Ready-made ox_inventory definitions live in the [installation docs](https://docs.samueldev.shop/resources/phone/installation), and the item icons ship in this repo's `images/` folder.
 
+**On ESX with no separate inventory resource, this step is automatic.** ESX keeps its item catalogue in the `items` database table, and an item missing from it can never be given or used, so the phone would register correctly and still refuse to open. sd-phone adds the missing rows on boot and refreshes ESX's catalogue in place, no restart needed. Turn it off with `SeedEsxItems = false` in `configs/phone.lua` and import `sql/esx_items.sql` yourself instead. Servers running ox_inventory, qs, tgiann or codem are untouched: define the items in that inventory as usual.
+
 Players can also open the phone with a keybind (<kbd>F1</kbd> by default), which still requires owning one of these items.
 
 Running unique phones with physical SIM trays (`SimTray` in `configs/uniqueandsim.lua`, ox_inventory only)? Give every phone item a `buttons` entry so players can open its tray:

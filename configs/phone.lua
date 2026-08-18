@@ -17,6 +17,26 @@ return {
         { item = 'phone_yellow', color = 'yellow' },
     },
 
+    -- ESX only. ESX keeps its item catalogue in the `items` database table and
+    -- nowhere else: an item missing from it can never be given or used, which
+    -- is why a stock ESX install had the phone registered, givable in theory
+    -- and impossible to open in practice. On boot, sd-phone adds any of the
+    -- items above that the table doesn't already have, then refreshes ESX's
+    -- in-memory catalogue so they work without a restart.
+    --
+    -- Runs only on ESX AND only when no dedicated inventory resource
+    -- (ox_inventory, qs, tgiann, codem...) is started - those own their own
+    -- item lists, where you add the items yourself. Nothing is ever
+    -- overwritten: existing rows are left exactly as they are. Set false to
+    -- manage the rows yourself (sql/esx_items.sql has them ready to import).
+    SeedEsxItems = true,
+
+    -- Each Items entry may also carry `label` and `weight`, used only by the
+    -- seeder above when it creates a row. Both default sensibly (the label
+    -- from the colour, the weight to ESX's own default of 1), so set them only
+    -- to override:
+    --   { item = 'phone_black', color = 'black', label = 'iFruit', weight = 2 },
+
     -- Frame colour the phone opens with before any item has been used this
     -- session (the keybind fallback). Must be one of the frame colours.
     DefaultColor = 'black',
