@@ -35,9 +35,10 @@ local FIELD_TYPES = {
 ---@type table<string, string> Fields of one entry in a def's optional `widgets` array, and the Lua
 ---type each must have. `ui` is the page the home screen frames; `id` defaults to a slug of `name`.
 local WIDGET_FIELD_TYPES = {
-    id   = 'string',
-    name = 'string',
-    ui   = 'string',
+    id          = 'string',
+    name        = 'string',
+    ui          = 'string',
+    interactive = 'boolean',
 }
 
 ---@type table<string, true> Sizes a declared widget may claim, matching the home screen's grid.

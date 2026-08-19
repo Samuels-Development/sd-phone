@@ -101,6 +101,12 @@ export interface CustomWidgetDef {
     name:  string;
     ui:    string;
     sizes: ('sm' | 'md' | 'lg')[];
+    /**
+     * Opt-in: lets the widget's iframe receive real pointer events (taps, buttons) instead of
+     * being purely decorative. Off by default so existing third-party widgets that never
+     * expected clicks keep behaving exactly as before.
+     */
+    interactive?: boolean;
 }
 
 export interface CustomAppDef {

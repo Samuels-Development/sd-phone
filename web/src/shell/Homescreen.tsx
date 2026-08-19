@@ -172,6 +172,9 @@ export function Homescreen({ apps, dock, firstPageApps, wallpaper, onLaunchApp, 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     const appMap   = useMemo(() => new Map(apps.map(a => [a.id, a])), [apps]);
+    // Tile elements keyed by widget uid, so an interactive custom widget's "open" postMessage
+    // (no MouseEvent to read a launch origin from) can still zoom the app open from its own tile.
+    const widgetTileRefs = useRef<Record<string, HTMLElement>>({});
 
     const [dockIds, setDockIds] = useState<string[]>(() => savedLayout?.dock ?? dock);
     const dockApps = useMemo(
@@ -993,6 +996,7 @@ export function Homescreen({ apps, dock, firstPageApps, wallpaper, onLaunchApp, 
                                         } as CSSProperties}
                                     >
                                         <div
+                                            ref={el => { if (el) widgetTileRefs.current[w.uid] = el; }}
                                             className={editing ? 'animate-app-jiggle' : ''}
                                             // --jiggle scales the wobble down for bigger tiles so a
                                             // 4x4 does not swing five times as far as an icon.
@@ -1022,7 +1026,21 @@ export function Homescreen({ apps, dock, firstPageApps, wallpaper, onLaunchApp, 
                                                     const cd = widgetByKind(card.kind);
                                                     if (!cd) return null;
                                                     return cd.render({ size: w.size, width, height, align: card.align ?? 'left', theme: card.theme ?? 'dark', picks: card.picks,
-                                                        onPicks: ids => setWidgets(prev => prev.map(o => (o.uid === w.uid ? patchCard(o, ci, { picks: ids.length ? ids : undefined }) : o))) });
+                                                        onPicks: ids => setWidgets(prev => prev.map(o => (o.uid === w.uid ? patchCard(o, ci, { picks: ids.length ? ids : undefined }) : o))),
+                                                        editing,
+                                                        // Interactive custom widgets are real pointer targets, so their own
+                                                        // clicks/long-presses no longer bubble out of the (cross-origin)
+                                                        // iframe into this tile - they ask for the same behavior explicitly.
+                                                        onOpen: () => {
+                                                            if (editingRef.current) return;
+                                                            const a = appMap.get(cd.appId);
+                                                            if (!a) return;
+                                                            launch(a, launchOriginFrom(widgetTileRefs.current[w.uid] ?? null));
+                                                        },
+                                                        onLongPress: () => {
+                                                            if (!editingRef.current) setEditing(true);
+                                                        },
+                                                    });
                                                 }}
                                             />
                                         </div>

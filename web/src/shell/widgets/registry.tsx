@@ -26,6 +26,12 @@ interface WidgetRender {
     theme:  WidgetTheme;
     picks?: string[];
     onPicks?: (ids: string[]) => void;
+    /** Homescreen is in jiggle/rearrange mode. Only consumed by interactive custom widgets. */
+    editing?: boolean;
+    /** Fired when an interactive custom widget asks to be treated like a tap on its tile. */
+    onOpen?: () => void;
+    /** Fired when an interactive custom widget detects its own long-press gesture. */
+    onLongPress?: () => void;
 }
 
 export interface WidgetDef {
@@ -142,7 +148,8 @@ function thirdPartyDef(app: CustomAppDef, widget: CustomWidgetDef): WidgetDef {
         label:  () => widget.name,
         sizes:  widget.sizes,
         appId:  app.id,
-        render: o => <CustomWidgetFrame kind={kind} size={o.size} width={o.width} height={o.height} />,
+        render: o => <CustomWidgetFrame kind={kind} size={o.size} width={o.width} height={o.height}
+            editing={o.editing} onOpen={o.onOpen} onLongPress={o.onLongPress} />,
     };
 }
 
@@ -167,7 +174,8 @@ function framedDef(kind: string, appId: string): WidgetDef {
         label:  () => t('widgets.thirdParty', 'Widget'),
         sizes:  ['sm', 'md', 'lg'],
         appId,
-        render: o => <CustomWidgetFrame kind={kind} size={o.size} width={o.width} height={o.height} />,
+        render: o => <CustomWidgetFrame kind={kind} size={o.size} width={o.width} height={o.height}
+            editing={o.editing} onOpen={o.onOpen} onLongPress={o.onLongPress} />,
     };
     framed.set(kind, def);
     return def;
