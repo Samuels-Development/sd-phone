@@ -6,7 +6,7 @@ import {
     Type, Wrench, Zap,
 } from 'lucide-react';
 
-import { getLocale, t } from '@/i18n';
+import { getCatalogVersion, t } from '@/i18n';
 
 type AccountKind = 'checking' | 'savings' | 'credit';
 
@@ -62,12 +62,12 @@ export interface CategoryMeta {
 }
 
 let categoryCache: Record<Category, CategoryMeta> | null = null;
-let categoryCacheLocale = '';
+let categoryCacheVersion = -1;
 
 export function getCategories(): Record<Category, CategoryMeta> {
-    const locale = getLocale();
-    if (categoryCache && categoryCacheLocale === locale) return categoryCache;
-    categoryCacheLocale = locale;
+    const version = getCatalogVersion();
+    if (categoryCache && categoryCacheVersion === version) return categoryCache;
+    categoryCacheVersion = version;
     categoryCache = {
         food:          { label: t('banking.catFood', 'Food & Drink'),  icon: Pizza,        color: '#ff9f0a' },
         groceries:     { label: t('banking.catGroceries', 'Groceries'),     icon: ShoppingCart, color: '#34c759' },
