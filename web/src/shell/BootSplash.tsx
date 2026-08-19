@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import type { SyntheticEvent } from 'react';
 import { createPortal } from 'react-dom';
 
 import logoUrl from '@/assets/logo.png';
@@ -63,6 +64,11 @@ const LOGO_MASK = {
     maskPosition: 'center',
 } as const;
 
+function swallow(e: SyntheticEvent): void {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
 export function BootSplash({ radius, tint }: { radius: number; tint: string }) {
     const motion = useThemeStore(s => s.motion);
     const replayCount = useSyncExternalStore(subscribeReplay, replaySnapshot, replaySnapshot);
@@ -95,9 +101,19 @@ export function BootSplash({ radius, tint }: { radius: number; tint: string }) {
     return (
         <div
             key={replayCount}
-            className="boot-root pointer-events-none absolute inset-0 z-[60] overflow-hidden"
+            // The splash owns the screen until it is gone: it sits above every in-screen layer
+            // (lockscreen, control/notification centre, app frames) and swallows pointer input,
+            // so nothing underneath can be clicked while the phone is still "booting".
+            className="boot-root absolute inset-0 z-[900] overflow-hidden"
+            onPointerDown={swallow}
+            onPointerUp={swallow}
+            onClick={swallow}
+            onContextMenu={swallow}
+            onWheel={swallow}
+            onTouchStart={swallow}
             style={{
                 borderRadius: radius,
+                touchAction: 'none',
                 opacity: phase === 'fading' ? 0 : 1,
                 transform: phase === 'fading' ? 'scale(1.06)' : 'scale(1)',
                 transition: `opacity ${FADE_MS}ms ease, transform ${FADE_MS}ms cubic-bezier(0.32,0.72,0,1)`,
