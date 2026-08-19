@@ -38,6 +38,7 @@ export function FleecaCard({ holder, last4, expiry }: { holder: string; last4: s
                 aspectRatio: '1.586',
                 background: 'radial-gradient(125% 135% at 12% 8%, #1C8A60 0%, #0F6043 34%, #0A3F2D 68%, #062018 100%)',
                 boxShadow: '0 4px 14px rgba(4,40,28,0.22), inset 0 1px 0 rgba(255,255,255,0.14)',
+                contain: 'paint',
             }}
         >
             <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 320 202" preserveAspectRatio="none" aria-hidden>

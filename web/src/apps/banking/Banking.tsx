@@ -72,7 +72,7 @@ export function Banking({ onClose: _onClose }: { onClose: () => void }) {
         return () => window.clearTimeout(id);
     }, [deckActive, refresh, refetchReceived]);
 
-    const txs    = overview?.transactions ?? [];
+    const txs    = useMemo(() => overview?.transactions ?? [], [overview]);
     const latest = useMemo(() => txs.slice(0, 8), [txs]);
 
     const balance = overview?.balance ?? 0;
@@ -101,7 +101,7 @@ export function Banking({ onClose: _onClose }: { onClose: () => void }) {
             <div key="home" className="flex min-h-0 flex-1 flex-col animate-swipe-in-left">
             <div className="px-5 pb-2 pt-0.5 text-[34px] font-bold tracking-tight">{t('banking.wallet', 'Wallet')}</div>
 
-            <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-10 pt-3">
+            <div className="flex-1 overflow-y-auto overscroll-contain no-scrollbar px-4 pb-10 pt-3" style={{ contain: 'paint' }}>
                 <FleecaCard holder={holder} last4={hideCard ? HIDDEN_TEXT : last4} expiry={CARD_EXPIRY} />
 
                 <div className="mt-5 flex items-center justify-between rounded-[16px] bg-surface px-5 py-3">

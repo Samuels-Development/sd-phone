@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { ChevronLeft } from 'lucide-react';
 
 import { useIosPush } from '@/hooks/useIosPush';
@@ -7,7 +8,10 @@ import { TxRows, fmtAmount } from './TxRow';
 
 export function AllTransactions({ transactions, onBack, onSelectTx }: { transactions: BankTx[]; onBack: () => void; onSelectTx?: (tx: BankTx) => void }) {
     const { goBack, pageStyle } = useIosPush(onBack);
-    const days = groupTx(transactions);
+    const days = useMemo(
+        () => groupTx(transactions).map(day => ({ ...day, total: day.items.reduce((sum, tx) => sum + tx.amount, 0) })),
+        [transactions],
+    );
 
     return (
         <div className="absolute inset-0 z-20 flex flex-col bg-base text-black dark:text-white" style={pageStyle}>
@@ -25,23 +29,20 @@ export function AllTransactions({ transactions, onBack, onSelectTx }: { transact
             <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-10">
                 {days.length === 0 ? (
                     <p className="mt-10 text-center text-[15px] text-ios-gray">{t('banking.noTransactionsYet', 'No transactions yet.')}</p>
-                ) : days.map(day => {
-                    const total = day.items.reduce((sum, t) => sum + t.amount, 0);
-                    return (
-                        <div key={day.key} className="mb-4">
-                            <div className="flex items-baseline justify-between px-1 pb-2 pt-1">
-                                <span className="text-[17px] font-semibold">{day.label}</span>
-                                <span className={`text-[17px] font-semibold tabular-nums ${
-                                    total > 0 ? 'text-[#34c759]' : total < 0 ? 'text-[#ff3b30]' : 'text-black/45 dark:text-white/45'
-                                }`}>
-                                    {fmtAmount(total)}
-                                </span>
-                            </div>
-
-                            <TxRows items={day.items} onSelect={onSelectTx} />
+                ) : days.map(day => (
+                    <div key={day.key} className="mb-4">
+                        <div className="flex items-baseline justify-between px-1 pb-2 pt-1">
+                            <span className="text-[17px] font-semibold">{day.label}</span>
+                            <span className={`text-[17px] font-semibold tabular-nums ${
+                                day.total > 0 ? 'text-[#34c759]' : day.total < 0 ? 'text-[#ff3b30]' : 'text-black/45 dark:text-white/45'
+                            }`}>
+                                {fmtAmount(day.total)}
+                            </span>
                         </div>
-                    );
-                })}
+
+                        <TxRows items={day.items} onSelect={onSelectTx} />
+                    </div>
+                ))}
             </div>
         </div>
     );
