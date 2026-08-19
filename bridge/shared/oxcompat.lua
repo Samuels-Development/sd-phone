@@ -20,3 +20,9 @@ if not string.endsWith then
         return suffix == '' or str:sub(-#suffix) == suffix
     end
 end
+
+local ok, libString = pcall(function() return lib and lib.string end)
+if ok and type(libString) == 'table' and libString ~= string then
+    if not libString.startsWith then libString.startsWith = string.startsWith end
+    if not libString.endsWith   then libString.endsWith   = string.endsWith   end
+end
