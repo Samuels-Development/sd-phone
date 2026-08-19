@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent, CSSProperties } from 'react';
-import { Camera, Check, Delete, Flashlight, Lock, ScanFace } from 'lucide-react';
+import { Camera, Check, Delete, Flashlight, Lock, Music, Pause, Play, ScanFace, SkipForward } from 'lucide-react';
 
 import { formatClockTime, formatLongDate, useDisplayClock } from '@/hooks/useClock';
 import { useKeypadInput } from '@/hooks/useKeypadInput';
@@ -11,7 +11,11 @@ import { useStreamerHidden, useTheme } from '@/stores/themeStore';
 import { Clockface } from './lockClock';
 import { LockClockEditor } from './LockClockEditor';
 import { NotifIcon, type NotificationItem } from './Notifications';
+import { useMusic } from '@/apps/music/MusicContext';
+import { coverUrl } from '@/apps/music/data';
 import { t } from '@/i18n';
+
+const NOW_PLAYING_H = 84;
 
 export interface LockscreenProps {
     use24h:        boolean;
@@ -36,6 +40,7 @@ export function Lockscreen({ use24h, showDate, wallpaper, unlockTrigger, onUnloc
     const [exiting, setExiting] = useState(false);
 
     const { lockClock, setLockClock, passcode, faceId, blurLock, wallpaperParallax } = useTheme('lockClock', 'setLockClock', 'passcode', 'faceId', 'blurLock', 'wallpaperParallax');
+    const music = useMusic();
     const [customizing, setCustomizing] = useState(false);
     const [authMode, setAuthMode] = useState<null | 'face' | 'passcode'>(null);
 
@@ -149,10 +154,16 @@ export function Lockscreen({ use24h, showDate, wallpaper, unlockTrigger, onUnloc
                     </div>
                 </div>
 
+                {music.current && (
+                    <div className="absolute inset-x-4 z-10" style={{ top: 236 }}>
+                        <LockNowPlaying music={music} />
+                    </div>
+                )}
+
                 {notifications.length > 0 && (
                     <div
                         className="absolute inset-x-0 z-10 overflow-y-auto no-scrollbar px-4"
-                        style={{ top: 286, bottom: 130 }}
+                        style={{ top: music.current ? 286 + NOW_PLAYING_H + 12 : 286, bottom: 130 }}
                     >
                         <div className="flex flex-col gap-2 pb-2">
                             {notifications.map(n => (
@@ -375,6 +386,57 @@ function ancestorZoom(el: HTMLElement | null): number {
         if (cz > 0 && cz !== 1) z *= cz;
     }
     return z || 1;
+}
+
+// The iOS-style Now Playing card lock screens show right under the clock, above notifications.
+// Deliberately no progress scrubber - Apple only shows one on the expanded/long-pressed card, and
+// keeping this compact matches every other lock screen element's density. Backed by the same
+// useMusic() as Control Center, the dynamic island and the widget, so an external provider (see
+// MusicContext's `external` state) shows here too, with zero extra wiring.
+function LockNowPlaying({ music }: { music: ReturnType<typeof useMusic> }) {
+    const track = music.current;
+    if (!track) return null;
+    const img = coverUrl(track);
+    const stop = (e: React.MouseEvent) => e.stopPropagation();
+
+    return (
+        <div
+            className="flex items-center gap-3 rounded-[22px] bg-white/[0.16] px-3 py-2.5 shadow-[0_6px_24px_rgba(0,0,0,0.22)] ring-1 ring-white/[0.14] backdrop-blur-2xl backdrop-saturate-150"
+            style={{ height: NOW_PLAYING_H }}
+        >
+            <div className="grid h-[52px] w-[52px] shrink-0 place-items-center overflow-hidden rounded-[12px] bg-white/15">
+                {img
+                    ? <img src={img} alt="" draggable={false} className="h-full w-full object-cover" />
+                    : <Music className="h-6 w-6 text-white/85" />}
+            </div>
+            <div className="min-w-0 flex-1">
+                <p className="truncate text-[15px] font-semibold leading-tight text-white">{track.title}</p>
+                <p className="truncate text-[13px] leading-tight text-white/60">{track.artist || t('shell.notPlaying', 'Not Playing')}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+                <button
+                    type="button"
+                    aria-label={music.playing ? t('shell.pause', 'Pause') : t('shell.play', 'Play')}
+                    onPointerDown={stop}
+                    onClick={e => { stop(e); music.toggle(); }}
+                    className="flex h-[42px] w-[42px] items-center justify-center text-white active:opacity-60"
+                >
+                    {music.playing
+                        ? <Pause className="h-[24px] w-[24px] fill-white" />
+                        : <Play  className="h-[24px] w-[24px] fill-white" />}
+                </button>
+                <button
+                    type="button"
+                    aria-label={t('shell.next', 'Next')}
+                    onPointerDown={stop}
+                    onClick={e => { stop(e); music.next(); }}
+                    className="flex h-[42px] w-[42px] items-center justify-center text-white active:opacity-60"
+                >
+                    <SkipForward className="h-[20px] w-[20px] fill-white" />
+                </button>
+            </div>
+        </div>
+    );
 }
 
 export function LockNotifCard({ item, onOpen, onDismiss }: { item: NotificationItem; onOpen: () => void; onDismiss: () => void }) {
