@@ -410,7 +410,7 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
     const { brightness, phoneScale, phoneAlign, phoneTilt, openAnim, ringtoneVol, setRingtoneVol, islandPet, shell } = useTheme('brightness', 'phoneScale', 'phoneAlign', 'phoneTilt', 'openAnim', 'ringtoneVol', 'setRingtoneVol', 'islandPet', 'shell');
     const m = useMemo(() => chassisMetrics(shellFor(shell, device.id)), [shell]);
     const {
-        SW, SH, W, H, SX, SY, BR, SR, SCREEN_MASK, BEZEL, hostsIsland, hasCutout, pillInCutout,
+        SW, SH, W, H, SX, SY, BR, SR, BEZEL, hostsIsland, hasCutout, pillInCutout,
         SCREEN_RRECT, OUTER_RRECT, softPatch,
         CUT_W, CUT_H, CUT_X, CUT_Y, CUT_R, CUT_PATH, CUT_LENS_X, CUT_COLLAR, CUT_OPTICS,
         DI_W, DI_H, DI_X, DI_Y, DI_R, MIP_X, PET_H, PET_TOP, petStage,
@@ -560,12 +560,6 @@ export function PhoneShell({ children, cameraActive = false, entering = false, l
                             borderRadius: SR,
                             clipPath: `inset(0 round ${SR}px)`,
                             WebkitClipPath: `inset(0 round ${SR}px)`,
-                            WebkitMaskImage: SCREEN_MASK,
-                            maskImage: SCREEN_MASK,
-                            WebkitMaskSize: '100% 100%',
-                            maskSize: '100% 100%',
-                            WebkitMaskRepeat: 'no-repeat',
-                            maskRepeat: 'no-repeat',
                             // The switcher's card scale, for index.css's ios-app-expand. The deck
                             // re-parents the opening app's host into this screen, so the value
                             // inherits down to it - and unlike the switcher, this element stays.

@@ -57,7 +57,6 @@ export interface RailCap {
 export interface ChassisMetrics {
     B: number;  SW: number; SH: number; W: number;  H: number;
     SX: number; SY: number; BR: number; SR: number;
-    SCREEN_MASK: string;
     BEZEL: string;
     SCREEN_RRECT: string;
     OUTER_RRECT: string;
@@ -317,11 +316,6 @@ export function chassisMetrics(shell: Shell | null): ChassisMetrics {
     const SY = BT;
     const SR = Math.max(0, shell?.screenRadius ?? BR - BS);
 
-    const SCREEN_MASK =
-        `url("data:image/svg+xml,${encodeURIComponent(
-            `<svg xmlns='http://www.w3.org/2000/svg' width='${SW}' height='${SH}'><rect width='${SW}' height='${SH}' rx='${SR}' ry='${SR}' fill='#fff'/></svg>`,
-        )}")`;
-
     const OUTER_RRECT = rrect(0, 0, W, H, BR);
     const SCREEN_RRECT = rrect(SX, SY, SW, SH, SR);
 
@@ -417,7 +411,7 @@ export function chassisMetrics(shell: Shell | null): ChassisMetrics {
 
     return {
         B, SW, SH, W, H, SX, SY, BR, SR,
-        SCREEN_MASK, BEZEL, SCREEN_RRECT, OUTER_RRECT,
+        BEZEL, SCREEN_RRECT, OUTER_RRECT,
         cutout,
         island: cutout === 'island',
         hostsIsland: shell ? true : device.screen.island,
