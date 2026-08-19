@@ -101,9 +101,6 @@ export function BootSplash({ radius, tint }: { radius: number; tint: string }) {
     return (
         <div
             key={replayCount}
-            // The splash owns the screen until it is gone: it sits above every in-screen layer
-            // (lockscreen, control/notification centre, app frames) and swallows pointer input,
-            // so nothing underneath can be clicked while the phone is still "booting".
             className="boot-root absolute inset-0 z-[900] overflow-hidden"
             onPointerDown={swallow}
             onPointerUp={swallow}
