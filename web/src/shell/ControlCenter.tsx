@@ -10,7 +10,7 @@ import { setLaunchIntent } from '@/shell/launchIntent';
 import { trackFraction } from '@/lib/zoom';
 import { useTheme } from '@/stores/themeStore';
 import { useMusic, useMusicProgress } from '@/apps/music/MusicContext';
-import { coverGradient, youtubeId } from '@/apps/music/data';
+import { coverGradient, coverUrl } from '@/apps/music/data';
 import { t } from '@/i18n';
 
 export function ControlCenter({ open, onClose, onOpenApp, onWifi }: {
@@ -108,8 +108,7 @@ function NowPlaying({ music }: { music: ReturnType<typeof useMusic> }) {
     const { time, duration } = useMusicProgress();
     const track = music.current;
     const pct = track && duration > 0 ? Math.min(100, (time / duration) * 100) : 0;
-    const vid = track ? youtubeId(track.url) : null;
-    const img = vid ? `https://i.ytimg.com/vi/${vid}/mqdefault.jpg` : null;
+    const img = track ? coverUrl(track) : null;
     return (
         <div className="rounded-[28px] bg-white/[0.14] px-5 py-[26px]">
             <div className="flex items-center gap-4">

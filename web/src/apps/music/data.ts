@@ -11,6 +11,8 @@ export interface Track {
     album?: string;
     url:    string;
     addedAt: number;
+    /** Explicit artwork, e.g. from an external now-playing provider. Wins over any YouTube-derived cover. */
+    thumb?: string;
 }
 
 const STORE_KEY = 'sd-phone:music:v1';
@@ -184,10 +186,13 @@ export function coverGradient(seed: string): string {
 }
 
 /**
- * Artwork URL for a track, or null when it is not a YouTube source. Lives here rather than in
- * Music.tsx so the home screen widget can resolve a cover without importing the Music app chunk.
+ * Artwork URL for a track, or null when there is none to show. An explicit `thumb` (e.g. from an
+ * external now-playing provider) always wins; otherwise falls back to a YouTube-derived cover.
+ * Lives here rather than in Music.tsx so the home screen widget can resolve a cover without
+ * importing the Music app chunk.
  */
-export function coverUrl(track: { url: string }): string | null {
+export function coverUrl(track: { url: string; thumb?: string }): string | null {
+    if (track.thumb) return track.thumb;
     const vid = youtubeId(track.url);
     return vid ? `https://i.ytimg.com/vi/${vid}/mqdefault.jpg` : null;
 }

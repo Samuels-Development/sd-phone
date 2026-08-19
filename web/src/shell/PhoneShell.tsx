@@ -10,7 +10,7 @@ import { useBatteryStore } from '@/stores/batteryStore';
 import { IslandPet } from './IslandPet';
 import { fetchNui } from '@/core/nui';
 import { useMusic } from '@/apps/music/MusicContext';
-import { coverGradient, youtubeId } from '@/apps/music/data';
+import { coverGradient, coverUrl } from '@/apps/music/data';
 import type { Track } from '@/apps/music/data';
 import { RingDuration } from '@/apps/clock/AlarmRinging';
 import { playShutter } from '@/media/shutter';
@@ -141,8 +141,7 @@ function MusicIsland({ m, track, playing, expanded, closing, onToggle, onPlayPau
     onPrev:      () => void;
     onOpenApp:   () => void;
 }) {
-    const vid   = youtubeId(track.url);
-    const thumb = vid ? `https://i.ytimg.com/vi/${vid}/mqdefault.jpg` : null;
+    const thumb = coverUrl(track);
     const artBg = coverGradient(track.id + track.title);
     const stop  = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
 

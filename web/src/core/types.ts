@@ -248,12 +248,32 @@ interface MusicSharePush {
     tracks?: MusicSharedTrack[];
 }
 
+/**
+ * Pushed by `exports('sd-phone'):setExternalNowPlaying(appId, track)` — lets a third-party
+ * resource (its own audio engine, not sd-phone's built-in Music) drive the Control Center card,
+ * the dynamic-island mini-player, and the native Now Playing widget, the same way the built-in
+ * Music app does. Only one provider is "active" at a time: the most recent `set` wins, and a
+ * `clear` from a stale appId (one that already lost the slot to a newer provider) is ignored.
+ */
+export interface ExternalNowPlayingTrack {
+    title:    string;
+    artist?:  string;
+    thumb?:   string;
+    playing:  boolean;
+    position: number;
+    duration: number;
+    canNext?: boolean;
+    canPrev?: boolean;
+}
+
 export type NuiMessage =
     | { action: 'sd-phone:open';    data: OpenPayload }
     | { action: 'sd-phone:apps';    data: { installedApps?: string[]; homeLayout?: string | null } }
     | { action: 'sd-phone:simState'; data: SimStatePush }
     | { action: 'sd-phone:frameColor'; data: { color: string } }
     | { action: 'sd-phone:music:receive'; data: MusicSharePush }
+    | { action: 'sd-phone:nowPlaying:set';   data: { appId: string; track: ExternalNowPlayingTrack } }
+    | { action: 'sd-phone:nowPlaying:clear'; data: { appId: string } }
     | { action: 'sd-phone:pages:feed';       data: ClassifiedFeedPush }
     | { action: 'sd-phone:weazelnews:feed';  data: { type: 'changed' | 'job' } }
     | { action: 'sd-phone:marketplace:feed'; data: ClassifiedFeedPush }
