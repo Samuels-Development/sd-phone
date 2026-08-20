@@ -47,6 +47,10 @@ local WIDGET_SIZES = { sm = true, md = true, lg = true }
 ---@type string[] Sizes a widget is offered at when it declares none.
 local WIDGET_SIZES_DEFAULT = { 'sm', 'md', 'lg' }
 
+local LOCKSCREEN_WIDGET_FIELD_TYPES = {
+    id = 'string', name = 'string', ui = 'string', height = 'number', interactive = 'boolean',
+}
+
 ---@type string This resource, which no widget may point its frame at: a page served from the
 ---phone's own origin would be same-origin with the shell, and framing the shell nests it in a tile.
 local PHONE_RESOURCE = GetCurrentResourceName():lower()
@@ -156,6 +160,28 @@ local function readWidgets(list, identifier)
         end
     end
     return widgets
+end
+
+local function readLockscreenWidgets(entries)
+    local out, seen = {}, {}
+    if type(entries) ~= 'table' then return out end
+    for index, entry in ipairs(entries) do
+        if type(entry) == 'table' then
+            local widget = {}
+            for field, expected in pairs(LOCKSCREEN_WIDGET_FIELD_TYPES) do
+                if type(entry[field]) == expected then widget[field] = entry[field] end
+            end
+            widget.name = widget.name or ('Lock Screen Widget ' .. index)
+            widget.id = slug(widget.id or widget.name)
+            widget.height = math.max(48, math.min(240, math.floor(widget.height or 84)))
+            if widget.id ~= '' and widget.ui and widget.ui ~= '' and not seen[widget.id]
+                and uiResource(widget.ui) ~= PHONE_RESOURCE then
+                seen[widget.id] = true
+                out[#out + 1] = widget
+            end
+        end
+    end
+    return out
 end
 
 ---Records an identifier in the order list once.
@@ -295,6 +321,10 @@ function M.has(identifier)
     return type(identifier) == 'string' and registry[identifier] ~= nil
 end
 
+function M.list()
+    return currentList()
+end
+
 ---Registers or replaces a third-party app. Re-registering an identifier is allowed only from the
 ---resource that first claimed it; built-in app ids are reserved and an unresolved caller is rejected.
 ---@param data table lb-phone-shaped app definition
@@ -338,6 +368,8 @@ function M.add(data, resource)
     end
     local widgets = readWidgets(data.widgets, identifier)
     if #widgets > 0 then def.widgets = widgets end
+    local lockscreenWidgets = readLockscreenWidgets(data.lockscreenWidgets)
+    if #lockscreenWidgets > 0 then def.lockscreenWidgets = lockscreenWidgets end
 
     -- Devices ride on the def because the UI does that matching; the job and `requires` gates do
     -- not, so a job the player cannot hold, or an app they have not unlocked, never reaches the

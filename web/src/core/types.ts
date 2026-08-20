@@ -109,6 +109,14 @@ export interface CustomWidgetDef {
     interactive?: boolean;
 }
 
+export interface CustomLockscreenWidgetDef {
+    id: string;
+    name: string;
+    ui: string;
+    height: number;
+    interactive?: boolean;
+}
+
 export interface CustomAppDef {
     id:          string;
     name:        string;
@@ -129,6 +137,7 @@ export interface CustomAppDef {
     /** Device ids this app appears on. Absent means every device. */
     devices?:    string[];
     widgets?:    CustomWidgetDef[];
+    lockscreenWidgets?: CustomLockscreenWidgetDef[];
     resource:    string;
 }
 
@@ -266,6 +275,14 @@ export interface ExternalNowPlayingTrack {
     canPrev?: boolean;
 }
 
+/** One registered custom-app widget currently visible in the lock-screen notification stack. */
+export interface ActiveLockscreenWidget {
+    key: string;
+    appId: string;
+    widgetId: string;
+    payload: Record<string, unknown>;
+}
+
 export type NuiMessage =
     | { action: 'sd-phone:open';    data: OpenPayload }
     | { action: 'sd-phone:apps';    data: { installedApps?: string[]; homeLayout?: string | null } }
@@ -274,6 +291,8 @@ export type NuiMessage =
     | { action: 'sd-phone:music:receive'; data: MusicSharePush }
     | { action: 'sd-phone:nowPlaying:set';   data: { appId: string; track: ExternalNowPlayingTrack } }
     | { action: 'sd-phone:nowPlaying:clear'; data: { appId: string } }
+    | { action: 'sd-phone:lockscreenWidget:show'; data: ActiveLockscreenWidget }
+    | { action: 'sd-phone:lockscreenWidget:hide'; data: { key: string } }
     | { action: 'sd-phone:pages:feed';       data: ClassifiedFeedPush }
     | { action: 'sd-phone:weazelnews:feed';  data: { type: 'changed' | 'job' } }
     | { action: 'sd-phone:marketplace:feed'; data: ClassifiedFeedPush }
