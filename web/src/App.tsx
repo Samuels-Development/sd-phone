@@ -17,6 +17,7 @@ import { SignRequestLayer, type SignRequestData } from '@/apps/documents/SignReq
 import { ControlCenter, ControlCenterHotzone } from '@/shell/ControlCenter';
 import { NotificationCenter, NotificationCenterHotzone } from '@/shell/NotificationCenter';
 import { MusicProvider, useMusic } from '@/apps/music/MusicContext';
+import { LockscreenWidgetsProvider } from '@/shell/LockscreenWidgetsContext';
 import { ryDevDataHidden, ryDevToggleData } from '@/apps/ryde/data';
 import { asAppId, isPreviewApp, preloadAllApps, preloadApp, setPreloadPaused, type AppId } from '@/shell/appRegistry';
 import { AppSwitcher } from '@/shell/AppSwitcher';
@@ -183,13 +184,15 @@ function isTextEntry(el: EventTarget | null): boolean {
 export function App() {
     return (
         <ThemeProvider>
-            <MusicProvider>
-                <BootReplayButton />
-                {!demoAdminOnly && <AppContent />}
-                {device.admin && <AdminPanel />}
-                {!demoAdminOnly && device.payphone && <PayphoneUI />}
-                {!demoAdminOnly && device.id === 'phone' && <RaceOverlay />}
-            </MusicProvider>
+            <LockscreenWidgetsProvider>
+                <MusicProvider>
+                    <BootReplayButton />
+                    {!demoAdminOnly && <AppContent />}
+                    {device.admin && <AdminPanel />}
+                    {!demoAdminOnly && device.payphone && <PayphoneUI />}
+                    {!demoAdminOnly && device.id === 'phone' && <RaceOverlay />}
+                </MusicProvider>
+            </LockscreenWidgetsProvider>
         </ThemeProvider>
     );
 }
