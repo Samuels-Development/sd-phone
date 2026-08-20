@@ -11,6 +11,8 @@ import { useStreamerHidden, useTheme } from '@/stores/themeStore';
 import { Clockface } from './lockClock';
 import { LockClockEditor } from './LockClockEditor';
 import { NotifIcon, type NotificationItem } from './Notifications';
+import { useLockscreenWidgets } from './LockscreenWidgetsContext';
+import { LockscreenWidgetFrame } from './LockscreenWidgetFrame';
 import { useMusic } from '@/apps/music/MusicContext';
 import { coverUrl } from '@/apps/music/data';
 import { t } from '@/i18n';
@@ -41,6 +43,7 @@ export function Lockscreen({ use24h, showDate, wallpaper, unlockTrigger, onUnloc
 
     const { lockClock, setLockClock, passcode, faceId, blurLock, wallpaperParallax } = useTheme('lockClock', 'setLockClock', 'passcode', 'faceId', 'blurLock', 'wallpaperParallax');
     const music = useMusic();
+    const lockscreenWidgets = useLockscreenWidgets();
     const [customizing, setCustomizing] = useState(false);
     const [authMode, setAuthMode] = useState<null | 'face' | 'passcode'>(null);
 
@@ -160,12 +163,13 @@ export function Lockscreen({ use24h, showDate, wallpaper, unlockTrigger, onUnloc
                     </div>
                 )}
 
-                {notifications.length > 0 && (
+                {(lockscreenWidgets.length > 0 || notifications.length > 0) && (
                     <div
                         className="absolute inset-x-0 z-10 overflow-y-auto no-scrollbar px-4"
                         style={{ top: music.current ? 286 + NOW_PLAYING_H + 12 : 286, bottom: 130 }}
                     >
                         <div className="flex flex-col gap-2 pb-2">
+                            {lockscreenWidgets.map(item => <LockscreenWidgetFrame key={item.key} item={item} />)}
                             {notifications.map(n => (
                                 <LockNotifCard key={n.id} item={n} onOpen={() => requestOpenNotif(n)} onDismiss={() => onDismissNotif(n.id)} />
                             ))}
@@ -388,11 +392,12 @@ function ancestorZoom(el: HTMLElement | null): number {
     return z || 1;
 }
 
-// The iOS-style Now Playing card lock screens show right under the clock, above notifications.
-// Deliberately no progress scrubber - Apple only shows one on the expanded/long-pressed card, and
-// keeping this compact matches every other lock screen element's density. Backed by the same
-// useMusic() as Control Center, the dynamic island and the widget, so an external provider (see
-// MusicContext's `external` state) shows here too, with zero extra wiring.
+// The iOS-style Now Playing card lock screens show right under the clock, above notifications and
+// any lock-screen widgets. Deliberately no progress scrubber - Apple only shows one on the
+// expanded/long-pressed card, and keeping this compact matches every other lock screen element's
+// density. Backed by the same useMusic() as Control Center and the dynamic island, so this always
+// mirrors the built-in player; third-party audio providers use their own lock-screen widget via
+// showLockscreenWidget/hideLockscreenWidget instead of this card.
 function LockNowPlaying({ music }: { music: ReturnType<typeof useMusic> }) {
     const track = music.current;
     if (!track) return null;
@@ -525,4 +530,3 @@ function QuickAction({ children, label, active = false, onClick }: { children: R
         </button>
     );
 }
-
