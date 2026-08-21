@@ -32,6 +32,19 @@ return {
     -- certificate, so it is something you turn on deliberately rather than half-have.
     Enabled = false,
 
+    -- Whether the relay runs inside this resource. With this on there is no Node to install, no
+    -- second process to keep alive, no signing key to generate and no port to pick: the key is
+    -- minted for each boot and never leaves the process, and the port is whichever one is free.
+    --
+    -- It cannot conjure a certificate, and nothing can. The phone's browser refuses an insecure
+    -- socket to anything but the machine it is running on, so a server with real players still
+    -- needs TLS terminated in front of this and its address in sd_phone_relay_url. Without that,
+    -- this is a development convenience and the features stay on the event path.
+    --
+    -- Turn it off to run media-server/ on its own box instead; then sd_phone_relay_url and
+    -- sd_phone_relay_key are read as before.
+    SelfHost = true,
+
     -- Which features may mint a token. A feature switched off here keeps working, it just keeps
     -- working the old way, over the event bus.
     Features = {

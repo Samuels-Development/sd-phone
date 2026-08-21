@@ -9,24 +9,39 @@ base64 encoded (a third more bytes), pushed across the NUI boundary, relayed as 
 reassembled by the viewer. That path is slow and it is expensive for the game server. This relay carries
 raw bytes over one socket per phone and never touches the game thread.
 
+## Two ways to run it
+
+**Inside the resource (the easy one).** With `Media.Enabled = true` and `Media.SelfHost = true` in
+`configs/media.lua`, sd-phone starts this code inside FXServer itself. There is no Node to install,
+no second process to keep alive, no signing key to generate and no port to choose: the key is minted
+for each boot and never leaves the process, and the port is the first free one from 30567. The
+console says which port it took.
+
+**On its own (the scalable one).** Set `Media.SelfHost = false` and run `node index.js` here, on this
+box or another one, then point `sd_phone_relay_url` and `sd_phone_relay_key` at it. This is the right
+shape once the relay is carrying enough traffic to want its own CPU.
+
+Either way you still need TLS in front of it for real players. See TLS below: this is the one part
+nothing can do for you.
+
 ## What this is not
 
-* **It is not a FiveM resource.** It is never listed in `fxmanifest.lua`, it is not a `server_script`,
-  it calls no native and it never uses `exports`. Nothing under `media-server/` matches any glob in the
-  resource manifest, so FiveM will not load a single file from this folder.
 * **It is not an authorization system.** Every permission decision stays in Lua. The relay only checks
   that a request carries a valid, unexpired, unused token signed by your game server, and that the token
   names the stream and the role being asked for. A token is a receipt that the Lua checks already passed.
 * **It is not required.** If you never run it, every feature keeps working exactly as it does today over
-  the existing FiveM event path. sd-phone only uses the relay when `sd_phone_relay_url` and
-  `sd_phone_relay_key` are both set, and it falls back to the event path the moment the relay is
-  unreachable. There is no user visible error when the relay is off.
+  the existing FiveM event path, and MDT bodycams can go straight between two clients over a peer
+  connection with no relay at all. sd-phone falls back to the event path the moment the relay is
+  unreachable, and there is no user visible error when it is off.
+* **It is not a place for permissions, storage or business logic.** It moves bytes between sockets.
 
 ## Requirements
 
-* Node.js 18.17 or newer (Node 20 or 22 LTS recommended).
+* Node.js 16.9 or newer to run standalone. Nothing to install to run it inside FXServer, whose own
+  runtime is what executes it there.
 * No dependencies. There is no `npm install` step; the `node_modules` folder is never created.
-* One TCP port reachable from your players (default 30130), and a hostname with a real TLS certificate.
+* CommonJS, not ESM, because FXServer's V8 has no ESM loader and this has to load in both.
+* One TCP port reachable from your players, and a hostname with a real TLS certificate.
 
 ## Quick start
 
@@ -38,7 +53,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 SD_PHONE_RELAY_KEY=<the 64 hex characters from step 1> node index.js
 
 # 3. Confirm it answers.
-curl http://127.0.0.1:30130/health
+curl http://127.0.0.1:30567/health
 # {"ok":true,"streams":0,"sockets":0,"uptimeMs":1234}
 ```
 
@@ -50,7 +65,7 @@ Then put the same key, and the public URL, into your `server.cfg` (see below) an
 | --- | --- | --- |
 | `SD_PHONE_RELAY_KEY` | (required) | 64 lowercase hex characters. Must match the `sd_phone_relay_key` convar exactly. The process refuses to start without it. |
 | `SD_PHONE_RELAY_HOST` | `0.0.0.0` | Bind address. Use `127.0.0.1` when a reverse proxy on the same box is the only thing that should reach it. |
-| `SD_PHONE_RELAY_PORT` | `30130` | Bind port. |
+| `SD_PHONE_RELAY_PORT` | `30567` | Bind port. Deliberately clear of the game port and the HTTP endpoint FiveM opens ten above it, which the old default of 30130 collided with. |
 | `SD_PHONE_RELAY_ORIGIN` | `https://cfx-nui-sd-phone,https://cfx-nui-sd-tablet` | Comma separated list of browser origins allowed to upgrade. `*` disables the check. |
 | `SD_PHONE_RELAY_TLS_CERT` | (empty) | Path to a PEM certificate chain. Leave empty when something else terminates TLS. |
 | `SD_PHONE_RELAY_TLS_KEY` | (empty) | Path to the matching PEM private key. |
@@ -102,7 +117,7 @@ node index.js
 
 ```caddyfile
 media.example.com {
-    reverse_proxy 127.0.0.1:30130
+    reverse_proxy 127.0.0.1:30567
 }
 ```
 
@@ -110,7 +125,7 @@ media.example.com {
 
 ```nginx
 location / {
-    proxy_pass http://127.0.0.1:30130;
+    proxy_pass http://127.0.0.1:30567;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
@@ -144,7 +159,7 @@ WorkingDirectory=/opt/sd-phone-media-server
 ExecStart=/usr/bin/node index.js
 Environment=SD_PHONE_RELAY_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 Environment=SD_PHONE_RELAY_HOST=127.0.0.1
-Environment=SD_PHONE_RELAY_PORT=30130
+Environment=SD_PHONE_RELAY_PORT=30567
 Environment=SD_PHONE_RELAY_TRUST_PROXY=1
 Restart=always
 RestartSec=3
@@ -172,7 +187,7 @@ pm2 save
 
 ```bash
 docker build -t sd-phone-media .
-docker run -d --name sd-phone-media -p 30130:30130 \
+docker run -d --name sd-phone-media -p 30567:30567 \
   -e SD_PHONE_RELAY_KEY=... --restart unless-stopped sd-phone-media
 ```
 

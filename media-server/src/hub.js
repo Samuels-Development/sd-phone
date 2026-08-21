@@ -1,20 +1,13 @@
 // The process-wide registry: every socket, every stream, the replay defence and the per IP abuse
 // counter (clause 3.12), plus the two housekeeping sweeps clause 1.9 requires.
 
-import { JtiStore } from './jti.js';
-import {
-    AUTH_BAN_MS,
-    AUTH_FAIL_MAX,
-    AUTH_FAIL_WINDOW_MS,
-    CLOSE,
-    RELAY_PING_MS,
-    SOCKET_IDLE_MS,
-} from './protocol.js';
-import { Stream } from './stream.js';
+const { JtiStore } = require('./jti.js');
+const { AUTH_BAN_MS, AUTH_FAIL_MAX, AUTH_FAIL_WINDOW_MS, CLOSE, RELAY_PING_MS, SOCKET_IDLE_MS } = require('./protocol.js');
+const { Stream } = require('./stream.js');
 
 const SWEEP_MS = 2_500;
 
-export class Hub {
+class Hub {
     constructor(config, log) {
         this.config = config;
         this.log = log;
@@ -143,3 +136,7 @@ export class Hub {
         for (const stream of [...this.streams.values()]) stream.destroy('shutdown');
     }
 }
+
+module.exports = {
+    Hub,
+};

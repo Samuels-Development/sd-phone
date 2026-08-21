@@ -4,23 +4,23 @@
 // text frames, binary frames, ping, pong, close and fragmentation. No extensions are negotiated,
 // which is deliberate (the payloads are already compressed media).
 
-import crypto from 'node:crypto';
-import { EventEmitter } from 'node:events';
+const crypto = require('node:crypto');
+const { EventEmitter } = require('node:events');
 
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
-export const OPCODE = { CONT: 0x0, TEXT: 0x1, BINARY: 0x2, CLOSE: 0x8, PING: 0x9, PONG: 0xa };
+const OPCODE = { CONT: 0x0, TEXT: 0x1, BINARY: 0x2, CLOSE: 0x8, PING: 0x9, PONG: 0xa };
 
 const WS_PROTOCOL_ERROR = 1002;
 const COMPACT_AT = 1 << 16;
 const CLOSE_LINGER_MS = 3000;
 
-export function computeAccept(key) {
+function computeAccept(key) {
     return crypto.createHash('sha1').update(`${key}${GUID}`).digest('base64');
 }
 
 // Writes the 101 response. Returns false when the request is not a usable websocket upgrade.
-export function acceptUpgrade(req, socket, { subprotocol } = {}) {
+function acceptUpgrade(req, socket, { subprotocol } = {}) {
     const key = req.headers['sec-websocket-key'];
     const version = String(req.headers['sec-websocket-version'] ?? '');
     if (typeof key !== 'string' || key === '' || version !== '13') return false;
@@ -36,13 +36,13 @@ export function acceptUpgrade(req, socket, { subprotocol } = {}) {
     return true;
 }
 
-export function offersSubprotocol(req, name) {
+function offersSubprotocol(req, name) {
     const raw = req.headers['sec-websocket-protocol'];
     if (typeof raw !== 'string') return false;
     return raw.split(',').some((part) => part.trim() === name);
 }
 
-export function rejectUpgrade(socket, status, text) {
+function rejectUpgrade(socket, status, text) {
     try {
         const body = `${text}\n`;
         socket.write(
@@ -55,7 +55,7 @@ export function rejectUpgrade(socket, status, text) {
     socket.destroy();
 }
 
-export class WsConnection extends EventEmitter {
+class WsConnection extends EventEmitter {
     constructor(socket, { maxBinaryBytes, maxTextBytes }) {
         super();
         this.socket = socket;
@@ -306,4 +306,12 @@ export class WsConnection extends EventEmitter {
     }
 }
 
-export { WS_PROTOCOL_ERROR };
+module.exports = {
+    WS_PROTOCOL_ERROR,
+    OPCODE,
+    computeAccept,
+    acceptUpgrade,
+    offersSubprotocol,
+    rejectUpgrade,
+    WsConnection,
+};

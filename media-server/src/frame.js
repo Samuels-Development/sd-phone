@@ -2,16 +2,16 @@
 // helpers used here are the BE variants for that reason and no little endian read exists in this
 // file by design.
 
-import { FLAG_MASK, KIND, MAGIC, SDMR_HEADER_BYTES, VERSION } from './protocol.js';
+const { FLAG_MASK, KIND, MAGIC, SDMR_HEADER_BYTES, VERSION } = require('./protocol.js');
 
 const KIND_OK = new Set([KIND.INIT, KIND.KEY, KIND.DELTA, KIND.JPEG]);
 
-export function isSelfContained(kind) {
+function isSelfContained(kind) {
     return kind === KIND.INIT || kind === KIND.KEY || kind === KIND.JPEG;
 }
 
 // Returns { ok: true, header } or { ok: false, reason } so the caller can pick the close code.
-export function decodeFrame(buf) {
+function decodeFrame(buf) {
     if (!Buffer.isBuffer(buf) || buf.length < SDMR_HEADER_BYTES) return { ok: false, reason: 'short' };
     if (buf[0] !== MAGIC) return { ok: false, reason: 'magic' };
     if (buf[1] !== VERSION) return { ok: false, reason: 'version' };
@@ -32,7 +32,7 @@ export function decodeFrame(buf) {
     };
 }
 
-export function encodeHeader(kind, flags, sid, gen, seq, timestampUs) {
+function encodeHeader(kind, flags, sid, gen, seq, timestampUs) {
     const head = Buffer.allocUnsafe(SDMR_HEADER_BYTES);
     head[0] = MAGIC;
     head[1] = VERSION;
@@ -46,7 +46,14 @@ export function encodeHeader(kind, flags, sid, gen, seq, timestampUs) {
     return head;
 }
 
-export function encodeFrame(kind, flags, sid, gen, seq, timestampUs, payload) {
+function encodeFrame(kind, flags, sid, gen, seq, timestampUs, payload) {
     const body = payload ?? Buffer.alloc(0);
     return Buffer.concat([encodeHeader(kind, flags, sid, gen, seq, timestampUs), body], SDMR_HEADER_BYTES + body.length);
 }
+
+module.exports = {
+    isSelfContained,
+    decodeFrame,
+    encodeHeader,
+    encodeFrame,
+};

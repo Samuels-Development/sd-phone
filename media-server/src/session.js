@@ -1,26 +1,11 @@
 // Clause 1 (transport), clause 3.11 (auth failure handling) and clause 4 (control messages). One
 // Session wraps one websocket: every stream a client publishes or watches multiplexes over it.
 
-import crypto from 'node:crypto';
+const crypto = require('node:crypto');
 
-import { decodeFrame } from './frame.js';
-import {
-    CLOSE,
-    CONTROL_HEADROOM,
-    HARD_LIMIT,
-    HELLO_TIMEOUT_MS,
-    MAX_MESSAGE_BYTES,
-    MAX_STREAMS_GLOBAL,
-    MAX_STREAMS_PER_SOCKET,
-    SDMR_HEADER_BYTES,
-    SOCKET_IDLE_MS,
-    SOFT_LIMIT,
-    STREAM_KEY_RE,
-    MODES,
-    WIRES,
-    WIRE_VERSION,
-} from './protocol.js';
-import { verifyToken } from './token.js';
+const { decodeFrame } = require('./frame.js');
+const { CLOSE, CONTROL_HEADROOM, HARD_LIMIT, HELLO_TIMEOUT_MS, MAX_MESSAGE_BYTES, MAX_STREAMS_GLOBAL, MAX_STREAMS_PER_SOCKET, SDMR_HEADER_BYTES, SOCKET_IDLE_MS, SOFT_LIMIT, STREAM_KEY_RE, MODES, WIRES, WIRE_VERSION } = require('./protocol.js');
+const { verifyToken } = require('./token.js');
 
 // Clause 3.11: how each verification failure is answered.
 const AUTH_FAILURE = {
@@ -43,7 +28,7 @@ function integer(value, min, max, fallback) {
     return Math.min(max, Math.max(min, Math.floor(value)));
 }
 
-export class Session {
+class Session {
     constructor(hub, ws, info) {
         this.hub = hub;
         this.log = hub.log;
@@ -486,3 +471,7 @@ export class Session {
         };
     }
 }
+
+module.exports = {
+    Session,
+};

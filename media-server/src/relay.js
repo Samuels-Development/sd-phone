@@ -2,21 +2,15 @@
 // control channel (clause 3.13). Nothing in this file knows what a bodycam is; the relay only ever
 // sees stream keys and tokens.
 
-import crypto from 'node:crypto';
-import fs from 'node:fs';
-import http from 'node:http';
-import https from 'node:https';
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const http = require('node:http');
+const https = require('node:https');
 
-import { Hub } from './hub.js';
-import {
-    CONTROL_SKEW_MS,
-    MAX_CONTROL_BYTES,
-    MAX_MESSAGE_BYTES,
-    STREAM_KEY_RE,
-    SUBPROTOCOL,
-} from './protocol.js';
-import { Session } from './session.js';
-import { WsConnection, acceptUpgrade, offersSubprotocol, rejectUpgrade } from './ws.js';
+const { Hub } = require('./hub.js');
+const { CONTROL_SKEW_MS, MAX_CONTROL_BYTES, MAX_MESSAGE_BYTES, STREAM_KEY_RE, SUBPROTOCOL } = require('./protocol.js');
+const { Session } = require('./session.js');
+const { WsConnection, acceptUpgrade, offersSubprotocol, rejectUpgrade } = require('./ws.js');
 
 const CONTROL_BODY_MAX = 16_384;
 
@@ -59,7 +53,7 @@ function signatureOk(key, ts, rawBody, provided) {
     return got.length === want.length && crypto.timingSafeEqual(got, want);
 }
 
-export function createRelay(config, log) {
+function createRelay(config, log) {
     const hub = new Hub(config, log);
 
     async function onControl(req, res) {
@@ -203,3 +197,7 @@ export function createRelay(config, log) {
         },
     };
 }
+
+module.exports = {
+    createRelay,
+};

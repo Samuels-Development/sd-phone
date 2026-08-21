@@ -4,10 +4,10 @@
   "private": true,
   "description": "SDMR/1 binary media relay for sd-phone (MDT bodycam, Photogram Live, Vibez Live)",
   "license": "SEE LICENSE IN ../LICENSE",
-  "type": "module",
+  "type": "commonjs",
   "main": "index.js",
   "engines": {
-    "node": ">=18.17"
+    "node": ">=16.9"
   },
   "scripts": {
     "start": "node index.js",

@@ -3,9 +3,9 @@
 // shared HMAC key. The step order in verifyToken() is normative (clause 3.9) and no claim is
 // inspected before the signature has been checked.
 
-import crypto from 'node:crypto';
+const crypto = require('node:crypto');
 
-import { CLOCK_SKEW_S, MAX_TOKEN_CHARS, TOKEN_TTL_S_MAX } from './protocol.js';
+const { CLOCK_SKEW_S, MAX_TOKEN_CHARS, TOKEN_TTL_S_MAX } = require('./protocol.js');
 
 const PREFIX = 'sdmr1';
 const B64URL_RE = /^[A-Za-z0-9_-]+$/;
@@ -29,7 +29,7 @@ function signingInput(payloadPart) {
 
 // Mints a token. FiveM does this through server/crypto.js in production; this exists so the relay
 // can be exercised by selftest.js and by an owner debugging a deployment.
-export function mintToken(key, payload) {
+function mintToken(key, payload) {
     const json = JSON.stringify(payload);
     const part = b64url(Buffer.from(json, 'utf8'));
     const mac = crypto.createHmac('sha256', key).update(signingInput(part)).digest();
@@ -61,7 +61,7 @@ function fieldsValid(payload) {
 
 // opts: { key: Buffer, role, streamKey, sub, jtiStore, now (unix seconds) }
 // Returns { ok: true, payload } or { ok: false, code } with a code from clause 4.16.
-export function verifyToken(token, opts) {
+function verifyToken(token, opts) {
     if (typeof token !== 'string' || token.length === 0 || token.length > MAX_TOKEN_CHARS) {
         return { ok: false, code: 'token_malformed' };
     }
@@ -111,3 +111,8 @@ export function verifyToken(token, opts) {
     if (opts.jtiStore) opts.jtiStore.remember(payload.jti, payload.exp);
     return { ok: true, payload };
 }
+
+module.exports = {
+    mintToken,
+    verifyToken,
+};

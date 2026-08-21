@@ -70,6 +70,19 @@ local UNKNOWN_STREAM = 'That stream does not exist'
 ---@type string Refusal answered when the feature that owns a stream would not have it watched.
 local REFUSED = 'You cannot watch that stream'
 
+---@type boolean Whether the relay may run inside this resource (configs/media.lua SelfHost).
+local SELF_HOST = CFG.SelfHost ~= false
+---@type integer Milliseconds to wait for the in-process relay to report which port it took.
+local HOST_START_MS = 3000
+
+---@type string Signing key minted for the relay running inside this resource, empty when there is
+---not one. It exists for this boot only and is never written anywhere.
+local hostedKey = ''
+---@type integer Port that relay took, 0 when nothing is hosted here.
+local hostedPort = 0
+---@type boolean Whether that relay is terminating TLS itself.
+local hostedTls = false
+
 ---@type boolean|nil Cached gate result; nil until the first resolve.
 local ready
 ---@type string Relay endpoint served to the browser, empty until the gate resolves.
@@ -131,6 +144,68 @@ local function probeClaims()
     }
 end
 
+---Starts the relay inside this resource and waits for it to say which port it took. Everything a
+---standalone relay needs configuring by hand is decided here instead: the signing key is minted for
+---this boot and never leaves the process, and the port is whatever is free, because a server owner
+---should not have to know that the relay's own default lands on the HTTP endpoint FiveM opens ten
+---above the game port.
+---
+---This does not conjure a certificate, and nothing can: the phone's browser refuses a ws:// socket
+---to anything but loopback, so a server serving real players still needs TLS terminated in front of
+---this and its address in the URL convar. What it removes is the Node install, the second process,
+---the key and the port.
+---@return boolean hosted
+local function startHost()
+    if not crypto.available() then return false end
+
+    local key = crypto.randomHex(32)
+    if type(key) ~= 'string' or #key ~= 64 then return false end
+
+    local answered, result = false, nil
+    local cookie = AddEventHandler('sd-phone:media:relayHosted', function(payload)
+        answered, result = true, payload
+    end)
+
+    local okCall = pcall(function()
+        exports[GetCurrentResourceName()]:sdRelayHost({
+            keyHex     = key,
+            port       = math.floor(tonumber(GetConvar('sd_phone_relay_port', '')) or 0),
+            logLevel   = GetConvar('sd_phone_relay_log', 'warn'),
+            tlsCert    = GetConvar('sd_phone_relay_tls_cert', ''),
+            tlsKey     = GetConvar('sd_phone_relay_tls_key', ''),
+            trustProxy = GetConvar('sd_phone_relay_url', '') ~= '',
+        })
+    end)
+
+    if okCall then
+        local waited = 0
+        while not answered and waited < HOST_START_MS do
+            Wait(50)
+            waited = waited + 50
+        end
+    end
+    RemoveEventHandler(cookie)
+
+    if not okCall then
+        print('^3[sd-phone:media]^0 the relay could not be started in this resource: the Node runtime did not answer. Run media-server/ separately, or set Media.SelfHost = false to silence this.')
+        return false
+    end
+    if not answered then
+        print('^3[sd-phone:media]^0 the relay did not report back in time; live video stays on the event path.')
+        return false
+    end
+    if type(result) ~= 'table' or result.ok ~= true then
+        local why = type(result) == 'table' and (result.detail or result.reason) or 'unknown'
+        print(('^3[sd-phone:media]^0 the relay could not start: %s'):format(tostring(why)))
+        return false
+    end
+
+    hostedKey  = key
+    hostedPort = math.floor(tonumber(result.port) or 0)
+    hostedTls  = result.tls == true
+    return hostedPort > 0
+end
+
 local function resolve()
     if ready ~= nil then return ready end
     ready = false
@@ -138,6 +213,38 @@ local function resolve()
 
     local url = GetConvar(URL_CONVAR, '')
     local key = GetConvar(KEY_CONVAR, '')
+
+    -- A relay running inside this resource signs with a key nobody had to generate and listens on
+    -- a port nobody had to pick, so both are taken from it rather than from the convars. An owner
+    -- who put TLS in front still sets the URL convar, and that address wins: it is the one their
+    -- players can actually reach.
+    if hostedPort > 0 then
+        key = hostedKey
+
+        -- A loopback URL naming a different port than the one we are listening on cannot be right:
+        -- there is no second relay on this machine, and what is usually there instead is FiveM's
+        -- own HTTP endpoint, which answers the browser's handshake with a redirect. Correcting it
+        -- silently would hide a setting the owner still has wrong somewhere else, so it is said.
+        local convarPort = tonumber(url:match('^wss?://127%.0%.0%.1:(%d+)') or url:match('^wss?://localhost:(%d+)'))
+        if convarPort and convarPort ~= hostedPort then
+            print(('^3[sd-phone:media]^0 %s points at loopback port %d, but the relay in this resource is on %d. Using the one that exists; clear the convar, or set it to the address your players reach.')
+                :format(URL_CONVAR, convarPort, hostedPort))
+            url = ''
+        end
+
+        -- With nothing configured, the relay is listening but has no address a player could use:
+        -- loopback reaches the player's own machine, not this one. Handing that out would cost
+        -- every player a connection that cannot succeed, so it is only advertised when somebody
+        -- deliberately says this is a local test.
+        if url == '' then
+            if GetConvarInt('sd_phone_relay_loopback', 0) == 1 then
+                url = ('%s://127.0.0.1:%d'):format(hostedTls and 'wss' or 'ws', hostedPort)
+            else
+                print(('^3[sd-phone:media]^0 the relay is up on port %d, but no address is set for it. Put TLS in front and `set %s "wss://your.host/ws"`, or `set sd_phone_relay_loopback 1` to test it on this machine. Live video stays on the event path until then.')
+                    :format(hostedPort, URL_CONVAR))
+            end
+        end
+    end
 
     local reason
     if url == '' then
@@ -396,6 +503,7 @@ if ENABLED then
     -- that has to be a live export by then rather than a file the runtime is still reading.
     CreateThread(function()
         Wait(0)
+        if SELF_HOST then startHost() end
         if resolve() then
             print(('^2[sd-phone:media]^0 relay ready at %s ^2·^0 %ds tokens'):format(endpointUrl, ttlSeconds))
         end

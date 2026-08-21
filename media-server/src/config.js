@@ -9,7 +9,7 @@ function intEnv(raw, fallback, min, max) {
     return Math.min(max, Math.max(min, n));
 }
 
-export function loadConfig(env = process.env) {
+function loadConfig(env = process.env) {
     const errors = [];
 
     const keyHex = String(env.SD_PHONE_RELAY_KEY ?? '').trim();
@@ -40,7 +40,7 @@ export function loadConfig(env = process.env) {
         keyHex,
         key: HEX64.test(keyHex) ? Buffer.from(keyHex, 'hex') : Buffer.alloc(0),
         host: String(env.SD_PHONE_RELAY_HOST ?? '0.0.0.0').trim() || '0.0.0.0',
-        port: intEnv(env.SD_PHONE_RELAY_PORT, 30130, 1, 65535),
+        port: intEnv(env.SD_PHONE_RELAY_PORT, 30567, 1, 65535),
         origins,
         anyOrigin: origins.includes('*'),
         tlsCert,
@@ -53,3 +53,7 @@ export function loadConfig(env = process.env) {
         logLevel,
     };
 }
+
+module.exports = {
+    loadConfig,
+};

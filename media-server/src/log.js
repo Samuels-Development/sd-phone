@@ -19,7 +19,7 @@ function render(fields) {
     return parts.length ? ` ${parts.join(' ')}` : '';
 }
 
-export function createLogger(level = 'info') {
+function createLogger(level = 'info') {
     const threshold = LEVELS[level] ?? LEVELS.info;
 
     function emit(kind, scope, message, fields) {
@@ -38,3 +38,7 @@ export function createLogger(level = 'info') {
         debug: (scope, message, fields) => emit('debug', scope, message, fields),
     };
 }
+
+module.exports = {
+    createLogger,
+};

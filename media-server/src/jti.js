@@ -1,9 +1,9 @@
 // Clause 3.10: replay defence. Entries are never evicted to make room, because evicting reopens
 // the replay window; at the cap the relay refuses new tokens instead.
 
-import { CLOCK_SKEW_S, JTI_MAX, JTI_SWEEP_MS } from './protocol.js';
+const { CLOCK_SKEW_S, JTI_MAX, JTI_SWEEP_MS } = require('./protocol.js');
 
-export class JtiStore {
+class JtiStore {
     constructor() {
         this.seen = new Map();
         this.timer = setInterval(() => this.sweep(), JTI_SWEEP_MS);
@@ -37,3 +37,7 @@ export class JtiStore {
         this.seen.clear();
     }
 }
+
+module.exports = {
+    JtiStore,
+};

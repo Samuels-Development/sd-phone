@@ -2,27 +2,8 @@
 // disappearance). One Stream instance exists per stream key for as long as anyone is attached to
 // it plus the linger window.
 
-import { encodeHeader, isSelfContained } from './frame.js';
-import {
-    CLOSE,
-    DROP_REPORT_MS,
-    FLAG,
-    HARD_LIMIT,
-    INGEST_ERROR_MS,
-    INGEST_MAX_BYTES_CEIL,
-    INGEST_OVER_WINDOWS_MAX,
-    INGEST_WINDOW_MS,
-    KEYFRAME_REQUEST_MS,
-    KIND,
-    LINGER_MS,
-    PRIME_MAX_AGE_MS,
-    PRIME_MAX_BYTES,
-    PRIME_MAX_FRAMES,
-    PRIME_MAX_GOPS,
-    SLOW_VIEWER_MS,
-    SOFT_LIMIT,
-    VIEWERS_COALESCE_MS,
-} from './protocol.js';
+const { encodeHeader, isSelfContained } = require('./frame.js');
+const { CLOSE, DROP_REPORT_MS, FLAG, HARD_LIMIT, INGEST_ERROR_MS, INGEST_MAX_BYTES_CEIL, INGEST_OVER_WINDOWS_MAX, INGEST_WINDOW_MS, KEYFRAME_REQUEST_MS, KIND, LINGER_MS, PRIME_MAX_AGE_MS, PRIME_MAX_BYTES, PRIME_MAX_FRAMES, PRIME_MAX_GOPS, SLOW_VIEWER_MS, SOFT_LIMIT, VIEWERS_COALESCE_MS } = require('./protocol.js');
 
 const DEFAULT_DESC = {
     mode: 'video',
@@ -158,7 +139,7 @@ class Viewer {
     }
 }
 
-export class Stream {
+class Stream {
     constructor(hub, key) {
         this.hub = hub;
         this.log = hub.log;
@@ -564,3 +545,7 @@ export class Stream {
         };
     }
 }
+
+module.exports = {
+    Stream,
+};

@@ -46,7 +46,7 @@ jobs:
         run: |
           mkdir -p dist/sd-phone/web
           cp fxmanifest.lua README.md dist/sd-phone/
-          cp -r bridge client server shared configs locales images dist/sd-phone/
+          cp -r bridge client server shared configs locales images media-server dist/sd-phone/
           cp -r web/build dist/sd-phone/web/build
 
       # The staging list above is an allowlist, so a new top-level directory is
