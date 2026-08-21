@@ -2743,6 +2743,7 @@
     "title": "MDT",
     "total": "Total",
     "transportEvent": "Server",
+    "transportPeer": "Direct",
     "transportRelay": "Relay",
     "type": "Type",
     "typeAll": "All",

@@ -894,19 +894,30 @@ export async function mdtCameras(): Promise<CameraGrid> {
     };
 }
 
+/**
+ * A camera attach, plus what the server decided about a peer connection for it. Kept here rather
+ * than on CameraStream because it describes this terminal's relationship to the camera, not the
+ * camera itself: the same broadcast is peer-served to one terminal and event-served to the next.
+ */
+export interface CameraAttach extends CameraStream {
+    peer:     boolean;
+    peerHost: number | null;
+}
+
 export async function mdtCameraWatch(
     cameraId: string,
     quality: CameraQuality,
     reprime = false,
     relay = false,
     relayFailed = false,
-): Promise<CameraStream | string> {
+    peer = false,
+): Promise<CameraAttach | string> {
     if (!isFiveM) {
         const tile = DEV_CAMERAS.find(c => c.id === cameraId);
         if (!tile) return 'That unit is no longer on the air';
-        return { cameraId, gen: 1, mime: null, status: tile.status, viewers: tile.viewers, relay: null };
+        return { cameraId, gen: 1, mime: null, status: tile.status, viewers: tile.viewers, relay: null, peer: false, peerHost: null };
     }
-    const res = await apiCall<CameraStream>('sd-phone:mdt:cameras:watch', { cameraId, quality, reprime, relay, relayFailed });
+    const res = await apiCall<CameraAttach>('sd-phone:mdt:cameras:watch', { cameraId, quality, reprime, relay, relayFailed, peer });
     if (!res.success || !res.data) return res.message ?? '';
     const grant = res.data.relay ?? null;
     return {
@@ -916,6 +927,8 @@ export async function mdtCameraWatch(
         status:   res.data.status ?? 'ready',
         viewers:  res.data.viewers ?? 0,
         relay:    grant && typeof grant.token === 'string' && typeof grant.url === 'string' ? grant : null,
+        peer:     res.data.peer === true,
+        peerHost: typeof res.data.peerHost === 'number' ? res.data.peerHost : null,
     };
 }
 

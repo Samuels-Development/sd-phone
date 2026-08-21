@@ -14,6 +14,7 @@ import {
     type RelayStreamHandle,
 } from '@/shared/mediaSocket';
 import { mdtCameraUnwatch, mdtCameraWatch } from './mdtApi';
+import { CameraPeerViewer } from './cameraPeer';
 import {
     onCameraChunk,
     onCameraOff,
@@ -31,6 +32,9 @@ const ATTACH_GAP_MS = 2500;
 const SWITCH_IDLE_MS = 1500;
 const SILENT_MS = 15000;
 const TIMESLICE_MS = 400;
+// Whether a terminal asks the officer's client for a direct connection before settling for the
+// picture coming through the game server. The server has the final say; this is only the ask.
+const PEER_FIRST = true;
 const DEFAULT_MIME = 'video/webm';
 
 export function feedNotice(camera: CameraTile, active: boolean, previews: boolean): string | null {
@@ -90,9 +94,11 @@ export function CameraFeed({ camera, quality, active, notice, showTransport, onH
         let relayMime = '';
         let committed: CameraTransport | null = null;
         let offered = true;
+        let peer: CameraPeerViewer | null = null;
+        let peerWanted = PEER_FIRST;
         let attachedAt = 0;
         let framedAt = Date.now();
-        const seen: Record<CameraTransport, number> = { relay: 0, event: 0 };
+        const seen: Record<CameraTransport, number> = { relay: 0, event: 0, peer: 0 };
 
         setHealth('starting');
         setTransport('event');
@@ -197,12 +203,47 @@ export function CameraFeed({ camera, quality, active, notice, showTransport, onH
             handle = opened;
         };
 
+        // The peer path is asked for first and given up on quietly. Nothing about the event path
+        // changes while it is being tried, so a terminal that cannot reach the officer directly
+        // never notices more than that the picture came the longer way round.
+        const dropPeer = (reason: string) => {
+            const open = peer;
+            peer = null;
+            if (!open) return;
+            open.close();
+            peerWanted = false;
+            mediaDebug('camera', 'peerDropped', { id: camera.id, reason });
+            if (committed === 'peer') {
+                committed = null;
+                const video = videoRef.current;
+                if (video) video.srcObject = null;
+                setTransport('event');
+                void attach(true, relayWanted());
+            }
+        };
+
+        const onPeerStream = (stream: MediaStream) => {
+            const video = videoRef.current;
+            if (!alive || !video) return;
+            // The picture is arriving decoded now, so the buffered player and everything feeding it
+            // is redundant: what it holds belongs to a transport this terminal has left.
+            destroy();
+            committed = 'peer';
+            setTransport('peer');
+            setFailure(null);
+            setSilent(false);
+            framedAt = Date.now();
+            video.srcObject = stream;
+            void video.play().catch(() => { /* autoplay is muted, so this only rejects while hidden */ });
+            publish('live');
+        };
+
         const attach = async (reprime: boolean, wantRelay: boolean) => {
             const now = Date.now();
             if (now - attachedAt < ATTACH_GAP_MS) return;
             attachedAt = now;
 
-            const res = await mdtCameraWatch(camera.id, quality, reprime, wantRelay, offered && !handle && !relayAvailable());
+            const res = await mdtCameraWatch(camera.id, quality, reprime, wantRelay, offered && !handle && !relayAvailable(), peerWanted);
             if (!alive) return;
             if (typeof res === 'string') {
                 if (!showingRef.current) setFailure(res || t('mdt.cameraNoFeed', 'No feed from that unit'));
@@ -211,6 +252,19 @@ export function CameraFeed({ camera, quality, active, notice, showTransport, onH
             setFailure(null);
             if (res.mime && !mime) mime = res.mime;
             if (res.relay) void join(res.relay);
+
+            if (res.peer && res.peerHost !== null && !peer) {
+                peer = new CameraPeerViewer({
+                    citizenid: camera.citizenid,
+                    host:      res.peerHost,
+                    onStream:  onPeerStream,
+                    onLost:    reason => dropPeer(reason),
+                });
+            } else if (!res.peer && peer) {
+                // The server took the peer slot back: another terminal wanted it, or the officer
+                // stopped serving them.
+                dropPeer('refused');
+            }
         };
 
         const offChunk = onCameraChunk(camera.citizenid, (push: CameraChunkPush) => {
@@ -253,6 +307,8 @@ export function CameraFeed({ camera, quality, active, notice, showTransport, onH
         return () => {
             alive = false;
             window.clearInterval(keepAlive);
+            peer?.close();
+            peer = null;
             offChunk();
             offPrime();
             offEnded();
@@ -290,7 +346,9 @@ export function CameraFeed({ camera, quality, active, notice, showTransport, onH
                 <span className="pointer-events-none absolute bottom-2 right-2 rounded-[6px] bg-black/70 px-1.5 py-[2px] text-[10.5px] font-bold uppercase tracking-wide text-white/70">
                     {transport === 'relay'
                         ? t('mdt.transportRelay', 'Relay')
-                        : t('mdt.transportEvent', 'Server')}
+                        : transport === 'peer'
+                            ? t('mdt.transportPeer', 'Direct')
+                            : t('mdt.transportEvent', 'Server')}
                 </span>
             )}
 

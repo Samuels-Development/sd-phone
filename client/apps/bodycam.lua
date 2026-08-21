@@ -51,11 +51,12 @@ local unsupported = false
 local function demandPayload()
     if not demand then return { on = false } end
     return {
-        on       = demand.on == true and not yielded,
-        gen      = demand.gen,
-        quality  = demand.quality,
-        enc      = demand.enc,
-        streamId = demand.streamId,
+        on        = demand.on == true and not yielded,
+        gen       = demand.gen,
+        citizenid = demand.citizenid,
+        quality   = demand.quality,
+        enc       = demand.enc,
+        streamId  = demand.streamId,
     }
 end
 
@@ -151,9 +152,10 @@ if ENABLED then
         end
 
         demand = {
-            on       = true,
-            gen      = payload.gen,
-            quality  = payload.quality,
+            on        = true,
+            gen       = payload.gen,
+            citizenid = type(payload.citizenid) == 'string' and payload.citizenid or nil,
+            quality   = payload.quality,
             enc      = type(payload.enc) == 'table' and payload.enc or nil,
             streamId = type(payload.streamId) == 'string' and payload.streamId or nil,
         }
@@ -176,6 +178,34 @@ if ENABLED then
         if not demand or not demand.on then return end
         if type(payload) == 'table' and payload.gen ~= nil and payload.gen ~= demand.gen then return end
         SendNUIMessage({ action = 'sd-phone:mdt:cameraAnchor', data = { gen = demand.gen } })
+    end)
+
+    ---Server push: which terminals hold a peer connection to this camera, and whether anything
+    ---still needs the encoded chunks. A camera watched only over peer connections stops encoding:
+    ---the page keeps the capture running to feed the peers and stops producing segments nobody is
+    ---waiting for.
+    ---@param payload table { gen, viewers, encode }
+    RegisterNetEvent('sd-phone:client:mdt:cameraPeers', function(payload)
+        if type(payload) ~= 'table' then return end
+        SendNUIMessage({ action = 'sd-phone:mdt:cameraPeers', data = payload })
+    end)
+
+    ---Server push: one WebRTC handshake message from the other end of a peer connection. Opaque
+    ---here; the page is the only thing that reads it.
+    ---@param payload table { citizenid, from, kind, data }
+    RegisterNetEvent('sd-phone:client:mdt:cameraSignal', function(payload)
+        if type(payload) ~= 'table' then return end
+        SendNUIMessage({ action = 'sd-phone:mdt:cameraSignal', data = payload })
+    end)
+
+    ---React -> Lua: one WebRTC handshake message on its way to the other end. A plain event rather
+    ---than a latent one: these are small and their order is the handshake.
+    ---@param payload table { citizenid, to, kind, data }
+    RegisterNUICallback('sd-phone:mdt:cameraSignal', function(payload, cb)
+        if type(payload) == 'table' then
+            TriggerServerEvent('sd-phone:server:mdt:cameraSignal', payload)
+        end
+        cb({ success = true })
     end)
 
     ---React -> Lua: the broadcaster page asking what the server currently wants, for the case

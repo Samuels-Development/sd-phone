@@ -11,7 +11,8 @@ import {
     relayPublish,
     type RelayStreamHandle,
 } from '@/shared/mediaSocket';
-import { onCameraAnchor, onCameraDemand, type CameraAnchorPush, type CameraDemand, type CameraEncoder } from './cameraBus';
+import { onCameraAnchor, onCameraDemand, onCameraPeers, type CameraAnchorPush, type CameraDemand, type CameraEncoder, type CameraPeersPush } from './cameraBus';
+import { CameraPeerHost } from './cameraPeer';
 import { mediaDebug } from '@/shared/mediaDebug';
 
 const FALLBACK_ASPECT = 16 / 9;
@@ -26,6 +27,10 @@ let startToken = 0;
 let teardown: (() => void) | null = null;
 /** Restarts the encoder on the running publish, so the next chunk is a fresh header. */
 let anchorNow: (() => void) | null = null;
+/** The peer connections this client is serving, while it is publishing. */
+let peerHost: CameraPeerHost | null = null;
+/** Starts or stops the encoder on the running publish, without disturbing the capture. */
+let encodingSwitch: ((on: boolean) => void) | null = null;
 let sampler: ReturnType<typeof setInterval> | null = null;
 let encodedBytes = 0;
 let render: GameRender | null = null;
@@ -59,6 +64,11 @@ function ensureSurface(): HTMLCanvasElement {
 }
 
 type Segment = (blob: Blob, init: boolean, key: boolean) => Promise<void>;
+
+interface Capture {
+    stream: MediaStream;
+    stop(): void;
+}
 
 interface Encoding {
     stop(): void;
@@ -98,19 +108,23 @@ function relaySink(handle: RelayStreamHandle, onLost: () => void): Segment {
     };
 }
 
-function encode(
-    source: HTMLCanvasElement,
-    enc: CameraEncoder,
-    outW: number,
-    outH: number,
-    mime: string,
-    first: Segment,
-): Encoding | null {
+/**
+ * The capture itself: the game view drawn into an offscreen canvas at the profile's size, as a
+ * MediaStream. This is deliberately separate from the encoder below, because a peer connection
+ * wants the stream and nothing else, and a camera watched only over peer connections runs this
+ * with no encoder attached at all.
+ */
+function capture(source: HTMLCanvasElement, enc: CameraEncoder, outW: number, outH: number): Capture | null {
     const off = document.createElement('canvas');
     off.width = outW;
     off.height = outH;
     const octx = off.getContext('2d');
     if (!octx) return null;
+    // The game view arrives at the player's full screen size and is drawn down to the profile's
+    // width. Chromium's default resampling for that is fast and mushy; this is the one place the
+    // picture loses detail before an encoder has even seen it.
+    octx.imageSmoothingEnabled = true;
+    octx.imageSmoothingQuality = 'high';
 
     const pump = setInterval(() => {
         if (source.width && source.height) octx.drawImage(source, 0, 0, outW, outH);
@@ -124,6 +138,16 @@ function encode(
         return null;
     }
 
+    return {
+        stream,
+        stop() {
+            clearInterval(pump);
+            try { stream.getTracks().forEach(track => track.stop()); } catch { /* tracks gone */ }
+        },
+    };
+}
+
+function encode(stream: MediaStream, enc: CameraEncoder, mime: string, first: Segment): Encoding | null {
     let recorder: MediaRecorder | null = null;
     let stopped = false;
     let sink = first;
@@ -173,12 +197,10 @@ function encode(
         stop() {
             stopped = true;
             clearInterval(beat);
-            clearInterval(pump);
             if (recorder && recorder.state !== 'inactive') {
                 try { recorder.onstop = null; recorder.stop(); } catch { /* already inactive */ }
             }
             recorder = null;
-            try { stream.getTracks().forEach(track => track.stop()); } catch { /* tracks gone */ }
         },
         anchor,
         setSink(next: Segment) {
@@ -291,25 +313,68 @@ async function startPublishing(demand: CameraDemand, token: number): Promise<voi
         return;
     }
 
-    encoding = encode(canvas, enc, outW, outH, mime, handle ? relaySink(handle, downgrade) : eventSink(gen, mime));
-    if (!encoding) {
+    const source = capture(canvas, enc, outW, outH);
+    if (!source) {
         handle?.close();
         stopPublishing();
         reportState('unsupported', false);
         return;
     }
 
-    const live = encoding;
-    anchorNow = () => live.anchor();
+    const sink = () => (handle ? relaySink(handle, downgrade) : eventSink(gen, mime));
+
+    /**
+     * Starts or stops the encoder without touching the capture. A camera every terminal watches
+     * over a peer connection needs no encoder at all: the picture is already going out over those
+     * connections, and encoding a second copy for nobody is the cost this exists to avoid.
+     */
+    const setEncoding = (on: boolean) => {
+        if (on === (encoding !== null)) return;
+        if (!on) {
+            encoding?.stop();
+            encoding = null;
+            anchorNow = null;
+            return;
+        }
+        encoding = encode(source.stream, enc, mime, sink());
+        anchorNow = encoding ? () => encoding?.anchor() : null;
+    };
+
+    setEncoding(true);
+    if (!encoding) {
+        source.stop();
+        handle?.close();
+        stopPublishing();
+        reportState('unsupported', false);
+        return;
+    }
+
+    const host = new CameraPeerHost(demand.citizenid ?? '', source.stream, enc.bitrate);
+    peerHost = host;
+    encodingSwitch = setEncoding;
+
     teardown = () => {
         anchorNow = null;
-        live.stop();
+        encodingSwitch = null;
+        peerHost = null;
+        host.close();
+        encoding?.stop();
+        encoding = null;
+        source.stop();
         if (handle) {
             try { handle.close(); } catch { /* socket already gone */ }
             handle = null;
         }
     };
     reportState('ok', handle !== null);
+}
+
+/** The server naming who holds a peer connection, and whether the encoder is still earning its keep. */
+function applyPeers(push: CameraPeersPush | undefined): void {
+    if (!push) return;
+    if (push.gen !== undefined && targetGen !== null && push.gen !== targetGen) return;
+    peerHost?.setViewers(Array.isArray(push.viewers) ? push.viewers : []);
+    encodingSwitch?.(push.encode !== false);
 }
 
 function applyDemand(demand: CameraDemand | undefined): void {
@@ -337,6 +402,7 @@ function applyAnchor(push: CameraAnchorPush | undefined): void {
 if (isFiveM) {
     onCameraDemand(applyDemand);
     onCameraAnchor(applyAnchor);
+    onCameraPeers(applyPeers);
 
     void fetchNui<{ success?: boolean; data?: CameraDemand }>('sd-phone:mdt:cameraSync')
         .then(res => applyDemand(res?.data))

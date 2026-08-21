@@ -92,6 +92,22 @@ return {
     -- Terminals allowed on one officer's camera at once (0 = unlimited).
     MaxViewers = 6,
 
+    -- Whether a terminal may take the picture straight from the officer's client, with this server
+    -- carrying nothing but the handshake that sets it up. It needs no port, no certificate and no
+    -- configuration of its own: the STUN and TURN settings the phone's voice mesh already uses
+    -- (configs/voice.lua) decide whether two clients can reach each other, and a pair that cannot
+    -- falls back to the path below on its own. Neither end sees more than the picture taking a
+    -- moment longer to start.
+    --
+    -- A camera every terminal watches this way stops encoding for the server entirely.
+    PeerToPeer = true,
+
+    -- Direct connections one camera may hand out at once (0 = unlimited). Each one is an upload
+    -- from the broadcasting officer's own connection rather than from the server, so this sits
+    -- below MaxViewers on purpose: terminals past it watch through the server instead, which costs
+    -- the officer nothing.
+    PeerMaxViewers = 3,
+
     -- Seconds a viewer may go quiet before the server drops them and, if they were the last
     -- one, tells the officer's client to stop encoding. The terminal refreshes the grid well
     -- inside this, so it only ever fires for a terminal that died without saying so.
