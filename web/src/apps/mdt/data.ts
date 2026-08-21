@@ -32,8 +32,9 @@ export type MdtSection =
 export type DepartmentType = 'leo' | 'ems' | 'doj';
 
 export const LEO_SECTIONS: readonly MdtSection[] = [
-    'home', 'dispatch', 'cameras', 'cctv', 'profiles', 'vehicles', 'weapons', 'reports', 'cases',
-    'warrants', 'offences', 'sops', 'employees', 'affairs', 'chat', 'jail', 'phone', 'logs',
+    'home', 'dispatch', 'profiles', 'vehicles', 'weapons', 'reports', 'cases',
+    'warrants', 'offences', 'cctv', 'cameras', 'sops', 'employees', 'affairs', 'chat', 'jail',
+    'phone', 'logs',
 ] as const;
 
 export const EMS_SECTIONS: readonly MdtSection[] = [

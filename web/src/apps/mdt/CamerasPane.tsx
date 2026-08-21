@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, Eye, Video, VideoOff } from 'lucide-react';
 
-import { device } from '@device';
 import { t } from '@/i18n';
 import { EmptyState } from '@/ui/EmptyState';
 import { Scroller } from '@/ui/Scroller';
@@ -17,8 +16,6 @@ import { mdtPanePad, mdtRowMeta, mdtSectionHeader } from './mdtTheme';
 import type { CameraTile } from './data';
 
 const REFRESH_MS = 5000;
-const IS_PHONE = device.id === 'phone';
-const TILE_MIN = IS_PHONE ? 168 : 232;
 
 function kindLabel(camera: CameraTile): string {
     return camera.kind === 'dashcam'
@@ -220,10 +217,7 @@ export function CamerasPane() {
                 <div className="flex min-h-0 flex-1 items-center justify-center px-6 py-6">{empty}</div>
             ) : (
                 <Scroller className="min-h-0 flex-1 px-6 pb-6 pt-4">
-                    <div
-                        className="mdt-stagger grid gap-3"
-                        style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${TILE_MIN}px, 1fr))` }}
-                    >
+                    <div className="mdt-stagger grid grid-cols-3 gap-2.5">
                         {cameras.map(camera => (
                             <CameraCard
                                 key={camera.id}

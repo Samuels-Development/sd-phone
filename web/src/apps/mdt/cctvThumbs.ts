@@ -1,8 +1,8 @@
 import { getGameRender } from '@/render';
 
 const KEY = 'sd-phone:cctv:thumbs';
-const THUMB_W = 224;
-const THUMB_H = 158;
+const THUMB_W = 448;
+const THUMB_H = 320;
 const SETTLE_MS = 900;
 const MAX_STORED = 60;
 
@@ -36,6 +36,10 @@ function persist(map: ThumbMap): void {
 
 export function thumbFor(cameraId: string): string | null {
     return load()[cameraId] ?? null;
+}
+
+export function curatedThumb(cameraId: string): string {
+    return `cctv/${cameraId}.jpg`;
 }
 
 export function onThumbs(fn: () => void): () => void {
@@ -74,7 +78,7 @@ export async function captureThumb(cameraId: string): Promise<void> {
         const h = source.height * scale;
         ctx.drawImage(source, (THUMB_W - w) / 2, (THUMB_H - h) / 2, w, h);
 
-        const data = out.toDataURL('image/jpeg', 0.55);
+        const data = out.toDataURL('image/jpeg', 0.78);
         if (data.length < 128) return;
 
         const map = { ...load(), [cameraId]: data };

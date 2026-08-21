@@ -20,7 +20,7 @@ export function navItems(): Record<MdtSection, MdtNavItem> {
         profiles:  { id: 'profiles',  label: t('mdt.navProfiles', 'Profiles'),   icon: IdCard },
         vehicles:  { id: 'vehicles',  label: t('mdt.navVehicles', 'Vehicles'),   icon: Car },
         weapons:   { id: 'weapons',   label: t('mdt.navWeapons', 'Weapons'),     icon: Crosshair },
-        cameras:   { id: 'cameras',   label: t('mdt.navCameras', 'Cameras'),     icon: Video },
+        cameras:   { id: 'cameras',   label: t('mdt.navCameras', 'Bodycams'),    icon: Video },
         cctv:      { id: 'cctv',      label: t('mdt.navCctv', 'CCTV'),           icon: Cctv },
         reports:   { id: 'reports',   label: t('mdt.navReports', 'Reports'),     icon: FileText },
         cases:     { id: 'cases',     label: t('mdt.navCases', 'Cases'),         icon: FolderOpen },

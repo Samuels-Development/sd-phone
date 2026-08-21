@@ -40,6 +40,8 @@ files {
     'web/build/assets/*.css',
     'web/build/assets/*.png',
     'web/build/assets/*.jpg',
+    'web/build/cctv/*.jpg',
+    'web/build/cctv/*.png',
     'web/build/assets/*.webp',
     'web/build/assets/*.svg',
     'web/build/assets/*.woff2',

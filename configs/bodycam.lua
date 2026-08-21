@@ -13,7 +13,7 @@
 return {
     -- Whether the Cameras section works at all. Off by default: every viewer costs roughly
     -- the profile bitrate of server uplink, the same as a live stream.
-    Enabled = false,
+    Enabled = true,
 
     -- Framework jobs that carry a bodycam. Leave empty to mean "every police department in
     -- configs/mdt.lua". A job that is not a police department never gets a camera whatever

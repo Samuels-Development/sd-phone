@@ -30,7 +30,7 @@
 return {
     -- Whether the relay is used at all. Off by default: it wants a Node process and a
     -- certificate, so it is something you turn on deliberately rather than half-have.
-    Enabled = false,
+    Enabled = true,
 
     -- Whether the relay runs inside this resource. With this on there is no Node to install, no
     -- second process to keep alive, no signing key to generate and no port to pick: the key is

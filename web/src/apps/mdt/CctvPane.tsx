@@ -8,7 +8,7 @@ import { useAsyncData } from '@/hooks/useAsyncData';
 import { useSessionState } from '@/hooks/useSessionState';
 import { mdtPanePad, mdtRowMeta, mdtSectionHeader } from './mdtTheme';
 import { cctvClose, cctvList, cctvWatch, type CctvCamera } from './mdtApi';
-import { onThumbs, thumbFor } from './cctvThumbs';
+import { curatedThumb, onThumbs, thumbFor } from './cctvThumbs';
 
 const ART: Record<string, { from: string; to: string; glow: string }> = {
     Bank:            { from: '#12263f', to: '#0a1622', glow: 'rgba(120,180,255,0.30)' },
@@ -26,7 +26,8 @@ function Thumb({ camera, live, shot }: { camera: CctvCamera; live: boolean; shot
             style={{ background: `linear-gradient(150deg, ${art.from} 0%, ${art.to} 100%)` }}
         >
             {shot
-                ? <img src={shot} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
+                ? <img src={shot} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover"
+                       onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                 : (
                     <div
                         className="absolute inset-0"
@@ -49,10 +50,11 @@ function Thumb({ camera, live, shot }: { camera: CctvCamera; live: boolean; shot
     );
 }
 
-function Group({ label, cameras, activeId, onPick }: {
+function Group({ label, cameras, activeId, curated, onPick }: {
     label: string;
     cameras: CctvCamera[];
     activeId: string | null;
+    curated: Record<string, string>;
     onPick: (camera: CctvCamera) => void;
 }) {
     return (
@@ -72,7 +74,7 @@ function Group({ label, cameras, activeId, onPick }: {
                                 boxShadow: on ? 'inset 0 0 0 1.5px rgba(59,130,246,0.55)' : undefined,
                             }}
                         >
-                            <Thumb camera={camera} live={on} shot={thumbFor(camera.id)} />
+                            <Thumb camera={camera} live={on} shot={curated[camera.id] ?? thumbFor(camera.id)} />
                             <span className="min-w-0 px-0.5">
                                 <span className="block truncate text-[12.5px] font-semibold leading-tight">{camera.label}</span>
                                 {on && (
@@ -95,11 +97,26 @@ export function CctvPane() {
     const [busy, setBusy] = useState(false);
     const [, bumpThumbs] = useState(0);
 
+    const [curated, setCurated] = useState<Record<string, string>>({});
+
     useEffect(() => onThumbs(() => bumpThumbs(n => n + 1)), []);
 
     const { data, settled } = useAsyncData(() => cctvList(), []);
     const cameras = useMemo(() => data?.cameras ?? [], [data]);
     const enabled = data?.enabled !== false;
+
+    useEffect(() => {
+        let alive = true;
+        for (const camera of cameras) {
+            const url = curatedThumb(camera.id);
+            const probe = new Image();
+            probe.onload = () => {
+                if (alive) setCurated(prev => (prev[camera.id] ? prev : { ...prev, [camera.id]: url }));
+            };
+            probe.src = url;
+        }
+        return () => { alive = false; };
+    }, [cameras]);
 
     const groups = useMemo(() => {
         const map = new Map<string, CctvCamera[]>();
@@ -189,6 +206,7 @@ export function CctvPane() {
                         label={label}
                         cameras={list}
                         activeId={activeId}
+                        curated={curated}
                         onPick={camera => { void pick(camera); }}
                     />
                 ))}

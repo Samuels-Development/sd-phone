@@ -66,7 +66,7 @@ return {
     -- refunds the fee. Impounded vehicles are never eligible (pay the impound),
     -- and neither are boats or aircraft.
     Valet = {
-        Enabled = false,
+        Enabled = true,
 
         -- Charged on delivery, refunded if it fails. Account is 'bank' or 'cash'.
         Price   = 100,
