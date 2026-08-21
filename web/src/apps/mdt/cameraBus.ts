@@ -24,9 +24,24 @@ export interface CameraTransportPush {
 export interface CameraChunkPush {
     citizenid: string;
     gen?:      number;
+    run?:      number;
+    seq?:      number;
     chunk?:    string;
     init?:     boolean;
     mime?:     string;
+}
+
+export interface CameraPrimePush {
+    citizenid: string;
+    gen?:      number;
+    run?:      number;
+    seq?:      number;
+    mime?:     string;
+    chunks?:   string[];
+}
+
+export interface CameraAnchorPush {
+    gen?: number;
 }
 
 export interface CameraOffPush {
@@ -40,11 +55,15 @@ const CHUNK_ACTION     = 'sd-phone:mdt:cameraChunk';
 const OFF_ACTION       = 'sd-phone:mdt:cameraOff';
 const DEMAND_ACTION    = 'sd-phone:mdt:cameraDemand';
 const TRANSPORT_ACTION = 'sd-phone:mdt:cameraTransport';
+const ANCHOR_ACTION    = 'sd-phone:mdt:cameraAnchor';
+const PRIME_ACTION     = 'sd-phone:mdt:cameraPrime';
 
 const chunkSubs = new Map<string, Set<Handler<CameraChunkPush>>>();
 const offSubs = new Map<string, Set<Handler<CameraOffPush>>>();
 const transportSubs = new Map<string, Set<Handler<CameraTransportPush>>>();
+const primeSubs = new Map<string, Set<Handler<CameraPrimePush>>>();
 const demandSubs = new Set<Handler<CameraDemand | undefined>>();
+const anchorSubs = new Set<Handler<CameraAnchorPush | undefined>>();
 
 let listening = false;
 
@@ -62,10 +81,13 @@ function ensureListener(): void {
         const msg = event.data as { action?: string; data?: unknown } | undefined;
         if (!msg?.action) return;
         if (msg.action === CHUNK_ACTION) fan(chunkSubs, msg.data as CameraChunkPush | undefined);
+        else if (msg.action === PRIME_ACTION) fan(primeSubs, msg.data as CameraPrimePush | undefined);
         else if (msg.action === OFF_ACTION) fan(offSubs, msg.data as CameraOffPush | undefined);
         else if (msg.action === TRANSPORT_ACTION) fan(transportSubs, msg.data as CameraTransportPush | undefined);
         else if (msg.action === DEMAND_ACTION) {
             for (const handler of Array.from(demandSubs)) handler(msg.data as CameraDemand | undefined);
+        } else if (msg.action === ANCHOR_ACTION) {
+            for (const handler of Array.from(anchorSubs)) handler(msg.data as CameraAnchorPush | undefined);
         }
     });
 }
@@ -85,6 +107,10 @@ export function onCameraChunk(citizenid: string, handler: Handler<CameraChunkPus
     return subscribe(chunkSubs, citizenid, handler);
 }
 
+export function onCameraPrime(citizenid: string, handler: Handler<CameraPrimePush>): () => void {
+    return subscribe(primeSubs, citizenid, handler);
+}
+
 export function onCameraOff(citizenid: string, handler: Handler<CameraOffPush>): () => void {
     return subscribe(offSubs, citizenid, handler);
 }
@@ -97,4 +123,10 @@ export function onCameraDemand(handler: Handler<CameraDemand | undefined>): () =
     ensureListener();
     demandSubs.add(handler);
     return () => { demandSubs.delete(handler); };
+}
+
+export function onCameraAnchor(handler: Handler<CameraAnchorPush | undefined>): () => void {
+    ensureListener();
+    anchorSubs.add(handler);
+    return () => { anchorSubs.delete(handler); };
 }

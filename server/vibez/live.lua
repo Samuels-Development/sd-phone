@@ -329,9 +329,14 @@ function live.chunk(src, payload)
         if gop then
             gop[#gop + 1] = chunk
             session.genBytes = (session.genBytes or 0) + #chunk
-            while #gop > 0 and (#gop > MAX_GOP or session.genBytes > MAX_GOP_BYTES) do
-                session.genBytes = session.genBytes - #gop[1]
-                table.remove(gop, 1)
+            -- Dropping the front would leave the header joined to a tail it no longer runs into,
+            -- and these chunks are slices of one encoder byte run rather than standalone segments:
+            -- a viewer primed with a header and a gap cannot decode either side of it. The cache
+            -- goes entirely instead, and the next header starts a fresh one.
+            if #gop > MAX_GOP or session.genBytes > MAX_GOP_BYTES then
+                session.header    = nil
+                session.genChunks = {}
+                session.genBytes  = 0
             end
         end
     end

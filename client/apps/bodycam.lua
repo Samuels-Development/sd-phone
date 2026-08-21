@@ -167,6 +167,17 @@ if ENABLED then
         if yielded then reportState() end
     end)
 
+    ---Server push: re-anchor now. A terminal has joined, or the run this client was feeding was
+    ---cut, and either way the only thing a terminal can start from is a fresh header. The encoder
+    ---restarts rather than continuing, which is a visible cut for anyone already watching, so the
+    ---server asks for this sparingly rather than on a timer.
+    ---@param payload table { gen }
+    RegisterNetEvent('sd-phone:client:mdt:cameraAnchor', function(payload)
+        if not demand or not demand.on then return end
+        if type(payload) == 'table' and payload.gen ~= nil and payload.gen ~= demand.gen then return end
+        SendNUIMessage({ action = 'sd-phone:mdt:cameraAnchor', data = { gen = demand.gen } })
+    end)
+
     ---React -> Lua: the broadcaster page asking what the server currently wants, for the case
     ---where the demand landed before the page had loaded this app's chunk.
     RegisterNUICallback('sd-phone:mdt:cameraSync', function(_, cb)

@@ -120,9 +120,17 @@ RegisterNetEvent('sd-phone:client:mdt:warrant', function(data)
 end)
 
 ---Server push: one media segment from a unit's camera, addressed to this terminal only.
----@param data table { citizenid, gen, chunk, init, mime? }
+---@param data table { citizenid, gen, seq, chunk, init, mime? }
 RegisterNetEvent('sd-phone:client:mdt:cameraChunk', function(data)
     SendNUIMessage({ action = 'sd-phone:mdt:cameraChunk', data = data })
+end)
+
+---Server push: the cached opening of a run, so a terminal that joined mid-shift has something to
+---start from. Header first, then every chunk since it, in one payload precisely so the parts cannot
+---arrive out of order the way separate latent sends can.
+---@param data table { citizenid, gen, seq, mime?, chunks }
+RegisterNetEvent('sd-phone:client:mdt:cameraPrime', function(data)
+    SendNUIMessage({ action = 'sd-phone:mdt:cameraPrime', data = data })
 end)
 
 ---Server push: a camera this terminal was watching has gone off the air.

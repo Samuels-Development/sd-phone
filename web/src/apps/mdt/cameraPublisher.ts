@@ -11,17 +11,21 @@ import {
     relayPublish,
     type RelayStreamHandle,
 } from '@/shared/mediaSocket';
-import { onCameraDemand, type CameraDemand, type CameraEncoder } from './cameraBus';
+import { onCameraAnchor, onCameraDemand, type CameraAnchorPush, type CameraDemand, type CameraEncoder } from './cameraBus';
 import { mediaDebug } from '@/shared/mediaDebug';
 
 const FALLBACK_ASPECT = 16 / 9;
 const CAPTURE_ZOOM = PORTRAIT_CROP.width;
 const ANCHOR_MIN_MS = 1000;
 const ANCHOR_DEFAULT_MS = 20000;
+// Comfortably inside the server's own 600000 byte ceiling on one base64 chunk.
+const MAX_EVENT_CHUNK = 400000;
 
 let targetGen: number | null = null;
 let startToken = 0;
 let teardown: (() => void) | null = null;
+/** Restarts the encoder on the running publish, so the next chunk is a fresh header. */
+let anchorNow: (() => void) | null = null;
 let sampler: ReturnType<typeof setInterval> | null = null;
 let encodedBytes = 0;
 let render: GameRender | null = null;
@@ -65,7 +69,22 @@ interface Encoding {
 function eventSink(gen: number, mime: string): Segment {
     return async (blob, init) => {
         const chunk = await blobToBase64(blob);
-        await fetchNui('sd-phone:mdt:cameraChunk', { gen, chunk, init, mime: init ? mime : undefined });
+
+        // The server refuses a chunk past its ceiling, and on this transport a refused chunk is a
+        // hole rather than a dropped frame: everything after it is undecodable until the next
+        // header. A recorder pushed hard enough will produce one, so the encoded run is cut into
+        // pieces that fit instead. Any cut is legal here because what travels is a byte run, not a
+        // frame, and only the first piece opens it.
+        if (chunk.length <= MAX_EVENT_CHUNK) {
+            await fetchNui('sd-phone:mdt:cameraChunk', { gen, chunk, init, mime: init ? mime : undefined });
+            return;
+        }
+
+        for (let at = 0; at < chunk.length; at += MAX_EVENT_CHUNK) {
+            const piece = chunk.slice(at, at + MAX_EVENT_CHUNK);
+            const opens = init && at === 0;
+            await fetchNui('sd-phone:mdt:cameraChunk', { gen, chunk: piece, init: opens, mime: opens ? mime : undefined });
+        }
     };
 }
 
@@ -281,7 +300,9 @@ async function startPublishing(demand: CameraDemand, token: number): Promise<voi
     }
 
     const live = encoding;
+    anchorNow = () => live.anchor();
     teardown = () => {
+        anchorNow = null;
         live.stop();
         if (handle) {
             try { handle.close(); } catch { /* socket already gone */ }
@@ -306,8 +327,16 @@ function applyDemand(demand: CameraDemand | undefined): void {
     void startPublishing(demand, startToken);
 }
 
+/** The server asking for a fresh header, because a terminal has nothing it can start from. */
+function applyAnchor(push: CameraAnchorPush | undefined): void {
+    if (targetGen === null) return;
+    if (push?.gen !== undefined && push.gen !== targetGen) return;
+    anchorNow?.();
+}
+
 if (isFiveM) {
     onCameraDemand(applyDemand);
+    onCameraAnchor(applyAnchor);
 
     void fetchNui<{ success?: boolean; data?: CameraDemand }>('sd-phone:mdt:cameraSync')
         .then(res => applyDemand(res?.data))

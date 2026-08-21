@@ -82,6 +82,8 @@ const REBUILD_WINDOW_MS = 30_000;
 const REBUILD_FAIL_COUNT = 3;
 const PROGRESS_STALE_MS = 2_000;
 const NEED_INIT_GAP_MS = 1_000;
+const REORDER_MAX = 3;
+const REORDER_MAX_BYTES = 2_097_152;
 const DEFAULT_TIMESLICE_MS = 400;
 
 type Op = { append: Uint8Array; init: boolean } | { remove: [number, number] };
@@ -106,8 +108,11 @@ export class LiveVideoPlayer {
     private active = true;
 
     private gen: number | null = null;
-    private lastInit: Uint8Array | null = null;
-    private lastInitGen: number | null = null;
+    private nextSeq: number | null = null;
+    private run: number | null = null;
+    private pendingRun: number | null = null;
+    private pending = new Map<number, Uint8Array>();
+    private pendingBytes = 0;
     private sawExplicitInit = false;
     private awaitingInit = false;
 
@@ -150,7 +155,7 @@ export class LiveVideoPlayer {
         this.attach();
     }
 
-    append(bytes: Uint8Array, init = false, gen: number | null = null): void {
+    append(bytes: Uint8Array, init = false, gen: number | null = null, seq: number | null = null, run: number | null = null): void {
         if (this.destroyed || !bytes || bytes.byteLength === 0) return;
         this.lastFrameAt = Date.now();
         if (this.healthState === 'offair') {
@@ -164,28 +169,137 @@ export class LiveVideoPlayer {
                 this.gen = gen;
             } else if (this.gen !== gen) {
                 this.gen = gen;
-                this.lastInit = null;
-                this.lastInitGen = null;
                 this.rebuild('gen_change');
             }
         }
 
+        // A transport that numbers its chunks lets a hole be told apart from a swap. Both look
+        // identical to the decoder - a fault a few hundred milliseconds later with no cause
+        // attached - but they want opposite handling: a swap is put back in order and played, a
+        // hole means every byte after it is undecodable until the next header.
+        const numbered = seq !== null && Number.isFinite(seq);
+
+        // Numbering restarts behind every header, so a number alone cannot say which run a chunk
+        // belongs to: the run before this one had a chunk 10 too, and it may still be in flight.
+        // The run it names is what tells a straggler from the chunk it would be mistaken for.
+        if (numbered && run !== null && Number.isFinite(run)) {
+            if (this.run !== null && run < this.run) return;
+            if (this.run === null || run > this.run) {
+                this.run = run;
+                if (this.pendingRun !== run) {
+                    this.dropPending();
+                    this.pendingRun = run;
+                }
+                if (!init) this.nextSeq = null;
+            }
+        }
+
         if (init) {
-            this.lastInit = bytes;
-            this.lastInitGen = this.gen;
+            if (numbered) {
+                this.nextSeq = seq + 1;
+                this.forgetBefore(this.nextSeq);
+            } else {
+                this.dropPending();
+            }
             this.awaitingInit = false;
-        } else if (this.awaitingInit) {
+            this.enqueue(bytes, true);
+            this.drainPending();
+            return;
+        }
+
+        if (numbered) {
+            if (this.nextSeq === null) {
+                // Nothing to measure against yet: these are the chunks that overtook the header
+                // still on its way. Held rather than dropped, so the picture starts on the header
+                // rather than on whatever arrives after it.
+                this.hold(seq, bytes, false);
+                return;
+            }
+            if (seq < this.nextSeq) return;
+            if (seq > this.nextSeq) {
+                this.hold(seq, bytes, true);
+                return;
+            }
+            this.nextSeq = seq + 1;
+            this.enqueue(bytes, false);
+            this.drainPending();
+            return;
+        }
+
+        // An unnumbered transport can only be taken at its word.
+        if (this.awaitingInit) {
             if (this.sawExplicitInit) {
                 this.needInit('awaiting_init');
                 return;
             }
             this.awaitingInit = false;
         }
+        this.enqueue(bytes, false);
+    }
 
+    /** Keeps one out-of-order chunk while the one before it is still in flight. */
+    private hold(seq: number, bytes: Uint8Array, measured: boolean): void {
+        this.pending.set(seq, bytes);
+        this.pendingBytes += bytes.byteLength;
+        if (this.pending.size <= REORDER_MAX && this.pendingBytes <= REORDER_MAX_BYTES) return;
+
+        if (measured) {
+            // The chunk this run is waiting on should have landed by now, so it was lost rather
+            // than overtaken. Holding longer only delays the header that actually repairs this.
+            this.dropPending();
+            this.nextSeq = null;
+            this.awaitingInit = true;
+            this.needInit('gap');
+            return;
+        }
+
+        // Still no header, so nothing here can be called missing. Keep the window small and keep
+        // asking for the one thing that would make these playable.
+        let oldest = Number.POSITIVE_INFINITY;
+        for (const held of this.pending.keys()) if (held < oldest) oldest = held;
+        const evicted = this.pending.get(oldest);
+        if (evicted) {
+            this.pending.delete(oldest);
+            this.pendingBytes -= evicted.byteLength;
+        }
+        this.needInit('awaiting_init');
+    }
+
+    /** Empties the reorder window. */
+    private dropPending(): void {
+        this.pending.clear();
+        this.pendingBytes = 0;
+    }
+
+    /** Forgets anything held from the run a new header has just replaced. */
+    private forgetBefore(seq: number): void {
+        for (const [held, bytes] of Array.from(this.pending)) {
+            if (held >= seq) continue;
+            this.pending.delete(held);
+            this.pendingBytes -= bytes.byteLength;
+        }
+    }
+
+    /** Queues one byte run for the SourceBuffer and starts it moving. */
+    private enqueue(bytes: Uint8Array, init: boolean): void {
         this.ops.push({ append: bytes, init });
         this.opBytes += bytes.byteLength;
         this.guardQueue();
         this.pump();
+    }
+
+    /** Plays out whatever the reorder window is now holding in an unbroken line. */
+    private drainPending(): void {
+        if (this.nextSeq === null || this.pending.size === 0) return;
+        let next = this.pending.get(this.nextSeq);
+        while (next) {
+            this.pending.delete(this.nextSeq);
+            this.pendingBytes -= next.byteLength;
+            this.nextSeq += 1;
+            this.enqueue(next, false);
+            next = this.pending.get(this.nextSeq);
+        }
+        if (this.pending.size === 0) this.pendingBytes = 0;
     }
 
     setActive(active: boolean): void {
@@ -226,7 +340,6 @@ export class LiveVideoPlayer {
         this.teardown(true);
         this.ops = [];
         this.opBytes = 0;
-        this.lastInit = null;
     }
 
     private attach(): void {
@@ -342,13 +455,13 @@ export class LiveVideoPlayer {
         this.attach();
         this.rebuilding = false;
 
-        const init = this.lastInit;
-        if (init && this.lastInitGen === this.gen) {
-            this.ops.push({ append: init, init: true });
-            this.opBytes += init.byteLength;
-            this.awaitingInit = false;
-            this.pump();
-        }
+        // No init is replayed here, and nothing is appended until a fresh one arrives. These chunks
+        // are slices of one continuous byte run rather than standalone segments, so an init only
+        // describes the run it opened: re-priming with the last one and resuming at the live edge
+        // splices bytes onto a header that does not describe them, the element faults again, and
+        // the rebuild that follows repeats it. That loop is what a viewer sees as a flicker.
+        this.nextSeq = null;
+        this.dropPending();
         this.needInit(reason, true);
     }
 

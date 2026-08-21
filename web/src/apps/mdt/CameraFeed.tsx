@@ -17,8 +17,10 @@ import { mdtCameraUnwatch, mdtCameraWatch } from './mdtApi';
 import {
     onCameraChunk,
     onCameraOff,
+    onCameraPrime,
     onCameraTransport,
     type CameraChunkPush,
+    type CameraPrimePush,
     type CameraTransport,
 } from './cameraBus';
 import type { CameraQuality, CameraTile } from './data';
@@ -127,7 +129,7 @@ export function CameraFeed({ camera, quality, active, notice, showTransport, onH
             void attach(true, relayWanted());
         };
 
-        const feed = (from: CameraTransport, bytes: Uint8Array, init: boolean, hint: string, gen: number) => {
+        const feed = (from: CameraTransport, bytes: Uint8Array, init: boolean, hint: string, gen: number, seq: number | null = null, run: number | null = null) => {
             if (!alive || bytes.byteLength === 0) return;
             const video = videoRef.current;
             if (!video) return;
@@ -167,7 +169,7 @@ export function CameraFeed({ camera, quality, active, notice, showTransport, onH
                 player.start();
                 player.setActive(deckRef.current);
             }
-            playerRef.current.append(bytes, init, gen);
+            playerRef.current.append(bytes, init, gen, seq, run);
         };
 
         const join = async (grant: RelayGrant) => {
@@ -213,7 +215,18 @@ export function CameraFeed({ camera, quality, active, notice, showTransport, onH
 
         const offChunk = onCameraChunk(camera.citizenid, (push: CameraChunkPush) => {
             if (!push.chunk) return;
-            feed('event', base64ToBytes(push.chunk), push.init === true, push.mime ?? '', push.gen ?? 0);
+            feed('event', base64ToBytes(push.chunk), push.init === true, push.mime ?? '', push.gen ?? 0, typeof push.seq === 'number' ? push.seq : null, typeof push.run === 'number' ? push.run : null);
+        });
+
+        // The cached opening of a run, arriving whole: a header and the chunks behind it, in the
+        // order they were encoded, which is the order they have to be fed in.
+        const offPrime = onCameraPrime(camera.citizenid, (push: CameraPrimePush) => {
+            const chunks = Array.isArray(push.chunks) ? push.chunks : [];
+            const first = typeof push.seq === 'number' ? push.seq : null;
+            for (let i = 0; i < chunks.length; i++) {
+                if (!chunks[i]) continue;
+                feed('event', base64ToBytes(chunks[i]), i === 0, push.mime ?? '', push.gen ?? 0, first === null ? null : first + i, typeof push.run === 'number' ? push.run : null);
+            }
         });
 
         const offEnded = onCameraOff(camera.citizenid, () => {
@@ -241,6 +254,7 @@ export function CameraFeed({ camera, quality, active, notice, showTransport, onH
             alive = false;
             window.clearInterval(keepAlive);
             offChunk();
+            offPrime();
             offEnded();
             offTransport();
             dropRelay();

@@ -137,6 +137,10 @@ local INGEST_WINDOW = 1000
 local MAX_INGEST_CHUNKS = 24
 ---@type integer Minimum gap between one terminal's cached-header replays, in milliseconds.
 local REPLAY_MS = 4000
+---@type integer Minimum gap between two re-anchor requests to the same broadcaster, in
+---milliseconds. Every re-anchor restarts the encoder and shows as a cut to everyone already
+---watching, so several terminals joining at once must cost one restart rather than one each.
+local ANCHOR_GAP_MS = 1500
 ---@type integer Minimum gap between two audit rows for the same officer watching the same camera.
 local AUDIT_GAP_MS = 60000
 ---@type integer Window a terminal's watch calls are counted over, in milliseconds.
@@ -154,6 +158,8 @@ local FEATURE = 'mdt:cam'
 local sessions = {}
 ---@type table<integer, table> The same sessions, keyed by the host's server id.
 local byHostSrc = {}
+---@type table<string, boolean> '<citizenid>:<reason>' pairs already reported by breakRun.
+local brokenSaid = {}
 ---@type table<integer, integer> Vehicle class last reported by an officer's own client.
 local reportedClass = {}
 
@@ -258,8 +264,11 @@ local function ensureSession(me)
         quality      = nil,   -- nil while nobody is watching, else 'preview' | 'full'
         mime         = nil,   -- e.g. 'video/webm;codecs=vp8', from the header chunk
         header       = nil,   -- the stream header a joining terminal is primed with
-        gop          = {},    -- chunks since that header
+        gop          = {},    -- chunks since that header, contiguous or not cached at all
         gopBytes     = 0,
+        run          = 0,     -- which run the header opened; counts up and never repeats
+        seq          = 0,     -- position of the next chunk in that run
+        anchorAt     = 0,     -- GetGameTimer of the last re-anchor asked of the officer's client
         busy         = false, -- the officer's own camera app has the game view
         unsupported  = false, -- the officer's client cannot capture at all
         onRelay      = false, -- the officer's client is publishing over the media relay instead
@@ -285,6 +294,45 @@ local function resetCache(session)
     session.gop      = {}
     session.gopBytes = 0
     session.replayAt = {}
+end
+
+---Drops the cache without touching the mime, for when the run it holds has stopped being one
+---contiguous piece: a chunk went over the size ceiling, the ingest budget refused one, or the
+---window filled and something had to go. What is left after any of those is a header and a tail
+---with a hole between them, and a hole is not a smaller cache, it is an undecodable one. A
+---terminal primed with it faults, rebuilds, is primed with it again and never recovers, so the
+---cache is emptied instead and the next header starts a fresh run.
+---@param session table broadcast session
+---@param cause string stable machine-readable cause, so a configuration that breaks a run on every
+---chunk is reported once rather than on every chunk
+---@param detail string what to tell the console the first time this cause fires
+local function breakRun(session, cause, detail)
+    if not session.header and #session.gop == 0 then return end
+    local key = session.citizenid .. ':' .. cause
+    if not brokenSaid[key] then
+        brokenSaid[key] = true
+        print(('^3[sd-phone:cameras]^0 %s: %s, so a terminal joining now waits for a fresh header rather than being primed with a gap. Lower Bitrate or TimesliceMs in configs/bodycam.lua to keep instant joins.')
+            :format(session.citizenid, detail))
+    end
+    session.header   = nil
+    session.gop      = {}
+    session.gopBytes = 0
+    session.replayAt = {}
+end
+
+---Asks the officer's client to re-anchor now: a fresh header, which is the only thing a terminal
+---with nothing cached can start from. Throttled per session, so a camera several terminals open at
+---once re-anchors once rather than once each, and a terminal re-asserting its watch on a timer
+---cannot drive the encoder into a permanent restart loop.
+---@param session table broadcast session
+---@return boolean asked
+local function requestAnchor(session)
+    if not session.src or not session.quality then return false end
+    local now = GetGameTimer()
+    if now < (session.anchorAt or 0) + ANCHOR_GAP_MS then return false end
+    session.anchorAt = now
+    TriggerClientEvent('sd-phone:client:mdt:cameraAnchor', session.src, { gen = session.gen })
+    return true
 end
 
 ---@param session table broadcast session
@@ -471,32 +519,39 @@ end
 ---into a shift shows a picture without waiting for the next re-anchor. A replay is up to a megabyte
 ---of latent event, so anything but a first attach is spaced by REPLAY_MS rather than served on
 ---demand: the terminal re-asserts its watch on a timer and would otherwise be replayed every tick.
+---An empty cache is not a failure to prime: it means the run it held stopped being contiguous, and
+---the officer's client is asked for a fresh header instead. The numbering the live chunks carry is
+---reproduced here, so the terminal reads the replay and the live feed it runs into as one run.
 ---@param session table broadcast session
 ---@param src integer viewer server id
 ---@param force boolean whether this is a first attach, which is never spaced
 local function replay(session, src, force)
-    if not session.header then return end
+    if not session.header then
+        requestAnchor(session)
+        return
+    end
 
     local now  = GetGameTimer()
     local last = session.replayAt[src]
     if not force and last and now >= last and (now - last) < REPLAY_MS then return end
     session.replayAt[src] = now
 
-    TriggerLatentClientEvent('sd-phone:client:mdt:cameraChunk', src, RELAY_BPS, {
+    -- One event rather than one per chunk. Latent sends are paced across ticks and several in
+    -- flight together finish in whatever order they finish in, so a header and the chunks behind it
+    -- sent separately can arrive scrambled, and the terminal cannot play a run it cannot order. In
+    -- one payload they cannot overtake each other. The header's own number is as many places back
+    -- from the next live one as the cache is long.
+    local chunks = { session.header }
+    for i = 1, #session.gop do chunks[i + 1] = session.gop[i] end
+
+    TriggerLatentClientEvent('sd-phone:client:mdt:cameraPrime', src, RELAY_BPS, {
         citizenid = session.citizenid,
         gen       = session.gen,
-        chunk     = session.header,
-        init      = true,
+        run       = session.run,
+        seq       = session.seq - #session.gop - 1,
         mime      = session.mime,
+        chunks    = chunks,
     })
-    for i = 1, #session.gop do
-        TriggerLatentClientEvent('sd-phone:client:mdt:cameraChunk', src, RELAY_BPS, {
-            citizenid = session.citizenid,
-            gen       = session.gen,
-            chunk     = session.gop[i],
-            init      = false,
-        })
-    end
 end
 
 ---Detaches a terminal from one camera, or from every camera it holds on that officer.
@@ -695,6 +750,11 @@ end)
 ---Broadcaster chunk push (latent net event). Only an officer with a live demand on them may feed
 ---it, the chunk must be a non-empty string under MAX_CHUNK, and a chunk carrying a stale
 ---generation is dropped rather than mixed into the current stream.
+---
+---These chunks are slices of one continuous encoder byte run, not standalone frames, so a chunk
+---that cannot be forwarded is not a dropped frame: it is a hole, and everything after it is
+---undecodable until the next header. Each refusal below therefore ends the run and asks for a new
+---header rather than quietly skipping one chunk and leaving the terminals to fault on the rest.
 ---@param src integer sender server id
 ---@param payload table { gen, chunk, init?, mime? } attacker-controlled
 function cameras.chunk(src, payload)
@@ -704,10 +764,32 @@ function cameras.chunk(src, payload)
     if math.floor(tonumber(payload.gen) or -1) ~= session.gen then return end
 
     local chunk = payload.chunk
-    if type(chunk) ~= 'string' or chunk == '' or #chunk > MAX_CHUNK then return end
-    if not ingestOk(session, #chunk) then return end
+    if type(chunk) ~= 'string' or chunk == '' then return end
 
     local isInit = payload.init == true
+    -- Numbered before the refusals below rather than after them, because a chunk that never
+    -- reaches the terminals has to leave a hole in the numbering: that hole is the only signal a
+    -- terminal gets that its byte run has been cut, and it stops feeding its decoder on the
+    -- strength of it instead of faulting somewhere on the far side.
+    if isInit then
+        session.run = session.run + 1
+        session.seq = 0
+    end
+    local seq = session.seq
+    session.seq = seq + 1
+
+    if #chunk > MAX_CHUNK then
+        breakRun(session, 'oversize_chunk',
+            ('a chunk of %d bytes is over the %d byte ceiling'):format(#chunk, MAX_CHUNK))
+        requestAnchor(session)
+        return
+    end
+    if not ingestOk(session, #chunk) then
+        breakRun(session, 'ingest_budget', 'the broadcaster is pushing bytes faster than the ingest budget allows')
+        requestAnchor(session)
+        return
+    end
+
     if isInit then
         local mime = util.limitedString(payload.mime, 64)
         if mime then session.mime = mime end
@@ -718,15 +800,20 @@ function cameras.chunk(src, payload)
         local gop = session.gop
         gop[#gop + 1] = chunk
         session.gopBytes = session.gopBytes + #chunk
-        while #gop > 0 and (#gop > MAX_GOP or session.gopBytes > MAX_GOP_BYTES) do
-            session.gopBytes = session.gopBytes - #gop[1]
-            table.remove(gop, 1)
+        -- Trimming the front would leave the header attached to a tail it no longer runs into.
+        -- The whole cache goes instead: a joiner is served nothing and re-anchored, which costs a
+        -- keyframe, where a spliced cache costs the terminal its picture until the camera closes.
+        if #gop > MAX_GOP or session.gopBytes > MAX_GOP_BYTES then
+            breakRun(session, 'cache_full',
+                ('a header plus %d chunks does not fit the %d byte replay cache'):format(#gop, MAX_GOP_BYTES))
         end
     end
 
     local data = {
         citizenid = session.citizenid,
         gen       = session.gen,
+        run       = session.run,
+        seq       = seq,
         chunk     = chunk,
         init      = isInit,
         mime      = isInit and session.mime or nil,
@@ -808,8 +895,33 @@ function cameras.vehicle(src, payload)
     reportedClass[src] = (class >= 0 and class <= 22) and class or nil
 end
 
+---Reports a quality profile whose numbers cannot survive the pipeline they feed. Base64 costs a
+---third on top of the encoded bitrate, so a chunk is roughly bitrate/8 * TimesliceMs * 1.37 bytes:
+---past MAX_CHUNK every chunk is refused and the picture never starts, and past MAX_GOP_BYTES the
+---cache cannot hold a run so every terminal that joins costs a re-anchor. Neither is visible from
+---the game, and both were silent before they were printed here.
+---@param name string quality name, as written in configs/bodycam.lua
+---@param profile table the resolved profile
+local function reportProfileFit(name, profile)
+    local chunkBytes = math.floor(profile.bitrate / 8 * (TIMESLICE_MS / 1000) * 1.37)
+    if chunkBytes > MAX_CHUNK then
+        print(('^1[sd-phone:cameras]^0 %s: Bitrate %d over TimesliceMs %d makes chunks of about %d bytes, past the %d byte ceiling. Every chunk will be refused and the picture will never start: lower Bitrate, or lower TimesliceMs.')
+            :format(name, profile.bitrate, TIMESLICE_MS, chunkBytes, MAX_CHUNK))
+        return
+    end
+
+    local runBytes = math.floor(chunkBytes * (KEYFRAME_MS / TIMESLICE_MS))
+    if runBytes > MAX_GOP_BYTES then
+        print(('^3[sd-phone:cameras]^0 %s: Bitrate %d over KeyframeMs %d makes a run of about %d bytes, past the %d byte replay cache. Terminals joining will wait for a fresh header rather than starting instantly: lower Bitrate or KeyframeMs to keep the cache useful.')
+            :format(name, profile.bitrate, KEYFRAME_MS, runBytes, MAX_GOP_BYTES))
+    end
+end
+
 if ENABLED then
     media.registerFeature(FEATURE, { entitle = entitle })
+
+    reportProfileFit('Preview', PROFILES.preview)
+    reportProfileFit('Fullscreen', PROFILES.full)
 
     -- Media and state travel on net events rather than callbacks because a chunk is latent: it is
     -- paced onto the wire instead of blocking the net thread on one big frame. This stays whatever
