@@ -503,7 +503,9 @@ RegisterNetEvent('sd-phone:client:payphone:ringStop', function(data)
     end
 end)
 
-if cfg.Enabled then
+---Registers the two booth options on the payphone prop models: Use Payphone when the booth is
+---idle, Answer Phone while it rings.
+local function registerBooths()
     target.addModel(cfg.Models or {}, {
         {
             name     = 'sd-phone:payphone',
@@ -537,6 +539,13 @@ if cfg.Enabled then
             end,
         },
     })
+end
+
+-- Booths are the only way into the payphone UI, so registration waits for a target backend
+-- instead of assuming one is already up: a server is free to start this resource before its
+-- target resource, and without a target resource at all the phone itself is unaffected.
+if cfg.Enabled then
+    target.onReady(registerBooths)
 end
 
 ---Public export: opens the payphone dial UI at the player's position (no booth prop needed),

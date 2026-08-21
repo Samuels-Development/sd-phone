@@ -16,10 +16,58 @@ local function detect()
     return nil
 end
 
----@type string|nil Detection result; nil aborts the module load below.
+---@type string|nil Active backend, or nil while none is started. Deliberately not an error: this
+---module is required for its side effects at client start, so raising here killed the rest of
+---bridge/client/init.lua and left every later `require 'bridge.client.target'` holding whatever
+---sentinel ox_lib caches for a module that failed to load. The symptom was a crash in payphone.lua
+---indexing a boolean, several files away from the actual cause.
 local active = detect()
+
+---@type string|nil Active target resource name, exposed so callers can branch per-backend; nil
+---until one is running.
+target.system = active
+
+---@type fun()[] Callbacks waiting for a backend to appear; drained once one does.
+local pending = {}
+
+---@type table<string, boolean> Methods that have already reported a missing backend.
+local warned = {}
+
+---Reports the missing backend once per method, so a call in a loop is one console line.
+---@param method string bridge method that was called
+local function warnMissing(method)
+    if warned[method] then return end
+    warned[method] = true
+    print(('^3[sd-phone]^0 target.%s ignored: no target resource is running (ox_target, qb-target or qtarget).')
+        :format(method))
+end
+
+---Runs `cb` as soon as a backend is available: right now when one is already started, otherwise
+---the moment a supported resource starts. Registration that would otherwise run at load time
+---belongs here, because a server is free to start sd-phone before its target resource.
+---@param cb fun()
+function target.onReady(cb)
+    if type(cb) ~= 'function' then return end
+    if active then return cb() end
+    pending[#pending + 1] = cb
+end
+
 if not active then
-    error('No target resource found. Install ox_target, qb-target, or qtarget.')
+    print('^3[sd-phone]^0 no target resource is running (ox_target, qb-target or qtarget). Payphone booths and any other target interactions stay off until one starts.')
+
+    AddEventHandler('onClientResourceStart', function(resource)
+        if active then return end
+        for i = 1, #SUPPORTED do
+            if resource == SUPPORTED[i] then
+                active = resource
+                target.system = resource
+                print(('^2[sd-phone]^0 target resource %s started; registering interactions now.'):format(resource))
+                for j = 1, #pending do pending[j]() end
+                pending = {}
+                return
+            end
+        end
+    end)
 end
 
 ---Translate ox_target option entries to the qb-target/qtarget shape. A pass-through when
@@ -292,7 +340,19 @@ function target.removeGlobalPlayer(label)
     return true
 end
 
----@type string Active target resource name, exposed so callers can branch per-backend.
-target.system = active
+-- Every method above reaches for exports[active], so each one is wrapped in a single guard that
+-- turns a call made with no backend into a no-op plus one console line. onReady is the exception:
+-- waiting for a backend is exactly what it is for.
+for name, fn in pairs(target) do
+    if type(fn) == 'function' and name ~= 'onReady' then
+        target[name] = function(...)
+            if not active then
+                warnMissing(name)
+                return false
+            end
+            return fn(...)
+        end
+    end
+end
 
 return target
