@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { t } from '@/i18n';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
+import { captureThumb } from './cctvThumbs';
 
 export interface CctvActive {
     cameraId: string;
@@ -29,6 +30,14 @@ export function CctvOverlay({ active }: { active: CctvActive }) {
     }, []);
 
     useEffect(() => { setElapsed(0); }, [active.cameraId]);
+
+    useEffect(() => {
+        let alive = true;
+        const timer = window.setTimeout(() => {
+            if (alive) void captureThumb(active.cameraId);
+        }, 1200);
+        return () => { alive = false; window.clearTimeout(timer); };
+    }, [active.cameraId]);
 
     const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
     const secs = String(elapsed % 60).padStart(2, '0');

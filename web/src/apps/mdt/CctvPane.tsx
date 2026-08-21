@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Cctv, ChevronRight, Radio, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Cctv, Radio, X } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { EmptyState } from '@/ui/EmptyState';
@@ -8,6 +8,7 @@ import { useAsyncData } from '@/hooks/useAsyncData';
 import { useSessionState } from '@/hooks/useSessionState';
 import { mdtPanePad, mdtRowMeta, mdtSectionHeader } from './mdtTheme';
 import { cctvClose, cctvList, cctvWatch, type CctvCamera } from './mdtApi';
+import { onThumbs, thumbFor } from './cctvThumbs';
 
 const ART: Record<string, { from: string; to: string; glow: string }> = {
     Bank:            { from: '#12263f', to: '#0a1622', glow: 'rgba(120,180,255,0.30)' },
@@ -17,17 +18,21 @@ const ART: Record<string, { from: string; to: string; glow: string }> = {
     YouTool:         { from: '#0f2620', to: '#081410', glow: 'rgba(110,235,190,0.26)' },
 };
 
-function Thumb({ camera, live }: { camera: CctvCamera; live: boolean }) {
+function Thumb({ camera, live, shot }: { camera: CctvCamera; live: boolean; shot: string | null }) {
     const art = ART[camera.category] ?? { from: '#1b1b1f', to: '#0d0d10', glow: 'rgba(255,255,255,0.2)' };
     return (
         <div
-            className="relative h-[74px] w-[104px] shrink-0 overflow-hidden rounded-[10px]"
+            className="relative aspect-[7/5] w-full overflow-hidden rounded-[10px]"
             style={{ background: `linear-gradient(150deg, ${art.from} 0%, ${art.to} 100%)` }}
         >
-            <div
-                className="absolute inset-0"
-                style={{ background: `radial-gradient(120% 90% at 30% 15%, ${art.glow} 0%, transparent 60%)` }}
-            />
+            {shot
+                ? <img src={shot} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
+                : (
+                    <div
+                        className="absolute inset-0"
+                        style={{ background: `radial-gradient(120% 90% at 30% 15%, ${art.glow} 0%, transparent 60%)` }}
+                    />
+                )}
             <div
                 className="absolute inset-0 opacity-[0.22]"
                 style={{ backgroundImage: 'repeating-linear-gradient(to bottom, rgba(255,255,255,0.5) 0px, rgba(255,255,255,0.5) 1px, transparent 1px, transparent 3px)' }}
@@ -53,7 +58,7 @@ function Group({ label, cameras, activeId, onPick }: {
     return (
         <div className="mb-5">
             <div className={`mb-2 ${mdtSectionHeader}`}>{label}</div>
-            <div className="flex flex-col gap-1.5">
+            <div className="grid grid-cols-3 gap-2.5">
                 {cameras.map(camera => {
                     const on = camera.id === activeId;
                     return (
@@ -61,25 +66,22 @@ function Group({ label, cameras, activeId, onPick }: {
                             key={camera.id}
                             type="button"
                             onClick={() => onPick(camera)}
-                            className="flex items-center gap-3 rounded-[14px] p-2 text-left transition-colors"
+                            className="flex flex-col gap-1.5 rounded-[14px] p-2 text-left transition-colors"
                             style={{
                                 background: on ? 'rgba(59,130,246,0.16)' : 'rgba(127,127,127,0.08)',
                                 boxShadow: on ? 'inset 0 0 0 1.5px rgba(59,130,246,0.55)' : undefined,
                             }}
                         >
-                            <Thumb camera={camera} live={on} />
-                            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                                <span className="truncate text-[14px] font-semibold">{camera.label}</span>
-                                <span className="truncate text-[11.5px] text-ios-gray">{camera.category}</span>
+                            <Thumb camera={camera} live={on} shot={thumbFor(camera.id)} />
+                            <span className="min-w-0 px-0.5">
+                                <span className="block truncate text-[12.5px] font-semibold leading-tight">{camera.label}</span>
+                                {on && (
+                                    <span className="mt-0.5 flex items-center gap-1 text-[10.5px] font-bold uppercase tracking-wide text-blue-500">
+                                        <Radio className="h-[10px] w-[10px]" strokeWidth={2.8} />
+                                        {t('mdt.cctvViewing', 'Viewing')}
+                                    </span>
+                                )}
                             </span>
-                            {on ? (
-                                <span className="flex shrink-0 items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-blue-500">
-                                    <Radio className="h-[12px] w-[12px]" strokeWidth={2.6} />
-                                    {t('mdt.cctvViewing', 'Viewing')}
-                                </span>
-                            ) : (
-                                <ChevronRight className="h-[15px] w-[15px] shrink-0 text-ios-gray" strokeWidth={2.2} />
-                            )}
                         </button>
                     );
                 })}
@@ -91,6 +93,9 @@ function Group({ label, cameras, activeId, onPick }: {
 export function CctvPane() {
     const [activeId, setActiveId] = useSessionState<string | null>('mdt:cctv:active', null);
     const [busy, setBusy] = useState(false);
+    const [, bumpThumbs] = useState(0);
+
+    useEffect(() => onThumbs(() => bumpThumbs(n => n + 1)), []);
 
     const { data, settled } = useAsyncData(() => cctvList(), []);
     const cameras = useMemo(() => data?.cameras ?? [], [data]);
