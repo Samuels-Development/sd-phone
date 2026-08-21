@@ -72,6 +72,51 @@ function actions.list(source, payload)
     return ok(data)
 end
 
+---Shapes a DB photo row for a third-party reader. `isVideo` is added because kind lives in the
+---URL rather than a column, and time is reported only as `timestamp`, a unix integer: the raw
+---created_at column arrives in whatever shape the SQL driver decided on (oxmysql hands back a
+---millisecond epoch, not the datetime text it was written as), which is not a shape to promise
+---an outside caller.
+---@param row { id: string, url: string, favorite: any, ts: any }
+---@return table
+local function shapeExportPhoto(row)
+    return {
+        id        = row.id,
+        url       = row.url,
+        isVideo   = store.isVideoUrl(row.url),
+        favorite  = isTruthy(row.favorite),
+        timestamp = math.floor(tonumber(row.ts) or 0),
+    }
+end
+
+---A player's photos by owner id, newest first, for other resources. Unpaged on purpose: a picker
+---wants one bounded list, so this is the first page and nothing else, clamped to PAGE_SIZE. Reads
+---nothing the owner cannot already see. Always an array, empty when nothing resolves.
+---@param citizenid string owner's framework per-character id
+---@param opts { limit: number|nil, filter: 'favorites'|'videos'|nil }|nil
+---@return table[] photos
+function actions.listForCid(citizenid, opts)
+    if type(citizenid) ~= 'string' or citizenid == '' then return {} end
+
+    opts = type(opts) == 'table' and opts or {}
+    local filter = (opts.filter == 'favorites' or opts.filter == 'videos') and opts.filter or nil
+
+    local limit = tonumber(opts.limit)
+    limit = (limit and util.finite(limit)) and math.floor(limit) or PAGE_SIZE
+    if limit < 1 then limit = 1 elseif limit > PAGE_SIZE then limit = PAGE_SIZE end
+
+    -- listForCitizen deliberately over-reads by one row to prove a further page exists; that probe
+    -- row is not part of the page and would silently hand the caller limit + 1 photos.
+    local rows = store.listForCitizen(citizenid, nil, limit, filter)
+    rows[limit + 1] = nil
+
+    local out = {}
+    for i = 1, #rows do
+        out[i] = shapeExportPhoto(rows[i])
+    end
+    return out
+end
+
 ---@type integer Longest accepted photo URL in bytes, matching the phone_photos.url VARCHAR(512) column.
 local MAX_URL_BYTES = 512
 

@@ -147,6 +147,29 @@ lib.callback.register('sd-phone:server:albums:photos', function(src, payload)
     return actions.listAlbumPhotos(src, payload and payload.albumId or '')
 end)
 
+---Public export: exports['sd-phone']:getPhotos(source, opts). Reads a player's gallery, newest
+---first, for other resources: a vehicle-listing photo picker, an evidence board, a print shop.
+---Read-only, and only ever the caller's own photos. Always an array, empty when nothing resolves.
+---@param source number acting player's server id (the gallery owner resolves from it)
+---@param opts { limit: number|nil, filter: 'favorites'|'videos'|nil }|nil
+---@return { id: string, url: string, isVideo: boolean, favorite: boolean, timestamp: integer }[]
+exports('getPhotos', function(source, opts)
+    if type(source) ~= 'number' then return {} end
+    local cid = player.getIdentifier(source)
+    if not cid then return {} end
+    return actions.listForCid(cid, opts)
+end)
+
+---Public export: exports['sd-phone']:getPhotosByIdentifier(citizenid, opts). The same read keyed
+---by owner id rather than a live source, for offline owners and for callers holding a phone
+---number: resolve it through getIdentifierByNumber first. Read-only.
+---@param citizenid string owner's framework per-character id
+---@param opts { limit: number|nil, filter: 'favorites'|'videos'|nil }|nil
+---@return { id: string, url: string, isVideo: boolean, favorite: boolean, timestamp: integer }[]
+exports('getPhotosByIdentifier', function(citizenid, opts)
+    return actions.listForCid(citizenid, opts)
+end)
+
 ---Public export: exports['sd-phone']:addPhoto(source, url). Saves an already-hosted http(s) URL
 ---into a player's gallery and pushes photos:added; a non-integer source returns { success = false }.
 ---@param source number acting player's server id (the gallery owner resolves from it)
