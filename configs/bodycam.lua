@@ -89,6 +89,32 @@ return {
     -- encoded video itself, so leave headroom over the bitrates above.
     RelayBytesPerSec = 2048 * 1024,
 
+    -- Whether an officer has to be carrying a bodycam item, and have switched it on, before their
+    -- camera exists at all. With this on, using the item toggles the camera and says so, and a unit
+    -- with theirs off does not appear in the Cameras section: an officer nobody can see is the
+    -- point of a switch.
+    --
+    -- Turning this off gives every eligible officer a camera that is always on, which is what this
+    -- did before the item existed.
+    RequireItem = true,
+
+    -- The item that switches a bodycam on and off. It has to exist in your inventory's item list
+    -- before an officer can be given one.
+    --
+    -- On ox_inventory an item reaches a resource through an export it names itself, so the entry
+    -- has to point back at the one the phone registers ('body_cam' becomes 'sd-phone.useBody_cam'),
+    -- and consume 0 so pressing the switch does not eat the camera:
+    --   ['body_cam'] = { label = 'Bodycam', weight = 200, stack = false, close = true,
+    --                    consume = 0, server = { export = 'sd-phone.useBody_cam' } },
+    --
+    -- qb, qbx, esx and qs register usable items by name, so those need nothing beyond the item.
+    Item = 'body_cam',
+
+    -- Whether a camera switched on stays on across a disconnect. Off means an officer comes back on
+    -- shift with it off, which is the safer default: nobody is broadcasting without having chosen
+    -- to since they last logged in.
+    RememberItemState = false,
+
     -- Terminals allowed on one officer's camera at once (0 = unlimited).
     MaxViewers = 6,
 

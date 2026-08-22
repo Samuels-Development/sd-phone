@@ -10,6 +10,10 @@ local store  = require 'server.mdt.store'
 ---@type table Player bridge (bridge.server.player): the citizenid -> source lookup a watch resolves
 ---its host with, rather than walking every connected player on every keep-alive.
 local player = require 'bridge.server.player'
+---@type table Inventory bridge (bridge.server.inventory): the item check and the usable-item registrar.
+local inventory = require 'bridge.server.inventory'
+---@type table Notify bridge (bridge.server.notify): the toast an officer sees when they switch it.
+local notify = require 'bridge.server.notify'
 ---@type table Media relay (server.media.init): the token mint and the relay's control channel. It
 ---decides nothing; every token this file asks for is signed only after the checks below have run.
 local media  = require 'server.media.init'
@@ -25,6 +29,13 @@ local ENABLED = CFG.Enabled == true
 local REQUIRE_DUTY = CFG.RequireDuty ~= false
 ---@type boolean Whether a broadcasting officer is put into first person while watched.
 local FIRST_PERSON = CFG.FirstPerson ~= false
+
+---@type boolean Whether an officer needs a bodycam item, switched on, to have a camera at all.
+local REQUIRE_ITEM = CFG.RequireItem ~= false
+---@type string The item that switches it.
+local ITEM = type(CFG.Item) == 'string' and CFG.Item ~= '' and CFG.Item or 'body_cam'
+---@type boolean Whether a camera left on survives the officer disconnecting.
+local REMEMBER_ITEM = CFG.RememberItemState == true
 
 ---@type table<string, boolean> Framework jobs that carry a bodycam. An empty config list means
 ---every police department, which is what a server that has not customised the list expects.
@@ -179,6 +190,13 @@ local FEATURE = 'mdt:cam'
 local sessions = {}
 ---@type table<integer, table> The same sessions, keyed by the host's server id.
 local byHostSrc = {}
+---@type table<string, boolean> Officers with a bodycam switched on, keyed by citizenid. Nothing is
+---persisted: a camera is on because somebody switched it on this session.
+local wearing = {}
+---@type table<integer, string> Server id -> citizenid for those, so a disconnect can clear one
+---without asking the framework about a player who has already gone.
+local wearingSrc = {}
+
 ---@type table<string, boolean> '<citizenid>:<reason>' pairs already reported by breakRun.
 local brokenSaid = {}
 ---@type table<integer, integer> Vehicle class last reported by an officer's own client.
@@ -239,8 +257,13 @@ local function cameraOfficer(src)
     if access.domain(me) ~= 'leo' then return nil end
     if JOBS_LISTED and not JOBS[me.job] then return nil end
     if REQUIRE_DUTY and me.duty == false then return nil end
+    -- A camera nobody switched on is not a camera. Checked here rather than at the tile, so an
+    -- officer with theirs off is absent from the section entirely and every route below refuses
+    -- them for the same reason.
+    if REQUIRE_ITEM and not wearing[me.citizenid] then return nil end
     return me
 end
+
 
 ---The police vehicle an officer is sitting in, when it carries a dashcam. The model is read from
 ---the vehicle itself; the class can only be read on a client, so it arrives from the officer's own
@@ -538,6 +561,62 @@ local function dropSession(session, reason)
     if byHostSrc[session.src] == session then byHostSrc[session.src] = nil end
 end
 
+---Turns an officer's camera on or off and tells them which it now is. The item is what the officer
+---holds; this is the state the department can see, and the two are checked against each other on
+---every use, so a camera cannot be left on by dropping the item that switches it.
+---@param src integer officer's server id
+---@param on boolean|nil desired state, nil to flip
+---@return boolean|nil state nil when this player has no business having one
+local function setWearing(src, on)
+    local me = access.identity(src)
+    if not me or access.domain(me) ~= 'leo' then return nil end
+    if JOBS_LISTED and not JOBS[me.job] then return nil end
+
+    local cid = me.citizenid
+    local want = on
+    if want == nil then want = not wearing[cid] end
+
+    if want and not inventory.has(src, ITEM, 1) then
+        notify.to(src, ('You are not carrying a %s.'):format(inventory.label(ITEM) or ITEM), 'error')
+        return false
+    end
+
+    wearing[cid] = want or nil
+    wearingSrc[src] = want and cid or nil
+
+    if not want then
+        -- Everything watching it stops now rather than at the next sweep: the officer switched it
+        -- off, and a terminal still showing their view a few seconds later is the one thing this
+        -- switch exists to prevent.
+        local session = sessions[cid]
+        if session then
+            stopBroadcast(session)
+            dropSession(session, 'switched off')
+        end
+    end
+
+    notify.to(src, want and 'Bodycam on' or 'Bodycam off', want and 'success' or 'info')
+    return want
+end
+
+---@type integer Milliseconds between possession re-checks for one officer. A terminal re-asserts
+---its watch every few seconds and searching an inventory is not free, so the answer is reused.
+local ITEM_CHECK_MS = 5000
+
+---Whether an officer still holds the item their camera is switched on by. Losing it switches the
+---camera off the same way using it would, because the alternative is a camera that stays on the air
+---because nobody thought to press the switch on the way out of it.
+---@param src integer officer's server id
+---@param cid string officer's citizenid
+---@return boolean holding
+local function stillHolding(src, cid)
+    if not REQUIRE_ITEM or not wearing[cid] then return true end
+    if not util.cooldown(cid, 'mdt:cameras:item', ITEM_CHECK_MS) then return true end
+    if inventory.has(src, ITEM, 1) then return true end
+    setWearing(src, false)
+    return false
+end
+
 ---The public status of one camera. A terminal renders a distinct card for each of these, so a
 ---camera that cannot be established says so rather than showing a dead tile.
 ---@param session table|nil broadcast session, nil when nobody has ever watched this officer
@@ -744,6 +823,7 @@ cameras.watch = access.gated('cameras.view', function(src, payload, me)
 
     local host = cameraOfficer(hostSrc)
     if not host or host.citizenid ~= cid then return util.fail('That unit is no longer on the air') end
+    if not stillHolding(hostSrc, cid) then return util.fail('That unit is no longer on the air') end
     if kind == 'dashcam' and not dashVehicle(hostSrc) then return util.fail('That unit is not in a marked vehicle') end
 
     local session = ensureSession(host)
@@ -1100,10 +1180,44 @@ if ENABLED then
     ---it, and a watched one loses them as a terminal.
     util.onCleanup(function(src)
         reportedClass[src] = nil
+        local heldBy = wearingSrc[src]
+        wearingSrc[src] = nil
+        if heldBy and not REMEMBER_ITEM then wearing[heldBy] = nil end
+
         local hosted = byHostSrc[src]
         if hosted then dropSession(hosted, 'offline') end
         detachEverywhere(src)
     end)
+
+    if REQUIRE_ITEM then
+        -- The item is the switch. Using it again turns the camera off, and the officer is told
+        -- which way it went rather than being left to open the terminal and check.
+        local okItem = pcall(inventory.registerUsable, ITEM, function(src)
+            setWearing(src, nil)
+        end)
+        if not okItem then
+            print(('^1[sd-phone:cameras]^0 could not register %q as a usable item, so nobody can switch a bodycam on. Add the item to your inventory, or set RequireItem = false in configs/bodycam.lua.')
+                :format(ITEM))
+        end
+
+        ---Public export: exports['sd-phone']:setBodycam(source, on). Switches an officer's camera
+        ---for them, for a duty script or a locker that should turn one on without the item being
+        ---used by hand. Answers the state it settled on, nil when that player may not have one.
+        ---@param source number officer's server id
+        ---@param on boolean|nil desired state, nil to flip
+        ---@return boolean|nil state
+        exports('setBodycam', function(source, on)
+            if type(source) ~= 'number' then return nil end
+            return setWearing(source, on)
+        end)
+
+        ---Public export: exports['sd-phone']:isBodycamOn(citizenid).
+        ---@param citizenid string
+        ---@return boolean on
+        exports('isBodycamOn', function(citizenid)
+            return type(citizenid) == 'string' and wearing[citizenid] == true
+        end)
+    end
 end
 
 ---Whether the Cameras section is switched on at all, for the routes above it.
