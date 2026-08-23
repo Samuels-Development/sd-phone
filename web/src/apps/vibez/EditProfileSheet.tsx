@@ -27,14 +27,14 @@ export function EditProfileSheet({ profile, onClose, onSaved }: {
     }
 
     return (
-        <Sheet onClose={onClose} forceDark top="18%" className="font-sf bg-[#161022]">
+        <Sheet onClose={onClose} forceDark top="18%" className="font-sf bg-[#141416]">
             {({ close }) => (
                 <>
-                    <div className="flex h-12 shrink-0 items-center justify-between px-4 pt-1">
+                    <div className="mt-3 flex h-12 shrink-0 items-center justify-between px-4">
                         <button type="button" onClick={close} className="text-[16px] text-white/70 active:opacity-60">
                             {t('vibez.cancel', 'Cancel')}
                         </button>
-                        <span className="text-[15px] font-semibold text-white">{t('vibez.editProfile', 'Edit profile')}</span>
+                        <span className="text-[17px] font-semibold text-white">{t('vibez.editProfile', 'Edit profile')}</span>
                         <button
                             type="button"
                             onClick={() => void save(close)}
@@ -49,7 +49,7 @@ export function EditProfileSheet({ profile, onClose, onSaved }: {
                     <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar px-5 pb-8 pt-3">
                         <button type="button" onClick={() => setPicker(true)} className="mx-auto block active:opacity-80">
                             <div className="relative mx-auto w-fit rounded-full p-[3px]" style={{ background: `linear-gradient(135deg, ${GRAD_FROM}, ${GRAD_TO})` }}>
-                                <img src={avatar} alt="" draggable={false} className="h-24 w-24 rounded-full border-[3px] border-[#161022] object-cover" />
+                                <img src={avatar} alt="" draggable={false} className="h-24 w-24 rounded-full border-[3px] border-[#141416] object-cover" />
                                 <span className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-white/15 backdrop-blur-sm">
                                     <Camera className="h-4 w-4 text-white" strokeWidth={2.2} />
                                 </span>

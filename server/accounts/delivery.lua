@@ -12,7 +12,7 @@ local delivery = {}
 local APPS = {
     photogram = { name = 'Photogram', code = '74682' },
     cherry    = { name = 'Cherry',    code = '24377' },
-    vibez     = { name = 'Vibez',     code = '84239' },
+    vibez     = { name = 'Clout',     code = '84239' },
     birdy     = { name = 'Squawk',    code = '24739' },
     mail      = { name = 'Mail',      code = '62450' },
     ryde      = { name = 'Ryde',      code = '79333' },

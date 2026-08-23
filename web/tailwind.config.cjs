@@ -165,6 +165,11 @@ module.exports = {
                     '70%':  { transform: 'scale(1.25)', opacity: 0.22 },
                     '100%': { transform: 'scale(1.55)', opacity: 0 },
                 },
+                // Clout audio disc: the track thumbnail turning while a clip plays.
+                'disc-spin': {
+                    from: { transform: 'rotate(0deg)' },
+                    to:   { transform: 'rotate(360deg)' },
+                },
                 // A terminal pane taking the stage: short rise and fade, no
                 // horizontal travel, since the sidebar stays put beside it.
                 'mdt-pane': {
@@ -194,6 +199,7 @@ module.exports = {
                 'shimmer':         'shimmer 1.6s linear infinite',
                 'heart-pop':       'heart-pop 0.42s cubic-bezier(0.34,1.56,0.64,1)',
                 'burst-ring':      'burst-ring 0.5s ease-out forwards',
+                'disc-spin':       'disc-spin 4s linear infinite',
                 'mdt-pane':        'mdt-pane 0.24s cubic-bezier(0.22,0.9,0.3,1)',
                 'mdt-detail':      'mdt-detail 0.26s cubic-bezier(0.22,0.9,0.3,1)',
             },

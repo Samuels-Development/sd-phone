@@ -41,12 +41,13 @@ export interface VPost {
 }
 
 export interface VComment {
-    id:    string;
-    user:  VUser;
-    text:  string;
-    likes: number;
-    liked: boolean;
-    time:  string;
+    id:      string;
+    user:    VUser;
+    text:    string;
+    gifUrl?: string;
+    likes:   number;
+    liked:   boolean;
+    time:    string;
 }
 
 export type VNotifKind = 'like' | 'comment' | 'mention' | 'follow' | 'post';
@@ -145,11 +146,11 @@ function devPost(id: string, user: VUser, video: string, caption: string, sound:
 }
 
 export const DEV_POSTS: VPost[] = [
-    devPost('v1', luna, bg6,  'Trippy vibes 🌌 catch the sunset before it’s gone #sunset', 'original sound · luna.vibe', 16, 1, 1, 480),
-    devPost('v2', dex,  bg5,  'view from the top never gets old 🌃 #lossantos', 'Night Drive · synthwave', 1243, 88, 42, 12400, { liked: true }),
-    devPost('v3', mira, bg9,  'beach day with the whole crew ☀️ #lossantos #beach', 'original sound · mira_ls', 5821, 204, 311, 88100),
-    devPost('v4', kobe, bg8,  'late night drive, no destination #nightdrive', 'lofi hours · chill beats', 932, 31, 64, 7040),
-    devPost('v5', sora, bg11, 'golden hour hits different up here ✨ #goldenhour', 'original sound · sora', 28400, 1290, 2200, 402000, { saved: true }),
+    devPost('v1', luna, bg6,  'Trippy vibes 🌌 catch the sunset before it’s gone #sunset', 'original sound · luna.vibe', 16, 6, 1, 480),
+    devPost('v2', dex,  bg5,  'view from the top never gets old 🌃 #lossantos', 'Night Drive · synthwave', 1243, 4, 42, 12400, { liked: true }),
+    devPost('v3', mira, bg9,  'beach day with the whole crew ☀️ #lossantos #beach', 'original sound · mira_ls', 5821, 2, 311, 88100),
+    devPost('v4', kobe, bg8,  'late night drive, no destination #nightdrive', 'lofi hours · chill beats', 932, 2, 64, 7040),
+    devPost('v5', sora, bg11, 'golden hour hits different up here ✨ #goldenhour', 'original sound · sora', 28400, 1, 2200, 402000, { saved: true }),
     devPost('v6', nox,  bg3,  'found this spot at 3am 🔥 worth it', 'Phonk Mix · nightcore', 412, 17, 9, 3900),
 ];
 
@@ -164,13 +165,30 @@ export const DEV_DISCOVER: VPost[] = [
 export const DEV_TRENDS = ['#lossantos', '#sunset', '#nightdrive', '#beach', '#goldenhour'];
 
 export const DEV_COMMENTS: Record<string, VComment[]> = {
+    v1: [
+        { id: 'c10', user: mira, text: 'the colours on this are unreal 😍', likes: 214, liked: false, time: '2h' },
+        { id: 'c11', user: dex,  text: 'ok but how did you get this shot without a drone', likes: 68, liked: true, time: '1h' },
+        { id: 'c12', user: nox,  text: '', gifUrl: bg4, likes: 31, liked: false, time: '52m' },
+        { id: 'c13', user: sora, text: 'been trying to catch this exact light for weeks and it never lines up, genuinely impressive timing', likes: 9, liked: false, time: '40m' },
+        { id: 'c14', user: kobe, text: 'this one goes hard', gifUrl: bg7, likes: 4, liked: false, time: '17m' },
+        { id: 'c15', user: luna, text: 'thank you all 🥹', likes: 0, liked: false, time: '3m' },
+    ],
     v2: [
         { id: 'c1', user: mira, text: 'this is insane 🔥', likes: 12, liked: false, time: '1h' },
         { id: 'c2', user: sora, text: 'where is this??', likes: 3, liked: true, time: '48m' },
         { id: 'c3', user: nox,  text: 'need the sound 🙏', likes: 1, liked: false, time: '12m' },
+        { id: 'c5', user: kobe, text: '', gifUrl: bg12, likes: 22, liked: false, time: '9m' },
     ],
     v3: [
         { id: 'c4', user: luna, text: 'take me next time 😭', likes: 40, liked: false, time: '4h' },
+        { id: 'c6', user: dex,  text: 'crew looks like they had the best day', likes: 7, liked: false, time: '2h' },
+    ],
+    v4: [
+        { id: 'c7', user: sora, text: 'no destination is the whole point', likes: 88, liked: true, time: '5h' },
+        { id: 'c8', user: mira, text: 'what song is this', likes: 2, liked: false, time: '20m' },
+    ],
+    v5: [
+        { id: 'c9', user: nox, text: 'golden hour supremacy ☀️', likes: 512, liked: false, time: '1d' },
     ],
 };
 

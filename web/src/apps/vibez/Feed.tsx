@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-    BadgeCheck, Bookmark, Heart, MessageCircle, Music2, Plus, Radio, Trash2,
+    Bookmark, Heart, Loader2, MessageCircle, Music2, Plus, Radio, Trash2, Video,
 } from 'lucide-react';
 
 import { t } from '@/i18n';
+import { EmptyState } from '@/ui/EmptyState';
+import { VerifiedBadge } from './ui';
 import { isVideoUrl } from '@/core/photosApi';
 import { GRAD_FROM, GRAD_TO, HEART, fmt, type VLive, type VPost } from './data';
 import type { FeedTab } from './vibezApi';
 
-const SB_H = 54;
-
-interface Pop { id: number; x: number; y: number }
+const SB_H = 58;
 
 export interface FeedHandlers {
     onToggleLike:   (id: string) => void;
@@ -60,67 +60,86 @@ export function Feed({ posts, tab, onTab, lives, onOpenLive, myHandle, loading, 
         setActive(prev => (prev === idx ? prev : idx));
     }
 
+    // The shell animates wheel input by nudging scrollTop a few pixels per tick, which a mandatory
+    // snap container undoes on every one of those ticks - it re-snaps to the slide already under
+    // the viewport, so the feed never advances. Claiming the event here (preventDefault marks it
+    // handled for the window listener) and jumping a whole slide is what makes the wheel work.
+    const count = posts.length;
+    useEffect(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+        let lock = 0;
+        function onWheel(e: WheelEvent) {
+            if (!e.deltaY || !el) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const now = Date.now();
+            if (now < lock) return;
+            lock = now + 420;
+            const step = Math.max(1, el.clientHeight);
+            const here = Math.round(el.scrollTop / step);
+            const next = Math.max(0, Math.min(count - 1, here + (e.deltaY > 0 ? 1 : -1)));
+            if (next === here) return;
+            el.scrollTo({ top: next * step, behavior: 'smooth' });
+        }
+        el.addEventListener('wheel', onWheel, { passive: false });
+        return () => el.removeEventListener('wheel', onWheel);
+    }, [count]);
+
     return (
         <div className="relative h-full w-full">
-            <style>{`
-                @keyframes vibez-disc-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-                @keyframes vibez-heart-pop {
-                    0%   { transform: translate(-50%,-50%) scale(0)   rotate(-18deg); opacity: 0; }
-                    18%  { transform: translate(-50%,-50%) scale(1.25) rotate(-12deg); opacity: 1; }
-                    42%  { transform: translate(-50%,-50%) scale(0.95) rotate(-12deg); opacity: 1; }
-                    70%  { transform: translate(-50%,-58%) scale(1)    rotate(-10deg); opacity: 1; }
-                    100% { transform: translate(-50%,-92%) scale(1.1)  rotate(-8deg);  opacity: 0; }
-                }
-            `}</style>
 
             <div
+                key={tab ?? 'viewer'}
                 ref={scrollRef}
-                className="h-full w-full overflow-y-auto no-scrollbar"
+                className={`h-full w-full overflow-y-auto no-scrollbar ${
+                    tab === 'foryou' ? 'animate-tab-in-right' : tab === 'following' ? 'animate-tab-in-left' : ''
+                }`}
                 style={{ scrollSnapType: 'y mandatory' }}
                 onScroll={handleScroll}
             >
                 {posts.map((p, i) => (
-                    Math.abs(i - active) <= 1
-                        ? (
+                    <section
+                        key={p.id}
+                        className="relative h-full w-full overflow-hidden bg-black"
+                        style={{ scrollSnapStop: 'always', scrollSnapAlign: 'start' }}
+                    >
+                        {Math.abs(i - active) <= 1 && (
                             <PostFrame
-                                key={p.id}
                                 post={p}
                                 isActive={i === active}
                                 isMine={!!myHandle && p.user.handle === myHandle}
                                 handlers={handlers}
                             />
-                        )
-                        : (
-                            <section
-                                key={p.id}
-                                className="relative h-full w-full overflow-hidden bg-black"
-                                style={{ scrollSnapStop: 'always', scrollSnapAlign: 'start' }}
-                            />
-                        )
+                        )}
+                    </section>
                 ))}
                 {posts.length === 0 && (
-                    <section className="flex h-full w-full flex-col items-center justify-center gap-2 px-10 text-center">
+                    <section className="flex h-full w-full items-center justify-center px-8">
                         {loading
-                            ? <p className="text-[14px] text-white/50">{t('vibez.loading', 'Loading…')}</p>
-                            : <>
-                                <p className="text-[16px] font-semibold text-white/85">
-                                    {tab === 'following' ? t('vibez.noFollowing', 'Nothing here yet') : t('vibez.noVibes', 'No vibes yet')}
-                                </p>
-                                <p className="text-[13px] leading-relaxed text-white/50">
-                                    {tab === 'following'
-                                        ? t('vibez.noFollowingHint', 'Follow creators to fill this feed.')
-                                        : t('vibez.noVibesHint', 'Be the first — record a vibe and post it.')}
-                                </p>
-                            </>}
+                            ? <Loader2 className="h-7 w-7 animate-spin text-white/40" strokeWidth={2.2} />
+                            : (
+                                <div className="dark">
+                                    <EmptyState
+                                        icon={Video}
+                                        center
+                                        title={tab === 'following' ? t('vibez.noFollowing', 'Nothing here yet') : t('vibez.noVibes', 'No vibes yet')}
+                                        subtitle={tab === 'following'
+                                            ? t('vibez.noFollowingHint', 'Follow creators to fill this feed.')
+                                            : t('vibez.noVibesHint', 'Be the first — record a clip and post it.')}
+                                        circleClassName="bg-white/10"
+                                    />
+                                </div>
+                            )}
                     </section>
                 )}
             </div>
 
             {tab && onTab && (
-                <div className="pointer-events-none absolute inset-x-0" style={{ top: SB_H - 4 }}>
-                    <div className="flex items-center justify-center gap-5">
+                <div className="pointer-events-none absolute inset-x-0" style={{ top: SB_H + 10 }}>
+                    <div className="flex items-center justify-center gap-6">
                         <TopTab active={tab === 'following'} onClick={() => onTab('following')}>{t('vibez.following', 'Following')}</TopTab>
-                        <span className="h-3.5 w-px bg-white/30" aria-hidden />
+                        <span className="h-4 w-px bg-white/25" aria-hidden />
                         <TopTab active={tab === 'foryou'} onClick={() => onTab('foryou')}>{t('vibez.forYou', 'For You')}</TopTab>
                     </div>
                     {!!lives?.length && onOpenLive && (
@@ -144,15 +163,20 @@ function TopTab({ active, onClick, children }: { active: boolean; onClick: () =>
         <button
             type="button"
             onClick={onClick}
-            className="pointer-events-auto relative flex flex-col items-center active:opacity-70"
+            className="pointer-events-auto relative flex flex-col items-center px-1 transition-transform active:scale-95"
         >
             <span
-                className={active ? 'text-[16px] font-bold text-white' : 'text-[16px] font-semibold text-white/55'}
-                style={active ? { textShadow: '0 1px 6px rgba(0,0,0,0.5)' } : undefined}
+                className={`text-[18px] font-bold transition-colors duration-200 ${active ? 'text-white' : 'text-white/50'}`}
+                style={{ textShadow: '0 1px 6px rgba(0,0,0,0.5)' }}
             >
                 {children}
             </span>
-            {active && <span className="absolute -bottom-1.5 h-[3px] w-6 rounded-full bg-white" />}
+            <span
+                className={`absolute -bottom-2 h-[3px] w-7 origin-center rounded-full bg-white transition-all duration-200 ease-out ${
+                    active ? 'scale-x-100 opacity-100' : 'scale-x-0 opacity-0'
+                }`}
+                aria-hidden
+            />
         </button>
     );
 }
@@ -199,19 +223,13 @@ function PostFrame({ post, isActive, isMine, handlers }: {
     isMine:   boolean;
     handlers: FeedHandlers;
 }) {
-    const [pops, setPops] = useState<Pop[]>([]);
+    const [burstId, setBurstId] = useState(0);
     const lastTap = useRef(0);
-    const popId   = useRef(0);
 
-    function handleTap(e: React.MouseEvent<HTMLDivElement>) {
+    function handleTap() {
         const now = Date.now();
         if (now - lastTap.current < 280) {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            const id = ++popId.current;
-            setPops(prev => [...prev, { id, x, y }]);
-            window.setTimeout(() => setPops(prev => prev.filter(p => p.id !== id)), 750);
+            setBurstId(id => id + 1);
             handlers.onLikeOn(post.id);
             lastTap.current = 0;
         } else {
@@ -220,36 +238,40 @@ function PostFrame({ post, isActive, isMine, handlers }: {
     }
 
     return (
-        <section
-            className="relative h-full w-full overflow-hidden bg-black"
-            style={{ scrollSnapStop: 'always', scrollSnapAlign: 'start' }}
-        >
+        <>
             <div className="absolute inset-0" onClick={handleTap}>
                 <Media post={post} isActive={isActive} />
                 <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/45 to-transparent" />
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-72 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
 
-                {pops.map(p => (
+                {burstId > 0 && (
                     <Heart
-                        key={p.id}
-                        className="pointer-events-none absolute h-24 w-24 drop-shadow-lg"
-                        style={{
-                            left: p.x, top: p.y,
-                            color: HEART, fill: HEART,
-                            animation: 'vibez-heart-pop 0.75s ease-out forwards',
-                        }}
+                        key={burstId}
+                        onAnimationEnd={() => setBurstId(0)}
+                        className="pointer-events-none absolute inset-0 m-auto h-[130px] w-[130px] text-white"
+                        style={{ filter: 'drop-shadow(0 3px 12px rgba(0,0,0,0.4))', animation: 'ig-heart 1s ease-out forwards' }}
+                        fill="currentColor"
                     />
-                ))}
+                )}
             </div>
 
-            <div className="absolute bottom-[150px] right-2.5 flex flex-col items-center gap-[18px]">
+            <div
+                className="pointer-events-none absolute bottom-0 right-0 top-[18%] w-[104px]"
+                style={{ background: 'radial-gradient(70% 50% at 78% 62%, rgba(0,0,0,0.42) 0%, rgba(0,0,0,0.18) 55%, transparent 100%)' }}
+                aria-hidden
+            />
+
+            <div
+                className="absolute bottom-[40px] right-2.5 flex flex-col items-center gap-[22px]"
+                style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.55)) drop-shadow(0 0 9px rgba(0,0,0,0.4))' }}
+            >
                 <div className="relative mb-1">
                     <button type="button" onClick={() => handlers.onOpenProfile(post.user.handle)} className="block active:opacity-80">
                         <img
                             src={post.user.avatar}
                             alt=""
                             draggable={false}
-                            className="h-12 w-12 rounded-full object-cover ring-2 ring-white"
+                            className="h-[54px] w-[54px] rounded-full object-cover ring-2 ring-white"
                         />
                     </button>
                     {!isMine && !post.following && (
@@ -267,64 +289,68 @@ function PostFrame({ post, isActive, isMine, handlers }: {
 
                 <RailAction label={t('vibez.like', 'Like')} count={fmt(post.likes)} onClick={() => handlers.onToggleLike(post.id)}>
                     <Heart
-                        className="h-[34px] w-[34px] drop-shadow"
+                        className="h-[40px] w-[40px] drop-shadow"
                         style={post.liked ? { color: HEART, fill: HEART } : { color: '#fff' }}
                         strokeWidth={post.liked ? 0 : 1.8}
                     />
                 </RailAction>
 
                 <RailAction label={t('vibez.comments', 'Comments')} count={fmt(post.comments)} onClick={() => handlers.onOpenComments(post)}>
-                    <MessageCircle className="h-[33px] w-[33px] text-white drop-shadow" fill="#fff" strokeWidth={0} />
+                    <MessageCircle className="h-[39px] w-[39px] text-white drop-shadow" fill="#fff" strokeWidth={0} />
                 </RailAction>
 
                 {isMine && handlers.onDelete && (
                     <RailAction label={t('vibez.delete', 'Delete')} onClick={() => handlers.onDelete?.(post.id)}>
-                        <Trash2 className="h-[29px] w-[29px] text-white drop-shadow" strokeWidth={1.9} />
+                        <Trash2 className="h-[34px] w-[34px] text-white drop-shadow" strokeWidth={1.9} />
                     </RailAction>
                 )}
 
                 <RailAction label={t('vibez.save', 'Save')} count={fmt(post.saves)} onClick={() => handlers.onToggleSave(post.id)}>
                     <Bookmark
-                        className="h-[31px] w-[31px] drop-shadow"
+                        className="h-[36px] w-[36px] drop-shadow"
                         style={post.saved ? { color: '#FACC15', fill: '#FACC15' } : { color: '#fff' }}
                         strokeWidth={post.saved ? 0 : 1.9}
                     />
                 </RailAction>
 
                 <div
-                    className="mt-1 flex h-12 w-12 items-center justify-center rounded-full ring-[5px] ring-black/30"
+                    className="mt-1 flex h-[52px] w-[52px] items-center justify-center rounded-full ring-[5px] ring-black/30"
                     style={{
                         background: `conic-gradient(${GRAD_FROM}, ${GRAD_TO}, ${GRAD_FROM})`,
-                        animation: isActive ? 'vibez-disc-spin 4s linear infinite' : undefined,
+                        animation: isActive ? 'disc-spin 4s linear infinite' : undefined,
                     }}
                 >
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-black/80">
-                        <Music2 className="h-3.5 w-3.5 text-white" strokeWidth={2.4} />
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-black/80">
+                        <Music2 className="h-4 w-4 text-white" strokeWidth={2.4} />
                     </div>
                 </div>
             </div>
 
-            <div className="absolute bottom-[120px] left-3.5 right-20">
+            <div className="absolute bottom-[14px] left-3.5 right-20">
                 <button
                     type="button"
                     onClick={() => handlers.onOpenProfile(post.user.handle)}
                     className="flex items-center gap-1.5 active:opacity-80"
                 >
-                    <span className="text-[16px] font-bold text-white drop-shadow">@{post.user.handle}</span>
+                    <span className="text-[18px] font-bold text-white drop-shadow">@{post.user.handle}</span>
                     {post.user.verified && (
-                        <BadgeCheck className="h-[15px] w-[15px]" style={{ color: GRAD_FROM, fill: GRAD_FROM }} stroke="#fff" strokeWidth={1.6} />
+                        <VerifiedBadge size={17} />
                     )}
-                    <span className="text-[13px] text-white/70">· {post.time}</span>
+                    <span className="text-[14.5px] text-white/70">· {post.time}</span>
                 </button>
                 {post.caption !== '' && (
-                    <div className="mt-1.5 text-[14px] leading-snug text-white drop-shadow">{post.caption}</div>
+                    <div className="mt-2 text-[15.5px] leading-snug text-white drop-shadow">{post.caption}</div>
                 )}
-                <div className="mt-2 flex items-center gap-1.5 text-[13px] text-white/90">
-                    <Music2 className="h-3.5 w-3.5 shrink-0" strokeWidth={2.2} />
-                    <span className="truncate">{post.sound}</span>
+                <div className="mt-2.5 flex items-center gap-2 text-[14.5px] text-white/90">
+                    <Music2 className="h-[17px] w-[17px] shrink-0" strokeWidth={2.2} />
+                    <span className="truncate">
+                        {post.sound !== ''
+                            ? post.sound
+                            : t('vibez.originalSound', 'original sound — {handle}', { handle: post.user.handle })}
+                    </span>
                 </div>
             </div>
-        </section>
+        </>
     );
 }
 
@@ -335,10 +361,10 @@ function RailAction({ label, count, onClick, children }: {
     children: React.ReactNode;
 }) {
     return (
-        <button type="button" aria-label={label} onClick={onClick} className="flex flex-col items-center gap-1 active:scale-90 transition-transform">
+        <button type="button" aria-label={label} onClick={onClick} className="flex flex-col items-center gap-1.5 transition-transform active:scale-90">
             {children}
             {count !== undefined && (
-                <span className="text-[12px] font-semibold text-white drop-shadow">{count}</span>
+                <span className="text-[13.5px] font-semibold text-white drop-shadow">{count}</span>
             )}
         </button>
     );

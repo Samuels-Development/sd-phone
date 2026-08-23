@@ -1065,25 +1065,46 @@ export function ChessIcon() {
 }
 
 function VibezIcon() {
-    // Neon pulse wave on a twilight tile — the Vibez brand mark.
-    const wave = 'M11,32 L19,32 L24,17 L31,45 L37,25 L41,32 L49,32';
+    const play = 'M18.5,18 L41.5,30 L18.5,42 Z';
     return (
         <svg viewBox={`0 0 ${S} ${S}`} width={S} height={S}>
             <defs>
-                <radialGradient id="vbzBg" cx="28%" cy="18%" r="115%">
-                    <stop offset="0%" stopColor="#2c1560" />
-                    <stop offset="55%" stopColor="#180b36" />
-                    <stop offset="100%" stopColor="#0a0518" />
-                </radialGradient>
-                <linearGradient id="vbzWave" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#8B5CF6" />
-                    <stop offset="55%" stopColor="#C084FC" />
+                <linearGradient id="vbzBg" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#B569FF" />
+                    <stop offset="50%" stopColor="#8B5CF6" />
                     <stop offset="100%" stopColor="#F472B6" />
                 </linearGradient>
+                <radialGradient id="vbzHot" cx="26%" cy="15%" r="80%">
+                    <stop offset="0%" stopColor="#E3BDFF" stopOpacity="0.9" />
+                    <stop offset="55%" stopColor="#E3BDFF" stopOpacity="0" />
+                </radialGradient>
+                <linearGradient id="vbzVig" x1="0.15" y1="0" x2="0.9" y2="1">
+                    <stop offset="50%" stopColor="#2A0B4E" stopOpacity="0" />
+                    <stop offset="100%" stopColor="#2A0B4E" stopOpacity="0.45" />
+                </linearGradient>
+                <linearGradient id="vbzFace" x1="0" y1="0" x2="0.2" y2="1">
+                    <stop offset="0%" stopColor="#ffffff" />
+                    <stop offset="55%" stopColor="#FBF6FF" />
+                    <stop offset="100%" stopColor="#E4D0FA" />
+                </linearGradient>
+                <filter id="vbzLift" x="-60%" y="-60%" width="220%" height="220%">
+                    <feDropShadow dx="0" dy="1.6" stdDeviation="1.9" floodColor="#3B0F6B" floodOpacity="0.55" />
+                </filter>
             </defs>
             <rect width={S} height={S} fill="url(#vbzBg)" />
-            <path d={wave} fill="none" stroke="url(#vbzWave)" strokeWidth="9.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.3" />
-            <path d={wave} fill="none" stroke="url(#vbzWave)" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" />
+            <rect width={S} height={S} fill="url(#vbzHot)" />
+            <rect width={S} height={S} fill="url(#vbzVig)" />
+            <g filter="url(#vbzLift)">
+                <path
+                    d={play}
+                    fill="url(#vbzFace)"
+                    stroke="url(#vbzFace)"
+                    strokeWidth="7.5"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                />
+            </g>
+            <path d="M20.2,19.4 L39.4,29.4" fill="none" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" opacity="0.75" />
         </svg>
     );
 }

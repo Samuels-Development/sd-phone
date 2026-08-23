@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BadgeCheck, Bookmark, ChevronLeft, Grid3x3, Heart, Play } from 'lucide-react';
+import { Bookmark, ChevronLeft, Grid3x3, Heart, Play } from 'lucide-react';
 
 import { ChangePasswordPage } from '@/shared/ChangePasswordPage';
 import { t } from '@/i18n';
@@ -8,8 +8,9 @@ import { ACCENT, GRAD_FROM, GRAD_TO, fmt, type VPost, type VProfile } from './da
 import { apiLikedPosts, apiProfile, apiProfilePosts, apiSavedPosts, apiToggleFollow } from './vibezApi';
 import { EditProfileSheet } from './EditProfileSheet';
 import { Thumb } from './Discover';
+import { VerifiedBadge } from './ui';
 
-const SB_H = 54;
+const SB_H = 58;
 
 type Grid = 'posts' | 'liked' | 'saved';
 
@@ -69,7 +70,7 @@ export function Profile({ handle, onBack, onOpenPost, onSignOut, onSignOutAll, o
                 </button>
             )}
 
-            <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar pb-24">
+            <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar pb-4">
                 <div className="flex flex-col items-center px-4 pt-2">
                     <div className="rounded-full p-[3px]" style={{ background: `linear-gradient(135deg, ${GRAD_FROM}, ${GRAD_TO})` }}>
                         <img
@@ -82,7 +83,7 @@ export function Profile({ handle, onBack, onOpenPost, onSignOut, onSignOutAll, o
                     <div className="mt-3 flex items-center gap-1.5">
                         <span className="text-[17px] font-semibold">@{profile?.username ?? handle ?? ''}</span>
                         {profile?.verified && (
-                            <BadgeCheck className="h-[16px] w-[16px]" style={{ color: GRAD_FROM, fill: GRAD_FROM }} stroke="#000" strokeWidth={1.6} />
+                            <VerifiedBadge size={16} />
                         )}
                     </div>
                     {profile?.name && profile.name !== '' && profile.name !== profile.username && (
@@ -205,7 +206,7 @@ export function Profile({ handle, onBack, onOpenPost, onSignOut, onSignOutAll, o
             {pwOpen && (
                 <ChangePasswordPage
                     app="vibez"
-                    appName="Vibez"
+                    appName="Clout"
                     icon="vibez"
                     theme={{ accent: ACCENT, welcomeBg: '#0a0518', welcomeText: 'light' }}
                     onClose={() => setPwOpen(false)}

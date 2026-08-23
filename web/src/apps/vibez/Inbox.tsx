@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { BadgeCheck, UserPlus } from 'lucide-react';
+import { AtSign, Bell, Heart, MessageCircle, UserPlus, Video } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { useAsyncData } from '@/hooks/useAsyncData';
-import { GRAD_FROM, GRAD_TO, type VNotif } from './data';
+import { EmptyState } from '@/ui/EmptyState';
+import { ACCENT, GRAD_FROM, GRAD_TO, HEART, type VNotif, type VNotifKind } from './data';
 import { apiActivity, apiToggleFollow } from './vibezApi';
+import { Avatar, FadeImg, ListSkeleton, VerifiedBadge } from './ui';
 
-const SB_H = 54;
+const SB_H = 58;
 
 export function Inbox({ onOpenPostId, onOpenProfile, onSeen, refreshKey }: {
     onOpenPostId:  (postId: string) => void;
@@ -37,64 +39,81 @@ export function Inbox({ onOpenPostId, onOpenProfile, onSeen, refreshKey }: {
             <div className="shrink-0" style={{ height: SB_H }} />
 
             <div className="shrink-0 px-4 pb-2">
-                <h1 className="text-[22px] font-bold tracking-tight">{t('vibez.inbox', 'Inbox')}</h1>
+                <h1 className="text-[22px] font-extrabold tracking-tight">{t('vibez.inbox', 'Inbox')}</h1>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar pb-24">
+            <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar pb-4">
                 {loading && notifs.length === 0 ? (
-                    <p className="px-4 pt-10 text-center text-[14px] text-white/45">{t('vibez.loading', 'Loading…')}</p>
+                    <ListSkeleton />
                 ) : notifs.length === 0 ? (
-                    <p className="px-4 pt-10 text-center text-[14px] text-white/45">{t('vibez.noActivity', 'Nothing yet — post a vibe to get noticed.')}</p>
+                    <div className="dark">
+                        <EmptyState
+                            icon={Bell}
+                            title={t('vibez.noActivityTitle', 'No activity yet')}
+                            subtitle={t('vibez.noActivity', 'Post a clip to get noticed.')}
+                            circleClassName="bg-white/10"
+                        />
+                    </div>
                 ) : notifs.map(n => (
                     <div
                         key={n.id}
-                        className="flex w-full items-center gap-3 px-4 py-3 active:bg-white/5"
+                        className="flex w-full gap-3.5 border-b border-white/10 px-4 py-4 text-left transition-colors active:bg-white/[0.04]"
                         role="button"
                         tabIndex={0}
                         onClick={() => { if (n.postId) onOpenPostId(n.postId); else onOpenProfile(n.user.handle); }}
                         onKeyDown={e => { if (e.key === 'Enter') { if (n.postId) onOpenPostId(n.postId); else onOpenProfile(n.user.handle); } }}
                     >
-                        <button
-                            type="button"
-                            onClick={e => { e.stopPropagation(); onOpenProfile(n.user.handle); }}
-                            className="shrink-0 active:opacity-80"
-                        >
-                            <img src={n.user.avatar} alt="" draggable={false} className="h-11 w-11 rounded-full object-cover" />
-                        </button>
+                        <div className="flex w-8 shrink-0 justify-center pt-2">
+                            <KindGlyph kind={n.kind} />
+                        </div>
 
-                        <div className="min-w-0 flex-1 text-left">
-                            <p className="text-[14px] leading-snug">
-                                <span className="inline-flex items-center gap-1 font-semibold">
-                                    {n.user.handle}
-                                    {n.user.verified && (
-                                        <BadgeCheck className="h-[13px] w-[13px]" style={{ color: GRAD_FROM, fill: GRAD_FROM }} stroke="#000" strokeWidth={1.6} />
-                                    )}
-                                </span>{' '}
-                                <span className="text-white/80">{n.text}</span>
-                            </p>
-                            <span className="text-[12px] text-white/45">{n.time}</span>
+                        <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-3">
+                                <button
+                                    type="button"
+                                    onClick={e => { e.stopPropagation(); onOpenProfile(n.user.handle); }}
+                                    className="shrink-0 active:opacity-80"
+                                >
+                                    <Avatar size={44} src={n.user.avatar} />
+                                </button>
+                                <p className="min-w-0 flex-1 text-[17px] leading-snug">
+                                    <span className="inline-flex items-center gap-1 font-bold">
+                                        {n.user.handle}
+                                        {n.user.verified && (
+                                            <VerifiedBadge size={15} />
+                                        )}
+                                    </span>{' '}
+                                    <span className="text-white/80">{n.text}</span>{' '}
+                                    <span className="text-white/40">{n.time}</span>
+                                </p>
+                            </div>
                         </div>
 
                         {n.kind === 'follow' ? (
                             <button
                                 type="button"
                                 onClick={e => { e.stopPropagation(); followBack(n.user.handle); }}
-                                className="shrink-0 rounded-md px-4 py-1.5 text-[13px] font-semibold text-white active:opacity-80"
+                                className="shrink-0 self-center rounded-[8px] px-3.5 py-1.5 text-[14px] font-semibold text-white active:opacity-80"
                                 style={followed.has(n.user.handle)
                                     ? { background: 'rgba(255,255,255,0.12)' }
                                     : { background: `linear-gradient(135deg, ${GRAD_FROM}, ${GRAD_TO})` }}
                             >
-                                <span className="flex items-center gap-1">
-                                    <UserPlus className="h-3.5 w-3.5" strokeWidth={2.6} />
-                                    {followed.has(n.user.handle) ? t('vibez.followingBtn', 'Following') : t('vibez.follow', 'Follow')}
-                                </span>
+                                {followed.has(n.user.handle) ? t('vibez.followingBtn', 'Following') : t('vibez.follow', 'Follow')}
                             </button>
                         ) : n.thumb ? (
-                            <img src={n.thumb} alt="" draggable={false} className="h-12 w-10 shrink-0 rounded object-cover" />
+                            <FadeImg src={n.thumb} className="h-12 w-10 shrink-0 rounded object-cover" />
                         ) : null}
                     </div>
                 ))}
             </div>
         </div>
     );
+}
+
+function KindGlyph({ kind }: { kind: VNotifKind }) {
+    if (kind === 'like')    return <Heart className="h-7 w-7" fill={HEART} color={HEART} />;
+    if (kind === 'comment') return <MessageCircle className="h-7 w-7" color={ACCENT} />;
+    if (kind === 'mention') return <AtSign className="h-7 w-7" color={ACCENT} strokeWidth={2.2} />;
+    if (kind === 'follow')  return <UserPlus className="h-7 w-7" color={ACCENT} strokeWidth={2.2} />;
+    return <Video className="h-7 w-7" color={ACCENT} strokeWidth={2.2} />;
 }

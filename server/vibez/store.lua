@@ -67,6 +67,7 @@ function store.ensureSchema()
             post_id     VARCHAR(16)  NOT NULL,
             author      VARCHAR(64)  NOT NULL,
             body        VARCHAR(500) NOT NULL,
+            gif_url     VARCHAR(512) NULL,
             created_at  BIGINT       NOT NULL,
             PRIMARY KEY (id),
             INDEX idx_vibez_comments_post (post_id, created_at)
@@ -113,6 +114,9 @@ function store.ensureSchema()
     -- Referential integrity, added on boot so existing installs migrate with no manual SQL.
     -- Each is a no-op once present; orphaned children are cleared first (they point at a
     -- parent that is already gone) and a type or collation mismatch is skipped, never fatal.
+    -- Comments predate GIF replies, so servers built before this carry no column for one.
+    util.ensureColumns('phone_vibez_comments', { gif_url = 'gif_url VARCHAR(512) NULL' })
+
     util.ensureForeignKey('phone_vibez_comments', 'post_id', 'phone_vibez_posts', 'id', 'fk_vibez_comments_post')
     util.ensureForeignKey('phone_vibez_likes', 'post_id', 'phone_vibez_posts', 'id', 'fk_vibez_likes_post')
     util.ensureForeignKey('phone_vibez_saves', 'post_id', 'phone_vibez_posts', 'id', 'fk_vibez_saves_post')
@@ -209,6 +213,7 @@ end
 ---@param follower string account handle
 ---@param target string account handle
 ---@param createdAt integer unix seconds
+---@param gifUrl string|nil GIF reply url, nil for a plain text comment
 function store.addFollow(follower, target, createdAt)
     MySQL.query.await('INSERT IGNORE INTO phone_vibez_follows (follower, target, created_at) VALUES (?, ?, ?)', { follower, target, createdAt })
 end
@@ -276,6 +281,7 @@ local POST_SELECT = [[
 ---@param caption string caption text
 ---@param sound string sound label
 ---@param createdAt integer unix seconds
+---@param gifUrl string|nil GIF reply url, nil for a plain text comment
 function store.insertPost(id, author, video, thumb, caption, sound, createdAt)
     MySQL.insert.await([[
         INSERT INTO phone_vibez_posts (id, author, video, thumb, caption, sound, created_at)
@@ -335,6 +341,23 @@ function store.trendingPosts(viewer, limit)
         ORDER BY p.views DESC, p.created_at DESC
         LIMIT %d
     ]]):format(n), { viewer, viewer, viewer, viewer }) or {}
+end
+
+---Posts whose caption contains the query, most viewed first. A hashtag search is the same thing:
+---the tag lives in the caption text, so `#sunset` and `sunset` both match without a tag table.
+---Read-only.
+---@param viewer string viewing account handle
+---@param query string already-trimmed, lowercased search text
+---@param limit? integer max rows (default 30, server-supplied)
+---@return table[] rows
+function store.searchPosts(viewer, query, limit)
+    local n = math.floor(tonumber(limit) or 30)
+    local like = '%' .. query:gsub('[%%_\\]', '\\%0') .. '%'
+    return MySQL.query.await((POST_SELECT .. [[
+        WHERE p.caption LIKE ? ESCAPE '\\'
+        ORDER BY p.views DESC, p.created_at DESC
+        LIMIT %d
+    ]]):format(n), { viewer, viewer, viewer, like }) or {}
 end
 
 ---A single author's posts (profile grid), newest first. Read-only.
@@ -423,6 +446,7 @@ end
 ---@param postId string post id
 ---@param username string account handle
 ---@param createdAt integer unix seconds
+---@param gifUrl string|nil GIF reply url, nil for a plain text comment
 function store.addLike(postId, username, createdAt)
     MySQL.query.await('INSERT IGNORE INTO phone_vibez_likes (post_id, username, created_at) VALUES (?, ?, ?)', { postId, username, createdAt })
 end
@@ -446,6 +470,7 @@ end
 ---@param postId string post id
 ---@param username string account handle
 ---@param createdAt integer unix seconds
+---@param gifUrl string|nil GIF reply url, nil for a plain text comment
 function store.addSave(postId, username, createdAt)
     MySQL.query.await('INSERT IGNORE INTO phone_vibez_saves (post_id, username, created_at) VALUES (?, ?, ?)', { postId, username, createdAt })
 end
@@ -463,11 +488,12 @@ end
 ---@param author string account handle
 ---@param body string comment text
 ---@param createdAt integer unix seconds
-function store.insertComment(id, postId, author, body, createdAt)
+---@param gifUrl string|nil GIF reply url, nil for a plain text comment
+function store.insertComment(id, postId, author, body, createdAt, gifUrl)
     MySQL.insert.await([[
-        INSERT INTO phone_vibez_comments (id, post_id, author, body, created_at)
-        VALUES (?, ?, ?, ?, ?)
-    ]], { id, postId, author, body, createdAt })
+        INSERT INTO phone_vibez_comments (id, post_id, author, body, gif_url, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ]], { id, postId, author, body, gifUrl, createdAt })
 end
 
 ---A post's comments, oldest first, each with its author card, live like count, and a per-viewer
@@ -479,7 +505,7 @@ end
 function store.commentsFor(postId, viewer, limit)
     local n = math.floor(tonumber(limit) or 200)
     return MySQL.query.await(([[
-        SELECT c.id, c.post_id, c.author, c.body, c.created_at,
+        SELECT c.id, c.post_id, c.author, c.body, c.gif_url, c.created_at,
                pr.display_name, pr.avatar, pr.verified,
                (SELECT COUNT(*) FROM phone_vibez_comment_likes cl WHERE cl.comment_id = c.id) AS like_count,
                (SELECT COUNT(*) FROM phone_vibez_comment_likes clv WHERE clv.comment_id = c.id AND clv.username = ?) AS liked
@@ -510,6 +536,7 @@ end
 ---@param commentId string comment id
 ---@param username string account handle
 ---@param createdAt integer unix seconds
+---@param gifUrl string|nil GIF reply url, nil for a plain text comment
 function store.addCommentLike(commentId, username, createdAt)
     MySQL.query.await('INSERT IGNORE INTO phone_vibez_comment_likes (comment_id, username, created_at) VALUES (?, ?, ?)', { commentId, username, createdAt })
 end
@@ -557,6 +584,7 @@ end
 ---@param postId string|nil related post id
 ---@param preview string|nil short body preview
 ---@param createdAt integer unix seconds
+---@param gifUrl string|nil GIF reply url, nil for a plain text comment
 function store.insertNotification(id, recipient, kind, actor, postId, preview, createdAt)
     MySQL.insert.await([[
         INSERT INTO phone_vibez_notifications (id, recipient, kind, actor, post_id, preview, created_at)

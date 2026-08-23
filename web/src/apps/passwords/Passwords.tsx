@@ -15,7 +15,7 @@ import { SlideOver } from '@/ui/SlideOver';
 import { t } from '@/i18n';
 
 const APP_LABELS: Record<string, string> = {
-    photogram: 'Photogram', cherry: 'Cherry', vibez: 'Vibez', birdy: 'Squawk', mail: 'Mail',
+    photogram: 'Photogram', cherry: 'Cherry', vibez: 'Clout', birdy: 'Squawk', mail: 'Mail',
 };
 const labelFor = (app: string) => APP_LABELS[app] ?? app.charAt(0).toUpperCase() + app.slice(1);
 

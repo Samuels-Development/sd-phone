@@ -88,7 +88,7 @@ return {
         { id = 'connectfour', label = 'Connect 4', icon = 'connectfour', route = '/connectfour', accent = '#1E66D0', base = false, enabled = true },
         { id = 'chess', label = 'Chess', icon = 'chess', route = '/chess', accent = '#3B3B3B', base = false, enabled = true },
         { id = 'battleship', label = 'Battleship', icon = 'battleship', route = '/battleship', accent = '#17A0B5', base = false, enabled = true },
-        { id = 'vibez', label = 'Vibez', icon = 'vibez', route = '/vibez', accent = '#A855F7', base = false, enabled = false },
+        { id = 'vibez', label = 'Clout', icon = 'vibez', route = '/vibez', accent = '#A855F7', base = false, enabled = true },
         { id = 'weazelnews', label = 'Weazel News', icon = 'weazelnews', route = '/weazelnews', accent = '#C8102E', base = false, enabled = true },
         { id = 'streaks', label = 'Streaks', icon = 'streaks', route = '/streaks', accent = '#FF7A1A', base = false, enabled = true },
 

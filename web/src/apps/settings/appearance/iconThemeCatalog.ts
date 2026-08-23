@@ -56,7 +56,7 @@ export const THEME_APPS: ThemeApp[] = [
     { id: 'connectfour', label: 'Connect 4',    icon: 'connectfour', accent: '#1e66d0' },
     { id: 'chess',       label: 'Chess',        icon: 'chess',       accent: '#3b3b3b' },
     { id: 'battleship',  label: 'Battleship',   icon: 'battleship',  accent: '#17a0b5' },
-    { id: 'vibez',       label: 'Vibez',        icon: 'vibez',       accent: '#a855f7' },
+    { id: 'vibez',       label: 'Clout',        icon: 'vibez',       accent: '#a855f7' },
     { id: 'weazelnews',  label: 'Weazel News',  icon: 'weazelnews',  accent: '#c8102e' },
     { id: 'streaks',     label: 'Streaks',      icon: 'streaks',     accent: '#ff7a1a' },
 ].sort((a, b) => a.label.localeCompare(b.label));

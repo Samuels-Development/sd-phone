@@ -161,6 +161,7 @@ local function serializeComment(row)
         text      = row.body,
         likes     = tonumber(row.like_count) or 0,
         liked     = (tonumber(row.liked) or 0) > 0,
+        gifUrl    = row.gif_url,
         createdAt = (tonumber(row.created_at) or 0) * 1000,
     }
 end
@@ -233,7 +234,7 @@ local function notify(recipient, kind, actor, postId, preview, ctx)
     end
     util.pushMany('sd-phone:client:vibez:notification', sources, {})
     util.pushMany('sd-phone:client:notify', sources, {
-        app = 'vibez', appId = 'vibez', title = 'Vibez',
+        app = 'vibez', appId = 'vibez', title = 'Clout',
         body = ('%s %s'):format(actorName, notifSuffix(kind, preview)), image = thumb,
         time = 'now', quietInApp = true,
         link = { ['vibez:tab'] = 'inbox' },
@@ -483,7 +484,7 @@ end
 ---Adds a comment (capped) to a post, notifying the author and eligible mentions. The refreshed
 ---count fans out to every watching phone.
 ---@param src integer player server id
----@param payload table { postId: string, text: string }
+---@param payload table { postId: string, text: string, gifUrl?: string }
 ---@return table result { comment, count }
 function actions.addComment(src, payload)
     payload = type(payload) == 'table' and payload or {}
@@ -496,10 +497,15 @@ function actions.addComment(src, payload)
     if not row then return fail('Vibe not found') end
 
     local text = trim(payload.text):sub(1, 500)
-    if text == '' then return fail('Empty comment') end
+
+    -- A GIF reply carries no words, so the empty-comment guard has to accept one in place of text.
+    -- Only http(s) is stored: the URL is handed straight back to an <img> on every viewer's phone.
+    local gifUrl = trim(payload.gifUrl):sub(1, 512)
+    if gifUrl ~= '' and not gifUrl:match('^https?://') then gifUrl = '' end
+    if text == '' and gifUrl == '' then return fail('Empty comment') end
 
     local id = store.newId()
-    store.insertComment(id, row.id, acc.username, text, os.time())
+    store.insertComment(id, row.id, acc.username, text, os.time(), gifUrl ~= '' and gifUrl or nil)
 
     notify(row.author, 'comment', acc.username, row.id, text:sub(1, 120))
     for _, m in ipairs(mentionsIn(text, acc.username)) do
@@ -694,7 +700,7 @@ function actions.search(src, payload)
     local acc = viewerAccount(src)
     if not acc then return fail('Not signed in') end
     local query = trim(payload.query):sub(1, 64):lower()
-    if query == '' then return ok({ users = {} }) end
+    if query == '' then return ok({ users = {}, posts = {} }) end
     local out = {}
     for _, r in ipairs(store.searchProfiles(query, 20)) do
         if r.username ~= acc.username then
@@ -703,7 +709,15 @@ function actions.search(src, payload)
             out[#out + 1] = card
         end
     end
-    return ok({ users = out })
+
+    -- A leading # is how people type a hashtag but not how it is stored any differently from the
+    -- rest of the caption, so both spellings look for the same text.
+    local posts = {}
+    for _, r in ipairs(store.searchPosts(acc.username, query, 30)) do
+        posts[#posts + 1] = serializePost(r)
+    end
+
+    return ok({ users = out, posts = posts })
 end
 
 ---Active lives the viewer may watch (everyone else's), newest first. Read-only.

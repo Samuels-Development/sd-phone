@@ -121,14 +121,14 @@ export async function apiComments(postId: string): Promise<VComment[]> {
     return (await call<{ comments: SrvComment[] }>('sd-phone:vibez:comments', { postId }))?.comments.map(mapComment) ?? [];
 }
 
-export async function apiAddComment(postId: string, text: string): Promise<{ comment: VComment; count: number } | null> {
+export async function apiAddComment(postId: string, text: string, gifUrl?: string): Promise<{ comment: VComment; count: number } | null> {
     if (!isFiveM) {
         return {
-            comment: { id: 'me-' + Date.now(), user: { id: 'dev', handle: 'dev', avatar: DEV_ME.avatar, verified: true }, text, likes: 0, liked: false, time: t('vibez.justNow', 'Just now') },
+            comment: { id: 'me-' + Date.now(), user: { id: 'dev', handle: 'dev', avatar: DEV_ME.avatar, verified: true }, text, gifUrl, likes: 0, liked: false, time: t('vibez.justNow', 'Just now') },
             count: (DEV_COMMENTS[postId]?.length ?? 0) + 1,
         };
     }
-    const r = await call<{ comment: SrvComment; count: number }>('sd-phone:vibez:addComment', { postId, text });
+    const r = await call<{ comment: SrvComment; count: number }>('sd-phone:vibez:addComment', { postId, text, gifUrl });
     return r?.comment ? { comment: mapComment(r.comment), count: r.count } : null;
 }
 
@@ -185,20 +185,34 @@ export async function apiToggleFollow(handle: string): Promise<boolean> {
 
 export interface SearchUser extends VUser { following: boolean }
 
-export async function apiSearch(query: string): Promise<SearchUser[]> {
+export interface SearchResults { users: SearchUser[]; posts: VPost[] }
+
+export async function apiSearch(query: string): Promise<SearchResults> {
+    const q = query.trim().toLowerCase();
     if (!isFiveM) {
-        const q = query.trim().toLowerCase();
-        if (!q) return [];
+        if (!q) return { users: [], posts: [] };
+        const bare = q.replace(/^#/, '');
         const seen = new Set<string>();
         const users: SearchUser[] = [];
         for (const u of [...DEV_POSTS, ...DEV_DISCOVER].map(p => p.user)) {
-            if (seen.has(u.handle) || !u.handle.toLowerCase().includes(q)) continue;
+            if (seen.has(u.handle) || !u.handle.toLowerCase().includes(bare)) continue;
             seen.add(u.handle);
             users.push({ ...u, following: false });
         }
-        return users;
+        const byId = new Set<string>();
+        const posts: VPost[] = [];
+        for (const p of [...DEV_POSTS, ...DEV_DISCOVER]) {
+            if (byId.has(p.id) || !p.caption.toLowerCase().includes(bare)) continue;
+            byId.add(p.id);
+            posts.push(p);
+        }
+        return { users, posts };
     }
-    return (await call<{ users: SearchUser[] }>('sd-phone:vibez:search', { query }))?.users.map(u => ({ ...u, avatar: avatarFor(u.handle, u.avatar) })) ?? [];
+    const r = await call<{ users: SearchUser[]; posts: SrvPost[] }>('sd-phone:vibez:search', { query });
+    return {
+        users: r?.users.map(u => ({ ...u, avatar: avatarFor(u.handle, u.avatar) })) ?? [],
+        posts: r?.posts.map(mapPost) ?? [],
+    };
 }
 
 export async function apiActivity(): Promise<VNotif[]> {
