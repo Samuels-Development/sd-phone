@@ -43,7 +43,9 @@ return {
     -- other domain is keyed off the number -> citizenid resolution it establishes.
     --
     -- `reactions` needs `messages` (it attaches to the messages that porter writes) and
-    -- `sessions` needs `photogram` (it links to the accounts that porter creates).
+    -- `sessions` needs `photogram` (it links to the accounts that porter creates). Turning
+    -- `birdy` or `vibez` off also holds back their logins, since there is then no account for a
+    -- Twitter or Trendy session to attach to.
     --
     -- lb-phone passwords are bcrypt hashed and cannot be converted to sd-phone's hasher, so
     -- migrated accounts rely on the pre-seeded sessions to stay signed in. Anyone who logs out
@@ -62,6 +64,10 @@ return {
         reactions  = true,
         -- Instagram accounts, posts, comments, likes, follows, stories and DMs
         photogram  = true,
+        -- Twitter accounts, posts and replies, likes, reposts, follows and DMs
+        birdy      = true,
+        -- Trendy accounts, videos, comments, likes, saves, follows and notifications
+        vibez      = true,
         -- mail accounts and their received messages
         mail       = true,
         -- wallet transaction history

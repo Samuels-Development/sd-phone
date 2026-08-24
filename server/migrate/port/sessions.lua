@@ -9,7 +9,7 @@ local store = require 'server.migrate.store'
 ---@type table<string, string> lb app name -> sd app name, keyed lowercase. lb-phone stores these
 ---capitalised ('Instagram', 'Twitter'), so the lookup lowercases first; matching the raw value
 ---silently skipped every login row and signed nobody in.
-local APPS = { instagram = 'photogram', twitter = 'birdy' }
+local APPS = { instagram = 'photogram', twitter = 'birdy', tiktok = 'vibez' }
 
 ---The sd-phone app a migrated login belongs to, or nil when sd-phone has no counterpart.
 ---@param app any lb app name, any casing
@@ -33,6 +33,9 @@ function M.run(ctx)
     -- those logins are held rather than written, and the domain stays unmarked so they are picked
     -- up once Squawk has been imported.
     local birdyReady = store.appAccountExists('birdy')
+    -- Clout's porter runs just before this one too, and its logins are held the same way when it
+    -- has not: a Trendy login with no Clout account to attach to would be silently lost.
+    local vibezReady = store.appAccountExists('vibez')
 
     for _, l in ipairs(store.lbLoggedIn()) do
         local app = appFor(l.app)
@@ -40,6 +43,8 @@ function M.run(ctx)
         if not app or not cid then
             skipped = skipped + 1
         elseif app == 'birdy' and not birdyReady then
+            deferred = deferred + 1
+        elseif app == 'vibez' and not vibezReady then
             deferred = deferred + 1
         else
             rows[#rows + 1] = { app, cid, l.username }
@@ -60,9 +65,9 @@ function M.run(ctx)
         end
         orphan, written, created = written - linked, linked, inserted
     end
-    -- Deferred rows are Twitter logins with no Squawk account to attach to yet. Staying unmarked
-    -- means this runs again after Squawk's porter lands and picks them up; marked done, those
-    -- players would silently never be signed in.
+    -- Deferred rows are Twitter or Trendy logins with no Squawk or Clout account to attach to yet.
+    -- Staying unmarked means this runs again after those porters land and picks them up; marked
+    -- done, those players would silently never be signed in.
     return {
         written = written, created = created, deferred = deferred,
         skipped = skipped, orphan = orphan, retry = deferred > 0 or nil,
