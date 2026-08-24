@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-    Bird, Camera, Clapperboard, DatabaseZap, Flag, Flame, Hash, Images, LayoutDashboard, Map, MessageSquare, Newspaper,
-    ScrollText, Search, ShieldCheck, ShoppingBag, Skull, VolumeX, X,
+    Bird, Camera, Clapperboard, DatabaseZap, FileText, Flag, Flame, Hash, Images, LayoutDashboard, Mail, Map,
+    MessageSquare, Mic, Newspaper, Rss, ScrollText, Search, ShieldCheck, ShoppingBag, Skull, Star, StickyNote,
+    Users, VolumeX, X,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -24,7 +25,8 @@ import { ToastHost, useToasts } from './ui';
 
 type PageId =
     | 'dashboard' | 'media' | 'map' | 'players' | 'numbers' | 'mutes' | 'audit' | 'migration' | 'birdy'
-    | 'messages' | 'darkchat' | 'photogram' | 'vibez' | 'cherry' | 'marketplace' | 'pages' | 'gallery' | 'racing';
+    | 'messages' | 'darkchat' | 'photogram' | 'vibez' | 'cherry' | 'marketplace' | 'pages' | 'gallery' | 'racing'
+    | 'mail' | 'documents' | 'weazelnews' | 'review' | 'notes' | 'voicememos' | 'groups';
 
 interface NavItem { id: PageId; label: string; icon: React.ReactNode }
 
@@ -42,12 +44,19 @@ const NAV_MAIN: NavItem[] = [
 const NAV_APPS: NavItem[] = [
     { id: 'birdy',       label: 'Squawk',      icon: <Bird size={15} /> },
     { id: 'messages',    label: 'Messages',    icon: <MessageSquare size={15} /> },
+    { id: 'mail',        label: 'Mail',        icon: <Mail size={15} /> },
     { id: 'darkchat',    label: 'Dark Chat',   icon: <Skull size={15} /> },
     { id: 'photogram',   label: 'Photogram',   icon: <Camera size={15} /> },
     { id: 'vibez',       label: 'Clout',       icon: <Clapperboard size={15} /> },
     { id: 'cherry',      label: 'Cherry',      icon: <Flame size={15} /> },
     { id: 'marketplace', label: 'Marketplace', icon: <ShoppingBag size={15} /> },
     { id: 'pages',       label: 'Pages',       icon: <Newspaper size={15} /> },
+    { id: 'weazelnews',  label: 'Weazel News', icon: <Rss size={15} /> },
+    { id: 'review',      label: 'Reviews',     icon: <Star size={15} /> },
+    { id: 'documents',   label: 'Documents',   icon: <FileText size={15} /> },
+    { id: 'notes',       label: 'Notes',       icon: <StickyNote size={15} /> },
+    { id: 'voicememos',  label: 'Voice memos', icon: <Mic size={15} /> },
+    { id: 'groups',      label: 'Groups',      icon: <Users size={15} /> },
     { id: 'gallery',     label: 'Gallery',     icon: <Images size={15} /> },
     { id: 'racing',      label: 'Racing',      icon: <Flag size={15} /> },
 ];
@@ -71,6 +80,13 @@ const PAGE_TITLE: Record<PageId, string> = {
     pages:       'Pages moderation',
     gallery:     'Gallery — player photos',
     racing:      'Racing — track board',
+    mail:        'Mail — mailboxes and their messages',
+    documents:   'Documents — files and who signed them',
+    weazelnews:  'Weazel News — published articles',
+    review:      'Reviews — business ratings',
+    notes:       'Notes (read-only)',
+    voicememos:  'Voice memos',
+    groups:      'Groups',
 };
 
 // Per-app config for the generic content browser.
@@ -83,6 +99,13 @@ const CONTENT_PAGES: Record<string, { search: string; empty: string; deleteBody:
     marketplace: { search: 'Filter listings by title or description',     empty: 'No listings yet.',            deleteBody: 'The listing is permanently removed.',                          thread: '' },
     pages:       { search: 'Filter posts by title or description',        empty: 'No posts yet.',               deleteBody: 'The post is permanently removed.',                             thread: '' },
     gallery:     { search: 'Filter photos by citizen ID',                 empty: 'No photos yet.',              deleteBody: 'The photo is removed from the player’s gallery and any albums.', thread: '', grid: true },
+    mail:        { search: 'Filter mailboxes by address, name or message text', empty: 'No mailboxes yet.',     deleteBody: '',                                                             thread: 'Messages' },
+    documents:   { search: 'Filter documents by name, content or citizen ID',   empty: 'No documents yet.',     deleteBody: 'The document and every signature on it are permanently removed.', thread: 'Signatures' },
+    weazelnews:  { search: 'Filter articles by headline, body or author', empty: 'No articles published yet.',  deleteBody: 'The article is permanently removed.',                          thread: '' },
+    review:      { search: 'Filter reviews by text, author or business',  empty: 'No reviews yet.',             deleteBody: 'The review and its helpful votes are permanently removed.',    thread: '' },
+    notes:       { search: 'Filter notes by content or citizen ID',       empty: 'No notes yet.',               deleteBody: '',                                                             thread: '' },
+    voicememos:  { search: 'Filter memos by name or citizen ID',          empty: 'No voice memos yet.',         deleteBody: 'The recording is permanently removed.',                        thread: '' },
+    groups:      { search: 'Filter groups by name or leader',             empty: 'No groups yet.',              deleteBody: '',                                                             thread: '' },
 };
 
 export function AdminPanel() {

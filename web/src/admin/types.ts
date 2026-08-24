@@ -148,6 +148,7 @@ export interface AdminCall {
 export interface AdminContentMedia {
     url:    string;
     video?: string | null;
+    audio?: string | null;
 }
 
 export interface AdminContentItem {

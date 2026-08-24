@@ -10,7 +10,7 @@ import { ContentDetail } from './content/ContentDetail';
 import { MediaLightbox, MediaStrip } from './content/Media';
 
 function Stat({ icon, value }: { icon: React.ReactNode; value?: number | null }) {
-    if (typeof value !== 'number') return null;
+    if (typeof value !== 'number' || value === 0) return null;
     return (
         <span className="inline-flex items-center gap-1 tabular-nums">
             {icon}

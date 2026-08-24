@@ -589,9 +589,11 @@ end
 -- ---------------------------------------------------------------------------
 
 -- Adapter shape: { deletable: boolean, list: fun(ts, id, like, limit): rows, delete?: fun(id): removed,
--- thread?: { list: fun(id, limit): rows, delete?: fun(id): removed } }. `thread` is what one row
--- expands into: the replies under a post, or the surrounding room and conversation lines around a
--- message, which is the context a single line can never be judged without.
+-- thread?: { list: fun(id, limit): rows, delete?: fun(id): removed }, shape?: fun(item, row) }.
+-- `thread` is what one row expands into: the replies under a post, or the surrounding room and
+-- conversation lines around a message, which is the context a single line can never be judged
+-- without. `shape` corrects the normalized row afterwards, for an app whose `url` column holds
+-- audio rather than a picture, or a count only that app knows how to derive.
 ---@type table<string, table>
 local CONTENT = {}
 
@@ -848,6 +850,236 @@ end
 CONTENT.marketplace = classifieds('marketplace_listings')
 CONTENT.pages       = classifieds('pages_posts')
 
+---@type integer Seconds this server's local time runs ahead of UTC, measured once at load.
+local UTC_DRIFT = (function()
+    local now = os.time()
+    local utc = os.date('!*t', now)
+    return type(utc) == 'table' and (now - os.time(utc)) or 0
+end)()
+
+---Parses the ISO-8601 UTC stamp that Mail and Notes store (`2026-08-24T12:00:00`, optionally with
+---a fractional part) into epoch seconds. They are the only apps keeping a string timestamp, and
+---every other reader here works in epochs.
+---@param iso any raw column or JSON value
+---@return integer|nil epoch seconds, nil when the value is not a stamp
+local function isoToEpoch(iso)
+    if type(iso) ~= 'string' then return nil end
+    local y, mo, d, h, mi, s = iso:match('^(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+)')
+    if not y then return nil end
+    return os.time({
+        year = tonumber(y) or 0, month = tonumber(mo) or 0, day = tonumber(d) or 0,
+        hour = tonumber(h) or 0, min  = tonumber(mi) or 0, sec = tonumber(s) or 0, isdst = false,
+    }) + UTC_DRIFT
+end
+
+CONTENT.mail = {
+    deletable = false,
+    -- One row per mailbox, not per email: Mail keeps every message in a JSON column on the
+    -- account, so the messages are what the row expands into. The search still reaches them,
+    -- because LIKE over that column matches the JSON text a body sits in.
+    list = function(ts, id, like, limit)
+        return MySQL.query.await([[
+            SELECT email AS id, UNIX_TIMESTAMP(created_at) AS ts, created_by_cid AS author_cid,
+                   email AS title, display_name AS body
+            FROM phone_mail_accounts
+            WHERE (? IS NULL OR email LIKE ? OR display_name LIKE ? OR messages LIKE ?)
+              AND (? IS NULL OR created_at < FROM_UNIXTIME(?)
+                   OR (created_at = FROM_UNIXTIME(?) AND email < ?))
+            ORDER BY created_at DESC, email DESC
+            LIMIT ?
+        ]], { like, like, like, like, ts, ts, ts, id, limit }) or {}
+    end,
+    thread = {
+        list = function(id, limit)
+            local row = MySQL.single.await('SELECT messages FROM phone_mail_accounts WHERE email = ?', { id })
+            if not row then return {} end
+
+            local messages = row.messages
+            if type(messages) == 'string' then
+                local okJson, decoded = pcall(json.decode, messages)
+                messages = okJson and decoded or nil
+            end
+            if type(messages) ~= 'table' then return {} end
+
+            local out = {}
+            for i = #messages, 1, -1 do
+                if #out >= limit then break end
+                local m = messages[i]
+                if type(m) == 'table' then
+                    local from    = type(m.from) == 'table' and m.from or {}
+                    local subject = type(m.subject) == 'string' and m.subject or ''
+                    out[#out + 1] = {
+                        id     = tostring(m.id or i),
+                        ts     = isoToEpoch(m.sentAt),
+                        author = from.email or from.name,
+                        kind   = m.folder,
+                        body   = subject ~= '' and (subject .. '\n' .. (m.body or '')) or (m.body or ''),
+                    }
+                end
+            end
+            return out
+        end,
+    },
+}
+
+CONTENT.documents = {
+    deletable = true,
+    list = function(ts, id, like, limit)
+        return MySQL.query.await([[
+            SELECT id, updated_at AS ts, citizenid AS author_cid, name AS title, content AS body,
+                   kind, url, locked, source,
+                   (SELECT COUNT(*) FROM phone_document_signatures s WHERE s.doc_id = phone_documents.id) AS comments
+            FROM phone_documents
+            WHERE (? IS NULL OR name LIKE ? OR content LIKE ? OR citizenid LIKE ?)
+              AND (? IS NULL OR updated_at < ? OR (updated_at = ? AND id < ?))
+            ORDER BY updated_at DESC, id DESC
+            LIMIT ?
+        ]], { like, like, like, like, ts, ts, ts, id, limit }) or {}
+    end,
+    thread = {
+        -- Who signed it. A forged document is only ever an argument about its signatures.
+        list = function(id, limit)
+            return MySQL.query.await([[
+                SELECT id, created_at AS ts, citizenid AS author_cid, signer AS author, image
+                FROM phone_document_signatures
+                WHERE doc_id = ?
+                ORDER BY created_at ASC, id ASC
+                LIMIT ?
+            ]], { id, limit }) or {}
+        end,
+        delete = function(id)
+            return tonumber(MySQL.update.await('DELETE FROM phone_document_signatures WHERE id = ?', { id })) or 0
+        end,
+    },
+    delete = function(id)
+        MySQL.update.await('DELETE FROM phone_document_signatures WHERE doc_id = ?', { id })
+        return tonumber(MySQL.update.await('DELETE FROM phone_documents WHERE id = ?', { id })) or 0
+    end,
+    -- Only an image document has a picture behind `url`; a PDF or a text file would render as a
+    -- broken thumbnail. The lock is worth surfacing because a locked document cannot be edited
+    -- by its owner, which is what makes a forged one worth arguing about.
+    shape = function(item, row)
+        if row.kind ~= 'image' then item.media = {} end
+        item.label = util.truthy(row.locked) and 'locked' or row.source or nil
+    end,
+}
+
+CONTENT.weazelnews = {
+    deletable = true,
+    list = function(ts, id, like, limit)
+        return MySQL.query.await([[
+            SELECT id, created_at AS ts, author_cid, author, headline AS title, category,
+                   CONCAT_WS('\n\n', NULLIF(dek, ''), body) AS body, image, views, featured
+            FROM phone_weazel_articles
+            WHERE (? IS NULL OR headline LIKE ? OR dek LIKE ? OR body LIKE ? OR author LIKE ?)
+              AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?))
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+        ]], { like, like, like, like, like, ts, ts, ts, id, limit }) or {}
+    end,
+    delete = function(id)
+        return tonumber(MySQL.update.await('DELETE FROM phone_weazel_articles WHERE id = ?', { id })) or 0
+    end,
+    shape = function(item, row)
+        item.label = util.truthy(row.featured) and 'featured' or row.category or nil
+    end,
+}
+
+CONTENT.review = {
+    deletable = true,
+    list = function(ts, id, like, limit)
+        return MySQL.query.await([[
+            SELECT r.id, r.created_at AS ts, r.citizenid AS author_cid, r.author, r.business_id,
+                   r.rating, r.body, r.image,
+                   (SELECT COUNT(*) FROM phone_review_helpful h WHERE h.review_id = r.id) AS likes
+            FROM phone_review_reviews r
+            WHERE (? IS NULL OR r.body LIKE ? OR r.author LIKE ? OR r.business_id LIKE ?)
+              AND (? IS NULL OR r.created_at < ? OR (r.created_at = ? AND r.id < ?))
+            ORDER BY r.created_at DESC, r.id DESC
+            LIMIT ?
+        ]], { like, like, like, like, ts, ts, ts, id, limit }) or {}
+    end,
+    delete = function(id)
+        MySQL.update.await('DELETE FROM phone_review_helpful WHERE review_id = ?', { id })
+        return tonumber(MySQL.update.await('DELETE FROM phone_review_reviews WHERE id = ?', { id })) or 0
+    end,
+    shape = function(item, row)
+        item.title = row.business_id
+        local rating = tonumber(row.rating) or 0
+        item.label  = rating > 0 and (rating .. '/5') or nil
+    end,
+}
+
+CONTENT.notes = {
+    deletable = false,
+    -- Notes stamp themselves with an ISO string, so the epoch the cursor needs is derived in SQL
+    -- while the ordering stays on the raw column: the two agree because ISO stamps sort the same
+    -- either way, and only the raw column has an index behind it.
+    list = function(ts, id, like, limit)
+        return MySQL.query.await([[
+            SELECT id, UNIX_TIMESTAMP(STR_TO_DATE(updated_at, '%Y-%m-%dT%H:%i:%s')) AS ts,
+                   citizenid AS author_cid, body, images
+            FROM phone_notes
+            WHERE (? IS NULL OR body LIKE ? OR citizenid LIKE ?)
+              AND (? IS NULL OR UNIX_TIMESTAMP(STR_TO_DATE(updated_at, '%Y-%m-%dT%H:%i:%s')) < ?
+                   OR (UNIX_TIMESTAMP(STR_TO_DATE(updated_at, '%Y-%m-%dT%H:%i:%s')) = ? AND id < ?))
+            ORDER BY updated_at DESC, id DESC
+            LIMIT ?
+        ]], { like, like, like, ts, ts, ts, id, limit }) or {}
+    end,
+}
+
+CONTENT.voicememos = {
+    deletable = true,
+    list = function(ts, id, like, limit)
+        return MySQL.query.await([[
+            SELECT id, created_at AS ts, citizenid AS author_cid, name AS title, url, duration,
+                   'audio' AS kind
+            FROM phone_voice_memos
+            WHERE (? IS NULL OR name LIKE ? OR citizenid LIKE ?)
+              AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?))
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+        ]], { like, like, like, ts, ts, ts, id, limit }) or {}
+    end,
+    delete = function(id)
+        return tonumber(MySQL.update.await('DELETE FROM phone_voice_memos WHERE id = ?', { id })) or 0
+    end,
+    -- A memo's `url` is a recording, so it is handed over as audio rather than left to render as
+    -- a picture that will never load.
+    shape = function(item, row)
+        item.media = type(row.url) == 'string' and row.url ~= '' and { { url = row.url, audio = row.url } } or {}
+        item.imageUrl = nil
+        local seconds = tonumber(row.duration) or 0
+        item.label = seconds > 0 and ('%d:%02d'):format(seconds // 60, seconds % 60) or nil
+    end,
+}
+
+CONTENT.groups = {
+    deletable = false,
+    list = function(ts, id, like, limit)
+        return MySQL.query.await([[
+            SELECT id, UNIX_TIMESTAMP(created_at) AS ts, leader_cid AS author_cid, name AS title,
+                   avatar AS image, members
+            FROM phone_groups
+            WHERE (? IS NULL OR name LIKE ? OR leader_cid LIKE ?)
+              AND (? IS NULL OR created_at < FROM_UNIXTIME(?)
+                   OR (created_at = FROM_UNIXTIME(?) AND id < ?))
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+        ]], { like, like, like, ts, ts, ts, id, limit }) or {}
+    end,
+    shape = function(item, row)
+        local members = row.members
+        if type(members) == 'string' then
+            local okJson, decoded = pcall(json.decode, members)
+            members = okJson and decoded or nil
+        end
+        local n = type(members) == 'table' and #members or 0
+        item.label = n > 0 and (n .. (n == 1 and ' member' or ' members')) or nil
+    end,
+}
+
 ---Whether an app id has a content adapter, whether its rows can be deleted, and whether a row
 ---expands into a thread the panel can open.
 ---@param app string
@@ -917,7 +1149,11 @@ function store.listContent(app, cursor, limit, query)
     local ts, id = splitCursor(cursor)
     local like = (type(query) == 'string' and query ~= '') and ('%' .. escapeLike(query) .. '%') or nil
 
-    local rows = adapter.list(ts, id, like, limit + 1)
+    -- Guarded per app, like the media wall: a table this server never created empties one tab
+    -- rather than failing the callback that draws it.
+    local okQuery, rows = pcall(adapter.list, ts, id, like, limit + 1)
+    if not okQuery or type(rows) ~= 'table' then return {}, nil end
+
     local nextCursor = nil
     if #rows > limit then
         rows[limit + 1] = nil
@@ -948,6 +1184,7 @@ function store.listContent(app, cursor, limit, query)
                 or (r.conversation and ((lib.string.startsWith(r.conversation, 'g-')) and ('group ' .. r.conversation) or ('to ' .. util.formatNumber(r.conversation))))
                 or nil,
         }
+        if adapter.shape then adapter.shape(items[i], r) end
     end
     return items, nextCursor
 end

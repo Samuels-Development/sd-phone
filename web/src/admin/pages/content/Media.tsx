@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Play, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Play, Volume2, X } from 'lucide-react';
 import clsx from 'clsx';
 
 import type { AdminContentMedia } from '../../types';
@@ -25,9 +25,15 @@ export function MediaStrip({ media, size = 64, max = 6, onOpen, className }: {
                     onClick={e => { e.stopPropagation(); onOpen(i); }}
                     style={{ width: size, height: size }}
                     className="group relative shrink-0 overflow-hidden rounded-lg bg-black/40 ring-1 ring-white/[0.08] transition-transform hover:scale-[1.04]"
-                    title={m.video ? 'Play clip' : 'View full size'}
+                    title={m.audio ? 'Play recording' : m.video ? 'Play clip' : 'View full size'}
                 >
-                    <img src={m.url} alt="" loading="lazy" draggable={false} className="h-full w-full object-cover" />
+                    {m.audio ? (
+                        <span className="flex h-full w-full items-center justify-center bg-ios-blue/15 text-[#6db4ff]">
+                            <Volume2 size={size > 56 ? 22 : 16} />
+                        </span>
+                    ) : (
+                        <img src={m.url} alt="" loading="lazy" draggable={false} className="h-full w-full object-cover" />
+                    )}
                     {m.video && (
                         <span className="absolute inset-0 flex items-center justify-center bg-black/25">
                             <Play size={size > 56 ? 18 : 14} className="fill-white text-white drop-shadow" />
@@ -77,9 +83,11 @@ export function MediaLightbox({ media, index, onIndex, onClose, caption }: {
     return (
         <div className="fixed inset-0 z-[420] flex flex-col items-center justify-center gap-3 bg-black/85 p-10" onMouseDown={onClose}>
             <div className="relative flex max-h-[78%] max-w-[80%] items-center" onMouseDown={e => e.stopPropagation()}>
-                {current.video
-                    ? <video src={current.video} poster={current.url} controls autoPlay loop className="max-h-[78vh] max-w-full rounded-xl shadow-2xl" />
-                    : <img src={current.url} alt="" className="max-h-[78vh] max-w-full rounded-xl object-contain shadow-2xl" />}
+                {current.audio
+                    ? <audio src={current.audio} controls autoPlay className="w-[420px] max-w-full rounded-xl bg-[#1a1b1f] p-3 shadow-2xl" />
+                    : current.video
+                        ? <video src={current.video} poster={current.url} controls autoPlay loop className="max-h-[78vh] max-w-full rounded-xl shadow-2xl" />
+                        : <img src={current.url} alt="" className="max-h-[78vh] max-w-full rounded-xl object-contain shadow-2xl" />}
             </div>
 
             {count > 1 && (

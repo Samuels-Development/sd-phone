@@ -277,11 +277,23 @@ const CONTENT: Record<string, { label: string; titles: string[]; bodies: string[
     marketplace: { label: 'Listing', titles: ['Sultan RS', 'Set of 18s', 'Apartment sublet', 'Toolbox, full', 'Camera body', 'Spare engine'], bodies: ['Two owners, clean.', 'Kerb mark on one lip.', 'Two months, Mirror Park.', 'Everything in the photo.', 'Barely used.', 'Pulled from a runner.'], priced: true },
     pages:       { label: 'Post',    titles: ['Mechanic wanted', 'Lost dog', 'Race night Friday', 'Room to let', 'Selling my spot', 'Tow service'], bodies: ['Popular St yard, ask for Sam.', 'Answers to Bruno. Reward.', 'Meet at the docks, 11pm.', 'Quiet building, no pets.', 'Vinewood, good views.', '24/7, fair rates.'] },
     gallery:     { label: 'Photo',   titles: [], bodies: [], imaged: true },
+    mail:        { label: 'Mailbox', titles: ['sam.black@ls.mail', 'dana.k@ls.mail', 'm.reyes@ls.mail', 'tola@weazel.mail', 'jonas.l@ls.mail', 'priya.r@ls.mail'], bodies: ['Samuel Black', 'Dana Kovac', 'Marcus Reyes', 'Tola Okafor', 'Jonas Lindqvist', 'Priya Raman'] },
+    documents:   { label: 'text',    titles: ['Sale of vehicle', 'Tenancy agreement', 'Employment contract', 'Bill of sale', 'NDA', 'Insurance claim'], bodies: ['Both parties agree the vehicle is sold as seen.', 'Twelve months, rent payable monthly.', 'Full time, probation of thirty days.', 'Received in full, no balance owing.', 'Neither party will disclose the terms.', 'Claim submitted for the damage on Elgin.'] },
+    weazelnews:  { label: 'City',    titles: ['Docks closed after overnight raid', 'Third street race this week ends in arrests', 'Mayor announces transit funding', 'Vinewood gallery opens to crowds', 'Hospital wing reopens', 'Storm warning issued for the coast'], bodies: ['Officers moved in shortly after two in the morning.', 'Residents say the noise has become nightly.', 'The plan covers two new lines.', 'The opening drew several hundred visitors.', 'Capacity is up by forty beds.', 'Sailings are suspended until further notice.'], imaged: true },
+    review:      { label: '4/5',     titles: ['Bean Machine', 'Los Santos Customs', 'Pearls', 'Ammu-Nation', 'Vanilla Unicorn', 'Burger Shot'], bodies: ['Coffee was fine, service was slow.', 'Quick turnaround, fair price.', 'Best table in the city, book ahead.', 'Staff knew what they were talking about.', 'Loud, but that is the point.', 'Exactly what you expect.'], imaged: true },
+    notes:       { label: 'Note',    titles: [], bodies: ['dock code 4471', 'ask Dana about the engine', 'shopping: oil, filter, plugs', 'meet Thursday 9pm', 'do not lend the van again', 'plate: 46FGH921'] },
+    voicememos:  { label: '0:42',    titles: ['Voice memo 1', 'Interview', 'Song idea', 'Reminder', 'Meeting notes', 'Voice memo 6'], bodies: [] },
+    groups:      { label: '5 members', titles: ['Popular St Crew', 'Night Runners', 'Weazel City Desk', 'EMS Shift B', 'Tunnel Rats', 'Sunday Drivers'], bodies: [] },
 };
 
-const THREADED = new Set(['messages', 'darkchat', 'photogram', 'vibez']);
+const THREADED = new Set(['messages', 'darkchat', 'photogram', 'vibez', 'mail', 'documents']);
+
+const UNDELETABLE = new Set(['messages', 'cherry', 'mail', 'notes', 'groups']);
+
+const LIKED = new Set(['darkchat', 'photogram', 'vibez', 'review']);
 
 function devMedia(app: string, i: number, count: number): AdminContentMedia[] {
+    if (app === 'voicememos') return [{ url: '', audio: '' }];
     return Array.from({ length: count }, (_, n) => {
         const url = photo(i * 3 + n);
         return app === 'vibez' ? { url, video: url } : { url };
@@ -297,7 +309,7 @@ export function devContent(app: string, q?: string): { items: AdminContentItem[]
         const p = DEV_PLAYERS[i % DEV_PLAYERS.length];
         const imageText = app === 'messages' && i % 6 === 5;
         const shots = imageText ? 1 : cfg.imaged ? (app === 'gallery' || app === 'vibez' ? 1 : 1 + (i % 3)) : 0;
-        const media = devMedia(app, i, shots);
+        const media = app === 'voicememos' ? devMedia(app, i, 1) : devMedia(app, i, shots);
         return {
             id:           `${app}-${i + 1}`,
             createdAt:    ago(i * 7 * HOUR + HOUR),
@@ -311,9 +323,9 @@ export function devContent(app: string, q?: string): { items: AdminContentItem[]
             images:       shots || null,
             imageUrl:     media[0]?.url ?? null,
             media,
-            likes:        app === 'messages' ? null : THREADED.has(app) ? 4 + i * 13 : null,
-            comments:     app === 'photogram' || app === 'vibez' ? 2 + (i % 5) : null,
-            views:        app === 'vibez' ? 900 + i * 1470 : null,
+            likes:        LIKED.has(app) ? 4 + i * 13 : null,
+            comments:     app === 'photogram' || app === 'vibez' ? 2 + (i % 5) : app === 'documents' ? i % 4 : null,
+            views:        app === 'vibez' ? 900 + i * 1470 : app === 'weazelnews' ? 300 + i * 940 : null,
             price:        cfg.priced ? 1500 + i * 2750 : null,
         };
     });
@@ -322,7 +334,7 @@ export function devContent(app: string, q?: string): { items: AdminContentItem[]
         ? items.filter(it => `${it.title ?? ''} ${it.body ?? ''} ${it.authorName ?? ''}`.toLowerCase().includes(term))
         : items;
 
-    return { items: filtered, deletable: app !== 'messages', threaded: THREADED.has(app) };
+    return { items: filtered, deletable: !UNDELETABLE.has(app), threaded: THREADED.has(app) };
 }
 
 const THREAD_BODIES = [
@@ -336,8 +348,58 @@ const THREAD_BODIES = [
     'my guy really said that out loud',
 ];
 
+const MAIL_THREAD: [string, string][] = [
+    ['Your delivery is waiting', 'Confirm your address to release the package. Reply with your bank details to cover the fee.'],
+    ['Re: Sultan RS', 'Still available? I can collect tonight.'],
+    ['Invoice 4471', 'Attached is the invoice for last month.'],
+    ['Re: Invoice 4471', 'Paid, thanks. Receipt attached.'],
+    ['Weazel News tip line', 'Someone is running races off the docks every Thursday.'],
+    ['Account notice', 'Your password was changed. If this was not you, contact support.'],
+];
+
+const SIGNERS = ['S. Black', 'D. Kovac', 'M. Reyes', 'T. Okafor'];
+
 export function devThread(app: string, id: string): { items: AdminThreadItem[]; deletable: boolean } {
     if (!THREADED.has(app)) return { items: [], deletable: false };
+
+    if (app === 'mail') {
+        return {
+            items: MAIL_THREAD.map(([subject, body], i) => {
+                const p = DEV_PLAYERS[(i + 1) % DEV_PLAYERS.length];
+                return {
+                    id:           `${id}-m${i + 1}`,
+                    createdAt:    ago((MAIL_THREAD.length - i) * 5 * HOUR),
+                    authorCid:    p.citizenid,
+                    authorName:   p.name,
+                    authorOnline: p.online,
+                    handle:       `${p.handle}@ls.mail`,
+                    kind:         i % 3 === 0 ? 'inbox' : 'sent',
+                    body:         `${subject}\n${body}`,
+                    media:        [],
+                };
+            }),
+            deletable: false,
+        };
+    }
+
+    if (app === 'documents') {
+        return {
+            items: SIGNERS.map((signer, i) => {
+                const p = DEV_PLAYERS[i % DEV_PLAYERS.length];
+                return {
+                    id:           `${id}-s${i + 1}`,
+                    createdAt:    ago((SIGNERS.length - i) * 3 * HOUR),
+                    authorCid:    p.citizenid,
+                    authorName:   p.name,
+                    authorOnline: p.online,
+                    handle:       signer,
+                    body:         null,
+                    media:        [],
+                };
+            }),
+            deletable: true,
+        };
+    }
 
     const anchorAt = app === 'photogram' || app === 'vibez' ? -1 : 3;
     const items: AdminThreadItem[] = Array.from({ length: 8 }, (_, i) => {

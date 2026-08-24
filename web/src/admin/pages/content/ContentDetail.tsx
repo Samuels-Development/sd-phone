@@ -8,7 +8,7 @@ import { Badge, Btn, CenterNote, ConfirmModal, OnlineDot, Spinner } from '../../
 import { MediaLightbox, MediaStrip } from './Media';
 
 function Stat({ icon, value }: { icon: React.ReactNode; value?: number | null }) {
-    if (typeof value !== 'number') return null;
+    if (typeof value !== 'number' || value === 0) return null;
     return (
         <span className="inline-flex items-center gap-1 tabular-nums">
             {icon}
@@ -49,9 +49,11 @@ function ThreadRow({ item, deletable, onOpenPlayer, onOpenMedia, onDelete }: {
                         {item.anchor && <Badge tone="amber">this one</Badge>}
                         <span className="text-zinc-600">{fmtTime(item.createdAt)}</span>
                     </div>
-                    <div className="mt-0.5 whitespace-pre-wrap break-words text-[12.5px] leading-snug text-zinc-300">
-                        {item.body || <span className="italic text-zinc-600">(no text)</span>}
-                    </div>
+                    {item.body && (
+                        <div className="mt-0.5 whitespace-pre-wrap break-words text-[12.5px] leading-snug text-zinc-300">
+                            {item.body}
+                        </div>
+                    )}
                     <MediaStrip media={item.media} size={52} max={4} className="mt-1.5" onOpen={i => onOpenMedia(item.media ?? [], i)} />
                     {typeof item.likes === 'number' && item.likes > 0 && (
                         <div className="mt-1 text-[11px] text-zinc-600">
