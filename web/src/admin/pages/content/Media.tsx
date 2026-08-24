@@ -11,23 +11,24 @@ export function MediaStrip({ media, size = 64, max = 6, onOpen, className }: {
     onOpen: (index: number) => void;
     className?: string;
 }) {
-    if (!media?.length) return null;
+    const usable = (media ?? []).map((m, at) => ({ m, at })).filter(({ m }) => m.url || m.audio);
+    if (usable.length === 0) return null;
 
-    const shown = media.slice(0, max);
-    const extra = media.length - shown.length;
+    const shown = usable.slice(0, max);
+    const extra = usable.length - shown.length;
 
     return (
         <div className={clsx('flex flex-wrap gap-1.5', className)}>
-            {shown.map((m, i) => (
+            {shown.map(({ m, at }, i) => (
                 <button
                     key={`${m.url}-${i}`}
                     type="button"
-                    onClick={e => { e.stopPropagation(); onOpen(i); }}
+                    onClick={e => { e.stopPropagation(); onOpen(at); }}
                     style={{ width: size, height: size }}
                     className="group relative shrink-0 overflow-hidden rounded-lg bg-black/40 ring-1 ring-white/[0.08] transition-transform hover:scale-[1.04]"
                     title={m.audio ? 'Play recording' : m.video ? 'Play clip' : 'View full size'}
                 >
-                    {m.audio ? (
+                    {m.audio || !m.url ? (
                         <span className="flex h-full w-full items-center justify-center bg-ios-blue/15 text-[#6db4ff]">
                             <Volume2 size={size > 56 ? 22 : 16} />
                         </span>
@@ -44,7 +45,7 @@ export function MediaStrip({ media, size = 64, max = 6, onOpen, className }: {
             {extra > 0 && (
                 <button
                     type="button"
-                    onClick={e => { e.stopPropagation(); onOpen(max); }}
+                    onClick={e => { e.stopPropagation(); onOpen(usable[max]?.at ?? 0); }}
                     style={{ width: size, height: size }}
                     className="shrink-0 rounded-lg bg-white/[0.05] text-[12px] font-bold text-zinc-400 ring-1 ring-white/[0.08] transition-colors hover:bg-white/[0.09] hover:text-zinc-200"
                 >
@@ -83,8 +84,8 @@ export function MediaLightbox({ media, index, onIndex, onClose, caption }: {
     return (
         <div className="fixed inset-0 z-[420] flex flex-col items-center justify-center gap-3 bg-black/85 p-10" onMouseDown={onClose}>
             <div className="relative flex max-h-[78%] max-w-[80%] items-center" onMouseDown={e => e.stopPropagation()}>
-                {current.audio
-                    ? <audio src={current.audio} controls autoPlay className="w-[420px] max-w-full rounded-xl bg-[#1a1b1f] p-3 shadow-2xl" />
+                {current.audio || !current.url
+                    ? <audio src={current.audio ?? undefined} controls autoPlay className="w-[420px] max-w-full rounded-xl bg-[#1a1b1f] p-3 shadow-2xl" />
                     : current.video
                         ? <video src={current.video} poster={current.url} controls autoPlay loop className="max-h-[78vh] max-w-full rounded-xl shadow-2xl" />
                         : <img src={current.url} alt="" className="max-h-[78vh] max-w-full rounded-xl object-contain shadow-2xl" />}

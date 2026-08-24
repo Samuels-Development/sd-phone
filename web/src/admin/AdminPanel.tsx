@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
     Bird, Camera, Clapperboard, DatabaseZap, FileText, Flag, Flame, Hash, Images, LayoutDashboard, Mail, Map,
     MessageSquare, Mic, Newspaper, Rss, ScrollText, Search, ShieldCheck, ShoppingBag, Skull, Star, StickyNote,
-    TriangleAlert, Users, VolumeX, X,
+    Trash2, TriangleAlert, Users, VolumeX, X,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -12,6 +12,7 @@ import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { AuditPage } from './pages/AuditPage';
 import { BirdyPage } from './pages/BirdyPage';
 import { ContentPage } from './pages/ContentPage';
+import { BinPage } from './pages/BinPage';
 import { Dashboard } from './pages/Dashboard';
 import { FlagsPage } from './pages/FlagsPage';
 import { MediaPage } from './pages/MediaPage';
@@ -25,7 +26,7 @@ import { PlayersPage } from './pages/PlayersPage';
 import { ToastHost, useToasts } from './ui';
 
 type PageId =
-    | 'dashboard' | 'media' | 'map' | 'players' | 'numbers' | 'flags' | 'mutes' | 'audit' | 'migration' | 'birdy'
+    | 'dashboard' | 'media' | 'map' | 'players' | 'numbers' | 'flags' | 'mutes' | 'bin' | 'audit' | 'migration' | 'birdy'
     | 'messages' | 'darkchat' | 'photogram' | 'vibez' | 'cherry' | 'marketplace' | 'pages' | 'gallery' | 'racing'
     | 'mail' | 'documents' | 'weazelnews' | 'review' | 'notes' | 'voicememos' | 'groups';
 
@@ -39,6 +40,7 @@ const NAV_MAIN: NavItem[] = [
     { id: 'numbers',   label: 'Numbers',   icon: <Hash size={15} /> },
     { id: 'flags',     label: 'Flags',     icon: <TriangleAlert size={15} /> },
     { id: 'mutes',     label: 'Mutes',     icon: <VolumeX size={15} /> },
+    { id: 'bin',       label: 'Recycle bin', icon: <Trash2 size={15} /> },
     { id: 'audit',     label: 'Audit log', icon: <ScrollText size={15} /> },
     { id: 'migration', label: 'Migration', icon: <DatabaseZap size={15} /> },
 ];
@@ -70,6 +72,7 @@ const PAGE_TITLE: Record<PageId, string> = {
     players:     'Players',
     numbers:     'Numbers — SIM registry',
     flags:       'Flags — watchlist queue',
+    bin:         'Recycle bin — restore deleted content',
     birdy:       'Squawk moderation',
     mutes:       'Active mutes',
     audit:       'Audit log',
@@ -95,19 +98,19 @@ const PAGE_TITLE: Record<PageId, string> = {
 // Per-app config for the generic content browser.
 const CONTENT_PAGES: Record<string, { search: string; empty: string; deleteBody: string; thread: string; grid?: boolean }> = {
     messages:    { search: 'Filter sent texts by content or number',      empty: 'No messages yet.',            deleteBody: '',                                                             thread: 'Conversation' },
-    darkchat:    { search: 'Filter messages by content, alias or room',   empty: 'No Dark Chat messages yet.',  deleteBody: 'The message and its reactions are permanently removed.',       thread: 'Room context' },
-    photogram:   { search: 'Filter posts by caption or username',         empty: 'No Photogram posts yet.',     deleteBody: 'The post, its comments, likes and saves are permanently removed.', thread: 'Comments' },
-    vibez:       { search: 'Filter posts by caption or username',         empty: 'No Clout posts yet.',         deleteBody: 'The post, its comments, likes and saves are permanently removed.', thread: 'Comments' },
+    darkchat:    { search: 'Filter messages by content, alias or room',   empty: 'No Dark Chat messages yet.',  deleteBody: 'The message goes to the Recycle bin for 30 days. Its reactions do not come back.',       thread: 'Room context' },
+    photogram:   { search: 'Filter posts by caption or username',         empty: 'No Photogram posts yet.',     deleteBody: 'The post goes to the Recycle bin for 30 days. Its comments, likes and saves do not come back.', thread: 'Comments' },
+    vibez:       { search: 'Filter posts by caption or username',         empty: 'No Clout posts yet.',         deleteBody: 'The post goes to the Recycle bin for 30 days. Its comments, likes and saves do not come back.', thread: 'Comments' },
     cherry:      { search: 'Filter profiles by username, name or bio',    empty: 'No Cherry profiles yet.',     deleteBody: '',                                                             thread: '' },
-    marketplace: { search: 'Filter listings by title or description',     empty: 'No listings yet.',            deleteBody: 'The listing is permanently removed.',                          thread: '' },
-    pages:       { search: 'Filter posts by title or description',        empty: 'No posts yet.',               deleteBody: 'The post is permanently removed.',                             thread: '' },
-    gallery:     { search: 'Filter photos by citizen ID',                 empty: 'No photos yet.',              deleteBody: 'The photo is removed from the player’s gallery and any albums.', thread: '', grid: true },
+    marketplace: { search: 'Filter listings by title or description',     empty: 'No listings yet.',            deleteBody: 'The listing goes to the Recycle bin for 30 days.',                          thread: '' },
+    pages:       { search: 'Filter posts by title or description',        empty: 'No posts yet.',               deleteBody: 'The post goes to the Recycle bin for 30 days.',                             thread: '' },
+    gallery:     { search: 'Filter photos by citizen ID',                 empty: 'No photos yet.',              deleteBody: 'The photo goes to the Recycle bin for 30 days. The albums it was in do not come back.', thread: '', grid: true },
     mail:        { search: 'Filter mailboxes by address, name or message text', empty: 'No mailboxes yet.',     deleteBody: '',                                                             thread: 'Messages' },
-    documents:   { search: 'Filter documents by name, content or citizen ID',   empty: 'No documents yet.',     deleteBody: 'The document and every signature on it are permanently removed.', thread: 'Signatures' },
-    weazelnews:  { search: 'Filter articles by headline, body or author', empty: 'No articles published yet.',  deleteBody: 'The article is permanently removed.',                          thread: '' },
-    review:      { search: 'Filter reviews by text, author or business',  empty: 'No reviews yet.',             deleteBody: 'The review and its helpful votes are permanently removed.',    thread: '' },
+    documents:   { search: 'Filter documents by name, content or citizen ID',   empty: 'No documents yet.',     deleteBody: 'The document goes to the Recycle bin for 30 days. The signatures on it do not come back.', thread: 'Signatures' },
+    weazelnews:  { search: 'Filter articles by headline, body or author', empty: 'No articles published yet.',  deleteBody: 'The article goes to the Recycle bin for 30 days.',                          thread: '' },
+    review:      { search: 'Filter reviews by text, author or business',  empty: 'No reviews yet.',             deleteBody: 'The review goes to the Recycle bin for 30 days. Its helpful votes do not come back.',    thread: '' },
     notes:       { search: 'Filter notes by content or citizen ID',       empty: 'No notes yet.',               deleteBody: '',                                                             thread: '' },
-    voicememos:  { search: 'Filter memos by name or citizen ID',          empty: 'No voice memos yet.',         deleteBody: 'The recording is permanently removed.',                        thread: '' },
+    voicememos:  { search: 'Filter memos by name or citizen ID',          empty: 'No voice memos yet.',         deleteBody: 'The recording goes to the Recycle bin for 30 days.',                        thread: '' },
     groups:      { search: 'Filter groups by name or leader',             empty: 'No groups yet.',              deleteBody: '',                                                             thread: '' },
 };
 
@@ -282,6 +285,7 @@ export function AdminPanel() {
                         )}
                         {page === 'mutes' && <MutesPage onOpenPlayer={openPlayer} toast={push} />}
                         {page === 'audit' && <AuditPage onOpenPlayer={openPlayer} />}
+                        {page === 'bin' && <BinPage onOpenPlayer={openPlayer} toast={push} />}
                         {page === 'flags' && (
                             <FlagsPage
                                 onOpenPlayer={openPlayer}

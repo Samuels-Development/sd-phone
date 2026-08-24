@@ -9,6 +9,8 @@ local store       = require 'server.admin.store'
 local moderation  = require 'server.admin.moderation'
 ---@type table Watchlist queue (server.admin.flags): schema bootstrap + the sweep.
 local flags       = require 'server.admin.flags'
+---@type table Recycle bin (server.admin.bin): schema bootstrap + the keep-window prune.
+local bin         = require 'server.admin.bin'
 ---@type table Watchlist config (configs/moderation.lua): sweep cadence.
 local modConfig   = require 'configs.moderation'
 ---@type table Authoritative admin handlers (server.admin.actions): validation + all mutation.
@@ -23,6 +25,7 @@ CreateThread(function()
         store.ensureSchema()
         moderation.ensureSchema()
         flags.ensureSchema()
+        bin.ensureSchema()
     end)
     if not okSchema then
         boot.schemaFailed('admin', err)
@@ -42,6 +45,16 @@ CreateThread(function()
     while true do
         pcall(flags.sweep)
         Wait(minutes * 60000)
+    end
+end)
+
+---Drops bin entries past their keep window, on its own thread rather than the sweep's: an
+---operator who turns the watchlist off is not asking to keep every deleted row forever.
+CreateThread(function()
+    Wait(120000)
+    while true do
+        pcall(bin.prune)
+        Wait(6 * 3600 * 1000)
     end
 end)
 
@@ -144,6 +157,8 @@ reg('unmute',               actions.unmute, 'moderate')
 reg('mutes',                actions.mutes, 'view')
 reg('wipePhone',            actions.wipePhone, 'destroy')
 reg('audit',                actions.audit, 'view')
+reg('bin',                  actions.bin, 'view')
+reg('binRestore',           actions.binRestore, 'moderate')
 reg('flags',                actions.flags, 'view')
 reg('flagsScan',            actions.flagsScan, 'view')
 reg('flagResolve',          actions.flagResolve, 'moderate')

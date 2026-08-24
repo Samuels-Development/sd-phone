@@ -14,6 +14,8 @@ local store      = require 'server.admin.store'
 local moderation = require 'server.admin.moderation'
 ---@type table Watchlist queue (server.admin.flags): keyword sweep + triage.
 local flags      = require 'server.admin.flags'
+---@type table Recycle bin (server.admin.bin): pre-delete snapshots + restores.
+local bin        = require 'server.admin.bin'
 ---@type table Phone wipe (server.admin.wipe): full per-citizenid data wipe.
 local wipe       = require 'server.admin.wipe'
 ---@type table Birdy badge vocabulary (server.birdy.verify): allowlist + input parsing.
@@ -611,12 +613,54 @@ function actions.contentDelete(source, payload)
     local id = payload and payload.id
     if (type(id) ~= 'string' and type(id) ~= 'number') or tostring(id) == '' then return fail('Missing id') end
 
+    local aCid, aName = adminIdent(source)
+
+    -- Copied out before the delete, never after: the row is what a restore writes back, and a
+    -- moment later there is nothing left to copy.
+    local kept = bin.keep(app, tostring(id), nil, aCid, aName)
+
     if store.deleteContent(app, tostring(id)) == 0 then return fail('Not found') end
     -- A queue entry pointing at a row that no longer exists is noise someone has to read to
     -- dismiss, so removing the content retires its flags with it.
     flags.clearFor(app, tostring(id))
-    local aCid, aName = adminIdent(source)
     store.audit(aCid, aName, 'delete-content', nil, ('%s %s'):format(app, tostring(id)))
+    return ok({ recoverable = kept })
+end
+
+---One page of the recycle bin: what admins have deleted, and what can be put back.
+---@param source number admin player server id
+---@param payload { cursor?: number }|nil
+---@return table envelope { entries, nextCursor }
+function actions.bin(source, payload)
+    local entries, nextCursor = bin.list(tonumber(payload and payload.cursor), PAGE)
+
+    local cids = {}
+    for _, e in ipairs(entries) do
+        if e.authorCid then cids[#cids + 1] = e.authorCid end
+    end
+    local names, online = resolveNames(cids)
+    for _, e in ipairs(entries) do
+        if e.authorCid then
+            e.authorName   = names[e.authorCid]
+            e.authorOnline = online[e.authorCid] == true
+        end
+    end
+    return ok({ entries = entries, nextCursor = nextCursor })
+end
+
+---Puts one deleted row back where it came from.
+---@param source number admin player server id
+---@param payload { id?: number }|nil
+---@return table envelope
+function actions.binRestore(source, payload)
+    local id = tonumber(payload and payload.id)
+    if not id then return fail('Missing entry') end
+
+    local aCid, aName = adminIdent(source)
+    local okRestore, err = bin.restore(id, aName)
+    if not okRestore then return fail(err or 'Restore failed') end
+
+    store.audit(aCid, aName, 'restore-content', nil, 'bin entry ' .. id)
     return ok()
 end
 
@@ -784,10 +828,13 @@ end
 
 ---Audit log, read-only, paginated.
 ---@param source number admin player server id
----@param payload { cursor?: number }|nil
+---@param payload { cursor?: number, q?: string, action?: string }|nil
 ---@return table envelope { entries, nextCursor }
 function actions.audit(source, payload)
-    local entries, nextCursor = store.listAudit(tonumber(payload and payload.cursor), PAGE)
+    local q = util.trim(payload and payload.q)
+    if q == '' then q = nil end
+    local entries, nextCursor = store.listAudit(
+        tonumber(payload and payload.cursor), PAGE, q, payload and payload.action)
     return ok({ entries = entries, nextCursor = nextCursor })
 end
 

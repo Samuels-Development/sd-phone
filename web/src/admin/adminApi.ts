@@ -3,14 +3,15 @@ import { isFiveM } from '@/core/nui';
 import type {
     AdminAuditEntry, AdminBirdyPost, AdminCall, AdminContentItem,
     AdminLivePlayer, AdminMediaItem,
+    AdminBinEntry,
     AdminFlag,
     AdminMessage, AdminMute, AdminNumberRow, AdminOverview, AdminPlayerHit, AdminSimLookup, AdminStats,
     AdminThreadItem,
     MigrationScan, MigrationSnapshot,
 } from './types';
 import {
-    DEV_AUDIT, DEV_LIVE, DEV_MEDIA, DEV_MIGRATION_SCAN, DEV_MIGRATION_SNAPSHOT, DEV_MUTES, DEV_PLAYERS, DEV_STATS,
-    devBirdyPosts, devCalls, devContent, devFlags,
+    DEV_BIN, DEV_LIVE, DEV_MEDIA, DEV_MIGRATION_SCAN, DEV_MIGRATION_SNAPSHOT, DEV_MUTES, DEV_PLAYERS, DEV_STATS,
+    devAudit, devBirdyPosts, devCalls, devContent, devFlags,
     devMessages, devNumbers, devOverview, devSearch, devSimLookup, devThread,
 } from './devData';
 
@@ -154,10 +155,18 @@ export const adminFlagsScan = () =>
 export const adminFlagResolve = (id: number, status: string) =>
     isFiveM ? call<{ openCount: number }>('sd-phone:admin:flagResolve', { id, status }) : seed({ openCount: 0 });
 
-export const adminAudit = (cursor?: number | null) =>
+export const adminAudit = (cursor?: number | null, q?: string, action?: string) =>
     isFiveM
-        ? call<{ entries: AdminAuditEntry[]; nextCursor?: number | null }>('sd-phone:admin:audit', { cursor })
-        : seed({ entries: DEV_AUDIT, nextCursor: null });
+        ? call<{ entries: AdminAuditEntry[]; nextCursor?: number | null }>('sd-phone:admin:audit', { cursor, q, action })
+        : seed({ entries: devAudit(q, action), nextCursor: null });
+
+export const adminBin = (cursor?: number | null) =>
+    isFiveM
+        ? call<{ entries: AdminBinEntry[]; nextCursor?: number | null }>('sd-phone:admin:bin', { cursor })
+        : seed({ entries: DEV_BIN, nextCursor: null });
+
+export const adminBinRestore = (id: number) =>
+    isFiveM ? call<void>('sd-phone:admin:binRestore', { id }) : ok();
 
 export const adminMigrateScan = () =>
     isFiveM ? call<MigrationScan>('sd-phone:admin:migrateScan') : seed(DEV_MIGRATION_SCAN);

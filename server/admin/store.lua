@@ -594,6 +594,11 @@ end
 -- conversation lines around a message, which is the context a single line can never be judged
 -- without. `shape` corrects the normalized row afterwards, for an app whose `url` column holds
 -- audio rather than a picture, or a count only that app knows how to derive.
+--
+-- `source = { table, idColumn?, lost? }` is what makes a delete reversible: the row is copied out
+-- of that table before it goes and written back from the copy on a restore. `lost` names what a
+-- restore cannot bring with it, because a satellite table's rows are gone for good once their
+-- parent row is deleted. An adapter with no `source` deletes with no way back.
 ---@type table<string, table>
 local CONTENT = {}
 
@@ -660,6 +665,7 @@ CONTENT.messages = {
 
 CONTENT.darkchat = {
     deletable = true,
+    source = { table = 'darkchat_messages', lost = 'its reactions' },
     list = function(ts, id, like, limit)
         return MySQL.query.await([[
             SELECT id, created_at AS ts, citizenid AS author_cid, room_id, author, kind, body, meta,
@@ -705,6 +711,7 @@ CONTENT.darkchat = {
 
 CONTENT.photogram = {
     deletable = true,
+    source = { table = 'phone_photogram_posts', lost = 'its comments, likes and saves' },
     list = function(ts, id, like, limit)
         return MySQL.query.await(([[
             SELECT p.id, p.created_at AS ts, %s AS author_cid, p.author, p.caption AS body, p.images,
@@ -745,6 +752,7 @@ CONTENT.photogram = {
 
 CONTENT.vibez = {
     deletable = true,
+    source = { table = 'phone_vibez_posts', lost = 'its comments, likes and saves' },
     list = function(ts, id, like, limit)
         return MySQL.query.await(([[
             SELECT p.id, p.created_at AS ts, %s AS author_cid, p.author, p.caption AS body,
@@ -802,6 +810,7 @@ CONTENT.cherry = {
 
 CONTENT.gallery = {
     deletable = true,
+    source = { table = 'phone_photos', lost = 'the albums it was in' },
     list = function(ts, id, like, limit)
         -- Under unique phones, also match photos taken on SIM profiles the searched character activated.
         local simActive = require('server.sim.state').active
@@ -832,6 +841,7 @@ CONTENT.gallery = {
 local function classifieds(tbl)
     return {
         deletable = true,
+        source = { table = tbl },
         list = function(ts, id, like, limit)
             return MySQL.query.await(([[
                 SELECT id, created_at AS ts, citizenid AS author_cid, title, body, price, images, image
@@ -924,6 +934,7 @@ CONTENT.mail = {
 
 CONTENT.documents = {
     deletable = true,
+    source = { table = 'phone_documents', lost = 'the signatures on it' },
     list = function(ts, id, like, limit)
         return MySQL.query.await([[
             SELECT id, updated_at AS ts, citizenid AS author_cid, name AS title, content AS body,
@@ -966,6 +977,7 @@ CONTENT.documents = {
 
 CONTENT.weazelnews = {
     deletable = true,
+    source = { table = 'phone_weazel_articles' },
     list = function(ts, id, like, limit)
         return MySQL.query.await([[
             SELECT id, created_at AS ts, author_cid, author, headline AS title, category,
@@ -987,6 +999,7 @@ CONTENT.weazelnews = {
 
 CONTENT.review = {
     deletable = true,
+    source = { table = 'phone_review_reviews', lost = 'its helpful votes' },
     list = function(ts, id, like, limit)
         return MySQL.query.await([[
             SELECT r.id, r.created_at AS ts, r.citizenid AS author_cid, r.author, r.business_id,
@@ -1031,6 +1044,7 @@ CONTENT.notes = {
 
 CONTENT.voicememos = {
     deletable = true,
+    source = { table = 'phone_voice_memos' },
     list = function(ts, id, like, limit)
         return MySQL.query.await([[
             SELECT id, created_at AS ts, citizenid AS author_cid, name AS title, url, duration,
@@ -1226,6 +1240,63 @@ function store.contentThread(app, id)
     return items
 end
 
+---What a delete would take with it that a restore cannot bring back, and whether the row can be
+---copied out at all.
+---@param app string adapter key
+---@return boolean recoverable, string|nil lost what a restore leaves behind
+function store.contentSource(app)
+    local source = (CONTENT[app] or {}).source
+    if not source then return false, nil end
+    return true, source.lost
+end
+
+---Copies one content row out of its own table, verbatim, before it is deleted. The copy is what a
+---restore writes back, so it is taken as the table stores it rather than as the panel shows it.
+---@param app string adapter key
+---@param id string row id
+---@return table|nil row, string excerpt a short readable summary for the bin listing
+function store.snapshotRow(app, id)
+    local source = (CONTENT[app] or {}).source
+    if not source then return nil, '' end
+
+    local column = source.idColumn or 'id'
+    local okRow, row = pcall(MySQL.single.await,
+        ('SELECT * FROM %s WHERE %s = ?'):format(source.table, column), { id })
+    if not okRow or type(row) ~= 'table' then return nil, '' end
+
+    local excerpt = row.body or row.caption or row.about or row.title or row.name
+        or row.headline or row.url or ''
+    return row, tostring(excerpt):sub(1, 300)
+end
+
+---Writes a snapshot back into its own table. Column names come from the snapshot rather than from
+---anything the caller passed, so a restore can only ever rebuild the row it copied.
+---@param app string adapter key
+---@param row table the snapshot taken by store.snapshotRow
+---@return boolean ok, string|nil err
+function store.restoreRow(app, row)
+    local source = (CONTENT[app] or {}).source
+    if not source then return false, 'That app cannot be restored into' end
+
+    local columns, marks, values = {}, {}, {}
+    for column, value in pairs(row) do
+        -- Column names come from a snapshot this server wrote, never from a payload, but they are
+        -- concatenated into SQL rather than bound, so anything unexpected is refused outright.
+        if type(column) ~= 'string' or not column:match('^[%w_]+$') then
+            return false, 'Unreadable snapshot'
+        end
+        columns[#columns + 1] = column
+        marks[#marks + 1]     = '?'
+        values[#values + 1]   = value
+    end
+    if #columns == 0 then return false, 'Empty snapshot' end
+
+    local okInsert, err = pcall(MySQL.insert.await, ('INSERT INTO %s (%s) VALUES (%s)')
+        :format(source.table, table.concat(columns, ', '), table.concat(marks, ', ')), values)
+    if not okInsert then return false, tostring(err) end
+    return true, nil
+end
+
 ---Whether an app's thread rows can be deleted one at a time.
 ---@param app string adapter key
 ---@return boolean
@@ -1249,15 +1320,22 @@ end
 ---Audit log, newest first, keyset-paginated by row id. Read-only.
 ---@param cursor integer|nil last row id of the previous page
 ---@param limit integer page size (already clamped)
+---@param query string|nil free text over admin, target and detail
+---@param action string|nil exact action name
 ---@return table[] rows, integer|nil nextCursor
-function store.listAudit(cursor, limit)
+function store.listAudit(cursor, limit, query, action)
+    local like = (type(query) == 'string' and query ~= '') and ('%' .. escapeLike(query) .. '%') or nil
+    if type(action) ~= 'string' or action == '' then action = nil end
+
     local rows = MySQL.query.await([[
         SELECT id, admin_cid, admin_name, action, target_cid, detail, created_at
         FROM phone_admin_audit
         WHERE (? IS NULL OR id < ?)
+          AND (? IS NULL OR action = ?)
+          AND (? IS NULL OR admin_name LIKE ? OR admin_cid LIKE ? OR target_cid LIKE ? OR detail LIKE ?)
         ORDER BY id DESC
         LIMIT ?
-    ]], { cursor, cursor, limit + 1 }) or {}
+    ]], { cursor, cursor, action, action, like, like, like, like, like, limit + 1 }) or {}
 
     local nextCursor = nil
     if #rows > limit then

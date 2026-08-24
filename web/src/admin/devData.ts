@@ -1,5 +1,5 @@
 import type {
-    AdminAuditEntry, AdminBirdyPost, AdminCall, AdminContentItem, AdminContentMedia,
+    AdminAuditEntry, AdminBinEntry, AdminBirdyPost, AdminCall, AdminContentItem, AdminContentMedia,
     AdminFlag, AdminFlagStatus,
     AdminLivePlayer, AdminMediaItem,
     AdminMessage, AdminMute, AdminNumberRow, AdminOverview, AdminPlayerHit, AdminSimLookup, AdminStats,
@@ -294,8 +294,10 @@ const UNDELETABLE = new Set(['messages', 'cherry', 'mail', 'notes', 'groups']);
 
 const LIKED = new Set(['darkchat', 'photogram', 'vibez', 'review']);
 
+const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA=';
+
 function devMedia(app: string, i: number, count: number): AdminContentMedia[] {
-    if (app === 'voicememos') return [{ url: '', audio: '' }];
+    if (app === 'voicememos') return [{ url: SILENT_WAV, audio: SILENT_WAV }];
     return Array.from({ length: count }, (_, n) => {
         const url = photo(i * 3 + n);
         return app === 'vibez' ? { url, video: url } : { url };
@@ -462,23 +464,25 @@ export function devFlags(status: string): { flags: AdminFlag[]; nextCursor: null
 }
 
 const AUDIT_ACTIONS: [string, string][] = [
-    ['mute',                'birdy for 5d: Repeated slurs in replies after a warning.'],
-    ['birdySetVerified',    'sblack -> blue'],
-    ['contentDelete',       'marketplace listing marketplace-3'],
-    ['resetPasscode',       'passcode cleared'],
-    ['setNumber',           '5550233 -> 5550241'],
-    ['giveSim',             'new SIM issued, bound to profile'],
-    ['forceLogout',         'signed out of photogram'],
-    ['setApp',              'installed darkchat'],
-    ['unmute',              'sms lifted early'],
-    ['wipePhone',           '1284 rows removed'],
-    ['racingSetFlag',       'Devils Gambit marked verified'],
-    ['racingDelete',        'Harbour Sprint deleted'],
-    ['resetAccountPassword','photogram account 102'],
-    ['birdyDeletePost',     'post-7'],
+    ['mute',              'birdy for 5d: Repeated slurs in replies after a warning.'],
+    ['birdy-verify',      'sblack -> blue'],
+    ['delete-content',    'marketplace marketplace-3'],
+    ['restore-content',   'bin entry 308'],
+    ['reset-passcode',    'passcode cleared'],
+    ['set-number',        '5550233 -> 5550241'],
+    ['give-sim',          'new SIM issued, bound to profile'],
+    ['force-logout',      'signed out of photogram'],
+    ['install-app',       'installed darkchat'],
+    ['unmute',            'sms lifted early'],
+    ['wipe-phone',        '1284 rows removed'],
+    ['flags-scan',        '3 filed from 1,240 rows'],
+    ['flag-actioned',     'flag 517'],
+    ['delete-comment',    'photogram photogram-3-t2'],
+    ['reset-password',    'photogram account 102'],
+    ['delete-birdy-post', 'post-7'],
 ];
 
-export const DEV_AUDIT: AdminAuditEntry[] = AUDIT_ACTIONS.map(([action, detail], i) => {
+const DEV_AUDIT: AdminAuditEntry[] = AUDIT_ACTIONS.map(([action, detail], i) => {
     const p = DEV_PLAYERS[i % DEV_PLAYERS.length];
     return {
         id:        1000 - i,
@@ -488,6 +492,39 @@ export const DEV_AUDIT: AdminAuditEntry[] = AUDIT_ACTIONS.map(([action, detail],
         targetCid: p.citizenid,
         detail,
         createdAt: ago(i * 3 * HOUR + 900),
+    };
+});
+
+export function devAudit(q?: string, action?: string): AdminAuditEntry[] {
+    const term = (q ?? '').trim().toLowerCase();
+    return DEV_AUDIT.filter(e =>
+        (!action || e.action === action)
+        && (!term || `${e.adminName} ${e.targetCid ?? ''} ${e.detail}`.toLowerCase().includes(term)));
+}
+
+const BIN_SEED: [string, string, string, string][] = [
+    ['photogram',   'race night, meet at the docks',            'its comments, likes and saves', 'Demo Admin'],
+    ['marketplace', 'Sultan RS, taking cash app only',          '',                              'S. Nicol'],
+    ['darkchat',    'price list is up, dm for the drop',        'its reactions',                 'Demo Admin'],
+    ['pages',       'Room to let, no questions asked',          '',                              'Demo Admin'],
+    ['weazelnews',  'Docks closed after overnight raid',        '',                              'S. Nicol'],
+];
+
+export const DEV_BIN: AdminBinEntry[] = BIN_SEED.map(([app, excerpt, lost, adminName], i) => {
+    const p = DEV_PLAYERS[i % DEV_PLAYERS.length];
+    return {
+        id:           310 - i,
+        app,
+        targetId:     `${app}-${i + 1}`,
+        excerpt,
+        lost:         lost || null,
+        authorCid:    p.citizenid,
+        authorName:   p.name,
+        authorOnline: p.online,
+        adminName,
+        restoredAt:   i === 3 ? ago(HOUR) : null,
+        restoredBy:   i === 3 ? 'S. Nicol' : null,
+        createdAt:    ago(i * 6 * HOUR + 2 * HOUR),
     };
 });
 

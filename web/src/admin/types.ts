@@ -204,6 +204,21 @@ export interface AdminFlag {
     createdAt:     number;
 }
 
+export interface AdminBinEntry {
+    id:            number;
+    app:           string;
+    targetId:      string;
+    excerpt:       string;
+    lost?:         string | null;
+    authorCid?:    string | null;
+    authorName?:   string | null;
+    authorOnline?: boolean;
+    adminName?:    string | null;
+    restoredAt?:   number | null;
+    restoredBy?:   string | null;
+    createdAt:     number;
+}
+
 export interface AdminAuditEntry {
     id:         number;
     adminCid:   string;

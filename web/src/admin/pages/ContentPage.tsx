@@ -4,7 +4,7 @@ import clsx from 'clsx';
 
 import { adminContent, adminContentDelete } from '../adminApi';
 import { fmtTime, type AdminContentItem, type AdminContentMedia } from '../types';
-import { Badge, Btn, Card, CenterNote, ConfirmModal, Input, LoadMore, OnlineDot, Spinner } from '../ui';
+import { Badge, Btn, Card, CenterNote, Checkbox, ConfirmModal, Input, LoadMore, OnlineDot, Spinner } from '../ui';
 import { usePaged } from '../usePaged';
 import { ContentDetail } from './content/ContentDetail';
 import { MediaLightbox, MediaStrip } from './content/Media';
@@ -35,6 +35,8 @@ export function ContentPage({ app, searchPlaceholder, emptyLabel, deleteBody, th
     const [deletable, setDeletable] = useState(false);
     const [threaded, setThreaded] = useState(false);
     const [doomed, setDoomed] = useState<string | null>(null);
+    const [bulk, setBulk] = useState<Set<string>>(new Set());
+    const [bulkPending, setBulkPending] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [lightbox, setLightbox] = useState<{ media: AdminContentMedia[]; index: number; who: string } | null>(null);
 
@@ -64,6 +66,27 @@ export function ContentPage({ app, searchPlaceholder, emptyLabel, deleteBody, th
         }
     };
 
+    const toggleBulk = (id: string) => setBulk(prev => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+    });
+
+    const removeSelected = async () => {
+        setBulkPending(true);
+        const ids = [...bulk];
+        const results = await Promise.all(ids.map(id => adminContentDelete(app, id)));
+        const gone = ids.filter((_, i) => results[i].success);
+        setItems(prev => prev.filter(i => !gone.includes(i.id)));
+        if (selectedId && gone.includes(selectedId)) setSelectedId(null);
+        setBulk(new Set());
+        setBulkPending(false);
+        const failed = ids.length - gone.length;
+        toast(failed
+            ? `Deleted ${gone.length}, ${failed} failed`
+            : `Deleted ${gone.length}`, failed > 0);
+    };
+
     const selected = items.find(i => i.id === selectedId) ?? null;
     const openMedia = (item: AdminContentItem, index: number) =>
         setLightbox({ media: item.media ?? [], index, who: item.authorName ?? item.authorCid ?? 'Unknown' });
@@ -74,6 +97,20 @@ export function ContentPage({ app, searchPlaceholder, emptyLabel, deleteBody, th
                 <Input value={q} onChange={setQ} onEnter={submit} placeholder={`${searchPlaceholder} — press Enter`} />
                 <Btn variant="primary" onClick={submit} disabled={q.trim().length === 1}>Search</Btn>
             </div>
+
+            {bulk.size > 0 && (
+                <div className="flex items-center justify-between gap-3 rounded-xl bg-ios-blue/10 px-4 py-2.5 ring-1 ring-ios-blue/25">
+                    <span className="text-[12.5px] font-semibold text-zinc-200">
+                        {bulk.size} selected
+                    </span>
+                    <div className="flex items-center gap-2">
+                        <Btn variant="ghost" onClick={() => setBulk(new Set())}>Clear</Btn>
+                        <Btn variant="danger" busy={bulkPending} disabled={bulkPending} onClick={() => void removeSelected()}>
+                            <Trash2 size={13} /> Delete {bulk.size}
+                        </Btn>
+                    </div>
+                </div>
+            )}
 
             <div className="flex items-start gap-4">
                 <div className="min-w-0 flex-1 space-y-4">
@@ -136,7 +173,12 @@ export function ContentPage({ app, searchPlaceholder, emptyLabel, deleteBody, th
                                         )}
                                     >
                                         <div className="flex items-start justify-between gap-3">
-                                            <div className="min-w-0">
+                                            {deletable && (
+                                                <div className="pt-0.5" onClick={e => e.stopPropagation()}>
+                                                    <Checkbox checked={bulk.has(item.id)} onChange={() => toggleBulk(item.id)} />
+                                                </div>
+                                            )}
+                                            <div className="min-w-0 flex-1">
                                                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px]">
                                                     {item.authorCid ? (
                                                         <span className="inline-flex items-center gap-1.5">
