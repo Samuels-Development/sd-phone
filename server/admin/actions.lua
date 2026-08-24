@@ -528,10 +528,10 @@ end
 ---photogram, cherry, marketplace, pages). Author names resolve like everywhere else.
 ---@param source number admin player server id
 ---@param payload { app?: string, cursor?: string, q?: string }|nil
----@return table envelope { items, nextCursor, deletable }
+---@return table envelope { items, nextCursor, deletable, threaded }
 function actions.content(source, payload)
     local app = payload and payload.app
-    local known, deletable = store.contentInfo(type(app) == 'string' and app or '')
+    local known, deletable, threaded = store.contentInfo(type(app) == 'string' and app or '')
     if not known then return fail('Unknown app') end
 
     local q = util.trim(payload and payload.q)
@@ -549,7 +549,52 @@ function actions.content(source, payload)
             item.authorOnline = online[item.authorCid] == true
         end
     end
-    return ok({ items = items, nextCursor = nextCursor, deletable = deletable })
+    return ok({ items = items, nextCursor = nextCursor, deletable = deletable, threaded = threaded })
+end
+
+---What one content row expands into: replies under a post, or the room and conversation lines
+---around a message. Read-only; the same name resolution the list uses applies here too.
+---@param source number admin player server id
+---@param payload { app?: string, id?: string }|nil
+---@return table envelope { items, deletable }
+function actions.contentThread(source, payload)
+    local app = payload and payload.app
+    local known, _, threaded = store.contentInfo(type(app) == 'string' and app or '')
+    if not known or not threaded then return fail('That content has no thread') end
+    local id = payload and payload.id
+    if (type(id) ~= 'string' and type(id) ~= 'number') or tostring(id) == '' then return fail('Missing id') end
+
+    local items = store.contentThread(app, tostring(id))
+
+    local cids = {}
+    for _, item in ipairs(items) do
+        if item.authorCid then cids[#cids + 1] = item.authorCid end
+    end
+    local names, online = resolveNames(cids)
+    for _, item in ipairs(items) do
+        if item.authorCid then
+            item.authorName   = names[item.authorCid]
+            item.authorOnline = online[item.authorCid] == true
+        end
+    end
+    return ok({ items = items, deletable = store.threadDeletable(app) })
+end
+
+---Deletes one row inside a thread: a Photogram or Clout comment, or a single Dark Chat line.
+---@param source number admin player server id
+---@param payload { app?: string, id?: string }|nil
+---@return table envelope
+function actions.contentThreadDelete(source, payload)
+    local app = payload and payload.app
+    local known = store.contentInfo(type(app) == 'string' and app or '')
+    if not known or not store.threadDeletable(app) then return fail('That can\'t be deleted') end
+    local id = payload and payload.id
+    if (type(id) ~= 'string' and type(id) ~= 'number') or tostring(id) == '' then return fail('Missing id') end
+
+    if store.deleteThreadItem(app, tostring(id)) == 0 then return fail('Not found') end
+    local aCid, aName = adminIdent(source)
+    store.audit(aCid, aName, 'delete-comment', nil, ('%s %s'):format(app, tostring(id)))
+    return ok()
 end
 
 ---Deletes one content row from an app that allows it (darkchat message, photogram post,
@@ -685,12 +730,52 @@ function actions.audit(source, payload)
     return ok({ entries = entries, nextCursor = nextCursor })
 end
 
+---Every image and clip posted across the phone's apps, newest first.
+---@param source integer admin server id
+---@param payload table|nil { limit?: integer }
+---@return table result { media }
+function actions.media(source, payload)
+    payload = type(payload) == 'table' and payload or {}
+    return ok({ media = store.mediaWall(tonumber(payload.limit)) })
+end
+
+---Where every online player is right now, for the admin map. Positions come from the live entity
+---rather than any table, so this is a snapshot and never a history - nothing about it is stored.
+---@param source integer admin server id
+---@return table result { players }
+function actions.livePositions(source)
+    local out = {}
+    for _, src in ipairs(GetPlayers()) do
+        local id  = tonumber(src)
+        local ped = id and GetPlayerPed(id)
+        if ped and ped ~= 0 then
+            local pos = GetEntityCoords(ped)
+            out[#out + 1] = {
+                source = id,
+                name   = player.getName(id),
+                cid    = player.getIdentifier(id),
+                x      = math.floor(pos.x + 0.5),
+                y      = math.floor(pos.y + 0.5),
+            }
+        end
+    end
+    return ok({ players = out })
+end
+
 ---Dashboard stats: table counts + live online player count.
----@param source number admin player server id
+---@param source integer admin server id
 ---@return table envelope
 function actions.stats(source)
     local stats = store.stats()
     stats.online = #GetPlayers()
+
+    -- Charts are best-effort: a failure here costs the sparklines, never the counters above.
+    local okTrends, trends, days = pcall(store.trends)
+    if okTrends then
+        stats.trends = trends
+        stats.days   = days
+    end
+
     return ok(stats)
 end
 

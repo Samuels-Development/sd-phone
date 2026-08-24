@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-    Bird, Camera, Clapperboard, DatabaseZap, Flag, Flame, Hash, Images, LayoutDashboard, MessageSquare, Newspaper,
+    Bird, Camera, Clapperboard, DatabaseZap, Flag, Flame, Hash, Images, LayoutDashboard, Map, MessageSquare, Newspaper,
     ScrollText, Search, ShieldCheck, ShoppingBag, Skull, VolumeX, X,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -12,6 +12,8 @@ import { AuditPage } from './pages/AuditPage';
 import { BirdyPage } from './pages/BirdyPage';
 import { ContentPage } from './pages/ContentPage';
 import { Dashboard } from './pages/Dashboard';
+import { MediaPage } from './pages/MediaPage';
+import { MapPage } from './pages/MapPage';
 import { MigrationPage } from './pages/MigrationPage';
 import { MutesPage } from './pages/MutesPage';
 import { NumbersPage } from './pages/NumbersPage';
@@ -21,13 +23,15 @@ import { PlayersPage } from './pages/PlayersPage';
 import { ToastHost, useToasts } from './ui';
 
 type PageId =
-    | 'dashboard' | 'players' | 'numbers' | 'mutes' | 'audit' | 'migration' | 'birdy'
+    | 'dashboard' | 'media' | 'map' | 'players' | 'numbers' | 'mutes' | 'audit' | 'migration' | 'birdy'
     | 'messages' | 'darkchat' | 'photogram' | 'vibez' | 'cherry' | 'marketplace' | 'pages' | 'gallery' | 'racing';
 
 interface NavItem { id: PageId; label: string; icon: React.ReactNode }
 
 const NAV_MAIN: NavItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={15} /> },
+    { id: 'media',     label: 'Media',     icon: <Images size={15} /> },
+    { id: 'map',       label: 'Live map',  icon: <Map size={15} /> },
     { id: 'players',   label: 'Players',   icon: <Search size={15} /> },
     { id: 'numbers',   label: 'Numbers',   icon: <Hash size={15} /> },
     { id: 'mutes',     label: 'Mutes',     icon: <VolumeX size={15} /> },
@@ -50,6 +54,8 @@ const NAV_APPS: NavItem[] = [
 
 const PAGE_TITLE: Record<PageId, string> = {
     dashboard:   'Dashboard',
+    media:       'Media - everything posted',
+    map:         'Live map - players online now',
     players:     'Players',
     numbers:     'Numbers — SIM registry',
     birdy:       'Squawk moderation',
@@ -68,15 +74,15 @@ const PAGE_TITLE: Record<PageId, string> = {
 };
 
 // Per-app config for the generic content browser.
-const CONTENT_PAGES: Record<string, { search: string; empty: string; deleteBody: string; grid?: boolean }> = {
-    messages:    { search: 'Filter sent texts by content or number',      empty: 'No messages yet.',            deleteBody: '' },
-    darkchat:    { search: 'Filter messages by content, alias or room',   empty: 'No Dark Chat messages yet.',  deleteBody: 'The message and its reactions are permanently removed.' },
-    photogram:   { search: 'Filter posts by caption or username',         empty: 'No Photogram posts yet.',     deleteBody: 'The post, its comments, likes and saves are permanently removed.' },
-    vibez:       { search: 'Filter posts by caption or username',         empty: 'No Clout posts yet.',         deleteBody: 'The post, its comments, likes and saves are permanently removed.' },
-    cherry:      { search: 'Filter profiles by username, name or bio',    empty: 'No Cherry profiles yet.',     deleteBody: '' },
-    marketplace: { search: 'Filter listings by title or description',     empty: 'No listings yet.',            deleteBody: 'The listing is permanently removed.' },
-    pages:       { search: 'Filter posts by title or description',        empty: 'No posts yet.',               deleteBody: 'The post is permanently removed.' },
-    gallery:     { search: 'Filter photos by citizen ID',                 empty: 'No photos yet.',              deleteBody: 'The photo is removed from the player’s gallery and any albums.', grid: true },
+const CONTENT_PAGES: Record<string, { search: string; empty: string; deleteBody: string; thread: string; grid?: boolean }> = {
+    messages:    { search: 'Filter sent texts by content or number',      empty: 'No messages yet.',            deleteBody: '',                                                             thread: 'Conversation' },
+    darkchat:    { search: 'Filter messages by content, alias or room',   empty: 'No Dark Chat messages yet.',  deleteBody: 'The message and its reactions are permanently removed.',       thread: 'Room context' },
+    photogram:   { search: 'Filter posts by caption or username',         empty: 'No Photogram posts yet.',     deleteBody: 'The post, its comments, likes and saves are permanently removed.', thread: 'Comments' },
+    vibez:       { search: 'Filter posts by caption or username',         empty: 'No Clout posts yet.',         deleteBody: 'The post, its comments, likes and saves are permanently removed.', thread: 'Comments' },
+    cherry:      { search: 'Filter profiles by username, name or bio',    empty: 'No Cherry profiles yet.',     deleteBody: '',                                                             thread: '' },
+    marketplace: { search: 'Filter listings by title or description',     empty: 'No listings yet.',            deleteBody: 'The listing is permanently removed.',                          thread: '' },
+    pages:       { search: 'Filter posts by title or description',        empty: 'No posts yet.',               deleteBody: 'The post is permanently removed.',                             thread: '' },
+    gallery:     { search: 'Filter photos by citizen ID',                 empty: 'No photos yet.',              deleteBody: 'The photo is removed from the player’s gallery and any albums.', thread: '', grid: true },
 };
 
 export function AdminPanel() {
@@ -219,6 +225,8 @@ export function AdminPanel() {
                         {page === 'players' && playerCid && (
                             <PlayerDetail cid={playerCid} onBack={() => setPlayerCid(null)} toast={push} onOpenGallery={openGallery} />
                         )}
+                        {page === 'media' && <MediaPage onOpenPlayer={openPlayer} />}
+                        {page === 'map' && <MapPage onOpenPlayer={openPlayer} />}
                         {page === 'numbers' && <NumbersPage onOpenPlayer={openPlayer} />}
                         {page === 'birdy' && <BirdyPage onOpenPlayer={openPlayer} toast={push} />}
                         {page === 'mutes' && <MutesPage onOpenPlayer={openPlayer} toast={push} />}
@@ -233,6 +241,7 @@ export function AdminPanel() {
                                 searchPlaceholder={contentCfg.search}
                                 emptyLabel={contentCfg.empty}
                                 deleteBody={contentCfg.deleteBody}
+                                threadLabel={contentCfg.thread}
                                 grid={contentCfg.grid}
                                 onOpenPlayer={openPlayer}
                                 toast={push}

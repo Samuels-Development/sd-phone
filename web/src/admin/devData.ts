@@ -1,6 +1,8 @@
 import type {
-    AdminAuditEntry, AdminBirdyPost, AdminCall, AdminContentItem,
+    AdminAuditEntry, AdminBirdyPost, AdminCall, AdminContentItem, AdminContentMedia,
+    AdminLivePlayer, AdminMediaItem,
     AdminMessage, AdminMute, AdminNumberRow, AdminOverview, AdminPlayerHit, AdminSimLookup, AdminStats,
+    AdminThreadItem,
     MigrationDomain, MigrationScan, MigrationSnapshot,
 } from './types';
 import bg3 from '@/assets/photos/background3.webp';
@@ -54,6 +56,11 @@ export const DEV_PLAYERS: DevPlayer[] = [
 
 const byCid = (cid: string) => DEV_PLAYERS.find(p => p.citizenid === cid) ?? DEV_PLAYERS[0];
 
+const DEV_DAYS = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(2026, 7, 11 + i);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+});
+
 export const DEV_STATS: AdminStats = {
     phones:      DEV_PLAYERS.length,
     appAccounts: 34,
@@ -61,6 +68,15 @@ export const DEV_STATS: AdminStats = {
     messages:    2417,
     activeMutes: 3,
     online:      DEV_PLAYERS.filter(p => p.online).length,
+    days:        DEV_DAYS,
+    trends: {
+        messages:   [142, 168, 155, 191, 210, 186, 240, 264, 231, 258, 289, 274, 302, 288],
+        calls:      [18, 24, 21, 30, 27, 19, 34, 41, 36, 30, 44, 39, 47, 52],
+        birdyPosts: [6, 9, 4, 11, 8, 13, 7, 15, 12, 9, 18, 14, 11, 16],
+        cloutPosts: [0, 0, 2, 5, 9, 14, 12, 21, 27, 24, 33, 41, 38, 46],
+        photos:     [22, 19, 31, 28, 24, 35, 41, 30, 27, 38, 44, 36, 42, 39],
+        accounts:   [2, 1, 3, 0, 4, 2, 5, 3, 1, 6, 4, 2, 3, 5],
+    },
 };
 
 export function devSearch(q: string): AdminPlayerHit[] {
@@ -263,13 +279,25 @@ const CONTENT: Record<string, { label: string; titles: string[]; bodies: string[
     gallery:     { label: 'Photo',   titles: [], bodies: [], imaged: true },
 };
 
-export function devContent(app: string, q?: string): { items: AdminContentItem[]; deletable: boolean } {
+const THREADED = new Set(['messages', 'darkchat', 'photogram', 'vibez']);
+
+function devMedia(app: string, i: number, count: number): AdminContentMedia[] {
+    return Array.from({ length: count }, (_, n) => {
+        const url = photo(i * 3 + n);
+        return app === 'vibez' ? { url, video: url } : { url };
+    });
+}
+
+export function devContent(app: string, q?: string): { items: AdminContentItem[]; deletable: boolean; threaded: boolean } {
     const cfg = CONTENT[app] ?? CONTENT.pages;
     const term = (q ?? '').trim().toLowerCase();
     const count = app === 'gallery' ? 12 : Math.max(cfg.bodies.length, cfg.titles.length, 6);
 
     const items: AdminContentItem[] = Array.from({ length: count }, (_, i) => {
         const p = DEV_PLAYERS[i % DEV_PLAYERS.length];
+        const imageText = app === 'messages' && i % 6 === 5;
+        const shots = imageText ? 1 : cfg.imaged ? (app === 'gallery' || app === 'vibez' ? 1 : 1 + (i % 3)) : 0;
+        const media = devMedia(app, i, shots);
         return {
             id:           `${app}-${i + 1}`,
             createdAt:    ago(i * 7 * HOUR + HOUR),
@@ -279,9 +307,13 @@ export function devContent(app: string, q?: string): { items: AdminContentItem[]
             label:        cfg.label,
             title:        cfg.titles[i % Math.max(cfg.titles.length, 1)] ?? null,
             body:         cfg.bodies[i % Math.max(cfg.bodies.length, 1)] ?? null,
-            kind:         app === 'messages' ? (i % 6 === 5 ? 'image' : 'text') : null,
-            images:       cfg.imaged ? 1 + (i % 3) : null,
-            imageUrl:     cfg.imaged ? photo(i) : null,
+            kind:         app === 'messages' ? (imageText ? 'image' : 'text') : null,
+            images:       shots || null,
+            imageUrl:     media[0]?.url ?? null,
+            media,
+            likes:        app === 'messages' ? null : THREADED.has(app) ? 4 + i * 13 : null,
+            comments:     app === 'photogram' || app === 'vibez' ? 2 + (i % 5) : null,
+            views:        app === 'vibez' ? 900 + i * 1470 : null,
             price:        cfg.priced ? 1500 + i * 2750 : null,
         };
     });
@@ -290,7 +322,42 @@ export function devContent(app: string, q?: string): { items: AdminContentItem[]
         ? items.filter(it => `${it.title ?? ''} ${it.body ?? ''} ${it.authorName ?? ''}`.toLowerCase().includes(term))
         : items;
 
-    return { items: filtered, deletable: app !== 'messages' };
+    return { items: filtered, deletable: app !== 'messages', threaded: THREADED.has(app) };
+}
+
+const THREAD_BODIES = [
+    'where is this',
+    'that is not the same car you posted last week',
+    'dm me the price',
+    'this is the third time. stop.',
+    'lmao',
+    'meet at the docks after',
+    'reported',
+    'my guy really said that out loud',
+];
+
+export function devThread(app: string, id: string): { items: AdminThreadItem[]; deletable: boolean } {
+    if (!THREADED.has(app)) return { items: [], deletable: false };
+
+    const anchorAt = app === 'photogram' || app === 'vibez' ? -1 : 3;
+    const items: AdminThreadItem[] = Array.from({ length: 8 }, (_, i) => {
+        const p = DEV_PLAYERS[(i + 2) % DEV_PLAYERS.length];
+        return {
+            id:           `${id}-t${i + 1}`,
+            createdAt:    ago((8 - i) * 11 * 60),
+            authorCid:    p.citizenid,
+            authorName:   p.name,
+            authorOnline: p.online,
+            handle:       p.handle,
+            body:         THREAD_BODIES[i % THREAD_BODIES.length],
+            direction:    app === 'messages' && i % 3 === 1 ? 'incoming' : 'outgoing',
+            media:        app === 'messages' ? [] : i % 4 === 2 ? [{ url: photo(i + 5) }] : [],
+            likes:        app === 'messages' ? null : i % 3 === 0 ? i * 2 : null,
+            anchor:       i === anchorAt,
+        };
+    });
+
+    return { items, deletable: app !== 'messages' };
 }
 
 const AUDIT_ACTIONS: [string, string][] = [
@@ -368,3 +435,26 @@ export const DEV_MIGRATION_SCAN: MigrationScan = {
 };
 
 export const DEV_MIGRATION_SNAPSHOT: MigrationSnapshot = { state: { phase: 'idle' }, lines: [] };
+
+const NOW = Math.floor(Date.now() / 1000);
+
+export const DEV_MEDIA: AdminMediaItem[] = [
+    { app: 'photogram', id: 'p1',  url: bg6,  author: 'luna.vibe', createdAt: NOW - 60 * 8 },
+    { app: 'clout',     id: 'v1',  url: bg5,  video: bg5, author: 'dex', createdAt: NOW - 60 * 22 },
+    { app: 'photos',    id: 'g1',  url: bg13,  author: 'C3106S6K', createdAt: NOW - 60 * 47 },
+    { app: 'squawk',    id: 's1',  url: bg8,  author: 'mira_ls', createdAt: NOW - 60 * 96 },
+    { app: 'photogram', id: 'p2',  url: bg11, author: 'sora', createdAt: NOW - 60 * 140 },
+    { app: 'clout',     id: 'v2',  url: bg3,  video: bg3, author: 'nox404', createdAt: NOW - 60 * 190 },
+    { app: 'photos',    id: 'g2',  url: bg12, author: 'M79SIWTW', createdAt: NOW - 60 * 240 },
+    { app: 'squawk',    id: 's2',  url: bg4,  author: 'kobe.rdr', createdAt: NOW - 60 * 300 },
+    { app: 'photogram', id: 'p3',  url: bg10, author: 'luna.vibe', createdAt: NOW - 60 * 420 },
+    { app: 'clout',     id: 'v3',  url: bg7,  video: bg7, author: 'sora', createdAt: NOW - 60 * 610 },
+];
+
+export const DEV_LIVE: AdminLivePlayer[] = [
+    { source: 1, name: 'Samuel Black', cid: DEV_PLAYERS[0].citizenid, x: -260,  y: -970 },
+    { source: 2, name: 'Samuel White', cid: DEV_PLAYERS[1]?.citizenid ?? 'M79SIWTW', x: 1980, y: 3760 },
+    { source: 3, name: 'Mira Lopez',   cid: DEV_PLAYERS[2]?.citizenid ?? 'X1', x: -1810, y: -420 },
+    { source: 4, name: 'Dex Farrow',   cid: DEV_PLAYERS[3]?.citizenid ?? 'X2', x: 430,   y: 6520 },
+    { source: 5, name: 'Nox Reed',     cid: DEV_PLAYERS[4]?.citizenid ?? 'X3', x: -3140, y: 1010 },
+];

@@ -145,6 +145,11 @@ export interface AdminCall {
     calledAt:  number;
 }
 
+export interface AdminContentMedia {
+    url:    string;
+    video?: string | null;
+}
+
 export interface AdminContentItem {
     id:            string;
     createdAt:     number;
@@ -157,7 +162,26 @@ export interface AdminContentItem {
     kind?:         string | null;
     images?:       number | null;
     imageUrl?:     string | null;
+    media?:        AdminContentMedia[] | null;
+    likes?:        number | null;
+    comments?:     number | null;
+    views?:        number | null;
     price?:        number | null;
+}
+
+export interface AdminThreadItem {
+    id:            string;
+    createdAt:     number;
+    authorCid?:    string | null;
+    authorName?:   string | null;
+    authorOnline?: boolean;
+    handle?:       string | null;
+    body?:         string | null;
+    kind?:         string | null;
+    direction?:    string | null;
+    media?:        AdminContentMedia[] | null;
+    likes?:        number | null;
+    anchor?:       boolean;
 }
 
 export interface AdminAuditEntry {
@@ -170,6 +194,32 @@ export interface AdminAuditEntry {
     createdAt:  number;
 }
 
+export interface AdminMediaItem {
+    app:       string;
+    id:        string;
+    url:       string;
+    video?:    string;
+    author:    string;
+    createdAt: number;
+}
+
+export interface AdminLivePlayer {
+    source: number;
+    name:   string;
+    cid:    string;
+    x:      number;
+    y:      number;
+}
+
+export interface AdminTrends {
+    messages?:   number[];
+    calls?:      number[];
+    birdyPosts?: number[];
+    cloutPosts?: number[];
+    photos?:     number[];
+    accounts?:   number[];
+}
+
 export interface AdminStats {
     phones:      number;
     appAccounts: number;
@@ -177,6 +227,8 @@ export interface AdminStats {
     messages:    number;
     activeMutes: number;
     online:      number;
+    trends?:     AdminTrends;
+    days?:       string[];
 }
 
 export interface MuteScopeDef {

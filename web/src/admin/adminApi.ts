@@ -2,13 +2,15 @@ import { apiCall, type Envelope } from '@/core/api';
 import { isFiveM } from '@/core/nui';
 import type {
     AdminAuditEntry, AdminBirdyPost, AdminCall, AdminContentItem,
+    AdminLivePlayer, AdminMediaItem,
     AdminMessage, AdminMute, AdminNumberRow, AdminOverview, AdminPlayerHit, AdminSimLookup, AdminStats,
+    AdminThreadItem,
     MigrationScan, MigrationSnapshot,
 } from './types';
 import {
-    DEV_AUDIT, DEV_MIGRATION_SCAN, DEV_MIGRATION_SNAPSHOT, DEV_MUTES, DEV_PLAYERS, DEV_STATS,
+    DEV_AUDIT, DEV_LIVE, DEV_MEDIA, DEV_MIGRATION_SCAN, DEV_MIGRATION_SNAPSHOT, DEV_MUTES, DEV_PLAYERS, DEV_STATS,
     devBirdyPosts, devCalls, devContent,
-    devMessages, devNumbers, devOverview, devSearch, devSimLookup,
+    devMessages, devNumbers, devOverview, devSearch, devSimLookup, devThread,
 } from './devData';
 
 function call<T>(event: string, payload?: unknown): Promise<Envelope<T>> {
@@ -25,6 +27,12 @@ function seed<T>(data: T): Promise<Envelope<T>> {
 }
 
 const ok = () => Promise.resolve({ success: true } as Envelope<void>);
+
+export const adminMedia = () =>
+    isFiveM ? call<{ media: AdminMediaItem[] }>('sd-phone:admin:media') : seed({ media: DEV_MEDIA });
+
+export const adminLivePositions = () =>
+    isFiveM ? call<{ players: AdminLivePlayer[] }>('sd-phone:admin:livePositions') : seed({ players: DEV_LIVE });
 
 export const adminStats = () =>
     isFiveM ? call<AdminStats>('sd-phone:admin:stats') : seed(DEV_STATS);
@@ -80,11 +88,19 @@ export const adminBirdySetVerified = (handle: string, type: string | null) =>
 
 export const adminContent = (app: string, cursor?: string | null, q?: string) =>
     isFiveM
-        ? call<{ items: AdminContentItem[]; nextCursor?: string | null; deletable: boolean }>('sd-phone:admin:content', { app, cursor, q })
+        ? call<{ items: AdminContentItem[]; nextCursor?: string | null; deletable: boolean; threaded: boolean }>('sd-phone:admin:content', { app, cursor, q })
         : seed({ ...devContent(app, q), nextCursor: null });
 
 export const adminContentDelete = (app: string, id: string) =>
     isFiveM ? call<void>('sd-phone:admin:contentDelete', { app, id }) : ok();
+
+export const adminContentThread = (app: string, id: string) =>
+    isFiveM
+        ? call<{ items: AdminThreadItem[]; deletable: boolean }>('sd-phone:admin:contentThread', { app, id })
+        : seed(devThread(app, id));
+
+export const adminContentThreadDelete = (app: string, id: string) =>
+    isFiveM ? call<void>('sd-phone:admin:contentThreadDelete', { app, id }) : ok();
 
 export const adminMessages = (cid: string, cursor?: string | null) =>
     isFiveM

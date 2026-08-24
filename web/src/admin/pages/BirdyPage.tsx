@@ -1,10 +1,11 @@
 import { useCallback, useState } from 'react';
-import { BadgeCheck, Eye, Heart, ImageIcon, MessageCircle, Trash2, UserSearch } from 'lucide-react';
+import { BadgeCheck, Eye, Heart, MessageCircle, Trash2, UserSearch } from 'lucide-react';
 
 import { adminBirdyDeletePost, adminBirdyPosts } from '../adminApi';
-import { fmtTime, type AdminBirdyPost } from '../types';
+import { fmtTime, type AdminBirdyPost, type AdminContentMedia } from '../types';
 import { Badge, Btn, Card, CenterNote, ConfirmModal, Input, LoadMore, OnlineDot, Spinner } from '../ui';
 import { usePaged } from '../usePaged';
+import { MediaLightbox, MediaStrip } from './content/Media';
 
 export const BADGE_TINT: Record<string, string> = {
     blue: '#1d9bf0',
@@ -18,6 +19,9 @@ export function PostCard({ post, onOpenPlayer, onDelete, showAuthorIdentity = tr
     onDelete: (id: string) => void;
     showAuthorIdentity?: boolean;
 }) {
+    const [lightbox, setLightbox] = useState<number | null>(null);
+    const media: AdminContentMedia[] = (post.images ?? []).map(url => ({ url }));
+
     return (
         <div className="border-t border-white/[0.05] px-4 py-3 first:border-t-0">
             <div className="flex items-start justify-between gap-3">
@@ -40,13 +44,11 @@ export function PostCard({ post, onOpenPlayer, onDelete, showAuthorIdentity = tr
                     <div className="mt-1.5 whitespace-pre-wrap break-words text-[13px] leading-snug text-zinc-200">
                         {post.body || <span className="italic text-zinc-500">(no text)</span>}
                     </div>
+                    <MediaStrip media={media} className="mt-2" onOpen={setLightbox} />
                     <div className="mt-1.5 flex items-center gap-4 text-[11.5px] text-zinc-500">
                         <span className="inline-flex items-center gap-1"><Heart size={12} /> {post.likes}</span>
                         <span className="inline-flex items-center gap-1"><MessageCircle size={12} /> {post.replies}</span>
                         <span className="inline-flex items-center gap-1"><Eye size={12} /> {post.views}</span>
-                        {!!post.images?.length && (
-                            <span className="inline-flex items-center gap-1"><ImageIcon size={12} /> {post.images.length} image{post.images.length > 1 ? 's' : ''}</span>
-                        )}
                     </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
@@ -60,6 +62,16 @@ export function PostCard({ post, onOpenPlayer, onDelete, showAuthorIdentity = tr
                     </Btn>
                 </div>
             </div>
+
+            {lightbox !== null && (
+                <MediaLightbox
+                    media={media}
+                    index={lightbox}
+                    onIndex={setLightbox}
+                    onClose={() => setLightbox(null)}
+                    caption={<span className="font-semibold text-zinc-200">{post.display ?? post.authorName ?? 'Unknown'}</span>}
+                />
+            )}
         </div>
     );
 }

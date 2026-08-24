@@ -588,15 +588,32 @@ end
 -- newest-first on (ts, id) with an opaque "ts:id" cursor.
 -- ---------------------------------------------------------------------------
 
--- Adapter shape: { deletable: boolean, list: fun(ts, id, like, limit): rows, delete?: fun(id): removed }.
+-- Adapter shape: { deletable: boolean, list: fun(ts, id, like, limit): rows, delete?: fun(id): removed,
+-- thread?: { list: fun(id, limit): rows, delete?: fun(id): removed } }. `thread` is what one row
+-- expands into: the replies under a post, or the surrounding room and conversation lines around a
+-- message, which is the context a single line can never be judged without.
 ---@type table<string, table>
 local CONTENT = {}
+
+---@type integer Thread rows returned before the anchor row.
+local THREAD_BEFORE = 40
+---@type integer Thread rows returned after it, so the anchor stays near the end of a long log.
+local THREAD_AFTER = 15
+
+---Deletes one Dark Chat message and its reactions. Shared by the adapter's row delete and its
+---thread delete: both remove a row of the same table, so they stay one implementation.
+---@param id string|number message row id
+---@return integer removed
+local function deleteDarkchatMessage(id)
+    MySQL.update.await('DELETE FROM darkchat_reactions WHERE message_id = ?', { id })
+    return tonumber(MySQL.update.await('DELETE FROM darkchat_messages WHERE id = ?', { id })) or 0
+end
 
 CONTENT.messages = {
     deletable = false,
     list = function(ts, id, like, limit)
         return MySQL.query.await([[
-            SELECT id, created_at AS ts, citizenid AS author_cid, conversation, direction, kind, body
+            SELECT id, created_at AS ts, citizenid AS author_cid, conversation, direction, kind, body, meta
             FROM phone_messages
             WHERE direction = 'outgoing'
               AND (? IS NULL OR body LIKE ? OR conversation LIKE ?)
@@ -605,13 +622,46 @@ CONTENT.messages = {
             LIMIT ?
         ]], { like, like, like, ts, ts, ts, id, limit }) or {}
     end,
+    thread = {
+        -- Both sides of the conversation this text belongs to, incoming included: the list itself
+        -- only ever shows outgoing lines, which read as half a conversation.
+        list = function(id)
+            local anchor = MySQL.single.await(
+                'SELECT citizenid, conversation, created_at FROM phone_messages WHERE id = ?', { id })
+            if not anchor then return {} end
+
+            local before = MySQL.query.await([[
+                SELECT id, created_at AS ts, citizenid AS author_cid, conversation, direction, kind, body, meta
+                FROM phone_messages
+                WHERE citizenid = ? AND conversation = ?
+                  AND (created_at < ? OR (created_at = ? AND id <= ?))
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+            ]], { anchor.citizenid, anchor.conversation, anchor.created_at, anchor.created_at, id, THREAD_BEFORE }) or {}
+
+            local after = MySQL.query.await([[
+                SELECT id, created_at AS ts, citizenid AS author_cid, conversation, direction, kind, body, meta
+                FROM phone_messages
+                WHERE citizenid = ? AND conversation = ?
+                  AND (created_at > ? OR (created_at = ? AND id > ?))
+                ORDER BY created_at ASC, id ASC
+                LIMIT ?
+            ]], { anchor.citizenid, anchor.conversation, anchor.created_at, anchor.created_at, id, THREAD_AFTER }) or {}
+
+            local out = {}
+            for i = #before, 1, -1 do out[#out + 1] = before[i] end
+            for _, r in ipairs(after) do out[#out + 1] = r end
+            return out
+        end,
+    },
 }
 
 CONTENT.darkchat = {
     deletable = true,
     list = function(ts, id, like, limit)
         return MySQL.query.await([[
-            SELECT id, created_at AS ts, citizenid AS author_cid, room_id, author, kind, body
+            SELECT id, created_at AS ts, citizenid AS author_cid, room_id, author, kind, body, meta,
+                   (SELECT COUNT(*) FROM darkchat_reactions r WHERE r.message_id = darkchat_messages.id) AS likes
             FROM darkchat_messages
             WHERE (? IS NULL OR body LIKE ? OR author LIKE ? OR room_id LIKE ?)
               AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?))
@@ -619,17 +669,45 @@ CONTENT.darkchat = {
             LIMIT ?
         ]], { like, like, like, like, ts, ts, ts, id, limit }) or {}
     end,
-    delete = function(id)
-        MySQL.update.await('DELETE FROM darkchat_reactions WHERE message_id = ?', { id })
-        return tonumber(MySQL.update.await('DELETE FROM darkchat_messages WHERE id = ?', { id })) or 0
-    end,
+    delete = deleteDarkchatMessage,
+    thread = {
+        list = function(id)
+            local anchor = MySQL.single.await(
+                'SELECT room_id, created_at FROM darkchat_messages WHERE id = ?', { id })
+            if not anchor then return {} end
+
+            local before = MySQL.query.await([[
+                SELECT id, created_at AS ts, citizenid AS author_cid, room_id, author, kind, body, meta
+                FROM darkchat_messages
+                WHERE room_id = ? AND (created_at < ? OR (created_at = ? AND id <= ?))
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+            ]], { anchor.room_id, anchor.created_at, anchor.created_at, id, THREAD_BEFORE }) or {}
+
+            local after = MySQL.query.await([[
+                SELECT id, created_at AS ts, citizenid AS author_cid, room_id, author, kind, body, meta
+                FROM darkchat_messages
+                WHERE room_id = ? AND (created_at > ? OR (created_at = ? AND id > ?))
+                ORDER BY created_at ASC, id ASC
+                LIMIT ?
+            ]], { anchor.room_id, anchor.created_at, anchor.created_at, id, THREAD_AFTER }) or {}
+
+            local out = {}
+            for i = #before, 1, -1 do out[#out + 1] = before[i] end
+            for _, r in ipairs(after) do out[#out + 1] = r end
+            return out
+        end,
+        delete = deleteDarkchatMessage,
+    },
 }
 
 CONTENT.photogram = {
     deletable = true,
     list = function(ts, id, like, limit)
         return MySQL.query.await(([[
-            SELECT p.id, p.created_at AS ts, %s AS author_cid, p.author, p.caption AS body, p.images
+            SELECT p.id, p.created_at AS ts, %s AS author_cid, p.author, p.caption AS body, p.images,
+                   (SELECT COUNT(*) FROM phone_photogram_likes l WHERE l.post_id = p.id) AS likes,
+                   (SELECT COUNT(*) FROM phone_photogram_comments c WHERE c.post_id = p.id) AS comments
             FROM phone_photogram_posts p
             WHERE (? IS NULL OR p.caption LIKE ? OR p.author LIKE ?)
               AND (? IS NULL OR p.created_at < ? OR (p.created_at = ? AND p.id < ?))
@@ -638,6 +716,22 @@ CONTENT.photogram = {
         ]]):format(SESSION_CID:format('photogram', 'p.author')),
             { like, like, like, ts, ts, ts, id, limit }) or {}
     end,
+    thread = {
+        list = function(id, limit)
+            return MySQL.query.await(([[
+                SELECT c.id, c.created_at AS ts, %s AS author_cid, c.author, c.body, c.gif_url,
+                       (SELECT COUNT(*) FROM phone_photogram_comment_likes l WHERE l.comment_id = c.id) AS likes
+                FROM phone_photogram_comments c
+                WHERE c.post_id = ?
+                ORDER BY c.created_at ASC, c.id ASC
+                LIMIT ?
+            ]]):format(SESSION_CID:format('photogram', 'c.author')), { id, limit }) or {}
+        end,
+        delete = function(id)
+            MySQL.update.await('DELETE FROM phone_photogram_comment_likes WHERE comment_id = ?', { id })
+            return tonumber(MySQL.update.await('DELETE FROM phone_photogram_comments WHERE id = ?', { id })) or 0
+        end,
+    },
     delete = function(id)
         MySQL.update.await('DELETE FROM phone_photogram_comment_likes WHERE comment_id IN (SELECT id FROM phone_photogram_comments WHERE post_id = ?)', { id })
         MySQL.update.await('DELETE FROM phone_photogram_comments WHERE post_id = ?', { id })
@@ -652,7 +746,9 @@ CONTENT.vibez = {
     list = function(ts, id, like, limit)
         return MySQL.query.await(([[
             SELECT p.id, p.created_at AS ts, %s AS author_cid, p.author, p.caption AS body,
-                   p.sound AS title, 'video' AS kind
+                   p.sound AS title, 'video' AS kind, p.video, p.thumb, p.views,
+                   (SELECT COUNT(*) FROM phone_vibez_likes l WHERE l.post_id = p.id) AS likes,
+                   (SELECT COUNT(*) FROM phone_vibez_comments c WHERE c.post_id = p.id) AS comments
             FROM phone_vibez_posts p
             WHERE (? IS NULL OR p.caption LIKE ? OR p.author LIKE ?)
               AND (? IS NULL OR p.created_at < ? OR (p.created_at = ? AND p.id < ?))
@@ -661,6 +757,22 @@ CONTENT.vibez = {
         ]]):format(SESSION_CID:format('vibez', 'p.author')),
             { like, like, like, ts, ts, ts, id, limit }) or {}
     end,
+    thread = {
+        list = function(id, limit)
+            return MySQL.query.await(([[
+                SELECT c.id, c.created_at AS ts, %s AS author_cid, c.author, c.body, c.gif_url,
+                       (SELECT COUNT(*) FROM phone_vibez_comment_likes l WHERE l.comment_id = c.id) AS likes
+                FROM phone_vibez_comments c
+                WHERE c.post_id = ?
+                ORDER BY c.created_at ASC, c.id ASC
+                LIMIT ?
+            ]]):format(SESSION_CID:format('vibez', 'c.author')), { id, limit }) or {}
+        end,
+        delete = function(id)
+            MySQL.update.await('DELETE FROM phone_vibez_comment_likes WHERE comment_id = ?', { id })
+            return tonumber(MySQL.update.await('DELETE FROM phone_vibez_comments WHERE id = ?', { id })) or 0
+        end,
+    },
     delete = function(id)
         MySQL.update.await('DELETE FROM phone_vibez_comment_likes WHERE comment_id IN (SELECT id FROM phone_vibez_comments WHERE post_id = ?)', { id })
         MySQL.update.await('DELETE FROM phone_vibez_comments WHERE post_id = ?', { id })
@@ -675,7 +787,7 @@ CONTENT.cherry = {
     list = function(ts, id, like, limit)
         return MySQL.query.await(([[
             SELECT p.username AS id, p.updated_at AS ts, %s AS author_cid, p.username,
-                   p.name, p.age, p.gender, p.about AS body
+                   p.name, p.age, p.gender, p.about AS body, p.photos
             FROM phone_cherry_profiles p
             WHERE (? IS NULL OR p.username LIKE ? OR p.name LIKE ? OR p.about LIKE ?)
               AND (? IS NULL OR p.updated_at < ? OR (p.updated_at = ? AND p.username < ?))
@@ -736,13 +848,62 @@ end
 CONTENT.marketplace = classifieds('marketplace_listings')
 CONTENT.pages       = classifieds('pages_posts')
 
----Whether an app id has a content adapter, and whether its rows can be deleted.
+---Whether an app id has a content adapter, whether its rows can be deleted, and whether a row
+---expands into a thread the panel can open.
 ---@param app string
----@return boolean known, boolean deletable
+---@return boolean known, boolean deletable, boolean threaded
 function store.contentInfo(app)
     local adapter = CONTENT[app]
-    if not adapter then return false, false end
-    return true, adapter.deletable
+    if not adapter then return false, false, false end
+    return true, adapter.deletable, adapter.thread ~= nil
+end
+
+---@type integer Hardest cap on media carried per row, so one absurd post cannot bloat a page.
+local MAX_MEDIA = 12
+
+---Every media reference on one adapter row: a JSON `images`/`photos` array, a single `image`,
+---`url` or `gif_url` column, or a `video` with its poster frame. Returns an empty table when the
+---row carries none, so the panel never has to null-check. `images` arrives as a JSON string from
+---TEXT columns and can arrive pre-decoded from a real JSON column, so both are accepted.
+---@param r table raw adapter row
+---@return table[] media { url = string, video = string|nil }
+local function mediaOf(r)
+    local out = {}
+
+    local function push(url, video)
+        if type(url) ~= 'string' or url == '' or #out >= MAX_MEDIA then return end
+        out[#out + 1] = { url = url, video = video }
+    end
+
+    for _, column in ipairs({ r.images or false, r.photos or false }) do
+        local list = column
+        if type(list) == 'string' and list ~= '' then
+            local okJson, decoded = pcall(json.decode, list)
+            list = okJson and decoded or nil
+        end
+        if type(list) == 'table' then
+            for _, url in ipairs(list) do push(url) end
+        end
+    end
+
+    -- Only when the JSON array held nothing: classifieds write the same picture to both columns.
+    if #out == 0 then push(r.image) end
+    push(r.url)
+    push(r.gif_url)
+
+    -- Texts and Dark Chat lines keep an attached picture in meta.gifUrl rather than a column of
+    -- its own, so an image message reads as "(no text)" without this.
+    local meta = r.meta
+    if type(meta) == 'string' and meta ~= '' then
+        local okMeta, decoded = pcall(json.decode, meta)
+        meta = okMeta and decoded or nil
+    end
+    if type(meta) == 'table' then push(meta.gifUrl) end
+
+    if type(r.video) == 'string' and r.video ~= '' then
+        push((type(r.thumb) == 'string' and r.thumb ~= '') and r.thumb or r.video, r.video)
+    end
+    return out
 end
 
 ---One page of an app's content, normalized. Read-only.
@@ -766,12 +927,7 @@ function store.listContent(app, cursor, limit, query)
 
     local items = {}
     for i, r in ipairs(rows) do
-        local images = nil
-        if r.images then
-            local decoded = json.decode(r.images)
-            if type(decoded) == 'table' then images = #decoded end
-        end
-        if (not images or images == 0) and r.image then images = 1 end
+        local media = mediaOf(r)
         items[i] = {
             id        = tostring(r.id),
             createdAt = tonumber(r.ts),
@@ -779,8 +935,12 @@ function store.listContent(app, cursor, limit, query)
             kind      = r.kind,
             title     = r.title,
             body      = r.body,
-            images    = images,
-            imageUrl  = r.url,
+            media     = media,
+            images    = #media > 0 and #media or nil,
+            imageUrl  = media[1] and media[1].url or nil,
+            likes     = tonumber(r.likes),
+            comments  = tonumber(r.comments),
+            views     = tonumber(r.views),
             price     = r.price and tonumber(r.price) or nil,
             label     = r.room_id and ('#' .. r.room_id .. ' as ' .. tostring(r.author))
                 or (r.author and ('@' .. r.author))
@@ -798,6 +958,51 @@ end
 ---@return integer removed
 function store.deleteContent(app, id)
     return CONTENT[app].delete(id)
+end
+
+---@type integer Most thread rows one expansion returns, before plus after the anchor.
+local THREAD_LIMIT = THREAD_BEFORE + THREAD_AFTER
+
+---What one content row expands into, oldest first: the replies under a post, or the room and
+---conversation lines around a message. The row the thread was opened from is flagged `anchor`
+---so the panel can mark it in a wall of surrounding context.
+---@param app string adapter key (validated + threaded-checked by the caller)
+---@param id string anchor row id
+---@return table[] items
+function store.contentThread(app, id)
+    local rows = CONTENT[app].thread.list(id, THREAD_LIMIT) or {}
+    local items = {}
+    for i, r in ipairs(rows) do
+        items[i] = {
+            id        = tostring(r.id),
+            createdAt = tonumber(r.ts),
+            authorCid = r.author_cid,
+            handle    = r.author,
+            body      = r.body,
+            kind      = r.kind,
+            direction = r.direction,
+            media     = mediaOf(r),
+            likes     = tonumber(r.likes),
+            anchor    = tostring(r.id) == tostring(id) or nil,
+        }
+    end
+    return items
+end
+
+---Whether an app's thread rows can be deleted one at a time.
+---@param app string adapter key
+---@return boolean
+function store.threadDeletable(app)
+    local adapter = CONTENT[app]
+    return adapter ~= nil and adapter.thread ~= nil and adapter.thread.delete ~= nil
+end
+
+---Deletes one row inside a thread: a comment, or a single line of a room log.
+---@param app string adapter key (validated + threadDeletable-checked by the caller)
+---@param id string thread row id
+---@return integer removed
+function store.deleteThreadItem(app, id)
+    return CONTENT[app].thread.delete(id)
 end
 
 -- ---------------------------------------------------------------------------
@@ -850,6 +1055,116 @@ function store.stats()
         messages    = count('SELECT COUNT(*) FROM phone_messages'),
         activeMutes = count(('SELECT COUNT(*) FROM phone_admin_mutes WHERE expires_at IS NULL OR expires_at > %d'):format(os.time())),
     }
+end
+
+---Every image and clip posted anywhere on the phone, newest first, as one merged wall.
+---
+---Each app is queried on its own and the results are merged in Lua rather than UNIONed in SQL:
+---the tables disagree on column names, on how they store a timestamp, and Squawk keeps a JSON
+---array where the others keep a single URL. A per-app pcall means an app whose table this server
+---never created drops out of the wall instead of emptying it.
+---@param limit? integer rows per app before merging (default 40)
+---@return table[] rows { app, url, author, createdAt, id }
+function store.mediaWall(limit)
+    local n = math.floor(tonumber(limit) or 40)
+    local out = {}
+
+    local function pull(app, sql, shape)
+        local okQuery, rows = pcall(MySQL.query.await, (sql):format(n))
+        if not okQuery or not rows then return end
+        for _, r in ipairs(rows) do shape(r) end
+    end
+
+    pull('photos', [[
+        SELECT id, url, citizenid, UNIX_TIMESTAMP(created_at) AS ts
+        FROM phone_photos ORDER BY created_at DESC LIMIT %d
+    ]], function(r)
+        out[#out + 1] = { app = 'photos', id = r.id, url = r.url, author = r.citizenid, createdAt = tonumber(r.ts) or 0 }
+    end)
+
+    pull('clout', [[
+        SELECT id, video, thumb, author, created_at AS ts
+        FROM phone_vibez_posts ORDER BY created_at DESC LIMIT %d
+    ]], function(r)
+        out[#out + 1] = { app = 'clout', id = r.id, url = r.thumb ~= '' and r.thumb or r.video,
+                          video = r.video, author = r.author, createdAt = tonumber(r.ts) or 0 }
+    end)
+
+    pull('photogram', [[
+        SELECT id, media, username, UNIX_TIMESTAMP(timestamp) AS ts
+        FROM phone_instagram_posts ORDER BY timestamp DESC LIMIT %d
+    ]], function(r)
+        out[#out + 1] = { app = 'photogram', id = tostring(r.id), url = r.media, author = r.username, createdAt = tonumber(r.ts) or 0 }
+    end)
+
+    pull('squawk', [[
+        SELECT id, images, author, UNIX_TIMESTAMP(created_at) AS ts
+        FROM phone_birdy_posts WHERE images IS NOT NULL AND images <> '' ORDER BY created_at DESC LIMIT %d
+    ]], function(r)
+        local okJson, list = pcall(json.decode, r.images)
+        if not okJson or type(list) ~= 'table' then return end
+        for _, url in ipairs(list) do
+            out[#out + 1] = { app = 'squawk', id = r.id, url = url, author = r.author, createdAt = tonumber(r.ts) or 0 }
+        end
+    end)
+
+    table.sort(out, function(a, b) return a.createdAt > b.createdAt end)
+    return out
+end
+
+---@type integer How many days of history the dashboard charts cover.
+local TREND_DAYS = 14
+
+---@type { key: string, tbl: string, col: string, unix: boolean }[] One entry per charted series.
+---`unix` marks a column stored as epoch seconds rather than a TIMESTAMP, which the two tables
+---below disagree on - phone_messages counts seconds, phone_birdy_posts holds a real timestamp.
+local TREND_SERIES = {
+    { key = 'messages',   tbl = 'phone_messages',      col = 'created_at', unix = true  },
+    { key = 'calls',      tbl = 'phone_calls',         col = 'called_at',  unix = true  },
+    { key = 'birdyPosts', tbl = 'phone_birdy_posts',   col = 'created_at', unix = false },
+    { key = 'cloutPosts', tbl = 'phone_vibez_posts',   col = 'created_at', unix = true  },
+    { key = 'photos',     tbl = 'phone_photos',        col = 'created_at', unix = false },
+    { key = 'accounts',   tbl = 'phone_app_accounts',  col = 'created_at', unix = false },
+}
+
+---Daily counts per series for the last TREND_DAYS days, oldest first and zero-filled, so the
+---panel can draw a line without knowing which days had no rows.
+---
+---Each series is pcall-guarded on its own: an app whose table this server has never created
+---returns an empty line instead of taking the whole dashboard down with it.
+---@return table<string, integer[]> series key -> one count per day
+---@return string[] days ISO dates matching the arrays, oldest first
+function store.trends()
+    local days = {}
+    local now  = os.time()
+    for i = TREND_DAYS - 1, 0, -1 do
+        days[#days + 1] = os.date('%Y-%m-%d', now - i * 86400)
+    end
+
+    local out = {}
+    for _, s in ipairs(TREND_SERIES) do
+        local line = {}
+        for i = 1, TREND_DAYS do line[i] = 0 end
+
+        local okQuery, rows = pcall(function()
+            local where = s.unix
+                and ('%s >= UNIX_TIMESTAMP(CURDATE() - INTERVAL %d DAY)'):format(s.col, TREND_DAYS - 1)
+                or  ('%s >= CURDATE() - INTERVAL %d DAY'):format(s.col, TREND_DAYS - 1)
+            local bucket = s.unix and ('DATE(FROM_UNIXTIME(%s))'):format(s.col) or ('DATE(%s)'):format(s.col)
+            return MySQL.query.await(('SELECT %s AS d, COUNT(*) AS n FROM %s WHERE %s GROUP BY d')
+                :format(bucket, s.tbl, where))
+        end)
+
+        if okQuery and rows then
+            local byDay = {}
+            for _, r in ipairs(rows) do byDay[tostring(r.d):sub(1, 10)] = tonumber(r.n) or 0 end
+            for i = 1, TREND_DAYS do line[i] = byDay[days[i]] or 0 end
+        end
+
+        out[s.key] = line
+    end
+
+    return out, days
 end
 
 return store
