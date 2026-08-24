@@ -997,32 +997,6 @@ CONTENT.weazelnews = {
     end,
 }
 
-CONTENT.review = {
-    deletable = true,
-    source = { table = 'phone_review_reviews', lost = 'its helpful votes' },
-    list = function(ts, id, like, limit)
-        return MySQL.query.await([[
-            SELECT r.id, r.created_at AS ts, r.citizenid AS author_cid, r.author, r.business_id,
-                   r.rating, r.body, r.image,
-                   (SELECT COUNT(*) FROM phone_review_helpful h WHERE h.review_id = r.id) AS likes
-            FROM phone_review_reviews r
-            WHERE (? IS NULL OR r.body LIKE ? OR r.author LIKE ? OR r.business_id LIKE ?)
-              AND (? IS NULL OR r.created_at < ? OR (r.created_at = ? AND r.id < ?))
-            ORDER BY r.created_at DESC, r.id DESC
-            LIMIT ?
-        ]], { like, like, like, like, ts, ts, ts, id, limit }) or {}
-    end,
-    delete = function(id)
-        MySQL.update.await('DELETE FROM phone_review_helpful WHERE review_id = ?', { id })
-        return tonumber(MySQL.update.await('DELETE FROM phone_review_reviews WHERE id = ?', { id })) or 0
-    end,
-    shape = function(item, row)
-        item.title = row.business_id
-        local rating = tonumber(row.rating) or 0
-        item.label  = rating > 0 and (rating .. '/5') or nil
-    end,
-}
-
 CONTENT.notes = {
     deletable = false,
     -- Notes stamp themselves with an ISO string, so the epoch the cursor needs is derived in SQL

@@ -28,7 +28,7 @@ return {
     -- tab instead, where the filter does reach message bodies.
     Apps = {
         'birdy', 'messages', 'darkchat', 'photogram', 'vibez',
-        'marketplace', 'pages', 'cherry', 'review', 'weazelnews', 'notes',
+        'marketplace', 'pages', 'cherry', 'weazelnews', 'notes',
     },
 
     -- Rules, checked against the lowercased text of each row.

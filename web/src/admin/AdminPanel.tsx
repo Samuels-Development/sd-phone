@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
     Bird, Camera, Clapperboard, DatabaseZap, FileText, Flag, Flame, Hash, Images, LayoutDashboard, Mail, Map,
-    MessageSquare, Mic, Newspaper, Rss, ScrollText, Search, ShieldCheck, ShoppingBag, Skull, Star, StickyNote,
+    MessageSquare, Mic, Newspaper, Rss, ScrollText, Search, ShieldCheck, ShoppingBag, Skull, StickyNote,
     Trash2, TriangleAlert, Users, VolumeX, X,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -28,7 +28,7 @@ import { ToastHost, useToasts } from './ui';
 type PageId =
     | 'dashboard' | 'media' | 'map' | 'players' | 'numbers' | 'flags' | 'mutes' | 'bin' | 'audit' | 'migration' | 'birdy'
     | 'messages' | 'darkchat' | 'photogram' | 'vibez' | 'cherry' | 'marketplace' | 'pages' | 'gallery' | 'racing'
-    | 'mail' | 'documents' | 'weazelnews' | 'review' | 'notes' | 'voicememos' | 'groups';
+    | 'mail' | 'documents' | 'weazelnews' | 'notes' | 'voicememos' | 'groups';
 
 interface NavItem { id: PageId; label: string; icon: React.ReactNode }
 
@@ -56,7 +56,6 @@ const NAV_APPS: NavItem[] = [
     { id: 'marketplace', label: 'Marketplace', icon: <ShoppingBag size={15} /> },
     { id: 'pages',       label: 'Pages',       icon: <Newspaper size={15} /> },
     { id: 'weazelnews',  label: 'Weazel News', icon: <Rss size={15} /> },
-    { id: 'review',      label: 'Reviews',     icon: <Star size={15} /> },
     { id: 'documents',   label: 'Documents',   icon: <FileText size={15} /> },
     { id: 'notes',       label: 'Notes',       icon: <StickyNote size={15} /> },
     { id: 'voicememos',  label: 'Voice memos', icon: <Mic size={15} /> },
@@ -89,7 +88,6 @@ const PAGE_TITLE: Record<PageId, string> = {
     mail:        'Mail — mailboxes and their messages',
     documents:   'Documents — files and who signed them',
     weazelnews:  'Weazel News — published articles',
-    review:      'Reviews — business ratings',
     notes:       'Notes (read-only)',
     voicememos:  'Voice memos',
     groups:      'Groups',
@@ -108,7 +106,6 @@ const CONTENT_PAGES: Record<string, { search: string; empty: string; deleteBody:
     mail:        { search: 'Filter mailboxes by address, name or message text', empty: 'No mailboxes yet.',     deleteBody: '',                                                             thread: 'Messages' },
     documents:   { search: 'Filter documents by name, content or citizen ID',   empty: 'No documents yet.',     deleteBody: 'The document goes to the Recycle bin for 30 days. The signatures on it do not come back.', thread: 'Signatures' },
     weazelnews:  { search: 'Filter articles by headline, body or author', empty: 'No articles published yet.',  deleteBody: 'The article goes to the Recycle bin for 30 days.',                          thread: '' },
-    review:      { search: 'Filter reviews by text, author or business',  empty: 'No reviews yet.',             deleteBody: 'The review goes to the Recycle bin for 30 days. Its helpful votes do not come back.',    thread: '' },
     notes:       { search: 'Filter notes by content or citizen ID',       empty: 'No notes yet.',               deleteBody: '',                                                             thread: '' },
     voicememos:  { search: 'Filter memos by name or citizen ID',          empty: 'No voice memos yet.',         deleteBody: 'The recording goes to the Recycle bin for 30 days.',                        thread: '' },
     groups:      { search: 'Filter groups by name or leader',             empty: 'No groups yet.',              deleteBody: '',                                                             thread: '' },

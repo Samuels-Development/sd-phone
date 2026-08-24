@@ -9,7 +9,7 @@ import { usePaged } from '../usePaged';
 const APP_LABEL: Record<string, string> = {
     darkchat: 'Dark Chat', photogram: 'Photogram', vibez: 'Clout', marketplace: 'Marketplace',
     pages: 'Pages', gallery: 'Gallery', documents: 'Documents', weazelnews: 'Weazel News',
-    review: 'Reviews', voicememos: 'Voice memos',
+    voicememos: 'Voice memos',
 };
 
 export function BinPage({ onOpenPlayer, toast }: {

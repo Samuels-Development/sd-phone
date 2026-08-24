@@ -282,7 +282,6 @@ const CONTENT: Record<string, { label: string; titles: string[]; bodies: string[
     mail:        { label: 'Mailbox', titles: ['sam.black@ls.mail', 'dana.k@ls.mail', 'm.reyes@ls.mail', 'tola@weazel.mail', 'jonas.l@ls.mail', 'priya.r@ls.mail'], bodies: ['Samuel Black', 'Dana Kovac', 'Marcus Reyes', 'Tola Okafor', 'Jonas Lindqvist', 'Priya Raman'] },
     documents:   { label: 'text',    titles: ['Sale of vehicle', 'Tenancy agreement', 'Employment contract', 'Bill of sale', 'NDA', 'Insurance claim'], bodies: ['Both parties agree the vehicle is sold as seen.', 'Twelve months, rent payable monthly.', 'Full time, probation of thirty days.', 'Received in full, no balance owing.', 'Neither party will disclose the terms.', 'Claim submitted for the damage on Elgin.'] },
     weazelnews:  { label: 'City',    titles: ['Docks closed after overnight raid', 'Third street race this week ends in arrests', 'Mayor announces transit funding', 'Vinewood gallery opens to crowds', 'Hospital wing reopens', 'Storm warning issued for the coast'], bodies: ['Officers moved in shortly after two in the morning.', 'Residents say the noise has become nightly.', 'The plan covers two new lines.', 'The opening drew several hundred visitors.', 'Capacity is up by forty beds.', 'Sailings are suspended until further notice.'], imaged: true },
-    review:      { label: '4/5',     titles: ['Bean Machine', 'Los Santos Customs', 'Pearls', 'Ammu-Nation', 'Vanilla Unicorn', 'Burger Shot'], bodies: ['Coffee was fine, service was slow.', 'Quick turnaround, fair price.', 'Best table in the city, book ahead.', 'Staff knew what they were talking about.', 'Loud, but that is the point.', 'Exactly what you expect.'], imaged: true },
     notes:       { label: 'Note',    titles: [], bodies: ['dock code 4471', 'ask Dana about the engine', 'shopping: oil, filter, plugs', 'meet Thursday 9pm', 'do not lend the van again', 'plate: 46FGH921'] },
     voicememos:  { label: '0:42',    titles: ['Voice memo 1', 'Interview', 'Song idea', 'Reminder', 'Meeting notes', 'Voice memo 6'], bodies: [] },
     groups:      { label: '5 members', titles: ['Popular St Crew', 'Night Runners', 'Weazel City Desk', 'EMS Shift B', 'Tunnel Rats', 'Sunday Drivers'], bodies: [] },
@@ -292,7 +291,7 @@ const THREADED = new Set(['messages', 'darkchat', 'photogram', 'vibez', 'mail', 
 
 const UNDELETABLE = new Set(['messages', 'cherry', 'mail', 'notes', 'groups']);
 
-const LIKED = new Set(['darkchat', 'photogram', 'vibez', 'review']);
+const LIKED = new Set(['darkchat', 'photogram', 'vibez']);
 
 const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA=';
 
