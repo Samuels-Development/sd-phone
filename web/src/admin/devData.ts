@@ -1,5 +1,6 @@
 import type {
     AdminAuditEntry, AdminBirdyPost, AdminCall, AdminContentItem, AdminContentMedia,
+    AdminFlag, AdminFlagStatus,
     AdminLivePlayer, AdminMediaItem,
     AdminMessage, AdminMute, AdminNumberRow, AdminOverview, AdminPlayerHit, AdminSimLookup, AdminStats,
     AdminThreadItem,
@@ -67,6 +68,7 @@ export const DEV_STATS: AdminStats = {
     birdyPosts:  128,
     messages:    2417,
     activeMutes: 3,
+    openFlags:   5,
     online:      DEV_PLAYERS.filter(p => p.online).length,
     days:        DEV_DAYS,
     trends: {
@@ -420,6 +422,43 @@ export function devThread(app: string, id: string): { items: AdminThreadItem[]; 
     });
 
     return { items, deletable: app !== 'messages' };
+}
+
+const FLAG_SEED: [string, string, string, string, string][] = [
+    ['birdy',       'ooc-contact', 'Out-of-character contact', 'discord.gg/', 'join the discord.gg/lsrp we run the real races there'],
+    ['darkchat',    'real-money',  'Real-money trading',       'paypal',      'can do 40 paypal for the whole crate, dm me'],
+    ['marketplace', 'real-money',  'Real-money trading',       'cash app',    'selling the Sultan, taking cash app only, no in game money'],
+    ['messages',    'ooc-contact', 'Out-of-character contact', 'teamspeak',   'get on teamspeak, easier than typing all this'],
+    ['photogram',   'ooc-contact', 'Out-of-character contact', 'discord.gg/', 'full album on discord.gg/lscar meets every friday'],
+    ['pages',       'real-money',  'Real-money trading',       'venmo',       'apartment sublet, venmo the deposit and its yours'],
+    ['vibez',       'ooc-contact', 'Out-of-character contact', 'twitch.tv',   'live now on twitch.tv, come watch the tunnel run'],
+];
+
+export function devFlags(status: string): { flags: AdminFlag[]; nextCursor: null; openCount: number } {
+    const all: AdminFlag[] = FLAG_SEED.map(([app, ruleId, ruleLabel, matched, excerpt], i) => {
+        const p = DEV_PLAYERS[i % DEV_PLAYERS.length];
+        const state: AdminFlagStatus = i === 5 ? 'actioned' : i === 6 ? 'dismissed' : 'open';
+        return {
+            id:           520 - i,
+            app,
+            targetId:     `${app}-${i + 1}`,
+            ruleId,
+            ruleLabel,
+            matched,
+            authorCid:    p.citizenid,
+            authorName:   p.name,
+            authorOnline: p.online,
+            excerpt,
+            status:       state,
+            handledName:  state === 'open' ? null : 'S. Nicol',
+            handledAt:    state === 'open' ? null : ago(2 * HOUR),
+            createdAt:    ago(i * 5 * HOUR + HOUR),
+        };
+    });
+
+    const openCount = all.filter(f => f.status === 'open').length;
+    const shown = status === 'all' ? all : all.filter(f => f.status === status);
+    return { flags: shown, nextCursor: null, openCount };
 }
 
 const AUDIT_ACTIONS: [string, string][] = [

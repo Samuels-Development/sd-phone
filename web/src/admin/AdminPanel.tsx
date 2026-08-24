@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
     Bird, Camera, Clapperboard, DatabaseZap, FileText, Flag, Flame, Hash, Images, LayoutDashboard, Mail, Map,
     MessageSquare, Mic, Newspaper, Rss, ScrollText, Search, ShieldCheck, ShoppingBag, Skull, Star, StickyNote,
-    Users, VolumeX, X,
+    TriangleAlert, Users, VolumeX, X,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -13,6 +13,7 @@ import { AuditPage } from './pages/AuditPage';
 import { BirdyPage } from './pages/BirdyPage';
 import { ContentPage } from './pages/ContentPage';
 import { Dashboard } from './pages/Dashboard';
+import { FlagsPage } from './pages/FlagsPage';
 import { MediaPage } from './pages/MediaPage';
 import { MapPage } from './pages/MapPage';
 import { MigrationPage } from './pages/MigrationPage';
@@ -24,7 +25,7 @@ import { PlayersPage } from './pages/PlayersPage';
 import { ToastHost, useToasts } from './ui';
 
 type PageId =
-    | 'dashboard' | 'media' | 'map' | 'players' | 'numbers' | 'mutes' | 'audit' | 'migration' | 'birdy'
+    | 'dashboard' | 'media' | 'map' | 'players' | 'numbers' | 'flags' | 'mutes' | 'audit' | 'migration' | 'birdy'
     | 'messages' | 'darkchat' | 'photogram' | 'vibez' | 'cherry' | 'marketplace' | 'pages' | 'gallery' | 'racing'
     | 'mail' | 'documents' | 'weazelnews' | 'review' | 'notes' | 'voicememos' | 'groups';
 
@@ -36,6 +37,7 @@ const NAV_MAIN: NavItem[] = [
     { id: 'map',       label: 'Live map',  icon: <Map size={15} /> },
     { id: 'players',   label: 'Players',   icon: <Search size={15} /> },
     { id: 'numbers',   label: 'Numbers',   icon: <Hash size={15} /> },
+    { id: 'flags',     label: 'Flags',     icon: <TriangleAlert size={15} /> },
     { id: 'mutes',     label: 'Mutes',     icon: <VolumeX size={15} /> },
     { id: 'audit',     label: 'Audit log', icon: <ScrollText size={15} /> },
     { id: 'migration', label: 'Migration', icon: <DatabaseZap size={15} /> },
@@ -67,6 +69,7 @@ const PAGE_TITLE: Record<PageId, string> = {
     map:         'Live map - players online now',
     players:     'Players',
     numbers:     'Numbers — SIM registry',
+    flags:       'Flags — watchlist queue',
     birdy:       'Squawk moderation',
     mutes:       'Active mutes',
     audit:       'Audit log',
@@ -160,6 +163,14 @@ export function AdminPanel() {
         setPage('gallery');
     }, []);
 
+    const [contentSeed, setContentSeed] = useState<{ app: string; q: string } | null>(null);
+    const openContent = useCallback((app: string, q: string) => {
+        setContentSeed({ app, q });
+        setPage(app as PageId);
+    }, []);
+
+    const [openFlags, setOpenFlags] = useState(0);
+
     if (!open) return null;
 
     const renderNavItem = (item: NavItem) => {
@@ -168,7 +179,12 @@ export function AdminPanel() {
             <button
                 key={item.id}
                 type="button"
-                onClick={() => { setPage(item.id); if (item.id !== 'players') setPlayerCid(null); if (item.id === 'gallery') setGallerySeed(''); }}
+                onClick={() => {
+                    setPage(item.id);
+                    if (item.id !== 'players') setPlayerCid(null);
+                    if (item.id === 'gallery') setGallerySeed('');
+                    if (item.id !== contentSeed?.app) setContentSeed(null);
+                }}
                 className={clsx(
                     'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors',
                     active ? 'bg-ios-blue/15 text-[#6db4ff]' : 'text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200',
@@ -176,6 +192,11 @@ export function AdminPanel() {
             >
                 {item.icon}
                 {item.label}
+                {item.id === 'flags' && openFlags > 0 && (
+                    <span className="ml-auto rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[10.5px] font-bold tabular-nums text-amber-300">
+                        {openFlags}
+                    </span>
+                )}
             </button>
         );
     };
@@ -251,16 +272,31 @@ export function AdminPanel() {
                         {page === 'media' && <MediaPage onOpenPlayer={openPlayer} />}
                         {page === 'map' && <MapPage onOpenPlayer={openPlayer} />}
                         {page === 'numbers' && <NumbersPage onOpenPlayer={openPlayer} />}
-                        {page === 'birdy' && <BirdyPage onOpenPlayer={openPlayer} toast={push} />}
+                        {page === 'birdy' && (
+                            <BirdyPage
+                                key={contentSeed?.app === 'birdy' ? `birdy:${contentSeed.q}` : 'birdy'}
+                                initialQuery={contentSeed?.app === 'birdy' ? contentSeed.q : undefined}
+                                onOpenPlayer={openPlayer}
+                                toast={push}
+                            />
+                        )}
                         {page === 'mutes' && <MutesPage onOpenPlayer={openPlayer} toast={push} />}
                         {page === 'audit' && <AuditPage onOpenPlayer={openPlayer} />}
+                        {page === 'flags' && (
+                            <FlagsPage
+                                onOpenPlayer={openPlayer}
+                                onOpenContent={openContent}
+                                onCount={setOpenFlags}
+                                toast={push}
+                            />
+                        )}
                         {page === 'racing' && <RacingPage onToast={push} />}
                         {page === 'migration' && <MigrationPage toast={push} />}
                         {contentCfg && (
                             <ContentPage
-                                key={page === 'gallery' ? `gallery:${gallerySeed}` : page}
+                                key={page === 'gallery' ? `gallery:${gallerySeed}` : contentSeed?.app === page ? `${page}:${contentSeed.q}` : page}
                                 app={page}
-                                initialQuery={page === 'gallery' ? gallerySeed : undefined}
+                                initialQuery={page === 'gallery' ? gallerySeed : contentSeed?.app === page ? contentSeed.q : undefined}
                                 searchPlaceholder={contentCfg.search}
                                 emptyLabel={contentCfg.empty}
                                 deleteBody={contentCfg.deleteBody}

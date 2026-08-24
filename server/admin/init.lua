@@ -7,6 +7,10 @@ local permissions = require 'server.admin.permissions'
 local store       = require 'server.admin.store'
 ---@type table Mute registry (server.admin.moderation): schema bootstrap.
 local moderation  = require 'server.admin.moderation'
+---@type table Watchlist queue (server.admin.flags): schema bootstrap + the sweep.
+local flags       = require 'server.admin.flags'
+---@type table Watchlist config (configs/moderation.lua): sweep cadence.
+local modConfig   = require 'configs.moderation'
 ---@type table Authoritative admin handlers (server.admin.actions): validation + all mutation.
 local actions     = require 'server.admin.actions'
 local util        = require 'server.util'
@@ -18,12 +22,27 @@ CreateThread(function()
     local okSchema, err = pcall(function()
         store.ensureSchema()
         moderation.ensureSchema()
+        flags.ensureSchema()
     end)
     if not okSchema then
         boot.schemaFailed('admin', err)
         return
     end
     boot.schemaReady()
+end)
+
+---The keyword sweep on its timer. It is deliberately started after a delay and run inside a pcall:
+---it is a background convenience, so a bad pattern in an operator's config costs the sweep and
+---nothing else. Setting SweepMinutes to 0 leaves scanning to the panel's button.
+CreateThread(function()
+    local minutes = tonumber(modConfig.SweepMinutes) or 0
+    if modConfig.Enabled ~= true or minutes <= 0 then return end
+
+    Wait(60000)
+    while true do
+        pcall(flags.sweep)
+        Wait(minutes * 60000)
+    end
 end)
 
 ---Registers one admin callback behind the server-side permission gate. The gate runs on every
@@ -125,6 +144,9 @@ reg('unmute',               actions.unmute, 'moderate')
 reg('mutes',                actions.mutes, 'view')
 reg('wipePhone',            actions.wipePhone, 'destroy')
 reg('audit',                actions.audit, 'view')
+reg('flags',                actions.flags, 'view')
+reg('flagsScan',            actions.flagsScan, 'view')
+reg('flagResolve',          actions.flagResolve, 'moderate')
 reg('stats',                actions.stats, 'view')
 reg('media',                actions.media, 'view')
 reg('livePositions',        actions.livePositions, 'view')

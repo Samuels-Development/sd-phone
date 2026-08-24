@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bird, Clapperboard, Images, MessageSquare, Phone, Search, Smartphone, UserPlus, Users, VolumeX } from 'lucide-react';
+import { Bird, Clapperboard, Images, MessageSquare, Phone, Search, Smartphone, TriangleAlert, UserPlus, Users, VolumeX } from 'lucide-react';
 
 import { adminStats } from '../adminApi';
 import type { AdminStats } from '../types';
@@ -57,10 +57,11 @@ export function Dashboard({ onSearch }: { onSearch: (q: string) => void }) {
                 <div className="flex justify-center py-8"><Spinner /></div>
             ) : (
                 <>
-                    <div className="grid grid-cols-3 gap-3">
-                        <StatTile icon={<Users size={16} />}      label="Players online"    value={stats?.online} />
-                        <StatTile icon={<Smartphone size={16} />} label="Phones registered" value={stats?.phones} />
-                        <StatTile icon={<VolumeX size={16} />}    label="Active mutes"      value={stats?.activeMutes} />
+                    <div className="grid grid-cols-4 gap-3">
+                        <StatTile icon={<Users size={16} />}         label="Players online"    value={stats?.online} />
+                        <StatTile icon={<Smartphone size={16} />}    label="Phones registered" value={stats?.phones} />
+                        <StatTile icon={<TriangleAlert size={16} />} label="Flags waiting"     value={stats?.openFlags} />
+                        <StatTile icon={<VolumeX size={16} />}       label="Active mutes"      value={stats?.activeMutes} />
                     </div>
 
                     <div>

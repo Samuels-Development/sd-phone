@@ -185,6 +185,25 @@ export interface AdminThreadItem {
     anchor?:       boolean;
 }
 
+export type AdminFlagStatus = 'open' | 'actioned' | 'dismissed';
+
+export interface AdminFlag {
+    id:            number;
+    app:           string;
+    targetId:      string;
+    ruleId:        string;
+    ruleLabel:     string;
+    matched:       string;
+    authorCid?:    string | null;
+    authorName?:   string | null;
+    authorOnline?: boolean;
+    excerpt:       string;
+    status:        AdminFlagStatus;
+    handledName?:  string | null;
+    handledAt?:    number | null;
+    createdAt:     number;
+}
+
 export interface AdminAuditEntry {
     id:         number;
     adminCid:   string;
@@ -228,6 +247,7 @@ export interface AdminStats {
     messages:    number;
     activeMutes: number;
     online:      number;
+    openFlags?:  number;
     trends?:     AdminTrends;
     days?:       string[];
 }

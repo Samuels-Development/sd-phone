@@ -12,6 +12,8 @@ local mailStore  = require 'server.mail.store'
 local store      = require 'server.admin.store'
 ---@type table Mute registry (server.admin.moderation): scope mutes + guards.
 local moderation = require 'server.admin.moderation'
+---@type table Watchlist queue (server.admin.flags): keyword sweep + triage.
+local flags      = require 'server.admin.flags'
 ---@type table Phone wipe (server.admin.wipe): full per-citizenid data wipe.
 local wipe       = require 'server.admin.wipe'
 ---@type table Birdy badge vocabulary (server.birdy.verify): allowlist + input parsing.
@@ -610,9 +612,68 @@ function actions.contentDelete(source, payload)
     if (type(id) ~= 'string' and type(id) ~= 'number') or tostring(id) == '' then return fail('Missing id') end
 
     if store.deleteContent(app, tostring(id)) == 0 then return fail('Not found') end
+    -- A queue entry pointing at a row that no longer exists is noise someone has to read to
+    -- dismiss, so removing the content retires its flags with it.
+    flags.clearFor(app, tostring(id))
     local aCid, aName = adminIdent(source)
     store.audit(aCid, aName, 'delete-content', nil, ('%s %s'):format(app, tostring(id)))
     return ok()
+end
+
+---@type table<string, true> Statuses a flag may be moved to.
+local FLAG_STATUS = { open = true, actioned = true, dismissed = true }
+
+---One page of the watchlist queue, newest first, with player names attached.
+---@param source number admin player server id
+---@param payload { status?: string, cursor?: number }|nil
+---@return table envelope { flags, nextCursor, openCount }
+function actions.flags(source, payload)
+    local status = payload and payload.status
+    if status == 'all' or not FLAG_STATUS[status] then status = nil end
+
+    local rows, nextCursor = flags.list(status, tonumber(payload and payload.cursor), PAGE)
+
+    local cids = {}
+    for _, f in ipairs(rows) do
+        if f.authorCid then cids[#cids + 1] = f.authorCid end
+    end
+    local names, online = resolveNames(cids)
+    for _, f in ipairs(rows) do
+        if f.authorCid then
+            f.authorName   = names[f.authorCid]
+            f.authorOnline = online[f.authorCid] == true
+        end
+    end
+    return ok({ flags = rows, nextCursor = nextCursor, openCount = flags.openCount() })
+end
+
+---Runs the keyword sweep now rather than waiting for the timer. Read-only against every app it
+---reads; all it can do is file queue entries.
+---@param source number admin player server id
+---@return table envelope { filed, scanned, openCount }
+function actions.flagsScan(source)
+    local okSweep, filed, scanned = pcall(flags.sweep)
+    if not okSweep then return fail('Scan failed') end
+
+    local aCid, aName = adminIdent(source)
+    store.audit(aCid, aName, 'flags-scan', nil, ('%d filed from %d rows'):format(filed, scanned))
+    return ok({ filed = filed, scanned = scanned, openCount = flags.openCount() })
+end
+
+---Marks one flag actioned or dismissed, or puts it back in the queue.
+---@param source number admin player server id
+---@param payload { id?: number, status?: string }|nil
+---@return table envelope { openCount }
+function actions.flagResolve(source, payload)
+    local id = tonumber(payload and payload.id)
+    local status = payload and payload.status
+    if not id then return fail('Missing flag') end
+    if not FLAG_STATUS[status] then return fail('Unknown status') end
+
+    local aCid, aName = adminIdent(source)
+    if flags.resolve(id, status, aCid, aName) == 0 then return fail('Not found') end
+    store.audit(aCid, aName, 'flag-' .. status, nil, 'flag ' .. id)
+    return ok({ openCount = flags.openCount() })
 end
 
 ---One player's messages, read-only, paginated.
@@ -768,6 +829,9 @@ end
 function actions.stats(source)
     local stats = store.stats()
     stats.online = #GetPlayers()
+
+    local okFlags, open = pcall(flags.openCount)
+    stats.openFlags = okFlags and open or 0
 
     -- Charts are best-effort: a failure here costs the sparklines, never the counters above.
     local okTrends, trends, days = pcall(store.trends)

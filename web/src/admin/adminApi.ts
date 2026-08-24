@@ -3,13 +3,14 @@ import { isFiveM } from '@/core/nui';
 import type {
     AdminAuditEntry, AdminBirdyPost, AdminCall, AdminContentItem,
     AdminLivePlayer, AdminMediaItem,
+    AdminFlag,
     AdminMessage, AdminMute, AdminNumberRow, AdminOverview, AdminPlayerHit, AdminSimLookup, AdminStats,
     AdminThreadItem,
     MigrationScan, MigrationSnapshot,
 } from './types';
 import {
     DEV_AUDIT, DEV_LIVE, DEV_MEDIA, DEV_MIGRATION_SCAN, DEV_MIGRATION_SNAPSHOT, DEV_MUTES, DEV_PLAYERS, DEV_STATS,
-    devBirdyPosts, devCalls, devContent,
+    devBirdyPosts, devCalls, devContent, devFlags,
     devMessages, devNumbers, devOverview, devSearch, devSimLookup, devThread,
 } from './devData';
 
@@ -139,6 +140,19 @@ export const adminMutes = (cursor?: number | null) =>
 
 export const adminWipePhone = (cid: string, confirm: string) =>
     isFiveM ? call<{ rows: number }>('sd-phone:admin:wipePhone', { cid, confirm }) : seed({ rows: 1284 });
+
+export const adminFlags = (status: string, cursor?: number | null) =>
+    isFiveM
+        ? call<{ flags: AdminFlag[]; nextCursor?: number | null; openCount: number }>('sd-phone:admin:flags', { status, cursor })
+        : seed(devFlags(status));
+
+export const adminFlagsScan = () =>
+    isFiveM
+        ? call<{ filed: number; scanned: number; openCount: number }>('sd-phone:admin:flagsScan')
+        : seed({ filed: 0, scanned: 1240, openCount: devFlags('open').openCount });
+
+export const adminFlagResolve = (id: number, status: string) =>
+    isFiveM ? call<{ openCount: number }>('sd-phone:admin:flagResolve', { id, status }) : seed({ openCount: 0 });
 
 export const adminAudit = (cursor?: number | null) =>
     isFiveM
