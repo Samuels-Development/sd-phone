@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-    Bird, Camera, Clapperboard, DatabaseZap, FileText, Flag, Flame, Hash, Images, LayoutDashboard, Mail, Map,
+    AudioLines, Bird, Camera, Clapperboard, DatabaseZap, FileText, Flag, Flame, Hash, Images, LayoutDashboard, Mail, Map,
     MessageSquare, Mic, Newspaper, Rss, ScrollText, Search, ShieldCheck, ShoppingBag, Skull, StickyNote,
     Trash2, TriangleAlert, Users, VolumeX, X,
 } from 'lucide-react';
@@ -28,7 +28,7 @@ import { ToastHost, closeTopmostOverlay, useToasts } from './ui';
 type PageId =
     | 'dashboard' | 'media' | 'map' | 'players' | 'numbers' | 'flags' | 'mutes' | 'bin' | 'audit' | 'migration' | 'birdy'
     | 'messages' | 'darkchat' | 'photogram' | 'vibez' | 'cherry' | 'marketplace' | 'pages' | 'gallery' | 'racing'
-    | 'mail' | 'documents' | 'weazelnews' | 'notes' | 'voicememos' | 'groups';
+    | 'mail' | 'documents' | 'weazelnews' | 'notes' | 'voicememos' | 'groups' | 'callrecordings';
 
 interface NavItem { id: PageId; label: string; icon: React.ReactNode }
 
@@ -59,6 +59,7 @@ const NAV_APPS: NavItem[] = [
     { id: 'documents',   label: 'Documents',   icon: <FileText size={15} /> },
     { id: 'notes',       label: 'Notes',       icon: <StickyNote size={15} /> },
     { id: 'voicememos',  label: 'Voice memos', icon: <Mic size={15} /> },
+    { id: 'callrecordings', label: 'Call recordings', icon: <AudioLines size={15} /> },
     { id: 'groups',      label: 'Groups',      icon: <Users size={15} /> },
     { id: 'gallery',     label: 'Gallery',     icon: <Images size={15} /> },
     { id: 'racing',      label: 'Racing',      icon: <Flag size={15} /> },
@@ -90,6 +91,7 @@ const PAGE_TITLE: Record<PageId, string> = {
     weazelnews:  'Weazel News — published articles',
     notes:       'Notes (read-only)',
     voicememos:  'Voice memos',
+    callrecordings: 'Call recordings',
     groups:      'Groups',
 };
 
@@ -108,6 +110,7 @@ const CONTENT_PAGES: Record<string, { search: string; empty: string; deleteBody:
     weazelnews:  { search: 'Filter articles by headline, body or author', empty: 'No articles published yet.',  deleteBody: 'The article goes to the Recycle bin for 30 days.',                          thread: '' },
     notes:       { search: 'Filter notes by content or citizen ID',       empty: 'No notes yet.',               deleteBody: '',                                                             thread: '' },
     voicememos:  { search: 'Filter memos by name or citizen ID',          empty: 'No voice memos yet.',         deleteBody: 'The recording goes to the Recycle bin for 30 days.',                        thread: '' },
+    callrecordings: { search: 'Filter recordings by number, name or citizen ID', empty: 'No call recordings yet.', deleteBody: 'The recording goes to the Recycle bin for 30 days.',                     thread: '' },
     groups:      { search: 'Filter groups by name or leader',             empty: 'No groups yet.',              deleteBody: '',                                                             thread: '' },
 };
 

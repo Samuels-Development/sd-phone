@@ -1060,6 +1060,38 @@ CONTENT.voicememos = {
     end,
 }
 
+CONTENT.callrecordings = {
+    deletable = true,
+    source = { table = 'phone_call_recordings' },
+    list = function(ts, id, like, limit)
+        return MySQL.query.await([[
+            SELECT id, created_at AS ts, citizenid AS author_cid, peer_name, peer_number,
+                   direction, one_sided, url, duration, 'audio' AS kind
+            FROM phone_call_recordings
+            WHERE (? IS NULL OR peer_number LIKE ? OR peer_name LIKE ? OR citizenid LIKE ?)
+              AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?))
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+        ]], { like, like, like, like, ts, ts, ts, id, limit }) or {}
+    end,
+    delete = function(id)
+        return tonumber(MySQL.update.await('DELETE FROM phone_call_recordings WHERE id = ?', { id })) or 0
+    end,
+    -- The `url` is a recording, so it is handed over as audio rather than left to render as a
+    -- picture that will never load, the same way voice memos are.
+    shape = function(item, row)
+        item.media = type(row.url) == 'string' and row.url ~= '' and { { url = row.url, audio = row.url } } or {}
+        item.imageUrl = nil
+        item.title = (row.peer_name and row.peer_name ~= '' and row.peer_name)
+            or util.formatNumber(row.peer_number or '')
+        local seconds = tonumber(row.duration) or 0
+        item.label = ('%s · %d:%02d%s'):format(
+            row.direction == 'incoming' and 'incoming' or 'outgoing',
+            seconds // 60, seconds % 60,
+            util.truthy(row.one_sided) and ' · one-sided' or '')
+    end,
+}
+
 CONTENT.groups = {
     deletable = false,
     list = function(ts, id, like, limit)
