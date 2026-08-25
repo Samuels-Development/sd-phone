@@ -23,7 +23,7 @@ import { NumbersPage } from './pages/NumbersPage';
 import { RacingPage } from './pages/RacingPage';
 import { PlayerDetail } from './pages/PlayerDetail';
 import { PlayersPage } from './pages/PlayersPage';
-import { ToastHost, useToasts } from './ui';
+import { ToastHost, closeTopmostOverlay, useToasts } from './ui';
 
 type PageId =
     | 'dashboard' | 'media' | 'map' | 'players' | 'numbers' | 'flags' | 'mutes' | 'bin' | 'audit' | 'migration' | 'birdy'
@@ -139,12 +139,16 @@ export function AdminPanel() {
     }, []);
 
     // Capture-phase Escape so the phone's own Escape handler (close phone) never
-    // fires while the panel is on top.
+    // fires while the panel is on top. It is also the panel's only Escape owner:
+    // capture listeners fire in registration order, so an overlay mounted later
+    // could never see the key. Overlays register a closer instead, and the
+    // topmost one takes the press before the panel itself closes.
     useEffect(() => {
         if (!open) return;
         const onKey = (e: KeyboardEvent) => {
             if (e.key !== 'Escape') return;
             e.stopImmediatePropagation();
+            if (closeTopmostOverlay()) return;
             close();
         };
         window.addEventListener('keydown', onKey, true);

@@ -164,6 +164,37 @@ export function LoadMore({ onClick, loading, hasMore }: { onClick: () => void; l
     );
 }
 
+const escStack: Array<() => void> = [];
+
+export function useEscapeHandler(handler: () => void) {
+    const latest = useRef(handler);
+    latest.current = handler;
+
+    useEffect(() => {
+        const entry = () => latest.current();
+        escStack.push(entry);
+        return () => {
+            const at = escStack.indexOf(entry);
+            if (at >= 0) escStack.splice(at, 1);
+        };
+    }, []);
+}
+
+export function closeTopmostOverlay() {
+    const top = escStack[escStack.length - 1];
+    if (!top) return false;
+    top();
+    return true;
+}
+
+export function useAdminSurface() {
+    const [host, setHost] = useState<HTMLElement | null>(null);
+    useEffect(() => {
+        setHost(document.querySelector<HTMLElement>('[data-admin-surface]'));
+    }, []);
+    return host;
+}
+
 const ModalClose = createContext<() => void>(() => {});
 
 function Modal({ title, children, onClose, width = 'w-[420px]' }: {
@@ -173,16 +204,14 @@ function Modal({ title, children, onClose, width = 'w-[420px]' }: {
     width?: string;
 }) {
     const [leaving, setLeaving] = useState(false);
-    const [host, setHost] = useState<HTMLElement | null>(null);
-
-    useEffect(() => {
-        setHost(document.querySelector<HTMLElement>('[data-admin-surface]'));
-    }, []);
+    const host = useAdminSurface();
 
     const beginClose = useCallback(() => {
         if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) onClose();
         else setLeaving(true);
     }, [onClose]);
+
+    useEscapeHandler(beginClose);
 
     const body = (
         <div

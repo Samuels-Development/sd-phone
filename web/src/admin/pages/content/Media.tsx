@@ -1,8 +1,10 @@
-import { useCallback, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Play, Volume2, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { ChevronLeft, ChevronRight, Minimize2, Play, Volume2, X, ZoomIn } from 'lucide-react';
 import clsx from 'clsx';
 
 import type { AdminContentMedia } from '../../types';
+import { useAdminSurface, useEscapeHandler } from '../../ui';
 
 export function MediaStrip({ media, size = 64, max = 6, onOpen, className }: {
     media?: AdminContentMedia[] | null;
@@ -56,6 +58,8 @@ export function MediaStrip({ media, size = 64, max = 6, onOpen, className }: {
     );
 }
 
+const ZOOM = 2.4;
+
 export function MediaLightbox({ media, index, onIndex, onClose, caption }: {
     media: AdminContentMedia[];
     index: number;
@@ -63,65 +67,176 @@ export function MediaLightbox({ media, index, onIndex, onClose, caption }: {
     onClose: () => void;
     caption?: React.ReactNode;
 }) {
+    const host = useAdminSurface();
     const count = media.length;
+
+    const [leaving, setLeaving] = useState(false);
+    const [zoomed, setZoomed] = useState(false);
+    const [pan, setPan] = useState({ x: 0, y: 0 });
+    const [dragging, setDragging] = useState(false);
+    const drag = useRef<{ x: number; y: number; ox: number; oy: number; moved: boolean } | null>(null);
+
+    const beginClose = useCallback(() => {
+        if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) onClose();
+        else setLeaving(true);
+    }, [onClose]);
+
     const step = useCallback((delta: number) => {
         onIndex((index + delta + count) % count);
     }, [index, count, onIndex]);
 
+    const resetZoom = useCallback(() => {
+        setZoomed(false);
+        setPan({ x: 0, y: 0 });
+    }, []);
+
+    useEffect(() => { resetZoom(); }, [index, resetZoom]);
+
+    useEscapeHandler(beginClose);
+
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') { e.stopImmediatePropagation(); onClose(); return; }
             if (e.key === 'ArrowRight') { e.stopImmediatePropagation(); step(1); }
             if (e.key === 'ArrowLeft') { e.stopImmediatePropagation(); step(-1); }
         };
         window.addEventListener('keydown', onKey, true);
         return () => window.removeEventListener('keydown', onKey, true);
-    }, [onClose, step]);
+    }, [step]);
 
     const current = media[index];
     if (!current) return null;
 
-    return (
-        <div className="fixed inset-0 z-[420] flex flex-col items-center justify-center gap-3 bg-black/85 p-10" onMouseDown={onClose}>
-            <div className="relative flex max-h-[78%] max-w-[80%] items-center" onMouseDown={e => e.stopPropagation()}>
-                {current.audio || !current.url
-                    ? <audio src={current.audio ?? undefined} controls autoPlay className="w-[420px] max-w-full rounded-xl bg-[#1a1b1f] p-3 shadow-2xl" />
-                    : current.video
-                        ? <video src={current.video} poster={current.url} controls autoPlay loop className="max-h-[78vh] max-w-full rounded-xl shadow-2xl" />
-                        : <img src={current.url} alt="" className="max-h-[78vh] max-w-full rounded-xl object-contain shadow-2xl" />}
+    const isAudio = Boolean(current.audio) || !current.url;
+    const isVideo = !isAudio && Boolean(current.video);
+    const isImage = !isAudio && !isVideo;
+
+    const onPointerDown = (e: React.PointerEvent<HTMLImageElement>) => {
+        if (!zoomed) return;
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        drag.current = { x: e.clientX, y: e.clientY, ox: pan.x, oy: pan.y, moved: false };
+        setDragging(true);
+    };
+
+    const onPointerMove = (e: React.PointerEvent<HTMLImageElement>) => {
+        const d = drag.current;
+        if (!d) return;
+        const dx = e.clientX - d.x;
+        const dy = e.clientY - d.y;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) d.moved = true;
+        setPan({ x: d.ox + dx, y: d.oy + dy });
+    };
+
+    const endDrag = () => {
+        setDragging(false);
+        drag.current = null;
+    };
+
+    const onImageClick = () => {
+        if (drag.current?.moved) return;
+        if (zoomed) resetZoom();
+        else setZoomed(true);
+    };
+
+    const body = (
+        <div
+            className={clsx(
+                'absolute inset-0 z-50 flex flex-col bg-black/85',
+                leaving ? 'admin-scrim-out' : 'admin-scrim-in',
+            )}
+            onMouseDown={beginClose}
+            onAnimationEnd={e => { if (leaving && e.target === e.currentTarget) onClose(); }}
+        >
+            <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-6">
+                {isAudio && (
+                    <audio
+                        src={current.audio ?? undefined}
+                        controls
+                        autoPlay
+                        className="w-[420px] max-w-full rounded-xl bg-[#1a1b1f] p-3 shadow-2xl"
+                        onMouseDown={e => e.stopPropagation()}
+                    />
+                )}
+                {isVideo && (
+                    <video
+                        src={current.video ?? undefined}
+                        poster={current.url ?? undefined}
+                        controls
+                        autoPlay
+                        loop
+                        className="max-h-full max-w-full rounded-xl shadow-2xl"
+                        onMouseDown={e => e.stopPropagation()}
+                    />
+                )}
+                {isImage && (
+                    <img
+                        src={current.url ?? undefined}
+                        alt=""
+                        draggable={false}
+                        onMouseDown={e => e.stopPropagation()}
+                        onPointerDown={onPointerDown}
+                        onPointerMove={onPointerMove}
+                        onPointerUp={endDrag}
+                        onPointerCancel={endDrag}
+                        onClick={onImageClick}
+                        style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoomed ? ZOOM : 1})` }}
+                        className={clsx(
+                            'max-h-full max-w-full rounded-xl object-contain shadow-2xl',
+                            dragging ? 'transition-none' : 'transition-transform duration-200 ease-out',
+                            zoomed ? (dragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-zoom-in',
+                        )}
+                    />
+                )}
+
+                {count > 1 && (
+                    <>
+                        <button
+                            type="button"
+                            onMouseDown={e => { e.stopPropagation(); step(-1); }}
+                            className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2.5 text-zinc-200 ring-1 ring-white/10 transition-colors hover:bg-black/70 hover:text-white"
+                            title="Previous"
+                        >
+                            <ChevronLeft size={19} />
+                        </button>
+                        <button
+                            type="button"
+                            onMouseDown={e => { e.stopPropagation(); step(1); }}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2.5 text-zinc-200 ring-1 ring-white/10 transition-colors hover:bg-black/70 hover:text-white"
+                            title="Next"
+                        >
+                            <ChevronRight size={19} />
+                        </button>
+                    </>
+                )}
             </div>
 
-            {count > 1 && (
-                <>
+            <div className="flex shrink-0 justify-center px-6 pb-5" onMouseDown={e => e.stopPropagation()}>
+                <div className="flex max-w-full items-center gap-3 rounded-xl bg-[#1a1b1f]/95 px-4 py-2.5 text-[12.5px] shadow-xl ring-1 ring-white/10">
+                    {caption && <span className="min-w-0 truncate">{caption}</span>}
+                    {count > 1 && <span className="shrink-0 tabular-nums text-zinc-500">{index + 1} / {count}</span>}
+                    {isImage && (
+                        <button
+                            type="button"
+                            onClick={() => (zoomed ? resetZoom() : setZoomed(true))}
+                            className="flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1 font-semibold text-zinc-400 transition-colors hover:bg-white/10 hover:text-zinc-100"
+                            title={zoomed ? 'Fit to panel' : 'Zoom in'}
+                        >
+                            {zoomed ? <Minimize2 size={14} /> : <ZoomIn size={14} />}
+                            {zoomed ? 'Fit' : 'Zoom'}
+                        </button>
+                    )}
                     <button
                         type="button"
-                        onMouseDown={e => { e.stopPropagation(); step(-1); }}
-                        className="absolute left-6 rounded-full bg-white/10 p-3 text-zinc-200 transition-colors hover:bg-white/20"
-                        title="Previous"
+                        onClick={beginClose}
+                        className="shrink-0 rounded-lg p-1 text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-200"
+                        title="Close (Esc)"
                     >
-                        <ChevronLeft size={20} />
+                        <X size={15} />
                     </button>
-                    <button
-                        type="button"
-                        onMouseDown={e => { e.stopPropagation(); step(1); }}
-                        className="absolute right-6 rounded-full bg-white/10 p-3 text-zinc-200 transition-colors hover:bg-white/20"
-                        title="Next"
-                    >
-                        <ChevronRight size={20} />
-                    </button>
-                </>
-            )}
-
-            <div
-                className="flex max-w-[80%] items-center gap-3 rounded-xl bg-[#1a1b1f] px-4 py-2.5 text-[12.5px] shadow-xl ring-1 ring-white/10"
-                onMouseDown={e => e.stopPropagation()}
-            >
-                {caption}
-                {count > 1 && <span className="tabular-nums text-zinc-500">{index + 1} / {count}</span>}
-                <button type="button" onClick={onClose} className="text-zinc-500 transition-colors hover:text-zinc-200" title="Close">
-                    <X size={15} />
-                </button>
+                </div>
             </div>
         </div>
     );
+
+    return host ? createPortal(body, host) : body;
 }
