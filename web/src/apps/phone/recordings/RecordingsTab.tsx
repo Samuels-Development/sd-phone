@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AudioLines, Pause, Play, PhoneIncoming, PhoneOutgoing, Trash2, TriangleAlert } from 'lucide-react';
+import { AudioLines, Pause, Pencil, Play, PhoneIncoming, PhoneOutgoing, Trash2, TriangleAlert } from 'lucide-react';
 import clsx from 'clsx';
 
 import { AlertDialog } from '@/ui/AlertDialog';
+import { PromptDialog } from '@/ui/PromptDialog';
 import { EmptyState } from '@/ui/EmptyState';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { formatPhone } from '@/lib/phone';
+import { trackFraction } from '@/lib/zoom';
 import { t } from '@/i18n';
-import { deleteRecording, fetchRecordings, type CallRecording } from '../callrecApi';
+import { deleteRecording, fetchRecordings, renameRecording, type CallRecording } from '../callrecApi';
+
+// How long the row takes to open. The audio element is only mounted once that has finished, so
+// its metadata fetch does not compete with the animation for the same frames.
+const EXPAND_MS = 260;
 
 function clock(seconds: number) {
     if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -25,13 +31,14 @@ function when(iso: string) {
 }
 
 function titleOf(rec: CallRecording) {
-    return rec.peerName?.trim() || formatPhone(rec.peerNumber);
+    return rec.label?.trim() || rec.peerName?.trim() || formatPhone(rec.peerNumber);
 }
 
 export function RecordingsTab() {
     const [items, setItems] = useState<CallRecording[]>([]);
     const [openId, setOpenId] = useState<string | null>(null);
     const [pendingDelete, setPendingDelete] = useState<CallRecording | null>(null);
+    const [renaming, setRenaming] = useState<CallRecording | null>(null);
 
     const load = useCallback(() => { void fetchRecordings().then(setItems); }, []);
     useEffect(() => { load(); }, [load]);
@@ -76,6 +83,7 @@ export function RecordingsTab() {
                                         rec={rec}
                                         open={openId === rec.id}
                                         onToggle={() => setOpenId(prev => (prev === rec.id ? null : rec.id))}
+                                        onRequestRename={() => setRenaming(rec)}
                                         onRequestDelete={() => setPendingDelete(rec)}
                                     />
                                 </div>
@@ -84,6 +92,27 @@ export function RecordingsTab() {
                     )}
                 </div>
             </div>
+
+            {renaming && (
+                <PromptDialog
+                    title={t('phone.renameRecording', 'Rename')}
+                    message={t('phone.renameRecordingBody', 'Enter a name for this recording.')}
+                    placeholder={t('phone.namePlaceholder', 'Name')}
+                    confirmLabel={t('phone.save', 'Save')}
+                    maxLength={120}
+                    initialValue={renaming.label ?? ''}
+                    onCancel={() => setRenaming(null)}
+                    onConfirm={name => {
+                        const rec = renaming;
+                        setRenaming(null);
+                        const next = name.trim();
+                        void renameRecording(rec.id, next).then(okDone => {
+                            if (!okDone) return;
+                            setItems(prev => prev.map(r => (r.id === rec.id ? { ...r, label: next || null } : r)));
+                        });
+                    }}
+                />
+            )}
 
             {pendingDelete && (
                 <AlertDialog
@@ -101,15 +130,17 @@ export function RecordingsTab() {
     );
 }
 
-function Row({ rec, open, onToggle, onRequestDelete }: {
+function Row({ rec, open, onToggle, onRequestRename, onRequestDelete }: {
     rec: CallRecording;
     open: boolean;
     onToggle: () => void;
+    onRequestRename: () => void;
     onRequestDelete: () => void;
 }) {
     const audioRef = useRef<HTMLAudioElement>(null);
     const trackRef = useRef<HTMLDivElement>(null);
     const scrubbing = useRef(false);
+    const pendingSeek = useRef<number | null>(null);
 
     // The audio element only exists once the row has been opened, so a list of fifty recordings
     // does not fetch fifty files on render. Once mounted it stays, keeping its position across
@@ -120,18 +151,25 @@ function Row({ rec, open, onToggle, onRequestDelete }: {
     const [total, setTotal] = useState(rec.duration || 0);
 
     useEffect(() => {
-        if (open) setArmed(true);
-        else audioRef.current?.pause();
-    }, [open]);
+        if (!open) { audioRef.current?.pause(); return; }
+        if (armed) return;
+        const id = window.setTimeout(() => setArmed(true), EXPAND_MS);
+        return () => window.clearTimeout(id);
+    }, [open, armed]);
 
+    // trackFraction resolves the pointer against the phone's CSS zoom. Measuring with
+    // getBoundingClientRect and clientX directly puts the pointer in a different coordinate space
+    // to the element under `zoom`, which made every click clamp to 0 and snap to the start.
     const seekTo = (clientX: number) => {
         const track = trackRef.current;
         const el = audioRef.current;
         if (!track || !el || !total) return;
-        const box = track.getBoundingClientRect();
-        const next = Math.max(0, Math.min(total, ((clientX - box.left) / box.width) * total));
-        el.currentTime = next;
+        const f = trackFraction(track, clientX);
+        if (f === null) return;
+        const next = f * total;
         setAt(next);
+        if (el.readyState > 0) el.currentTime = next;
+        else pendingSeek.current = next;
     };
 
     const endScrub = () => { scrubbing.current = false; };
@@ -159,7 +197,7 @@ function Row({ rec, open, onToggle, onRequestDelete }: {
 
             <div
                 className={clsx(
-                    'grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none',
+                    'grid transition-[grid-template-rows] duration-[260ms] ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none',
                     open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
                 )}
             >
@@ -173,10 +211,20 @@ function Row({ rec, open, onToggle, onRequestDelete }: {
                                 onPlay={() => setPlaying(true)}
                                 onPause={() => setPlaying(false)}
                                 onEnded={() => { setPlaying(false); setAt(0); }}
-                                onTimeUpdate={e => { if (!scrubbing.current) setAt(e.currentTarget.currentTime); }}
+                                onTimeUpdate={e => {
+                                    if (scrubbing.current || e.currentTarget.seeking) return;
+                                    setAt(e.currentTarget.currentTime);
+                                }}
                                 onLoadedMetadata={e => {
-                                    const d = e.currentTarget.duration;
+                                    const el = e.currentTarget;
+                                    const d = el.duration;
                                     if (Number.isFinite(d) && d > 0) setTotal(d);
+                                    // A seek made before the file had loaded is applied now rather
+                                    // than dropped, which is what made an early click do nothing.
+                                    if (pendingSeek.current !== null) {
+                                        el.currentTime = pendingSeek.current;
+                                        pendingSeek.current = null;
+                                    }
                                 }}
                             />
                         )}
@@ -223,6 +271,15 @@ function Row({ rec, open, onToggle, onRequestDelete }: {
                             <span className="shrink-0 text-[13px] tabular-nums text-black/50 dark:text-white/50">
                                 {clock(at)} / {clock(total)}
                             </span>
+
+                            <button
+                                type="button"
+                                onClick={onRequestRename}
+                                className="shrink-0 p-1 text-ios-blue active:opacity-60"
+                                title={t('phone.renameRecording', 'Rename')}
+                            >
+                                <Pencil className="h-[17px] w-[17px]" strokeWidth={2} />
+                            </button>
 
                             <button
                                 type="button"

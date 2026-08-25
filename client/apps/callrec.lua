@@ -3,6 +3,7 @@ local proxy = require 'client.nui'
 
 -- Thin delegates into server/callrec.
 proxy('sd-phone:callrec:list',    'sd-phone:server:callrec:list')
+proxy('sd-phone:callrec:rename',  'sd-phone:server:callrec:rename')
 proxy('sd-phone:callrec:delete',  'sd-phone:server:callrec:delete')
 proxy('sd-phone:callrec:enabled', 'sd-phone:server:callrec:enabled')
 

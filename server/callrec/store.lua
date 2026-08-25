@@ -22,6 +22,22 @@ function store.ensureSchema()
             KEY `created_at` (`created_at`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ]])
+
+    -- Back-filled rather than added to the CREATE above, so a server that already stored
+    -- recordings before naming existed gains the column instead of keeping a stale table.
+    util.ensureColumns('phone_call_recordings', { label = 'label VARCHAR(120) NULL' })
+end
+
+---Renames one recording, scoped to its owner. An empty name clears it, so the row falls back to
+---showing who the call was with.
+---@param citizenid string
+---@param id integer
+---@param label string|nil
+---@return integer affected
+function store.rename(citizenid, id, label)
+    return tonumber(MySQL.update.await(
+        'UPDATE `phone_call_recordings` SET label = ? WHERE id = ? AND citizenid = ?',
+        { label, id, citizenid })) or 0
 end
 
 ---Inserts one recording row (fields already sanitized by the actions layer).

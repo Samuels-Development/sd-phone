@@ -24,6 +24,7 @@ local DIRECTIONS = { incoming = true, outgoing = true }
 local function toRecording(row)
     return {
         id         = tostring(row.id),
+        label      = row.label,
         peerNumber = row.peer_number,
         peerName   = row.peer_name,
         direction  = row.direction,
@@ -83,6 +84,26 @@ function actions.saveUploaded(src, url, meta)
 
     local rows = store.listFor(cid, 1)
     return rows[1] and toRecording(rows[1]) or nil
+end
+
+---Renames one of the caller's recordings. A blank name clears the label rather than storing an
+---empty string, so the row goes back to showing who the call was with.
+---@param src number player server id
+---@param id any client-supplied recording id
+---@param name any client-supplied label
+---@return table result
+function actions.rename(src, id, name)
+    local cid = player.getIdentifier(src)
+    if not cid then return fail('Player not found') end
+
+    local rowId = math.floor(tonumber(id) or 0)
+    if rowId <= 0 then return fail('Missing recording') end
+
+    local label = util.trim(name):sub(1, 120)
+    if store.rename(cid, rowId, label ~= '' and label or nil) == 0 then
+        return fail('Recording not found')
+    end
+    return ok({ id = tostring(rowId), label = label ~= '' and label or nil })
 end
 
 ---Deletes one of the caller's recordings. Scoped to the citizenid, so an id alone cannot reach

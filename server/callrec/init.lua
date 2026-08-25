@@ -36,6 +36,11 @@ lib.callback.register('sd-phone:server:callrec:list', function(src)
     return actions.list(src)
 end)
 
+lib.callback.register('sd-phone:server:callrec:rename', function(src, payload)
+    payload = type(payload) == 'table' and payload or {}
+    return actions.rename(src, payload.id, payload.name)
+end)
+
 lib.callback.register('sd-phone:server:callrec:delete', function(src, payload)
     return actions.delete(src, type(payload) == 'table' and payload.id or nil)
 end)

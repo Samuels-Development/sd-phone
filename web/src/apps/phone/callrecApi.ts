@@ -3,6 +3,7 @@ import { apiCall, apiData } from '@/core/api';
 
 export interface CallRecording {
     id:         string;
+    label?:     string | null;
     peerNumber: string;
     peerName?:  string | null;
     direction:  'incoming' | 'outgoing';
@@ -42,4 +43,13 @@ export async function deleteRecording(id: string): Promise<boolean> {
         return true;
     }
     return (await apiCall<unknown>('sd-phone:callrec:delete', { id })).success;
+}
+
+export async function renameRecording(id: string, name: string): Promise<boolean> {
+    if (!isFiveM) {
+        const rec = devRecordings.find(r => r.id === id);
+        if (rec) rec.label = name.trim() || null;
+        return true;
+    }
+    return (await apiCall<unknown>('sd-phone:callrec:rename', { id, name })).success;
 }
