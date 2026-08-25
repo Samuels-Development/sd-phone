@@ -130,6 +130,7 @@ export function PromptDialog({
             title={title}
             message={message}
             exiting={exiting}
+            zIndex={70}
             cancel={{ label: cancelLabel, onClick: () => dismiss(onCancel) }}
             confirm={{ label: confirmLabel, onClick: confirm, disabled: !canConfirm || busy, busy }}
         >
