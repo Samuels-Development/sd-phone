@@ -1010,12 +1010,13 @@ CONTENT.weazelnews = {
 CONTENT.notes = {
     deletable = false,
     -- Notes stamp themselves with an ISO string, so the epoch every other reader here works in has
-    -- to come from somewhere. It is derived in Lua rather than in SQL, because STR_TO_DATE needs a
-    -- format string, a format string carries percent signs, and a parameterised query holding one
-    -- does not survive the driver: the whole tab came back empty. Mail already converts the same
-    -- stamps this way. The cursor compares against the first 19 characters of the raw column,
-    -- which orders identically (ISO stamps sort lexicographically) and tolerates the fractional
-    -- part the stored values carry but a second-precision cursor cannot reproduce.
+    -- to come from somewhere. It is derived in Lua rather than in SQL, because STR_TO_DATE would
+    -- need a time format, a time format contains colons, and the driver reads `:x` as a named
+    -- placeholder even inside a quoted literal - so a query carrying one and positional params
+    -- together fails outright. This tab came back empty for exactly that reason. Mail already
+    -- converts the same stamps in Lua. The cursor compares against the first 19 characters of the
+    -- raw column, which orders identically (ISO stamps sort lexicographically) and tolerates the
+    -- fractional part the stored values carry but a second-precision cursor cannot reproduce.
     list = function(ts, id, like, limit)
         local cursor = ts and epochToIso(ts) or nil
         local rows = MySQL.query.await([[
