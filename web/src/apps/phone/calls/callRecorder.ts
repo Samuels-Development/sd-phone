@@ -59,9 +59,6 @@ class CallRecorder {
         };
         this.peer = peer;
 
-        // Anything that arrived while this side was still fetching ICE config and asking for the
-        // microphone is replayed now. Without it the offer lands on a null peer and is dropped,
-        // negotiation never completes, and the recording comes out one-sided.
         const queued = this.pending;
         this.pending = [];
         for (const sig of queued) void peer.handle(sig);
@@ -86,9 +83,6 @@ class CallRecorder {
         if (!this.mic) { this.teardown(); return false; }
         this.mixer.addStream(this.mic);
 
-        // The far side is told before the offer is made, not after. It has to mount its own peer
-        // and add its microphone before our offer reaches it; sending the offer first means it
-        // arrives at a client that has no peer yet and is discarded.
         if (isFiveM) void fetchNui('sd-phone:record:start');
 
         const peer = await this.openPeer(true);
@@ -149,7 +143,6 @@ class CallRecorder {
         this.pending = [];
     }
 
-    /** Ends the far side's half without uploading: used when they stopped, or the call dropped. */
     dropPeer() {
         this.peer?.close();
         this.peer = null;

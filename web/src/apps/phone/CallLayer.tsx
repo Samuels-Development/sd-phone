@@ -28,8 +28,6 @@ function fmtElapsed(seconds: number): string {
 
 const KEYPAD_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
 
-// Mirrors configs/callrec.lua MaxMinutes. The recorder stops itself at the cap so a forgotten
-// recording cannot grow until the upload is refused for size.
 const RECORD_MAX_MINUTES = 10;
 
 export function CallLayer({ wallpaper }: { wallpaper?: string }) {
@@ -94,8 +92,6 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
         setMuted(false); setSpeaker(false); setVideoPhase('off');
         setKeypadOpen(false); setContactsOpen(false); setDtmfDialed('');
         setAddOpen(false); setAddKeypad(false); setAddDigits(''); setAddError(null);
-        // A call that ends mid-recording still keeps what was captured: stop uploads it rather
-        // than throwing it away for the call not having ended tidily.
         if (callRecorder.active) void callRecorder.stop();
         else callRecorder.dropPeer();
         setRecording(false);
@@ -135,10 +131,6 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
         setVideoPhase('active');
     }, []));
 
-    // The far side answers the peer so its microphone reaches the recorder, and shows nothing.
-    // A caller is not told that the person they rang is recording them: an indicator would end
-    // the only thing this feature is for, and players can already record a call with OBS, where
-    // there is no retention limit and no admin trail at all.
     useNuiEvent('sd-phone:record:peerStart', useCallback(() => {
         void callRecorder.acceptPeer();
     }, []));

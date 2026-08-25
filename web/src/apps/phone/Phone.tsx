@@ -25,10 +25,6 @@ export function Phone({ onClose: _onClose }: { onClose: () => void }) {
     const [tab,        setTab]        = useSessionState<PhoneTab>('phone:tab', 'contacts');
     const [recordingsOn, setRecordingsOn] = useState(false);
 
-    // The selected tab is remembered across opens, so a player parked on Recordings when the
-    // server turns recording off would come back to a tab that no longer has a button: visible
-    // content with no way back to it. Redirect once the answer is known, never before, or the
-    // pending `false` would bounce them out every time the phone opens.
     useEffect(() => {
         void recordingEnabled().then(on => {
             setRecordingsOn(on);

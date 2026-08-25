@@ -11,8 +11,6 @@ import { trackFraction } from '@/lib/zoom';
 import { t } from '@/i18n';
 import { deleteRecording, fetchRecordings, renameRecording, type CallRecording } from '../callrecApi';
 
-// How long the row takes to open. The audio element is only mounted once that has finished, so
-// its metadata fetch does not compete with the animation for the same frames.
 const EXPAND_MS = 260;
 
 function clock(seconds: number) {
@@ -142,9 +140,6 @@ function Row({ rec, open, onToggle, onRequestRename, onRequestDelete }: {
     const scrubbing = useRef(false);
     const pendingSeek = useRef<number | null>(null);
 
-    // The audio element only exists once the row has been opened, so a list of fifty recordings
-    // does not fetch fifty files on render. Once mounted it stays, keeping its position across
-    // collapses, and preloads metadata so the scrubber can seek before anything has been played.
     const [armed, setArmed] = useState(open);
     const [playing, setPlaying] = useState(false);
     const [at, setAt] = useState(0);
@@ -157,9 +152,6 @@ function Row({ rec, open, onToggle, onRequestRename, onRequestDelete }: {
         return () => window.clearTimeout(id);
     }, [open, armed]);
 
-    // trackFraction resolves the pointer against the phone's CSS zoom. Measuring with
-    // getBoundingClientRect and clientX directly puts the pointer in a different coordinate space
-    // to the element under `zoom`, which made every click clamp to 0 and snap to the start.
     const seekTo = (clientX: number) => {
         const track = trackRef.current;
         const el = audioRef.current;
@@ -219,8 +211,6 @@ function Row({ rec, open, onToggle, onRequestRename, onRequestDelete }: {
                                     const el = e.currentTarget;
                                     const d = el.duration;
                                     if (Number.isFinite(d) && d > 0) setTotal(d);
-                                    // A seek made before the file had loaded is applied now rather
-                                    // than dropped, which is what made an early click do nothing.
                                     if (pendingSeek.current !== null) {
                                         el.currentTime = pendingSeek.current;
                                         pendingSeek.current = null;
