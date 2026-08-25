@@ -303,3 +303,102 @@ lib.addCommand('testmail', {
             or ('Failed: %s'):format(res.message or 'unknown error'),
     })
 end)
+
+---@type table Seed content (server.devseed.content): the per-app seeders and their cleanup.
+local seedContent = require 'server.devseed.content'
+
+---Every seeder key, for the help text on an unrecognised argument.
+---@return string names comma-separated
+local function seederNames()
+    local names = {}
+    for i = 1, #seedContent.order do names[i] = seedContent.order[i] end
+    table.sort(names)
+    return table.concat(names, ', ')
+end
+
+---/seedphone [app|all|clear] - DEV TOOL: fills every app the admin panel reads with test content,
+---so the content tabs, the thread panes, the Flags queue and the Recycle bin all have something
+---real to work against without creating it by hand in each app.
+---
+---One row per app goes in through that app's own action path, as the caller: the same auth,
+---throttles, notifications, badge pushes and live broadcasts a player would trigger. The bulk is
+---attributed to stand-in characters through each app's store, because every write action is bound
+---to a live player source and there is no such source for someone who does not exist.
+---@param source integer player server id
+---@param args table { app?: string }
+lib.addCommand('seedphone', {
+    help = 'Dev: fill every app the admin panel reads with test content',
+    restricted = 'group.admin',
+    params = { { name = 'app', type = 'string', help = "One app, 'all' (default) or 'clear'", optional = true } },
+}, function(source, args)
+    local cid = player.getIdentifier(source)
+    if not cid then return end
+
+    local want = (args.app or 'all'):lower()
+
+    if want == 'clear' then
+        local removedRows = seedContent.clearCast(cid)
+        print(('^2[sd-phone]^0 /seedphone clear removed %d seeded rows'):format(removedRows))
+        TriggerClientEvent('sd-phone:client:notify', source, {
+            app = 'phone', title = 'Dev Seed',
+            body = ('Removed %d seeded rows. Flags filed against them stay until dismissed.')
+                :format(removedRows),
+        })
+        badges.push(source)
+        return
+    end
+
+    local apps
+    if want == 'all' then
+        apps = seedContent.order
+    elseif seedContent.seed[want] then
+        apps = { want }
+    else
+        TriggerClientEvent('sd-phone:client:notify', source, {
+            app = 'phone', title = 'Dev Seed',
+            body = ('Unknown app. Try one of: %s'):format(seederNames()),
+        })
+        return
+    end
+
+    local myNumber = (tostring(settingsStore.getPhoneNumber(cid) or ''):gsub('%D', ''))
+    local ctx = {
+        src    = source,
+        cid    = cid,
+        name   = player.getName(source) or 'You',
+        number = myNumber,
+    }
+
+    -- A full run replaces what the last one left rather than adding to it, so re-seeding while
+    -- testing does not turn every tab into the same four posts six times over. Seeding a single
+    -- app deliberately does not, because the clear is not scoped to one app.
+    if want == 'all' then
+        seedContent.clearCast(cid)
+    end
+
+    local total, liveApps = 0, 0
+    for _, app in ipairs(apps) do
+        local ok, res = pcall(seedContent.seed[app], ctx)
+        if ok and type(res) == 'table' then
+            total = total + (res.rows or 0)
+            if res.live then
+                liveApps = liveApps + 1
+                print(('^2[sd-phone]^0 seedphone %s: %d rows, yours through the app'):format(app, res.rows or 0))
+            else
+                print(('^3[sd-phone]^0 seedphone %s: %d rows, store only (%s)')
+                    :format(app, res.rows or 0, res.note or 'no action path for this app'))
+            end
+        else
+            print(('^1[sd-phone]^0 seedphone %s failed: %s'):format(app, tostring(res)))
+        end
+    end
+
+    badges.push(source)
+    print(('^2[sd-phone]^0 /seedphone wrote %d rows across %d apps for %s (%d through a real action path)')
+        :format(total, #apps, cid, liveApps))
+    TriggerClientEvent('sd-phone:client:notify', source, {
+        app = 'phone', title = 'Dev Seed',
+        body = ('Seeded %d rows across %d apps. Open the admin panel, then hit Scan now on Flags.')
+            :format(total, #apps),
+    })
+end)
