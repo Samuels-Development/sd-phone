@@ -29,7 +29,6 @@ export const THEME_APPS: ThemeApp[] = [
     { id: 'birdy',       label: 'Squawk',       icon: 'birdy',       accent: '#1d9bf0' },
     { id: 'services',    label: 'Services',     icon: 'services',    accent: '#16b8a6' },
     { id: 'pages',       label: 'Pages',        icon: 'pages',       accent: '#fbc02d' },
-    { id: 'review',      label: 'Review',       icon: 'review',      accent: '#e03131' },
     { id: 'marketplace', label: 'Marketplace',  icon: 'marketplace', accent: '#0a84ff' },
     { id: 'mdt',         label: 'MDT',          icon: 'mdt',         accent: '#1d4ed8' },
     { id: 'emsmdt',      label: 'EMS',          icon: 'emsmdt',      accent: '#e11d48' },

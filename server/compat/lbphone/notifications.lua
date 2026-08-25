@@ -13,7 +13,7 @@ local SD_APPS = {}
 for _, id in ipairs({
     'photos', 'bank', 'settings', 'clock', 'messages', 'phone', 'calendar', 'mail', 'weather',
     'maps', 'music', 'stocks', 'ryde', 'notes', 'voicememos', 'health', 'compass', 'groups',
-    'services', 'pages', 'review', 'marketplace', 'radio', 'darkchat', 'cherry', 'photogram',
+    'services', 'pages', 'marketplace', 'radio', 'darkchat', 'cherry', 'photogram',
     'garages', 'homes', 'calculator', 'passwords', 'cookie', 'wordle', 'flappy', 'blocks',
     'casino', 'climber', 'connectfour', 'chess', 'battleship', 'vibez',
     'weazelnews', 'streaks', 'birdy', 'appstore', 'camera',

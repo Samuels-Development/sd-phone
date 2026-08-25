@@ -954,7 +954,7 @@ export function PhoneShell({ children, hidden = false, cameraActive = false, ent
                     {hostsIsland && device.calls && (
                         <IslandPill m={m}
                             active={callActive}
-                            onClick={() => void fetchNui('sd-phone:requestOpen')}
+                            onClick={() => { useCallStore.getState().setMinimised(false); void fetchNui('sd-phone:requestOpen'); }}
                             compactX={DI_X} compactW={DI_W} expandedX={CALL_X} expandedW={CALL_W}
                         >
                             <span className="absolute left-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5">

@@ -13,7 +13,7 @@ Unlock it, rearrange the home screen, install apps from the App Store, open the 
 
 ---
 
-**An iOS-themed smartphone for FiveM.** that supports QBOX, QBCORE and ESX, with experimental ox_core support. 49 server-backed apps, real app accounts, a live game-view camera and online multiplayer games. Ships its own custom phone props: eight phone items in eight colours, each tinting both the on-screen frame and the custom prop model held in hand. A unique phone system as well as sim cards can be enabled!
+**An iOS-themed smartphone for FiveM.** that supports QBOX, QBCORE, ESX and ox_core. 49 server-backed apps, real app accounts, a live game-view camera and online multiplayer games. Ships its own custom phone props: eight phone items in eight colours, each tinting both the on-screen frame and the custom prop model held in hand. A unique phone system as well as sim cards can be enabled!
 
 **A drop-in lb-phone replacement.** Scripts and custom apps written against lb-phone's exports and events keep running unmodified, and a first-boot migration carries your players across rather than resetting them: phone numbers and lock passcodes, contacts, blocked numbers, call history, SMS threads including groups and reactions, photos and albums, notes, phone settings, mail accounts with their inboxes, wallet transaction history, voice memos, Photogram and Birdy accounts with their posts, stories, DMs and followers, and the app logins themselves, so players open the phone already signed in.
 
@@ -96,7 +96,7 @@ The Camera, Photos and Voice Memos apps need somewhere to store what they captur
 | **Communication** | Phone (1:1, group and company calls over pma-voice), Messages (SMS, group threads, GIFs, money and location cards), Mail (multi-account, global inboxes), Groups, Dark Chat, Radio, Find Friends |
 | **Social** | Photogram (posts, stories, DMs, real live video streaming), Birdy, Cherry, Vibez, Streaks, all on a shared accounts engine with registration, sign-in, and password resets delivered in-game |
 | **Camera & media** | Camera (live game view: photos, video with voice capture, selfie mode), Photos, Music (with AirShare library sharing), Voice Memos |
-| **World** | Maps (CDN-streamed tiles, routing, pins), Garages, Homes, Wallet, Services (company directory, dispatch messaging, phone multijob), Ryde (player-to-player ride hailing), Weazel News, Pages, Marketplace, Review, Weather, Stocks |
+| **World** | Maps (CDN-streamed tiles, routing, pins), Garages, Homes, Wallet, Services (company directory, dispatch messaging, phone multijob), Ryde (player-to-player ride hailing), Weazel News, Pages, Marketplace, Weather, Stocks |
 | **Games** | Chess, Connect Four, Battleship and Wordle with online lobbies, plus Blackjack, Cookie, Flappy, Blocks, Climber and Rail Runner with server-side leaderboards |
 | **Utilities** | Clock (alarms), Calendar, Notes (with sketches), Calculator, Compass, Health, Passwords, App Store, Settings |
 
@@ -180,8 +180,8 @@ end)
 
 | Layer | Supported |
 |---|---|
-| Frameworks | QBCore, QBox, ESX (auto-detected). ox_core is supported but **experimental** |
-| Inventories | ox_inventory, tgiann-inventory, qb-inventory, qs-inventory(-pro), origen_inventory, codem-inventory, jaksam_inventory, lj-inventory, ps-inventory |
+| Frameworks | QBCore, QBox, ESX, ox_core (auto-detected) |
+| Inventories | ox_inventory, one_inventory, tgiann-inventory, qb-inventory, qs-inventory(-pro), origen_inventory, codem-inventory, jaksam_inventory, lj-inventory, ps-inventory |
 | Voice | pma-voice |
 | Housing | 9 housing systems for the Homes app |
 | Garages | 10 garage systems for the Garages app |

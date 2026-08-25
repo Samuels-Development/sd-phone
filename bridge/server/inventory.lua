@@ -13,6 +13,8 @@ local inventory = { system = inventoryId.name }
 -- Inventory resource name aliases.
 ---@type string ox_inventory resource name.
 local OX = 'ox_inventory'
+---@type string one_inventory (One Studios) resource name.
+local ONE = 'one_inventory'
 ---@type string tgiann-inventory resource name.
 local TG = 'tgiann-inventory'
 ---@type string jaksam_inventory resource name.
@@ -37,6 +39,14 @@ local active = inventoryId.name
 local function chooseAdd()
     if active == OX then
         return function(src, item, count, metadata) return exports[OX]:AddItem(src, item, count, metadata) end
+    end
+    if active == ONE then
+        return function(src, item, count, metadata)
+            -- AddItem answers with a boolean and a second failure-reason value. Assigning to a
+            -- single local drops the reason, which would otherwise be returned alongside the ok.
+            local ok = exports[ONE]:AddItem(src, item, count, metadata)
+            return ok == true
+        end
     end
     if active == TG then
         return function(src, item, count, metadata) return exports[TG]:AddItem(src, item, count, metadata) end
@@ -95,6 +105,7 @@ local function chooseCount()
             return total
         end
     end
+    if active == ONE then return function(src, item) return exports[ONE]:GetItemCount(src, item) or 0 end end
     if active == TG then return function(src, item) return exports[TG]:GetItemCount(src, item) or 0 end end
     if active == JK then return function(src, item) return exports[JK]:getTotalItemAmount(src, item) or 0 end end
     if active == CD then return function(src, item) return exports[CD]:GetItemsTotalAmount(src, item) or 0 end end
@@ -142,6 +153,12 @@ end
 local function chooseRemove()
     if active == OX then
         return function(src, item, count, metadata) return exports[OX]:RemoveItem(src, item, count, metadata) end
+    end
+    if active == ONE then
+        return function(src, item, count, metadata)
+            local ok = exports[ONE]:RemoveItem(src, item, count, metadata)
+            return ok == true
+        end
     end
     if active == TG then
         return function(src, item, count, metadata) return exports[TG]:RemoveItem(src, item, count, metadata) end
@@ -197,6 +214,9 @@ local function chooseCanCarry()
     end
     if active == OX then
         return function(src, item, count, metadata) return exports[OX]:CanCarryItem(src, item, count, metadata) end
+    end
+    if active == ONE then
+        return function(src, item, count) return exports[ONE]:CanCarryItem(src, item, count) end
     end
     if active == TG then
         return function(src, item, count) return exports[TG]:CanCarryItem(src, item, count) end
@@ -260,6 +280,10 @@ local function chooseRegisterUsable()
         return function(item, cb) return exports[OG]:CreateUseableItem(item, cb) end
     end
 
+    -- one_inventory is deliberately absent here. Its own export form has to be pointed at a
+    -- resource from its admin panel, which nothing in this resource can do at boot, but it also
+    -- reads the framework's usable-item registry - so the framework paths below are the ones that
+    -- actually fire. Adding a branch for it would replace a working path with a dead one.
     if framework.name == 'esx' then
         return function(item, cb) return framework.core.RegisterUsableItem(item, cb) end
     end
@@ -286,6 +310,12 @@ local function chooseLabel()
         return function(itemName)
             local ok, item = pcall(exports[active].Items, exports[active], itemName)
             return (ok and item) and item.label or itemName
+        end
+    end
+    if active == ONE then
+        return function(itemName)
+            local ok, def = pcall(exports[ONE].GetItemDefinition, exports[ONE], itemName)
+            return (ok and type(def) == 'table') and def.label or itemName
         end
     end
     if active == JK then
@@ -677,6 +707,35 @@ SLOT_BACKENDS[CD] = {
     removeFromSlot = function(src, item, slot, count)
         local ok, res = pcall(function() return exports[CD]:RemoveItem(src, item, count or 1, slot) end)
         return ok and res ~= false
+    end,
+}
+
+-- one_inventory: one standardised slot table from every getter, and a bare server id addresses
+-- the player's own inventory. RemoveItem takes the slot as its fifth arg, after a metadata filter.
+SLOT_BACKENDS[ONE] = {
+    search = function(src, item)
+        local out = {}
+        local slots = exports[ONE]:SearchInventory(src, item)
+        if type(slots) ~= 'table' then return out end
+        for _, row in pairs(slots) do
+            if row then out[#out + 1] = slotEntry(row.slot, row.name or item, row.count, row.metadata) end
+        end
+        return out
+    end,
+    get = function(src, slot)
+        local row = exports[ONE]:GetSlot(src, slot)
+        if type(row) ~= 'table' then return nil end
+        return slotEntry(row.slot or slot, row.name, row.count, row.metadata)
+    end,
+    setMetadata = function(src, slot, metadata)
+        -- The metadata table replaces the slot's outright rather than merging into it, which is
+        -- the contract inventory.setSlotMetadata already documents.
+        local ok = exports[ONE]:SetItemMetadata(src, slot, metadata)
+        return ok ~= false
+    end,
+    removeFromSlot = function(src, item, slot, count)
+        local ok = exports[ONE]:RemoveItem(src, item, count or 1, nil, slot)
+        return ok == true
     end,
 }
 

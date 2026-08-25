@@ -65,7 +65,6 @@ return {
         { id = 'birdy', label = 'Squawk', icon = 'birdy', route = '/birdy', accent = '#1d9bf0', base = false, enabled = true },
         { id = 'services', label = 'Services', icon = 'services', route = '/services', accent = '#16B8A6', base = false, enabled = true },
         { id = 'pages', label = 'Pages', icon = 'pages', route = '/pages', accent = '#FBC02D', base = false, enabled = true },
-        { id = 'review', label = 'Review', icon = 'review', route = '/review', accent = '#E03131', base = false, enabled = false },
         { id = 'marketplace', label = 'Marketplace', icon = 'marketplace', route = '/marketplace', accent = '#0a84ff', base = false, enabled = true },
         { id = 'darkchat', label = 'Dark Chat', icon = 'darkchat', route = '/darkchat', accent = '#1c1c1e', base = false, enabled = true },
         { id = 'cherry', label = 'Cherry', icon = 'cherry', route = '/cherry', accent = '#F0285A', base = false, enabled = true },

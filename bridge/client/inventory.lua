@@ -22,6 +22,14 @@ local function chooseImageResolver()
         end
     end
 
+    if active == 'one_inventory' then
+        -- Same web/images layout as ox_inventory. An item may also name a remote host in its
+        -- definition, but only the local folder is addressable as a nui:// path from here.
+        return function(item)
+            return ('nui://one_inventory/web/images/%s.png'):format(item)
+        end
+    end
+
     if active == 'tgiann-inventory' then
         local imageResource = GetResourceState('inventory_images') == 'started' and 'inventory_images' or active
         local imagePath = imageResource == 'inventory_images' and 'images' or 'web/images'
@@ -103,6 +111,12 @@ local function chooseLabelResolver()
             return (ok and item) and item.label or nil
         end
     end
+    if active == 'one_inventory' then
+        return function(itemName)
+            local ok, def = pcall(exports.one_inventory.GetItemDefinition, exports.one_inventory, itemName)
+            return (ok and type(def) == 'table') and def.label or nil
+        end
+    end
     if active == 'jaksam_inventory' then
         return function(itemName)
             local ok, label = pcall(exports[active].getItemLabel, exports[active], itemName)
@@ -152,6 +166,9 @@ local function chooseCountResolver()
 
     if active == 'ox_inventory' then
         return function(item) return exports.ox_inventory:Search('count', item) or 0 end
+    end
+    if active == 'one_inventory' then
+        return function(item) return exports.one_inventory:GetItemCount(item) or 0 end
     end
     if active == 'tgiann-inventory' then
         return function(item) return exports['tgiann-inventory']:GetItemCount(item) or 0 end

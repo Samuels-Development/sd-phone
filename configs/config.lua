@@ -32,7 +32,6 @@ local config = {
     DarkChat    = require 'configs.darkchat',      -- anonymous chat rooms
     Marketplace = require 'configs.marketplace',   -- classifieds
     Pages       = require 'configs.pages',          -- yellow-pages board
-    Review        = require 'configs.review',            -- business reviews directory
     Banking     = require 'configs.banking',        -- wallet + transfers
     Services    = require 'configs.services',        -- job/company directory + boss management
     VoiceMemos  = require 'configs.voicememos',     -- voice notes + Fivemanage

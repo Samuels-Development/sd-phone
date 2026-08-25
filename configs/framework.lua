@@ -1,9 +1,8 @@
 -- Framework-specific settings.
 --
--- ox_core support is EXPERIMENTAL: it is built against ox_core's published API but has not been
--- run against a live ox_core server. Employee and owner NAMES come back blank in the Services
--- roster, the MDT people search and Homes offline lookups, and jail features stay off. Identity,
--- cash and bank money, jobs, gangs and society balances are all wired.
+-- ox_core, not yet wired: employee and owner NAMES come back blank in the Services roster, the
+-- MDT people search and Homes offline lookups, and jail features stay off. Identity, cash and
+-- bank money, jobs, gangs and society balances are all wired.
 --
 -- Only ox_core needs anything here: QBCore, QBox and ESX all name
 -- their concepts the same way on every install, so the bridge reads them without asking.

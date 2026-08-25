@@ -46,12 +46,11 @@ print(('^2[SD-PHONE]^0 Framework detected: ^3%s^0'):format(info.name))
 
 if info.name == 'ox' then
     print([[
-^3[SD-PHONE] ox_core support is EXPERIMENTAL.^0
-^3It has been built against ox_core's published API but never run against a live ox_core server.^0
-^3Known gaps: employee/owner NAMES come back blank in the Services roster, the MDT people search^0
-^3and Homes offline lookups; jail features stay off. Everything else - identity, cash and bank,^0
-^3jobs, gangs, society balances - is wired.^0
+^3[SD-PHONE] Running on ox_core.^0
 ^3Set the group types the phone should treat as jobs and gangs in configs/framework.lua.^0
+^3Not yet wired: employee and owner NAMES come back blank in the Services roster, the MDT people^0
+^3search and Homes offline lookups, and jail features stay off. Identity, cash and bank, jobs,^0
+^3gangs and society balances all work.^0
 ^3Please report anything wrong at github.com/Samuels-Development/sd-phone/issues^0
     ]])
 end

@@ -1,6 +1,7 @@
 ---@type string[] Supported inventory resources, in detection-priority order.
 local CANDIDATES = {
     'ox_inventory',
+    'one_inventory',
     'tgiann-inventory',
     'jaksam_inventory',
     'qs-inventory',

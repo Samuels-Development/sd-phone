@@ -30,10 +30,12 @@
 -- lets a player carry their data to a new phone (the number stays behind on the old SIM).
 --
 -- Backend support: reading/writing per-slot item metadata is required. Supported out of the box:
---   * ox_inventory              (metadata mode, or the physical SIM-tray mode below)
---   * qb-inventory / ps / lj    (metadata mode via the QBCore item `info` table)
--- Other inventories (qs / tgiann / codem / origen / jaksam) need a small adapter in
--- server/sim/inv.lua; plain ESX inventory has no item metadata and cannot support this feature.
+--   * ox_inventory                        (metadata mode, or the physical SIM-tray mode below)
+--   * one_inventory                       (metadata mode)
+--   * qb-inventory / ps / lj              (metadata mode via the QBCore item `info` table)
+--   * qs(-pro) / tgiann / codem / origen  (metadata mode)
+--   * jaksam                              (metadata mode)
+-- Plain ESX inventory has no item metadata and cannot support this feature.
 return {
     -- Master switch. Off = sd-phone behaves exactly as before (numbers auto-assigned per
     -- character, phone always has service).

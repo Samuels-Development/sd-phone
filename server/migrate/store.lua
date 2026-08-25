@@ -719,6 +719,112 @@ function store.insertPgNotifications(rows)
     insertMulti('INSERT IGNORE INTO phone_photogram_notifications (id, recipient, kind, actor, post_id, seen, created_at) VALUES', 7, rows)
 end
 
+---Usernames already present in Clout, so a migrated account never overwrites a live one.
+---@return table<string, boolean>
+function store.existingVibezUsernames()
+    local rows = MySQL.query.await('SELECT username FROM phone_vibez_profiles') or {}
+    local set = {}
+    for _, r in ipairs(rows) do set[r.username] = true end
+    return set
+end
+
+---@return table[]
+function store.lbTkAccounts()
+    return MySQL.query.await(([[
+        SELECT username, name AS display_name, password, bio, avatar, verified,
+               phone_number, UNIX_TIMESTAMP(date_joined) AS ts
+        FROM %s
+    ]]):format(lbt('tiktok_accounts'))) or {}
+end
+
+---lb calls the video file `src` and the audio track `music`; Clout calls them `video` and `sound`.
+---There is no poster frame on lb's side at all, so `thumb` is left for Clout to fill in.
+---@return table[]
+function store.lbTkVideos()
+    return MySQL.query.await(([[
+        SELECT id, username, src, caption, music, views, UNIX_TIMESTAMP(`timestamp`) AS ts FROM %s
+    ]]):format(lbt('tiktok_videos'))) or {}
+end
+
+---@return table[]
+function store.lbTkComments()
+    return MySQL.query.await(([[
+        SELECT id, video_id, reply_to, username, comment, UNIX_TIMESTAMP(`timestamp`) AS ts FROM %s
+    ]]):format(lbt('tiktok_comments'))) or {}
+end
+
+---@return table[]
+function store.lbTkLikes()
+    return MySQL.query.await(
+        ('SELECT username, video_id FROM %s'):format(lbt('tiktok_likes'))) or {}
+end
+
+---@return table[]
+function store.lbTkSaves()
+    return MySQL.query.await(
+        ('SELECT username, video_id FROM %s'):format(lbt('tiktok_saves'))) or {}
+end
+
+---@return table[]
+function store.lbTkCommentLikes()
+    return MySQL.query.await(
+        ('SELECT username, comment_id FROM %s'):format(lbt('tiktok_comments_likes'))) or {}
+end
+
+---@return table[]
+function store.lbTkFollows()
+    return MySQL.query.await(
+        ('SELECT followed, follower FROM %s'):format(lbt('tiktok_follows'))) or {}
+end
+
+---@return table[]
+function store.lbTkNotifications()
+    return MySQL.query.await(([[
+        SELECT id, username, `from` AS from_user, `type`, video_id, UNIX_TIMESTAMP(`timestamp`) AS ts
+        FROM %s
+    ]]):format(lbt('tiktok_notifications'))) or {}
+end
+
+---@param rows any[][] { username, display_name, bio, avatar, verified, created_at }
+function store.insertVzProfiles(rows)
+    insertMulti('INSERT IGNORE INTO phone_vibez_profiles (username, display_name, bio, avatar, verified, created_at) VALUES', 6, rows)
+end
+
+---@param rows any[][] { id, author, video, thumb, caption, sound, views, created_at }
+function store.insertVzPosts(rows)
+    insertMulti('INSERT IGNORE INTO phone_vibez_posts (id, author, video, thumb, caption, sound, views, created_at) VALUES', 8, rows)
+end
+
+---@param rows any[][] { id, post_id, author, body, gif_url, created_at }
+function store.insertVzComments(rows)
+    insertMulti('INSERT IGNORE INTO phone_vibez_comments (id, post_id, author, body, gif_url, created_at) VALUES', 6, rows)
+end
+
+---@param rows any[][] { post_id, username, created_at }
+function store.insertVzLikes(rows)
+    insertMulti('INSERT IGNORE INTO phone_vibez_likes (post_id, username, created_at) VALUES', 3, rows)
+end
+
+---@param rows any[][] { post_id, username, created_at }
+function store.insertVzSaves(rows)
+    insertMulti('INSERT IGNORE INTO phone_vibez_saves (post_id, username, created_at) VALUES', 3, rows)
+end
+
+---@param rows any[][] { comment_id, username, created_at }
+function store.insertVzCommentLikes(rows)
+    insertMulti('INSERT IGNORE INTO phone_vibez_comment_likes (comment_id, username, created_at) VALUES', 3, rows)
+end
+
+---@param rows any[][] { follower, target, created_at }
+function store.insertVzFollows(rows)
+    insertMulti('INSERT IGNORE INTO phone_vibez_follows (follower, target, created_at) VALUES', 3, rows)
+end
+
+---@param rows any[][] { id, recipient, kind, actor, post_id, preview, seen, created_at }
+function store.insertVzNotifications(rows)
+    insertMulti('INSERT IGNORE INTO phone_vibez_notifications (id, recipient, kind, actor, post_id, preview, seen, created_at) VALUES', 8, rows)
+end
+
 ---Fills in an lb-phone password hash on accounts that have none.
 ---
 ---An account with an empty hash cannot be signed into at all, which for mail means nobody can ever

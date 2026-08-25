@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Mic, MicOff, Phone, Plus, User, Video, Volume2 } from 'lucide-react';
+import { ChevronDown, Disc, Mic, MicOff, Phone, Plus, Video, Volume2 } from 'lucide-react';
 
 import { AlertDialog } from '@/ui/AlertDialog';
 import { resolveWallpaper } from '@/shell/wallpapers';
@@ -10,10 +10,15 @@ import { useContacts } from '@/stores/contactsStore';
 import { acceptCall, addToCall, declineCall, getCurrentCall, hangupCall } from './callsApi';
 import { useMaskedPhone } from '@/stores/themeStore';
 import { playDtmf } from './keypad/dtmf';
+import { Dialpad } from './keypad/Dialpad';
+import { ContactPickerSheet } from '@/shared/ContactPickerSheet';
+import { Sheet } from '@/ui/Sheet';
 import { startRing } from './calls/ringtone';
+import { callRecorder } from './calls/callRecorder';
+import { recordingEnabled } from './callrecApi';
 import { startRingtone } from '@/apps/settings/tonePlayer';
 import { resolveTone } from '@/apps/settings/tones';
-import { useTheme } from '@/stores/themeStore';
+import { useTheme, useThemeStore } from '@/stores/themeStore';
 import { VideoCall } from './calls/VideoCall';
 import { acceptVideo, requestVideo, stopVideo } from './calls/webrtc';
 import { useCallStore } from '@/stores/callStore';
@@ -24,7 +29,7 @@ function fmtElapsed(seconds: number): string {
     return formatDuration(seconds);
 }
 
-const KEYPAD_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
+const RECORD_MAX_MINUTES = 10;
 
 export function CallLayer({ wallpaper }: { wallpaper?: string }) {
     const phoneFmt  = useMaskedPhone();
@@ -36,22 +41,24 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
     const others    = useCallStore(s => s.others);
     const pending   = useCallStore(s => s.pending);
     const isVideo   = useCallStore(s => s.video);
+    const minimised = useCallStore(s => s.minimised);
     const [muted, setMuted]     = useState(false);
     const [speaker, setSpeaker] = useState(false);
     const [keypadOpen, setKeypadOpen]     = useState(false);
     const [contactsOpen, setContactsOpen] = useState(false);
     const [addOpen, setAddOpen]           = useState(false);
-    const [addKeypad, setAddKeypad]       = useState(false);
     const [addDigits, setAddDigits]       = useState('');
     const [addError, setAddError]         = useState<string | null>(null);
     const [dtmfDialed, setDtmfDialed]     = useState('');
     const [droppedLost, setDroppedLost]   = useState<boolean | null>(null);
     const [now, setNow]         = useState(() => Date.now());
+    const [recording, setRecording]           = useState(false);
+    const [canRecord, setCanRecord]           = useState(false);
     const [videoPhase, setVideoPhase]         = useState<'off' | 'requesting' | 'incoming' | 'active'>('off');
     const [videoInitiator, setVideoInitiator] = useState(false);
     const [canMute, setCanMute] = useState(true);
     const { ringtone, ringtoneVol, customRingtones } = useTheme('ringtone', 'ringtoneVol', 'customRingtones');
-    const { contacts: contactList, load: loadContacts } = useContacts('contacts', 'load');
+    const { load: loadContacts } = useContacts('load');
 
     useEffect(() => {
         void fetchNui<{ mute?: boolean }>('sd-phone:call:voiceCapabilities')
@@ -59,19 +66,69 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
             .catch(() => {});
     }, []);
 
+    useEffect(() => { void recordingEnabled().then(setCanRecord); }, []);
+
+    const direction = useRef<'incoming' | 'outgoing'>('outgoing');
+    const [recError, setRecError] = useState<string | null>(null);
+
+    const motion = useThemeStore(s => s.motion);
+    const [anim, setAnim] = useState<'' | 'call-minimise' | 'call-restore'>('');
+    const [hidden, setHidden] = useState(minimised);
+    const wasMinimised = useRef(minimised);
+
+    useEffect(() => {
+        if (minimised === wasMinimised.current) return;
+        wasMinimised.current = minimised;
+
+        if (motion === 'off') { setHidden(minimised); setAnim(''); return; }
+
+        if (minimised) {
+            setAnim('call-minimise');
+            const id = window.setTimeout(() => { setHidden(true); setAnim(''); }, 300);
+            return () => window.clearTimeout(id);
+        }
+        setHidden(false);
+        setAnim('call-restore');
+        const id = window.setTimeout(() => setAnim(''), 380);
+        return () => window.clearTimeout(id);
+    }, [minimised, motion]);
+
+    const toggleRecording = useCallback(async () => {
+        if (callRecorder.active) {
+            const res = await callRecorder.stop();
+            setRecording(false);
+            if (!res.ok) setRecError(res.error ?? t('phone.recordFailed','Recording failed'));
+            return;
+        }
+        const started = await callRecorder.start(
+            { peerNumber: number ?? '', peerName: name ?? undefined, direction: direction.current },
+            RECORD_MAX_MINUTES,
+        );
+        if (!started) {
+            setRecError(t('phone.recordNoMic','Recording needs microphone access.'));
+            return;
+        }
+        setRecording(true);
+    }, [name, number]);
+
     const resetControls = useCallback(() => {
         setMuted(false); setSpeaker(false); setVideoPhase('off');
         setKeypadOpen(false); setContactsOpen(false); setDtmfDialed('');
-        setAddOpen(false); setAddKeypad(false); setAddDigits(''); setAddError(null);
+        setAddOpen(false); setAddDigits(''); setAddError(null);
+        if (callRecorder.active) void callRecorder.stop();
+        else callRecorder.dropPeer();
+        setRecording(false);
     }, []);
 
     useNuiEvent('sd-phone:call:incoming', useCallback((data) => {
         resetControls();
+        direction.current = 'incoming';
         useCallStore.getState().incoming(data);
     }, [resetControls]));
 
     useNuiEvent('sd-phone:call:outgoing', useCallback((data) => {
         resetControls();
+        direction.current = 'outgoing';
         useCallStore.getState().outgoing(data);
     }, [resetControls]));
 
@@ -95,6 +152,16 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
     useNuiEvent('sd-phone:video:begin', useCallback((data) => {
         setVideoInitiator(data?.initiator === true);
         setVideoPhase('active');
+    }, []));
+
+    useNuiEvent('sd-phone:record:peerStart', useCallback(() => {
+        void callRecorder.acceptPeer();
+    }, []));
+    useNuiEvent('sd-phone:record:peerStop', useCallback(() => {
+        callRecorder.dropPeer();
+    }, []));
+    useNuiEvent('sd-phone:video:signal', useCallback((data) => {
+        if (data?.slot === 'record') callRecorder.handleSignal(data);
     }, []));
 
     useNuiEvent('sd-phone:video:request', useCallback(() => setVideoPhase('incoming'), []));
@@ -132,7 +199,7 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
         if (!digits) return;
         const res = await addToCall(digits);
         if (!res.success) { setAddError(res.message ?? t('phone.couldNotAdd','Could not add that number')); return; }
-        setAddOpen(false); setAddKeypad(false); setAddDigits(''); setAddError(null);
+        setAddOpen(false); setAddDigits(''); setAddError(null);
     }
 
     const dropNotice = droppedLost === null ? null : (
@@ -148,7 +215,18 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
         />
     );
 
-    if (!phase) return dropNotice;
+    const recNotice = recError === null ? null : (
+        <AlertDialog
+            title={t('phone.recording','Recording')}
+            message={recError}
+            confirmLabel={t('phone.ok','OK')}
+            hideCancel
+            onCancel={() => setRecError(null)}
+            onConfirm={() => setRecError(null)}
+        />
+    );
+
+    if (!phase || (hidden && phase === 'active')) return <>{dropNotice}{recNotice}</>;
 
     const title    = name || phoneFmt(number) || t('phone.unknown','Unknown');
     const elapsed  = startedAt ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
@@ -159,7 +237,7 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
             : (isVideo ? t('phone.videoCallIncoming','Incoming video call') : t('phone.incomingCallStatus','Incoming call'));
 
     return (
-        <div className="absolute inset-0 z-[60] overflow-hidden font-sf">
+        <div className={`absolute inset-0 z-[60] overflow-hidden font-sf ${anim} ${anim ? 'app-anim-flatten' : ''}`}>
             <div
                 className="absolute inset-0"
                 style={{
@@ -174,6 +252,18 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
 
             <div className="relative z-10 flex h-full flex-col items-center">
                 <div className="flex shrink-0 flex-col items-center px-8 pt-[120px]">
+                    {recording && (
+                        <button
+                            type="button"
+                            onClick={() => void toggleRecording()}
+                            className="mb-3 flex items-center gap-2 rounded-full bg-ios-red/85 px-3.5 py-1.5 backdrop-blur-md"
+                        >
+                            <span className="h-[9px] w-[9px] animate-pulse rounded-full bg-white" />
+                            <span className="text-[13px] font-semibold tracking-wide text-white">
+                                {t('phone.recordingTapToStop','Recording, tap to stop')}
+                            </span>
+                        </button>
+                    )}
                     {isVideo && phase !== 'active' && (
                         <div className="mb-3 flex items-center gap-2 rounded-full bg-white/15 px-3.5 py-1.5 backdrop-blur-md">
                             <Video className="h-[16px] w-[16px] text-white" strokeWidth={2.2} />
@@ -237,7 +327,7 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
                                     <ControlButton
                                         label={t('phone.video','Video')}
                                         active={videoPhase === 'requesting'}
-                                        disabled={others.length > 0}
+                                        disabled={phase !== 'active' || others.length > 0}
                                         onClick={() => { if (phase === 'active' && videoPhase === 'off') { requestVideo(); setVideoPhase('requesting'); } }}
                                         icon={<Video className="h-[31px] w-[31px]" strokeWidth={2} />}
                                     />
@@ -245,11 +335,25 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
                                         label={t('phone.addCall','Add call')}
                                         active={addOpen}
                                         disabled={phase !== 'active' || pending !== null || others.length > 0}
-                                        onClick={() => { setAddError(null); setAddDigits(''); setAddKeypad(false); setAddOpen(true); void loadContacts(); }}
+                                        onClick={() => { setAddError(null); setAddDigits(''); setContactsOpen(true); void loadContacts(); }}
                                         icon={<Plus className="h-[34px] w-[34px]" strokeWidth={2} />}
                                     />
+                                    {canRecord && (
+                                        <ControlButton
+                                            label={t('phone.record','Record')}
+                                            active={recording}
+                                            disabled={phase !== 'active' || others.length > 0}
+                                            onClick={() => void toggleRecording()}
+                                            icon={<Disc className="h-[31px] w-[31px]" strokeWidth={2} />}
+                                        />
+                                    )}
                                     <ControlButton label={t('phone.keypad','Keypad')} active={keypadOpen} onClick={() => setKeypadOpen(true)} icon={<KeypadDots />} />
-                                    <ControlButton label={t('phone.contacts','Contacts')} active={contactsOpen} onClick={() => { setContactsOpen(true); void loadContacts(); }} icon={<User className="h-[31px] w-[31px]" strokeWidth={2} />} />
+                                    <ControlButton
+                                        label={t('phone.minimise','Minimise')}
+                                        disabled={phase !== 'active'}
+                                        onClick={() => useCallStore.getState().setMinimised(true)}
+                                        icon={<ChevronDown className="h-[34px] w-[34px]" strokeWidth={2} />}
+                                    />
                                 </div>
                             </div>
                         </div>
@@ -292,139 +396,71 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
             </div>
 
             {keypadOpen && (
-                <div className="absolute inset-0 z-[66] flex flex-col items-center justify-end bg-black/60 pb-[120px] backdrop-blur-xl">
-                    <div className="mb-5 flex h-[40px] items-center text-[30px] font-light tracking-wider text-white tabular-nums">
-                        {dtmfDialed.slice(-12) || <span className="text-[17px] font-normal text-white/40">{t('phone.keypad','Keypad')}</span>}
-                    </div>
-                    <div className="grid grid-cols-3 gap-x-6 gap-y-4">
-                        {KEYPAD_KEYS.map(k => (
-                            <button
-                                key={k}
-                                type="button"
-                                onClick={() => { playDtmf(k); setDtmfDialed(d => (d + k).slice(-24)); }}
-                                className="flex h-[70px] w-[70px] items-center justify-center rounded-full bg-white/[0.14] text-[30px] font-light text-white active:bg-white/35"
-                            >
-                                {k}
-                            </button>
-                        ))}
-                    </div>
-                    <button
-                        type="button"
-                        onClick={() => setKeypadOpen(false)}
-                        className="mt-7 text-[17px] font-semibold text-white/85 active:opacity-60"
-                    >
-                        {t('phone.hideKeypad','Hide')}
-                    </button>
-                </div>
+                <Sheet onClose={() => setKeypadOpen(false)} fit="content" zIndex={68} className="font-sf bg-base">
+                    {() => (
+                        <div className="flex flex-col items-center px-6 pb-9 pt-2">
+                            <div className="mb-5 flex h-[44px] items-center text-[32px] tracking-[0.02em] tabular-nums text-black dark:text-white">
+                                {dtmfDialed.slice(-12) || (
+                                    <span className="text-[17px] text-black/40 dark:text-white/40">{t('phone.keypad','Keypad')}</span>
+                                )}
+                            </div>
+                            <Dialpad onPress={k => { playDtmf(k); setDtmfDialed(d => (d + k).slice(-24)); }} />
+                        </div>
+                    )}
+                </Sheet>
             )}
 
+
             {addOpen && (
-                <div className="absolute inset-0 z-[66] flex flex-col bg-black/75 backdrop-blur-2xl">
-                    <div className="flex items-center justify-between px-6 pb-2 pt-[70px]">
-                        <span className="text-[22px] font-bold text-white">{t('phone.addCall','Add call')}</span>
-                        <button
-                            type="button"
-                            onClick={() => setAddOpen(false)}
-                            className="text-[17px] font-semibold text-ios-blue active:opacity-60"
-                        >
-                            {t('phone.cancel','Cancel')}
-                        </button>
-                    </div>
+                <Sheet onClose={() => { setAddOpen(false); setAddDigits(''); setAddError(null); }} fit="content" zIndex={68} className="font-sf bg-base">
+                    {() => (
+                        <div className="flex flex-col items-center px-6 pb-9 pt-2">
+                            <div className="text-[15px] font-semibold text-black/50 dark:text-white/50">
+                                {t('phone.addCall','Add call')}
+                            </div>
+                            <div className="mb-4 mt-2 flex h-[44px] items-center text-[32px] tracking-[0.02em] tabular-nums text-black dark:text-white">
+                                {addDigits || (
+                                    <span className="text-[17px] text-black/40 dark:text-white/40">{t('phone.enterNumber','Enter a number')}</span>
+                                )}
+                            </div>
 
-                    {addError && (
-                        <p className="px-6 pb-1 text-center text-[14px] text-ios-red">{addError}</p>
-                    )}
+                            {addError && <p className="pb-2 text-center text-[14px] text-ios-red">{addError}</p>}
 
-                    {addKeypad ? (
-                        <div className="flex flex-1 flex-col items-center justify-center pb-8">
-                            <div className="mb-5 flex h-[40px] items-center text-[30px] font-light tracking-wider text-white tabular-nums">
-                                {addDigits || <span className="text-[17px] font-normal text-white/40">{t('phone.enterNumber','Enter a number')}</span>}
-                            </div>
-                            <div className="grid grid-cols-3 gap-x-6 gap-y-4">
-                                {KEYPAD_KEYS.map(k => (
-                                    <button
-                                        key={k}
-                                        type="button"
-                                        onClick={() => { playDtmf(k); setAddDigits(d => (d + k).slice(0, 15)); }}
-                                        className="flex h-[70px] w-[70px] items-center justify-center rounded-full bg-white/[0.14] text-[30px] font-light text-white active:bg-white/35"
-                                    >
-                                        {k}
-                                    </button>
-                                ))}
-                            </div>
-                            <div className="mt-6 flex items-center gap-6">
-                                <button
-                                    type="button"
-                                    onClick={() => { setAddKeypad(false); setAddError(null); }}
-                                    className="text-[17px] font-semibold text-white/85 active:opacity-60"
-                                >
-                                    {t('phone.contacts','Contacts')}
-                                </button>
-                                <button
-                                    type="button"
-                                    disabled={addDigits.length === 0}
-                                    onClick={() => void submitAdd(addDigits)}
-                                    className="rounded-full bg-ios-green px-7 py-2.5 text-[15px] font-semibold text-white active:opacity-80 disabled:opacity-35"
-                                >
-                                    {t('phone.add','Add')}
-                                </button>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="flex-1 overflow-y-auto no-scrollbar px-6 pb-10">
+                            <Dialpad onPress={k => { playDtmf(k); setAddDigits(d => (d + k).slice(0, 15)); }} />
+
                             <button
                                 type="button"
-                                onClick={() => { setAddKeypad(true); setAddError(null); }}
-                                className="flex w-full items-center gap-3 border-b border-white/[0.08] py-3 text-left active:opacity-60"
+                                disabled={addDigits.length === 0}
+                                onClick={() => void submitAdd(addDigits)}
+                                className="mt-6 rounded-full bg-ios-green px-8 py-3 text-[16px] font-semibold text-white active:opacity-80 disabled:opacity-35"
                             >
-                                <span className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-white/15 text-white">
-                                    <KeypadDots />
-                                </span>
-                                <span className="text-[17px] font-medium text-white">{t('phone.dialNumber','Dial a number')}</span>
+                                {t('phone.add','Add')}
                             </button>
-                            {contactList.length === 0 && (
-                                <p className="pt-8 text-center text-[15px] text-white/50">{t('phone.noContacts','No contacts yet')}</p>
-                            )}
-                            {contactList.map(c => (
-                                <button
-                                    key={c.id}
-                                    type="button"
-                                    onClick={() => void submitAdd(c.phone)}
-                                    className="block w-full border-b border-white/[0.08] py-3 text-left active:opacity-60"
-                                >
-                                    <div className="text-[17px] font-medium text-white">{c.name}</div>
-                                    <div className="text-[14px] tabular-nums text-white/55">{phoneFmt(c.phone)}</div>
-                                </button>
-                            ))}
                         </div>
                     )}
-                </div>
+                </Sheet>
             )}
 
             {contactsOpen && (
-                <div className="absolute inset-0 z-[66] flex flex-col bg-black/75 backdrop-blur-2xl">
-                    <div className="flex items-center justify-between px-6 pb-2 pt-[70px]">
-                        <span className="text-[22px] font-bold text-white">{t('phone.contacts','Contacts')}</span>
+                <ContactPickerSheet
+                    zIndex={68}
+                    onPick={c => { setContactsOpen(false); void submitAdd(c.phone); }}
+                    onClose={() => setContactsOpen(false)}
+                    extra={
                         <button
                             type="button"
-                            onClick={() => setContactsOpen(false)}
-                            className="text-[17px] font-semibold text-ios-blue active:opacity-60"
+                            onClick={() => { setContactsOpen(false); setAddOpen(true); }}
+                            className="mb-4 flex w-full items-center gap-4 rounded-[12px] bg-surface px-4 py-3.5 text-left shadow-sm active:bg-black/[0.06] dark:active:bg-white/[0.06]"
                         >
-                            {t('phone.done','Done')}
+                            <span className="flex h-[56px] w-[56px] items-center justify-center rounded-full bg-ios-blue/15 text-ios-blue">
+                                <KeypadDots />
+                            </span>
+                            <span className="text-[21px] font-semibold text-black dark:text-white">
+                                {t('phone.dialNumber','Dial a number')}
+                            </span>
                         </button>
-                    </div>
-                    <div className="flex-1 overflow-y-auto no-scrollbar px-6 pb-10">
-                        {contactList.length === 0 && (
-                            <p className="pt-8 text-center text-[15px] text-white/50">{t('phone.noContacts','No contacts yet')}</p>
-                        )}
-                        {contactList.map(c => (
-                            <div key={c.id} className="border-b border-white/[0.08] py-3">
-                                <div className="text-[17px] font-medium text-white">{c.name}</div>
-                                <div className="text-[14px] tabular-nums text-white/55">{phoneFmt(c.phone)}</div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
+                    }
+                />
             )}
 
             {videoPhase === 'active' && (
@@ -438,6 +474,8 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
                     onHangup={() => void hangupCall(channel!)}
                 />
             )}
+
+            {recNotice}
         </div>
     );
 }

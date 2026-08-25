@@ -5,15 +5,9 @@ import { useKeypadInput } from '@/hooks/useKeypadInput';
 import { useSessionState } from '@/hooks/useSessionState';
 import { AddContact } from '../contacts/AddContact';
 import { playDtmf } from './dtmf';
+import { Dialpad } from './Dialpad';
 import { formatPhone, type Contact } from '../data';
 import { t } from '@/i18n';
-
-const KEYS: { d: string; sub: string }[] = [
-    { d: '1', sub: '' },     { d: '2', sub: 'ABC' },  { d: '3', sub: 'DEF' },
-    { d: '4', sub: 'GHI' },  { d: '5', sub: 'JKL' },  { d: '6', sub: 'MNO' },
-    { d: '7', sub: 'PQRS' }, { d: '8', sub: 'TUV' },  { d: '9', sub: 'WXYZ' },
-    { d: '*', sub: '' },     { d: '0', sub: '+' },    { d: '#', sub: '' },
-];
 
 export function KeypadTab({ onAddContact, onCall }: {
     onAddContact: (c: Contact) => Promise<string | null>;
@@ -56,21 +50,7 @@ export function KeypadTab({ onAddContact, onCall }: {
             </div>
 
             <div className="shrink-0 px-6 pb-[44px]">
-                <div className="grid grid-cols-3 justify-items-center gap-y-4">
-                    {KEYS.map(k => (
-                        <button
-                            key={k.d}
-                            type="button"
-                            onClick={() => press(k.d)}
-                            className="flex h-[95px] w-[95px] flex-col items-center justify-center rounded-full bg-[#e8e8ea] active:bg-surface dark:bg-elevated dark:active:bg-control"
-                        >
-                            <span className="text-[38px] font-normal leading-none text-black dark:text-white">{k.d}</span>
-                            {k.sub && (
-                                <span className="mt-[4px] text-[11px] font-semibold leading-none tracking-[0.16em] text-black/55 dark:text-white/55">{k.sub}</span>
-                            )}
-                        </button>
-                    ))}
-                </div>
+                <Dialpad onPress={press} />
 
                 <div className="mt-4 grid grid-cols-3 items-center justify-items-center">
                     <div />

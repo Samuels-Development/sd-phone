@@ -9,9 +9,12 @@ import { useContacts, useContactsStore } from '@/stores/contactsStore';
 import { groupContacts, matchesQuery, type Contact } from '@/apps/phone/data';
 import { useMaskedPhone } from '@/stores/themeStore';
 
-export function ContactPickerSheet({ onPick, onClose }: {
-    onPick:  (c: Contact) => void;
-    onClose: () => void;
+export function ContactPickerSheet({ onPick, onClose, forceDark, zIndex, extra }: {
+    onPick:    (c: Contact) => void;
+    onClose:   () => void;
+    forceDark?: boolean;
+    zIndex?:    number;
+    extra?:     ReactNode;
 }) {
     const { contacts } = useContacts('contacts');
     const [query, setQuery] = useState('');
@@ -34,7 +37,7 @@ export function ContactPickerSheet({ onPick, onClose }: {
     }
 
     return (
-        <Sheet onClose={settle} top={50} className="font-sf bg-base">
+        <Sheet onClose={settle} top={50} className="font-sf bg-base" forceDark={forceDark} zIndex={zIndex}>
             {({ close }) => {
                 const choose = (c: Contact) => { picked.current = c; close(); };
                 return (
@@ -45,6 +48,7 @@ export function ContactPickerSheet({ onPick, onClose }: {
                         </div>
 
                         <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar px-4 pb-2">
+                            {extra}
                             {sections.length === 0 ? (
                                 <p className="mt-12 text-center text-[15px] text-ios-gray">
                                     {searching ? t('common.noResultsForQuery', 'No results for “{q}”', { q: query.trim() }) : t('common.noContacts', 'No contacts.')}

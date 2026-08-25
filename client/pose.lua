@@ -81,6 +81,9 @@ local prop
 local typing = false
 ---@type boolean True while a call is live, whether it is still ringing out or already connected.
 local inCall = false
+---@type boolean True while the call's own screen is what the phone is showing. False once it has
+---been minimised away, which is the one case where a live call is not held to the ear.
+local callUi = true
 ---@type table<integer, true> Prop models this client has already failed to stream.
 local unavailableModels = {}
 
@@ -112,9 +115,12 @@ local function currentClip()
         action = landscape and 'landscape' or 'camera'
     elseif typing then
         action = "typing"
-    elseif inCall then
+    elseif inCall and (callUi or not phoneOpen) then
         -- A live call outranks the reading pose whether the phone is on screen or stowed, so the
-        -- ped keeps it at their ear for the whole call instead of only while the UI is up.
+        -- ped keeps it at their ear for the whole call instead of only while the UI is up. The
+        -- exception is a call that has been minimised away to use another app: reading the screen
+        -- with the phone still at the ear is the one combination that never looks right. Stowing
+        -- the phone while minimised puts it straight back, since only an open phone can be read.
         action = 'call'
     end
     return CLIPS[action][IsPedInAnyVehicle(cache.ped, true) and 'inCar' or 'onFoot']
@@ -220,12 +226,13 @@ function pose.stop()
 end
 
 ---Mirrors the phone's state, then starts or stops the pose to match it.
----@param state { open: boolean, torch: boolean, camera: boolean, color: string, typing: boolean, call: boolean }
+---@param state { open: boolean, torch: boolean, camera: boolean, color: string, typing: boolean, call: boolean, callUi: boolean }
 function pose.refresh(state)
     phoneOpen = state.open and true or false
     torchOn   = state.torch and true or false
     cameraOn  = state.camera and true or false
     inCall    = state.call and true or false
+    callUi    = state.callUi ~= false
     color     = state.color or color
     if state.typing ~= nil then typing = state.typing and true or false end
     if not phoneOpen then typing = false end

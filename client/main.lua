@@ -139,11 +139,11 @@ require 'client.apps.garages'
 require 'client.apps.darkchat'
 require 'client.apps.marketplace'
 require 'client.apps.pages'
-require 'client.apps.review'
 require 'client.apps.weazelnews'
 require 'client.apps.banking'
 require 'client.apps.services'
 require 'client.apps.voicememos'
+require 'client.apps.callrec'
 require 'client.apps.music'
 require 'client.lockscreenwidgets'
 require 'client.apps.share'
@@ -241,6 +241,9 @@ local cameraSurface = 'camera'
 local cameraCursorFree = false
 ---@type boolean True while a call is live; holds the pose up after the phone is put away.
 local callActive = false
+---@type boolean True while the call screen has been minimised away for another app, which is the
+---one live-call case that drops out of the ear pose.
+local callMinimised = false
 ---@type boolean True while a UI text field is focused.
 local typingInPhone = false
 ---@type boolean True while the focused field is digit-only (PIN pads, dialers): keep-input
@@ -276,6 +279,7 @@ local function updatePose()
         camera = cameraActive,
         color  = currentFrameColor,
         call   = callActive,
+        callUi = not callMinimised,
     })
     broadcastHoldState()
 end
@@ -421,12 +425,14 @@ AddEventHandler('sd-phone:client:cameraMode', function(on, surface)
     syncKeepInput()
 end)
 
----Tracks whether a call is live, then re-syncs the pose so the phone stays in hand once the UI is
----put away. Routed through updatePose rather than straight into the pose module so the prop
----statebag other players read is broadcast with it.
+---Tracks whether a call is live and whether its screen has been minimised away, then re-syncs the
+---pose so the phone stays in hand once the UI is put away. Routed through updatePose rather than
+---straight into the pose module so the prop statebag other players read is broadcast with it.
 ---@param on any truthy from the first ring-out until the call ends
-AddEventHandler('sd-phone:client:callPose', function(on)
-    callActive = on and true or false
+---@param minimised any truthy while the call screen has been left for another app
+AddEventHandler('sd-phone:client:callPose', function(on, minimised)
+    callActive    = on and true or false
+    callMinimised = minimised and true or false
     updatePose()
 end)
 

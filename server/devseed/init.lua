@@ -14,6 +14,8 @@ local badges     = require 'server.badges.init'
 local util       = require 'server.util'
 ---@type table Player bridge (bridge.server.player): citizenid/name/phone-number lookups.
 local player     = require 'bridge.server.player'
+---@type table Call actions (server.calls.actions): the dev fake-call registry.
+local callActions = require 'server.calls.actions'
 
 ---@type string Sentinel citizenid that owns the "someone else's" seed rows.
 local OTHER = 'DEVSEED'
@@ -401,4 +403,46 @@ lib.addCommand('seedphone', {
         body = ('Seeded %d rows across %d apps. Open the admin panel, then hit Scan now on Flags.')
             :format(total, #apps),
     })
+end)
+
+---@type integer Channel the fake call uses. Far above anything the real allocator hands out, so
+---a test call can never collide with a live one.
+local FAKE_CALL_CHANNEL = 990001
+
+---/fakecall [name] - DEV TOOL: drops the caller straight into the in-call panel, talking to
+---themselves. The client drives the panel directly, so nothing on the server is
+---holding a session: the red hangup button ends it because hangup on an unknown channel already
+---replies with call:ended.
+---
+---There is no voice behind it. Speaker and Mute talk to the voice script about a call that does
+---not exist, and a recording started here has no peer to answer, so it saves as one-sided.
+---@param source integer player server id
+---@param args table { name?: string }
+lib.addCommand('fakecall', {
+    help = 'Dev: put yourself in the in-call panel to test the call UI',
+    restricted = 'group.admin',
+    params = { { name = 'name', type = 'longString', help = 'Caller name to show', optional = true } },
+}, function(source, args)
+    local cid = player.getIdentifier(source)
+    if not cid then return end
+
+    local myNumber = (tostring(settingsStore.getPhoneNumber(cid) or ''):gsub('%D', ''))
+    local display  = args.name
+    if type(display) ~= 'string' or display == '' then display = player.getName(source) or 'Test Call' end
+
+    callActions.devFake(source, {
+        channel   = FAKE_CALL_CHANNEL,
+        number    = myNumber ~= '' and myNumber or '5550100',
+        name      = display,
+        startedAt = os.time(),
+    })
+
+    TriggerClientEvent('sd-phone:client:call:devFake', source, {
+        channel = FAKE_CALL_CHANNEL,
+        name    = display,
+        number  = myNumber ~= '' and myNumber or '5550100',
+        video   = false,
+    })
+
+    print(('^2[sd-phone]^0 /fakecall opened the call panel for %s as "%s"'):format(cid, display))
 end)

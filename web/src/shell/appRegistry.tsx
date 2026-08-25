@@ -65,7 +65,6 @@ const APP_REGISTRY = {
     groups:      entry(() => import('@/apps/groups/Groups').then(m => ({ default: m.Groups }))),
     services:    entry(() => import('@/apps/services/Services').then(m => ({ default: m.Services }))),
     pages:       entry(() => import('@/apps/pages/Pages').then(m => ({ default: m.Pages }))),
-    review:      entry(() => import('@/apps/review/Review').then(m => ({ default: m.Review }))),
     marketplace: entry(() => import('@/apps/marketplace/Marketplace').then(m => ({ default: m.Marketplace }))),
     radio:       entry(() => import('@/apps/radio/Radio').then(m => ({ default: m.Radio }))),
     darkchat:    entry(() => import('@/apps/darkchat/DarkChat').then(m => ({ default: m.DarkChat }))),

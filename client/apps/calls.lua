@@ -29,14 +29,26 @@ local micMuted = false
 ---@type boolean True from the moment a call starts ringing out until it ends.
 local callLive = false
 
----Tells the shell whether a call is live, so the held pose survives the phone being put away.
+---@type boolean True while the call screen has been minimised away, so the phone is open on some
+---other app. Only meaningful while callLive.
+local callMinimised = false
+
+---Tells the shell whether a call is live and whether its screen has been minimised away, so the
+---held pose survives the phone being put away and drops out of the ear pose once the player has
+---left the call screen for another app.
+local function syncCallPose()
+    TriggerEvent('sd-phone:client:callPose', callLive, callMinimised)
+end
+
 ---Only ever announced on a change: the pose refresh it drives also re-broadcasts the prop
----statebag, which is not worth doing on every roster or connect push.
+---statebag, which is not worth doing on every roster or connect push. Ending a call clears the
+---minimised flag too, so the next one opens on its call screen rather than inheriting this one.
 ---@param on boolean
 local function setCallLive(on)
     if callLive == on then return end
     callLive = on
-    TriggerEvent('sd-phone:client:callPose', on)
+    if not on then callMinimised = false end
+    syncCallPose()
 end
 
 ---Mutes/unmutes the local mic entirely (call AND proximity), through whichever voice script is
@@ -53,6 +65,19 @@ end
 ---@param cb fun(ok: string) NUI response
 RegisterNUICallback('sd-phone:call:mute', function(data, cb)
     setMicMuted(data and data.on)
+    cb('ok')
+end)
+
+---React to Lua: the call screen was minimised away or brought back. Drives the held pose only, so
+---it is dropped outside a live call rather than remembered for the next one.
+---@param data { on: boolean }
+---@param cb fun(ok: string) NUI response
+RegisterNUICallback('sd-phone:call:minimised', function(data, cb)
+    local on = data and data.on == true
+    if callLive and callMinimised ~= on then
+        callMinimised = on
+        syncCallPose()
+    end
     cb('ok')
 end)
 
@@ -352,3 +377,26 @@ RegisterNetEvent('sd-phone:client:call:video:begin',   function(data)  pushCall(
 RegisterNetEvent('sd-phone:client:call:video:accept',  function()      pushCall('sd-phone:video:accept',  nil) end)
 RegisterNetEvent('sd-phone:client:call:video:stop',    function()      pushCall('sd-phone:video:stop',    nil) end)
 RegisterNetEvent('sd-phone:client:call:video:signal',  function(data)  pushCall('sd-phone:video:signal',  data) end)
+
+-- Call recording: NUI to server one-way, and the peer's notifications back into the overlay.
+RegisterNUICallback('sd-phone:record:start', function(_, cb) TriggerServerEvent('sd-phone:server:call:record:start'); cb('ok') end)
+RegisterNUICallback('sd-phone:record:stop',  function(_, cb) TriggerServerEvent('sd-phone:server:call:record:stop');  cb('ok') end)
+
+RegisterNetEvent('sd-phone:client:call:record:start', function() pushCall('sd-phone:record:peerStart', nil) end)
+RegisterNetEvent('sd-phone:client:call:record:stop',  function() pushCall('sd-phone:record:peerStop',  nil) end)
+
+---Dev only: opens the phone and drives the in-call panel with no real call behind it. The
+---sequencing lives here rather than on the server so the open animation is given time to finish
+---before the panel is pushed on top of it.
+---@param data table { channel: number, name: string, number: string }
+RegisterNetEvent('sd-phone:client:call:devFake', function(data)
+    if type(data) ~= 'table' then return end
+    exports['sd-phone']:open()
+    SetTimeout(450, function()
+        setCallLive(true)
+        pushCall('sd-phone:call:outgoing', data)
+        SetTimeout(1200, function()
+            pushCall('sd-phone:call:connected', { channel = data.channel })
+        end)
+    end)
+end)
