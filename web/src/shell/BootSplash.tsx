@@ -5,10 +5,11 @@ import { createPortal } from 'react-dom';
 import logoUrl from '@/assets/logo.png';
 import { t } from '@/i18n';
 import { isFiveM } from '@/core/nui';
+import { isDemo } from '@/core/demo';
 import { useThemeStore } from '@/stores/themeStore';
 
 let played = false;
-let enabled = true;
+let enabled = !isDemo;
 let replays = 0;
 const listeners = new Set<() => void>();
 
@@ -20,11 +21,16 @@ function replaySnapshot(): number {
     return replays;
 }
 
+// The website preview never boots. A visitor arrives mid-session rather than switching a phone on,
+// so a splash there reads as the page stalling. Both entry points are closed rather than just the
+// default, because a server setting push and the replay hook could each switch it back on.
 export function setBootScreenEnabled(v: boolean): void {
+    if (isDemo) return;
     enabled = v;
 }
 
 export function replayBootSplash(): void {
+    if (isDemo) return;
     played = false;
     replays += 1;
     listeners.forEach(fn => fn());
