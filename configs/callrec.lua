@@ -16,7 +16,7 @@
 return {
     -- Master switch. With this off the Record button never appears, the server refuses uploads,
     -- and the Recordings tab hides itself.
-    Enabled = true,
+    Enabled = false,
 
     -- Longest single recording. The recorder stops itself at the cap and uploads what it has,
     -- rather than dropping the lot for going over.
