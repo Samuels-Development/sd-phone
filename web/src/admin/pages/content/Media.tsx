@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, Minimize2, Play, Volume2, X, ZoomIn } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Minimize2, Play, X, ZoomIn } from 'lucide-react';
 import clsx from 'clsx';
 
 import type { AdminContentMedia } from '../../types';
 import { useAdminSurface, useEscapeHandler } from '../../ui';
+import { AudioPlayer } from './AudioPlayer';
 
 export function MediaStrip({ media, size = 64, max = 6, onOpen, className }: {
     media?: AdminContentMedia[] | null;
@@ -16,43 +17,48 @@ export function MediaStrip({ media, size = 64, max = 6, onOpen, className }: {
     const usable = (media ?? []).map((m, at) => ({ m, at })).filter(({ m }) => m.url || m.audio);
     if (usable.length === 0) return null;
 
-    const shown = usable.slice(0, max);
-    const extra = usable.length - shown.length;
+    const sounds = usable.filter(({ m }) => m.audio);
+    const visuals = usable.filter(({ m }) => !m.audio);
+
+    const shown = visuals.slice(0, max);
+    const extra = visuals.length - shown.length;
 
     return (
-        <div className={clsx('flex flex-wrap gap-1.5', className)}>
-            {shown.map(({ m, at }, i) => (
-                <button
-                    key={`${m.url}-${i}`}
-                    type="button"
-                    onClick={e => { e.stopPropagation(); onOpen(at); }}
-                    style={{ width: size, height: size }}
-                    className="group relative shrink-0 overflow-hidden rounded-lg bg-black/40 ring-1 ring-white/[0.08] transition-transform hover:scale-[1.04]"
-                    title={m.audio ? 'Play recording' : m.video ? 'Play clip' : 'View full size'}
-                >
-                    {m.audio || !m.url ? (
-                        <span className="flex h-full w-full items-center justify-center bg-ios-blue/15 text-[#6db4ff]">
-                            <Volume2 size={size > 56 ? 22 : 16} />
-                        </span>
-                    ) : (
-                        <img src={m.url} alt="" loading="lazy" draggable={false} className="h-full w-full object-cover" />
-                    )}
-                    {m.video && (
-                        <span className="absolute inset-0 flex items-center justify-center bg-black/25">
-                            <Play size={size > 56 ? 18 : 14} className="fill-white text-white drop-shadow" />
-                        </span>
-                    )}
-                </button>
+        <div className={clsx('flex flex-col gap-2', className)}>
+            {sounds.map(({ m }, i) => (
+                <AudioPlayer key={`${m.audio}-${i}`} src={m.audio ?? ''} />
             ))}
-            {extra > 0 && (
-                <button
-                    type="button"
-                    onClick={e => { e.stopPropagation(); onOpen(usable[max]?.at ?? 0); }}
-                    style={{ width: size, height: size }}
-                    className="shrink-0 rounded-lg bg-white/[0.05] text-[12px] font-bold text-zinc-400 ring-1 ring-white/[0.08] transition-colors hover:bg-white/[0.09] hover:text-zinc-200"
-                >
-                    +{extra}
-                </button>
+
+            {shown.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                    {shown.map(({ m, at }, i) => (
+                        <button
+                            key={`${m.url}-${i}`}
+                            type="button"
+                            onClick={e => { e.stopPropagation(); onOpen(at); }}
+                            style={{ width: size, height: size }}
+                            className="group relative shrink-0 overflow-hidden rounded-lg bg-black/40 ring-1 ring-white/[0.08] transition-transform hover:scale-[1.04]"
+                            title={m.video ? 'Play clip' : 'View full size'}
+                        >
+                            <img src={m.url ?? undefined} alt="" loading="lazy" draggable={false} className="h-full w-full object-cover" />
+                            {m.video && (
+                                <span className="absolute inset-0 flex items-center justify-center bg-black/25">
+                                    <Play size={size > 56 ? 18 : 14} className="fill-white text-white drop-shadow" />
+                                </span>
+                            )}
+                        </button>
+                    ))}
+                    {extra > 0 && (
+                        <button
+                            type="button"
+                            onClick={e => { e.stopPropagation(); onOpen(visuals[max]?.at ?? 0); }}
+                            style={{ width: size, height: size }}
+                            className="shrink-0 rounded-lg bg-white/[0.05] text-[12px] font-bold text-zinc-400 ring-1 ring-white/[0.08] transition-colors hover:bg-white/[0.09] hover:text-zinc-200"
+                        >
+                            +{extra}
+                        </button>
+                    )}
+                </div>
             )}
         </div>
     );
@@ -149,13 +155,9 @@ export function MediaLightbox({ media, index, onIndex, onClose, caption }: {
         >
             <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-6">
                 {isAudio && (
-                    <audio
-                        src={current.audio ?? undefined}
-                        controls
-                        autoPlay
-                        className="w-[420px] max-w-full rounded-xl bg-[#1a1b1f] p-3 shadow-2xl"
-                        onMouseDown={e => e.stopPropagation()}
-                    />
+                    <div className="w-[420px] max-w-full rounded-xl bg-[#1a1b1f] p-3 shadow-2xl" onMouseDown={e => e.stopPropagation()}>
+                        <AudioPlayer src={current.audio ?? current.url ?? ''} />
+                    </div>
                 )}
                 {isVideo && (
                     <video
