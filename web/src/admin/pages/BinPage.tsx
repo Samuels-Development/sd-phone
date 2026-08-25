@@ -7,7 +7,7 @@ import { Badge, Btn, Card, CenterNote, ConfirmModal, LoadMore, OnlineDot, Spinne
 import { usePaged } from '../usePaged';
 
 const APP_LABEL: Record<string, string> = {
-    darkchat: 'Dark Chat', photogram: 'Photogram', vibez: 'Clout', marketplace: 'Marketplace',
+    birdy: 'Squawk', darkchat: 'Dark Chat', photogram: 'Photogram', vibez: 'Clout', marketplace: 'Marketplace',
     pages: 'Pages', gallery: 'Gallery', documents: 'Documents', weazelnews: 'Weazel News',
     voicememos: 'Voice memos',
 };

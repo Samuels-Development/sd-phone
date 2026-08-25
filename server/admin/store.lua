@@ -882,6 +882,16 @@ local function isoToEpoch(iso)
     }) + UTC_DRIFT
 end
 
+---The inverse, to the second: turns a cursor's epoch back into the stamp shape the column holds,
+---so a keyset cursor can be compared against the raw string instead of against SQL arithmetic.
+---Seconds precision only, which is why callers compare the first 19 characters rather than the
+---whole column: the stored value may carry a fractional part this cannot reproduce.
+---@param ts integer epoch seconds
+---@return string iso `YYYY-MM-DDTHH:MM:SS`
+local function epochToIso(ts)
+    return os.date('!%Y-%m-%dT%H:%M:%S', ts - UTC_DRIFT) --[[@as string]]
+end
+
 CONTENT.mail = {
     deletable = false,
     -- One row per mailbox, not per email: Mail keeps every message in a JSON column on the
@@ -999,20 +1009,26 @@ CONTENT.weazelnews = {
 
 CONTENT.notes = {
     deletable = false,
-    -- Notes stamp themselves with an ISO string, so the epoch the cursor needs is derived in SQL
-    -- while the ordering stays on the raw column: the two agree because ISO stamps sort the same
-    -- either way, and only the raw column has an index behind it.
+    -- Notes stamp themselves with an ISO string, so the epoch every other reader here works in has
+    -- to come from somewhere. It is derived in Lua rather than in SQL, because STR_TO_DATE needs a
+    -- format string, a format string carries percent signs, and a parameterised query holding one
+    -- does not survive the driver: the whole tab came back empty. Mail already converts the same
+    -- stamps this way. The cursor compares against the first 19 characters of the raw column,
+    -- which orders identically (ISO stamps sort lexicographically) and tolerates the fractional
+    -- part the stored values carry but a second-precision cursor cannot reproduce.
     list = function(ts, id, like, limit)
-        return MySQL.query.await([[
-            SELECT id, UNIX_TIMESTAMP(STR_TO_DATE(updated_at, '%Y-%m-%dT%H:%i:%s')) AS ts,
-                   citizenid AS author_cid, body, images
+        local cursor = ts and epochToIso(ts) or nil
+        local rows = MySQL.query.await([[
+            SELECT id, updated_at, citizenid AS author_cid, body, images
             FROM phone_notes
             WHERE (? IS NULL OR body LIKE ? OR citizenid LIKE ?)
-              AND (? IS NULL OR UNIX_TIMESTAMP(STR_TO_DATE(updated_at, '%Y-%m-%dT%H:%i:%s')) < ?
-                   OR (UNIX_TIMESTAMP(STR_TO_DATE(updated_at, '%Y-%m-%dT%H:%i:%s')) = ? AND id < ?))
+              AND (? IS NULL OR LEFT(updated_at, 19) < ?
+                   OR (LEFT(updated_at, 19) = ? AND id < ?))
             ORDER BY updated_at DESC, id DESC
             LIMIT ?
-        ]], { like, like, like, ts, ts, ts, id, limit }) or {}
+        ]], { like, like, like, cursor, cursor, cursor, id, limit }) or {}
+        for i = 1, #rows do rows[i].ts = isoToEpoch(rows[i].updated_at) end
+        return rows
     end,
 }
 
@@ -1214,12 +1230,54 @@ function store.contentThread(app, id)
     return items
 end
 
+---@type table<string, table> Bin sources for apps that have no content adapter to carry one.
+---Squawk is read by a bespoke query rather than an adapter, because its posts resolve handles the
+---generic readers know nothing about, so without this its deletes could never reach the bin.
+local EXTRA_SOURCE = {
+    birdy = { table = 'phone_birdy_posts', lost = 'its replies, likes and reposts' },
+}
+
+---Where one app's rows are copied out of, and written back to, for the Recycle bin.
+---@param app string adapter key
+---@return table|nil source
+local function binSource(app)
+    return EXTRA_SOURCE[app] or (CONTENT[app] or {}).source
+end
+
+---@type table<string, table<string, string>> Date/time columns per source table, resolved once each.
+local DATE_COLUMNS = {}
+
+---Which of a table's columns hold a date or time, keyed to their type. Looked up rather than
+---hard-coded, so a source table that gains a timestamp column later restores without anyone
+---remembering this exists.
+---@param tbl string table name
+---@return table<string, string> columns column name to data type
+local function datetimeColumns(tbl)
+    local cached = DATE_COLUMNS[tbl]
+    if cached then return cached end
+
+    local out = {}
+    local rows = MySQL.query.await([[
+        SELECT COLUMN_NAME, DATA_TYPE FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+    ]], { tbl }) or {}
+    for i = 1, #rows do
+        local kind = tostring(rows[i].DATA_TYPE or ''):lower()
+        if kind == 'datetime' or kind == 'timestamp' or kind == 'date' then
+            out[rows[i].COLUMN_NAME] = kind
+        end
+    end
+
+    DATE_COLUMNS[tbl] = out
+    return out
+end
+
 ---What a delete would take with it that a restore cannot bring back, and whether the row can be
 ---copied out at all.
 ---@param app string adapter key
 ---@return boolean recoverable, string|nil lost what a restore leaves behind
 function store.contentSource(app)
-    local source = (CONTENT[app] or {}).source
+    local source = binSource(app)
     if not source then return false, nil end
     return true, source.lost
 end
@@ -1230,7 +1288,7 @@ end
 ---@param id string row id
 ---@return table|nil row, string excerpt a short readable summary for the bin listing
 function store.snapshotRow(app, id)
-    local source = (CONTENT[app] or {}).source
+    local source = binSource(app)
     if not source then return nil, '' end
 
     local column = source.idColumn or 'id'
@@ -1249,15 +1307,23 @@ end
 ---@param row table the snapshot taken by store.snapshotRow
 ---@return boolean ok, string|nil err
 function store.restoreRow(app, row)
-    local source = (CONTENT[app] or {}).source
+    local source = binSource(app)
     if not source then return false, 'That app cannot be restored into' end
 
+    local stamps = datetimeColumns(source.table)
     local columns, marks, values = {}, {}, {}
     for column, value in pairs(row) do
         -- Column names come from a snapshot this server wrote, never from a payload, but they are
         -- concatenated into SQL rather than bound, so anything unexpected is refused outright.
         if type(column) ~= 'string' or not column:match('^[%w_]+$') then
             return false, 'Unreadable snapshot'
+        end
+        -- A DATETIME or TIMESTAMP column is read back as epoch milliseconds, and MariaDB refuses
+        -- to take that number as a datetime. Without turning it back into a stamp, a restore into
+        -- any table carrying one fails outright: Squawk and the gallery are the two here.
+        if stamps[column] and type(value) == 'number' then
+            value = os.date(stamps[column] == 'date' and '%Y-%m-%d' or '%Y-%m-%d %H:%M:%S',
+                math.floor(value / 1000))
         end
         columns[#columns + 1] = column
         marks[#marks + 1]     = '?'

@@ -127,7 +127,7 @@ export function BirdyPage({ initialQuery, onOpenPlayer, toast }: {
             {doomed && (
                 <ConfirmModal
                     title="Delete Birdy post"
-                    body="The post, its replies and their likes are permanently removed. This cannot be undone."
+                    body="The post goes to the Recycle bin for 30 days. Its replies, likes and reposts do not come back."
                     confirmLabel="Delete post"
                     danger
                     onConfirm={() => remove(doomed)}

@@ -500,11 +500,20 @@ end
 function actions.birdyDeletePost(source, payload)
     local id = payload and payload.id
     if type(id) ~= 'string' or id == '' or #id > 16 then return fail('Missing post') end
+
+    local aCid, aName = adminIdent(source)
+
+    -- Copied out before the delete, like every other content delete: afterwards there is nothing
+    -- left to copy. Squawk carries its own bin source because it has no content adapter to hold one.
+    local kept = bin.keep('birdy', id, nil, aCid, aName)
+
     local removed = store.deleteBirdyPost(id)
     if removed == 0 then return fail('Post not found') end
-    local aCid, aName = adminIdent(source)
+    -- A queue entry pointing at a row that no longer exists is noise someone has to read to
+    -- dismiss, so removing the post retires its flags with it.
+    flags.clearFor('birdy', id)
     store.audit(aCid, aName, 'delete-birdy-post', nil, 'post ' .. id)
-    return ok()
+    return ok({ recoverable = kept })
 end
 
 ---Sets the verified badge on one Birdy account, addressed by handle: a character can hold
