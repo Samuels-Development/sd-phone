@@ -352,3 +352,10 @@ RegisterNetEvent('sd-phone:client:call:video:begin',   function(data)  pushCall(
 RegisterNetEvent('sd-phone:client:call:video:accept',  function()      pushCall('sd-phone:video:accept',  nil) end)
 RegisterNetEvent('sd-phone:client:call:video:stop',    function()      pushCall('sd-phone:video:stop',    nil) end)
 RegisterNetEvent('sd-phone:client:call:video:signal',  function(data)  pushCall('sd-phone:video:signal',  data) end)
+
+-- Call recording: NUI to server one-way, and the peer's notifications back into the overlay.
+RegisterNUICallback('sd-phone:record:start', function(_, cb) TriggerServerEvent('sd-phone:server:call:record:start'); cb('ok') end)
+RegisterNUICallback('sd-phone:record:stop',  function(_, cb) TriggerServerEvent('sd-phone:server:call:record:stop');  cb('ok') end)
+
+RegisterNetEvent('sd-phone:client:call:record:start', function() pushCall('sd-phone:record:peerStart', nil) end)
+RegisterNetEvent('sd-phone:client:call:record:stop',  function() pushCall('sd-phone:record:peerStop',  nil) end)

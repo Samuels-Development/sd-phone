@@ -4,7 +4,7 @@ import { Mic, MicOff, Orbit, Phone, ScanFace, SwitchCamera, Video } from 'lucide
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import {
     fetchIceConfig, setVideoCamera, setVideoCursor, setVideoZoom, stopVideo,
-    toggleVideoFaceCam, toggleVideoLock, VideoPeer,
+    toggleVideoFaceCam, toggleVideoLock, CallPeer,
     VIDEO_CAPTURE_FPS, VIDEO_CAPTURE_WIDTH, type Signal,
 } from './webrtc';
 import { getGameRender, PORTRAIT_CROP, type GameRender } from '@/render';
@@ -55,7 +55,7 @@ export function VideoCall({ peerName, initiator, muted, canMute, onToggleMute, o
 }) {
     const localCanvas = useRef<HTMLCanvasElement>(null);
     const remoteVideo = useRef<HTMLVideoElement>(null);
-    const peerRef     = useRef<VideoPeer | null>(null);
+    const peerRef     = useRef<CallPeer | null>(null);
     const renderRef   = useRef<GameRender | null>(null);
     const pending     = useRef<Signal[]>([]);
     const [front, setFront]   = useState(true);
@@ -111,7 +111,7 @@ export function VideoCall({ peerName, initiator, muted, canMute, onToggleMute, o
 
             const cfg  = await fetchIceConfig();
             if (dead) return;
-            const peer = new VideoPeer(cfg, initiator);
+            const peer = new CallPeer(cfg, initiator);
             peer.onRemote = (stream) => {
                 setHasRemote(true);
                 if (remoteVideo.current) remoteVideo.current.srcObject = stream;
@@ -137,6 +137,7 @@ export function VideoCall({ peerName, initiator, muted, canMute, onToggleMute, o
     }, [initiator]);
 
     useNuiEvent('sd-phone:video:signal', useCallback((data) => {
+        if (data?.slot === 'record') return;
         if (peerRef.current) void peerRef.current.handle(data);
         else pending.current.push(data);
     }, []));

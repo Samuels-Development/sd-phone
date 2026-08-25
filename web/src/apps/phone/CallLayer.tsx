@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Mic, MicOff, Phone, Plus, User, Video, Volume2 } from 'lucide-react';
+import { Disc, Mic, MicOff, Phone, Plus, User, Video, Volume2 } from 'lucide-react';
 
 import { AlertDialog } from '@/ui/AlertDialog';
 import { resolveWallpaper } from '@/shell/wallpapers';
@@ -11,6 +11,8 @@ import { acceptCall, addToCall, declineCall, getCurrentCall, hangupCall } from '
 import { useMaskedPhone } from '@/stores/themeStore';
 import { playDtmf } from './keypad/dtmf';
 import { startRing } from './calls/ringtone';
+import { callRecorder } from './calls/callRecorder';
+import { recordingEnabled } from './callrecApi';
 import { startRingtone } from '@/apps/settings/tonePlayer';
 import { resolveTone } from '@/apps/settings/tones';
 import { useTheme } from '@/stores/themeStore';
@@ -25,6 +27,10 @@ function fmtElapsed(seconds: number): string {
 }
 
 const KEYPAD_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
+
+// Mirrors configs/callrec.lua MaxMinutes. The recorder stops itself at the cap so a forgotten
+// recording cannot grow until the upload is refused for size.
+const RECORD_MAX_MINUTES = 10;
 
 export function CallLayer({ wallpaper }: { wallpaper?: string }) {
     const phoneFmt  = useMaskedPhone();
@@ -47,6 +53,8 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
     const [dtmfDialed, setDtmfDialed]     = useState('');
     const [droppedLost, setDroppedLost]   = useState<boolean | null>(null);
     const [now, setNow]         = useState(() => Date.now());
+    const [recording, setRecording]           = useState(false);
+    const [canRecord, setCanRecord]           = useState(false);
     const [videoPhase, setVideoPhase]         = useState<'off' | 'requesting' | 'incoming' | 'active'>('off');
     const [videoInitiator, setVideoInitiator] = useState(false);
     const [canMute, setCanMute] = useState(true);
@@ -59,19 +67,49 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
             .catch(() => {});
     }, []);
 
+    useEffect(() => { void recordingEnabled().then(setCanRecord); }, []);
+
+    const direction = useRef<'incoming' | 'outgoing'>('outgoing');
+    const [recError, setRecError] = useState<string | null>(null);
+
+    const toggleRecording = useCallback(async () => {
+        if (callRecorder.active) {
+            const res = await callRecorder.stop();
+            setRecording(false);
+            if (!res.ok) setRecError(res.error ?? t('phone.recordFailed','Recording failed'));
+            return;
+        }
+        const started = await callRecorder.start(
+            { peerNumber: number ?? '', peerName: name ?? undefined, direction: direction.current },
+            RECORD_MAX_MINUTES,
+        );
+        if (!started) {
+            setRecError(t('phone.recordNoMic','Recording needs microphone access.'));
+            return;
+        }
+        setRecording(true);
+    }, [name, number]);
+
     const resetControls = useCallback(() => {
         setMuted(false); setSpeaker(false); setVideoPhase('off');
         setKeypadOpen(false); setContactsOpen(false); setDtmfDialed('');
         setAddOpen(false); setAddKeypad(false); setAddDigits(''); setAddError(null);
+        // A call that ends mid-recording still keeps what was captured: stop uploads it rather
+        // than throwing it away for the call not having ended tidily.
+        if (callRecorder.active) void callRecorder.stop();
+        else callRecorder.dropPeer();
+        setRecording(false);
     }, []);
 
     useNuiEvent('sd-phone:call:incoming', useCallback((data) => {
         resetControls();
+        direction.current = 'incoming';
         useCallStore.getState().incoming(data);
     }, [resetControls]));
 
     useNuiEvent('sd-phone:call:outgoing', useCallback((data) => {
         resetControls();
+        direction.current = 'outgoing';
         useCallStore.getState().outgoing(data);
     }, [resetControls]));
 
@@ -95,6 +133,20 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
     useNuiEvent('sd-phone:video:begin', useCallback((data) => {
         setVideoInitiator(data?.initiator === true);
         setVideoPhase('active');
+    }, []));
+
+    // The far side answers the peer so its microphone reaches the recorder, and shows nothing.
+    // A caller is not told that the person they rang is recording them: an indicator would end
+    // the only thing this feature is for, and players can already record a call with OBS, where
+    // there is no retention limit and no admin trail at all.
+    useNuiEvent('sd-phone:record:peerStart', useCallback(() => {
+        void callRecorder.acceptPeer();
+    }, []));
+    useNuiEvent('sd-phone:record:peerStop', useCallback(() => {
+        callRecorder.dropPeer();
+    }, []));
+    useNuiEvent('sd-phone:video:signal', useCallback((data) => {
+        if (data?.slot === 'record') callRecorder.handleSignal(data);
     }, []));
 
     useNuiEvent('sd-phone:video:request', useCallback(() => setVideoPhase('incoming'), []));
@@ -148,7 +200,18 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
         />
     );
 
-    if (!phase) return dropNotice;
+    const recNotice = recError === null ? null : (
+        <AlertDialog
+            title={t('phone.recording','Recording')}
+            message={recError}
+            confirmLabel={t('phone.ok','OK')}
+            hideCancel
+            onCancel={() => setRecError(null)}
+            onConfirm={() => setRecError(null)}
+        />
+    );
+
+    if (!phase) return <>{dropNotice}{recNotice}</>;
 
     const title    = name || phoneFmt(number) || t('phone.unknown','Unknown');
     const elapsed  = startedAt ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
@@ -174,6 +237,18 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
 
             <div className="relative z-10 flex h-full flex-col items-center">
                 <div className="flex shrink-0 flex-col items-center px-8 pt-[120px]">
+                    {recording && (
+                        <button
+                            type="button"
+                            onClick={() => void toggleRecording()}
+                            className="mb-3 flex items-center gap-2 rounded-full bg-ios-red/85 px-3.5 py-1.5 backdrop-blur-md"
+                        >
+                            <span className="h-[9px] w-[9px] animate-pulse rounded-full bg-white" />
+                            <span className="text-[13px] font-semibold tracking-wide text-white">
+                                {t('phone.recordingTapToStop','Recording, tap to stop')}
+                            </span>
+                        </button>
+                    )}
                     {isVideo && phase !== 'active' && (
                         <div className="mb-3 flex items-center gap-2 rounded-full bg-white/15 px-3.5 py-1.5 backdrop-blur-md">
                             <Video className="h-[16px] w-[16px] text-white" strokeWidth={2.2} />
@@ -248,6 +323,15 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
                                         onClick={() => { setAddError(null); setAddDigits(''); setAddKeypad(false); setAddOpen(true); void loadContacts(); }}
                                         icon={<Plus className="h-[34px] w-[34px]" strokeWidth={2} />}
                                     />
+                                    {canRecord && (
+                                        <ControlButton
+                                            label={t('phone.record','Record')}
+                                            active={recording}
+                                            disabled={phase !== 'active' || others.length > 0}
+                                            onClick={() => void toggleRecording()}
+                                            icon={<Disc className="h-[31px] w-[31px]" strokeWidth={2} />}
+                                        />
+                                    )}
                                     <ControlButton label={t('phone.keypad','Keypad')} active={keypadOpen} onClick={() => setKeypadOpen(true)} icon={<KeypadDots />} />
                                     <ControlButton label={t('phone.contacts','Contacts')} active={contactsOpen} onClick={() => { setContactsOpen(true); void loadContacts(); }} icon={<User className="h-[31px] w-[31px]" strokeWidth={2} />} />
                                 </div>
@@ -438,6 +522,8 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
                     onHangup={() => void hangupCall(channel!)}
                 />
             )}
+
+            {recNotice}
         </div>
     );
 }

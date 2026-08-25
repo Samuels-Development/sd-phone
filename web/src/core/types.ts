@@ -383,12 +383,16 @@ export type NuiMessage =
     | { action: 'sd-phone:video:request' }
     | { action: 'sd-phone:video:accept' }
     | { action: 'sd-phone:video:stop' }
-    | { action: 'sd-phone:video:signal';   data: { kind: 'offer' | 'answer' | 'ice'; sdp?: string; candidate?: unknown } }
+    | { action: 'sd-phone:video:signal';   data: { kind: 'offer' | 'answer' | 'ice'; slot?: 'video' | 'record'; sdp?: string; candidate?: unknown } }
     | { action: 'sd-phone:video:key';      data: { key: string } }
     | { action: 'sd-phone:video:lock';     data: { on: boolean } }
     | { action: 'sd-phone:video:faceCam';  data: { on: boolean } }
     | { action: 'sd-phone:video:cursorState'; data: { on: boolean } }
     | { action: 'sd-phone:video:begin';    data: { initiator?: boolean } }
+    | { action: 'sd-phone:record:peerStart';  data: undefined }
+    | { action: 'sd-phone:record:peerStop';   data: undefined }
+    | { action: 'sd-phone:callrec:added';     data: { id: string; peerNumber: string; peerName?: string | null; direction: 'incoming' | 'outgoing'; oneSided: boolean; url: string; duration: number; date: string } }
+    | { action: 'sd-phone:callrec:failed';    data: { message: string } }
     | { action: 'sd-phone:voice:added';        data: { id: string; name: string; url: string; duration: number; date: string } }
     | { action: 'sd-phone:notes:added';        data: { id: string; body: string; sketches: string[]; images: string[]; createdAt: string; updatedAt: string } }
     | { action: 'sd-phone:documents:added';    data: { doc: DocFile } }

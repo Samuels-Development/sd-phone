@@ -1257,9 +1257,14 @@ local SIGNAL_WINDOW = 10000
 local SIGNAL_PER_WINDOW = 200
 
 ---Relays a WebRTC signaling blob to the call peer. Dropped silently when the sender isn't in a
----live call, when the blob isn't the shape the video peer sends, or when it is over budget.
+---live call, when the blob isn't the shape a peer sends, or when it is over budget.
+---
+---The blob is relayed verbatim, which is what lets one relay carry two peers: the client stamps
+---`slot` ('video' or 'record') and routes the arriving blob to the matching connection. A call
+---can have a video peer and a recording peer open at once, and their candidates must not be fed
+---to each other.
 ---@param src number
----@param payload table { kind: string, sdp?: string, candidate?: table }
+---@param payload table { kind: string, slot?: string, sdp?: string, candidate?: table }
 function actions.videoSignal(src, payload)
     if type(payload) ~= 'table' or not SIGNAL_KINDS[payload.kind] then return end
     if not util.smallTable(payload, 16, SIGNAL_BYTES) then return end
@@ -1267,6 +1272,23 @@ function actions.videoSignal(src, payload)
     if not peer then return end
     if not util.rateLimit(player.getIdentifier(src), 'call:videoSignal', SIGNAL_WINDOW, SIGNAL_PER_WINDOW) then return end
     TriggerClientEvent('sd-phone:client:call:video:signal', peer, payload)
+end
+
+---Tell the peer this side started recording, so their client adds its microphone to the peer and
+---raises the indicator. There is no accept step: the far side is told, never asked, and the
+---indicator is what makes that honest.
+---@param src number
+function actions.recordStart(src)
+    local peer = peerSrc(src)
+    if peer then TriggerClientEvent('sd-phone:client:call:record:start', peer) end
+end
+
+---Tell the peer this side stopped recording, so their client drops the mic track and clears the
+---indicator. Also fired when the recorder's call ends.
+---@param src number
+function actions.recordStop(src)
+    local peer = peerSrc(src)
+    if peer then TriggerClientEvent('sd-phone:client:call:record:stop', peer) end
 end
 
 ---Tell the peer this side wants to start video. Dropped silently outside a live call.

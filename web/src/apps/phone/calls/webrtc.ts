@@ -3,7 +3,8 @@ import type { HintConfig } from '@/ui/KeyHints';
 
 
 export interface IceConfig { iceServers: RTCIceServer[] }
-export type Signal = { kind: 'offer' | 'answer' | 'ice'; sdp?: string; candidate?: unknown };
+export type PeerSlot = 'video' | 'record';
+export type Signal = { kind: 'offer' | 'answer' | 'ice'; slot?: PeerSlot; sdp?: string; candidate?: unknown };
 
 const FALLBACK: IceConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
@@ -35,20 +36,24 @@ export function toggleVideoLock()    { return fetchNui<LensToggle>('sd-phone:vid
 export function toggleVideoFaceCam() { return fetchNui<LensToggle>('sd-phone:video:faceCam'); }
 export function setVideoZoom(zoom: number) { void fetchNui('sd-phone:video:zoom', { zoom }); }
 
-export class VideoPeer {
+export class CallPeer {
     private pc: RTCPeerConnection;
     private remote = new MediaStream();
     onRemote?: (stream: MediaStream) => void;
 
-    constructor(config: IceConfig, private initiator: boolean) {
+    constructor(config: IceConfig, private initiator: boolean, private slot: PeerSlot = 'video') {
         this.pc = new RTCPeerConnection(config);
         this.pc.onicecandidate = (e) => {
-            if (e.candidate) sendVideoSignal({ kind: 'ice', candidate: e.candidate.toJSON() });
+            if (e.candidate) this.send({ kind: 'ice', candidate: e.candidate.toJSON() });
         };
         this.pc.ontrack = (e) => {
             this.remote.addTrack(e.track);
             this.onRemote?.(this.remote);
         };
+    }
+
+    private send(sig: Signal) {
+        sendVideoSignal({ ...sig, slot: this.slot });
     }
 
     async start(local: MediaStream | null) {
@@ -57,7 +62,7 @@ export class VideoPeer {
         if (this.initiator) {
             const offer = await this.pc.createOffer();
             await this.pc.setLocalDescription(offer);
-            sendVideoSignal({ kind: 'offer', sdp: this.pc.localDescription?.sdp });
+            this.send({ kind: 'offer', sdp: this.pc.localDescription?.sdp });
         }
     }
 
@@ -82,7 +87,7 @@ export class VideoPeer {
                 await this.pc.setRemoteDescription({ type: 'offer', sdp: sig.sdp });
                 const answer = await this.pc.createAnswer();
                 await this.pc.setLocalDescription(answer);
-                sendVideoSignal({ kind: 'answer', sdp: this.pc.localDescription?.sdp });
+                this.send({ kind: 'answer', sdp: this.pc.localDescription?.sdp });
             } else if (sig.kind === 'answer' && sig.sdp) {
                 await this.pc.setRemoteDescription({ type: 'answer', sdp: sig.sdp });
             } else if (sig.kind === 'ice' && sig.candidate) {

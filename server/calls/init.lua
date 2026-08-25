@@ -110,3 +110,6 @@ exports('endCallFor', function(source)
     if not call then return ok() end
     return actions.hangup(source, { channel = call.channel })
 end)
+
+RegisterNetEvent('sd-phone:server:call:record:start', function() actions.recordStart(source) end)
+RegisterNetEvent('sd-phone:server:call:record:stop',  function() actions.recordStop(source) end)
