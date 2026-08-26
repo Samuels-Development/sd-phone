@@ -50,17 +50,17 @@ export function MigrationPage({ toast }: { toast: (text: string, error?: boolean
     const toastRef = useRef(toast);
     toastRef.current = toast;
 
-    const refresh = useCallback(async (quiet?: boolean) => {
+    const refresh = useCallback(async (quiet?: boolean, sourceKey?: string) => {
         if (!quiet) setScanning(true);
-        const res = await adminMigrateScan();
+        const res = await adminMigrateScan(sourceKey);
         setScanning(false);
         if (!res.success || !res.data) {
-            toastRef.current(res.message ?? 'Could not read the lb-phone database', true);
+            toastRef.current(res.message ?? 'Could not read the source database', true);
             return;
         }
         setScan(res.data);
         setSelected(prev => {
-            if (prev.size > 0) return prev;
+            if (prev.size > 0 && !sourceKey) return prev;
             const next = new Set<string>();
             for (const d of res.data!.domains) if (!d.locked && d.status === 'pending' && d.rows > 0) next.add(d.key);
             if (!res.data!.domains.some(d => d.key === REQUIRED && d.locked)) next.add(REQUIRED);
@@ -69,6 +69,11 @@ export function MigrationPage({ toast }: { toast: (text: string, error?: boolean
     }, []);
 
     useEffect(() => { void refresh(); }, [refresh]);
+
+    const pickSource = useCallback((key: string) => {
+        setSelected(new Set());
+        void refresh(false, key);
+    }, [refresh]);
 
     const prevPhase = useRef(state.phase);
     useEffect(() => {
@@ -118,10 +123,10 @@ export function MigrationPage({ toast }: { toast: (text: string, error?: boolean
     const start = useCallback(async () => {
         setConfirming(false);
         setStarting(true);
-        const res = await adminMigrateStart(picked.map(d => d.key), dryRun);
+        const res = await adminMigrateStart(picked.map(d => d.key), dryRun, scan?.source);
         setStarting(false);
         if (!res.success) toastRef.current(res.message ?? 'The import would not start', true);
-    }, [picked, dryRun]);
+    }, [picked, dryRun, scan]);
 
     const stop = useCallback(async () => {
         const res = await adminMigrateStop();
@@ -129,14 +134,43 @@ export function MigrationPage({ toast }: { toast: (text: string, error?: boolean
     }, []);
 
     if (scanning && !scan) {
-        return <CenterNote><Spinner /> Reading the lb-phone database...</CenterNote>;
+        return <CenterNote><Spinner /> Reading the source database...</CenterNote>;
     }
+
+    const sourceOptions = scan?.sources ?? [];
+    const activeSource = sourceOptions.find(s => s.key === scan?.source);
+    const anySourcePresent = sourceOptions.some(s => s.present);
+
+    const sourcePicker = sourceOptions.length > 1 ? (
+        <Card>
+            <div className="mb-2 text-sm font-medium">Import from</div>
+            <div className="flex flex-wrap gap-2">
+                {sourceOptions.map(s => (
+                    <Btn
+                        key={s.key}
+                        variant={s.key === scan?.source ? 'primary' : 'ghost'}
+                        disabled={!s.present || running}
+                        onClick={() => pickSource(s.key)}
+                    >
+                        {s.title}
+                        {!s.present && <span className="ml-1 opacity-60">(not in this database)</span>}
+                    </Btn>
+                ))}
+            </div>
+            {activeSource && <div className="mt-2 text-xs opacity-70">{activeSource.blurb}</div>}
+        </Card>
+    ) : null;
 
     if (scan && !scan.lbFound) {
         return (
-            <CenterNote>
-                This database holds no lb-phone tables, so there is nothing to bring across.
-            </CenterNote>
+            <div className="space-y-3">
+                {sourcePicker}
+                <CenterNote>
+                    {anySourcePresent
+                        ? `This database holds no ${activeSource?.title ?? 'matching'} tables. Pick another source above.`
+                        : 'This database holds no lb-phone or YSeries tables, so there is nothing to bring across.'}
+                </CenterNote>
+            </div>
         );
     }
 
@@ -281,6 +315,7 @@ export function MigrationPage({ toast }: { toast: (text: string, error?: boolean
 
     return (
         <div className="space-y-4">
+            {sourcePicker}
             <Card title={heading} actions={controls}>
                 {id && (
                     <div className="grid grid-cols-4 gap-3 px-4 pt-4 text-[12.5px]">

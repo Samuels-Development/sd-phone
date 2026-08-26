@@ -327,8 +327,18 @@ export interface MigrationIdentity {
     ambiguous:  number;
 }
 
+export interface MigrationSource {
+    key:     string;
+    label:   string;
+    title:   string;
+    blurb:   string;
+    present: boolean;
+}
+
 export interface MigrationScan {
     lbFound:   boolean;
+    source?:   string;
+    sources?:  MigrationSource[];
     busy:      boolean;
     domains:   MigrationDomain[];
     totalRows: number;

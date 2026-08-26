@@ -30,9 +30,11 @@ local function reg(name, fn)
     end)
 end
 
----Preview: what lb-phone has, what already landed, and how big the job is. Writes nothing.
-reg('migrateScan', function()
-    local ok, res = pcall(runner.scan)
+---Preview: what the chosen source has, what already landed, and how big the job is. Writes nothing.
+---A nil source falls back to whichever import source this database actually carries.
+reg('migrateScan', function(_src, payload)
+    local sourceKey = type(payload) == 'table' and payload.source or nil
+    local ok, res = pcall(runner.scan, sourceKey)
     if not ok then return util.fail(('Scan failed: %s'):format(res)) end
     return util.ok(res)
 end)
@@ -70,6 +72,7 @@ reg('migrateStart', function(src, payload)
     events.subscribe(src)
     local started, reason = runner.start({
         domains = selection,
+        source  = type(payload) == 'table' and payload.source or nil,
         dryRun  = type(payload) == 'table' and payload.dryRun == true,
         by      = player.getName(src) or ('player %d'):format(src),
     })

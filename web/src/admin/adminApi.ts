@@ -168,14 +168,14 @@ export const adminBin = (cursor?: number | null) =>
 export const adminBinRestore = (id: number) =>
     isFiveM ? call<void>('sd-phone:admin:binRestore', { id }) : ok();
 
-export const adminMigrateScan = () =>
-    isFiveM ? call<MigrationScan>('sd-phone:admin:migrateScan') : seed(DEV_MIGRATION_SCAN);
+export const adminMigrateScan = (source?: string) =>
+    isFiveM ? call<MigrationScan>('sd-phone:admin:migrateScan', { source }) : seed(DEV_MIGRATION_SCAN);
 
 export const adminMigrateState = () =>
     isFiveM ? call<MigrationSnapshot>('sd-phone:admin:migrateState') : seed(DEV_MIGRATION_SNAPSHOT);
 
-export const adminMigrateStart = (domains: string[], dryRun: boolean) =>
-    isFiveM ? call<void>('sd-phone:admin:migrateStart', { domains, dryRun }) : ok();
+export const adminMigrateStart = (domains: string[], dryRun: boolean, source?: string) =>
+    isFiveM ? call<void>('sd-phone:admin:migrateStart', { domains, dryRun, source }) : ok();
 
 export const adminMigrateStop = () =>
     isFiveM ? call<void>('sd-phone:admin:migrateStop') : ok();
