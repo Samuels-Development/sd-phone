@@ -94,6 +94,14 @@ function store.namesFor(cids)
             for _, r in ipairs(rows) do
                 out[r.identifier] = ('%s %s'):format(r.firstname or '', r.lastname or '')
             end
+        elseif framework.name == 'nd' then
+            local ids = {}
+            for i = 1, #list do ids[i] = tonumber(list[i]) end
+            local rows = MySQL.query.await(
+                ('SELECT charid, firstname, lastname FROM nd_characters WHERE charid IN (%s)'):format(placeholders), ids) or {}
+            for _, r in ipairs(rows) do
+                out[tostring(r.charid)] = ('%s %s'):format(r.firstname or '', r.lastname or '')
+            end
         end
     end)
     return out
@@ -123,6 +131,13 @@ function store.searchByName(like, limit)
                 LIMIT ?
             ]], { like, limit }) or {}
             for _, r in ipairs(rows) do out[#out + 1] = r.identifier end
+        elseif framework.name == 'nd' then
+            local rows = MySQL.query.await([[
+                SELECT charid FROM nd_characters
+                WHERE CONCAT(firstname, ' ', lastname) LIKE ?
+                LIMIT ?
+            ]], { like, limit }) or {}
+            for _, r in ipairs(rows) do out[#out + 1] = tostring(r.charid) end
         end
     end)
     return out

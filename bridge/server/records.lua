@@ -10,17 +10,20 @@ local garages = require 'bridge.server.garages'
 local records = {}
 
 ---@type { table: string, idCol: string } Framework citizen table: QBCore/QBox key characters by
----citizenid in `players`, ESX by identifier in `users`, ox_core by charId in `characters`.
+---citizenid in `players`, ESX by identifier in `users`, ox_core by charId in `characters`, ND by
+---charid in `nd_characters`.
 ---
----ox_core also HAS a `users` table, but it is the account (one per player, many characters), not
----the character - reaching ESX's branch here would read the wrong rows entirely.
+---ox_core and ND both also HAVE an account table (`users` and `nd_users`), one row per player
+---rather than per character - reaching ESX's branch here would read the wrong rows entirely.
 local PEOPLE
 if framework.name == 'esx' then
-    PEOPLE = { table = 'users',      idCol = 'identifier' }
+    PEOPLE = { table = 'users',         idCol = 'identifier' }
 elseif framework.name == 'ox' then
-    PEOPLE = { table = 'characters', idCol = 'charId' }
+    PEOPLE = { table = 'characters',    idCol = 'charId' }
+elseif framework.name == 'nd' then
+    PEOPLE = { table = 'nd_characters', idCol = 'charid' }
 else
-    PEOPLE = { table = 'players',    idCol = 'citizenid' }
+    PEOPLE = { table = 'players',       idCol = 'citizenid' }
 end
 
 ---@type { table: string, idCol: string } Framework ownership table, picked the same way
@@ -30,6 +33,8 @@ if framework.name == 'esx' then
     VEHICLES = { table = 'owned_vehicles',  idCol = 'owner' }
 elseif framework.name == 'ox' then
     VEHICLES = { table = 'vehicles',        idCol = 'owner' }
+elseif framework.name == 'nd' then
+    VEHICLES = { table = 'nd_vehicles',     idCol = 'owner' }
 else
     VEHICLES = { table = 'player_vehicles', idCol = 'citizenid' }
 end
@@ -179,10 +184,50 @@ local function esxCitizen(row)
     }
 end
 
+---Builds the normalised citizen shape from an ND `nd_characters` row. charid is an INT column, so
+---it is stringified on the way out to match the identifier every caller carries.
+---@param row table
+---@return table citizen
+local function ndCitizen(row)
+    local cid   = tostring(row.charid)
+    local first = str(row.firstname)
+    local last  = str(row.lastname)
+    local name  = str(first .. ' ' .. last)
+    local meta  = decode(row.metadata)
+
+    local activeJob, activeRank = '', 0
+    for groupName, group in pairs(decode(row.groups)) do
+        if type(groupName) == 'string' and type(group) == 'table' and group.isJob then
+            activeJob, activeRank = groupName, tonumber(group.rank) or 0
+            break
+        end
+    end
+
+    return {
+        citizenid   = cid,
+        name        = name ~= '' and name or cid,
+        firstname   = first,
+        lastname    = last,
+        dob         = str(row.dob),
+        sex         = str(row.gender),
+        phone       = str(row.phonenumber),
+        nationality = '',
+        job         = activeJob,
+        jobGrade    = activeRank,
+        licences    = {},
+        fingerprint = str(meta.fingerprint),
+        bloodtype   = str(meta.bloodtype),
+        callsign    = str(meta.callsign),
+    }
+end
+
 ---@type string QBCore/QBox citizen projection.
 local QB_CITIZEN_COLS = 'citizenid, charinfo, metadata, job'
 ---@type string ESX citizen projection.
 local ESX_CITIZEN_COLS = 'identifier, firstname, lastname, dateofbirth, sex, phone_number, job, job_grade'
+---@type string ND citizen projection. `groups` carries the job: ND stores no job column, the active
+---one is the held group flagged isJob.
+local ND_CITIZEN_COLS = 'charid, firstname, lastname, dob, gender, phonenumber, `groups`, metadata'
 
 ---One citizen by their framework identifier, or nil. Read-only.
 ---@param cid string citizenid on QBCore/QBox, identifier on ESX
@@ -194,6 +239,13 @@ function records.getCitizen(cid)
         local row = MySQL.single.await(
             ('SELECT %s FROM players WHERE citizenid = ? LIMIT 1'):format(QB_CITIZEN_COLS), { cid })
         return row and qbCitizen(row) or nil
+    end
+
+    if framework.name == 'nd' then
+        local row = MySQL.single.await(
+            ('SELECT %s FROM nd_characters WHERE charid = ? LIMIT 1'):format(ND_CITIZEN_COLS),
+            { tonumber(cid) })
+        return row and ndCitizen(row) or nil
     end
 
     local have = columnsOf('users')
@@ -222,6 +274,19 @@ function records.namesFor(cids)
             local info = decode(rows[i].charinfo)
             local name = str(str(info.firstname) .. ' ' .. str(info.lastname))
             out[rows[i].citizenid] = name ~= '' and name or rows[i].citizenid
+        end
+        return out
+    end
+
+    if framework.name == 'nd' then
+        local ids = {}
+        for i = 1, #cids do ids[i] = tonumber(cids[i]) end
+        local rows = MySQL.query.await(
+            ('SELECT charid, firstname, lastname FROM nd_characters WHERE charid IN (%s)'):format(inClause), ids) or {}
+        for i = 1, #rows do
+            local cid  = tostring(rows[i].charid)
+            local name = str(str(rows[i].firstname) .. ' ' .. str(rows[i].lastname))
+            out[cid] = name ~= '' and name or cid
         end
         return out
     end
@@ -276,6 +341,24 @@ function records.searchCitizens(term, page, pageSize)
         return out, tonumber(total) or 0
     end
 
+    if framework.name == 'nd' then
+        local where, args = '', {}
+        if not browse then
+            where = 'WHERE charid LIKE ? OR firstname LIKE ? OR lastname LIKE ? OR phonenumber LIKE ?'
+            args  = { like, like, like, like }
+        end
+        local order = citizenOrder('nd_characters', 'charid', 'charid')
+        local total = MySQL.scalar.await(
+            ('SELECT COUNT(*) FROM nd_characters %s'):format(where), args)
+        local rows  = MySQL.query.await(
+            ('SELECT %s FROM nd_characters %s ORDER BY %s LIMIT %d OFFSET %d')
+                :format(ND_CITIZEN_COLS, where, order, limit, offset), args) or {}
+
+        local out = {}
+        for i = 1, #rows do out[i] = ndCitizen(rows[i]) end
+        return out, tonumber(total) or 0
+    end
+
     local where, args = '', {}
     if not browse then
         where = 'WHERE identifier LIKE ? OR firstname LIKE ? OR lastname LIKE ? OR phone_number LIKE ?'
@@ -295,14 +378,15 @@ function records.searchCitizens(term, page, pageSize)
 end
 
 ---Builds the normalised vehicle shape from an ownership row. The model is the chosen column when it
----holds a plain name, else the saved-properties model key, else the row's stored hash - ESX keeps the
----whole properties blob under `vehicle`, so a value opening with a brace is a row rather than a name
----and printing it verbatim puts the entire blob in the MDT. Same rule as garages.lua's modelOf.
+---holds a plain name, else the saved-properties model key (`vehicle` on ESX, `properties` on ND),
+---else the row's stored hash - ESX keeps the whole blob under `vehicle`, so a value opening with a
+---brace is a row rather than a name. Same rule as garages.lua's modelOf.
 ---@param row table raw ownership row
 ---@param modelCol string|nil column carrying the model name
 ---@return table vehicle
 local function vehicleOf(row, modelCol)
     local props = decode(row.vehicle)
+    if next(props) == nil then props = decode(row.properties) end
     local model = modelCol and str(row[modelCol]) or ''
 
     if model:sub(1, 1) == '{' then model = '' end

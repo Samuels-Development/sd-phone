@@ -106,6 +106,19 @@ local function offlineName(cid)
             local last  = s(r.lastname)
             if first or last then return (first or '') .. ' ' .. (last or '') end
         end
+    elseif framework.name == 'nd' then
+        local ok, rows = pcall(function()
+            return MySQL.query.await(
+                'SELECT firstname, lastname FROM nd_characters WHERE charid = ? LIMIT 1',
+                { tonumber(cid) }
+            )
+        end)
+        if ok and rows and rows[1] then
+            local r = rows[1]
+            local first = s(r.firstname)
+            local last  = s(r.lastname)
+            if first or last then return (first or '') .. ' ' .. (last or '') end
+        end
     else
         local ok, rows = pcall(function()
             return MySQL.query.await(

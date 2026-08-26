@@ -98,6 +98,10 @@ elseif framework.name == 'esx' then
     AddEventHandler('esx:playerLoaded', function(playerId)
         pushOnline(playerId)
     end)
+elseif framework.name == 'nd' then
+    AddEventHandler('ND:characterLoaded', function(character)
+        pushOnline(character and character.source)
+    end)
 end
 
 ---Uninstalling Groups leaves every membership behind: groups the player leads are disbanded,

@@ -23,6 +23,8 @@ if framework.name == 'esx' then
     BASE = { table = 'owned_vehicles',  idCol = 'owner' }
 elseif framework.name == 'ox' then
     BASE = { table = 'vehicles',        idCol = 'owner' }
+elseif framework.name == 'nd' then
+    BASE = { table = 'nd_vehicles',     idCol = 'owner' }
 else
     BASE = { table = 'player_vehicles', idCol = 'citizenid' }
 end
@@ -68,6 +70,7 @@ local PROFILES = {
     ['codem-garage']       = { garage = { 'parking', 'garage' },  state = { 'state', 'stored' } },
     ['cd_garage']          = { garage = { 'garage_id', 'garage' },state = { 'in_garage', 'state' } },
     ['esx_garage']         = { garage = { 'parking', 'garage' },  state = { 'stored', 'state' } },
+    ['ND_Core']            = { garage = {},                       state = { 'stored' }, impoundCol = 'impounded' },
 }
 
 ---Resolve which supported garage system is running: an explicit config override wins, else the
@@ -98,12 +101,12 @@ local function pick(row, names)
     return nil
 end
 
----Decode the saved vehicle-properties blob (qb `mods`, esx `vehicle`, some forks
+---Decode the saved vehicle-properties blob (qb `mods`, esx `vehicle`, ND `properties`, some forks
 ---`modifications`): tables pass through, JSON-looking strings are decoded, failures yield nil.
 ---@param row table vehicle DB row
 ---@return table|nil props decoded properties, nil when absent/undecodable
 local function decodeProps(row)
-    for _, col in ipairs({ 'mods', 'vehicle', 'modifications' }) do
+    for _, col in ipairs({ 'mods', 'vehicle', 'properties', 'modifications' }) do
         local raw = row[col]
         if type(raw) == 'string' and (lib.string.startsWith(raw, '{') or lib.string.startsWith(raw, '[')) then
             local ok, decoded = pcall(json.decode, raw)

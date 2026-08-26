@@ -2,6 +2,8 @@
 local framework = require 'bridge.shared.framework'
 ---@type table|nil ox_core helpers (bridge.shared.oxcore); nil on every other framework.
 local oxc       = framework.name == 'ox' and require 'bridge.shared.oxcore' or nil
+---@type table|nil ND_Core helpers (bridge.shared.ndcore); nil on every other framework.
+local ndc       = framework.name == 'nd' and require 'bridge.shared.ndcore' or nil
 
 ---@type table Job module; the table returned at end of file. Client-side job identity, kept live off
 ---the framework's own job-change events so callers never poll.
@@ -32,6 +34,9 @@ local function playerData()
         local ok, data = pcall(function() return exports.ox_core:GetPlayer() end)
         return ok and data or nil
     end
+    if framework.name == 'nd' then
+        return ndc.player()
+    end
     if framework.name == 'esx' then
         if not framework.core then return nil end
         local ok, data = pcall(function() return framework.core.GetPlayerData() end)
@@ -54,6 +59,11 @@ local function readJob(raw)
     if framework.name == 'ox' then
         -- The client player blob carries identity, not groups, so the job is asked for by type.
         return oxc.groupByTypes(nil, oxc.jobTypes)
+    end
+    if framework.name == 'nd' then
+        -- ND's `job` is a bare name string, with the rank on a separate `jobInfo` blob, so the
+        -- whole character is re-read rather than picked apart from the one field passed in.
+        return ndc.jobOf(ndc.player())
     end
     return name, tonumber(raw.grade) or 0
 end
@@ -122,6 +132,16 @@ elseif framework.name == 'ox' then
     end)
     AddEventHandler('ox:playerLoaded', refresh)
     AddEventHandler('ox:playerLogout', function() apply(nil, 0) end)
+elseif framework.name == 'nd' then
+    -- Both events carry the whole character, so the job comes off the payload rather than out of a
+    -- re-read: ND sets its own copy from the same events, and the order between the two is not ours.
+    RegisterNetEvent('ND:characterLoaded', function(character)
+        if type(character) == 'table' then apply(ndc.jobOf(character)) else refresh() end
+    end)
+    RegisterNetEvent('ND:updateCharacter', function(character)
+        if type(character) == 'table' then apply(ndc.jobOf(character)) else refresh() end
+    end)
+    RegisterNetEvent('ND:characterUnloaded', function() apply(nil, 0) end)
 elseif framework.name == 'esx' then
     RegisterNetEvent('esx:setJob', function(raw)
         if type(raw) == 'table' then apply(readJob(raw)) else refresh() end

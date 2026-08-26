@@ -4,6 +4,8 @@ local framework = require 'bridge.shared.framework'
 local job       = require 'bridge.server.job'
 ---@type table|nil ox_core helpers (bridge.shared.oxcore); nil on every other framework.
 local oxc       = framework.name == 'ox' and require 'bridge.shared.oxcore' or nil
+---@type table|nil ND_Core helpers (bridge.shared.ndcore); nil on every other framework.
+local ndc       = framework.name == 'nd' and require 'bridge.shared.ndcore' or nil
 ---@type table Player bridge (bridge.server.player): identifier -> online source resolution.
 local player    = require 'bridge.server.player'
 
@@ -67,6 +69,9 @@ function society.available()
     -- ox_core needs no provider: it creates a shared account per group at setup, so the company
     -- money the other frameworks farm out to qb-banking or esx_addonaccount is built in.
     if framework.name == 'ox' then return true end
+    -- ND has no group account and no management resource of its own, and the providers below are
+    -- all qb/ESX-only, so there is nothing truthful to read: the Services app hides company money.
+    if framework.name == 'nd' then return false end
     return provider() ~= nil
 end
 
@@ -215,6 +220,20 @@ function society.getGrades(jobName)
         return out
     end
 
+    if framework.name == 'nd' then
+        -- ND weights ranks from 1 upward in `nd_group_ranks`, so the weight IS the grade level.
+        local def = ndc.group(jobName)
+        local ranks = def and def.ranksData
+        if type(ranks) == 'table' then
+            for weight, rank in pairs(ranks) do
+                local lvl = tonumber(weight) or 0
+                out[#out + 1] = { level = lvl, label = (type(rank) == 'table' and rank.label) or ('Grade ' .. lvl) }
+            end
+        end
+        table.sort(out, function(a, b) return a.level < b.level end)
+        return out
+    end
+
     if framework.qb then
         local def
         if framework.name == 'qbx' then
@@ -282,6 +301,32 @@ function society.listEmployees(jobName)
                     citizenid = tostring(r.charId),
                     name      = ('%s %s'):format(r.firstName or '', r.lastName or ''),
                     grade     = tonumber(r.grade) or 0,
+                }
+            end
+        end
+        return out
+    end
+
+    if framework.name == 'nd' then
+        -- ND keeps a character's groups as a JSON object keyed by group name rather than in a join
+        -- table, so membership is a path test and the rank is read out of the same blob.
+        local ok, rows = pcall(function()
+            return MySQL.query.await([[
+                SELECT charid, firstname, lastname,
+                       JSON_EXTRACT(`groups`, CONCAT('$."', ?, '".rank')) AS rank
+                FROM nd_characters
+                WHERE JSON_CONTAINS_PATH(`groups`, 'one', CONCAT('$."', ?, '"'))
+                  AND deleted_at IS NULL
+            ]], { jobName, jobName })
+        end)
+        if ok and type(rows) == 'table' then
+            for _, r in ipairs(rows) do
+                local cid  = tostring(r.charid)
+                local name = ('%s %s'):format(r.firstname or '', r.lastname or ''):gsub('^%s+', ''):gsub('%s+$', '')
+                out[#out + 1] = {
+                    citizenid = cid,
+                    name      = name ~= '' and name or cid,
+                    grade     = tonumber(r.rank) or 0,
                 }
             end
         end
@@ -366,6 +411,19 @@ function society.namesByCids(cids)
                 out[r.identifier] = n ~= '' and n or r.identifier
             end
         end
+    elseif framework.name == 'nd' then
+        local ids = {}
+        for i = 1, #cids do ids[i] = tonumber(cids[i]) end
+        local ok, rows = pcall(function()
+            return MySQL.query.await(('SELECT charid, firstname, lastname FROM nd_characters WHERE charid IN (%s)'):format(inClause), ids)
+        end)
+        if ok and type(rows) == 'table' then
+            for _, r in ipairs(rows) do
+                local cid = tostring(r.charid)
+                local n = ('%s %s'):format(r.firstname or '', r.lastname or ''):gsub('^%s+', ''):gsub('%s+$', '')
+                out[cid] = n ~= '' and n or cid
+            end
+        end
     end
 
     return out
@@ -386,17 +444,17 @@ end
 ---Reset an online target to the unemployed job. Returns false when offline. No permission checks
 ---here.
 ---
----`fromJob` is only read on ox_core, which has no unemployed group to move someone into: being
----fired there means the group is REMOVED, so the caller has to say which one. The other
----frameworks ignore it and move the target to `unemployedJob` as before.
+---`fromJob` is only read on ox_core and ND, neither of which has an unemployed group to move
+---someone into: being fired there means the group is REMOVED, so the caller has to say which one.
+---The other frameworks ignore it and move the target to `unemployedJob` as before.
 ---@param targetCid string
 ---@param unemployedJob string
----@param fromJob? string the job being fired from; required on ox_core
+---@param fromJob? string the job being fired from; required on ox_core and ND
 ---@return boolean
 function society.fire(targetCid, unemployedJob, fromJob)
     local src = player.getSourceByIdentifier(targetCid)
     if not src then return false end
-    if framework.name == 'ox' then
+    if framework.name == 'ox' or framework.name == 'nd' then
         if not fromJob then return false end
         return job.leave(src, fromJob) == true
     end

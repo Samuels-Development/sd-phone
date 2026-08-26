@@ -15,10 +15,13 @@ return {
 
     -- Resources checked, in priority order, when System = 'auto'. The first
     -- one that's `started` wins. Add custom/renamed resources here.
+    -- ND_Core is last on purpose: on ND it owns the vehicles itself (`nd_vehicles`, with its own
+    -- stored/impounded flags), so it is the fallback once no dedicated garage resource is running.
+    -- ND keeps no garage-NAME column, so vehicles list with their status but without a location.
     Resources = {
         'qs-advancedgarages', 'jg-advancedgarages', 'qbx_garages', 'qb-garages',
         'cd_garage', 'okokGarage', 'codem-garage', 'lunar_garage', 'nc_garage',
-        'op_garages', 'esx_garage',
+        'op_garages', 'esx_garage', 'ND_Core',
     },
 
     -- Default for whether a real photo of each vehicle (matched by spawn name)

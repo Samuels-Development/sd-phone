@@ -13,7 +13,7 @@ Unlock it, rearrange the home screen, install apps from the App Store, open the 
 
 ---
 
-**An iOS-themed smartphone for FiveM.** that supports QBOX, QBCORE, ESX and ox_core. 49 server-backed apps, real app accounts, a live game-view camera and online multiplayer games. Ships its own custom phone props: eight phone items in eight colours, each tinting both the on-screen frame and the custom prop model held in hand. A unique phone system as well as sim cards can be enabled!
+**An iOS-themed smartphone for FiveM.** that supports QBOX, QBCORE, ESX, ox_core and ND. 49 server-backed apps, real app accounts, a live game-view camera and online multiplayer games. Ships its own custom phone props: eight phone items in eight colours, each tinting both the on-screen frame and the custom prop model held in hand. A unique phone system as well as sim cards can be enabled!
 
 **A drop-in lb-phone replacement.** Scripts and custom apps written against lb-phone's exports and events keep running unmodified, and a first-boot migration carries your players across rather than resetting them: phone numbers and lock passcodes, contacts, blocked numbers, call history, SMS threads including groups and reactions, photos and albums, notes, phone settings, mail accounts with their inboxes, wallet transaction history, voice memos, Photogram and Birdy accounts with their posts, stories, DMs and followers, and the app logins themselves, so players open the phone already signed in.
 
@@ -24,7 +24,7 @@ If sd-phone is useful to you, please ⭐ the repo. Issues and pull requests are 
 [![Discord](https://img.shields.io/discord/842045164951437383?label=Discord&logo=discord&logoColor=white)](https://discord.gg/FzPehMQaBQ)
 [![Documentation](https://img.shields.io/badge/Docs-docs.samueldev.shop-94DD0C)](https://docs.samueldev.shop/resources/phone/)
 
-![Framework](https://img.shields.io/badge/Framework-QBCore%20%7C%20QBox%20%7C%20ESX%20%7C%20ox__core%20(beta)-3b82f6)
+![Framework](https://img.shields.io/badge/Framework-QBCore%20%7C%20QBox%20%7C%20ESX%20%7C%20ox__core%20(beta)%20%7C%20ND%20(beta)-3b82f6)
 ![Voice](https://img.shields.io/badge/Voice-pma--voice-3b82f6)
 ![Compatibility](https://img.shields.io/badge/lb--phone-drop--in%20compatible-3b82f6)
 
@@ -180,7 +180,7 @@ end)
 
 | Layer | Supported |
 |---|---|
-| Frameworks | QBCore, QBox, ESX, ox_core (auto-detected) |
+| Frameworks | QBCore, QBox, ESX, ox_core, ND (auto-detected) |
 | Inventories | ox_inventory, one_inventory, tgiann-inventory, qb-inventory, qs-inventory(-pro), origen_inventory, codem-inventory, jaksam_inventory, lj-inventory, ps-inventory |
 | Voice | pma-voice |
 | Housing | 9 housing systems for the Homes app |

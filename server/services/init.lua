@@ -45,6 +45,11 @@ elseif framework.name == 'esx' then
     AddEventHandler('esx:playerLoaded', function(playerId)
         if playerId then SetTimeout(1500, function() actions.reconcileJobs(playerId) end) end
     end)
+elseif framework.name == 'nd' then
+    AddEventHandler('ND:characterLoaded', function(character)
+        local src = character and character.source
+        if src then SetTimeout(1500, function() actions.reconcileJobs(src) end) end
+    end)
 end
 
 ---Refreshes a disconnecting player's company rosters.

@@ -201,6 +201,10 @@ function store.loadRoster(frameworkName)
         if frameworkName == 'esx' then
             return MySQL.query.await('SELECT identifier AS citizenid, NULL AS license FROM users') or {}
         end
+        if frameworkName == 'nd' then
+            return MySQL.query.await(
+                'SELECT CAST(charid AS CHAR) AS citizenid, identifier AS license FROM nd_characters') or {}
+        end
         return MySQL.query.await('SELECT citizenid, license FROM players') or {}
     end)
     if not ok or type(rows) ~= 'table' then return { cids = cids, licenseToCids = licenseToCids } end

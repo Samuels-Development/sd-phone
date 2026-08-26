@@ -234,6 +234,15 @@ function banking.addOffline(citizenid, amount)
                 { amount, tonumber(citizenid) })
         end)
         return ok and (tonumber(affected) or 0) > 0
+    elseif framework.name == 'nd' then
+        -- charid is an INT column, so the identifier has to go back to a number: passed as the
+        -- string the phone carries it as, the row never matches and the credit silently vanishes.
+        local ok, affected = pcall(function()
+            return MySQL.update.await(
+                'UPDATE nd_characters SET bank = bank + ? WHERE charid = ?',
+                { amount, tonumber(citizenid) })
+        end)
+        return ok and (tonumber(affected) or 0) > 0
     end
     return false
 end

@@ -1,7 +1,9 @@
----@type table Framework detection (bridge.shared.framework): name ('qb'|'esx'|'ox') + live core handle.
+---@type table Framework detection (bridge.shared.framework): name ('qb'|'esx'|'ox'|'nd') + live core handle.
 local framework = require 'bridge.shared.framework'
 ---@type table|nil ox_core helpers (bridge.shared.oxcore); nil on every other framework.
 local ox        = framework.name == 'ox' and require 'bridge.shared.oxcore' or nil
+---@type table|nil ND_Core helpers (bridge.shared.ndcore); nil on every other framework.
+local nd        = framework.name == 'nd' and require 'bridge.shared.ndcore' or nil
 
 ---@type table Player module; the table returned at end of file. Player resolution + identity
 ---helpers for the server bridge.
@@ -22,6 +24,9 @@ local function chooseGet()
     end
     if framework.name == 'ox' then
         return function(src) return ox.player(src) end
+    end
+    if framework.name == 'nd' then
+        return function(src) return nd.player(src) end
     end
     return function(src)
         error(('Unsupported framework — cannot resolve player for source %s'):format(src))
@@ -50,6 +55,11 @@ local function chooseIdentifier()
         -- charId, as a string: it is ox_core's character primary key, and the same value ox_core
         -- hands ox_inventory, so the phone and the inventory agree on who owns what.
         return function(p) return p.charId and tostring(p.charId) or nil end
+    end
+    if framework.name == 'nd' then
+        -- charid, as a string: it is ND's character primary key in `nd_characters`, and the value
+        -- `nd_vehicles.owner` is a foreign key onto, so the phone and ND agree on who owns what.
+        return function(p) return p.id and tostring(p.id) or nil end
     end
     return function() return nil end
 end
@@ -121,6 +131,13 @@ elseif framework.name == 'esx' then
 elseif framework.name == 'ox' then
     AddEventHandler('ox:playerLoaded', function(src) player.forget(src) end)
     AddEventHandler('ox:playerLogout', function(src) player.forget(src) end)
+elseif framework.name == 'nd' then
+    -- ND's two lifecycle events disagree on their signature: characterLoaded is handed the
+    -- character, which carries the source, while characterUnloaded is handed the source first.
+    AddEventHandler('ND:characterLoaded', function(character)
+        player.forget(character and character.source)
+    end)
+    AddEventHandler('ND:characterUnloaded', function(src) player.forget(src) end)
 end
 
 ---The player's persistent per-character identifier (citizenid on QBCore/QBox, identifier on ESX).
@@ -157,6 +174,15 @@ function player.getName(source)
         if first or last then return ('%s %s'):format(first or '', last or '') end
         return 'Unknown'
     end
+    if framework.name == 'nd' then
+        -- ND assembles `fullname` itself when the character loads; the parts are the fallback for
+        -- a record built before that ran.
+        if p.fullname and p.fullname ~= '' then return p.fullname end
+        if p.firstname or p.lastname then
+            return ('%s %s'):format(p.firstname or '', p.lastname or '')
+        end
+        return 'Unknown'
+    end
     return 'Unknown'
 end
 
@@ -169,10 +195,11 @@ function player.getJob(source)
     if framework.name == 'esx'  then return p.job and p.job.name or nil end
     if framework.qb then return p.PlayerData.job and p.PlayerData.job.name or nil end
     if framework.name == 'ox' then return (ox.groupByTypes(source, ox.jobTypes)) end
+    if framework.name == 'nd' then return (nd.jobOf(p)) end
     return nil
 end
 
----The player's current gang name. QBCore and ox_core only; always nil on ESX.
+---The player's current gang name. QBCore, ox_core and ND only; always nil on ESX.
 ---@param source number player server id
 ---@return string|nil
 function player.getGang(source)
@@ -180,6 +207,7 @@ function player.getGang(source)
     if not p then return nil end
     if framework.qb then return p.PlayerData.gang and p.PlayerData.gang.name or nil end
     if framework.name == 'ox' then return (ox.groupByTypes(source, ox.gangTypes)) end
+    if framework.name == 'nd' then return (nd.gangOf(p)) end
     return nil
 end
 
@@ -205,6 +233,13 @@ function player.getMetadata(source, key)
         return ok and value or nil
     end
     if framework.name == 'ox' then return ox.call(source, 'get', key) end
+    if framework.name == 'nd' then
+        -- getMetadata is a closure on the character record rather than a method, so it takes the
+        -- key alone; pcall-guarded because a record assembled offline carries no functions at all.
+        if type(p.getMetadata) ~= 'function' then return nil end
+        local ok, value = pcall(p.getMetadata, key)
+        return ok and value or nil
+    end
     return nil
 end
 

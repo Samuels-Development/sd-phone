@@ -47,9 +47,9 @@ local function chooseBackend()
         return function(data) framework.core.Functions.Notify(data.description, data.type or 'info') end
     end
 
-    -- ox_core ships no notify of its own, but it refuses to start without ox_lib, so lib.notify is
-    -- always there to fall back on even when the ox_lib backend above is switched off in config.
-    if framework.name == 'ox' and lib ~= nil then
+    -- Neither ox_core nor ND ships a notify of its own, but both refuse to start without ox_lib, so
+    -- lib.notify is always there even when the ox_lib backend above is switched off in config.
+    if (framework.name == 'ox' or framework.name == 'nd') and lib ~= nil then
         return function(data)
             lib.notify({
                 title       = data.title,
