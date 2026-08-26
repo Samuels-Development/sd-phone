@@ -248,30 +248,17 @@ do
     end)
 end
 
--- State bag reporting: the shell state only the client can know, sent up for the replicated write.
+-- Battery + phone-item lifecycle mirrored under YSeries names. The state bag FEED itself is
+-- first-party (client/statebags.lua), so it runs whether or not this shim is enabled.
 
----Reports the shell state only the client can know to the server, which does the replicated
----state bag write. Open/close is edge-driven; battery follows the cosmetic drain tick.
-local function report(open)
-    TriggerServerEvent('sd-phone:server:statebags:report', {
-        open    = open,
-        soft    = sd:isCompanionOpen() == true,
-        battery = sd:getBattery(),
-    })
-end
-
-AddEventHandler('sd-phone:client:openState', function(open) report(open == true) end)
-
----Publishes the cosmetic battery percentage on the same cadence the UI drains it, and mirrors it
----under YSeries' own battery event.
+---Mirrors the cosmetic battery percentage under YSeries' own battery event.
 AddEventHandler('sd-phone:client:battery', function(level)
-    TriggerServerEvent('sd-phone:server:statebags:report', { battery = level })
     TriggerEvent('yseries:battery:update', level)
 end)
 
 -- Phone item lifecycle -> YSeries' item events. sd-phone announces a SIM/device state push rather
 -- than an inventory add/remove, so the two item edges are derived from whether the acting phone
--- currently carries a SIM. Only fires while unique phones are on; with them off there is one
+-- currently carries a SIM. Only meaningful while unique phones are on; with them off there is one
 -- permanent phone per character and no swap to report.
 do
     local lastIdentity = nil
@@ -287,6 +274,3 @@ do
         TriggerEvent(state.hasSim and 'yseries:phone-item-added' or 'yseries:phone-item-removed', identity)
     end)
 end
-
--- A resource restart lands mid-session, where no open/close edge is coming.
-CreateThread(function() report(sd:isOpen() == true) end)

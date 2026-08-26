@@ -96,6 +96,12 @@ require 'server.statebags'
 require 'server.compat.lbphone.init'
 -- yseries export compatibility shim (inert while the real yseries runs; sd_phone_yseriescompat kill switch).
 require 'server.compat.yseries.init'
+-- qs-smartphone export compatibility shim (sd_phone_qscompat kill switch).
+require 'server.compat.qssmartphone.init'
+-- gksphone export compatibility shim (sd_phone_gkscompat kill switch).
+require 'server.compat.gksphone.init'
+-- roadphone export compatibility shim (sd_phone_roadcompat kill switch).
+require 'server.compat.roadphone.init'
 
 ---@type table SIM feature flags (server.sim.state): active + mode.
 local simState = require 'server.sim.state'

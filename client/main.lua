@@ -1114,5 +1114,10 @@ AddEventHandler('onResourceStop', function(resource)
     for source in pairs(remoteProps) do removeRemoteProp(source) end
 end)
 
+-- Loaded for side effects: feeds the player state bags every compat shim reads.
+require 'client.statebags'
 require 'client.compat.lbphone'
 require 'client.compat.yseries'
+require 'client.compat.qssmartphone'
+require 'client.compat.gksphone'
+require 'client.compat.roadphone'

@@ -55,3 +55,9 @@ dependencies {
 
 provide 'lb-phone'
 provide 'yseries'
+
+provide 'qs-smartphone'
+provide 'qs-smartphone-pro'
+provide 'qs-smartphone-lite'
+provide 'gksphone'
+provide 'roadphone'
