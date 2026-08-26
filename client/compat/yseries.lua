@@ -188,6 +188,66 @@ end)
 
 registerExport('RemoveCustomApp', function(key) return sd:removeCustomApp(key) end)
 
+-- Battery: sd-phone's battery is a cosmetic status-bar counter that drains while the phone is open,
+-- with no charge persistence, no charging and no per-device state. The reads are answered from it;
+-- the writes have nothing durable to write to and say so.
+registerExport('GetBatteryLevel', function() return sd:getBattery() end)
+
+registerExport('GetBatteryInfo', function()
+    return { level = sd:getBattery(), charging = false, cosmetic = true }
+end)
+
+stubExport('SetBatteryLevel', false,
+    'has no sd-phone equivalent: the battery is a cosmetic drain counter, not a stored charge')
+stubExport('ChargeBattery', false,
+    'has no sd-phone equivalent: the battery is a cosmetic drain counter, not a stored charge')
+stubExport('StartCharging', false, 'has no sd-phone equivalent: sd-phone models no charging')
+stubExport('StopCharging', false, 'has no sd-phone equivalent: sd-phone models no charging')
+
+-- Phone items: sd-phone gates phone ownership on its own configured items and resolves the frame
+-- colour from which one is held, so a caller cannot hand it an arbitrary YSeries model name.
+stubExport('UsePhoneItem', false,
+    'has no sd-phone equivalent: phone items are configured in configs/phone.lua and used through the inventory directly')
+stubExport('VerifyPhoneItemName', true,
+    'has no sd-phone equivalent: sd-phone accepts whichever items configs/phone.lua names, so every name verifies')
+
+-- Weather override: sd-phone derives its weather on the CLIENT from whichever sync resource is
+-- running, so the server-side YSeries setters cannot write to a store. The bridge's single read
+-- choke point is wrapped instead, layering an override over the live reading when one is set and
+-- delegating untouched when it is not.
+do
+    local weatherBridge = require 'bridge.client.weather'
+    local liveRead = weatherBridge.read
+    local override = nil
+
+    RegisterNetEvent('sd-phone:client:yseries:weather', function(data)
+        override = type(data) == 'table' and next(data) ~= nil and data or nil
+    end)
+
+    weatherBridge.read = function(...)
+        local snapshot = liveRead(...)
+        if not override then return snapshot end
+        for k, v in pairs(override) do snapshot[k] = v end
+        return snapshot
+    end
+end
+
+-- Player lifecycle: YSeries fires these off its own death handler, which sd-phone does not own, so
+-- they are re-fired from the framework's death state instead.
+do
+    local wasDead = false
+    CreateThread(function()
+        while true do
+            Wait(1000)
+            local dead = IsPlayerDead(PlayerId())
+            if dead ~= wasDead then
+                wasDead = dead
+                TriggerEvent(dead and 'yseries:player:died' or 'yseries:player:revived')
+            end
+        end
+    end)
+end
+
 -- State bag reporting: the shell state only the client can know, sent up for the replicated write.
 
 ---Reports the shell state only the client can know to the server, which does the replicated
@@ -202,10 +262,31 @@ end
 
 AddEventHandler('sd-phone:client:openState', function(open) report(open == true) end)
 
----Publishes the cosmetic battery percentage on the same cadence the UI drains it.
+---Publishes the cosmetic battery percentage on the same cadence the UI drains it, and mirrors it
+---under YSeries' own battery event.
 AddEventHandler('sd-phone:client:battery', function(level)
     TriggerServerEvent('sd-phone:server:statebags:report', { battery = level })
+    TriggerEvent('yseries:battery:update', level)
 end)
+
+-- Phone item lifecycle -> YSeries' item events. sd-phone announces a SIM/device state push rather
+-- than an inventory add/remove, so the two item edges are derived from whether the acting phone
+-- currently carries a SIM. Only fires while unique phones are on; with them off there is one
+-- permanent phone per character and no swap to report.
+do
+    local lastIdentity = nil
+
+    RegisterNetEvent('sd-phone:client:simState', function(state)
+        if type(state) ~= 'table' then return end
+
+        local identity = state.profile or state.number
+        if identity == lastIdentity then return end
+        lastIdentity = identity
+
+        TriggerEvent('yseries:client:device-changed', identity)
+        TriggerEvent(state.hasSim and 'yseries:phone-item-added' or 'yseries:phone-item-removed', identity)
+    end)
+end
 
 -- A resource restart lands mid-session, where no open/close edge is coming.
 CreateThread(function() report(sd:isOpen() == true) end)
