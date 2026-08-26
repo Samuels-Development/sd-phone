@@ -29,6 +29,10 @@ source.ports = {
     { key = 'settings',   label = 'settings',   run = require('server.migrate.port.y.settings').run },
     { key = 'wallet',     label = 'wallet',     run = require('server.migrate.port.y.wallet').run },
     { key = 'voicememos', label = 'voicememos', run = require('server.migrate.port.y.voicememos').run },
+    { key = 'photogram',  label = 'photogram',  run = require('server.migrate.port.y.photogram').run },
+    { key = 'birdy',      label = 'birdy',      run = require('server.migrate.port.y.birdy').run },
+    { key = 'marketplace', label = 'marketplace', run = require('server.migrate.port.y.classifieds').marketplace },
+    { key = 'pages',      label = 'pages',      run = require('server.migrate.port.y.classifieds').pages },
 }
 
 ---@type table<string, string> Domains that cannot land without another having run first. None yet:
@@ -53,6 +57,10 @@ source.domainSources = {
     settings   = { 'settings' },
     wallet     = { 'banking_transactions' },
     voicememos = { 'voice_memos' },
+    photogram  = { 'instashots_accounts', 'instashots_posts', 'instashots_comments', 'instashots_likes', 'instashots_follows' },
+    birdy      = { 'twitter_accounts', 'twitter_tweets', 'twitter_likes', 'twitter_retweets', 'twitter_follows' },
+    marketplace = { 'ybuy_ads' },
+    pages      = { 'promo_hub_posts' },
 }
 
 ---Whether a YSeries database is present to read from.

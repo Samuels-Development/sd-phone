@@ -28,15 +28,22 @@ function yidentity.build(cfg, framework)
     local known = roster.cids or {}
 
     local imeiToCid, cidToImei = {}, {}
-    local stats = { holders = 0, resolved = 0, unknownCharacter = 0, fromSettings = 0, numbers = 0 }
+
+    -- total / resolved / unresolved / ambiguous are the shape the runner logs and the admin panel
+    -- renders for every source; the rest are YSeries' own detail. `ambiguous` is always 0 here:
+    -- yphone_holders is keyed by character, so a character cannot resolve to two phones.
+    local stats = {
+        total = 0, resolved = 0, unresolved = 0, ambiguous = 0,
+        fromSettings = 0, numbers = 0,
+    }
 
     for _, row in ipairs(ystore.holders()) do
-        stats.holders = stats.holders + 1
+        stats.total = stats.total + 1
         local cid = row.citizenid
         local imei = row.imei
         if cid and cid ~= '' and imei and imei ~= '' then
             if next(known) ~= nil and not known[cid] then
-                stats.unknownCharacter = stats.unknownCharacter + 1
+                stats.unresolved = stats.unresolved + 1
             else
                 imeiToCid[imei] = cid
                 if not cidToImei[cid] then cidToImei[cid] = imei end
@@ -81,7 +88,19 @@ function yidentity.build(cfg, framework)
     local cids = {}
     for cid in pairs(cidToImei) do cids[#cids + 1] = cid end
 
+    -- The same { cid, number, pin } shape the lb-phone context carries. The runner publishes these
+    -- numbers so readers can filter in SQL, and the numbers porter adopts them, so a source that
+    -- omitted them would both crash the runner and import nobody.
+    local resolvedPhones = {}
+    for cid, imei in pairs(cidToImei) do
+        local number = imeiToNumber[imei]
+        if number then
+            resolvedPhones[#resolvedPhones + 1] = { cid = cid, number = number, pin = pins[imei] }
+        end
+    end
+
     return {
+        resolvedPhones = resolvedPhones,
         imeiToCid    = imeiToCid,
         cidToImei    = cidToImei,
         imeiToNumber = imeiToNumber,

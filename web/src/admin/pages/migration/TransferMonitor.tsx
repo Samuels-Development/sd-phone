@@ -15,6 +15,7 @@ interface Props {
     eta:      number | null;
     height:   number;
     started:  boolean;
+    sourceTitle: string;
 }
 
 const VW = 1000;
@@ -36,7 +37,7 @@ function ratePoints(samples: MigrationSample[]): { t: number; r: number }[] {
 }
 
 export function TransferMonitor({
-    samples, marks, state, plan, rate, peak, elapsed, eta, height, started,
+    samples, marks, state, plan, rate, peak, elapsed, eta, height, started, sourceTitle,
 }: Props) {
     const all = useMemo(() => ratePoints(samples), [samples]);
     const latest = all.length ? all[all.length - 1].t : 0;
@@ -146,7 +147,7 @@ export function TransferMonitor({
                         Transfer rate
                         {reading && (
                             <span className="rounded bg-ios-blue/20 px-1.5 py-0.5 text-[10px] normal-case tracking-normal text-[#8ecbff]">
-                                Reading {state.currentDomain ?? 'source'} from lb-phone
+                                Reading {state.currentDomain ?? 'source'} from {sourceTitle}
                             </span>
                         )}
                         {state.currentStage === 'writing' && (state.writeTotal ?? 0) > 0 && (

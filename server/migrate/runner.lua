@@ -15,6 +15,16 @@ local sources   = require 'server.migrate.sources.init'
 
 local runner = {}
 
+---@type table<string, table<string, string>> The name the SOURCE phone gives an app, shown in
+---brackets after sd-phone's own name so the operator recognises what they are migrating from. A
+---domain absent here takes no bracket, which is right when both sides call it the same thing.
+local FOREIGN_NAMES = {
+    lbphone = { photogram = 'InstaPic', birdy = 'Birdy', vibez = 'Trendy', wallet = 'Wallet',
+                pages = 'Yellow Pages' },
+    yseries = { photogram = 'Instashots', birdy = 'Y', wallet = 'YPay', marketplace = 'YBuy',
+                pages = 'PromoHub', photos = 'Gallery', calls = 'Recents' },
+}
+
 ---@type table<string, string> What the panel calls each domain. sd-phone's own name leads, because
 ---that is what the data becomes and the only name that holds on every server. Where lb-phone ships
 ---the same app under a different name, its default follows in brackets so the operator recognises
@@ -29,11 +39,11 @@ local TITLES = {
     photos     = 'Photos and albums',
     notes      = 'Notes',
     settings   = 'Phone settings',
-    photogram  = 'Photogram (InstaPic)',
-    birdy      = 'Squawk (Birdy)',
-    vibez      = 'Clout (Trendy)',
+    photogram  = 'Photogram',
+    birdy      = 'Squawk',
+    vibez      = 'Clout',
     mail       = 'Mail',
-    wallet     = 'Bank (Wallet)',
+    wallet     = 'Bank',
     voicememos = 'Voice Memos',
     sessions   = 'Signed-in accounts',
 }
@@ -56,6 +66,8 @@ local BLURB = {
     wallet     = 'Wallet transaction history.',
     voicememos = 'Voice memo recordings.',
     sessions   = 'Keeps migrated players signed into their accounts.',
+    marketplace = 'For-sale listings with their photos and asking prices.',
+    pages      = 'Business and service adverts from the Yellow Pages board.',
 }
 
 -- sd-phone tables the porters write into; the migration waits for all of them. Names lb-phone
@@ -78,6 +90,7 @@ local TARGETS = {
     'phone_vibez_notifications',
     { 'phone_mail_accounts', 'password_hash' }, { 'phone_message_reactions', 'mid' },
     'phone_bank_transactions', 'phone_voice_memos',
+    'marketplace_listings', 'pages_posts',
 }
 
 ---@type boolean True while a run owns the engine. One run at a time, server wide: the writes are
@@ -96,6 +109,18 @@ local lastScan = nil
 ---@return boolean
 function runner.busy() return busy end
 
+---The panel's name for one domain: sd-phone's own app name, plus the source phone's name for the
+---same app in brackets when the two differ.
+---@param src table import source
+---@param port { key: string, label: string }
+---@return string
+local function titleFor(src, port)
+    local base = TITLES[port.key] or port.label
+    local foreign = (FOREIGN_NAMES[src.key] or {})[port.key]
+    if not foreign or foreign == base then return base end
+    return ('%s (%s)'):format(base, foreign)
+end
+
 ---Marker bookkeeping shared by the scan and the run: makes sure the marker table exists and that a
 ---pre-domain-marker install has its domains backfilled.
 ---@return table<string, boolean> completed domain keys
@@ -104,7 +129,7 @@ local function completed(src)
     if src.legacyMark then store.backfillLegacyDomains(src.legacyMark, src.legacyDomains or {}) end
 
     local out = {}
-    for mark in pairs(store.completedDomains()) do
+    for mark in pairs(store.completedMarks()) do
         local domain = sources.domainFor(src, mark)
         if domain then out[domain] = true end
     end
@@ -163,7 +188,7 @@ function runner.scan(sourceKey)
         domains[#domains + 1] = {
             key      = port.key,
             label    = port.label,
-            title    = TITLES[port.key] or port.label,
+            title    = titleFor(src, port),
             blurb    = BLURB[port.key],
             rows     = rows,
             status   = status,
@@ -290,8 +315,8 @@ local function execute(opts)
     local ctx = src.identity(cfg, framework)
     ctx.dryRun = dryRun
     local s = ctx.stats
-    events.log('info', ('matching players: %d lb-phone phones -> %d resolved, %d unresolved, %d ambiguous')
-        :format(s.total, s.resolved, s.unresolved, s.ambiguous))
+    events.log('info', ('matching players: %d %s phones -> %d resolved, %d unresolved, %d ambiguous')
+        :format(s.total or 0, src.title, s.resolved or 0, s.unresolved or 0, s.ambiguous or 0))
     events.setState({ identity = s })
 
     local unmatched = s.unresolved + s.ambiguous
@@ -312,7 +337,7 @@ local function execute(opts)
     -- Hand the resolved numbers to the readers so they filter in SQL. Without it every porter pulls
     -- its whole source table across the bridge and discards the vast majority in Lua.
     local owned = {}
-    for _, p in ipairs(ctx.resolvedPhones) do
+    for _, p in ipairs(ctx.resolvedPhones or {}) do
         if p.number and p.number ~= '' then owned[#owned + 1] = p.number end
     end
     store.publishOwnedNumbers(owned)
@@ -426,7 +451,7 @@ local function execute(opts)
             if type(res) == 'table' and res.retry then
                 events.log('warn', ('%s left pending; it runs again next start.'):format(port.label))
             elseif not dryRun then
-                store.recordDomain(sources.markFor(src, port.key), res)
+                store.recordMark(sources.markFor(src, port.key), res)
             end
         else
             failed[#failed + 1] = port.key
@@ -460,7 +485,7 @@ local function execute(opts)
             events.log('ok', ('imported %s: %s'):format(port.label, line))
         end
     end
-    if not any then events.log('info', 'nothing came across: no lb-phone data matched a character here.') end
+    if not any then events.log('info', ('nothing came across: no %s data matched a character here.'):format(src.title)) end
 
     events.log('info', ('finished in %s: %d ok, %d failed.')
         :format(fmt.elapsed(startedAt), okCount, #failed))

@@ -133,8 +133,33 @@ function store.recordMigration(name, stats)
     )
 end
 
----@type string Marker-row prefix for a single completed domain.
+---@type string Marker-row prefix for a single completed domain. Historically lb-phone was the only
+---import source, so every mark already on disk carries this prefix; it stays the lb-phone source's
+---own prefix rather than becoming a general one, and other sources bring their own.
 local DOMAIN_MARKER = 'lbphone:'
+
+---Every completed-domain marker name, unstripped. A caller that knows about more than one import
+---source needs the whole name, because the source is encoded in its prefix.
+---@return table<string, boolean>
+function store.completedMarks()
+    local rows = MySQL.query.await('SELECT name FROM phone_migrations') or {}
+    local set = {}
+    for _, r in ipairs(rows) do
+        local name = tostring(r.name)
+        if name ~= '' then set[name] = true end
+    end
+    return set
+end
+
+---Records one completed domain under its full marker name, source prefix included. Idempotent.
+---@param mark string full marker name
+---@param stats table|nil per-domain counts
+function store.recordMark(mark, stats)
+    MySQL.query.await(
+        'INSERT IGNORE INTO phone_migrations (name, stats) VALUES (?, ?)',
+        { mark, json.encode(stats or {}) }
+    )
+end
 
 ---The set of domain keys already imported. Gating per domain (rather than one marker for the whole
 ---import) is what lets a server that ran an earlier version pick up only the domains added since.
@@ -423,6 +448,20 @@ end
 ---@param rows any[][]
 function store.insertBlocked(rows)
     insertMulti('INSERT IGNORE INTO phone_blocked (citizenid, number) VALUES', 2, rows)
+end
+
+---Insert a batch of Marketplace listings. rows:
+---{ citizenid, title, body, price, image, images, number, email, created_at }. `id` is left out
+---because the target column is auto-increment.
+---@param rows any[][]
+function store.insertMarketplace(rows)
+    insertMulti('INSERT IGNORE INTO marketplace_listings (citizenid, title, body, price, image, images, `number`, email, created_at) VALUES', 9, rows)
+end
+
+---Insert a batch of Pages posts. Same row shape as insertMarketplace: the two apps share a schema.
+---@param rows any[][]
+function store.insertPages(rows)
+    insertMulti('INSERT IGNORE INTO pages_posts (citizenid, title, body, price, image, images, `number`, email, created_at) VALUES', 9, rows)
 end
 
 ---Insert a batch of call-log rows. rows: { id, citizenid, number, name, direction, duration, seen, called_at }.

@@ -93,6 +93,40 @@ function ystore.page(name, columns, offset, limit, orderBy, where)
         :format(columns, tbl, clause, orderBy or '`id`', limit, offset)) or {}
 end
 
+---The username -> owning imei map for one social app, read from its `<app>_loggedin` table. YSeries
+---keeps social accounts in a username-keyed table with no owner column; the logged-in table is what
+---ties an account to a handset, and through it to a character.
+---@param app string app prefix, e.g. 'twitter'
+---@return table<string, string> username -> phone_imei
+function ystore.accountOwners(app)
+    local tbl = ystore.table(app .. '_loggedin')
+    if not tbl then return {} end
+
+    local rows = MySQL.query.await(
+        ('SELECT username, phone_imei FROM `%s` WHERE username IS NOT NULL AND phone_imei IS NOT NULL'):format(tbl)) or {}
+
+    local out = {}
+    for _, r in ipairs(rows) do
+        if not out[r.username] then out[r.username] = r.phone_imei end
+    end
+    return out
+end
+
+---A MySQL DATETIME string for an epoch seconds value, defaulting to now.
+---
+---sd-phone's target columns are split between BIGINT epoch seconds (messages, calls, wallet,
+---photogram, marketplace, pages) and real TIMESTAMP columns (photos, albums, every phone_birdy_*).
+---Handing an integer to a TIMESTAMP column does not error: MariaDB stores '0000-00-00 00:00:00',
+---which reads back as a zero date and sorts every row to the bottom of a DESC ordering. Use this
+---for the TIMESTAMP columns and pass the raw number to the BIGINT ones.
+---@param ts any epoch seconds
+---@return string
+function ystore.stamp(ts)
+    local n = tonumber(ts)
+    if not n or n <= 0 then n = os.time() end
+    return os.date('!%Y-%m-%d %H:%M:%S', n)
+end
+
 ---Row count for one YSeries table, 0 when absent.
 ---@param name string table name without the prefix
 ---@param where? string WHERE clause without the keyword

@@ -21,9 +21,9 @@ local function wallpaper(v)
 end
 
 ---@param ctx table migration context (imeiToCid, dryRun)
----@return { migrated: number, skipped: number }
+---@return { imported: number, skipped: number }
 function M.run(ctx)
-    if not ystore.table('settings') then return { migrated = 0, skipped = 0 } end
+    if not ystore.table('settings') then return { imported = 0, skipped = 0 } end
 
     local rows, migrated, skipped = {}, 0, 0
     local seen = {}
@@ -48,7 +48,7 @@ function M.run(ctx)
     end
 
     if not ctx.dryRun and #rows > 0 then store.fillSettings(rows) end
-    return { migrated = migrated, skipped = skipped }
+    return { imported = migrated, skipped = skipped }
 end
 
 return M

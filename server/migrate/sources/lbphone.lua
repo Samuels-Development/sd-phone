@@ -12,10 +12,10 @@ source.label = 'lb-phone'
 source.title = 'lb-phone'
 source.blurb = 'Import phone numbers, contacts, messages, photos, mail and app accounts from an lb-phone database.'
 
----@type string|nil Marker prefix. Nil rather than 'lbphone', because installs that migrated before
----a second source existed wrote their marks unprefixed, and re-running every domain on upgrade
----would be both slow and wrong.
-source.markPrefix = nil
+---@type string Marker prefix. Every mark already on disk carries it: store.recordDomain has always
+---written 'lbphone:<domain>', so an install that migrated before a second source existed is read
+---correctly here and is never asked to re-run a domain it already finished.
+source.markPrefix = 'lbphone'
 
 ---@type { key: string, label: string, run: fun(ctx: table): table }[] Domains, in run order.
 source.ports = {
@@ -35,6 +35,8 @@ source.ports = {
     { key = 'mail',       label = 'mail',       run = require('server.migrate.port.mail').run },
     { key = 'wallet',     label = 'wallet',     run = require('server.migrate.port.wallet').run },
     { key = 'voicememos', label = 'voicememos', run = require('server.migrate.port.voicememos').run },
+    { key = 'marketplace', label = 'marketplace', run = require('server.migrate.port.classifieds').marketplace },
+    { key = 'pages',      label = 'pages',      run = require('server.migrate.port.classifieds').pages },
     -- Last: links sessions to the accounts the photogram and Squawk porters created.
     { key = 'sessions',   label = 'sessions',   run = require('server.migrate.port.sessions').run },
 }
@@ -80,6 +82,8 @@ source.domainSources = {
     mail       = { 'phone_mail_accounts', 'phone_mails' },
     wallet     = { 'phone_transactions' },
     voicememos = { 'phone_notes_voice' },
+    marketplace = { 'phone_marketplace_posts' },
+    pages      = { 'phone_yellow_pages_posts' },
     sessions   = { 'phone_last_phone' },
 }
 

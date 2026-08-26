@@ -13,9 +13,9 @@ local util = require 'server.util'
 local PAGE <const> = 2000
 
 ---@param ctx table migration context (imeiToCid, dryRun)
----@return { migrated: number, skipped: number }
+---@return { imported: number, skipped: number }
 function M.run(ctx)
-    if not ystore.table('voice_memos') then return { migrated = 0, skipped = 0 } end
+    if not ystore.table('voice_memos') then return { imported = 0, skipped = 0 } end
 
     local migrated, skipped, offset = 0, 0, 0
 
@@ -45,7 +45,7 @@ function M.run(ctx)
         if not ctx.dryRun and #rows > 0 then store.insertVoiceMemos(rows) end
     end
 
-    return { migrated = migrated, skipped = skipped }
+    return { imported = migrated, skipped = skipped }
 end
 
 return M

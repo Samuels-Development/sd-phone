@@ -94,13 +94,26 @@ CreateThread(function()
     runner.start({ force = false, dryRun = false, by = 'server start' })
 end)
 
--- Manual trigger from the server console only (source 0): `sdphone:migrate` runs it for real,
--- `sdphone:migrate dry` previews without writing. Ignores the domain markers.
+-- Manual trigger from the server console only (source 0). Both arguments are optional and order
+-- does not matter: `dry` previews without writing, and an import source name picks which phone to
+-- read from (`lbphone` or `yseries`), defaulting to whichever this database actually carries.
+--   sdphone:migrate                -> real run, detected source
+--   sdphone:migrate dry            -> preview, detected source
+--   sdphone:migrate yseries dry    -> preview, YSeries
+-- Ignores the domain markers.
 RegisterCommand('sdphone:migrate', function(source, args)
     if source ~= 0 then return end
+
+    local dryRun, sourceKey = false, nil
+    for i = 1, #args do
+        local arg = tostring(args[i]):lower()
+        if arg == 'dry' then dryRun = true else sourceKey = arg end
+    end
+
     local started, reason = runner.start({
         force  = true,
-        dryRun = (args[1] or ''):lower() == 'dry',
+        dryRun = dryRun,
+        source = sourceKey,
         by     = 'server console',
     })
     if not started then log(('^1%s^0'):format(reason)) end
@@ -108,8 +121,8 @@ end, true)
 
 -- Drops every table sd-phone owns and forgets the import markers, so the next start rebuilds the
 -- schema from scratch and re-imports. Server console only, and requires the confirm word: this
--- destroys every player's phone. lb-phone's own tables are left alone, or there would be nothing
--- left to import from.
+-- destroys every player's phone. The source phone's own tables are left alone, or there would be
+-- nothing left to import from.
 RegisterCommand('sdphone:wipedata', function(source, args)
     if source ~= 0 then return end
     if (args[1] or '') ~= 'CONFIRM' then
@@ -130,7 +143,7 @@ RegisterCommand('sdphone:wipedata', function(source, args)
         local dropped, kept = store.dropOwnedTables(owned)
 
         log(('%d table(s) dropped%s.'):format(dropped, kept > 0 and (', %d left alone'):format(kept) or ''))
-        log('lb-phone source tables were left untouched, so the import can run again.')
+        log('the source phone tables were left untouched, so the import can run again.')
         log('restart the resource to rebuild the schema and re-import.')
         log('=========================================================')
     end)

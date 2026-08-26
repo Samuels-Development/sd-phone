@@ -76,7 +76,7 @@ const PAGE_TITLE: Record<PageId, string> = {
     birdy:       'Squawk moderation',
     mutes:       'Active mutes',
     audit:       'Audit log',
-    migration:   'Migration - lb-phone import',
+    migration:   'Migration - import from another phone',
     messages:    'Messages (read-only)',
     darkchat:    'Dark Chat moderation',
     photogram:   'Photogram moderation',

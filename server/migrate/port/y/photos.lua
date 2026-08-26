@@ -8,6 +8,9 @@ local store = require 'server.migrate.store'
 local ystore = require 'server.migrate.ystore'
 ---@type table Shared server helpers (server.util): trim + truthiness.
 local util = require 'server.util'
+---@type fun(ts: any): string DATETIME formatter (server.migrate.ystore): the phone_photos and
+---phone_birdy_* created_at columns are real TIMESTAMPs, and an epoch integer lands as a zero date.
+local stamp = ystore.stamp
 
 ---@type integer Rows read per page.
 local PAGE <const> = 2000
@@ -25,10 +28,10 @@ local function isLink(url)
 end
 
 ---@param ctx table migration context (imeiToCid, dryRun)
----@return { migrated: number, skipped: number, albums: number, inlineSkipped: number }
+---@return { photos: number, skipped: number, albums: number, links: number, inlineSkipped: number }
 function M.run(ctx)
     if not ystore.table('gallery') then
-        return { migrated = 0, skipped = 0, albums = 0, inlineSkipped = 0 }
+        return { photos = 0, skipped = 0, albums = 0, links = 0, inlineSkipped = 0 }
     end
 
     local albumIds, albums = {}, 0
@@ -53,7 +56,7 @@ function M.run(ctx)
         end
     end
 
-    local migrated, skipped, inlineSkipped, offset = 0, 0, 0, 0
+    local migrated, skipped, inlineSkipped, links, offset = 0, 0, 0, 0, 0
 
     while true do
         local page = ystore.page('gallery',
@@ -73,11 +76,10 @@ function M.run(ctx)
                 local id = ('yp%s'):format(p.id)
                 rows[#rows + 1] = {
                     id, cid, util.trim(p.image),
-                    util.truthy(p.is_favorite) and 1 or 0,
-                    tonumber(p.ts) or os.time(),
+                    util.truthy(p.is_favorite) and 1 or 0, stamp(p.ts),
                 }
                 local album = p.album_id and albumIds[p.album_id]
-                if album then items[#items + 1] = { album, id } end
+                if album then items[#items + 1] = { album, id }; links = links + 1 end
                 migrated = migrated + 1
             end
         end
@@ -88,7 +90,7 @@ function M.run(ctx)
         end
     end
 
-    return { migrated = migrated, skipped = skipped, albums = albums, inlineSkipped = inlineSkipped }
+    return { photos = migrated, skipped = skipped, albums = albums, links = links, inlineSkipped = inlineSkipped }
 end
 
 return M
