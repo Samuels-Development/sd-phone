@@ -858,6 +858,8 @@ CreateThread(function()
         if phoneState.open and phoneState.battery > 0 then
             phoneState.battery = phoneState.battery - 1
             SendNUIMessage({ action = 'sd-phone:battery', data = phoneState.battery })
+            ---First-party client event: the cosmetic battery percentage moved.
+            TriggerEvent('sd-phone:client:battery', phoneState.battery)
         end
     end
 end)
@@ -1067,6 +1069,11 @@ end)
 ---@return boolean disabled
 exports('isDisabled', function() return phoneDisabled end)
 
+---The cosmetic battery percentage shown in the status bar - exports['sd-phone']:getBattery().
+---Drains one percent every 30s while the phone is open; not a persisted charge.
+---@return number percent 0-100
+exports('getBattery', function() return phoneState.battery end)
+
 ---Character-loaded signal for the NUI: settings can only resolve once the citizenid exists, so
 ---the UI re-pulls its per-player state (wallpaper, tones, locale...) the moment the framework
 ---reports the player in - covering slow multichar picks and live character switches alike.
@@ -1108,3 +1115,4 @@ AddEventHandler('onResourceStop', function(resource)
 end)
 
 require 'client.compat.lbphone'
+require 'client.compat.yseries'

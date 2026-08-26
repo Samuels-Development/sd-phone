@@ -54,3 +54,4 @@ dependencies {
 }
 
 provide 'lb-phone'
+provide 'yseries'

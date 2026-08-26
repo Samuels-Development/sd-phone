@@ -89,8 +89,13 @@ require 'server.admin.wipe'
 require 'server.admin.init'
 -- lb-phone -> sd-phone one-time data import (no-op unless lb-phone's tables are present).
 require 'server.migrate.init'
+-- Loaded for side effects: publishes the phone's live per-player state onto player state bags.
+require 'server.statebags'
+
 -- lb-phone export compatibility shim (inert while the real lb-phone runs; sd_phone_lbcompat kill switch).
 require 'server.compat.lbphone.init'
+-- yseries export compatibility shim (inert while the real yseries runs; sd_phone_yseriescompat kill switch).
+require 'server.compat.yseries.init'
 
 ---@type table SIM feature flags (server.sim.state): active + mode.
 local simState = require 'server.sim.state'
