@@ -1,18 +1,20 @@
 -- Police bodycams and vehicle dashcams, watched from the MDT's Cameras section.
 --
--- There is no second video stack here: an officer's own client encodes the view it is
--- already rendering and the server relays it to the terminals watching, exactly the way
--- Photogram Live relays a broadcast. The important consequence is that a camera costs
--- nothing at all until somebody opens it - no encoder, no readback, no bandwidth - and
--- the officer's client is told to start only once a viewer is actually attached.
+-- The picture is rendered by the TERMINAL, not by the officer. When a dispatcher opens a
+-- unit, their own client quietly moves to that officer, bolts a camera to the officer's
+-- chest and renders it. The officer is never touched: they keep playing on whatever
+-- camera they like, in third person or first, and their client does no encoding and
+-- sends no video anywhere.
 --
--- Because the capture is the officer's own rendered frame, a bodycam shows what the
--- officer sees, from whatever camera they are playing on. A dashcam is the same feed,
--- labelled with the vehicle they are sitting in. FirstPerson below can force them into
--- first person while watched, but it is off by default: see the note on that setting.
+-- That is what makes the feed a real body-worn camera rather than a copy of the
+-- officer's screen. It also means a camera costs no bandwidth at all: nothing is
+-- relayed, because nothing leaves the watcher's machine.
+--
+-- The cost is that a terminal watches one unit at a time, and that the watcher's own
+-- character is parked, hidden and immovable while they watch. They get it back the
+-- moment they leave the camera.
 return {
-    -- Whether the Cameras section works at all. Off by default: every viewer costs roughly
-    -- the profile bitrate of server uplink, the same as a live stream.
+    -- Whether the Cameras section works at all.
     Enabled = false,
 
     -- Framework jobs that carry a bodycam. Leave empty to mean "every police department in
@@ -23,18 +25,45 @@ return {
     -- Whether an officer must be on duty to appear in the grid.
     RequireDuty = true,
 
-    -- Put a broadcasting officer into first person for as long as they are being watched, and
-    -- restore the view they had when the last viewer leaves.
-    --
-    -- OFF by default, and think before turning it on: the capture is the officer's own rendered
-    -- frame, so this does not change the camera for the viewer, it changes it for the OFFICER,
-    -- mid-roleplay, because somebody opened their tile. Left off, the feed is simply whatever
-    -- camera they are playing on, which is the honest reading of a body-worn camera anyway.
-    FirstPerson = false,
+    -- Where the camera sits on the officer and how it sees. The offsets are measured from the
+    -- ped's own origin, which sits at the HIPS rather than the feet, so Height is the rise from
+    -- the waist to the top of the chest and not a height off the ground.
+    Mount = {
+        -- Forward of the chest, in metres. Far enough out that the officer's own body does not
+        -- pass through the lens when they run, close enough that it still reads as worn rather
+        -- than floating. A ped leans into a sprint, so the shoulders travel further forward than
+        -- the hips this is measured from: too small a figure and the officer clips the picture.
+        Forward = 0.34,
+        -- Above the ped's origin, in metres. 0.38 lands on the upper chest, where a real
+        -- body-worn camera clips on.
+        Height = 0.38,
+        -- Sideways from the centre of the chest, in metres. Negative is the officer's left,
+        -- which is the shoulder most departments mount on.
+        Side = 0.0,
+        -- Field of view. Body-worn cameras are wide; this is deliberately wider than the game's
+        -- own first person.
+        Fov = 78.0,
+        -- Downward tilt in degrees, because a camera on a chest points slightly at the ground.
+        Pitch = -8.0,
+        -- How close geometry may come before it stops being drawn. Small, so the officer's own
+        -- arms enter the frame instead of being clipped away.
+        NearClip = 0.10,
+    },
 
     Dashcam = {
         -- Whether an occupied police vehicle gets its own tile in the grid.
         Enabled = true,
+
+        -- Where the camera sits in the vehicle, measured from the vehicle's origin. Forward puts
+        -- it at the windscreen, Height at roughly mirror level.
+        Mount = {
+            Forward  = 0.55,
+            Height   = 0.65,
+            Side     = 0.0,
+            Fov      = 70.0,
+            Pitch    = -4.0,
+            NearClip = 0.15,
+        },
 
         -- Vehicle models that carry a dashcam. Matched on the server against the model the
         -- officer is actually sitting in, so this is the authoritative list.
@@ -49,72 +78,56 @@ return {
         Classes = { 18 },
     },
 
-    -- The grid thumbnail profile. Deliberately tiny: opening the Cameras section attaches
-    -- one preview to every unit on the grid at once, so this figure is multiplied by the
-    -- number of officers on duty.
-    Preview = {
-        -- Whether the grid streams live thumbnails at all. With this off the tiles render as
-        -- offline cards and a feed is only established when an officer is opened full screen.
+    -- Recording the watch. Because the picture is rendered on the terminal, the only footage that
+    -- can exist is footage somebody watched: there is no stream running when nobody is looking,
+    -- so there is nothing to capture. What a terminal watches, it can keep.
+    Recording = {
+        -- Whether watches are recorded at all. With this off the Cameras section is live only and
+        -- the Recordings tab does not appear.
         Enabled = true,
-        Fps     = 5,
-        Width   = 384,
-        Bitrate = 220000,
-    },
 
-    -- The full-screen profile, established only for the one camera an officer opened. Only ever
-    -- one of these runs per viewer, so it can afford to be a real picture rather than a thumbnail.
-    -- Width is capped by the broadcasting officer's own game resolution: asking for more than they
-    -- render buys nothing but bitrate.
-    Fullscreen = {
+        -- Whether opening a unit starts recording on its own. Left off, the dispatcher presses
+        -- record when something is worth keeping, which is far kinder to storage.
+        Auto = false,
+
+        -- Seconds a single recording may run before it is closed and uploaded. A cap rather than a
+        -- suggestion: the whole clip is held in memory on the server until it is uploaded.
+        MaxSeconds = 300,
+
+        -- Recordings shorter than this are thrown away rather than uploaded, so a terminal that
+        -- opened the wrong unit for a second does not leave a file behind.
+        MinSeconds = 4,
+
+        -- Capture profile. Width is capped by the watching terminal's own game resolution: asking
+        -- for more than they render buys nothing but bitrate.
         Fps     = 30,
-        Width   = 1600,
-        Bitrate = 8000000,
+        Width   = 1280,
+        Bitrate = 2500000,
+
+        -- How often (ms) the recorder emits a chunk to the server. Each one is paced onto the wire
+        -- rather than blocking the net thread.
+        TimesliceMs = 1000,
+
+        -- Send ceiling (bytes/s) each chunk is paced with. Chunks cross the NUI boundary as
+        -- base64, which is about a third larger than the encoded video, so leave headroom.
+        ChunkBytesPerSec = 2048 * 1024,
+
+        -- Days a recording is kept before it is pruned. 0 keeps them forever.
+        KeepDays = 30,
+
+        -- Recordings one officer's terminal may store. The oldest is dropped past this.
+        MaxPerOfficer = 50,
     },
-
-    -- How often (ms) the broadcaster emits a chunk. Lower is lower latency and slightly
-    -- more overhead.
-    TimesliceMs = 400,
-
-    -- How often (ms) the broadcaster re-anchors with a fresh stream header.
-    --
-    -- Every re-anchor restarts the encoder, which restarts the stream clock, which makes every
-    -- terminal already watching rebuild its player and show a visible break. So this wants to be
-    -- RARE, not frequent: the relay asks for a fresh header the moment somebody actually joins, so
-    -- a terminal opening a long-running camera still gets a picture quickly without everyone else
-    -- paying for a cut on the same interval.
-    KeyframeMs = 20000,
-
-    -- Per-viewer latent send ceiling (bytes/s) the server paces each chunk onto the wire
-    -- with. Chunks cross the NUI boundary as base64, which is about a third larger than the
-    -- encoded video itself, so leave headroom over the bitrates above.
-    RelayBytesPerSec = 2048 * 1024,
 
     -- Terminals allowed on one officer's camera at once (0 = unlimited).
     MaxViewers = 6,
 
-    -- Whether a terminal may take the picture straight from the officer's client, with this server
-    -- carrying nothing but the handshake that sets it up. It needs no port, no certificate and no
-    -- configuration of its own: the STUN and TURN settings the phone's voice mesh already uses
-    -- (configs/voice.lua) decide whether two clients can reach each other, and a pair that cannot
-    -- falls back to the path below on its own. Neither end sees more than the picture taking a
-    -- moment longer to start.
-    --
-    -- A camera every terminal watches this way stops encoding for the server entirely.
-    PeerToPeer = true,
-
-    -- Direct connections one camera may hand out at once (0 = unlimited). Each one is an upload
-    -- from the broadcasting officer's own connection rather than from the server, so this sits
-    -- below MaxViewers on purpose: terminals past it watch through the server instead, which costs
-    -- the officer nothing.
-    PeerMaxViewers = 3,
-
-    -- Seconds a viewer may go quiet before the server drops them and, if they were the last
-    -- one, tells the officer's client to stop encoding. The terminal refreshes the grid well
-    -- inside this, so it only ever fires for a terminal that died without saying so.
+    -- Seconds a viewer may go quiet before the server stops counting them as watching. The
+    -- terminal refreshes well inside this, so it only fires for a terminal that died without
+    -- saying so.
     IdleSeconds = 15,
 
-    -- Whether opening a camera FULL SCREEN writes a row to the MDT audit log, the same way
-    -- a handset read does. Grid thumbnails are not logged one by one; the audited action is
-    -- an officer choosing to watch a particular unit.
+    -- Whether opening a camera writes a row to the MDT audit log, the same way a handset read
+    -- does. The audited action is an officer choosing to watch a particular unit.
     LogViewing = true,
 }

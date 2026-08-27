@@ -4,7 +4,7 @@ import type { BirdyMessage } from '@/apps/birdy/data';
 import type { CrashBust, CrashSettled, CrashSnapshot, CrashTick } from '@/apps/casino/crash/data';
 import type { HoldemHandEnd, HoldemStatePush } from '@/apps/casino/holdem/data';
 import type { DocFile } from '@/apps/documents/data';
-import type { Bulletin, Call, ChatMsg, Unit } from '@/apps/mdt/data';
+import type { BodycamRecording, Bulletin, Call, ChatMsg, Unit } from '@/apps/mdt/data';
 import type { DMsg as PhotogramDM, User as PhotogramUser } from '@/apps/photogram/data';
 import type {
     HudMarker, HudPosition, HudState, HudStyle, LineupState, RaceResult, StartBoard, Standing,
@@ -448,7 +448,12 @@ export type NuiMessage =
     | { action: 'sd-phone:mdt:chat';     data: { message: ChatMsg } }
     | { action: 'sd-phone:mdt:bulletin'; data: { bulletins: Bulletin[] } }
     | { action: 'sd-phone:mdt:warrant';  data: { citizenid: string; wanted: boolean } }
-    | { action: 'sd-phone:mdt:cameraTransport'; data: { citizenid: string; transport: 'relay' | 'event' } }
+    | { action: 'sd-phone:mdt:bodycam:enter'; data: { cameraId: string; kind: string; officer: string; callsign: string | null; plate: string | null; model: string | null; unit: string | null; rank: string | null; canRecord: boolean; auto: boolean; profile: { fps: number; width: number; bitrate: number; maxSeconds: number; minSeconds: number } } }
+    | { action: 'sd-phone:mdt:bodycam:exit';   data: Record<string, never> }
+    | { action: 'sd-phone:mdt:bodycam:record'; data: Record<string, never> }
+    | { action: 'sd-phone:mdt:recSaved';       data: BodycamRecording }
+    | { action: 'sd-phone:mdt:recFailed';      data: { message?: string } }
+    | { action: 'sd-phone:mdt:recShared';      data: { by?: string } }
     | { action: 'sd-phone:racing:racesChanged' }
     | { action: 'sd-phone:racing:standings';  data: { raceId: string; entries: Standing[] } }
     | { action: 'sd-phone:racing:raceResult'; data: RaceResult }

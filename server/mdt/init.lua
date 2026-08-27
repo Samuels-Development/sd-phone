@@ -18,6 +18,8 @@ local weapons   = require 'server.mdt.weapons'
 local cameras   = require 'server.mdt.cameras'
 ---@type table Fixed CCTV cameras (server.mdt.cctv): the police-only gate on looking through one.
 local cctv      = require 'server.mdt.cctv'
+---@type table Bodycam recordings (server.mdt.recordings): what a terminal watched and kept.
+local recordings = require 'server.mdt.recordings'
 ---@type table Reports and cases (server.mdt.paperwork).
 local paperwork = require 'server.mdt.paperwork'
 ---@type table Warrants (server.mdt.warrants).
@@ -110,6 +112,9 @@ local ROUTES = {
     { 'cameras:list',        cameras,   'list' },
     { 'cameras:watch',       cameras,   'watch' },
     { 'cameras:unwatch',     cameras,   'unwatch' },
+    { 'recordings:list',     recordings, 'list' },
+    { 'recordings:delete',   recordings, 'delete' },
+    { 'recordings:share',    recordings, 'share' },
     { 'cctv:watch',          cctv,      'watch' },
 
     { 'reports:list',        paperwork, 'reportsList' },

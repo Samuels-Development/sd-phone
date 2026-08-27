@@ -21,7 +21,7 @@ import { NotificationCenter, NotificationCenterHotzone } from '@/shell/Notificat
 import { MusicProvider, useMusic } from '@/apps/music/MusicContext';
 import { LockscreenWidgetsProvider } from '@/shell/LockscreenWidgetsContext';
 import { CctvOverlay, useCctvActive } from '@/apps/mdt/CctvOverlay';
-import '@/apps/mdt/cameraPublisher';
+import { BodycamOverlay, useBodycamActive } from '@/apps/mdt/BodycamOverlay';
 import { ryDevDataHidden, ryDevToggleData } from '@/apps/ryde/data';
 import { asAppId, isPreviewApp, preloadAllApps, preloadApp, setPreloadPaused, type AppId } from '@/shell/appRegistry';
 import { AppSwitcher } from '@/shell/AppSwitcher';
@@ -205,6 +205,7 @@ export function App() {
 
 function AppContent() {
     const cctvActive = useCctvActive();
+    const bodycamActive = useBodycamActive();
     // Tone/volume fields are deliberately NOT subscribed here — they're only
     // read inside event callbacks (via useThemeStore.getState()), so slider
     // drags in Control Center don't re-render the whole tree from the root.
@@ -1505,7 +1506,7 @@ function AppContent() {
         && (!isFiveM || serverSetupDone !== null);
 
     const cameraMode = currentApp === 'camera' && !isClosing && !locked;
-    const onCamera = cctvActive !== null;
+    const onCamera = cctvActive !== null || bodycamActive !== null;
 
     const onHomescreen = !showSetup && !locked && !currentApp;
 
@@ -1735,6 +1736,7 @@ function AppContent() {
             </PhoneShell>
         </div>
         {cctvActive && <CctvOverlay active={cctvActive} />}
+        {bodycamActive && <BodycamOverlay active={bodycamActive} />}
         </>
     );
 }

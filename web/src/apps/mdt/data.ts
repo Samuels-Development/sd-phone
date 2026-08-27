@@ -1,4 +1,3 @@
-import type { RelayGrant } from '@/shared/mediaSocket';
 
 export interface EvidenceItem {
     url:   string;
@@ -351,8 +350,7 @@ export interface WeaponDetail extends WeaponRow {
 }
 
 export type CameraKind = 'bodycam' | 'dashcam';
-export type CameraQuality = 'preview' | 'full';
-export type CameraStatus = 'live' | 'starting' | 'busy' | 'unsupported' | 'ready';
+export type CameraStatus = 'live' | 'offline';
 
 export interface CameraTile {
     id:        string;
@@ -371,17 +369,25 @@ export interface CameraTile {
 
 export interface CameraGrid {
     cameras:     CameraTile[];
-    previews:    boolean;
     idleSeconds: number;
 }
 
-export interface CameraStream {
-    cameraId: string;
-    gen:      number;
-    mime:     string | null;
-    status:   CameraStatus;
-    viewers:  number;
-    relay:    RelayGrant | null;
+export interface BodycamRecording {
+    id:         number;
+    cameraId:   string;
+    kind:       CameraKind;
+    officerCid: string;
+    officer:    string;
+    callsign:   string | null;
+    plate:      string | null;
+    model:      string | null;
+    watcher:    string;
+    url:        string;
+    mime:       string;
+    duration:   number;
+    bytes:      number;
+    sharedBy:   string | null;
+    createdAt:  number;
 }
 
 export interface Charge {

@@ -4,11 +4,10 @@ import {
     emptyPage,
     type ArrestRow,
     type AuditRow,
+    type BodycamRecording,
     type Bulletin,
     type Call,
     type CameraGrid,
-    type CameraQuality,
-    type CameraStream,
     type CameraTile,
     type CaseDetail,
     type CaseRole,
@@ -859,11 +858,11 @@ export async function mdtUpdateWeapon(serial: string, patch: WeaponPatch): Promi
 }
 
 const DEV_CAMERAS: CameraTile[] = [
-    { id: 'bodycam:WHT44012', kind: 'bodycam', citizenid: 'WHT44012', officer: 'Dana Whitlock', callsign: 'LS-114', rank: 'Sergeant', unit: 'LSPD', plate: null, model: null, status: 'ready', viewers: 0, self: true },
+    { id: 'bodycam:WHT44012', kind: 'bodycam', citizenid: 'WHT44012', officer: 'Dana Whitlock', callsign: 'LS-114', rank: 'Sergeant', unit: 'LSPD', plate: null, model: null, status: 'live', viewers: 0, self: true },
     { id: 'bodycam:OKF10233', kind: 'bodycam', citizenid: 'OKF10233', officer: 'Miles Okafor', callsign: 'LS-207', rank: 'Officer II', unit: 'LSPD', plate: null, model: null, status: 'live', viewers: 1, self: false },
     { id: 'dashcam:OKF10233', kind: 'dashcam', citizenid: 'OKF10233', officer: 'Miles Okafor', callsign: 'LS-207', rank: 'Officer II', unit: 'LSPD', plate: '20LSPD07', model: 'Police Cruiser', status: 'live', viewers: 1, self: false },
-    { id: 'bodycam:HRT88104', kind: 'bodycam', citizenid: 'HRT88104', officer: 'Grace Hartley', callsign: 'LS-301', rank: 'Lieutenant', unit: 'LSPD', plate: null, model: null, status: 'busy', viewers: 0, self: false },
-    { id: 'bodycam:REY55018', kind: 'bodycam', citizenid: 'REY55018', officer: 'Tomas Reyes', callsign: 'LS-412', rank: 'Officer I', unit: 'LSPD', plate: null, model: null, status: 'unsupported', viewers: 0, self: false },
+    { id: 'bodycam:HRT88104', kind: 'bodycam', citizenid: 'HRT88104', officer: 'Grace Hartley', callsign: 'LS-301', rank: 'Lieutenant', unit: 'LSPD', plate: null, model: null, status: 'live', viewers: 0, self: false },
+    { id: 'bodycam:REY55018', kind: 'bodycam', citizenid: 'REY55018', officer: 'Tomas Reyes', callsign: 'LS-412', rank: 'Officer I', unit: 'LSPD', plate: null, model: null, status: 'live', viewers: 0, self: false },
 ];
 
 function pinCamera(tile: CameraTile): CameraTile {
@@ -877,64 +876,57 @@ function pinCamera(tile: CameraTile): CameraTile {
         unit:      tile.unit ?? null,
         plate:     tile.plate ?? null,
         model:     tile.model ?? null,
-        status:    tile.status ?? 'ready',
+        status:    tile.status ?? 'live',
         viewers:   tile.viewers ?? 0,
         self:      tile.self === true,
     };
 }
 
 export async function mdtCameras(): Promise<CameraGrid> {
-    if (!isFiveM) return { cameras: DEV_CAMERAS.map(pinCamera), previews: true, idleSeconds: 15 };
+    if (!isFiveM) return { cameras: DEV_CAMERAS.map(pinCamera), idleSeconds: 15 };
     const res = await apiData<CameraGrid>('sd-phone:mdt:cameras:list');
-    if (!res) return { cameras: [], previews: false, idleSeconds: 15 };
+    if (!res) return { cameras: [], idleSeconds: 15 };
     return {
         cameras:     (res.cameras ?? []).map(pinCamera),
-        previews:    res.previews === true,
         idleSeconds: res.idleSeconds ?? 15,
     };
 }
 
-/**
- * A camera attach, plus what the server decided about a peer connection for it. Kept here rather
- * than on CameraStream because it describes this terminal's relationship to the camera, not the
- * camera itself: the same broadcast is peer-served to one terminal and event-served to the next.
- */
-export interface CameraAttach extends CameraStream {
-    peer:     boolean;
-    peerHost: number | null;
+export async function mdtCameraWatch(cameraId: string): Promise<string | null> {
+    if (!isFiveM) return 'Cameras only work in game';
+    const res = await apiCall('sd-phone:mdt:cameras:watch', { cameraId });
+    if (res.success !== true) return res.message ?? 'Could not reach that unit';
+    return null;
 }
 
-export async function mdtCameraWatch(
-    cameraId: string,
-    quality: CameraQuality,
-    reprime = false,
-    relay = false,
-    relayFailed = false,
-    peer = false,
-): Promise<CameraAttach | string> {
-    if (!isFiveM) {
-        const tile = DEV_CAMERAS.find(c => c.id === cameraId);
-        if (!tile) return 'That unit is no longer on the air';
-        return { cameraId, gen: 1, mime: null, status: tile.status, viewers: tile.viewers, relay: null, peer: false, peerHost: null };
-    }
-    const res = await apiCall<CameraAttach>('sd-phone:mdt:cameras:watch', { cameraId, quality, reprime, relay, relayFailed, peer });
-    if (!res.success || !res.data) return res.message ?? '';
-    const grant = res.data.relay ?? null;
-    return {
-        cameraId: res.data.cameraId ?? cameraId,
-        gen:      res.data.gen ?? 0,
-        mime:     res.data.mime ?? null,
-        status:   res.data.status ?? 'ready',
-        viewers:  res.data.viewers ?? 0,
-        relay:    grant && typeof grant.token === 'string' && typeof grant.url === 'string' ? grant : null,
-        peer:     res.data.peer === true,
-        peerHost: typeof res.data.peerHost === 'number' ? res.data.peerHost : null,
-    };
+const DEV_RECORDINGS: BodycamRecording[] = [
+    { id: 1, cameraId: 'bodycam:OKF10233', kind: 'bodycam', officerCid: 'OKF10233', officer: 'Miles Okafor', callsign: 'LS-207', plate: null, model: null, watcher: 'Dana Whitlock', url: '', mime: 'video/webm', duration: 335, bytes: 0, sharedBy: null, createdAt: Math.floor(Date.now() / 1000) - 5400 },
+    { id: 2, cameraId: 'dashcam:OKF10233', kind: 'dashcam', officerCid: 'OKF10233', officer: 'Miles Okafor', callsign: 'LS-207', plate: '20LSPD07', model: 'Police Cruiser', watcher: 'Dana Whitlock', url: '', mime: 'video/webm', duration: 92, bytes: 0, sharedBy: 'Grace Hartley', createdAt: Math.floor(Date.now() / 1000) - 21600 },
+];
+
+export async function mdtRecordings(officerCid?: string): Promise<{ enabled: boolean; recordings: BodycamRecording[] }> {
+    if (!isFiveM) return { enabled: true, recordings: DEV_RECORDINGS };
+    const res = await apiData<{ enabled?: boolean; recordings?: BodycamRecording[] }>(
+        'sd-phone:mdt:recordings:list', officerCid ? { officerCid } : {},
+    );
+    if (!res) return { enabled: false, recordings: [] };
+    return { enabled: res.enabled !== false, recordings: res.recordings ?? [] };
 }
 
-export async function mdtCameraUnwatch(cameraId?: string): Promise<void> {
-    if (!isFiveM) return;
-    await apiCall('sd-phone:mdt:cameras:unwatch', cameraId ? { cameraId } : {});
+export async function mdtRecordingDelete(id: number): Promise<boolean> {
+    if (!isFiveM) return true;
+    return (await apiCall('sd-phone:mdt:recordings:delete', { id })).success === true;
+}
+
+export async function mdtRecordingShare(
+    id: number,
+    citizenid: string,
+    toMdt: boolean,
+    toPhone: boolean,
+): Promise<string | null> {
+    if (!isFiveM) return null;
+    const res = await apiCall('sd-phone:mdt:recordings:share', { id, citizenid, toMdt, toPhone });
+    return res.success === true ? null : (res.message ?? 'That could not be sent');
 }
 
 export async function mdtReports(opts: { query?: string; type?: ReportType | 'All'; page?: number } = {}): Promise<Page<ReportSummary>> {
