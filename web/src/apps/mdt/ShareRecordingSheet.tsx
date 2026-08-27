@@ -84,7 +84,7 @@ export function ShareRecordingSheet({ recording, onClose, onSent }: Props) {
     };
 
     return (
-        <Sheet onClose={onClose} fit="content" title={t('mdt.shareTitle', 'Send footage')}>
+        <Sheet onClose={onClose} fit="content" className="bg-base" title={t('mdt.shareTitle', 'Send footage')}>
             {() => (
             <div className="flex min-h-0 flex-col gap-3 px-4 pb-4">
                 <p className={mdtRowMeta}>

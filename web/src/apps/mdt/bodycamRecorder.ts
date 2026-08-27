@@ -244,3 +244,7 @@ export function abandonRecording(): void {
 export function uploadSettled(error?: string | null): void {
     emit({ uploading: false, error: error ?? null });
 }
+
+export function devPreviewState(next: Partial<RecorderState>): void {
+    emit(next);
+}
