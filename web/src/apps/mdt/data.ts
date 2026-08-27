@@ -369,6 +369,7 @@ export interface CameraTile {
 
 export interface CameraGrid {
     cameras:     CameraTile[];
+    dashcams:    boolean;
     idleSeconds: number;
 }
 

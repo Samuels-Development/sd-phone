@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, Eye, Film, Pause, Play, Share2, Trash2, Video, VideoOff } from 'lucide-react';
+import { Car, ChevronLeft, Eye, Film, Pause, Play, Share2, Trash2, Video, VideoOff } from 'lucide-react';
 
 import { device } from '@device';
 import { t } from '@/i18n';
@@ -10,6 +10,7 @@ import { SearchBar } from '@/ui/SearchBar';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useSessionState } from '@/hooks/useSessionState';
+import { initials } from '@/lib/format';
 import { formatDuration } from '@/lib/time';
 
 import { uploadSettled } from './bodycamRecorder';
@@ -22,9 +23,18 @@ import type { BodycamRecording, CameraTile } from './data';
 
 const REFRESH_MS = 5000;
 const IS_PHONE = device.id === 'phone';
-const TILE_MIN = IS_PHONE ? 168 : 232;
+const COLUMNS = IS_PHONE ? 2 : 3;
 
-type CamerasTab = 'live' | 'recordings';
+type CamerasTab = 'bodycams' | 'dashcams' | 'recordings';
+
+function matchesCamera(camera: CameraTile, needle: string): boolean {
+    return camera.officer.toLowerCase().includes(needle)
+        || (camera.callsign ?? '').toLowerCase().includes(needle)
+        || (camera.rank ?? '').toLowerCase().includes(needle)
+        || (camera.unit ?? '').toLowerCase().includes(needle)
+        || (camera.plate ?? '').toLowerCase().includes(needle)
+        || (camera.model ?? '').toLowerCase().includes(needle);
+}
 
 function kindLabel(kind: string): string {
     return kind === 'dashcam' ? t('mdt.dashcam', 'Dashcam') : t('mdt.bodycam', 'Bodycam');
@@ -50,51 +60,70 @@ function CameraCard({ camera, busy, onOpen }: {
     onOpen: () => void;
 }) {
     const still = thumbFor(camera.id);
+    const ownBodycam = camera.self && camera.kind === 'bodycam';
 
     return (
         <button
             type="button"
-            disabled={busy || camera.self}
+            disabled={busy || ownBodycam}
             onClick={onOpen}
-            className="group relative flex flex-col overflow-hidden rounded-[14px] bg-black text-left ring-1 ring-black/10 transition-transform duration-150 active:scale-[0.985] disabled:opacity-60 dark:ring-white/10"
+            className="group relative flex flex-col overflow-hidden rounded-[18px] bg-surface text-left shadow-sm ring-1 ring-black/[0.07] transition-all duration-150 hover:-translate-y-[2px] hover:shadow-lg hover:ring-black/[0.14] active:translate-y-0 active:scale-[0.99] disabled:opacity-60 dark:ring-white/[0.09] dark:hover:ring-white/20"
         >
-            <span className="relative block w-full overflow-hidden" style={{ aspectRatio: '16 / 9' }}>
+            <span className="relative block w-full overflow-hidden bg-[#05070c]" style={{ aspectRatio: '16 / 9' }}>
                 {still ? (
-                    <img src={still} alt="" className="h-full w-full object-cover opacity-80 grayscale-[0.35]" />
+                    <img
+                        src={still}
+                        alt=""
+                        className="h-full w-full object-cover opacity-85 saturate-[0.7] transition-transform duration-500 group-hover:scale-[1.04]"
+                    />
                 ) : (
-                    <span className="flex h-full w-full items-center justify-center bg-gradient-to-b from-[#151821] to-[#05070c]">
-                        <Video className="h-7 w-7 text-white/25" strokeWidth={1.8} />
+                    <span className="flex h-full w-full items-center justify-center bg-gradient-to-b from-[#1a1f2b] to-[#05070c]">
+                        <span className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-white/[0.07] text-[17px] font-bold tracking-wide text-white/45 ring-1 ring-white/10">
+                            {initials(camera.officer)}
+                        </span>
                     </span>
                 )}
 
-                <span className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/45 via-transparent to-black/55" />
+                <span
+                    className="pointer-events-none absolute inset-0 opacity-[0.06]"
+                    style={{ backgroundImage: 'repeating-linear-gradient(to bottom, rgba(255,255,255,0.6) 0px, rgba(255,255,255,0.6) 1px, transparent 1px, transparent 4px)' }}
+                />
+                <span className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70" />
 
-                <span className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-2">
-                    <span className="rounded-[6px] bg-black/70 px-1.5 py-[2px] text-[10.5px] font-bold uppercase tracking-wide text-white/85">
+                <span className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-2.5">
+                    <span className="rounded-[6px] bg-black/65 px-2 py-[3px] font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-white/90">
                         {kindLabel(camera.kind)}
                     </span>
                     {camera.viewers > 0 && (
-                        <span className="flex items-center gap-1 rounded-full bg-black/70 px-1.5 py-[2px] text-[11px] font-semibold tabular-nums text-white/85">
+                        <span className="flex items-center gap-1 rounded-full bg-black/65 px-2 py-[3px] text-[11px] font-semibold tabular-nums text-white/90">
                             <Eye className="h-[12px] w-[12px]" strokeWidth={2.4} />
                             {camera.viewers}
                         </span>
                     )}
                 </span>
 
-                <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between p-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">
-                        {camera.self
-                            ? t('mdt.cameraSelf', 'Your unit')
+                <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-2.5">
+                    <span className="flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-white/85">
+                        <span className={`h-[6px] w-[6px] rounded-full ${
+                            ownBodycam ? 'bg-white/40' : busy ? 'bg-ios-yellow' : 'animate-pulse bg-[#ff4b4b]'
+                        }`} />
+                        {ownBodycam
+                            ? t('mdt.cameraOwnBodycam', 'Your own camera')
                             : busy
                                 ? t('mdt.cameraOpening', 'Connecting')
-                                : t('mdt.cameraOpen', 'Open')}
+                                : t('mdt.cameraLive', 'Live')}
                     </span>
+                    {camera.self && !ownBodycam && (
+                        <span className="rounded-[5px] bg-white/[0.18] px-1.5 py-[2px] font-mono text-[9.5px] font-bold uppercase tracking-[0.14em] text-white/90">
+                            {t('mdt.cameraSelf', 'Your unit')}
+                        </span>
+                    )}
                 </span>
             </span>
 
-            <span className="flex min-w-0 flex-col gap-0.5 bg-surface px-3 py-2.5">
+            <span className="flex min-w-0 flex-col gap-[3px] px-3.5 py-3">
                 <span className="flex min-w-0 items-center gap-2">
-                    <span className="truncate text-[14px] font-semibold text-black dark:text-white">
+                    <span className="truncate text-[15.5px] font-semibold tracking-[-0.01em] text-black dark:text-white">
                         {camera.officer}
                     </span>
                     {camera.callsign && (
@@ -302,9 +331,10 @@ function RecordingRow({ recording, onOpen, onShare, onDelete }: {
 }
 
 export function CamerasPane() {
-    const [tab, setTab] = useSessionState<CamerasTab>('mdt:cameras:tab', 'live');
+    const [storedTab, setTab] = useSessionState<CamerasTab>('mdt:cameras:tab', 'bodycams');
     const [openRec, setOpenRec] = useSessionState<number | null>('mdt:cameras:rec', null);
     const [query, setQuery] = useSessionState('mdt:cameras:recQuery', '');
+    const [liveQuery, setLiveQuery] = useSessionState('mdt:cameras:liveQuery', '');
     const [opening, setOpening] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<BodycamRecording | null>(null);
@@ -337,6 +367,28 @@ export function CamerasPane() {
     const cameras = useMemo(() => data?.cameras ?? [], [data]);
     const allRecordings = useMemo(() => recData?.recordings ?? [], [recData]);
     const recordingsOn = recData?.enabled === true;
+    const dashcamsOn = data?.dashcams === true;
+
+    const tabs = useMemo(() => {
+        const list: CamerasTab[] = ['bodycams'];
+        if (dashcamsOn) list.push('dashcams');
+        if (recordingsOn) list.push('recordings');
+        return list;
+    }, [dashcamsOn, recordingsOn]);
+
+    const tab: CamerasTab = tabs.includes(storedTab) ? storedTab : 'bodycams';
+
+    const liveCameras = useMemo(() => {
+        const kind = tab === 'dashcams' ? 'dashcam' : 'bodycam';
+        const rows = cameras.filter(c => c.kind === kind);
+        const needle = liveQuery.trim().toLowerCase();
+        return needle ? rows.filter(c => matchesCamera(c, needle)) : rows;
+    }, [cameras, tab, liveQuery]);
+
+    const liveTotal = useMemo(
+        () => cameras.filter(c => c.kind === (tab === 'dashcams' ? 'dashcam' : 'bodycam')).length,
+        [cameras, tab],
+    );
 
     const recordings = useMemo(() => {
         const needle = query.trim().toLowerCase();
@@ -375,12 +427,19 @@ export function CamerasPane() {
         if (openRec !== null && recData && !playing) setOpenRec(null);
     }, [openRec, recData, playing, setOpenRec]);
 
-    const liveEmpty = (
+    const liveEmpty = tab === 'dashcams' ? (
+        <EmptyState
+            center
+            icon={Car}
+            title={t('mdt.noDashcams', 'No marked units out')}
+            subtitle={t('mdt.noDashcamsSub', 'A dashcam appears here as soon as an officer gets into a marked vehicle.')}
+        />
+    ) : (
         <EmptyState
             center
             icon={VideoOff}
             title={t('mdt.noCameras', 'No units on the air')}
-            subtitle={t('mdt.noCamerasSub', 'Bodycams and dashcams appear here while officers are on duty. Opening one puts you behind that unit’s camera.')}
+            subtitle={t('mdt.noCamerasSub', 'Bodycams appear here while officers are on duty. Opening one puts you behind that unit’s camera.')}
         />
     );
 
@@ -400,14 +459,16 @@ export function CamerasPane() {
                     <Video className="h-[17px] w-[17px] text-ios-gray" strokeWidth={2.2} />
                     <h2 className={mdtSectionHeader}>{t('mdt.camerasLive', 'Live cameras')}</h2>
                     <span className="flex-1" />
-                    <span className={mdtRowMeta}>
-                        {t('mdt.camerasOnAir', '{count} on air', { count: cameras.length })}
-                    </span>
+                    {tab !== 'recordings' && (
+                        <span className={mdtRowMeta}>
+                            {t('mdt.camerasOnAir', '{count} on air', { count: liveTotal })}
+                        </span>
+                    )}
                 </div>
 
-                {recordingsOn && (
+                {tabs.length > 1 && (
                     <div className="mt-2.5 flex gap-1 rounded-[10px] bg-black/[0.05] p-[3px] dark:bg-white/[0.07]">
-                        {(['live', 'recordings'] as CamerasTab[]).map(id => (
+                        {tabs.map(id => (
                             <button
                                 key={id}
                                 type="button"
@@ -418,16 +479,22 @@ export function CamerasPane() {
                                         : 'text-ios-gray'
                                 }`}
                             >
-                                {id === 'live' ? t('mdt.camerasTabLive', 'Live') : t('mdt.camerasTabRecordings', 'Recordings')}
+                                {id === 'bodycams'
+                                    ? t('mdt.camerasTabBodycams', 'Bodycams')
+                                    : id === 'dashcams'
+                                        ? t('mdt.camerasTabDashcams', 'Dashcams')
+                                        : t('mdt.camerasTabRecordings', 'Recordings')}
                             </button>
                         ))}
                     </div>
                 )}
 
                 <p className={`mt-1.5 ${mdtRowMeta}`}>
-                    {tab === 'live'
-                        ? t('mdt.camerasHint', 'Opening a unit puts you behind their camera. Backspace leaves it.')
-                        : t('mdt.recordingsHint', 'Footage you recorded while watching a unit.')}
+                    {tab === 'recordings'
+                        ? t('mdt.recordingsHint', 'Footage you recorded while watching a unit.')
+                        : tab === 'dashcams'
+                            ? t('mdt.dashcamsHint', 'A unit appears here while they are in a marked vehicle.')
+                            : t('mdt.camerasHint', 'Opening a unit puts you behind their camera. Backspace leaves it.')}
                 </p>
 
                 {notice && (
@@ -435,26 +502,49 @@ export function CamerasPane() {
                 )}
             </div>
 
-            {tab === 'live' ? (
-                settled && cameras.length === 0 ? (
-                    <div className="flex min-h-0 flex-1 items-center justify-center px-6 py-6">{liveEmpty}</div>
-                ) : (
-                    <Scroller className="min-h-0 flex-1 px-6 pb-6 pt-4">
-                        <div
-                            className="mdt-stagger grid gap-3"
-                            style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${TILE_MIN}px, 1fr))` }}
-                        >
-                            {cameras.map(camera => (
-                                <CameraCard
-                                    key={camera.id}
-                                    camera={camera}
-                                    busy={opening === camera.id}
-                                    onOpen={() => { void open(camera.id); }}
-                                />
-                            ))}
+            {tab !== 'recordings' ? (
+                <div className="flex min-h-0 flex-1 flex-col">
+                    {liveTotal > 0 && (
+                        <div className="shrink-0 px-6 pb-1">
+                            <SearchBar
+                                value={liveQuery}
+                                onChange={setLiveQuery}
+                                placeholder={tab === 'dashcams'
+                                    ? t('mdt.dashcamSearch', 'Search by unit, callsign or plate')
+                                    : t('mdt.bodycamSearch', 'Search by unit, callsign or rank')}
+                            />
                         </div>
-                    </Scroller>
-                )
+                    )}
+
+                    {liveCameras.length === 0 ? (
+                        <div className="flex min-h-0 flex-1 items-center justify-center px-6 py-6">
+                            {liveTotal === 0 ? (settled ? liveEmpty : null) : (
+                                <EmptyState
+                                    center
+                                    icon={VideoOff}
+                                    title={t('mdt.cameraNoMatch', 'No units match')}
+                                    subtitle={t('mdt.cameraNoMatchSub', 'Try a different name, callsign or plate.')}
+                                />
+                            )}
+                        </div>
+                    ) : (
+                        <Scroller className="min-h-0 flex-1 px-6 pb-6 pt-3">
+                            <div
+                                className="mdt-stagger grid gap-3"
+                                style={{ gridTemplateColumns: `repeat(${COLUMNS}, minmax(0, 1fr))` }}
+                            >
+                                {liveCameras.map(camera => (
+                                    <CameraCard
+                                        key={camera.id}
+                                        camera={camera}
+                                        busy={opening === camera.id}
+                                        onOpen={() => { void open(camera.id); }}
+                                    />
+                                ))}
+                            </div>
+                        </Scroller>
+                    )}
+                </div>
             ) : (
                 <div className="flex min-h-0 flex-1 flex-col">
                     {allRecordings.length > 0 && (

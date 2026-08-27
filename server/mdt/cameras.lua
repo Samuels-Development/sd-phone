@@ -34,6 +34,10 @@ end
 local DASH = type(CFG.Dashcam) == 'table' and CFG.Dashcam or {}
 ---@type boolean Whether an occupied police vehicle gets a tile of its own.
 local DASH_ENABLED = DASH.Enabled ~= false
+---@type integer Milliseconds a dashcam stays on the grid after the officer gets out.
+local LINGER_MS = math.max(0, math.floor((tonumber(DASH.LingerSeconds) or 180) * 1000))
+---@type number Metres the officer may be from that car while the tile lasts.
+local LINGER_RANGE = math.max(1.0, tonumber(DASH.LingerRange) or 60.0)
 
 ---Normalises a model hash to unsigned 32 bit. GetEntityModel can hand back the signed form of the
 ---same hash that joaat produces unsigned, and both have to land on one key.
@@ -76,6 +80,8 @@ local SWEEP_MS <const> = 5000
 local WATCH_WINDOW <const> = 10000
 ---@type integer Camera opens allowed inside that window.
 local MAX_WATCHES <const> = 12
+---@type number Metres a claimed vehicle may be from the officer before the claim is refused.
+local CLAIM_RANGE <const> = 12.0
 
 ---@type table<string, table<integer, integer>> Terminals watching each camera id, by the game
 ---timer at which each last said so. Live only: a camera exists while its officer is connected and
@@ -85,6 +91,14 @@ local watchers = {}
 ---@type table<integer, integer> Vehicle class last reported by each officer's own game, which is
 ---the only place a class can be read.
 local reportedClass = {}
+
+---@type table<integer, integer> Network id of the vehicle each officer's own game last reported
+---being in, used only when this server's own read of it comes back empty.
+local reportedNet = {}
+
+---@type table<integer, table> The dashcam vehicle each officer last worked out of, and when, so a
+---stop does not lose the camera the moment they step out of the car.
+local lastDash = {}
 
 ---A value that is a non-empty string, or nil.
 ---@param value any
@@ -126,27 +140,86 @@ local function cameraOfficer(src)
     return me
 end
 
----The police vehicle an officer is sitting in, when it carries a dashcam. The model is read from
----the vehicle itself; the class can only be read on a client, so it arrives from the officer's own
----game and is used solely to decide whether a tile appears.
+---The vehicle an officer is in, resolved from this server first and from the officer's own game
+---only when that comes back empty.
+---
+---GetVehiclePedIsIn reads through OneSync and answers 0 for a moment after somebody gets in, which
+---is precisely when a dispatcher opens the grid to look for them. The client already has to report
+---the vehicle class, so it reports the network id alongside it and this falls back to that. The
+---fallback is checked against the ped's own position, so a tampered client cannot claim to be
+---sitting in a car on the other side of the map.
 ---@param src integer player server id
----@return table|nil vehicle { plate, model }
+---@param ped integer the officer's ped
+---@return integer|nil vehicle
+local function vehicleOf(src, ped)
+    local vehicle = GetVehiclePedIsIn(ped, false)
+    if vehicle and vehicle ~= 0 then return vehicle end
+
+    local netId = reportedNet[src]
+    if not netId then return nil end
+
+    local claimed = NetworkGetEntityFromNetworkId(netId)
+    if not claimed or claimed == 0 or not DoesEntityExist(claimed) then return nil end
+
+    -- Close enough to be sitting in it, rather than merely to have named it.
+    if #(GetEntityCoords(ped) - GetEntityCoords(claimed)) > CLAIM_RANGE then return nil end
+
+    return claimed
+end
+
+---Whether a vehicle is one that carries a dashcam at all.
+---@param vehicle integer
+---@param class integer|nil the class the officer's own game reported, when it has
+---@return boolean
+local function carriesDashcam(vehicle, class)
+    local model = u32(GetEntityModel(vehicle))
+    if model and DASH_MODELS[model] then return true end
+    return class ~= nil and DASH_CLASSES[class] == true
+end
+
+---The police vehicle an officer is working out of, when it carries a dashcam.
+---
+---"Working out of" rather than "sitting in": a dashcam is most worth watching during a stop, and a
+---stop is exactly when the officer is stood in front of the car rather than in it. So the car they
+---last got out of stays theirs for a while, as long as it still exists and they have not walked
+---off and left it.
+---@param src integer player server id
+---@return table|nil vehicle { plate, model, netId }
 local function dashVehicle(src)
     if not DASH_ENABLED then return nil end
 
     local ped = GetPlayerPed(src)
     if not ped or ped == 0 then return nil end
 
-    local vehicle = GetVehiclePedIsIn(ped, false)
-    if not vehicle or vehicle == 0 then return nil end
-
-    local model = u32(GetEntityModel(vehicle))
     local class = reportedClass[src]
-    if not (model and DASH_MODELS[model]) and not (class and DASH_CLASSES[class]) then return nil end
+    local vehicle = vehicleOf(src, ped)
+
+    if vehicle and vehicle ~= 0 and carriesDashcam(vehicle, class) then
+        lastDash[src] = { vehicle = vehicle, at = GetGameTimer() }
+    else
+        -- Not in one now, so fall back to the last one they were in.
+        local held = lastDash[src]
+        vehicle = nil
+
+        if held and LINGER_MS > 0 and (GetGameTimer() - held.at) <= LINGER_MS
+            and DoesEntityExist(held.vehicle)
+            and #(GetEntityCoords(ped) - GetEntityCoords(held.vehicle)) <= LINGER_RANGE
+        then
+            vehicle = held.vehicle
+        elseif held then
+            lastDash[src] = nil
+        end
+    end
+
+    if not vehicle then return nil end
 
     -- Both fields are always sent, even blank: client/apps/mdt.lua turns a model hash back into
     -- words on the way through, and it only recognises a vehicle row by seeing BOTH keys present.
-    return { plate = util.trim(GetVehicleNumberPlateText(vehicle) or ''), model = model or 0 }
+    return {
+        plate = util.trim(GetVehicleNumberPlateText(vehicle) or ''),
+        model = u32(GetEntityModel(vehicle)) or 0,
+        netId = NetworkGetNetworkIdFromEntity(vehicle),
+    }
 end
 
 ---Terminals currently counted as watching one camera, dropping any that have gone quiet. Counting
@@ -256,7 +329,11 @@ cameras.list = access.gated('cameras.view', function(src, _payload, me)
         if seats[src] then seats[src] = now end
     end
 
-    return util.ok({ cameras = out, idleSeconds = math.floor(IDLE_MS / 1000) })
+    return util.ok({
+        cameras     = out,
+        dashcams    = DASH_ENABLED,
+        idleSeconds = math.floor(IDLE_MS / 1000),
+    })
 end)
 
 ---Authorises one terminal to look through one unit's camera, and answers with the server id the
@@ -273,6 +350,13 @@ cameras.watch = access.audited('cameras.view', function(src, payload, me)
 
     local kind, cid = splitCameraId(payload.cameraId)
     if not kind or not cid then return util.fail('Unknown camera') end
+
+    -- Your own bodycam shows the back of your own head from a camera on your own chest, which is
+    -- worth nothing to anybody. Your own DASHCAM is a different matter: it points out of the
+    -- windscreen at the stop you are standing in front of, so that one stays open to you.
+    if kind == 'bodycam' and cid == me.citizenid then
+        return util.fail('That is your own bodycam')
+    end
 
     local unitSrc, officer, refusal = resolveTarget(cid, kind)
     if not unitSrc or not officer then return util.fail(refusal or 'Unknown camera') end
@@ -325,6 +409,10 @@ cameras.watch = access.audited('cameras.view', function(src, payload, me)
         unit     = textOrNil(officer.department and officer.department.short),
         plate    = vehicle and vehicle.plate or nil,
         model    = vehicle and vehicle.model or nil,
+        -- Which car to bolt to. Named explicitly rather than left to the watching client to work
+        -- out, because an officer stood in front of their car is not "in" it as far as the client
+        -- can tell, and that is exactly when a dashcam is worth opening.
+        vehicleNet = vehicle and vehicle.netId or nil,
         viewers  = viewerCount(id, now),
     })
 
@@ -370,8 +458,31 @@ end)
 ---@param payload table { class }
 function cameras.vehicle(src, payload)
     if not ENABLED or not DASH_ENABLED then return end
+
     local class = type(payload) == 'table' and tonumber(payload.class) or nil
     reportedClass[src] = class and math.floor(class) or nil
+
+    local netId = type(payload) == 'table' and tonumber(payload.netId) or nil
+    reportedNet[src] = netId and math.floor(netId) or nil
+
+    -- Remembering the car has to happen HERE, when the officer gets in, and not when a dispatcher
+    -- happens to open the grid. Recording it only on a read meant an officer who got in and out
+    -- while nobody was looking left nothing behind to linger, which is every ordinary stop.
+    if netId then
+        local vehicle = NetworkGetEntityFromNetworkId(math.floor(netId))
+        if vehicle and vehicle ~= 0 and DoesEntityExist(vehicle)
+            and carriesDashcam(vehicle, reportedClass[src])
+        then
+            lastDash[src] = { vehicle = vehicle, at = GetGameTimer() }
+        end
+        return
+    end
+
+    -- No vehicle reported means they just got out, so the linger starts counting from now rather
+    -- than from whenever they got in. Otherwise a long patrol would expire the tile before the
+    -- stop it exists for even begins.
+    local held = lastDash[src]
+    if held then held.at = GetGameTimer() end
 end
 
 ---Whether the Cameras section is switched on at all, for the routes above it.
@@ -419,6 +530,7 @@ if ENABLED then
     ---their game was reporting.
     util.onCleanup(function(src)
         reportedClass[src] = nil
+        reportedNet[src] = nil
         for id, seats in pairs(watchers) do
             seats[src] = nil
             if next(seats) == nil then watchers[id] = nil end

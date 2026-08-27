@@ -883,11 +883,12 @@ function pinCamera(tile: CameraTile): CameraTile {
 }
 
 export async function mdtCameras(): Promise<CameraGrid> {
-    if (!isFiveM) return { cameras: DEV_CAMERAS.map(pinCamera), idleSeconds: 15 };
+    if (!isFiveM) return { cameras: DEV_CAMERAS.map(pinCamera), dashcams: true, idleSeconds: 15 };
     const res = await apiData<CameraGrid>('sd-phone:mdt:cameras:list');
-    if (!res) return { cameras: [], idleSeconds: 15 };
+    if (!res) return { cameras: [], dashcams: false, idleSeconds: 15 };
     return {
         cameras:     (res.cameras ?? []).map(pinCamera),
+        dashcams:    res.dashcams === true,
         idleSeconds: res.idleSeconds ?? 15,
     };
 }

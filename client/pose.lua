@@ -177,6 +177,32 @@ local function attachProp(ped)
     prop = pose.createProp(ped, color, landscape)
 end
 
+---Puts the pose and prop the player is holding right now onto ANOTHER ped.
+---
+---For the stand-in the MDT leaves behind while a dispatcher watches a camera: the officer is stood
+---there reading their phone, so the copy has to be stood there reading one too rather than
+---appearing empty-handed the moment somebody opens a feed.
+---
+---The prop is handed back rather than tracked here, because it belongs to the ped the caller owns
+---and has to be deleted with it. This module only ever tracks the player's own.
+---@param ped integer the ped to put the pose on
+---@return integer|nil prop the prop welded to it, for the caller to delete
+function pose.mirrorOnto(ped)
+    if not pose.shouldHold() then return nil end
+    if not ped or ped == 0 or not DoesEntityExist(ped) then return nil end
+
+    local clip = currentClip()
+    if pcall(lib.requestAnimDict, clip.dict, 1000) then
+        -- A plain looping FULL BODY clip, not the upper-body secondary the player gets. That one
+        -- blends over whatever the ped is already doing, and a stand-in that has just been cloned
+        -- and stood still has nothing underneath for it to blend onto, so it barely reads at all.
+        TaskPlayAnim(ped, clip.dict, clip.anim, clip.blendIn, clip.blendOut, -1, 1, 0.0, false, false, false)
+        RemoveAnimDict(clip.dict)
+    end
+
+    return pose.createProp(ped, color, landscape)
+end
+
 ---Delete the attached phone prop, if any. Idempotent.
 function pose.removeProp()
     if prop and DoesEntityExist(prop) then DeleteObject(prop) end

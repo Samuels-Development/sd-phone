@@ -30,9 +30,7 @@ return {
     -- the waist to the top of the chest and not a height off the ground.
     Mount = {
         -- Forward of the chest, in metres. Far enough out that the officer's own body does not
-        -- pass through the lens when they run, close enough that it still reads as worn rather
-        -- than floating. A ped leans into a sprint, so the shoulders travel further forward than
-        -- the hips this is measured from: too small a figure and the officer clips the picture.
+        -- fill the lens, close enough that it still reads as worn rather than floating.
         Forward = 0.34,
         -- Above the ped's origin, in metres. 0.38 lands on the upper chest, where a real
         -- body-worn camera clips on.
@@ -45,18 +43,80 @@ return {
         Fov = 78.0,
         -- Downward tilt in degrees, because a camera on a chest points slightly at the ground.
         Pitch = -8.0,
-        -- How close geometry may come before it stops being drawn. Small, so the officer's own
-        -- arms enter the frame instead of being clipped away.
+        -- How close geometry may come before it stops being drawn.
         NearClip = 0.10,
+
+        -- The same figure while the officer is running. A ped pitches forward into a run and the
+        -- camera does not, so the head swings toward the lens and for a moment you see the inside
+        -- of their face. This rejects anything that close for as long as they are running, and
+        -- drops back to NearClip the moment they stop.
+        --
+        -- It also drops their arms and anything held while running, which is the deliberate trade:
+        -- a clean picture is worth more than seeing their hands. Lower it toward NearClip to keep
+        -- the arms, at the cost of the head clipping through on the first strides of a sprint.
+        NearClipRunning = 0.32,
+    },
+
+    -- How the picture is graded, applied in the ENGINE rather than drawn over the top. That
+    -- matters twice over: it looks like footage rather than like a filter, and because it is part
+    -- of the rendered frame it is also what gets recorded.
+    Look = {
+        -- A GTA timecycle modifier applied for as long as a camera is open. Set to false for a
+        -- clean picture. Ones worth trying: 'scanline_cam' and 'scanline_cam_cheap' are the
+        -- in-game security feeds, 'CAMERA_secuirity' is darker and greener, and
+        -- 'Island_CCTV_ChannelFuzz' adds channel noise on top.
+        Timecycle = 'scanline_cam_cheap',
+
+        -- How strongly it is applied, 0.0 to 1.0. Low, because a body-worn camera is a cheap
+        -- sensor and not a broken one.
+        Strength = 0.4,
+
+        -- Handheld movement, as a shake amplitude. A camera strapped to a moving person is never
+        -- perfectly still, and a perfectly still one is the main reason a feed reads as a video
+        -- game rather than as footage. 0 switches it off.
+        Shake = 0.35,
     },
 
     Dashcam = {
-        -- Whether an occupied police vehicle gets its own tile in the grid.
+        -- Whether a police vehicle gets its own tile in the grid.
         Enabled = true,
 
-        -- Where the camera sits in the vehicle, measured from the vehicle's origin. Forward puts
-        -- it at the windscreen, Height at roughly mirror level.
+        -- Seconds a dashcam stays on the grid after the officer gets out of the car.
+        --
+        -- Not a grace period for its own sake: a traffic stop is the moment a dashcam earns its
+        -- keep, and it is precisely the moment the officer is stood in front of the car rather
+        -- than sitting in it. Dropping the tile the instant they step out would take the camera
+        -- away exactly when somebody wants to watch it. 0 keeps the old behaviour.
+        LingerSeconds = 180,
+
+        -- Metres the officer may be from the car while that lingering tile lasts. Past this it is
+        -- not their car any more, it is one they parked somewhere and walked away from.
+        LingerRange = 60.0,
+
+        -- Where the camera sits in the vehicle.
+        --
+        -- By default it is sized to the vehicle rather than fixed, because one set of offsets that
+        -- suits a cruiser puts the lens inside the bonnet of a van and behind the seats of a bike.
+        -- The model's own bounding box gives the windscreen: a fraction of the way to the nose and
+        -- a fraction of the way to the roof.
         Mount = {
+            -- Set to false to ignore everything below and use the fixed offsets instead.
+            Auto = true,
+
+            -- Where the camera sits relative to the DRIVER'S SEAT, which is how a real dashcam is
+            -- described: behind the rear-view mirror, looking out through the windscreen. Measured
+            -- from the seat because every drivable vehicle has one and it is inside the cabin by
+            -- definition, so this lands correctly on a cruiser, a van and a bike alike.
+            SeatForward = 0.42,
+            SeatHeight  = 0.60,
+
+            -- Used only when a vehicle has no driver seat bone to measure from. Fractions of the
+            -- model's own size. Less reliable, because a police car's height includes its LIGHTBAR
+            -- and a fraction of that sits above the roof rather than under it.
+            ForwardFactor = 0.28,
+            HeightFactor  = 0.62,
+
+            -- The fixed fallback, used when Auto is false or the model gives nothing usable.
             Forward  = 0.55,
             Height   = 0.65,
             Side     = 0.0,
@@ -112,11 +172,16 @@ return {
         -- base64, which is about a third larger than the encoded video, so leave headroom.
         ChunkBytesPerSec = 2048 * 1024,
 
-        -- Days a recording is kept before it is pruned. 0 keeps them forever.
-        KeepDays = 30,
+        -- Days a recording is kept before it is pruned. 0 keeps them forever, which is the
+        -- default: footage is evidence, and quietly deleting it on a timer is the kind of thing
+        -- nobody notices until the one clip that mattered has gone. Set a number here only if
+        -- storage is the greater worry.
+        KeepDays = 0,
 
-        -- Recordings one officer's terminal may store. The oldest is dropped past this.
-        MaxPerOfficer = 50,
+        -- Recordings one terminal may hold before the oldest is dropped. Deliberately high rather
+        -- than absent: it is a backstop against one dispatcher filling the table forever, not a
+        -- retention policy. Recordings shared TO somebody count against theirs too.
+        MaxPerOfficer = 1000,
     },
 
     -- Terminals allowed on one officer's camera at once (0 = unlimited).

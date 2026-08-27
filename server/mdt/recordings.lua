@@ -18,6 +18,9 @@ local player   = require 'bridge.server.player'
 ---@type table Photo library (server.photos.store): where a shared clip lands when it is sent to
 ---somebody's handset rather than their terminal.
 local photos   = require 'server.photos.store'
+---@type table Notifications (server.notifications.init): the banner a recipient sees on the phone
+---itself, so footage sent to somebody who is not looking at their terminal is still noticed.
+local notifications = require 'server.notifications.init'
 
 ---@type table Recordings module; the table returned at end of file. A recording is what one
 ---terminal watched: the picture is rendered on the watching client, so there is no stream running
@@ -30,10 +33,10 @@ local REC = type(CFG.Recording) == 'table' and CFG.Recording or {}
 local ENABLED = CFG.Enabled == true and REC.Enabled ~= false
 ---@type integer Seconds one recording may run.
 local MAX_SECONDS = math.max(5, math.floor(tonumber(REC.MaxSeconds) or 300))
----@type integer Days a recording is kept, 0 meaning forever.
-local KEEP_DAYS = math.max(0, math.floor(tonumber(REC.KeepDays) or 30))
+---@type integer Days a recording is kept, 0 meaning forever, which is the default.
+local KEEP_DAYS = math.max(0, math.floor(tonumber(REC.KeepDays) or 0))
 ---@type integer Recordings one officer may keep before the oldest is dropped.
-local MAX_PER_OFFICER = math.max(1, math.floor(tonumber(REC.MaxPerOfficer) or 50))
+local MAX_PER_OFFICER = math.max(1, math.floor(tonumber(REC.MaxPerOfficer) or 1000))
 
 ---@type integer Ceiling on the assembled base64 payload, derived from the profile rather than
 ---guessed: the encoder cannot produce more than its own bitrate over its own maximum length, and
@@ -80,7 +83,7 @@ recordings.list = access.gated('cameras.view', function(_src, payload, me)
             FROM phone_mdt_bodycam_recs
             WHERE watcher_cid = ? AND officer_cid = ?
             ORDER BY created_at DESC
-            LIMIT 100
+            LIMIT 500
         ]], { me.citizenid, officerCid })
     else
         rows = MySQL.query.await([[
@@ -89,7 +92,7 @@ recordings.list = access.gated('cameras.view', function(_src, payload, me)
             FROM phone_mdt_bodycam_recs
             WHERE watcher_cid = ?
             ORDER BY created_at DESC
-            LIMIT 100
+            LIMIT 500
         ]], { me.citizenid })
     end
 
@@ -163,6 +166,17 @@ recordings.share = access.audited('cameras.view', function(_src, payload, me)
         })
         sent[#sent + 1] = 'mdt'
         if targetSrc then TriggerClientEvent('sd-phone:client:mdt:recShared', targetSrc, { by = me.name }) end
+
+        -- Addressed by citizenid rather than source, so footage sent to somebody who is offline is
+        -- still waiting on their phone when they come back rather than being dropped on the floor.
+        notifications.notifyCid(targetCid, {
+            app = 'mdt', appId = 'mdt', time = 'now',
+            title = 'MDT',
+            body  = ('%s sent you %s footage of %s'):format(
+                me.name,
+                row.kind == 'dashcam' and 'dashcam' or 'bodycam',
+                row.officer_name ~= '' and row.officer_name or 'a unit'),
+        })
     end
 
     if toPhone then
@@ -176,6 +190,12 @@ recordings.share = access.audited('cameras.view', function(_src, payload, me)
             TriggerClientEvent('sd-phone:client:photos:added', targetSrc,
                 { id = nil, url = row.url, favorite = false })
         end
+
+        notifications.notifyCid(targetCid, {
+            app = 'photos', appId = 'photos', time = 'now',
+            title = 'Photos',
+            body  = ('%s shared a video with you'):format(me.name),
+        })
     end
 
     return util.ok({ sent = sent }), {

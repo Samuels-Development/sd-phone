@@ -145,12 +145,8 @@ export function BodycamOverlay({ active }: { active: BodycamActive }) {
                 style={{ background: 'radial-gradient(ellipse 78% 78% at 50% 50%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.30) 74%, rgba(0,0,0,0.72) 100%)' }}
             />
             <div
-                className="absolute inset-0 opacity-[0.09]"
+                className="absolute inset-0 opacity-[0.045]"
                 style={{ backgroundImage: 'repeating-linear-gradient(to bottom, rgba(255,255,255,0.5) 0px, rgba(255,255,255,0.5) 1px, transparent 1px, transparent 4px)' }}
-            />
-            <div
-                className="absolute inset-0 opacity-[0.05] motion-reduce:hidden animate-[cctv-drift_11s_linear_infinite]"
-                style={{ backgroundImage: 'repeating-linear-gradient(to bottom, rgba(255,255,255,0.85) 0px, rgba(255,255,255,0.85) 2px, transparent 2px, transparent 14px)' }}
             />
             <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/55 to-transparent" />
             <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-black/70 to-transparent" />
