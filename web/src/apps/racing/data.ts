@@ -256,8 +256,6 @@ export interface AdminTrackRow extends TrackRow {
     createdAt: number;
 }
 
-export type PublishStatus = 'pending' | 'published' | 'rejected';
-
 export interface PendingTrackRow {
     id:               number;
     name:             string;
