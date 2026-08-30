@@ -185,6 +185,19 @@ html, body, #root {
                 fill             0.3s ease,
                 stroke           0.3s ease !important;
 }
+@keyframes mg-shake { 0%,100% { transform: translateX(0); } 15% { transform: translateX(-9px); } 30% { transform: translateX(8px); } 45% { transform: translateX(-6px); } 60% { transform: translateX(5px); } 80% { transform: translateX(-2px); } }
+@keyframes mg-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes mg-sweep { from { transform: translateX(0); } to { transform: translateX(100%); } }
+@keyframes mg-in    { from { opacity: 0; transform: scale(1.06); } to { opacity: 1; transform: scale(1); } }
+@keyframes mg-out   { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.94); } }
+@keyframes mg-rise  { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes mg-board { from { opacity: 0; transform: scale(0.93); } to { opacity: 1; transform: scale(1); } }
+@keyframes mg-pop { from { transform: scale(0.72); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes mg-drain  { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@keyframes mg-power  { from { opacity: 0.18; } to { opacity: 1; } }
+@keyframes mg-flood  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mg-row-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes mg-urgent { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 @keyframes admin-toast { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .animate-admin-toast { animation: admin-toast 0.22s ease; }
 /* Admin panel scroll areas: slim rounded thumb on a transparent track, matching the dark theme. */

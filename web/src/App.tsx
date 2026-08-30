@@ -16,6 +16,8 @@ import { useCallRing } from '@/apps/phone/calls/useCallRing';
 import { NotificationHost, type NotificationItem } from '@/shell/Notifications';
 import { AirShareCard, type AirShareRequest } from '@/shared/AirShare';
 import { SignRequestLayer, type SignRequestData } from '@/apps/documents/SignRequestLayer';
+import { DevLauncher } from '@/minigames/DevLauncher';
+import { MinigameLayer } from '@/minigames/MinigameLayer';
 import { ControlCenter, ControlCenterHotzone } from '@/shell/ControlCenter';
 import { NotificationCenter, NotificationCenterHotzone } from '@/shell/NotificationCenter';
 import { MusicProvider, useMusic } from '@/apps/music/MusicContext';
@@ -1557,11 +1559,12 @@ function AppContent() {
                 <button
                     type="button"
                     onClick={() => setHour24(!hour24)}
-                    className="fixed left-3 top-[84px] z-[99999] rounded-md bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/20 hover:bg-black/90"
+                    className="fixed left-3 top-[120px] z-[99999] rounded-md bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/20 hover:bg-black/90"
                 >
                     {hour24 ? '24h: on' : '24h: off'}
                 </button>
             )}
+            {import.meta.env.DEV && <DevLauncher />}
             <PhoneShell hidden={onCamera} cameraActive={cameraMode} landscape={cameraMode && landscape} entering={entering} leaving={leaving} onClose={closePhone} frameColor={frameColor} radioIsland={radioIsland} alarmIsland={{ ringing: !!ringingAlarm, since: ringingSince }}>
                 {!(showSetup && setupHello && !noSim) && (
                     <StatusBar
@@ -1697,6 +1700,8 @@ function AppContent() {
                         <AirShareCard key={airshare[0].id} request={airshare[0]} onRespond={(a) => respondAirshare(airshare[0]!.id, a)} />
                     </div>
                 )}
+
+                <MinigameLayer />
 
                 {signReqs[0] && (
                     <SignRequestLayer

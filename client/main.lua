@@ -120,6 +120,8 @@ local wifiClient = require 'client.wifi'
 local bluetoothClient = require 'client.bluetooth'
 ---@type table Game-clock sampler (client.gameclock): pushes GetClock* to the UI while open.
 local gameclock = require 'client.gameclock'
+---@type table Minigames (client.minigames): whether a round is holding the screen.
+local minigames = require 'client.minigames'
 
 -- Loaded for side effects: each app module registers its own NUI callbacks, net events and
 -- server proxies.
@@ -558,6 +560,7 @@ end
 ---flashlight keeps it. Idempotent.
 function ClosePhone()
     if not phoneState.open then return end
+    if minigames.active() then return end
 
     phoneState.open = false
     companion.phoneOpen = false

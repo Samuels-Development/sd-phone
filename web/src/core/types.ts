@@ -11,6 +11,7 @@ import type {
 } from '@/apps/racing/data';
 import type { VUser as VibezUser } from '@/apps/vibez/data';
 import type { Reaction } from '@/shared/chat/data';
+import type { MinigameStart } from '@/minigames/data';
 
 export interface OpenPayload {
     locale?: string;
@@ -294,6 +295,8 @@ export type NuiMessage =
     | { action: 'sd-phone:nowPlaying:clear'; data: { appId: string } }
     | { action: 'sd-phone:cctv:enter'; data: { cameraId: string; label: string; category: string } }
     | { action: 'sd-phone:cctv:exit';  data: Record<string, never> }
+    | { action: 'sd-phone:minigames:start'; data: MinigameStart }
+    | { action: 'sd-phone:minigames:stop';  data: Record<string, never> }
     | { action: 'sd-phone:lockscreenWidget:show'; data: ActiveLockscreenWidget }
     | { action: 'sd-phone:lockscreenWidget:hide'; data: { key: string } }
     | { action: 'sd-phone:pages:feed';       data: ClassifiedFeedPush }

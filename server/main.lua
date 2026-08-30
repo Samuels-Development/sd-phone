@@ -92,6 +92,7 @@ require 'server.admin.init'
 require 'server.migrate.init'
 -- Loaded for side effects: publishes the phone's live per-player state onto player state bags.
 require 'server.statebags'
+require 'server.minigames.init'
 
 -- lb-phone export compatibility shim (inert while the real lb-phone runs; sd_phone_lbcompat kill switch).
 require 'server.compat.lbphone.init'
