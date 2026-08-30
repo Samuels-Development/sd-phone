@@ -62,6 +62,17 @@ register('setAlias',     function(src, payload) return actions.setAlias(src, pay
 register('setAvatar',    function(src, payload) return actions.setAvatar(src, payload) end)
 register('setHud',       function(src, payload) return actions.setHud(src, payload) end)
 register('createTrack',  function(src, payload) return actions.createTrack(src, payload) end)
+
+---Opens the in-game gate creator on the player's client. Re-checks the same ace the /createtrack
+---command is restricted on: that command's gate is enforced by ox_lib before the command body ever
+---runs, but this callback has no such wrapper, so without this check any caller of the phone's NUI
+---action -- ace or not -- could pop the recorder and stream its flag prop for free.
+register('startCreator', function(src)
+    if not actions.canCreate(src) then return util.fail('You are not allowed to create tracks') end
+    TriggerClientEvent('sd-phone:client:racing:creator', src)
+    return util.ok({})
+end)
+
 ---Bulk import for server owners: reads a JSON file from the resource folder and saves every track
 ---in it. Console only, because it writes rows and needs no in-game context; the file lives beside
 ---the resource so an owner can drop a track pack in without touching the database.
@@ -104,11 +115,14 @@ exports('importRaceTrack', function(data, authorName)
     return actions.importTracks(data, nil, type(authorName) == 'string' and authorName or 'Imported')
 end)
 
-register('importTracks', function(src, payload) return actions.importTracksFor(src, payload) end)
-register('exportTrack',  function(src, payload) return actions.exportTrack(src, payload) end)
-register('adminTracks',  function(src, payload) return actions.adminTracks(src, payload) end)
-register('adminSetFlag', function(src, payload) return actions.adminSetFlag(src, payload) end)
-register('adminDelete',  function(src, payload) return actions.adminDelete(src, payload) end)
+register('importTracks',        function(src, payload) return actions.importTracksFor(src, payload) end)
+register('exportTrack',         function(src, payload) return actions.exportTrack(src, payload) end)
+register('adminTracks',         function(src, payload) return actions.adminTracks(src, payload) end)
+register('adminSetFlag',        function(src, payload) return actions.adminSetFlag(src, payload) end)
+register('adminDelete',         function(src, payload) return actions.adminDelete(src, payload) end)
+register('adminPendingTracks',  function(src, payload) return actions.adminPendingTracks(src, payload) end)
+register('adminApproveTrack',   function(src, payload) return actions.adminApproveTrack(src, payload) end)
+register('adminRejectTrack',    function(src, payload) return actions.adminRejectTrack(src, payload) end)
 
 register('boards', function(src)
     local cid = player.getIdentifier(src)
@@ -181,13 +195,16 @@ if ENABLED then
     end)
 
     if CREATOR.Enabled ~= false and type(CREATOR.Command) == 'string' then
-        ---Toggles the in-game gate creator. Registered restricted, which is what makes ox_lib gate
-        ---it on the `command.<name>` ace that Config.Creator.Ace names.
+        ---Toggles the in-game gate creator. `restricted` mirrors Config.Creator.Access: true gates
+        ---the command itself on the `command.<name>` ace (Config.Creator.Ace names it), false opens
+        ---it to everyone. Either way the handler re-checks actions.canCreate, the same rule the
+        ---phone's "+" button goes through, so the two entry points can never disagree.
         ---@param source integer player server id
         lib.addCommand(CREATOR.Command, {
             help = 'Toggle the in-game track creator',
-            restricted = true,
+            restricted = CREATOR.Access ~= 'everyone',
         }, function(source)
+            if not actions.canCreate(source) then return end
             TriggerClientEvent('sd-phone:client:racing:creator', source)
         end)
     end

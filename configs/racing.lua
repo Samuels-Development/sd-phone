@@ -292,6 +292,17 @@ return {
         -- Metres beyond which already-placed gates stop being drawn. Lower it if a
         -- long track costs you frames in the editor.
         DrawRadius   = 300.0,
+
+        -- Who may open the track creator (the /createtrack command and the phone's
+        -- "+" button both read this):
+        --   'ace'      - only players holding the Ace above. Their tracks publish
+        --                immediately, exactly like every version of this feature
+        --                before approval existed.
+        --   'everyone' - any player may create a track. A creator who holds the Ace
+        --                is trusted and still publishes immediately; everyone else's
+        --                track is queued as pending until an admin approves or
+        --                rejects it from the phone's admin panel.
+        Access = 'ace',
     },
 
     -- The live race: what the client draws, and what counts as passing a gate.

@@ -11,20 +11,21 @@ import { CLASS_COLOR } from './racingTheme';
 import { racingBootstrap } from './racingApi';
 
 export interface RacingSessionValue {
-    me:         RacingMe | null;
-    hud:        HudSettings;
-    admin:      boolean;
-    creator:    boolean;
-    classes:    Record<RaceClass, { level: number; label: string; color: string }>;
-    limits:     RacingLimits;
-    loading:    boolean;
-    ready:      boolean;
-    section:    RacingSection;
-    setSection: (section: RacingSection) => void;
-    selected:   string | null;
-    select:     (ref: string | null) => void;
-    setHud:     (hud: HudSettings) => void;
-    refresh:    () => void;
+    me:                   RacingMe | null;
+    hud:                  HudSettings;
+    admin:                boolean;
+    creator:              boolean;
+    creatorNeedsApproval: boolean;
+    classes:              Record<RaceClass, { level: number; label: string; color: string }>;
+    limits:               RacingLimits;
+    loading:              boolean;
+    ready:                boolean;
+    section:              RacingSection;
+    setSection:           (section: RacingSection) => void;
+    selected:             string | null;
+    select:               (ref: string | null) => void;
+    setHud:               (hud: HudSettings) => void;
+    refresh:              () => void;
 }
 
 const RacingSessionContext = createContext<RacingSessionValue | null>(null);
@@ -84,19 +85,20 @@ export function useRacingSessionState(): RacingSessionValue {
     const hud = hudOverride ?? data?.hud ?? DEFAULT_HUD;
 
     return useMemo(() => ({
-        me:         data?.me ?? null,
+        me:                   data?.me ?? null,
         hud,
-        admin:      data?.admin ?? false,
-        creator:    data?.creator ?? false,
+        admin:                data?.admin ?? false,
+        creator:              data?.creator ?? false,
+        creatorNeedsApproval: data?.creatorNeedsApproval ?? false,
         classes,
-        limits:     data?.limits ?? DEFAULT_LIMITS,
+        limits:               data?.limits ?? DEFAULT_LIMITS,
         loading,
-        ready:      data !== null || settled,
+        ready:                data !== null || settled,
         section,
         setSection,
-        selected:   selection[section] ?? null,
+        selected:             selection[section] ?? null,
         select,
         setHud,
-        refresh:    refetch,
+        refresh:              refetch,
     }), [data, hud, classes, loading, settled, section, setSection, selection, select, setHud, refetch]);
 }

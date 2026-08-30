@@ -106,6 +106,13 @@ local COLUMNS = {
         best_lap_ms = 'best_lap_ms INT NULL',
         sectors     = 'sectors VARCHAR(64) NULL',
     },
+
+    -- Track approval workflow. publish_status tracks pending/published/rejected state.
+    -- rejection_reason stores admin feedback when a track is rejected.
+    phone_racing_tracks = {
+        publish_status    = "publish_status VARCHAR(20) NOT NULL DEFAULT 'published'",
+        rejection_reason  = 'rejection_reason TEXT NULL',
+    },
 }
 
 ---Brings one table up to date, in a single information_schema read and at most one ALTER. Called

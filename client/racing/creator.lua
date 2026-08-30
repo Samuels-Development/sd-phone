@@ -221,9 +221,10 @@ local function promptSave()
 
     if type(res) == 'table' and res.success then
         stopCreator()
+        local data = type(res.data) == 'table' and res.data or {}
         notify.show({
             title = TITLE,
-            description = ('Saved %s.'):format(input[1]),
+            description = type(data.message) == 'string' and data.message or ('Saved %s.'):format(input[1]),
             type = 'success',
         })
         return

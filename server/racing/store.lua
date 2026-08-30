@@ -51,8 +51,11 @@ local TRACK_FLAGS = { verified = 'verified', featured = 'featured', published = 
 ---@type string Filter shared by the track count and the track page so the two can never disagree.
 ---Takes includeUnpublished, verifiedOnly, like, like. The unfiltered name match is the empty string
 ---rather than NULL: a trailing nil would shorten the parameter array and leave a placeholder unfed.
+---A track still awaiting approval is excluded outright, even from includeUnpublished: it belongs to
+---the pending queue alone until an admin approves or rejects it, never to the general track list.
 local TRACK_FILTER = [[
         t.deleted = 0
+          AND t.publish_status != 'pending'
           AND (? = 1 OR t.published = 1)
           AND (? = 0 OR t.verified = 1)
           AND (? = '' OR t.name LIKE ?)
@@ -63,22 +66,25 @@ local TRACK_FILTER = [[
 function store.ensureSchema()
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_racing_tracks (
-            id           INT          NOT NULL AUTO_INCREMENT,
-            name         VARCHAR(60)  NOT NULL,
-            citizenid    VARCHAR(64)  NULL,
-            author_name  VARCHAR(64)  NOT NULL DEFAULT '',
-            checkpoints  LONGTEXT     NOT NULL,
-            gate_count   INT          NOT NULL DEFAULT 0,
-            is_sprint    TINYINT(1)   NOT NULL DEFAULT 0,
-            published    TINYINT(1)   NOT NULL DEFAULT 1,
-            verified     TINYINT(1)   NOT NULL DEFAULT 0,
-            featured     TINYINT(1)   NOT NULL DEFAULT 0,
-            deleted      TINYINT(1)   NOT NULL DEFAULT 0,
-            created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            id                INT          NOT NULL AUTO_INCREMENT,
+            name              VARCHAR(60)  NOT NULL,
+            citizenid         VARCHAR(64)  NULL,
+            author_name       VARCHAR(64)  NOT NULL DEFAULT '',
+            checkpoints       LONGTEXT     NOT NULL,
+            gate_count        INT          NOT NULL DEFAULT 0,
+            is_sprint         TINYINT(1)   NOT NULL DEFAULT 0,
+            published         TINYINT(1)   NOT NULL DEFAULT 1,
+            verified          TINYINT(1)   NOT NULL DEFAULT 0,
+            featured          TINYINT(1)   NOT NULL DEFAULT 0,
+            deleted           TINYINT(1)   NOT NULL DEFAULT 0,
+            publish_status    VARCHAR(20)  NOT NULL DEFAULT 'published',
+            rejection_reason  TEXT         NULL,
+            created_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             INDEX idx_racing_tracks_live    (deleted, published, featured, name),
-            INDEX idx_racing_tracks_creator (citizenid)
+            INDEX idx_racing_tracks_creator (citizenid),
+            INDEX idx_racing_tracks_status  (publish_status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
     migrations.apply('phone_racing_tracks')
@@ -125,9 +131,27 @@ function store.ensureSchema()
     ]])
     migrations.apply('phone_racing_results')
 
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS phone_racing_notifications (
+            id              INT          NOT NULL AUTO_INCREMENT,
+            citizenid       VARCHAR(64)  NOT NULL,
+            track_id        INT          NOT NULL,
+            track_name      VARCHAR(60)  NOT NULL,
+            notification_type VARCHAR(20) NOT NULL,
+            rejection_reason TEXT         NULL,
+            delivered       TINYINT(1)   NOT NULL DEFAULT 0,
+            created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            INDEX idx_racing_notifications_creator (citizenid),
+            INDEX idx_racing_notifications_delivered (citizenid, delivered)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ]])
+    migrations.apply('phone_racing_notifications')
+
     util.ensureCollation('phone_racing_tracks')
     util.ensureCollation('phone_racing_profiles')
     util.ensureCollation('phone_racing_results')
+    util.ensureCollation('phone_racing_notifications')
 
     util.ensureIndex('phone_racing_tracks', 'idx_racing_tracks_live', '(deleted, published, featured, name)')
     util.ensureIndex('phone_racing_tracks', 'idx_racing_tracks_creator', '(citizenid)')
@@ -135,6 +159,8 @@ function store.ensureSchema()
     util.ensureIndex('phone_racing_results', 'idx_racing_results_board', '(track_id, dnf, time_ms)')
     util.ensureIndex('phone_racing_results', 'idx_racing_results_recent', '(track_id, dnf, finished_at)')
     util.ensureIndex('phone_racing_results', 'idx_racing_results_racer', '(citizenid, finished_at)')
+    util.ensureIndex('phone_racing_notifications', 'idx_racing_notifications_creator', '(citizenid)')
+    util.ensureIndex('phone_racing_notifications', 'idx_racing_notifications_delivered', '(citizenid, delivered)')
 end
 
 ---A whole page number, at least 1.
@@ -243,7 +269,7 @@ function store.trackCache()
     local rows = MySQL.query.await([[
         SELECT id, name, author_name, gate_count, is_sprint, verified, featured, checkpoints
         FROM phone_racing_tracks
-        WHERE deleted = 0 AND published = 1
+        WHERE deleted = 0 AND published = 1 AND publish_status = 'published'
         ORDER BY featured DESC, name ASC, id ASC
     ]]) or {}
 
@@ -348,18 +374,25 @@ end
 
 ---Inserts a track built in the creator: published straight away but unverified, so an admin still
 ---has to pass it before the generator can schedule a race on it. The gate count is denormalised
----here so no later read has to measure the JSON.
+---here so no later read has to measure the JSON. When the approval workflow is on, the caller
+---passes publishStatus = 'pending' so the track stays invisible until an admin approves it.
 ---@param name string display name, already capped by the caller
 ---@param isSprint boolean point to point rather than a circuit
 ---@param gates table[] `{ {ax,ay,az}, {bx,by,bz} }` per gate, already validated
 ---@param citizenid string|nil creator, nil for a track the server generated
 ---@param authorName string|nil creator's display name at the time
+---@param publishStatus string|nil 'pending', 'published' or 'rejected'; defaults to 'published'
 ---@return integer|nil id new row id
-function store.createTrack(name, isSprint, gates, citizenid, authorName)
+function store.createTrack(name, isSprint, gates, citizenid, authorName, publishStatus)
+    publishStatus = publishStatus or 'published'
+    -- `published` stays in lockstep with publish_status: a pending track is not published, full
+    -- stop, so every existing published = 1 filter (trackCache, tracksPage) already keeps it out
+    -- of every player-facing list with no further changes needed there.
+    local published = publishStatus == 'published' and 1 or 0
     local id = MySQL.insert.await([[
         INSERT INTO phone_racing_tracks
-            (name, citizenid, author_name, checkpoints, gate_count, is_sprint, published, verified)
-        VALUES (?, ?, ?, ?, ?, ?, 1, 0)
+            (name, citizenid, author_name, checkpoints, gate_count, is_sprint, published, verified, publish_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
     ]], {
         name,
         citizenid,
@@ -367,6 +400,8 @@ function store.createTrack(name, isSprint, gates, citizenid, authorName)
         json.encode(gates),
         #gates,
         isSprint and 1 or 0,
+        published,
+        publishStatus,
     })
     if id then store.invalidateTrackCache() end
     return id
@@ -401,6 +436,62 @@ function store.softDeleteTrack(trackId)
         'UPDATE phone_racing_tracks SET published = 0, deleted = 1 WHERE id = ?', { id })) or 0
     if changed > 0 then store.invalidateTrackCache() end
     return changed > 0
+end
+
+---Approve a pending track: sets its publish_status to 'published'.
+---@param trackId integer|string
+---@return boolean changed
+function store.approveTrack(trackId)
+    local id = idOf(trackId)
+    if not id then return false end
+
+    local changed = tonumber(MySQL.update.await(
+        'UPDATE phone_racing_tracks SET publish_status = ?, published = 1, rejection_reason = NULL WHERE id = ? AND publish_status = ?',
+        { 'published', id, 'pending' })) or 0
+    if changed > 0 then store.invalidateTrackCache() end
+    return changed > 0
+end
+
+---Reject a pending track: sets its publish_status to 'rejected' and stores the reason. `published`
+---stays 0, the same as it was while pending, so the track never leaks into a player-facing list.
+---@param trackId integer|string
+---@param reason string rejection reason, already validated non-empty by the caller
+---@return boolean changed
+function store.rejectTrack(trackId, reason)
+    local id = idOf(trackId)
+    if not id then return false end
+
+    local trimmed = util.limitedString(reason, 500) or ''
+    local changed = tonumber(MySQL.update.await(
+        'UPDATE phone_racing_tracks SET publish_status = ?, published = 0, rejection_reason = ? WHERE id = ? AND publish_status = ?',
+        { 'rejected', trimmed, id, 'pending' })) or 0
+    if changed > 0 then store.invalidateTrackCache() end
+    return changed > 0
+end
+
+---Pending tracks list, one page at a time. Used by admins to review and approve tracks.
+---@param opts table { page, perPage }
+---@return table[] rows pending tracks
+---@return integer total count of all pending tracks
+function store.pendingTracksPage(opts)
+    opts = opts or {}
+    local page = math.max(1, math.floor(tonumber(opts.page) or 1))
+    local perPage = math.min(MAX_PER_PAGE, math.floor(tonumber(opts.perPage) or TRACK_PAGE))
+    local offset = (page - 1) * perPage
+
+    local rows = MySQL.query.await([[
+        SELECT id, name, author_name, citizenid, gate_count, is_sprint, created_at, rejection_reason
+        FROM phone_racing_tracks
+        WHERE deleted = 0 AND publish_status = ?
+        ORDER BY created_at ASC
+        LIMIT ? OFFSET ?
+    ]], { 'pending', perPage, offset }) or {}
+
+    local total = tonumber(MySQL.scalar.await(
+        'SELECT COUNT(*) FROM phone_racing_tracks WHERE deleted = 0 AND publish_status = ?',
+        { 'pending' })) or 0
+
+    return rows, total
 end
 
 ---A track's route in the layout the race client and the map both read: one nine-number array per
@@ -866,6 +957,48 @@ function store.racerProfile(citizenid, currentMmr)
         chart           = chart,
         pastRaces       = pastRaces,
     }
+end
+
+---Saves a track approval or rejection notification for delivery when the player logs in.
+---@param citizenid string track creator
+---@param trackId integer the track id
+---@param trackName string track name
+---@param notificationType 'approved'|'rejected'
+---@param rejectionReason string|nil reason if rejected
+---@return boolean success
+function store.saveNotification(citizenid, trackId, trackName, notificationType, rejectionReason)
+    if type(citizenid) ~= 'string' or citizenid == '' then return false end
+    if type(trackId) ~= 'number' or trackId <= 0 then return false end
+    if type(trackName) ~= 'string' or trackName == '' then return false end
+    if notificationType ~= 'approved' and notificationType ~= 'rejected' then return false end
+
+    local id = MySQL.insert.await(
+        'INSERT INTO phone_racing_notifications (citizenid, track_id, track_name, notification_type, rejection_reason) VALUES (?, ?, ?, ?, ?)',
+        { citizenid, trackId, trackName, notificationType, (notificationType == 'rejected' and rejectionReason) or nil }
+    )
+    return id and id > 0 or false
+end
+
+---Fetches undelivered notifications for a citizen.
+---@param citizenid string
+---@return table[] notifications with id, track_id, track_name, notification_type, rejection_reason, created_at
+function store.pendingNotifications(citizenid)
+    if type(citizenid) ~= 'string' or citizenid == '' then return {} end
+    return MySQL.query.await(
+        'SELECT id, track_id, track_name, notification_type, rejection_reason, created_at FROM phone_racing_notifications WHERE citizenid = ? AND delivered = 0 ORDER BY created_at DESC',
+        { citizenid }
+    ) or {}
+end
+
+---Marks a notification as delivered.
+---@param notificationId integer
+---@return boolean success
+function store.markNotificationDelivered(notificationId)
+    local rows = MySQL.update.await(
+        'UPDATE phone_racing_notifications SET delivered = 1 WHERE id = ?',
+        { notificationId }
+    ) or 0
+    return rows > 0
 end
 
 return store

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BadgeCheck, Check, Download, MapPin, Route, Search, Star } from 'lucide-react';
+import { BadgeCheck, Check, Download, MapPin, Plus, Route, Search, Star } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { useAsyncData } from '@/hooks/useAsyncData';
@@ -16,8 +16,9 @@ import { device } from '@device';
 const isPhone = device.id === 'phone';
 
 import { TrackDetail, modeLabel } from './TrackDetail';
-import { racingImportTracks, racingTracks, racingWaypoint } from './racingApi';
+import { racingImportTracks, racingStartCreator, racingTracks, racingWaypoint } from './racingApi';
 import { RACING_ACCENT, racingAccentFill, racingAccentText, racingJsonField, racingJsonPlaceholder, racingSheetHint } from './racingTheme';
+import { useRacingSession } from './useRacingSession';
 import { TRACKS_PER_PAGE, type TrackRow, type TrackSort } from './data';
 
 const MASTER_WIDTH = 408;
@@ -113,6 +114,48 @@ const PLACEHOLDER_JSON = `{
   "gates": [ ... ]
 }`;
 
+function CreateTrackSheet({ onClose, needsApproval }: { onClose: () => void; needsApproval: boolean }) {
+    const [busy, setBusy] = useState(false);
+
+    async function start() {
+        setBusy(true);
+        await racingStartCreator();
+        setBusy(false);
+        onClose();
+    }
+
+    return (
+        <Sheet
+            onClose={onClose}
+            fit="content"
+            title={t('racing.createTrack', 'Create track')}
+            className="font-sf bg-base text-black dark:text-white"
+        >
+            {() => (
+                <div className="flex flex-col gap-3 px-4 pb-5">
+                    <p className={racingSheetHint}>
+                        {t('racing.createTrackHint', 'You will place gates in the world to define your track. Drive to a start line and begin placing checkpoints with E, undo with X, and save when done.')}
+                    </p>
+                    {needsApproval && (
+                        <p className={racingSheetHint}>
+                            {t('racing.createTrackApprovalHint', 'Your track will be reviewed by an admin before other players can race it.')}
+                        </p>
+                    )}
+                    <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => { void start(); }}
+                        className="h-[44px] w-full rounded-[12px] text-[15px] font-semibold text-white transition-opacity active:opacity-70 disabled:opacity-40"
+                        style={{ backgroundColor: RACING_ACCENT }}
+                    >
+                        {busy ? t('racing.starting', 'Starting…') : t('racing.startCreator', 'Start creating')}
+                    </button>
+                </div>
+            )}
+        </Sheet>
+    );
+}
+
 function ImportSheet({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
     const [text, setText]     = useState('');
     const [busy, setBusy]     = useState(false);
@@ -181,12 +224,14 @@ function ImportSheet({ onClose, onDone }: { onClose: () => void; onDone: () => v
 }
 
 export function TracksPane() {
+    const { creator, creatorNeedsApproval } = useRacingSession();
     const [query, setQuery]       = useSessionState('racing:tracks:query', '');
     const [sort, setSort]         = useSessionState<TrackSort>('racing:tracks:sort', 'newest');
     const [verified, setVerified] = useSessionState('racing:tracks:verified', false);
     const [page, setPage]         = useSessionState('racing:tracks:page', 1);
     const [selected, setSelected] = useSessionState<number | null>('racing:tracks:selected', null);
     const [term, setTerm]         = useState(query.trim());
+    const [creating, setCreating] = useState(false);
     const [importing, setImporting] = useState(false);
     const [reload, setReload]       = useState(0);
 
@@ -239,14 +284,26 @@ export function TracksPane() {
             isEmpty={settled && rows.length === 0}
             empty={empty}
             action={
-                <button
-                    type="button"
-                    onClick={() => setImporting(true)}
-                    aria-label={t('racing.importTracks', 'Import tracks')}
-                    className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-ios-gray transition-colors duration-150 hover:bg-black/[0.06] hover:text-black active:opacity-60 dark:hover:bg-white/[0.10] dark:hover:text-white"
-                >
-                    <Download className="h-[15px] w-[15px]" strokeWidth={2.2} />
-                </button>
+                <div className="flex gap-1">
+                    {creator && (
+                        <button
+                            type="button"
+                            onClick={() => setCreating(true)}
+                            aria-label={t('racing.createTrack', 'Create track')}
+                            className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-ios-gray transition-colors duration-150 hover:bg-black/[0.06] hover:text-black active:opacity-60 dark:hover:bg-white/[0.10] dark:hover:text-white"
+                        >
+                            <Plus className="h-[15px] w-[15px]" strokeWidth={2.2} />
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={() => setImporting(true)}
+                        aria-label={t('racing.importTracks', 'Import tracks')}
+                        className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-ios-gray transition-colors duration-150 hover:bg-black/[0.06] hover:text-black active:opacity-60 dark:hover:bg-white/[0.10] dark:hover:text-white"
+                    >
+                        <Download className="h-[15px] w-[15px]" strokeWidth={2.2} />
+                    </button>
+                </div>
             }
             filters={
                 <>
@@ -298,6 +355,12 @@ export function TracksPane() {
                 }
                 onCloseDetail={() => setSelected(null)}
             />
+            {creating && (
+                <CreateTrackSheet
+                    onClose={() => setCreating(false)}
+                    needsApproval={creatorNeedsApproval}
+                />
+            )}
             {importing && (
                 <ImportSheet
                     onClose={() => setImporting(false)}

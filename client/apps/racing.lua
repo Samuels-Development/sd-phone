@@ -17,8 +17,9 @@ local ACTIONS = {
     'leave', 'host',
     'rankings', 'racer',
     'setAlias', 'setAvatar',
-    'importTracks', 'exportTrack',
+    'importTracks', 'exportTrack', 'startCreator',
     'adminTracks', 'adminSetFlag', 'adminDelete',
+    'adminPendingTracks', 'adminApproveTrack', 'adminRejectTrack',
 }
 
 for _, action in ipairs(ACTIONS) do
