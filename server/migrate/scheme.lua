@@ -86,9 +86,13 @@ function scheme.decide()
     local owner = scheme.dataOwner()
     local why = blocker()
 
-    if why and store.readScheme(MARK) == 'per-number' then
+    local pinned = store.readScheme(MARK)
+    if pinned == 'per-number' then
         return { mode = 'per-number', reason = nil, dataOwner = owner, pinned = true }
+    elseif pinned == 'per-character' then
+        return { mode = 'per-character', reason = nil, dataOwner = owner, pinned = true }
     end
+
     return {
         mode      = why and 'per-character' or 'per-number',
         reason    = why,
