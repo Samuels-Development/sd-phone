@@ -1209,7 +1209,7 @@ end
 ---@type table<string, boolean> Whitelist of storable phone locales.
 local SUPPORTED_LOCALES = {
     en = true, fr = true, es = true, de = true, it = true,
-    pt = true, nl = true, pl = true, da = true, no = true,
+    pt = true, nl = true, pl = true, da = true, no = true, ru = true,
 }
 
 ---Reads a player's saved phone language, or nil if unset. Read-only.
