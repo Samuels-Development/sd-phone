@@ -61,6 +61,7 @@ end
 ---the closing summary: the counter each porter returns, paired with a human noun. Counters that
 ---are zero are left out, so a server without a given app produces no line for it.
 local SUMMARY_FIELDS = {
+    uniquephones = { { 'registered', 'phone' } },
     numbers    = { { 'set', 'phone number' } },
     contacts   = { { 'migrated', 'contact' } },
     blocked    = { { 'migrated', 'blocked number' } },
@@ -122,7 +123,12 @@ end
 ---would delete on the next boot anyway. Saying so where the number is printed stops an operator
 ---going looking for a fault that is not there.
 local SKIP_REASONS = {
-    numbers    = { skipped = 'a second phone whose owner already has a number' },
+    uniquephones = { skipped = 'a phone with no number to register',
+                     refused = 'every phone, because this server keys phone data per player',
+                     pending = 'a phone whose data is not in this database yet; the domains below '
+                            .. 'bring it across' },
+    numbers    = { skipped = 'a phone whose number is already set up here',
+                   conflict = 'a number a different player already holds on this server' },
     contacts   = { skipped = 'the same contact already saved on another of that player\'s phones' },
     blocked    = { skipped = 'the same number already blocked on another of that player\'s phones' },
     calls      = { skipped = 'a call on a number that belongs to no character here' },

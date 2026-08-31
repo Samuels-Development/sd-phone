@@ -12,6 +12,8 @@ local fmt       = require 'server.migrate.format'
 local events    = require 'server.migrate.events'
 ---@type table Import source registry (server.migrate.sources): which phone the rows come from.
 local sources   = require 'server.migrate.sources.init'
+---@type table Identity scheme (server.migrate.scheme): why rows key per phone or per player.
+local scheme    = require 'server.migrate.scheme'
 
 local runner = {}
 
@@ -31,6 +33,7 @@ local FOREIGN_NAMES = {
 ---the same app under a different name, its default follows in brackets so the operator recognises
 ---what they are migrating from. Names that match on both sides take no bracket.
 local TITLES = {
+    uniquephones = 'Unique phones',
     numbers    = 'Phone numbers',
     contacts   = 'Contacts',
     blocked    = 'Blocked numbers',
@@ -56,6 +59,7 @@ local TITLES = {
 
 ---@type table<string, string> One line per domain describing what it carries, for the panel.
 local BLURB = {
+    uniquephones = 'Lets each phone item keep its own number and data, instead of one per player.',
     numbers    = 'Phone numbers and lock passcodes. Everything else keys off this.',
     contacts   = 'Saved contacts and their avatars.',
     blocked    = 'Blocked number list.',
@@ -303,6 +307,72 @@ local function execute(opts)
     end
 
     local queue = split.queue
+
+    events.log('info', 'waiting for sd-phone tables to be ready...')
+    if not store.waitForTables(TARGETS, 240, 500) then
+        events.log('error', 'sd-phone tables not ready in time, aborting. Nothing was written.')
+        events.log('error', 'this usually means another resource is still creating them; restart sd-phone.')
+        events.setState({ phase = 'failed', finishedAt = os.time() }, true)
+        return
+    end
+
+    -- Pinned here, not in a porter: a porter that fails does not stop the run, so one holding the
+    -- pin could leave every later domain writing rows under a keying nothing recorded.
+    local ctx = src.identity(cfg, framework, { pin = not dryRun })
+    ctx.dryRun = dryRun
+    local s = ctx.stats
+    events.log('info', ('matching players: %d %s phones -> %d resolved, %d unresolved, %d ambiguous')
+        :format(s.total or 0, src.title, s.resolved or 0, s.unresolved or 0, s.ambiguous or 0))
+    events.setState({ identity = s })
+
+    if ctx.scheme == 'per-number' then
+        events.log('info', ('unique phones: each phone keeps its own number and data (%s identity)')
+            :format(ctx.dataOwner or 'device'))
+        if (s.multiPhone or 0) > 0 then
+            events.log('info', ('    %d %s hold more than one phone, and keep all of them.')
+                :format(s.multiPhone, s.multiPhone == 1 and 'player' or 'players'))
+        end
+        -- Some numbers are already set up here, so an earlier import covered part of this. Only
+        -- the rest is read; nothing already in place is rewritten.
+        if (s.pending or 0) > 0 and s.pending < (s.resolved or 0) then
+            events.log('info', ('    topping up: %d of %d phones have no data here yet.')
+                :format(s.pending, s.resolved))
+        end
+        if (s.collisions or 0) > 0 then
+            events.log('warn', ('%d phone(s) skipped: a different player here already holds that number.')
+                :format(s.collisions))
+        end
+    elseif (s.multiPhone or 0) > 0 then
+        local why = scheme.reasons[ctx.schemeReason or '']
+        events.log('warn', ('%d %s hold more than one phone. Each keeps one number and one set of '
+            .. 'data; their other phones are skipped.')
+            :format(s.multiPhone, s.multiPhone == 1 and 'player' or 'players'))
+        if why then events.log('info', ('    %s.'):format(why)) end
+    end
+
+    -- A database imported before unique phones has every domain marked done, but the phones that
+    -- run left behind still have no rows anywhere - which surfaces as a phone showing its number
+    -- and nothing else. Re-open those domains instead of expecting the operator to know the
+    -- console command forces and the panel does not. Safe to do unasked: every write is INSERT
+    -- IGNORE / fill-only, so re-reading a finished domain places only what is missing.
+    if not opts.force and ctx.scheme == 'per-number' and (s.pending or 0) > 0
+        and #split.alreadyDone > 0 then
+        local reopen, inQueue = {}, {}
+        for _, key in ipairs(split.alreadyDone) do reopen[key] = true end
+        for _, port in ipairs(queue) do inQueue[port.key] = true end
+
+        -- Rebuilt in source order rather than appended: `reactions` has to follow `messages`, and
+        -- `sessions` has to follow `photogram`.
+        local merged = {}
+        for _, port in ipairs(src.ports) do
+            if inQueue[port.key] or reopen[port.key] then merged[#merged + 1] = port end
+        end
+        events.log('info', ('%d phone(s) have no data here yet; re-reading %d finished domain(s) to '
+            .. 'bring them across.'):format(s.pending, #split.alreadyDone))
+        queue = merged
+        split.alreadyDone = {}
+    end
+
     if #queue == 0 then
         events.log('info', 'nothing to do: every domain is already imported, disabled or unselected.')
         events.setState({ phase = 'done', finishedAt = os.time() }, true)
@@ -315,21 +385,6 @@ local function execute(opts)
     if #split.alreadyDone > 0 then
         events.log('info', ('already finished, left alone: %s'):format(table.concat(split.alreadyDone, ', ')))
     end
-
-    events.log('info', 'waiting for sd-phone tables to be ready...')
-    if not store.waitForTables(TARGETS, 240, 500) then
-        events.log('error', 'sd-phone tables not ready in time, aborting. Nothing was written.')
-        events.log('error', 'this usually means another resource is still creating them; restart sd-phone.')
-        events.setState({ phase = 'failed', finishedAt = os.time() }, true)
-        return
-    end
-
-    local ctx = src.identity(cfg, framework)
-    ctx.dryRun = dryRun
-    local s = ctx.stats
-    events.log('info', ('matching players: %d %s phones -> %d resolved, %d unresolved, %d ambiguous')
-        :format(s.total or 0, src.title, s.resolved or 0, s.unresolved or 0, s.ambiguous or 0))
-    events.setState({ identity = s })
 
     local unmatched = s.unresolved + s.ambiguous
     if s.total > 0 and unmatched > 0 then

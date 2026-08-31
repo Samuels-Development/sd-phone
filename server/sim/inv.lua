@@ -17,6 +17,26 @@ local inv = {}
 ---@type string ox_inventory resource name (container mode is ox-only).
 local OX = 'ox_inventory'
 
+---@type string[] Display-only keys another phone resource writes ALONGSIDE its number key.
+---sd-phone never reads them, but they are stripped with the number so an ejected phone does not
+---keep advertising the number it just gave up.
+local LEGACY_COMPANION_KEYS = { 'lbFormattedNumber' }
+
+---@type string[] Number keys other phone resources write onto a phone item. Held in code, not
+---only in the config: a server that updates sd-phone but keeps its existing configs/ would
+---otherwise read an empty list, stop recognising imported phones, and let device mode mint a
+---blank identity over one - which is permanent. config.Sim.LegacyNumberKeys overrides it, and
+---setting that to an empty table is the deliberate opt-out.
+local DEFAULT_LEGACY_NUMBER_KEYS = { 'lbPhoneNumber' }
+
+---The configured legacy number keys, falling back to the built-in list when a config predates it.
+---@return string[]
+local function legacyNumberKeys()
+    local keys = config.Sim.LegacyNumberKeys
+    if type(keys) ~= 'table' then return DEFAULT_LEGACY_NUMBER_KEYS end
+    return keys
+end
+
 ---@type table<string, string> Phone item name -> frame colour, built from config.Phone.Items.
 local phoneColors = {}
 for _, entry in ipairs(config.Phone.Items or {}) do phoneColors[entry.item] = entry.color end
@@ -98,8 +118,34 @@ function inv.getSimNumber(source, phone)
         return ok and number or nil
     end
 
-    local digits = util.digits(phone.metadata and phone.metadata.simNumber)
-    return digits ~= '' and digits or nil
+    local md = phone.metadata
+    local digits = util.digits(md and md.simNumber)
+    if digits ~= '' then return digits end
+
+    -- No number of our own on the item: fall back to one another phone resource left here, so an
+    -- imported phone works the moment it is used rather than needing its inventory rewritten.
+    -- Purely a read - inv.setPhoneSim normalises the key away the next time this SIM is written.
+    for _, key in ipairs(legacyNumberKeys()) do
+        local legacy = util.digits(md and md[key])
+        if legacy ~= '' then return legacy end
+    end
+    return nil
+end
+
+---True when this phone's number comes from another resource's metadata key rather than from
+---sd-phone's own `simNumber`. Device mode reads it to decide whether the number predates this
+---server's phone data (see session.resolveDevice); tray mode never has one.
+---@param phone { metadata: table }
+---@return boolean
+function inv.hasLegacyNumber(phone)
+    if tray.configured and inv.isOx() then return false end
+    local md = phone.metadata
+    if type(md) ~= 'table' then return false end
+    if util.digits(md.simNumber) ~= '' then return false end
+    for _, key in ipairs(legacyNumberKeys()) do
+        if util.digits(md[key]) ~= '' then return true end
+    end
+    return false
 end
 
 ---The persistent DEVICE identity stamped onto a phone item, plus the first-activator cid that
@@ -146,6 +192,11 @@ function inv.setPhoneSim(source, slot, number)
     local metadata = row.metadata
     metadata.simNumber   = number
     metadata.description = number and ('SIM: %s'):format(util.formatNumber(number)) or nil
+    -- Whatever another resource wrote here is now superseded, and leaving it would outlive this
+    -- write: ejecting clears simNumber, and the next read would fall back to the stale key and
+    -- hand the number straight back while the player is holding its sim_card item.
+    for _, key in ipairs(legacyNumberKeys()) do metadata[key] = nil end
+    for _, key in ipairs(LEGACY_COMPANION_KEYS) do metadata[key] = nil end
     return bridge.setSlotMetadata(source, slot, metadata)
 end
 

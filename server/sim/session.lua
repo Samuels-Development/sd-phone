@@ -149,6 +149,9 @@ end
 ---identity) when that profile already has data, so a legacy server flipping DeviceIdentity on
 ---grandfathers every phone in place; a fresh phone gets a `device:<id>` of its own. Also stamps
 ---the first-activator cid as the Face Unlock owner.
+---
+---A number IMPORTED from another phone resource (see inv.hasLegacyNumber) binds to its SIM
+---identity unconditionally, because the import that fills that identity may not have run yet.
 ---@param source number player server id
 ---@param phone { slot: number, metadata: table }
 ---@param number string|nil the SIM number currently installed
@@ -164,7 +167,16 @@ local function resolveDevice(source, phone, number)
             -- inherits its profile, but claimAdoption atomically binds the card so a second phone
             -- that later receives the same SIM mints a fresh device identity (number, not data).
             local simIdentity = simStore.ensureRegistered(number, realCid)
-            if simIdentity and settingsStore.hasData(simIdentity)
+            if simIdentity and siminv.hasLegacyNumber(phone) then
+                -- A number carried in from another phone resource binds unconditionally, and
+                -- WITHOUT consuming the adoption latch: the import that fills this identity may
+                -- not have run yet, so hasData is false and the phone would fall through to a
+                -- minted device id - which getDevice short-circuits on every later resolve,
+                -- stranding the imported data under sim:<number> for good. Skipping the latch is
+                -- safe because the resources this imports from key their numbers one-per-phone,
+                -- so two imported phones cannot arrive holding the same one.
+                identity = simIdentity
+            elseif simIdentity and settingsStore.hasData(simIdentity)
                 and simStore.claimAdoption(number, simIdentity) then
                 identity = simIdentity
             end

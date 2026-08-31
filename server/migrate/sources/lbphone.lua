@@ -19,6 +19,8 @@ source.markPrefix = 'lbphone'
 
 ---@type { key: string, label: string, run: fun(ctx: table): table }[] Domains, in run order.
 source.ports = {
+    -- First: registers each migrated number in the SIM registry the number porter's rows key on.
+    { key = 'uniquephones', label = 'unique phones', run = require('server.migrate.port.uniquephones').run },
     { key = 'numbers',    label = 'numbers',    run = require('server.migrate.port.numbers').run },
     { key = 'contacts',   label = 'contacts',   run = require('server.migrate.port.contacts').run },
     { key = 'blocked',    label = 'blocked',    run = require('server.migrate.port.blocked').run },
@@ -57,6 +59,7 @@ source.legacyDomains = {
 
 ---@type table<string, string[]> Source tables per domain, for the scan's row counts.
 source.domainSources = {
+    uniquephones = { 'phones' },
     numbers    = { 'phones' },
     contacts   = { 'phone_contacts' },
     blocked    = { 'phone_blocked_numbers' },
@@ -105,8 +108,8 @@ end
 ---@param cfg table config.Migrate
 ---@param framework table framework detection
 ---@return table
-function source.identity(cfg, framework)
-    return identity.build(cfg, framework)
+function source.identity(cfg, framework, opts)
+    return identity.build(cfg, framework, opts)
 end
 
 return source

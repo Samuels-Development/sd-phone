@@ -1,6 +1,7 @@
 ---@type table Settings porter (server.migrate.port.settings). Copies each lb-phone phone's
----settings blob onto its owner's sd-phone settings row. Fill-only: a value the player has already
----chosen is never overwritten.
+---settings blob onto its owner's sd-phone settings row, along with whether that phone had
+---finished lb-phone's first-run setup. Fill-only: a value the player has already chosen is never
+---overwritten.
 ---
 ---The home-screen layout is deliberately NOT imported. lb-phone stores pages of apps (an array of
 ---arrays) named in PascalCase, while sd-phone stores a flat slot list of lowercase app ids, and each
@@ -34,6 +35,16 @@ local function flag(v)
     return v and 1 or 0
 end
 
+---1 when lb-phone recorded this phone as having finished first-run setup, nil otherwise. Only the
+---completed state carries over: leaving it NULL keeps sd-phone's wizard armed, where writing a 0
+---would claim lb-phone had actively decided this phone was not set up.
+---@param v any
+---@return integer|nil
+local function setupFlag(v)
+    if v == nil or v == false or v == 0 or v == '0' then return nil end
+    return 1
+end
+
 ---A string capped at `len`, nil when absent or empty.
 ---@param v any
 ---@param len integer
@@ -56,6 +67,7 @@ function M.run(ctx)
     for _, p in ipairs(store.lbPhoneSettings()) do
         local cid = ctx.numberToCid[digits(p.phone_number)]
         local s = cid and store.decodeJson(p.settings) or nil
+        local setup = cid and setupFlag(p.is_setup) or nil
         if s and next(s) ~= nil then
             local display = type(s.display) == 'table' and s.display or {}
             local sound   = type(s.sound) == 'table' and s.sound or {}
@@ -86,7 +98,16 @@ function M.run(ctx)
                 str(sound.texttone, 64),
                 pct(sound.volume),
                 pct(sound.callVolume),
+                setup,
             }
+            imported = imported + 1
+        elseif setup then
+            -- Set up in lb-phone but never had a setting changed, so there is no blob to import
+            -- and every other column stays NULL. The row still has to be written: without it the
+            -- player meets sd-phone's first-run wizard on a phone full of imported data.
+            local row = {}
+            row[1], row[13] = cid, setup
+            rows[#rows + 1] = row
             imported = imported + 1
         else
             skipped = skipped + 1

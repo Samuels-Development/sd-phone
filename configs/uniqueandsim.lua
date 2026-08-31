@@ -88,6 +88,15 @@ return {
     -- mode ejecting is physical (drag it out of the tray) and this flag is ignored.
     AllowEject = true,
 
+    -- Metadata mode only: number keys ANOTHER phone resource wrote onto the phone item, read as
+    -- a fallback when the item carries no `simNumber` of its own. This is what lets a phone
+    -- imported from another resource keep working the moment it is used, with no rewrite of
+    -- anyone's inventory: the number is read where it already sits, and normalised onto
+    -- `simNumber` the first time anything writes this phone's SIM. Add keys here if you migrated
+    -- from a phone this list does not cover; emptying it strands imported phones on blank
+    -- profiles, so leave it alone unless you know no such item exists on your server.
+    LegacyNumberKeys = { 'lbPhoneNumber' },
+
     -- Cloud Backup (Settings -> SIM & Backup). The backup account is the CHARACTER, so a SIM
     -- thief can never restore someone else's backup. Enabling it remembers which phone profile
     -- belongs to the character; restoring on a new SIM copies that profile's data (messages,

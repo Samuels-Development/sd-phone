@@ -12,6 +12,12 @@
 -- overwritten. Safe to leave enabled forever: once there is nothing left to import it is a cheap
 -- no-op. The join is lb-phone's phone owner id -> framework citizenid, and each player's lb-phone
 -- number is adopted as their sd-phone number so every contact / thread / call log still lines up.
+--
+-- With unique phones on (configs/uniqueandsim.lua), the join is per PHONE instead: lb-phone keys
+-- its data by phone number, so a player holding two phones has two separate sets of contacts and
+-- photos, and both come across intact. Their phone items need no editing - sd-phone reads the
+-- number lb-phone already wrote onto them. Servers without unique phones are unaffected: each
+-- player keeps one number, exactly as before.
 return {
     -- Import automatically on resource start. Off by default: this reads millions of rows and runs
     -- the server heavy for as long as it takes, which is not something to do to a live server
@@ -51,6 +57,9 @@ return {
     -- migrated accounts rely on the pre-seeded sessions to stay signed in. Anyone who logs out
     -- recovers through the normal in-app password reset.
     domains = {
+        -- Registers each migrated number so a phone item can keep its own data. Does nothing
+        -- unless unique phones are on, and runs before `numbers`.
+        uniquephones = true,
         numbers    = true,
         contacts   = true,
         blocked    = true,

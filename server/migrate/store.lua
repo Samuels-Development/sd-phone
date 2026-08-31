@@ -161,6 +161,30 @@ function store.recordMark(mark, stats)
     )
 end
 
+---The identity scheme a previous run pinned for this database, or nil when none has been. Read-only.
+---@param mark string marker row name
+---@return string|nil
+function store.readScheme(mark)
+    local row = MySQL.single.await('SELECT stats FROM phone_migrations WHERE name = ?', { mark })
+    if not row then return nil end
+    local decoded = store.decodeJson(row.stats)
+    local mode = decoded.scheme
+    return type(mode) == 'string' and mode ~= '' and mode or nil
+end
+
+---Pins the identity scheme for this database. INSERT IGNORE, so the first run to record one wins
+---and no later config change can re-key rows that are already in place.
+---@param mark string marker row name
+---@param mode string 'per-number' | 'per-character'
+---@param dataOwner string the DataOwner in force when it was chosen
+function store.recordScheme(mark, mode, dataOwner)
+    store.ensureMarkerTable()
+    MySQL.query.await(
+        'INSERT IGNORE INTO phone_migrations (name, stats) VALUES (?, ?)',
+        { mark, json.encode({ scheme = mode, dataOwner = dataOwner }) }
+    )
+end
+
 ---The set of domain keys already imported. Gating per domain (rather than one marker for the whole
 ---import) is what lets a server that ran an earlier version pick up only the domains added since.
 ---@return table<string, boolean>
@@ -427,6 +451,49 @@ function store.adoptNumber(cid, number, pin, dryRun)
     return 'set'
 end
 
+---Which identity currently holds each of these numbers in phone_settings, batched one query per
+---500 rather than one per number. Read-only.
+---
+---This is what lets a later run top up a database already imported per character: a number someone
+---holds keys on that holder, so its rows are recognised rather than copied, and only the numbers
+---nobody holds come across fresh.
+---@param numbers string[] bare digits
+---@return table<string, string> number -> citizenid
+function store.numberHolders(numbers)
+    local out = {}
+    local total = #numbers
+    for i = 1, total, 500 do
+        local last = math.min(i + 499, total)
+        local chunk, marks = {}, {}
+        for j = i, last do
+            chunk[#chunk + 1] = numbers[j]
+            marks[#marks + 1] = '?'
+        end
+        local rows = MySQL.query.await(
+            ('SELECT citizenid, phone_number FROM phone_settings WHERE phone_number IN (%s)')
+                :format(table.concat(marks, ',')), chunk) or {}
+        for _, r in ipairs(rows) do
+            local n = (tostring(r.phone_number or ''):gsub('%D', ''))
+            if n ~= '' and r.citizenid then out[n] = r.citizenid end
+        end
+    end
+    return out
+end
+
+---Registers migrated numbers in sd-phone's SIM registry, so a phone item carrying one resolves to
+---the profile this import filled rather than minting a blank identity of its own.
+---
+---`adopted_by` is deliberately left NULL. Device mode claims it on the phone's first use
+---(server/sim/session.lua resolveDevice), and pre-claiming it here would make that claim fail and
+---stamp a fresh `device:` identity over the phone instead - permanently, because getDevice
+---short-circuits every later resolve.
+---@param rows any[][] { number, identity, ownerCid }
+function store.registerSimCards(rows)
+    insertMulti(
+        'INSERT INTO phone_sim_cards (number, identity, owner_cid) VALUES', 3, rows,
+        'ON DUPLICATE KEY UPDATE number = number')
+end
+
 ---The set of `citizenid|phone` keys already present in phone_contacts. Read-only.
 ---@return table<string, boolean>
 function store.existingContactKeys()
@@ -569,23 +636,34 @@ function store.insertNotes(rows)
     insertMulti('INSERT IGNORE INTO phone_notes (citizenid, id, body, sketches, images, created_at, updated_at) VALUES', 7, rows)
 end
 
----Every lb-phone phone that carries a settings blob. Read-only.
----@return { phone_number: string, settings: string }[]
+---Every lb-phone phone that carries a settings blob OR has finished its first-run setup, with
+---the setup flag when this lb-phone version records one. A phone that was set up but never had a
+---setting changed still has to come back: it has nothing to import, but dropping it would send
+---the player through sd-phone's wizard again on a phone already full of imported data.
+---@return { phone_number: string, settings: string|nil, is_setup: any }[]
 function store.lbPhoneSettings()
+    local phones = lbt('phones')
+    -- Selected defensively: an lb-phone old or trimmed enough to lack the column degrades to
+    -- settings-only rather than erroring out and failing the whole domain.
+    if not store.tableHasColumn(phones, 'is_setup') then
+        return MySQL.query.await(
+            ('SELECT phone_number, settings FROM %s WHERE settings IS NOT NULL'):format(phones)) or {}
+    end
     return MySQL.query.await(
-        ('SELECT phone_number, settings FROM %s WHERE settings IS NOT NULL'):format(lbt('phones'))) or {}
+        ('SELECT phone_number, settings, is_setup FROM %s WHERE settings IS NOT NULL OR is_setup = 1')
+            :format(phones)) or {}
 end
 
 ---Fill-only settings merge. rows: { citizenid, wallpaper, blur_lock, blur_home, theme, brightness,
----phone_scale, hour24, ringtone, notification_tone, ringtone_volume, call_volume }.
+---phone_scale, hour24, ringtone, notification_tone, ringtone_volume, call_volume, setup_done }.
 ---@param rows any[][]
 function store.fillSettings(rows)
     insertMulti([[
         INSERT INTO phone_settings
             (citizenid, wallpaper, blur_lock, blur_home, theme, brightness, phone_scale, hour24,
-             ringtone, notification_tone, ringtone_volume, call_volume)
+             ringtone, notification_tone, ringtone_volume, call_volume, setup_done)
         VALUES
-    ]], 12, rows, [[
+    ]], 13, rows, [[
         ON DUPLICATE KEY UPDATE
             wallpaper         = IF(wallpaper IS NULL, VALUES(wallpaper), wallpaper),
             blur_lock         = IF(blur_lock IS NULL, VALUES(blur_lock), blur_lock),
@@ -597,7 +675,8 @@ function store.fillSettings(rows)
             ringtone          = IF(ringtone IS NULL, VALUES(ringtone), ringtone),
             notification_tone = IF(notification_tone IS NULL, VALUES(notification_tone), notification_tone),
             ringtone_volume   = IF(ringtone_volume IS NULL, VALUES(ringtone_volume), ringtone_volume),
-            call_volume       = IF(call_volume IS NULL, VALUES(call_volume), call_volume)
+            call_volume       = IF(call_volume IS NULL, VALUES(call_volume), call_volume),
+            setup_done        = IF(setup_done IS NULL, VALUES(setup_done), setup_done)
     ]])
 end
 
