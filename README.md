@@ -15,7 +15,7 @@ Unlock it, rearrange the home screen, install apps from the App Store, open the 
 
 **An iOS-themed smartphone for FiveM.** that supports QBOX, QBCORE, ESX, ox_core and ND. 49 server-backed apps, real app accounts, a live game-view camera and online multiplayer games. Ships its own custom phone props: eight phone items in eight colours, each tinting both the on-screen frame and the custom prop model held in hand. A unique phone system as well as sim cards can be enabled!
 
-**A drop-in replacement for lb-phone, qs-smartphone, gksphone, roadphone and YSeries.** Scripts and custom apps written against any of them keep running unmodified: their exports answer and their events fire, so nothing has to be rewritten. And if you are coming from lb-phone or YSeries, a migration carries your players across rather than resetting them: their numbers, contacts, messages, mail, photos, wallet history and social accounts, right down to the app logins, so they open the phone already signed in.
+**A drop-in replacement for lb-phone, qs-smartphone, gksphone, roadphone and YSeries.** Scripts and custom apps written against any of them keep running unmodified: their exports answer and their events fire, so nothing has to be rewritten. And if you are coming from lb-phone or YSeries, a migration carries your players across rather than resetting them: their numbers, contacts, messages, mail, photos, wallet history and social accounts, right down to the app logins, so they open the phone already signed in. Unique phones included - every phone item keeps the number and the data it had, without anyone's inventory being rewritten.
 
 If sd-phone is useful to you, please ⭐ the repo. Issues and pull requests are always welcome.
 
@@ -48,6 +48,10 @@ If sd-phone is useful to you, please ⭐ the repo. Issues and pull requests are 
 > Nothing is imported automatically. Open **`/phoneadmin` → Migration**: it previews what your old database actually holds, lets you pick what to bring across, and streams the run with a live log and an ETA.
 >
 > What comes across: phone numbers and lock passcodes, contacts, blocked numbers, call history, messages, mail, notes, photos and albums, voice memos, wallet history, classifieds, phone settings, and whichever social apps your old phone had (Birdy, Photogram, Cherry, Dark Chat, Weazel News, Clout) with their posts, DMs, followers and logins, so players open the phone already signed in.
+>
+> **Unique phones come across as unique phones.** If lb-phone kept a number on each phone item, every one of those phones keeps its own number and its own data here: a player carrying two opens two separate phones, and handing one to somebody hands over what is on it. Nobody's inventory is edited to do it - sd-phone reads the number lb-phone already wrote onto the item and tidies it away the next time that phone's SIM is written, so phones sitting in a trunk, a stash or an offline player's pockets are fine and need no migration of their own. Turn unique phones on in `configs/uniqueandsim.lua` **before** you import. With `DataOwner = 'character'`, with SIM trays, or on an inventory that cannot store per-item metadata there is nowhere per-phone to put the data, so the import keys it per player instead and says which of those it was in the log.
+>
+> **Already imported once, before unique phones were on?** Run it again. Phones whose numbers are already set up here are left exactly as they are - nothing is rewritten and nothing is duplicated - and only the ones the first run had to skip, a player's second and third phones, are brought across. The run reports how many that is before it starts.
 >
 > On a large database this is not instant. A production import of **3.8 million rows took roughly 8 minutes**, and the server stays busy until it finishes. Start it when that is acceptable, and let it run to the end.
 >
