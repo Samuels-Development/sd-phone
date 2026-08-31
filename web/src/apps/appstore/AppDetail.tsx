@@ -4,7 +4,7 @@ import { ChevronLeft, Lock } from 'lucide-react';
 import { AppIconSVG } from '@/shell/AppIconSVG';
 import { CircularProgress } from '@/ui/CircularProgress';
 import { getCustomApp } from '@/stores/customAppsStore';
-import { t } from '@/i18n';
+import { t, appLabel } from '@/i18n';
 import type { AppDef } from '@/core/types';
 
 const HEAVY = new Set(['cookie', 'wordle', 'flappy', 'blocks', 'casino', 'climber', 'connectfour', 'photogram', 'vibez', 'cherry', 'birdy', 'camera', 'maps', 'music', 'weazelnews', 'streaks']);
@@ -70,7 +70,7 @@ export function AppDetail({ app, desc, installed, downloadProgress, onBack, onIn
                     </div>
                     <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
-                            <span className="min-w-0 truncate text-[24px] font-semibold leading-tight text-black dark:text-white">{app.label}</span>
+                            <span className="min-w-0 truncate text-[24px] font-semibold leading-tight text-black dark:text-white">{appLabel(app)}</span>
                             {wifiLocked && !installed && <Lock className="h-[16px] w-[16px] shrink-0 text-black/45 dark:text-white/45" role="img" aria-label={t('appstore.wifiOnly', 'Wi-Fi only')} />}
                         </div>
                         <div className="mt-0.5 line-clamp-2 text-[15px] leading-snug text-black/65 dark:text-white/65">{desc}</div>

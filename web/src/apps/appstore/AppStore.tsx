@@ -12,7 +12,7 @@ import { SegmentedControl } from '@/ui/SegmentedControl';
 import { CircularProgress } from '@/ui/CircularProgress';
 import { AppDetail } from './AppDetail';
 import { getCustomApp } from '@/stores/customAppsStore';
-import { t } from '@/i18n';
+import { t, appLabel } from '@/i18n';
 import type { AppDef } from '@/core/types';
 
 function getDescriptions(): Record<string, string> {
@@ -111,7 +111,7 @@ export function AppStore({ onClose: _onClose, apps, installed, onInstall, onOpen
         if (filter === 'notInstalled' && isInstalled) return false;
         if (!query) return true;
         const desc = descOf(a.id);
-        return a.label.toLowerCase().includes(query) || desc.toLowerCase().includes(query);
+        return appLabel(a).toLowerCase().includes(query) || desc.toLowerCase().includes(query);
     });
 
     return (
@@ -146,13 +146,13 @@ export function AppStore({ onClose: _onClose, apps, installed, onInstall, onOpen
                             const locked = !isInstalled && lockedNetwork(a) !== null;
                             return (
                                 <div key={a.id} className={`flex items-center gap-3.5 py-2.5 pl-3.5 ${i < list.length - 1 ? 'border-b border-black/10 dark:border-white/10' : ''}`}>
-                                    <button type="button" onClick={() => setSelectedId(a.id)} aria-label={t('appstore.appDetails', '{label} details', { label: a.label })} className="shrink-0 active:opacity-60">
+                                    <button type="button" onClick={() => setSelectedId(a.id)} aria-label={t('appstore.appDetails', '{label} details', { label: appLabel(a) })} className="shrink-0 active:opacity-60">
                                         <StoreIcon icon={a.icon} />
                                     </button>
                                     <div className="flex min-w-0 flex-1 items-center gap-3 pr-3.5">
                                         <button type="button" onClick={() => setSelectedId(a.id)} className="min-w-0 flex-1 text-left active:opacity-60">
                                             <div className="flex items-center gap-1.5">
-                                                <span className="min-w-0 truncate text-[23px] font-medium leading-tight text-black dark:text-white">{a.label}</span>
+                                                <span className="min-w-0 truncate text-[23px] font-medium leading-tight text-black dark:text-white">{appLabel(a)}</span>
                                                 {locked && <Lock className="h-[15px] w-[15px] shrink-0 text-black/45 dark:text-white/45" role="img" aria-label={t('appstore.wifiOnly', 'Wi-Fi only')} />}
                                             </div>
                                             <div className="truncate text-[15px] leading-snug text-black/65 dark:text-white/65">{descOf(a.id)}</div>

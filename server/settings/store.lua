@@ -4,6 +4,8 @@ local config = require 'configs.config'
 local util = require 'server.util'
 ---@type table Post-0.9.0 column back-fills (server.migrations).
 local migrations = require 'server.migrations'
+---@type table Locale bridge (bridge.shared.locale): which catalogues this install ships.
+local localeBridge = require 'bridge.shared.locale'
 ---@type fun(v: any): boolean Boolean coercion for oxmysql TINYINT columns.
 local isTruthy = util.truthy
 
@@ -1279,12 +1281,16 @@ function store.setVolumes(citizenid, ringtone, call, device)
     ]], { citizenid, device, r, c })
 end
 
--- Mirrors SUPPORTED_LOCALES in web/src/i18n/index.ts.
----@type table<string, boolean> Whitelist of storable phone locales.
-local SUPPORTED_LOCALES = {
-    en = true, fr = true, es = true, de = true, it = true,
-    pt = true, nl = true, pl = true, da = true, no = true, ru = true,
-}
+---Whether a locale code is one this install ships a catalogue for.
+---@param code any client-supplied locale code
+---@return boolean
+local function storableLocale(code)
+    if type(code) ~= 'string' or code == '' then return false end
+    for _, available in ipairs(localeBridge.available()) do
+        if available == code then return true end
+    end
+    return false
+end
 
 ---Reads a player's saved phone language, or nil if unset. Read-only.
 ---@param citizenid string framework per-character id
@@ -1297,13 +1303,13 @@ function store.getLocale(citizenid, device)
     return row.locale
 end
 
----Persists a player's chosen phone language, whitelist-checked against SUPPORTED_LOCALES.
+---Persists a player's chosen phone language, refused unless a catalogue for it is on disk.
 ---@param citizenid string framework per-character id
 ---@param locale any client-supplied locale code
 function store.setLocale(citizenid, locale, device)
     device = device or 'phone'
     if not citizenid or citizenid == '' then return end
-    if type(locale) ~= 'string' or not SUPPORTED_LOCALES[locale] then return end
+    if not storableLocale(locale) then return end
     MySQL.update.await([[
         INSERT INTO phone_settings (citizenid, device, locale) VALUES (?, ?, ?)
         ON DUPLICATE KEY UPDATE locale = VALUES(locale)

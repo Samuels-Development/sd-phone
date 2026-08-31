@@ -26,7 +26,7 @@ import { launchOriginFrom } from './launchOrigin';
 import { WidgetGallery } from './widgets/WidgetGallery';
 import { WidgetStack } from './widgets/WidgetStack';
 import { addCard, cardsOf, patchCard, removeCard } from './widgets/stack';
-import { t } from '@/i18n';
+import { t, appLabel } from '@/i18n';
 
 
 const { w: SCREEN_W, h: SCREEN_H } = device.screen;
@@ -1256,7 +1256,7 @@ export function Homescreen({ apps, dock, firstPageApps, wallpaper, onLaunchApp, 
                                         {editing && !app.base && (
                                             <button
                                                 type="button"
-                                                aria-label={t('shell.removeApp','Remove {label}', { label: app.label })}
+                                                aria-label={t('shell.removeApp','Remove {label}', { label: appLabel(app) })}
                                                 onPointerDown={e => e.stopPropagation()}
                                                 onClick={() => setConfirmRemove(app)}
                                                 className="absolute z-10 flex h-[24px] w-[24px] items-center justify-center rounded-full bg-[#e4e4e6] shadow-[0_1px_3px_rgba(0,0,0,0.4)] active:scale-90"
@@ -1307,7 +1307,7 @@ export function Homescreen({ apps, dock, firstPageApps, wallpaper, onLaunchApp, 
 
             {confirmRemove && (
                 <AlertDialog
-                    title={t('shell.removeAppTitle','Remove “{label}”?', { label: confirmRemove.label })}
+                    title={t('shell.removeAppTitle','Remove “{label}”?', { label: appLabel(confirmRemove) })}
                     message={t('shell.removeAppMessage','It stays available in the App Store and can be added back later.')}
                     confirmLabel={t('shell.remove','Remove')}
                     destructive
@@ -1339,7 +1339,7 @@ function EditTile({ app, dragging, swapTarget, plopping, removable, merging, bad
                         </div>
                     ) : (
                         <div className="flex h-full w-full items-center justify-center" style={{ background }}>
-                            <AppGlyph icon={app.icon} override={glyphOverride} label={app.label} color={glyph} size={glyphSize} strokeWidth={glyphWeight} />
+                            <AppGlyph icon={app.icon} override={glyphOverride} label={appLabel(app)} color={glyph} size={glyphSize} strokeWidth={glyphWeight} />
                         </div>
                     )}
                     {boxShadow !== '' && (
@@ -1348,12 +1348,12 @@ function EditTile({ app, dragging, swapTarget, plopping, removable, merging, bad
                 </div>
                 {!dragging && <AppBadge count={badge} />}
                 {removable && (
-                    <button type="button" aria-label={t('shell.removeApp','Remove {label}', { label: app.label })} onPointerDown={e => e.stopPropagation()} onClick={onRemove} className="absolute -left-[7px] -top-[7px] flex h-[24px] w-[24px] items-center justify-center rounded-full bg-[#e4e4e6] shadow-[0_1px_3px_rgba(0,0,0,0.4)] active:scale-90">
+                    <button type="button" aria-label={t('shell.removeApp','Remove {label}', { label: appLabel(app) })} onPointerDown={e => e.stopPropagation()} onClick={onRemove} className="absolute -left-[7px] -top-[7px] flex h-[24px] w-[24px] items-center justify-center rounded-full bg-[#e4e4e6] shadow-[0_1px_3px_rgba(0,0,0,0.4)] active:scale-90">
                         <Minus className="h-[16px] w-[16px] text-black/75" strokeWidth={3} />
                     </button>
                 )}
             </div>
-            {showLabel && <span className={`mt-[7px] block ${APP_LABEL_CLASS}`} style={{ ...appLabelStyle(grid), color: labelColor, fontWeight: labelWeight }}>{app.label}</span>}
+            {showLabel && <span className={`mt-[7px] block ${APP_LABEL_CLASS}`} style={{ ...appLabelStyle(grid), color: labelColor, fontWeight: labelWeight }}>{appLabel(app)}</span>}
         </div>
     );
 }
@@ -1382,7 +1382,7 @@ function FolderMini({ app }: { app: AppDef }): ReactNode {
                     <AppGlyph
                         icon={app.icon}
                         override={glyphOverride}
-                        label={app.label}
+                        label={appLabel(app)}
                         color={glyph}
                         size={Math.round(glyphSize * (MINI_GLYPH / TILE_GLYPH))}
                         strokeWidth={glyphWeight}

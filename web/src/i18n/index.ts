@@ -1,3 +1,4 @@
+import { hostResource, isFiveM } from '@/core/nui';
 // The catalogs are the resource-root locales/<lang>.json files (shared with the
 // Lua side), stored as nested tables. Flatten each once into dot-path keys so
 // t('ns.key') resolves — mirrors the flatten in bridge/shared/locale.lua.
@@ -54,6 +55,37 @@ export const SUPPORTED_LOCALES: LocaleOption[] = [
     ...Object.keys(loaders).sort().map(code => ({ code, name: nativeName(code) })),
 ];
 
+
+const runtimeCodes = new Set<string>();
+
+export function registerRuntimeLocales(codes: unknown): void {
+    if (!Array.isArray(codes)) return;
+
+    let added = false;
+    for (const raw of codes) {
+        const code = String(raw);
+        if (code === 'en' || loaders[code] || runtimeCodes.has(code) || !/^[a-z]{2}(-[a-z]{2})?$/i.test(code)) continue;
+        runtimeCodes.add(code);
+        SUPPORTED_LOCALES.push({ code, name: nativeName(code) });
+        added = true;
+    }
+
+    if (added) {
+        SUPPORTED_LOCALES.sort((a, b) =>
+            a.code === 'en' ? -1 : b.code === 'en' ? 1 : a.code.localeCompare(b.code));
+    }
+}
+
+async function fetchCatalog(code: string): Promise<Record<string, unknown> | null> {
+    if (!isFiveM) return null;
+    try {
+        const res = await fetch(`https://cfx-nui-${hostResource}/locales/${code}.json`);
+        if (!res.ok) return null;
+        return await res.json() as Record<string, unknown>;
+    } catch {
+        return null;
+    }
+}
 let active = catalogs.en;
 let currentCode = 'en';
 let catalogVersion = 0;
@@ -61,17 +93,30 @@ let catalogVersion = 0;
 /** Select the active language (from config.Locale, or a player's saved pick).
  *  Falls back to English for an unknown code. Resolves once the catalog is
  *  applied; a newer setLocale call wins over a slower in-flight one. */
+function bundledCatalog(code: string): Promise<Record<string, unknown> | null> {
+    const loader = loaders[code];
+    if (!loader) return Promise.resolve(null);
+    return loader().then(m => m.default as Record<string, unknown>).catch(() => null);
+}
+
 export function setLocale(lang: string): Promise<void> {
-    const code = catalogs[lang] || loaders[lang] ? lang : 'en';
+    const known = Boolean(catalogs[lang] || loaders[lang] || runtimeCodes.has(lang));
+    const code = known ? lang : 'en';
     currentCode = code;
     if (catalogs[code]) {
         active = catalogs[code];
         catalogVersion += 1;
         return Promise.resolve();
     }
-    return loaders[code]()
-        .then(m => {
-            catalogs[code] = flatten(m.default as Record<string, unknown>, '', {});
+
+    const load = isFiveM
+        ? fetchCatalog(code).then(data => data ?? bundledCatalog(code))
+        : bundledCatalog(code).then(data => data ?? fetchCatalog(code));
+
+    return load
+        .then(data => {
+            if (!data) throw new Error('no catalog for ' + code);
+            catalogs[code] = flatten(data, '', {});
             if (currentCode === code) { active = catalogs[code]; catalogVersion += 1; }
         })
         .catch(() => {
@@ -88,13 +133,11 @@ export function getCatalogVersion(): number {
 }
 
 const LOCALE_TAGS: Record<string, string> = {
-    en: 'en-US', fr: 'fr-FR', es: 'es-ES', de: 'de-DE', it: 'it-IT',
-    pt: 'pt-PT', nl: 'nl-NL', pl: 'pl-PL', da: 'da-DK', no: 'nb-NO', ru: 'ru-RU',
+    en: 'en-US', pt: 'pt-PT', no: 'nb-NO', zh: 'zh-CN',
 };
 
-/** BCP-47 tag for the active locale, for Intl/toLocaleDateString calls. */
 export function getLocaleTag(): string {
-    return LOCALE_TAGS[currentCode] ?? 'en-US';
+    return LOCALE_TAGS[currentCode] ?? currentCode ?? 'en-US';
 }
 
 export function t(key: string, fallback: string, vars?: Record<string, string | number>): string {
@@ -103,4 +146,8 @@ export function t(key: string, fallback: string, vars?: Record<string, string | 
         for (const k in vars) s = s.split('{' + k + '}').join(String(vars[k]));
     }
     return s;
+}
+
+export function appLabel(app: { id: string; label: string }): string {
+    return t('apps.' + app.id, app.label);
 }

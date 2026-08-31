@@ -4,6 +4,8 @@
 local companion = require 'client.companion'
 ---@type table sd-phone config root (configs/config.lua).
 local config = require 'configs.config'
+---@type table Locale bridge (bridge.shared.locale): which catalogues this install ships.
+local locale = require 'bridge.shared.locale'
 ---@type table Notify bridge (bridge.client.notify): backend-agnostic on-screen toasts.
 local notify = require 'bridge.client.notify'
 
@@ -502,6 +504,7 @@ local function OpenPhone()
         action = 'sd-phone:open',
         data   = {
             locale    = config.Locale,
+            locales   = locale.available(),
             locked    = phoneState.locked,
             battery   = phoneState.battery,
             frameColor = currentFrameColor,

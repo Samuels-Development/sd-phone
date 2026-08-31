@@ -7,7 +7,7 @@ import { AppBadge } from './AppBadge';
 import { registerCardStage } from './appDeckBridge';
 import { useBadges } from '@/stores/badgeStore';
 import type { AppDef } from '@/core/types';
-import { t } from '@/i18n';
+import { t, appLabel } from '@/i18n';
 
 const SW         = device.screen.w;
 const SH         = device.screen.h;
@@ -274,7 +274,7 @@ export function AppSwitcher({
                                     className="flex-1 truncate text-[16px] font-semibold text-white"
                                     style={{ textShadow: '0 1px 4px rgba(0,0,0,0.9)' }}
                                 >
-                                    {appDef?.label ?? appId}
+                                    {appDef ? appLabel(appDef) : appId}
                                 </span>
 
                                 {/* Close: to the RIGHT of the name, a larger
@@ -283,7 +283,7 @@ export function AppSwitcher({
                                     and flickers in CEF). */}
                                 <button
                                     type="button"
-                                    aria-label={`Close ${appDef?.label ?? appId}`}
+                                    aria-label={`Close ${appDef ? appLabel(appDef) : appId}`}
                                     onClick={e => { e.stopPropagation(); onRemove(appId); }}
                                     className="shrink-0 flex h-[30px] w-[30px] items-center justify-center rounded-full text-white transition-colors duration-200 active:bg-white/30"
                                     style={{
@@ -320,7 +320,7 @@ export function AppSwitcher({
                                     inert / pointer-events:none while parented into the card). */}
                                 <button
                                     type="button"
-                                    aria-label={appDef?.label ?? appId}
+                                    aria-label={appDef ? appLabel(appDef) : appId}
                                     className="absolute inset-0 z-[2]"
                                     onClick={e => {
                                         e.stopPropagation();

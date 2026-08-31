@@ -8,6 +8,7 @@ import { isCustomPaletteId, rampFor, rampVars } from '@/apps/settings/appearance
 import { accentVars } from '@/apps/settings/appearance/accentRamp';
 import { AdminPanel } from '@/admin/AdminPanel';
 import { demoAdminOnly } from '@/core/demo';
+import { registerRuntimeLocales } from '@/i18n';
 import { PayphoneUI } from '@/payphone/PayphoneUI';
 import { RaceOverlay } from '@/apps/racing/hud/RaceOverlay';
 import { CallLayer } from '@/apps/phone/CallLayer';
@@ -447,6 +448,7 @@ function AppContent() {
 
     useNuiEvent('sd-phone:open', useCallback((data) => {
         if (!data) return;
+        registerRuntimeLocales(data.locales);
         if (data.locale) useLocaleStore.getState().applyServerDefault(data.locale);   // server default, unless the player already picked their own
         if (data.mailDomain) setMailDomain(data.mailDomain);
         if (data.number) setNumberFormat(data.number.formats, data.number.length);

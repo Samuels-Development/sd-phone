@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { appLabel } from '@/i18n';
 
 import { useGrid } from '@/device/grid';
 import { APP_LABEL_CLASS, appLabelStyle } from './appLabel';
@@ -88,7 +89,7 @@ export function AppIcon({ app, label = true, onOpen, badge }: AppIconProps) {
                             <AppGlyph
                                 icon={app.icon}
                                 override={glyphOverride}
-                                label={app.label}
+                                label={appLabel(app)}
                                 color={glyph}
                                 size={glyphSize}
                                 strokeWidth={glyphWeight}
@@ -135,7 +136,7 @@ export function AppIcon({ app, label = true, onOpen, badge }: AppIconProps) {
                         fontWeight: labelWeight,
                     }}
                 >
-                    {app.label}
+                    {appLabel(app)}
                 </span>
             )}
         </button>
