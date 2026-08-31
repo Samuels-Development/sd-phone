@@ -32,6 +32,7 @@ function getDescriptions(): Record<string, string> {
         voicememos:  t('appstore.descVoicememos', 'Record quick voice notes'),
         bank:        t('appstore.descBank', 'Manage money & cards'),
         health:      t('appstore.descHealth', 'Track your daily activity'),
+        documents:   t('appstore.descDocuments', 'Store and sign your documents'),
         settings:    t('appstore.descSettings', 'Tune your phone settings'),
         appstore:    t('appstore.descAppstore', 'Discover and download apps'),
         calculator:  t('appstore.descCalculator', 'Everyday calculations'),

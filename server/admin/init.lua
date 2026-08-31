@@ -69,7 +69,7 @@ end)
 ---@param tier string 'view' | 'moderate' | 'destroy'
 local function reg(name, fn, tier)
     lib.callback.register('sd-phone:server:admin:' .. name, function(src, payload)
-        if not permissions.allows(src, tier) then return util.fail('Not authorized') end
+        if not permissions.allows(src, tier) then return util.fail('admin.notAuthorized', 'Not authorized') end
         return fn(src, payload)
     end)
 end

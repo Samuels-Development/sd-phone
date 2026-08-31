@@ -8,7 +8,7 @@ import { isCustomPaletteId, rampFor, rampVars } from '@/apps/settings/appearance
 import { accentVars } from '@/apps/settings/appearance/accentRamp';
 import { AdminPanel } from '@/admin/AdminPanel';
 import { demoAdminOnly } from '@/core/demo';
-import { registerRuntimeLocales } from '@/i18n';
+import { registerRuntimeLocales, setAppLabelSource, t } from '@/i18n';
 import { PayphoneUI } from '@/payphone/PayphoneUI';
 import { RaceOverlay } from '@/apps/racing/hud/RaceOverlay';
 import { CallLayer } from '@/apps/phone/CallLayer';
@@ -81,6 +81,8 @@ import { alarmsSnapshot, disableAlarm, hydrateAlarms, onTestAlarm } from '@/stor
 import { tmFinish, useTimer } from '@/stores/timerStore';
 import { isRepeating } from '@/apps/clock/data';
 import type { AlarmDef } from '@/apps/clock/data';
+
+setAppLabelSource(() => useThemeStore.getState().appLabels);
 
 const PEEK_FALLBACK_WALL = 'lockscreen.jpg';
 
@@ -547,7 +549,7 @@ function AppContent() {
         const lib = useMusicLibrary.getState();
         if (data.kind === 'track' && data.track) lib.addReceivedTracks([data.track]);
         else if (data.kind === 'playlist' && Array.isArray(data.tracks)) {
-            lib.addReceivedPlaylist(data.name ?? 'Shared Playlist', data.tracks);
+            lib.addReceivedPlaylist(data.name ?? t('music.sharedPlaylist', 'Shared Playlist'), data.tracks);
         }
     }, []));
 
@@ -1159,7 +1161,7 @@ function AppContent() {
             const tones = useThemeStore.getState();
             playOnce(resolveTone('notification', tones.notificationTone, tones.customNotificationTones).url, tones.ringtoneVol / 100);
         } else {
-            window.postMessage({ action: 'sd-phone:notification', data: { app: 'clock', appId: 'clock', title: 'Timer', body: 'Your timer has been completed' } }, '*');
+            window.postMessage({ action: 'sd-phone:notification', data: { app: 'clock', appId: 'clock', title: t('clock.timer', 'Timer'), body: t('clock.timerDoneBody', 'Your timer has been completed') } }, '*');
         }
     }, []);
     useEffect(() => {

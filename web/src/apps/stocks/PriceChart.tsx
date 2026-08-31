@@ -35,12 +35,12 @@ export function PriceChart({ asset, live }: { asset: Asset; live: Asset }) {
     const [hover, setHover] = useState<number | null>(null);
 
     const RANGES = [
-        { key: '1H', label: '1H', word: t('stocks.rangeHour', 'hour') },
-        { key: '1D', label: '1D', word: t('stocks.rangeDay', 'day') },
-        { key: '1W', label: '1W', word: t('stocks.rangeWeek', 'week') },
-        { key: '1M', label: '1M', word: t('stocks.rangeMonth', 'month') },
-        { key: '3M', label: '3M', word: t('stocks.range3Months', '3 months') },
-        { key: '1Y', label: '1Y', word: t('stocks.rangeYear', 'year') },
+        { key: '1H', label: t('stocks.range1H', '1H'), word: t('stocks.rangeHour', 'hour') },
+        { key: '1D', label: t('stocks.range1D', '1D'), word: t('stocks.rangeDay', 'day') },
+        { key: '1W', label: t('stocks.range1W', '1W'), word: t('stocks.rangeWeek', 'week') },
+        { key: '1M', label: t('stocks.range1M', '1M'), word: t('stocks.rangeMonth', 'month') },
+        { key: '3M', label: t('stocks.range3M', '3M'), word: t('stocks.range3Months', '3 months') },
+        { key: '1Y', label: t('stocks.range1Y', '1Y'), word: t('stocks.rangeYear', 'year') },
     ] as const satisfies readonly { key: RangeKey; label: string; word: string }[];
 
     const series = range === '1H'

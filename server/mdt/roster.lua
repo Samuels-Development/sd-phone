@@ -171,14 +171,15 @@ end
 ---somebody outside it.
 ---@param me table caller identity from access.identity
 ---@param citizenid any client-supplied citizenid
----@return table|nil member, string? reason
+---@return table|nil member
+---@return table? refusal failure envelope when member is nil
 local function memberOf(me, citizenid)
     local cid = util.limitedString(citizenid, 64)
-    if not cid then return nil, 'No officer selected' end
+    if not cid then return nil, util.fail('mdt.noOfficerSelected', 'No officer selected') end
     for _, m in ipairs(society.listEmployees(me.job)) do
         if m.citizenid == cid then return m end
     end
-    return nil, 'That officer is not in your department'
+    return nil, util.fail('mdt.officerNotDepartment', 'That officer is not in your department')
 end
 
 ---Rebuilds one officer row, for the envelope a mutation echoes back.
@@ -254,18 +255,18 @@ end)
 
 ---Sets another officer's callsign. The unique index on the column is what actually enforces it.
 roster.setCallsign = access.audited('roster.callsign', function(_src, payload, me)
-    local member, reason = memberOf(me, payload.citizenid)
-    if not member then return util.fail(reason) end
+    local member, refusal = memberOf(me, payload.citizenid)
+    if not member then return refusal end
 
     local callsign = util.limitedString(payload.callsign, MAX_CALLSIGN)
-    if not callsign then return util.fail('Enter a callsign') end
+    if not callsign then return util.fail('mdt.enterCallsign', 'Enter a callsign') end
     callsign = callsign:upper()
 
     local labels = gradeLadder(me.department)
     ensureMemberProfile(me, member, labels[member.grade] or '')
 
-    local profile, err = store.updateProfile(member.citizenid, { callsign = callsign })
-    if not profile then return util.fail(err or 'That callsign could not be set') end
+    local profile, refused = store.updateProfile(member.citizenid, { callsign = callsign })
+    if not profile then return refused or util.fail('mdt.callsignCouldNotSet', 'That callsign could not be set') end
     dispatch.setCallsign(member.citizenid, callsign)
 
     return util.ok({ officer = rowFor(me, member) }),
@@ -274,17 +275,17 @@ end)
 
 ---Sets another officer's radio channel.
 roster.setRadio = access.audited('roster.radio', function(_src, payload, me)
-    local member, reason = memberOf(me, payload.citizenid)
-    if not member then return util.fail(reason) end
+    local member, refusal = memberOf(me, payload.citizenid)
+    if not member then return refusal end
 
     local channel = util.limitedString(payload.channel, MAX_RADIO)
-    if not channel then return util.fail('Enter a radio channel') end
+    if not channel then return util.fail('mdt.enterRadioChannel', 'Enter a radio channel') end
 
     local labels = gradeLadder(me.department)
     ensureMemberProfile(me, member, labels[member.grade] or '')
 
-    local profile, err = store.updateProfile(member.citizenid, { radio = channel })
-    if not profile then return util.fail(err or 'That channel could not be set') end
+    local profile, refused = store.updateProfile(member.citizenid, { radio = channel })
+    if not profile then return refused or util.fail('mdt.channelCouldNotSet', 'That channel could not be set') end
 
     return util.ok({ officer = rowFor(me, member) }),
         { entityType = 'officer', entityId = member.citizenid, details = { radio = channel } }
@@ -293,15 +294,15 @@ end)
 ---Re-grades another officer. Chain of command sits on top of the permission key: never a peer,
 ---never a superior, never yourself, and never to a grade at or above your own.
 roster.setGrade = access.audited('roster.grade', function(src, payload, me)
-    local member, reason = memberOf(me, payload.citizenid)
-    if not member then return util.fail(reason) end
+    local member, refusal = memberOf(me, payload.citizenid)
+    if not member then return refusal end
 
-    local ok, refusal = access.belowMe(src, member.citizenid)
-    if not ok then return util.fail(refusal) end
+    local ok, denied = access.belowMe(src, member.citizenid)
+    if not ok then return denied end
 
     local grade = math.floor(tonumber(payload.grade) or -1)
-    if grade < 0 then return util.fail('Pick a rank') end
-    if grade >= me.grade then return util.fail('You cannot set a rank at or above your own') end
+    if grade < 0 then return util.fail('mdt.pickRank', 'Pick a rank') end
+    if grade >= me.grade then return util.fail('mdt.cannotSetRankAboveOwn', 'You cannot set a rank at or above your own') end
 
     local labels, ladder = gradeLadder(me.department)
     local known = false
@@ -311,10 +312,10 @@ roster.setGrade = access.audited('roster.grade', function(src, payload, me)
             break
         end
     end
-    if not known then return util.fail('That rank does not exist') end
+    if not known then return util.fail('mdt.rankDoesNotExist', 'That rank does not exist') end
 
     if not society.hire(me.job, member.citizenid, grade) then
-        return util.fail('That officer has to be online to be re-graded')
+        return util.fail('mdt.officerHasOnlineReGraded', 'That officer has to be online to be re-graded')
     end
 
     member.grade = grade
@@ -328,14 +329,14 @@ end)
 ---Dismisses another officer to the unemployed job. Same chain-of-command guard as setGrade; the
 ---MDT record is left on file so their paperwork keeps its author.
 roster.dismiss = access.audited('roster.dismiss', function(src, payload, me)
-    local member, reason = memberOf(me, payload.citizenid)
-    if not member then return util.fail(reason) end
+    local member, refusal = memberOf(me, payload.citizenid)
+    if not member then return refusal end
 
-    local ok, refusal = access.belowMe(src, member.citizenid)
-    if not ok then return util.fail(refusal) end
+    local ok, denied = access.belowMe(src, member.citizenid)
+    if not ok then return denied end
 
     if not society.fire(member.citizenid, UNEMPLOYED, me.job) then
-        return util.fail('That officer has to be online to be dismissed')
+        return util.fail('mdt.officerHasOnlineDismissed', 'That officer has to be online to be dismissed')
     end
 
     return util.ok({ citizenid = member.citizenid }),
@@ -345,8 +346,8 @@ end)
 ---Resolves an officer's live server id so the caller can page them. A nil source means they are
 ---not on the air.
 roster.page = access.gated('roster.view', function(_src, payload, me)
-    local member, reason = memberOf(me, payload.citizenid)
-    if not member then return util.fail(reason) end
+    local member, refusal = memberOf(me, payload.citizenid)
+    if not member then return refusal end
 
     return util.ok({
         source = player.getSourceByIdentifier(member.citizenid),
@@ -360,7 +361,7 @@ roster.meUpdate = access.audited('me.update', function(src, payload, me)
 
     if payload.callsign ~= nil then
         local callsign = util.limitedString(payload.callsign, MAX_CALLSIGN)
-        if not callsign then return util.fail('Enter a callsign') end
+        if not callsign then return util.fail('mdt.enterCallsign', 'Enter a callsign') end
         fields.callsign = callsign:upper()
     end
     if payload.avatar ~= nil then
@@ -369,10 +370,10 @@ roster.meUpdate = access.audited('me.update', function(src, payload, me)
     if payload.notes ~= nil then
         fields.notes = util.limitedString(payload.notes, 4000) or ''
     end
-    if next(fields) == nil then return util.fail('Nothing to save') end
+    if next(fields) == nil then return util.fail('mdt.nothingSave', 'Nothing to save') end
 
-    local profile, err = store.updateProfile(me.citizenid, fields)
-    if not profile then return util.fail(err or 'That change could not be saved') end
+    local profile, refused = store.updateProfile(me.citizenid, fields)
+    if not profile then return refused or util.fail('mdt.changeCouldNotSaved', 'That change could not be saved') end
     if fields.callsign then dispatch.setCallsign(me.citizenid, fields.callsign) end
 
     return util.ok({

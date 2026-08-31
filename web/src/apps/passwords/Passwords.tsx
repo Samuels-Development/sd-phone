@@ -17,7 +17,7 @@ import { t } from '@/i18n';
 const APP_LABELS: Record<string, string> = {
     photogram: 'Photogram', cherry: 'Cherry', vibez: 'Clout', birdy: 'Squawk', mail: 'Mail',
 };
-const labelFor = (app: string) => APP_LABELS[app] ?? app.charAt(0).toUpperCase() + app.slice(1);
+const labelFor = (app: string) => t('apps.' + app, APP_LABELS[app] ?? app.charAt(0).toUpperCase() + app.slice(1));
 
 export function Passwords({ onClose }: { onClose: () => void }) {
     const [entries, setEntries] = useState<VaultEntry[]>([]);

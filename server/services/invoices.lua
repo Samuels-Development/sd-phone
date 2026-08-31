@@ -93,16 +93,18 @@ end
 
 ---Resolves the caller's active business for invoicing. Succeeds only on a duty-capable framework
 ---(QBCore/QBox) when the caller holds a real (non-blacklisted) job and is on duty. Returns
----`(jobName, citizenid)` on success, `(nil, errorMessage)` otherwise.
+---`(jobName, citizenid)` on success, `(nil, nil, refusal)` otherwise.
 ---@param src number
----@return string|nil jobName, string citizenidOrError
+---@return string|nil jobName
+---@return string|nil citizenid nil when the caller is refused
+---@return table|nil refusal failure envelope, set only when jobName is nil
 local function requireOnDutyBusiness(src)
-    if not job.supportsMultijob() then return nil, 'Not available here' end
+    if not job.supportsMultijob() then return nil, nil, fail('services.notAvailableHere', 'Not available here') end
     local cid = player.getIdentifier(src)
-    if not cid then return nil, 'Player not found' end
+    if not cid then return nil, nil, fail('services.playerNotFound', 'Player not found') end
     local myJob = job.getName(src)
-    if not myJob or BLACKLIST[myJob] then return nil, "You're not in a job" end
-    if job.getDuty(src) ~= true then return nil, 'You must be on duty to do that' end
+    if not myJob or BLACKLIST[myJob] then return nil, nil, fail('services.reNotJob', "You're not in a job") end
+    if job.getDuty(src) ~= true then return nil, nil, fail('services.mustDutyDoThat', 'You must be on duty to do that') end
     return myJob, cid
 end
 
@@ -210,7 +212,7 @@ function invoices.list(src)
     if not ENABLED then return ok({ invoices = {} }) end
     if not job.supportsMultijob() then return ok({ invoices = {} }) end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('services.playerNotFound', 'Player not found') end
     local myJob = job.getName(src)
     if not myJob or BLACKLIST[myJob] then return ok({ invoices = {} }) end
 
@@ -226,17 +228,16 @@ end
 ---@param payload { number?: string, serverId?: number, amount?: number, note?: string }
 ---@return table
 function invoices.create(src, payload)
-    if not ENABLED then return fail('Invoicing is disabled') end
+    if not ENABLED then return fail('services.invoicingDisabled', 'Invoicing is disabled') end
     payload = type(payload) == 'table' and payload or {}
-    local myJob, cidOrErr = requireOnDutyBusiness(src)
-    if not myJob then return fail(cidOrErr) end
-    local cid = cidOrErr
+    local myJob, cid, refusal = requireOnDutyBusiness(src)
+    if not myJob then return refusal end
 
     local amount = tonumber(payload.amount)
-    if not finite(amount) then return fail('Enter a valid amount') end
+    if not finite(amount) then return fail('services.enterValidAmount', 'Enter a valid amount') end
     amount = math.floor(amount)
-    if amount < MIN then return fail('Enter a valid amount') end
-    if amount > MAX_AMT then return fail('That amount is too large') end
+    if amount < MIN then return fail('services.enterValidAmount', 'Enter a valid amount') end
+    if amount > MAX_AMT then return fail('services.amountTooLarge', 'That amount is too large') end
 
     local myNumber = digits(settings.ensurePhoneNumber(cid) or '')
     local number, targetCid, targetName, tsrc
@@ -244,30 +245,30 @@ function invoices.create(src, payload)
     local serverId = tonumber(payload.serverId)
     if serverId and finite(serverId) then
         serverId = math.floor(serverId)
-        if serverId <= 0 or serverId > 65535 then return fail('No player with that server ID') end
-        if serverId == src then return fail("You can't invoice yourself") end
+        if serverId <= 0 or serverId > 65535 then return fail('services.noPlayerWithServerId', 'No player with that server ID') end
+        if serverId == src then return fail('services.canTInvoiceYourself', "You can't invoice yourself") end
         targetCid = player.getIdentifier(serverId)
-        if not targetCid then return fail('No player with that server ID') end
-        if targetCid == cid then return fail("You can't invoice yourself") end
+        if not targetCid then return fail('services.noPlayerWithServerId', 'No player with that server ID') end
+        if targetCid == cid then return fail('services.canTInvoiceYourself', "You can't invoice yourself") end
         tsrc       = serverId
         number     = digits(settings.ensurePhoneNumber(targetCid) or '')
         targetName = player.getName(serverId)
     else
         number = digits(payload.number)
-        if number == '' then return fail('Enter a recipient number') end
-        if number == myNumber then return fail("You can't invoice yourself") end
+        if number == '' then return fail('services.enterRecipientNumber', 'Enter a recipient number') end
+        if number == myNumber then return fail('services.canTInvoiceYourself', "You can't invoice yourself") end
         targetCid = settings.getCitizenByNumber(number)
-        if not targetCid then return fail('No one owns that number') end
-        if targetCid == cid then return fail("You can't invoice yourself") end
+        if not targetCid then return fail('services.noOneOwnsNumber', 'No one owns that number') end
+        if targetCid == cid then return fail('services.canTInvoiceYourself', "You can't invoice yourself") end
         tsrc       = player.getSourceByIdentifier(targetCid)
         targetName = tsrc and player.getName(tsrc) or (society.namesByCids({ targetCid })[targetCid])
     end
 
     if store.countPendingByJobTarget(myJob, targetCid) >= MAXPEND_TARGET then
-        return fail('They already have unpaid invoices from you')
+        return fail('services.theyAlreadyHaveUnpaidInvoices', 'They already have unpaid invoices from you')
     end
     if not util.rateLimit(cid, 'services:invoiceCreate', CREATE_WINDOW, CREATE_MAX) then
-        return fail("You've raised too many invoices, try again later")
+        return fail('services.veRaisedTooManyInvoices', "You've raised too many invoices, try again later")
     end
 
     local note  = trim(payload.note):sub(1, 140)
@@ -290,9 +291,11 @@ function invoices.create(src, payload)
     })
 
     if tsrc then
+        local money = formatMoney(amount)
         TriggerClientEvent('sd-phone:client:notify', tsrc, {
             app = 'bank', appId = 'bank', title = label,
-            body = ('%s sent you an invoice for %s.'):format(label, formatMoney(amount)),
+            bodyKey = 'services.sentYouInvoice', body = ('%s sent you an invoice for %s.'):format(label, money),
+            bodyVars = { name = label, amount = money },
             time = 'now',
         })
         TriggerClientEvent('sd-phone:client:services:invoices', tsrc, {})
@@ -316,17 +319,17 @@ end
 ---@param payload { id?: string }
 ---@return table
 function invoices.cancel(src, payload)
-    if not ENABLED then return fail('Invoicing is disabled') end
+    if not ENABLED then return fail('services.invoicingDisabled', 'Invoicing is disabled') end
     payload = type(payload) == 'table' and payload or {}
-    local myJob, cidOrErr = requireOnDutyBusiness(src)
-    if not myJob then return fail(cidOrErr) end
+    local myJob, _, refusal = requireOnDutyBusiness(src)
+    if not myJob then return refusal end
 
     local id  = tostring(payload.id or '')
     local inv = store.get(id)
-    if not inv then return fail('Invoice not found') end
-    if inv.job ~= myJob then return fail("That invoice isn't from your business") end
-    if inv.status ~= 'pending' then return fail('That invoice is no longer pending') end
-    if not store.markCancelled(id) then return fail('That invoice is no longer pending') end
+    if not inv then return fail('services.invoiceNotFound', 'Invoice not found') end
+    if inv.job ~= myJob then return fail('services.invoiceIsnTFromBusiness', "That invoice isn't from your business") end
+    if inv.status ~= 'pending' then return fail('services.invoiceNoLongerPending', 'That invoice is no longer pending') end
+    if not store.markCancelled(id) then return fail('services.invoiceNoLongerPending', 'That invoice is no longer pending') end
 
     local tsrc = player.getSourceByIdentifier(inv.target_cid)
     if tsrc then TriggerClientEvent('sd-phone:client:services:invoices', tsrc, {}) end
@@ -340,7 +343,7 @@ end
 function invoices.received(src)
     if not ENABLED and not PENABLED then return ok({ invoices = {} }) end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('services.playerNotFound', 'Player not found') end
 
     local out = {}
     for _, r in ipairs(store.listReceived(cid, LIST_CAP)) do
@@ -358,7 +361,7 @@ end
 function invoices.personalSent(src)
     if not PENABLED then return ok({ invoices = {} }) end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('services.playerNotFound', 'Player not found') end
 
     local out = {}
     for _, r in ipairs(store.listPersonalBySender(cid, LIST_CAP)) do out[#out + 1] = shapeSent(r) end
@@ -371,16 +374,16 @@ end
 ---@param payload { number?: string, serverId?: number, amount?: number, note?: string }
 ---@return table
 function invoices.personalCreate(src, payload)
-    if not PENABLED then return fail('Invoicing is disabled') end
+    if not PENABLED then return fail('services.invoicingDisabled', 'Invoicing is disabled') end
     payload = type(payload) == 'table' and payload or {}
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('services.playerNotFound', 'Player not found') end
 
     local amount = tonumber(payload.amount)
-    if not finite(amount) then return fail('Enter a valid amount') end
+    if not finite(amount) then return fail('services.enterValidAmount', 'Enter a valid amount') end
     amount = math.floor(amount)
-    if amount < PMIN then return fail('Enter a valid amount') end
-    if amount > PMAX then return fail('That amount is too large') end
+    if amount < PMIN then return fail('services.enterValidAmount', 'Enter a valid amount') end
+    if amount > PMAX then return fail('services.amountTooLarge', 'That amount is too large') end
 
     local myNumber = digits(settings.ensurePhoneNumber(cid) or '')
     local number, targetCid, targetName, tsrc
@@ -388,33 +391,33 @@ function invoices.personalCreate(src, payload)
     local serverId = tonumber(payload.serverId)
     if serverId and finite(serverId) then
         serverId = math.floor(serverId)
-        if serverId <= 0 or serverId > 65535 then return fail('No player with that server ID') end
-        if serverId == src then return fail("You can't invoice yourself") end
+        if serverId <= 0 or serverId > 65535 then return fail('services.noPlayerWithServerId', 'No player with that server ID') end
+        if serverId == src then return fail('services.canTInvoiceYourself', "You can't invoice yourself") end
         targetCid = player.getIdentifier(serverId)
-        if not targetCid then return fail('No player with that server ID') end
-        if targetCid == cid then return fail("You can't invoice yourself") end
+        if not targetCid then return fail('services.noPlayerWithServerId', 'No player with that server ID') end
+        if targetCid == cid then return fail('services.canTInvoiceYourself', "You can't invoice yourself") end
         tsrc       = serverId
         number     = digits(settings.ensurePhoneNumber(targetCid) or '')
         targetName = player.getName(serverId)
     else
         number = digits(payload.number)
-        if number == '' then return fail('Enter a recipient number') end
-        if number == myNumber then return fail("You can't invoice yourself") end
+        if number == '' then return fail('services.enterRecipientNumber', 'Enter a recipient number') end
+        if number == myNumber then return fail('services.canTInvoiceYourself', "You can't invoice yourself") end
         targetCid = settings.getCitizenByNumber(number)
-        if not targetCid then return fail('No one owns that number') end
-        if targetCid == cid then return fail("You can't invoice yourself") end
+        if not targetCid then return fail('services.noOneOwnsNumber', 'No one owns that number') end
+        if targetCid == cid then return fail('services.canTInvoiceYourself', "You can't invoice yourself") end
         tsrc       = player.getSourceByIdentifier(targetCid)
         targetName = tsrc and player.getName(tsrc) or (society.namesByCids({ targetCid })[targetCid])
     end
 
-    if store.countPendingPersonal(cid) >= PMAXPEND then return fail('You have too many unpaid invoices out') end
+    if store.countPendingPersonal(cid) >= PMAXPEND then return fail('services.haveTooManyUnpaidInvoices', 'You have too many unpaid invoices out') end
     if store.countPendingPersonalTo(cid, targetCid) >= MAXPEND_TARGET then
-        return fail('They already have unpaid invoices from you')
+        return fail('services.theyAlreadyHaveUnpaidInvoices', 'They already have unpaid invoices from you')
     end
     -- The pending cap above resets on cancel, so the row count and the banner flood need their
     -- own bound: a create-then-cancel loop is otherwise free.
     if not util.rateLimit(cid, 'services:personalInvoiceCreate', CREATE_WINDOW, PCREATE_MAX) then
-        return fail("You've raised too many invoices, try again later")
+        return fail('services.veRaisedTooManyInvoices', "You've raised too many invoices, try again later")
     end
 
     local note       = trim(payload.note):sub(1, 140)
@@ -437,9 +440,12 @@ function invoices.personalCreate(src, payload)
     if tsrc then
         -- Banner identity follows the target's own contact book: saved name, else the number.
         local senderShown = contactNameFor(targetCid, myNumber) or util.formatNumber(myNumber)
+        local money = formatMoney(amount)
         TriggerClientEvent('sd-phone:client:notify', tsrc, {
-            app = 'bank', appId = 'bank', title = 'Wallet',
-            body = ('%s sent you an invoice for %s.'):format(senderShown, formatMoney(amount)),
+            app = 'bank', appId = 'bank',
+            titleKey = 'banking.walletTitle', title = 'Wallet',
+            bodyKey = 'services.sentYouInvoice', body = ('%s sent you an invoice for %s.'):format(senderShown, money),
+            bodyVars = { name = senderShown, amount = money },
             time = 'now',
         })
         TriggerClientEvent('sd-phone:client:services:invoices', tsrc, {})
@@ -461,17 +467,17 @@ end
 ---@param payload { id?: string }
 ---@return table
 function invoices.personalCancel(src, payload)
-    if not PENABLED then return fail('Invoicing is disabled') end
+    if not PENABLED then return fail('services.invoicingDisabled', 'Invoicing is disabled') end
     payload = type(payload) == 'table' and payload or {}
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('services.playerNotFound', 'Player not found') end
 
     local id  = tostring(payload.id or '')
     local inv = store.get(id)
-    if not inv then return fail('Invoice not found') end
-    if inv.job ~= nil or inv.sender_cid ~= cid then return fail("That invoice isn't yours") end
-    if inv.status ~= 'pending' then return fail('That invoice is no longer pending') end
-    if not store.markCancelled(id) then return fail('That invoice is no longer pending') end
+    if not inv then return fail('services.invoiceNotFound', 'Invoice not found') end
+    if inv.job ~= nil or inv.sender_cid ~= cid then return fail('services.invoiceIsnTYours', "That invoice isn't yours") end
+    if inv.status ~= 'pending' then return fail('services.invoiceNoLongerPending', 'That invoice is no longer pending') end
+    if not store.markCancelled(id) then return fail('services.invoiceNoLongerPending', 'That invoice is no longer pending') end
 
     local tsrc = player.getSourceByIdentifier(inv.target_cid)
     if tsrc then TriggerClientEvent('sd-phone:client:services:invoices', tsrc, {}) end
@@ -486,38 +492,38 @@ end
 ---@param payload { id?: string }
 ---@return table
 function invoices.pay(src, payload)
-    if not ENABLED and not PENABLED then return fail('Invoicing is disabled') end
+    if not ENABLED and not PENABLED then return fail('services.invoicingDisabled', 'Invoicing is disabled') end
     payload = type(payload) == 'table' and payload or {}
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('services.playerNotFound', 'Player not found') end
 
     local id  = tostring(payload.id or '')
     local inv = store.get(id)
-    if not inv then return fail('Invoice not found') end
-    if inv.target_cid ~= cid then return fail('That invoice is not yours') end
-    if inv.status ~= 'pending' then return fail('That invoice is no longer pending') end
+    if not inv then return fail('services.invoiceNotFound', 'Invoice not found') end
+    if inv.target_cid ~= cid then return fail('services.invoiceNotYours', 'That invoice is not yours') end
+    if inv.status ~= 'pending' then return fail('services.invoiceNoLongerPending', 'That invoice is no longer pending') end
 
     local personal = inv.job == nil
-    if personal and not PENABLED then return fail('Invoicing is disabled') end
-    if not personal and not ENABLED then return fail('Invoicing is disabled') end
+    if personal and not PENABLED then return fail('services.invoicingDisabled', 'Invoicing is disabled') end
+    if not personal and not ENABLED then return fail('services.invoicingDisabled', 'Invoicing is disabled') end
 
     local amount = math.floor(tonumber(inv.amount) or 0)
-    if amount <= 0 then return fail('Invalid invoice') end
+    if amount <= 0 then return fail('services.invalidInvoice', 'Invalid invoice') end
 
     local balance = bank.getBalance(src) or 0
-    if balance < amount then return fail('Insufficient funds') end
+    if balance < amount then return fail('services.insufficientFunds', 'Insufficient funds') end
 
     local label = personal and personalLabel(inv)
         or ((inv.label and inv.label ~= '') and inv.label or labelOf(inv.job))
 
     -- Flip pending -> paid first: the atomic guard means a second concurrent pay loses here,
     -- before any money moves.
-    if not store.markPaid(id, os.time()) then return fail('That invoice is no longer pending') end
+    if not store.markPaid(id, os.time()) then return fail('services.invoiceNoLongerPending', 'That invoice is no longer pending') end
 
     local code = codeOf(id)
     if not bank.removeMoney(src, amount, ('Invoice %s'):format(code)) then
         store.revertToPending(id)
-        return fail('Could not take that from your account')
+        return fail('services.couldNotTakeFromAccount', 'Could not take that from your account')
     end
 
     -- Business commission: a per-company fraction of a society-credited invoice goes to the
@@ -563,7 +569,7 @@ function invoices.pay(src, payload)
         -- Payout leg failed: refund the payer and put the invoice back to pending.
         bank.addMoney(src, amount, 'Invoice refund')
         store.revertToPending(id)
-        return fail('Could not complete the payment')
+        return fail('services.couldNotCompletePayment', 'Could not complete the payment')
     end
 
     -- Phone Wallet log for both sides (log-only; the money already moved above). Both entries

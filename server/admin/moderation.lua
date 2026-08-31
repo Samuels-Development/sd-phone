@@ -107,8 +107,12 @@ function moderation.guard(citizenid, scope)
     if not citizenid or citizenid == '' then return nil end
     local muted, expiresAt = moderation.isMuted(citizenid, scope)
     if not muted then return nil end
-    local suffix = expiresAt and (' until ' .. os.date('%d/%m/%Y %H:%M', expiresAt)) or ''
-    return util.fail(('You have been muted by an admin%s.'):format(suffix))
+    if expiresAt then
+        return util.fail('admin.mutedByAdminUntil', 'You have been muted by an admin until {time}.', {
+            time = os.date('%d/%m/%Y %H:%M', expiresAt),
+        })
+    end
+    return util.fail('admin.mutedByAdmin', 'You have been muted by an admin.')
 end
 
 ---Upserts one mute row per scope. Invalid scopes are skipped; durationSecs nil = permanent.

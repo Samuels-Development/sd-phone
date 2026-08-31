@@ -110,7 +110,11 @@ RegisterNetEvent('sd-phone:server:radio:presence', function(channel)
         local res = actions.canTune(src, channel / 10)
         if res and res.allowed == false then
             setPresence(src, 0)
-            TriggerClientEvent('sd-phone:client:radio:forceoff', src, { message = res.message })
+            TriggerClientEvent('sd-phone:client:radio:forceoff', src, {
+                messageKey  = res.messageKey,
+                message     = res.message,
+                messageVars = res.messageVars,
+            })
             return
         end
     end

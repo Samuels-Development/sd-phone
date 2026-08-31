@@ -30,7 +30,7 @@ import { MdtCard } from './ui/MdtCard';
 
 type HandsetTab = 'overview' | 'contacts' | 'calls' | 'messages' | 'media' | 'notes' | 'accounts';
 
-const TABS: readonly { value: HandsetTab; label: string }[] = [
+const handsetTabs = (): readonly { value: HandsetTab; label: string }[] => [
     { value: 'overview', label: t('mdt.hsOverview', 'Device') },
     { value: 'contacts', label: t('mdt.hsContacts', 'Contacts') },
     { value: 'calls',    label: t('mdt.hsCalls', 'Calls') },
@@ -501,7 +501,7 @@ function TabRail({ tab, onTab, accent }: {
     return (
         <div ref={railRef} className="relative -mx-6 mb-4 shrink-0 overflow-x-auto">
             <div className="flex w-max gap-1.5 px-6">
-                {TABS.map(opt => {
+                {handsetTabs().map(opt => {
                     const active = opt.value === tab;
                     return (
                         <button
@@ -552,7 +552,7 @@ function Handset({ citizenid, accent }: { citizenid: string; accent: string }) {
                     className={`mb-4 shrink-0 ${mdtSegmentedDense}`}
                     value={tab}
                     onChange={setTab}
-                    options={TABS}
+                    options={handsetTabs()}
                 />
             )}
             <Scroller className="min-h-0 flex-1">

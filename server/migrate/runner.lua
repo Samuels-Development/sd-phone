@@ -14,6 +14,8 @@ local events    = require 'server.migrate.events'
 local sources   = require 'server.migrate.sources.init'
 ---@type table Identity scheme (server.migrate.scheme): why rows key per phone or per player.
 local scheme    = require 'server.migrate.scheme'
+---@type table Shared helpers (server.util): the ok/fail response envelopes.
+local util      = require 'server.util'
 
 local runner = {}
 
@@ -579,10 +581,11 @@ end
 ---Starts a run in its own thread and returns immediately. The caller never waits: a real import
 ---runs for minutes and progress arrives through `events`.
 ---@param opts { domains?: table<string, boolean>, dryRun?: boolean, force?: boolean, by?: string }
----@return boolean started, string|nil reason
+---@return boolean started
+---@return table? refusal keyed refusal envelope when started is false
 function runner.start(opts)
-    if busy then return false, 'A migration is already running.' end
-    if not config.Migrate then return false, 'configs/migrate.lua is missing.' end
+    if busy then return false, util.fail('migrate.migrationAlreadyRunning', 'A migration is already running.') end
+    if not config.Migrate then return false, util.fail('migrate.configMissing', 'configs/migrate.lua is missing.') end
 
     busy = true
     cancelRequested = false

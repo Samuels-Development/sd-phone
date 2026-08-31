@@ -17,6 +17,7 @@ import { HudPreview } from './hud/HudPreview';
 import { racingSetAlias, racingSetAvatar, racingSetHud } from './racingApi';
 import { racingAccentFill, racingSegmented, racingStat, racingStatLabel } from './racingTheme';
 import { useRacingSession } from './useRacingSession';
+import { failText } from '@/core/api';
 
 const ALIAS_MIN = 3;
 const ALIAS_MAX = 16;
@@ -187,7 +188,7 @@ export function DriverPane() {
             void racingSetHud(payload).then(envelope => {
                 setError(envelope.success
                     ? null
-                    : envelope.message ?? t('racing.hudSaveFailed', 'Those HUD settings could not be saved.'));
+                    : failText(envelope, t('racing.hudSaveFailed', 'Those HUD settings could not be saved.')));
             });
         }, delay);
     }, [setDraft, setHud]);
@@ -195,7 +196,7 @@ export function DriverPane() {
     const clearIdentity = useCallback((pending: Promise<{ success: boolean; message?: string }>) => {
         void pending.then(envelope => {
             if (!envelope.success) {
-                setError(envelope.message ?? t('racing.identityFailed', 'That change could not be saved.'));
+                setError(failText(envelope, t('racing.identityFailed', 'That change could not be saved.')));
                 return;
             }
             setError(null);
@@ -367,7 +368,7 @@ export function DriverPane() {
                     onConfirm={async value => {
                         const envelope = await racingSetAlias(value);
                         if (!envelope.success) {
-                            return envelope.message ?? t('racing.aliasFailed', 'That alias could not be saved.');
+                            return failText(envelope, t('racing.aliasFailed', 'That alias could not be saved.'));
                         }
                         refresh();
                         return null;
@@ -391,7 +392,7 @@ export function DriverPane() {
                     onConfirm={async value => {
                         const envelope = await racingSetAvatar(value);
                         if (!envelope.success) {
-                            return envelope.message ?? t('racing.avatarFailed', 'That picture could not be saved.');
+                            return failText(envelope, t('racing.avatarFailed', 'That picture could not be saved.'));
                         }
                         refresh();
                         return null;

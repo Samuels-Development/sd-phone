@@ -13,6 +13,7 @@ import { apiList } from '@/apps/documents/documentsApi';
 import { RichBody, SignatureBlock } from '@/apps/documents/TextEditor';
 import type { DocFile } from '@/apps/documents/data';
 import { attachmentSaveStates, saveAttachment, type MailAttachment } from './data';
+import { failText } from '@/core/api';
 
 type DocAttachment = Extract<MailAttachment, { kind: 'document' }>;
 
@@ -569,7 +570,7 @@ export function AttachmentsView({ attachments, accountEmail, messageId, canSave 
         if (savedIdx.has(index)) return;
         const r = await saveAttachment(accountEmail, messageId, index);
         if (r.ok) setSavedIdx(prev => new Set(prev).add(index));
-        else setSaveErr(r.message ?? t('mail.saveAttachmentFailed', 'Could not save the attachment.'));
+        else setSaveErr(failText(r, t('mail.saveAttachmentFailed', 'Could not save the attachment.')));
     }
 
     return (

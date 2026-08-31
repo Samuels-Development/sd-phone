@@ -593,14 +593,14 @@ end
 ---@return table envelope
 function races.trialStart(src, payload)
     local cid = player.getIdentifier(src)
-    if not cid then return util.fail('Player not found') end
+    if not cid then return util.fail('racing.playerNotFound', 'Player not found') end
 
     local trackId = math.floor(tonumber(payload.trackId) or 0)
-    if trackId <= 0 then return util.fail('That track is no longer available') end
+    if trackId <= 0 then return util.fail('racing.trackNoLongerAvailable', 'That track is no longer available') end
 
     local track = store.trackRow(trackId)
     if not track or util.truthy(track.deleted) or not util.truthy(track.published) then
-        return util.fail('That track is no longer available')
+        return util.fail('racing.trackNoLongerAvailable', 'That track is no longer available')
     end
 
     Trials[cid] = { trackId = trackId, startedAt = GetGameTimer() }
@@ -615,13 +615,13 @@ end
 ---@return table envelope on success data = { timeMs, bestLapMs, personalBest, record }
 function races.trialFinish(src, payload)
     local cid = player.getIdentifier(src)
-    if not cid then return util.fail('Player not found') end
+    if not cid then return util.fail('racing.playerNotFound', 'Player not found') end
     if not util.rateLimit(cid, 'racing:finish', FINISH_WINDOW, FINISH_MAX) then
-        return util.fail('Too many runs, wait a moment')
+        return util.fail('racing.tooManyRunsWaitMoment', 'Too many runs, wait a moment')
     end
 
     local trial = Trials[cid]
-    if not trial then return util.fail('You are not on a timed run') end
+    if not trial then return util.fail('racing.notTimedRun', 'You are not on a timed run') end
     Trials[cid] = nil
 
     local elapsedMs = math.max(1, GetGameTimer() - trial.startedAt)

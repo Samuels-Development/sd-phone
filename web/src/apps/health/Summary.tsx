@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Activity, Footprints, Heart, MoonStar, Route } from 'lucide-react';
 
-import { t } from '@/i18n';
+import { getLocaleTag, t } from '@/i18n';
 import type { HealthDay, HealthSummary } from './healthApi';
 
 const M_PER_MILE = 1609.34;
@@ -208,7 +208,7 @@ function HeartPulse({ hr }: { hr: number }) {
 function weekday(iso: string): string {
     const d = new Date(`${iso}T12:00:00`);
     if (Number.isNaN(d.getTime())) return '';
-    return ['S', 'M', 'T', 'W', 'T', 'F', 'S'][d.getDay()];
+    return d.toLocaleDateString(getLocaleTag(), { weekday: 'narrow' });
 }
 
 function formatMinutes(ms: number): string {

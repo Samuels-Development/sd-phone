@@ -203,18 +203,18 @@ end
 ---@return table result envelope with { id, views }
 function actions.view(src, id)
     id = articleId(id)
-    if not id then return { success = false, message = 'Bad article id' } end
+    if not id then return { success = false, messageKey = 'weazelnews.badArticleId', message = 'Bad article id' } end
 
     local cid = cidOf(src)
     if cid and not util.rateLimit(cid, 'weazelnews:view', VIEW_WINDOW, VIEW_MAX) then
-        return { success = false, message = 'Slow down' }
+        return { success = false, messageKey = 'weazelnews.slowDown', message = 'Slow down' }
     end
 
     local total = viewTotals[id]
     if not total then
         -- Unknown ids stop here: seeding the table from a client id would let id probing grow it.
         total = store.viewsOf(id)
-        if not total then return { success = false, message = 'Article not found' } end
+        if not total then return { success = false, messageKey = 'weazelnews.articleNotFound', message = 'Article not found' } end
         viewTotals[id] = total
     end
 
@@ -238,7 +238,7 @@ end
 ---@param payload any client-supplied article draft (sanitize documents the shape)
 ---@return table result envelope with { article } on success
 function actions.save(src, payload)
-    if not canManage(src) then return { success = false, message = 'Only Weazel News staff can publish' } end
+    if not canManage(src) then return { success = false, messageKey = 'weazelnews.onlyWeazelNewsStaffCan', message = 'Only Weazel News staff can publish' } end
     local cid = cidOf(src)
     if not cid then return { success = false } end
 
@@ -249,11 +249,11 @@ function actions.save(src, payload)
     local id
     if type(payload) == 'table' and payload.id ~= nil then
         id = articleId(payload.id)
-        if not id then return { success = false, message = 'Article not found' } end
+        if not id then return { success = false, messageKey = 'weazelnews.articleNotFound', message = 'Article not found' } end
     end
 
     if id then
-        if not store.articleById(id) then return { success = false, message = 'Article not found' } end
+        if not store.articleById(id) then return { success = false, messageKey = 'weazelnews.articleNotFound', message = 'Article not found' } end
         row.updated_at = ts
         store.updateArticle(id, row)
     else
@@ -276,9 +276,9 @@ end
 ---@param id any client-supplied article id
 ---@return table result envelope with { id } on success
 function actions.delete(src, id)
-    if not canManage(src) then return { success = false, message = 'Only Weazel News staff can edit this' } end
+    if not canManage(src) then return { success = false, messageKey = 'weazelnews.onlyWeazelNewsStaffCan2', message = 'Only Weazel News staff can edit this' } end
     id = articleId(id)
-    if not id then return { success = false, message = 'Bad article id' } end
+    if not id then return { success = false, messageKey = 'weazelnews.badArticleId', message = 'Bad article id' } end
     store.deleteArticle(id)
     nudge(src)
     return { success = true, data = { id = tostring(id) } }
@@ -308,7 +308,7 @@ end
 ---@param payload any client-supplied { lines: string[] }
 ---@return table result envelope with { ticker } echoing the stored lines
 function actions.setBreaking(src, payload)
-    if not canManage(src) then return { success = false, message = 'Only Weazel News staff can edit this' } end
+    if not canManage(src) then return { success = false, messageKey = 'weazelnews.onlyWeazelNewsStaffCan2', message = 'Only Weazel News staff can edit this' } end
     if type(payload) ~= 'table' then payload = {} end
 
     local lines = clampTickerLines(payload.lines)

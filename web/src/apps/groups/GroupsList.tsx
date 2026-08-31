@@ -123,7 +123,9 @@ export function GroupsList({
                                                 <div className="mt-0.5 text-[16px] leading-snug text-ios-gray">
                                                     {g.leaderId === 'local' ? t('groups.you', 'You') : g.leaderName}
                                                     {' · '}
-                                                    {g.members.length} {t('groups.member', 'member')}{g.members.length !== 1 ? 's' : ''}
+                                                    {g.members.length === 1
+                                                        ? t('groups.oneMember', '1 member')
+                                                        : t('groups.memberCount', '{n} members', { n: g.members.length })}
                                                     {g.onlineCount > 0 && (
                                                         <>
                                                             {' · '}
@@ -192,7 +194,9 @@ export function GroupsList({
                                                 <div className="mt-0.5 text-[16px] leading-snug text-ios-gray">
                                                     {t('groups.invitedBy', 'Invited by {name}', { name: inv.invitedBy })}
                                                     {' · '}
-                                                    {inv.memberCount} {t('groups.member', 'member')}{inv.memberCount !== 1 ? 's' : ''}
+                                                    {inv.memberCount === 1
+                                                        ? t('groups.oneMember', '1 member')
+                                                        : t('groups.memberCount', '{n} members', { n: inv.memberCount })}
                                                 </div>
                                                 <div className="mt-3 flex gap-2.5">
                                                     <button

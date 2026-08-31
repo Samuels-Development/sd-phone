@@ -10,6 +10,7 @@ import type { Contact as PhoneContact } from '@/apps/phone/data';
 import { formatMoney } from './data';
 import { useStreamerHidden } from '@/stores/themeStore';
 import { HIDDEN_TEXT } from '@/shell/streamerMode';
+import { failText } from '@/core/api';
 
 // Presentational: the fetch lives in Banking (above the animated tab subtree) so segment
 // switches re-render instantly from props instead of refetching through a loading flash.
@@ -40,7 +41,7 @@ export function ReceivedInvoices({ invoices, loading, onRefetch, onPaid, contact
         const res = await payInvoice(inv.id);
         setBusy(false);
         if (res.success) { onRefetch(); onPaid(); }
-        else setError(res.message ?? t('banking.somethingWentWrong', 'Something went wrong'));
+        else setError(failText(res, t('banking.somethingWentWrong', 'Something went wrong')));
     }
 
     if (invoices.length === 0) {

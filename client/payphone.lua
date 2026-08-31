@@ -4,6 +4,8 @@ local config = require 'configs.config'
 local target = require 'bridge.client.target'
 ---@type table Companion-device bus (client.companion): whether a sibling device holds the screen.
 local companion = require 'client.companion'
+---@type table Locale bridge (bridge.shared.locale): t(key, english, vars) for in-world text.
+local locale = require 'bridge.shared.locale'
 
 ---@type table Payphone config (configs/payphone.lua).
 local cfg = config.Payphone
@@ -249,7 +251,11 @@ local function openMenu(state)
         if state.coin and state.coin.enabled and not state.credited then
             local pay = lib.callback.await('sd-phone:server:payphone:insertCoin', false, { location = activeLocation })
             if not pay or not pay.success then
-                lib.notify({ title = 'Payphone', description = (pay and pay.message) or 'You need change', type = 'error' })
+                lib.notify({
+                    title       = locale.t('payphone.menuTitle', 'Payphone'),
+                    description = (pay and pay.message) or locale.t('payphone.menuNeedChange', 'You need change'),
+                    type        = 'error',
+                })
                 endMenuSession()
                 return
             end
@@ -258,17 +264,21 @@ local function openMenu(state)
         local result = doDial(number)
         if result.success then state.credited = false end -- the coin was spent on this call
         if not result.success then
-            lib.notify({ title = 'Payphone', description = result.message or 'Call failed', type = 'error' })
+            lib.notify({
+                title       = locale.t('payphone.menuTitle', 'Payphone'),
+                description = result.message or locale.t('payphone.menuCallFailed', 'Call failed'),
+                type        = 'error',
+            })
             endMenuSession()
             return
         end
         lib.registerContext({
             id = 'sd_payphone_call',
-            title = ('Calling %s'):format(number),
+            title = locale.t('payphone.menuCalling', 'Calling {number}', { number = number }),
             canClose = false,
             options = {
                 {
-                    title = 'Hang Up',
+                    title = locale.t('payphone.menuHangUp', 'Hang Up'),
                     icon = 'phone-slash',
                     onSelect = function()
                         endMenuSession()
@@ -282,12 +292,19 @@ local function openMenu(state)
 
     local options = {
         {
-            title = 'Dial Number',
-            description = state.anonymous and 'Caller ID withheld' or ('This booth: %s'):format(state.number),
+            title = locale.t('payphone.menuDialNumber', 'Dial Number'),
+            description = state.anonymous
+                and locale.t('payphone.menuWithheld', 'Caller ID withheld')
+                or locale.t('payphone.menuThisBooth', 'This booth: {number}', { number = state.number }),
             icon = 'phone',
             onSelect = function()
-                local input = lib.inputDialog('Payphone', {
-                    { type = 'input', label = 'Phone number', required = true, max = 15 },
+                local input = lib.inputDialog(locale.t('payphone.menuTitle', 'Payphone'), {
+                    {
+                        type     = 'input',
+                        label    = locale.t('payphone.menuPhoneNumber', 'Phone number'),
+                        required = true,
+                        max      = 15,
+                    },
                 })
                 if not input or not input[1] then endMenuSession() return end
                 startCall(tostring(input[1]):gsub('%D', ''))
@@ -305,7 +322,7 @@ local function openMenu(state)
 
     lib.registerContext({
         id = 'sd_payphone',
-        title = 'Payphone',
+        title = locale.t('payphone.menuTitle', 'Payphone'),
         onExit = endMenuSession,
         options = options,
     })
@@ -352,11 +369,13 @@ local function openPayphone(entity, coords, connected)
         if connected then
             lib.registerContext({
                 id = 'sd_payphone_call',
-                title = connected.callerName and ('On call: %s'):format(connected.callerName) or 'On call',
+                title = connected.callerName
+                    and locale.t('payphone.menuOnCallWith', 'On call: {name}', { name = connected.callerName })
+                    or locale.t('payphone.menuOnCall', 'On call'),
                 canClose = false,
                 options = {
                     {
-                        title = 'Hang Up',
+                        title = locale.t('payphone.menuHangUp', 'Hang Up'),
                         icon = 'phone-slash',
                         onSelect = function()
                             endMenuSession()
@@ -458,7 +477,11 @@ RegisterNetEvent('sd-phone:client:call:ended', function(data)
     activeChannel = nil
     if cfg.UseOxLibMenu then
         if lib.getOpenContextMenu() == 'sd_payphone_call' then lib.hideContext(true) end
-        lib.notify({ title = 'Payphone', description = 'Call ended', type = 'inform' })
+        lib.notify({
+            title       = locale.t('payphone.menuTitle', 'Payphone'),
+            description = locale.t('payphone.menuCallEnded', 'Call ended'),
+            type        = 'inform',
+        })
         endMenuSession()
         return
     end
@@ -510,7 +533,7 @@ local function registerBooths()
         {
             name     = 'sd-phone:payphone',
             icon     = 'fas fa-phone',
-            label    = 'Use Payphone',
+            label    = locale.t('payphone.targetUse', 'Use Payphone'),
             distance = cfg.TargetDistance or 1.5,
             canInteract = function(entity)
                 return ringAt(entity) == nil
@@ -525,7 +548,7 @@ local function registerBooths()
         {
             name     = 'sd-phone:payphone:answer',
             icon     = 'fas fa-phone-volume',
-            label    = 'Answer Phone',
+            label    = locale.t('payphone.targetAnswer', 'Answer Phone'),
             distance = cfg.TargetDistance or 1.5,
             canInteract = function(entity)
                 return ringAt(entity) ~= nil

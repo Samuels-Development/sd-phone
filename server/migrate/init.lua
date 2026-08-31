@@ -25,7 +25,7 @@ local function log(msg) print(('^5[sd-phone:migrate]^0 %s'):format(msg)) end
 ---@param fn fun(src: number, payload: table|nil): table
 local function reg(name, fn)
     lib.callback.register('sd-phone:server:admin:' .. name, function(src, payload)
-        if not permissions.isAllowed(src) then return util.fail('Not authorized') end
+        if not permissions.isAllowed(src) then return util.fail('migrate.notAuthorized', 'Not authorized') end
         return fn(src, payload)
     end)
 end
@@ -35,7 +35,7 @@ end
 reg('migrateScan', function(_src, payload)
     local sourceKey = type(payload) == 'table' and payload.source or nil
     local ok, res = pcall(runner.scan, sourceKey)
-    if not ok then return util.fail(('Scan failed: %s'):format(res)) end
+    if not ok then return util.fail('migrate.scanFailed', 'Scan failed: {error}', { error = tostring(res) }) end
     return util.ok(res)
 end)
 
@@ -66,23 +66,25 @@ reg('migrateStart', function(src, payload)
         for _, key in ipairs(payload.domains) do
             if type(key) == 'string' then selection[key] = true; any = true end
         end
-        if not any then return util.fail('Select at least one domain to import.') end
+        if not any then return util.fail('migrate.selectLeastOneDomainImport', 'Select at least one domain to import.') end
     end
 
     events.subscribe(src)
-    local started, reason = runner.start({
+    local started, refusal = runner.start({
         domains = selection,
         source  = type(payload) == 'table' and payload.source or nil,
         dryRun  = type(payload) == 'table' and payload.dryRun == true,
         by      = player.getName(src) or ('player %d'):format(src),
     })
-    if not started then return util.fail(reason or 'Could not start the migration.') end
+    if not started then
+        return refusal or util.fail('migrate.couldNotStartMigration', 'Could not start the migration.')
+    end
     return util.ok()
 end)
 
 ---Asks the running import to stop after the domain in flight.
 reg('migrateStop', function()
-    if not runner.cancel() then return util.fail('No migration is running.') end
+    if not runner.cancel() then return util.fail('migrate.noMigrationRunning', 'No migration is running.') end
     return util.ok()
 end)
 
@@ -110,13 +112,13 @@ RegisterCommand('sdphone:migrate', function(source, args)
         if arg == 'dry' then dryRun = true else sourceKey = arg end
     end
 
-    local started, reason = runner.start({
+    local started, refusal = runner.start({
         force  = true,
         dryRun = dryRun,
         source = sourceKey,
         by     = 'server console',
     })
-    if not started then log(('^1%s^0'):format(reason)) end
+    if not started then log(('^1%s^0'):format(refusal and refusal.message or 'could not start')) end
 end, true)
 
 -- Drops every table sd-phone owns and forgets the import markers, so the next start rebuilds the

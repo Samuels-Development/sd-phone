@@ -1,5 +1,7 @@
 ---@type table Bodycam config (configs/bodycam.lua): the enable switch and the camera mount.
 local CFG = require 'configs.bodycam'
+---@type table Locale bridge (bridge.shared.locale): t(key, english, vars) for in-world text.
+local locale = require 'bridge.shared.locale'
 ---@type table Notify bridge (bridge.client.notify): backend-agnostic toast notifications.
 local notify = require 'bridge.client.notify'
 ---@type fun(raw: any): VehicleModel Stored model value to hash/spawn/display (client.vehiclename).
@@ -541,7 +543,7 @@ local function ensureFollow()
             if ped == 0 then
                 -- The officer left this client's scope or disconnected. Nothing here can bring
                 -- them back, so end the watch rather than holding a black screen.
-                notify.show({ description = 'That unit is no longer reachable.', type = 'error' })
+                notify.show({ description = locale.t('bodycam.unitUnreachable', 'That unit is no longer reachable.'), type = 'error' })
                 leaveCamera()
                 break
             end
@@ -802,7 +804,9 @@ if ENABLED then
         local by = type(payload) == 'table' and payload.by or nil
         SendNUIMessage({ action = 'sd-phone:mdt:recShared', data = { by = by } })
         notify.show({
-            description = by and ('%s sent you bodycam footage.'):format(by) or 'You were sent bodycam footage.',
+            description = by
+                and locale.t('bodycam.sharedBy', '{name} sent you bodycam footage.', { name = by })
+                or locale.t('bodycam.sharedAnon', 'You were sent bodycam footage.'),
             type = 'inform',
         })
     end)

@@ -13,6 +13,7 @@ import {
     acceptInvite, declineInvite, fetchJobs, removeJob, switchJob,
     type JobInvite, type JobsView, type SavedJob,
 } from './servicesApi';
+import { failText } from '@/core/api';
 
 type Scope = 'mine' | 'offers';
 
@@ -36,7 +37,7 @@ export function JobsTab({ onJobChanged }: { onJobChanged?: () => void }) {
         const res = await p;
         setBusy(false);
         if (res.success) { if (res.data) { cachedJobs = res.data; setView(res.data); } onJobChanged?.(); }
-        else setError(res.message ?? t('services.somethingWentWrong', 'Something went wrong'));
+        else setError(failText(res, t('services.somethingWentWrong', 'Something went wrong')));
     }, [busy, onJobChanged]);
 
     const jobs    = view?.jobs ?? [];
@@ -148,7 +149,7 @@ export function JobsTab({ onJobChanged }: { onJobChanged?: () => void }) {
                 <AlertDialog
                     title={t('services.removeLabel', 'Remove {label}?', { label: removing.label })}
                     message={removing.active
-                        ? t('services.removeMsgActive', "This is your active job — removing it will set you to unemployed. You'd need to be re-hired to get it back.")
+                        ? t('services.removeMsgActive', "This is your active job. Removing it will set you to unemployed. You'd need to be re-hired to get it back.")
                         : t('services.removeMsg', "This drops the job from your saved jobs. You'd need to be re-hired to get it back.")}
                     confirmLabel={t('services.remove', 'Remove')}
                     destructive

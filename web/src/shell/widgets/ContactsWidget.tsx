@@ -9,6 +9,7 @@ import { ContactPickerSheet } from '@/shared/ContactPickerSheet';
 import { useContactsStore } from '@/stores/contactsStore';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { WidgetTile, palette } from './WidgetTile';
+import { failText } from '@/core/api';
 
 const GRID: Record<WidgetSize, { cols: number; rows: number; name: number }> = {
     sm: { cols: 2, rows: 2, name: 11 },
@@ -129,7 +130,7 @@ export function ContactsWidget({ size, width, height, theme = 'dark', picks, onP
     async function placeCall(c: Contact) {
         if (!c.phone) return;
         const res = await dialCall(c.phone, c.name);
-        if (!res.success) setDialError(res.message ?? t('phone.unableToPlaceCall', 'Unable to place call'));
+        if (!res.success) setDialError(failText(res, t('phone.unableToPlaceCall', 'Unable to place call')));
     }
 
     return (

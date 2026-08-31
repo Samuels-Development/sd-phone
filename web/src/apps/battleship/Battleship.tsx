@@ -33,14 +33,14 @@ const GAME   = 'battleship';
 const ACCENT = '#17A0B5';
 registerGameSides(GAME, ['1', '2']);
 
-const BS_CONFIG: GameStartConfig = {
+const bsConfig = (): GameStartConfig => ({
     icon: BattleshipIcon,
     title: t('battleship.title', 'Battleship'),
     accent: ACCENT,
     sideOptions: [{ id: '1', label: t('battleship.goFirst', 'Go First') }, { id: '2', label: t('battleship.goSecond', 'Go Second') }, { id: 'random', label: t('battleship.random', 'Random') }],
     difficultyOptions: [{ id: 'easy', label: t('battleship.easy', 'Easy') }, { id: 'medium', label: t('battleship.medium', 'Medium') }, { id: 'hard', label: t('battleship.hard', 'Hard') }],
     onlineBlurb: t('battleship.onlineBlurb', 'Create public or private lobbies, invite players by server ID, and accept invites.'),
-};
+});
 const sideLabel = (s: Side) => (s === 'random' ? t('battleship.random', 'Random') : s === '1' ? t('battleship.first', 'First') : t('battleship.second', 'Second'));
 
 interface ShotResult { hit: boolean; sunk: string | null }
@@ -327,6 +327,7 @@ export function Battleship({ onClose: _onClose }: Props) {
         : result === 'win' ? (pot > 0 ? t('battleship.youWinAmount', 'You win ${amount}!', { amount: pot.toLocaleString('en-US') }) : t('battleship.victoryFleetSunkShort', 'Victory! Fleet sunk.'))
         : t('battleship.defeatFleetSunk', 'Defeat. Your fleet was sunk.');
 
+    const startConfig = bsConfig();
     const screenKey = screen === 'lobby' ? (lobby ? 'lobby-room' : 'lobby-hub') : screen;
 
     return (
@@ -345,13 +346,13 @@ export function Battleship({ onClose: _onClose }: Props) {
 
             <div key={screenKey} className="flex min-h-0 flex-1 flex-col animate-swipe-in-left">
             {screen === 'home' && (
-                <StartScreen config={BS_CONFIG} stats={stats} hasInvite={!!incoming} onPlayCpu={startCpu} onPlayOnline={() => setScreen('lobby')} onLeaderboard={openLeaderboard} />
+                <StartScreen config={startConfig} stats={stats} hasInvite={!!incoming} onPlayCpu={startCpu} onPlayOnline={() => setScreen('lobby')} onLeaderboard={openLeaderboard} />
             )}
 
             {screen === 'lobby' && (lobby ? (
                 <LobbyRoom lobby={lobby} inviteError={inviteError} accent={ACCENT} sideLabel={sideLabel} onInvite={online.invite} onStart={online.start} onLeave={online.leave} onKick={online.kick} onSetWager={online.setWager} onSetReady={online.ready} />
             ) : (
-                <OnlineHub lobbies={lobbies} incoming={incoming} error={hubError} accent={ACCENT} sideOptions={BS_CONFIG.sideOptions} onCreate={online.create} onJoin={online.join} onAccept={online.accept} onDecline={online.decline} onRefresh={online.refresh} />
+                <OnlineHub lobbies={lobbies} incoming={incoming} error={hubError} accent={ACCENT} sideOptions={startConfig.sideOptions} onCreate={online.create} onJoin={online.join} onAccept={online.accept} onDecline={online.decline} onRefresh={online.refresh} />
             ))}
 
             {screen === 'leaderboard' && (

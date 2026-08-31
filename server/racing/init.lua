@@ -27,13 +27,13 @@ local CREATOR = type(RACING.Creator) == 'table' and RACING.Creator or {}
 ---catalog here would turn the whole feature off on every server, exactly as it would for the MDT.
 local ENABLED = RACING.Enabled == true
 
----@type string Refusal every callback answers with while Racing is switched off. Registering a
+---@type table Refusal every callback answers with while Racing is switched off. Registering a
 ---refusal rather than nothing is the point: an unregistered callback never answers, so the tablet
 ---would sit on its loading screen instead of reaching a readable error.
-local DISABLED = 'Racing is not available on this server'
+local DISABLED = util.fail('racing.racingNotAvailableServer', 'Racing is not available on this server')
 
----@type string Refusal for a caller whose character has not finished loading.
-local LOADING = 'Your character is still loading'
+---@type table Refusal for a caller whose character has not finished loading.
+local LOADING = util.fail('racing.characterStillLoading', 'Your character is still loading')
 
 ---Registers one Racing callback under the app's prefix, normalising a non-table payload at the
 ---boundary and refusing outright while the app is off.
@@ -41,7 +41,7 @@ local LOADING = 'Your character is still loading'
 ---@param fn fun(src: integer, payload: table): table
 local function register(action, fn)
     lib.callback.register('sd-phone:server:racing:' .. action, function(src, payload)
-        if not ENABLED then return util.fail(DISABLED) end
+        if not ENABLED then return DISABLED end
         if type(payload) ~= 'table' then payload = {} end
         return fn(src, payload)
     end)
@@ -68,7 +68,7 @@ register('createTrack',  function(src, payload) return actions.createTrack(src, 
 ---runs, but this callback has no such wrapper, so without this check any caller of the phone's NUI
 ---action -- ace or not -- could pop the recorder and stream its flag prop for free.
 register('startCreator', function(src)
-    if not actions.canCreate(src) then return util.fail('You are not allowed to create tracks') end
+    if not actions.canCreate(src) then return util.fail('racing.notAllowedCreateTracks', 'You are not allowed to create tracks') end
     TriggerClientEvent('sd-phone:client:racing:creator', src)
     return util.ok({})
 end)
@@ -126,19 +126,19 @@ register('adminRejectTrack',    function(src, payload) return actions.adminRejec
 
 register('boards', function(src)
     local cid = player.getIdentifier(src)
-    if not cid then return util.fail(LOADING) end
+    if not cid then return LOADING end
     return util.ok({ boards = racegen.boards(cid) })
 end)
 
 register('join', function(src, payload)
     local cid = player.getIdentifier(src)
-    if not cid then return util.fail(LOADING) end
+    if not cid then return LOADING end
     return racegen.join(src, cid, payload.raceId, payload.modelHash)
 end)
 
 register('leave', function(src, payload)
     local cid = player.getIdentifier(src)
-    if not cid then return util.fail(LOADING) end
+    if not cid then return LOADING end
     return racegen.leave(src, cid, payload.raceId)
 end)
 
@@ -148,15 +148,15 @@ end)
 ---can already do by driving away.
 register('notStarted', function(src, payload)
     local cid = player.getIdentifier(src)
-    if not cid then return util.fail(LOADING) end
-    if type(payload.raceId) ~= 'string' then return util.fail('Unknown race') end
+    if not cid then return LOADING end
+    if type(payload.raceId) ~= 'string' then return util.fail('racing.unknownRace', 'Unknown race') end
     races.withdraw(cid, payload.raceId)
     return util.ok({})
 end)
 
 register('host', function(src, payload)
     local cid = player.getIdentifier(src)
-    if not cid then return util.fail(LOADING) end
+    if not cid then return LOADING end
     return racegen.host(src, cid, payload)
 end)
 

@@ -29,7 +29,7 @@ end
 ---@return table envelope { success, data: { enabled, devices } }
 function actions.scan(source)
     local cid = player.getIdentifier(source)
-    if not cid then return util.fail('No character') end
+    if not cid then return util.fail('bluetooth.noCharacter', 'No character') end
 
     local state = store.get(cid)
     local pos = coordsOf(source)
@@ -72,22 +72,25 @@ end
 ---@return table envelope
 function actions.pair(source, payload)
     local cid = player.getIdentifier(source)
-    if not cid then return util.fail('No character') end
+    if not cid then return util.fail('bluetooth.noCharacter', 'No character') end
 
     local id = type(payload) == 'table' and payload.id or nil
     local device = type(id) == 'string' and registry.get(id) or nil
-    if not device then return util.fail('That device is no longer nearby') end
+    if not device then return util.fail('bluetooth.deviceNoLongerNearby', 'That device is no longer nearby') end
 
     local state = store.get(cid)
-    if not state.enabled then return util.fail('Bluetooth is off') end
+    if not state.enabled then return util.fail('bluetooth.bluetoothOff', 'Bluetooth is off') end
 
     local pos = coordsOf(source)
     if not pos or not registry.reachable(device, pos.x, pos.y, pos.z) then
-        return util.fail('That device is out of range')
+        return util.fail('bluetooth.deviceOutRange', 'That device is out of range')
     end
 
     local ok, err = registry.connect(source, id)
-    if not ok then return util.fail(err == 'device is full' and 'That device is already in use' or 'Could not connect') end
+    if not ok then
+        if err == 'device is full' then return util.fail('bluetooth.deviceAlreadyUse', 'That device is already in use') end
+        return util.fail('bluetooth.couldNotConnect', 'Could not connect')
+    end
 
     store.remember(cid, id, device.name)
     return util.ok({ id = id })
@@ -99,10 +102,10 @@ end
 ---@return table envelope
 function actions.forget(source, payload)
     local cid = player.getIdentifier(source)
-    if not cid then return util.fail('No character') end
+    if not cid then return util.fail('bluetooth.noCharacter', 'No character') end
 
     local id = type(payload) == 'table' and payload.id or nil
-    if type(id) ~= 'string' then return util.fail('Unknown device') end
+    if type(id) ~= 'string' then return util.fail('bluetooth.unknownDevice', 'Unknown device') end
 
     registry.disconnect(source, id, 'manual')
     store.forget(cid, id)
@@ -115,7 +118,7 @@ end
 ---@return table envelope
 function actions.disconnect(source, payload)
     local id = type(payload) == 'table' and payload.id or nil
-    if type(id) ~= 'string' then return util.fail('Unknown device') end
+    if type(id) ~= 'string' then return util.fail('bluetooth.unknownDevice', 'Unknown device') end
     registry.disconnect(source, id, 'manual')
     return util.ok({ id = id })
 end
@@ -127,7 +130,7 @@ end
 ---@return table envelope
 function actions.setEnabled(source, payload)
     local cid = player.getIdentifier(source)
-    if not cid then return util.fail('No character') end
+    if not cid then return util.fail('bluetooth.noCharacter', 'No character') end
 
     local on = type(payload) == 'table' and payload.on == true
     store.setEnabled(cid, on)

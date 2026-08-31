@@ -10,7 +10,7 @@ import { useTheme } from '@/stores/themeStore';
 import { Article } from './Article';
 import { ManageDashboard } from './ManageDashboard';
 import {
-    CATEGORIES, type Article as ArticleT, type Category, formatViews, WEAZEL_RED,
+    CATEGORIES, categoryLabel, type Article as ArticleT, type Category, formatViews, WEAZEL_RED,
 } from './data';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { weazelFeed, weazelView, weazelWatch } from './weazelnewsApi';
@@ -163,7 +163,7 @@ export function WeazelNews({ onClose: _onClose }: { onClose: () => void }) {
                                 }`}
                                 style={active ? { background: WEAZEL_RED } : undefined}
                             >
-                                {cat}
+                                {categoryLabel(cat)}
                             </button>
                         );
                     })}

@@ -1,5 +1,7 @@
 ---@type table sd-phone config root (configs/config.lua).
 local config = require 'configs.config'
+---@type table Locale bridge (bridge.shared.locale): t(key, english, vars) for in-world text.
+local locale = require 'bridge.shared.locale'
 ---@type table Notify bridge (bridge.client.notify): backend-agnostic toast notifications.
 local notify = require 'bridge.client.notify'
 
@@ -13,8 +15,6 @@ local CREATOR_CFG = type(RACING_CFG.Creator) == 'table' and RACING_CFG.Creator o
 ---@type table Server-side value caps, borrowed here so the name field cannot overrun the column.
 local LIMITS_CFG  = type(RACING_CFG.Limits) == 'table' and RACING_CFG.Limits or {}
 
----@type string Toast title for every message the recorder raises.
-local TITLE       = 'Racing'
 ---@type integer Flag prop spawned at each gate edge.
 local FLAG_MODEL  = joaat(type(CREATOR_CFG.FlagModel) == 'string' and CREATOR_CFG.FlagModel or 'prop_beachflag_01')
 ---@type integer Alpha of a placed flag: transparent, not invisible, so gates read as guides.
@@ -58,6 +58,13 @@ local active = false
 local gates = {}
 ---@type number Live gate width, in metres.
 local gateWidth = DEF_WIDTH
+
+---Toast title for every message the recorder raises. Resolved on demand rather than held as a
+---constant, so it is translated after the locale catalogue has loaded.
+---@return string
+local function raceTitle()
+    return locale.t('apps.racing', 'Racing')
+end
 
 ---@param value number
 ---@return number rounded two decimals, which keeps the stored gate JSON compact
@@ -118,8 +125,8 @@ end
 local function placeGate()
     if #gates >= MAX_GATES then
         notify.show({
-            title = TITLE,
-            description = ('A track can hold %d gates.'):format(MAX_GATES),
+            title = raceTitle(),
+            description = locale.t('racing.creatorMaxGates', 'A track can hold {n} gates.', { n = MAX_GATES }),
             type = 'error',
         })
         return
@@ -161,7 +168,7 @@ local function stopCreator(message)
     lib.hideTextUI()
     SetModelAsNoLongerNeeded(FLAG_MODEL)
     if message then
-        notify.show({ title = TITLE, description = message, type = 'inform' })
+        notify.show({ title = raceTitle(), description = message, type = 'inform' })
     end
 end
 
@@ -185,20 +192,25 @@ end
 local function promptSave()
     if #gates < MIN_GATES then
         notify.show({
-            title = TITLE,
-            description = ('A track needs at least %d gates.'):format(MIN_GATES),
+            title = raceTitle(),
+            description = locale.t('racing.creatorMinGates', 'A track needs at least {n} gates.', { n = MIN_GATES }),
             type = 'error',
         })
         return
     end
 
-    local input = lib.inputDialog('Save track', {
-        { type = 'input', label = 'Track name', required = true, max = NAME_MAX },
+    local input = lib.inputDialog(locale.t('racing.creatorSaveTrack', 'Save track'), {
         {
-            type = 'select', label = 'Mode', required = true, default = 'circuit',
+            type     = 'input',
+            label    = locale.t('racing.creatorTrackName', 'Track name'),
+            required = true,
+            max      = NAME_MAX,
+        },
+        {
+            type = 'select', label = locale.t('racing.mode', 'Mode'), required = true, default = 'circuit',
             options = {
-                { value = 'circuit', label = 'Circuit' },
-                { value = 'sprint',  label = 'Sprint' },
+                { value = 'circuit', label = locale.t('racing.circuit', 'Circuit') },
+                { value = 'sprint',  label = locale.t('racing.sprint', 'Sprint') },
             },
         },
     })
@@ -223,24 +235,27 @@ local function promptSave()
         stopCreator()
         local data = type(res.data) == 'table' and res.data or {}
         notify.show({
-            title = TITLE,
-            description = type(data.message) == 'string' and data.message or ('Saved %s.'):format(input[1]),
+            title = raceTitle(),
+            description = type(data.message) == 'string' and data.message
+                or locale.t('racing.creatorSaved', 'Saved {name}.', { name = input[1] }),
             type = 'success',
         })
         return
     end
 
     notify.show({
-        title = TITLE,
-        description = (type(res) == 'table' and res.message) or 'The track could not be saved.',
+        title = raceTitle(),
+        description = (type(res) == 'table' and res.message)
+            or locale.t('racing.creatorSaveFailed', 'The track could not be saved.'),
         type = 'error',
     })
 end
 
 ---@return string text markdown for the on-screen key guide
 local function buildTextUI()
-    return ('**Track Creator**  \nGates: %d of %d  Width: %.1f m  \n[E] Place  [X] Undo  [Left/Right] Width  \n[Enter] Save  [Backspace] Cancel')
-        :format(#gates, MAX_GATES, gateWidth)
+    return locale.t('racing.creatorGuide',
+        '**Track Creator**  \nGates: {n} of {max}  Width: {width} m  \n[E] Place  [X] Undo  [Left/Right] Width  \n[Enter] Save  [Backspace] Cancel',
+        { n = #gates, max = MAX_GATES, width = ('%.1f'):format(gateWidth) })
 end
 
 ---Opens the recorder and runs the per-frame loop: keys, the ghost gate, the placed gates, and the
@@ -260,16 +275,16 @@ local function startCreator()
     if not pcall(lib.requestModel, FLAG_MODEL, MODEL_BUDGET) then
         active = false
         notify.show({
-            title = TITLE,
-            description = 'The gate flag prop could not be loaded.',
+            title = raceTitle(),
+            description = locale.t('racing.creatorFlagFailed', 'The gate flag prop could not be loaded.'),
             type = 'error',
         })
         return
     end
 
     notify.show({
-        title = TITLE,
-        description = 'Track creator open. Drive to a start line and press E.',
+        title = raceTitle(),
+        description = locale.t('racing.creatorOpen', 'Track creator open. Drive to a start line and press E.'),
         type = 'inform',
     })
 
@@ -282,7 +297,7 @@ local function startCreator()
             if IsControlJustPressed(0, KEY_UNDO) then undoGate() end
             if IsControlJustPressed(0, KEY_SAVE) then promptSave() end
             if IsControlJustPressed(0, KEY_CANCEL) then
-                stopCreator('Track creator closed.')
+                stopCreator(locale.t('racing.creatorClosed', 'Track creator closed.'))
                 break
             end
             if not active then break end

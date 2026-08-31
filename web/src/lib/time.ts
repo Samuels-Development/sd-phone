@@ -8,18 +8,18 @@ export function relTimeCompact(from: number, opts: {
 } = {}): string {
     const now = opts.now ?? Date.now();
     const secs = Math.max(0, Math.floor((now - from) / 1000));
-    if (secs < 60) return opts.nowLabel ?? 'now';
+    if (secs < 60) return opts.nowLabel ?? t('time.now', 'now');
     const mins = Math.floor(secs / 60);
-    if (mins < 60) return `${mins}m`;
+    if (mins < 60) return t('time.minutesShort', '{n}m', { n: mins });
     const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h`;
+    if (hours < 24) return t('time.hoursShort', '{n}h', { n: hours });
     const days = Math.floor(hours / 24);
     if (days === 1 && opts.yesterdayLabel) return opts.yesterdayLabel;
     if (opts.dateAfterDays !== undefined && days >= opts.dateAfterDays) {
-        return new Date(from).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        return new Date(from).toLocaleDateString(getLocaleTag(), { month: 'short', day: 'numeric' });
     }
-    if (days < 7) return `${days}d`;
-    return `${Math.floor(days / 7)}w`;
+    if (days < 7) return t('time.daysShort', '{n}d', { n: days });
+    return t('time.weeksShort', '{n}w', { n: Math.floor(days / 7) });
 }
 
 export function formatDuration(secs: number, opts: {

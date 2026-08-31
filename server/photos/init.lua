@@ -129,15 +129,15 @@ end)
 ---Player-supplied, so the URL must pass config.Photos.AllowImport + the block/allow lists.
 lib.callback.register('sd-phone:server:photos:saveUrl', function(src, payload)
     if not actions.importEnabled() then
-        return { success = false, message = 'URL import is disabled on this server' }
+        return { success = false, messageKey = 'photos.urlImportDisabledServer', message = 'URL import is disabled on this server' }
     end
     if not actions.isAllowedImportUrl(payload and payload.url) then
-        return { success = false, message = 'Images from that site aren\'t allowed' }
+        return { success = false, messageKey = 'photos.imagesFromSiteArenT', message = 'Images from that site aren\'t allowed' }
     end
     -- Same budget the capture upload uses: saving a hosted URL is a deliberate tap, so the 1s
     -- gap is invisible, and without it this path writes and prunes phone_photos at line rate.
     local okLimit = mediaLimit.check(player.getIdentifier(src), #(payload and payload.url or ''))
-    if not okLimit then return { success = false, message = 'Slow down a moment' } end
+    if not okLimit then return { success = false, messageKey = 'photos.slowDownMoment', message = 'Slow down a moment' } end
     local res = actions.saveFromUrl(src, payload and payload.url)
     if res and res.success and res.data and res.data.photo then
         TriggerClientEvent('sd-phone:client:photos:added', src, res.data.photo)

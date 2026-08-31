@@ -7,7 +7,7 @@ import { t } from '@/i18n';
 import { useTheme } from '@/stores/themeStore';
 import { useSessionState } from '@/hooks/useSessionState';
 import { fetchNui, isFiveM } from '@/core/nui';
-import { apiData } from '@/core/api';
+import { apiData, failText } from '@/core/api';
 import { requestOpenMaps } from '@/shell/deeplink';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { ActionSheet } from '@/ui/ActionSheet';
@@ -650,7 +650,7 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
                         setCallConfirm(null);
                         if (!num) return;
                         void dialCall(num, name).then(res => {
-                            if (!res.success) setDialError(res.message ?? t('messages.unableToPlaceCall', 'Unable to place call'));
+                            if (!res.success) setDialError(failText(res, t('messages.unableToPlaceCall', 'Unable to place call')));
                         });
                     }}
                 />

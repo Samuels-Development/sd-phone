@@ -25,11 +25,20 @@ end
 ---@return { success: true, data?: any }
 function util.ok(data) return { success = true, data = data } end
 
----Failure response envelope - the shape every callback/action returns when it refuses. `message`
----is the already-localised, user-facing reason the UI shows.
----@param message string user-facing failure reason
----@return { success: false, message: string }
-function util.fail(message) return { success = false, message = message } end
+---Failure response envelope - the shape every callback/action returns when it refuses. The server
+---has no per-player language, so it sends both halves: `messageKey` is the catalogue key the NUI
+---resolves against the player's own locale, and `message` is the English text it falls back to.
+---Called with one argument the message is passed through unkeyed and stays English.
+---`vars` fills {placeholder} spans in both halves, so a message carrying a number stays one
+---catalogue entry: fail('contacts.atMost', 'You can store at most {n} contacts', { n = 50 }).
+---@param key string catalogue key, e.g. 'banking.insufficientFunds'
+---@param message? string English text the NUI shows when the key is not in the player's catalogue
+---@param vars? table<string, any> {placeholder} replacements applied by the NUI
+---@return { success: false, messageKey?: string, message: string, messageVars?: table }
+function util.fail(key, message, vars)
+    if message == nil then return { success = false, message = key } end
+    return { success = false, messageKey = key, message = message, messageVars = vars }
+end
 
 ---@type string Alphabet for generated row ids (base-36, lowercase) - matches the frontend's id shape.
 local ID_CHARS = '0123456789abcdefghijklmnopqrstuvwxyz'

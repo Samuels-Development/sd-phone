@@ -32,12 +32,12 @@ const SCRIM: CSSProperties = {
     filter:       'blur(26px)',
 };
 
-const LINEUP: Record<LineupState, { tone: string; text: string }> = {
+const lineupHint = (state: LineupState): { tone: string; text: string } => ({
     ready:   { tone: READY, text: t('racing.lineupReady', 'Lined up') },
     vehicle: { tone: MUTE,  text: t('racing.lineupVehicle', 'Get in the driver seat') },
     turn:    { tone: WRONG, text: t('racing.lineupTurn', 'Facing the wrong way') },
     backup:  { tone: WARN,  text: t('racing.lineupBackup', 'Back up behind the line') },
-};
+}[state]);
 
 function clock(left: number): string {
     if (left >= 3600) {
@@ -105,7 +105,7 @@ export function RaceStartBoard({ board, x, y, lineup }: {
     const now  = Math.floor(Date.now() / 1000);
     const left = Math.max(0, board.startsAt - now);
     const full = board.registered >= board.maxRacers;
-    const hint = lineup ? LINEUP[lineup] : null;
+    const hint = lineup ? lineupHint(lineup) : null;
     const tone = CLASS_COLOR[board.class];
 
     const clockTone = left <= 10 ? WRONG : left <= 30 ? WARN : INK;

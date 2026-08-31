@@ -262,7 +262,7 @@ end
 ---@return table result { me, profile, deck, matches, canReset }
 function actions.state(src)
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('cherry.notSigned', 'Not signed in') end
 
     local mine = serializeProfile(ensureProfile(acc))
 
@@ -309,10 +309,10 @@ end
 function actions.saveProfile(src, payload)
     payload = payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('cherry.notSigned', 'Not signed in') end
 
     local name = trim(payload.name):sub(1, 50)
-    if name == '' then return fail('Name is required') end
+    if name == '' then return fail('cherry.nameRequired', 'Name is required') end
 
     local photos = {}
     if type(payload.photos) == 'table' then
@@ -350,12 +350,12 @@ end
 function actions.swipe(src, payload)
     payload = payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('cherry.notSigned', 'Not signed in') end
 
     local target = trim(payload.target)
-    if target == '' or target == acc.username then return fail('Bad target') end
-    if not store.getProfile(target) then return fail('Profile not found') end
-    if store.isBlocked(acc.username, target) then return fail('Profile not found') end
+    if target == '' or target == acc.username then return fail('cherry.badTarget', 'Bad target') end
+    if not store.getProfile(target) then return fail('cherry.profileNotFound', 'Profile not found') end
+    if store.isBlocked(acc.username, target) then return fail('cherry.profileNotFound', 'Profile not found') end
 
     local liked = payload.liked == true
     store.recordSwipe(acc.username, target, liked)
@@ -388,11 +388,11 @@ end
 function actions.rewind(src, payload)
     payload = payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('cherry.notSigned', 'Not signed in') end
 
     local target = trim(payload.target)
-    if target == '' then return fail('Nothing to rewind') end
-    if store.matchBetween(acc.username, target) then return fail('You already matched') end
+    if target == '' then return fail('cherry.nothingRewind', 'Nothing to rewind') end
+    if store.matchBetween(acc.username, target) then return fail('cherry.alreadyMatched', 'You already matched') end
 
     store.deleteSwipe(acc.username, target)
     return ok()
@@ -403,7 +403,7 @@ end
 ---@return table result
 function actions.resetDeck(src)
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('cherry.notSigned', 'Not signed in') end
     store.clearSwipes(acc.username)
     return ok()
 end
@@ -429,7 +429,7 @@ end
 function actions.thread(src, payload)
     payload = payload or {}
     local acc, m = memberOf(src, payload.matchId)
-    if not acc then return fail('Match not found') end
+    if not acc then return fail('cherry.matchNotFound', 'Match not found') end
     local out = {}
     for _, row in ipairs(store.threadMessages(m.id, 100)) do
         out[#out + 1] = serializeMessage(row, acc.username)
@@ -446,24 +446,25 @@ function actions.send(src, payload)
     payload = payload or {}
     local muted = moderation.guard(player.getIdentifier(src), 'cherry'); if muted then return muted end
     local acc, m = memberOf(src, payload.matchId)
-    if not acc then return fail('Match not found') end
+    if not acc then return fail('cherry.matchNotFound', 'Match not found') end
 
     local kind = VALID_KINDS[payload.kind] and payload.kind or 'text'
     local body = trim(payload.body):sub(1, 1000)
     local meta = sanitizeMeta(kind, payload)
-    if not hasContent(kind, body, meta) then return fail('Empty message') end
+    if not hasContent(kind, body, meta) then return fail('cherry.emptyMessage', 'Empty message') end
 
     local partner = partnerOf(m, acc.username)
 
     if kind == 'money' and not meta.requested then
         local tsrcs = sourcesFor(partner)
-        if #tsrcs == 0 then return fail('They need to be online to receive money') end
+        if #tsrcs == 0 then return fail('cherry.theyNeedOnlineReceiveMoney', 'They need to be online to receive money') end
         local tcid = player.getIdentifier(tsrcs[1])
         local number = tcid and settings.getPhoneNumber(tcid)
-        if not number then return fail('Payment failed') end
+        if not number then return fail('cherry.paymentFailed', 'Payment failed') end
         local res = banking.send(src, { number = number, amount = meta.amount, note = 'Cherry payment' })
         if not res or not res.success then
-            return fail(res and res.message or 'Payment failed')
+            if res and res.message then return res end
+            return fail('cherry.paymentFailed', 'Payment failed')
         end
     end
 
@@ -490,15 +491,15 @@ end
 function actions.react(src, payload)
     payload = payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('cherry.notSigned', 'Not signed in') end
 
     local row = type(payload.id) == 'string' and store.getMessage(payload.id) or nil
-    if not row then return fail('Message not found') end
+    if not row then return fail('cherry.messageNotFound', 'Message not found') end
     local m = store.getMatch(row.match_id)
-    if not m or (m.a ~= acc.username and m.b ~= acc.username) then return fail('Message not found') end
+    if not m or (m.a ~= acc.username and m.b ~= acc.username) then return fail('cherry.messageNotFound', 'Message not found') end
 
     local emoji = tostring(payload.emoji or '')
-    if not REACTION_SET[emoji] then return fail('Invalid reaction') end
+    if not REACTION_SET[emoji] then return fail('cherry.invalidReaction', 'Invalid reaction') end
 
     local reactions = store.decodeJson(row.reactions)
     local users = reactions[emoji] or {}
@@ -526,7 +527,7 @@ end
 ---@return table result blocked cards { username, name, age, photo }
 function actions.blockedList(src)
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('cherry.notSigned', 'Not signed in') end
     local out = {}
     for _, r in ipairs(store.blockedBy(acc.username)) do
         local photos = store.decodeJson(r.photos)
@@ -542,9 +543,9 @@ end
 function actions.unblock(src, payload)
     payload = payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('cherry.notSigned', 'Not signed in') end
     local target = trim(payload.username)
-    if target == '' then return fail('Bad target') end
+    if target == '' then return fail('cherry.badTarget', 'Bad target') end
     store.removeBlock(acc.username, target)
     return ok()
 end
@@ -566,7 +567,7 @@ end
 function actions.unmatch(src, payload)
     payload = payload or {}
     local acc, m = memberOf(src, payload.matchId)
-    if not acc then return fail('Match not found') end
+    if not acc then return fail('cherry.matchNotFound', 'Match not found') end
 
     local partner = partnerOf(m, acc.username)
     store.clearPairSwipes(acc.username, partner)
@@ -582,7 +583,7 @@ end
 function actions.block(src, payload)
     payload = payload or {}
     local acc, m = memberOf(src, payload.matchId)
-    if not acc then return fail('Match not found') end
+    if not acc then return fail('cherry.matchNotFound', 'Match not found') end
 
     local partner = partnerOf(m, acc.username)
     store.clearPairSwipes(acc.username, partner)
@@ -597,7 +598,7 @@ end
 ---@return table result
 function actions.deleteAccount(src)
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('cherry.notSigned', 'Not signed in') end
     store.wipeUser(acc.username)
     acctStore.deleteAccount(acc.id)
     return ok()

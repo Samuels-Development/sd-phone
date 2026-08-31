@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { fetchNui, isFiveM } from '@/core/nui';
-import { t } from '@/i18n';
+import { getCatalogVersion, t } from '@/i18n';
 import { useDeckActive } from '@/shell/deckActive';
 import { useTheme } from '@/stores/themeStore';
 
@@ -17,19 +17,37 @@ const TICKS = Array.from({ length: 72 }, (_, i) => {
     return { b, inner, cardinal, major };
 });
 
-const CARD = ['N', 'E', 'S', 'W'];
 const LABELS = Array.from({ length: 12 }, (_, i) => {
     const b = i * 30;
     const cardinal = b % 90 === 0;
-    return { b, text: cardinal ? CARD[b / 90] : String(b), cardinal, north: b === 0 };
+    return { b, cardinal, north: b === 0 };
 });
 
 const INTERCARD = [
-    { b: 45, t: 'NE' }, { b: 135, t: 'SE' }, { b: 225, t: 'SW' }, { b: 315, t: 'NW' },
+    { b: 45, dir: 1 }, { b: 135, dir: 3 }, { b: 225, dir: 5 }, { b: 315, dir: 7 },
 ];
 
-const COMPASS_DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-const cardinalOf = (deg: number) => COMPASS_DIRS[Math.round((deg % 360) / 45) % 8];
+let dirsCache: string[] | null = null;
+let dirsCacheVersion = -1;
+
+function compassDirs(): string[] {
+    const version = getCatalogVersion();
+    if (dirsCache && dirsCacheVersion === version) return dirsCache;
+    dirsCacheVersion = version;
+    dirsCache = [
+        t('compass.dirN', 'N'),
+        t('compass.dirNE', 'NE'),
+        t('compass.dirE', 'E'),
+        t('compass.dirSE', 'SE'),
+        t('compass.dirS', 'S'),
+        t('compass.dirSW', 'SW'),
+        t('compass.dirW', 'W'),
+        t('compass.dirNW', 'NW'),
+    ];
+    return dirsCache;
+}
+
+const cardinalOf = (deg: number) => compassDirs()[Math.round((deg % 360) / 45) % 8];
 
 function pt(b: number, r: number) {
     const rad = (b * Math.PI) / 180;
@@ -48,6 +66,8 @@ function toDMS(dec: number, pos: string, neg: string) {
 }
 
 interface Geo { lat: number; lon: number; alt: number; }
+
+const PLACEHOLDER_GEO: Geo = { lat: 34.0533, lon: -118.24, alt: 28 };
 
 export function Compass({ onClose: _onClose }: { onClose: () => void }) {
     const [rot, setRot] = useState(-34);
@@ -116,10 +136,10 @@ export function Compass({ onClose: _onClose }: { onClose: () => void }) {
     }
     const endDrag = () => { dragging.current = false; };
 
-    const coordLine = geo
-        ? `${toDMS(geo.lat, 'N', 'S')}  ${toDMS(geo.lon, 'E', 'W')}`
-        : '34°3′12″ N  118°14′24″ W';
-    const elevation = geo ? `${Math.round(geo.alt)} m` : '28 m';
+    const dirs = compassDirs();
+    const { lat, lon, alt } = geo ?? PLACEHOLDER_GEO;
+    const coordLine = `${toDMS(lat, dirs[0], dirs[4])}  ${toDMS(lon, dirs[2], dirs[6])}`;
+    const elevation = t('compass.metresUnit', '{n} m', { n: Math.round(alt) });
 
     return (
         <div
@@ -169,20 +189,20 @@ export function Compass({ onClose: _onClose }: { onClose: () => void }) {
                             );
                         })}
 
-                        {INTERCARD.map(({ b, t }) => (
+                        {INTERCARD.map(({ b, dir }) => (
                             <text
-                                key={t}
+                                key={b}
                                 x={C} y={C - 86}
                                 transform={`rotate(${b} ${C} ${C})`}
                                 textAnchor="middle" dominantBaseline="middle"
                                 fontSize="12" fontWeight="600" letterSpacing="0.5"
                                 fill={intCol}
                             >
-                                {t}
+                                {dirs[dir]}
                             </text>
                         ))}
 
-                        {LABELS.map(({ b, text, cardinal, north }) => (
+                        {LABELS.map(({ b, cardinal, north }) => (
                             <text
                                 key={b}
                                 x={C} y={C - 116}
@@ -192,7 +212,7 @@ export function Compass({ onClose: _onClose }: { onClose: () => void }) {
                                 fontWeight={cardinal ? 700 : 500}
                                 fill={north ? IOS_RED : cardinal ? ink : numCol}
                             >
-                                {text}
+                                {cardinal ? dirs[(b / 90) * 2] : String(b)}
                             </text>
                         ))}
                     </svg>

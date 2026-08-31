@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 
-import { t } from '@/i18n';
+import { getLocaleTag, t } from '@/i18n';
 import { useRefreshOnReconnect } from '@/hooks/useRefreshOnReconnect';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useSessionState } from '@/hooks/useSessionState';
@@ -28,6 +28,12 @@ type Navigation =
     | { stage: 'mailboxes' }
     | { stage: 'list'; folder: Folder; accountId?: string; accountName?: string }
     | { stage: 'detail'; folder: Folder; msgId: string; accountId?: string; accountName?: string };
+
+function replySubject(subject: string): string {
+    const prefix = t('mail.replyPrefix', 'Re:');
+    if (subject.startsWith(prefix) || subject.startsWith('Re:')) return subject;
+    return `${prefix} ${subject}`;
+}
 
 export function Mail({ onClose }: { onClose: () => void }) {
     const [locked,          setLocked]          = useState(() => !isAuthed('mail'));
@@ -426,8 +432,8 @@ export function Mail({ onClose }: { onClose: () => void }) {
                     onReply={(m) => setComposeFor({
                         accountId: m.accountId,
                         to:        m.from.email,
-                        subject:   m.subject.startsWith('Re:') ? m.subject : `Re: ${m.subject}`,
-                        body:      `\n\n\n${t('mail.replyQuote', 'On {date}, {name} <{email}> wrote:', { date: new Date(m.sentAt).toLocaleString(), name: m.from.name, email: m.from.email })}\n${m.body.split('\n').map(l => `> ${l}`).join('\n')}`,
+                        subject:   replySubject(m.subject),
+                        body:      `\n\n\n${t('mail.replyQuote', 'On {date}, {name} <{email}> wrote:', { date: new Date(m.sentAt).toLocaleString(getLocaleTag()), name: m.from.name, email: m.from.email })}\n${m.body.split('\n').map(l => `> ${l}`).join('\n')}`,
                     })}
                 />
             )}

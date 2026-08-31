@@ -6,7 +6,7 @@ import { ConversationList } from './ConversationList';
 import { NewMessage } from './NewMessage';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { isFiveM } from '@/core/nui';
-import { apiCall } from '@/core/api';
+import { apiCall, failText } from '@/core/api';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useSessionState, seedSessionState, clearSessionState } from '@/hooks/useSessionState';
 import { useDidEnter } from '@/hooks/useDidEnter';
@@ -200,7 +200,7 @@ export function Messages({ onClose }: { onClose: () => void }) {
             const r = await apiCall<void>(
                 'sd-phone:friends:respond', { id: messageId, phone: conversationId, accept });
             if (!r.success) {
-                setSendError(r.message ?? t('messages.requestNoLongerActive', 'This request is no longer active.'));
+                setSendError(failText(r, t('messages.requestNoLongerActive', 'This request is no longer active.')));
                 return;
             }
         }

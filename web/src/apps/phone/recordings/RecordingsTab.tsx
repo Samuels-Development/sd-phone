@@ -8,7 +8,7 @@ import { EmptyState } from '@/ui/EmptyState';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { formatPhone } from '@/lib/phone';
 import { trackFraction } from '@/lib/zoom';
-import { t } from '@/i18n';
+import { getLocaleTag, t } from '@/i18n';
 import { deleteRecording, fetchRecordings, renameRecording, type CallRecording } from '../callrecApi';
 
 const EXPAND_MS = 260;
@@ -24,8 +24,8 @@ function when(iso: string) {
     if (Number.isNaN(at.getTime())) return '';
     const sameDay = at.toDateString() === new Date().toDateString();
     return sameDay
-        ? at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-        : at.toLocaleDateString([], { day: 'numeric', month: 'short' });
+        ? at.toLocaleTimeString(getLocaleTag(), { hour: 'numeric', minute: '2-digit' })
+        : at.toLocaleDateString(getLocaleTag(), { day: 'numeric', month: 'short' });
 }
 
 function titleOf(rec: CallRecording) {

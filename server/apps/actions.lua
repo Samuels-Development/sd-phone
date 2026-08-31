@@ -68,7 +68,7 @@ end
 ---@return table result { success, data = { installed, layout } }
 function actions.list(source)
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('apps.playerNotFound', 'Player not found') end
     return ok({
         installed = sanitize(settings.getInstalledApps(cid)),
         layout    = settings.getHomeLayout(cid),
@@ -83,16 +83,16 @@ end
 function actions.install(source, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('apps.playerNotFound', 'Player not found') end
 
     local id = payload.id
     if type(id) ~= 'string' or not DOWNLOADABLE[id] then
-        return fail('That app can\'t be downloaded')
+        return fail('apps.appCanTDownloaded', 'That app can\'t be downloaded')
     end
 
     local gate = WIFI_GATED[id]
     if gate and not exports['sd-phone']:hasWifiAccess(source, gate.id) then
-        return fail(('Only available on %s'):format(gate.ssid))
+        return fail('apps.onlyAvailableOn', 'Only available on {network}', { network = gate.ssid })
     end
 
     local installed = sanitize(settings.getInstalledApps(cid))
@@ -112,11 +112,11 @@ end
 function actions.uninstall(source, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('apps.playerNotFound', 'Player not found') end
 
     local id = payload.id
     if type(id) ~= 'string' or not DOWNLOADABLE[id] then
-        return fail('That app can\'t be uninstalled')
+        return fail('apps.appCanTUninstalled', 'That app can\'t be uninstalled')
     end
 
     local installed = sanitize(settings.getInstalledApps(cid))
@@ -175,14 +175,14 @@ end
 function actions.saveLayout(source, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('apps.playerNotFound', 'Player not found') end
 
     -- The home screen already debounces a rearrange into one save every 500ms, so this only ever
     -- bites a script: a 16KB TEXT column rewrite is the most expensive write the phone can ask for.
-    if not util.rateLimit(cid, 'apps:saveLayout', 10000, 30) then return fail('Too many changes at once') end
+    if not util.rateLimit(cid, 'apps:saveLayout', 10000, 30) then return fail('apps.tooManyChangesOnce', 'Too many changes at once') end
 
     local layout = payload.layout
-    if type(layout) ~= 'string' or #layout > 16000 then return fail('Invalid layout') end
+    if type(layout) ~= 'string' or #layout > 16000 then return fail('apps.invalidLayout', 'Invalid layout') end
 
     -- An absent or unrecognised device is the phone: that is what every caller predating the
     -- tablet sent, so an older NUI bundle keeps writing exactly the slice it always wrote.
@@ -191,7 +191,7 @@ function actions.saveLayout(source, payload)
     devices[deviceId] = layout
 
     local encoded = json.encode({ devices = devices })
-    if #encoded > MAX_LAYOUT_COLUMN then return fail('Invalid layout') end
+    if #encoded > MAX_LAYOUT_COLUMN then return fail('apps.invalidLayout', 'Invalid layout') end
     settings.setHomeLayout(cid, encoded)
     return ok()
 end

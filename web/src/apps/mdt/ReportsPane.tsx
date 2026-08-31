@@ -111,7 +111,7 @@ export function ReportsPane() {
             count={total}
             query={query}
             onQuery={setQuery}
-            placeholder={t('mdt.searchReports', 'Title or reference')}
+            placeholder={t('mdt.searchTitleOrRef', 'Title or reference')}
             action={can('reports.create') ? (
                 <MdtButton size="sm" onClick={() => select(NEW_REPORT)}>
                     {t('mdt.newReport', 'Create')}

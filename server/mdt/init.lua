@@ -211,12 +211,12 @@ local function register(action, fn)
     end)
 end
 
----@type string Refusal answered while the terminal is switched off in the config.
-local DISABLED = 'There is no terminal on this network'
+---@type table Refusal answered while the terminal is switched off in the config.
+local DISABLED = util.fail('mdt.thereNoTerminalNetwork', 'There is no terminal on this network')
 
----@type string Refusal answered while the tables are still being built, or after they failed to
+---@type table Refusal answered while the tables are still being built, or after they failed to
 ---build. Worded as a retry because the first case clears itself a moment later.
-local NOT_READY = 'The terminal is still starting up'
+local NOT_READY = util.fail('mdt.terminalStillStartingUp', 'The terminal is still starting up')
 
 ---@type boolean Whether the refusal hint has already been printed this session.
 local hinted = false
@@ -234,7 +234,8 @@ local function refuse()
             print('^3[sd-phone:mdt]^0 a device opened the MDT before its tables were ready, check for a schema error above')
         end
     end
-    return util.fail(ENABLED and NOT_READY or DISABLED)
+    if ENABLED then return NOT_READY end
+    return DISABLED
 end
 
 for i = 1, #ROUTES do
@@ -331,8 +332,8 @@ end)
 ---@return string? message refusal reason
 exports('mdtRegisterWeapon', function(data)
     if not ENABLED then return false, 'The MDT is disabled' end
-    local serial, message = weapons.register(data)
-    return serial or false, message
+    local serial, refusal = weapons.register(data)
+    return serial or false, refusal and refusal.message or nil
 end)
 
 ---One registry record by serial (exports['sd-phone']:mdtGetWeapon).

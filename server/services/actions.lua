@@ -80,39 +80,46 @@ local READ_MAX = 90
 
 
 ---Parses a client message draft into a kind, a body, and a JSON meta blob of the extras, with
----every client string length-capped. Returns `nil, errorMessage` when the draft is empty/invalid.
+---every client string length-capped. Returns `nil` plus a refusal when the draft is empty/invalid.
 ---@param payload { kind?: string, body?: string, mediaUrl?: string, wpCode?: string, wpSub?: string }
----@return string|nil kind, string body, string|nil meta
+---@return string|nil kind nil when the draft is unusable
+---@return string|nil body
+---@return string|nil meta
+---@return table|nil refusal failure envelope, set only when kind is nil
 local function parseDraft(payload)
     local kind = tostring(payload.kind or 'text')
     if kind == 'image' then
         local url = trim(payload.mediaUrl):sub(1, 512)
-        if url == '' then return nil, 'No image' end
+        if url == '' then return nil, nil, nil, fail('services.noImage', 'No image') end
         return 'image', '📷 Photo', json.encode({ mediaUrl = url })
     elseif kind == 'location' then
         local wp = trim(payload.wpCode):sub(1, 256)
-        if wp == '' then return nil, 'No location' end
+        if wp == '' then return nil, nil, nil, fail('services.noLocation', 'No location') end
         local meta = { wpCode = wp }
         local sub = trim(payload.wpSub):sub(1, 128)
         if sub ~= '' then meta.wpSub = sub end
         return 'location', '📍 Location', json.encode(meta)
     end
     local body = trim(payload.body)
-    if body == '' then return nil, 'Empty message' end
+    if body == '' then return nil, nil, nil, fail('services.emptyMessage', 'Empty message') end
     if #body > 300 then body = body:sub(1, 300) end
     return 'text', body, nil
 end
 
 ---Asserts the caller is a boss of their current job. Returns `(jobName, citizenid)` on success,
----or `(nil, errorMessage)`.
+---or `(nil, nil, refusal)`.
 ---@param src number caller server id
----@return string|nil jobName, string citizenidOrError
+---@return string|nil jobName
+---@return string|nil citizenid nil when the caller is refused
+---@return table|nil refusal failure envelope, set only when jobName is nil
 local function requireBoss(src)
     local cid = player.getIdentifier(src)
-    if not cid then return nil, 'Player not found' end
+    if not cid then return nil, nil, fail('services.playerNotFound', 'Player not found') end
     local myJob = job.getName(src)
-    if not myJob or BLACKLIST[myJob] then return nil, "You're not in a job" end
-    if not job.isBoss(src, myJob, esxBossGrade(myJob)) then return nil, 'You must be the boss to do that' end
+    if not myJob or BLACKLIST[myJob] then return nil, nil, fail('services.reNotJob', "You're not in a job") end
+    if not job.isBoss(src, myJob, esxBossGrade(myJob)) then
+        return nil, nil, fail('services.mustBossDoThat', 'You must be the boss to do that')
+    end
     return myJob, cid
 end
 
@@ -304,9 +311,9 @@ end
 function actions.setDuty(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('services.playerNotFound', 'Player not found') end
     local myJob = job.getName(src)
-    if not myJob or BLACKLIST[myJob] then return fail("You're not in a job") end
+    if not myJob or BLACKLIST[myJob] then return fail('services.reNotJob', "You're not in a job") end
 
     local on = payload.on == true
     job.setDuty(src, on)
@@ -323,9 +330,9 @@ end
 function actions.setJobCalls(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('services.playerNotFound', 'Player not found') end
     local myJob = job.getName(src)
-    if not (myJob and byJob[myJob]) then return fail("You're not in a company") end
+    if not (myJob and byJob[myJob]) then return fail('services.reNotCompany', "You're not in a company") end
 
     store.setJobCalls(cid, myJob, payload.on == true)
     return ok({ myCompany = buildMyCompany(src) })
@@ -337,9 +344,9 @@ end
 function actions.setJobMessages(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('services.playerNotFound', 'Player not found') end
     local myJob = job.getName(src)
-    if not (myJob and byJob[myJob]) then return fail("You're not in a company") end
+    if not (myJob and byJob[myJob]) then return fail('services.reNotCompany', "You're not in a company") end
 
     store.setJobMessages(cid, myJob, payload.on == true)
     return ok({ myCompany = buildMyCompany(src) })
@@ -351,20 +358,20 @@ end
 ---@param payload { amount?: number }
 function actions.deposit(src, payload)
     payload = type(payload) == 'table' and payload or {}
-    local myJob, cidOrErr = requireBoss(src)
-    if not myJob then return fail(cidOrErr) end
+    local myJob, _, refusal = requireBoss(src)
+    if not myJob then return refusal end
 
     local amount = math.floor(tonumber(payload.amount) or 0)
-    if amount <= 0 or amount ~= amount or amount == math.huge then return fail('Enter a valid amount') end
-    if not society.available() then return fail('No company bank is available') end
-    if (bank.getBalance(src) or 0) < amount then return fail('Insufficient personal funds') end
+    if amount <= 0 or amount ~= amount or amount == math.huge then return fail('services.enterValidAmount', 'Enter a valid amount') end
+    if not society.available() then return fail('services.noCompanyBankAvailable', 'No company bank is available') end
+    if (bank.getBalance(src) or 0) < amount then return fail('services.insufficientPersonalFunds', 'Insufficient personal funds') end
 
     if not bank.removeMoney(src, amount, 'Company deposit') then
-        return fail('Could not take that from your account')
+        return fail('services.couldNotTakeFromAccount', 'Could not take that from your account')
     end
     if not society.addMoney(myJob, amount, 'Phone deposit') then
         bank.addMoney(src, amount, 'Deposit refund')
-        return fail('Could not reach the company account')
+        return fail('services.couldNotReachCompanyAccount', 'Could not reach the company account')
     end
     return ok({ myCompany = buildMyCompany(src) })
 end
@@ -375,22 +382,22 @@ end
 ---@param payload { amount?: number }
 function actions.withdraw(src, payload)
     payload = type(payload) == 'table' and payload or {}
-    local myJob, cidOrErr = requireBoss(src)
-    if not myJob then return fail(cidOrErr) end
+    local myJob, _, refusal = requireBoss(src)
+    if not myJob then return refusal end
 
     local amount = math.floor(tonumber(payload.amount) or 0)
-    if amount <= 0 or amount ~= amount or amount == math.huge then return fail('Enter a valid amount') end
-    if not society.available() then return fail('No company bank is available') end
+    if amount <= 0 or amount ~= amount or amount == math.huge then return fail('services.enterValidAmount', 'Enter a valid amount') end
+    if not society.available() then return fail('services.noCompanyBankAvailable', 'No company bank is available') end
     if society.getBalance(myJob) < amount then
-        return fail('Insufficient company funds')
+        return fail('services.insufficientCompanyFunds', 'Insufficient company funds')
     end
 
     if not society.removeMoney(myJob, amount, 'Phone withdrawal') then
-        return fail('Could not reach the company account')
+        return fail('services.couldNotReachCompanyAccount', 'Could not reach the company account')
     end
     if not bank.addMoney(src, amount, 'Company withdrawal') then
         society.addMoney(myJob, amount, 'Withdrawal refund')
-        return fail('Could not reach your account')
+        return fail('services.couldNotReachAccount', 'Could not reach your account')
     end
     return ok({ myCompany = buildMyCompany(src) })
 end
@@ -401,19 +408,19 @@ end
 ---@param payload { serverId?: number, grade?: number }
 function actions.hire(src, payload)
     payload = type(payload) == 'table' and payload or {}
-    local myJob, cid = requireBoss(src)
-    if not myJob then return fail(cid) end
+    local myJob, cid, refusal = requireBoss(src)
+    if not myJob then return refusal end
     local label = job.getLabel(myJob) or myJob
 
     local targetId = math.floor(tonumber(payload.serverId) or 0)
-    if targetId <= 0 then return fail('Enter a valid server ID') end
+    if targetId <= 0 then return fail('services.enterValidServerId', 'Enter a valid server ID') end
     local grade = math.max(0, math.floor(tonumber(payload.grade) or 0))
-    if grade >= job.getGrade(src) then return fail("You can't hire someone at or above your own rank") end
+    if grade >= job.getGrade(src) then return fail('services.canTHireSomeoneAbove', "You can't hire someone at or above your own rank") end
 
     local targetCid = player.getIdentifier(targetId)
-    if not targetCid then return fail('No player with that ID is online') end
-    if targetCid == cid then return fail("You can't hire yourself") end
-    if jobstore.getSaved(targetCid)[myJob] then return fail('They already work here') end
+    if not targetCid then return fail('services.noPlayerWithIdOnline', 'No player with that ID is online') end
+    if targetCid == cid then return fail('services.canTHireYourself', "You can't hire yourself") end
+    if jobstore.getSaved(targetCid)[myJob] then return fail('services.theyAlreadyWorkHere', 'They already work here') end
 
     jobstore.addInvite({
         id        = jobstore.newId(),
@@ -426,7 +433,9 @@ function actions.hire(src, payload)
 
     TriggerClientEvent('sd-phone:client:notify', targetId, {
         app = 'services', appId = 'services', title = label,
+        bodyKey = 'services.jobOfferFrom',
         body = ('You have a job offer from %s. Open Services → Jobs to accept.'):format(label),
+        bodyVars = { company = label },
         time = 'now',
     })
     TriggerClientEvent('sd-phone:client:services:jobsChanged', targetId, {})
@@ -460,19 +469,19 @@ end
 ---@param payload { citizenid?: string }
 function actions.fire(src, payload)
     payload = type(payload) == 'table' and payload or {}
-    local myJob, cid = requireBoss(src)
-    if not myJob then return fail(cid) end
+    local myJob, cid, refusal = requireBoss(src)
+    if not myJob then return refusal end
 
     local targetCid = tostring(payload.citizenid or '')
-    if targetCid == '' then return fail('No employee selected') end
-    if targetCid == cid then return fail("You can't fire yourself") end
+    if targetCid == '' then return fail('services.noEmployeeSelected', 'No employee selected') end
+    if targetCid == cid then return fail('services.canTFireYourself', "You can't fire yourself") end
 
     local info = memberInfo(myJob, targetCid)
-    if not info then return fail('Employee not found') end
-    if info.grade >= job.getGrade(src) then return fail("You can't fire someone of equal or higher rank") end
+    if not info then return fail('services.employeeNotFound', 'Employee not found') end
+    if info.grade >= job.getGrade(src) then return fail('services.canTFireSomeoneEqual', "You can't fire someone of equal or higher rank") end
 
     if info.activeHere then
-        if not society.fire(targetCid, UNEMPLOYED, myJob) then return fail('That player must be online to be fired') end
+        if not society.fire(targetCid, UNEMPLOYED, myJob) then return fail('services.playerMustOnlineFired', 'That player must be online to be fired') end
         if info.saved then jobstore.removeSaved(targetCid, myJob) end
     else
         if info.saved then jobstore.removeSaved(targetCid, myJob) end
@@ -490,37 +499,39 @@ end
 ---@param payload { citizenid?: string }
 function actions.promote(src, payload)
     payload = type(payload) == 'table' and payload or {}
-    local myJob, cid = requireBoss(src)
-    if not myJob then return fail(cid) end
+    local myJob, cid, refusal = requireBoss(src)
+    if not myJob then return refusal end
     local label = job.getLabel(myJob) or myJob
 
     local targetCid = tostring(payload.citizenid or '')
-    if targetCid == '' then return fail('No employee selected') end
-    if targetCid == cid then return fail("You can't promote yourself") end
+    if targetCid == '' then return fail('services.noEmployeeSelected', 'No employee selected') end
+    if targetCid == cid then return fail('services.canTPromoteYourself', "You can't promote yourself") end
 
     local info = memberInfo(myJob, targetCid)
-    if not info then return fail('Employee not found') end
+    if not info then return fail('services.employeeNotFound', 'Employee not found') end
 
     local nextGrade
     for _, g in ipairs(society.getGrades(myJob)) do
         if g.level > info.grade then nextGrade = g.level; break end
     end
-    if not nextGrade then return fail('They are already at the highest rank') end
-    if nextGrade >= job.getGrade(src) then return fail("You can't promote someone to your own rank") end
+    if not nextGrade then return fail('services.theyAlreadyHighestRank', 'They are already at the highest rank') end
+    if nextGrade >= job.getGrade(src) then return fail('services.canTPromoteSomeoneOwn', "You can't promote someone to your own rank") end
 
     if info.activeHere then
-        if not job.set(info.src, myJob, nextGrade) then return fail('Could not update their grade') end
+        if not job.set(info.src, myJob, nextGrade) then return fail('services.couldNotUpdateTheirGrade', 'Could not update their grade') end
         jobstore.addSaved(targetCid, myJob, nextGrade)
     elseif info.saved then
         jobstore.addSaved(targetCid, myJob, nextGrade)
     else
-        return fail('That player must be online to be promoted')
+        return fail('services.playerMustOnlinePromoted', 'That player must be online to be promoted')
     end
 
     if info.src then
+        local gradeName = society.gradeLabel(myJob, nextGrade)
         TriggerClientEvent('sd-phone:client:notify', info.src, {
             app = 'services', appId = 'services', title = label,
-            body = ('You were promoted to %s.'):format(society.gradeLabel(myJob, nextGrade)),
+            bodyKey = 'services.youWerePromoted', body = ('You were promoted to %s.'):format(gradeName),
+            bodyVars = { grade = gradeName },
             time = 'now',
         })
         TriggerClientEvent('sd-phone:client:services:jobsChanged', info.src, {})
@@ -536,37 +547,39 @@ end
 ---@param payload { citizenid?: string }
 function actions.demote(src, payload)
     payload = type(payload) == 'table' and payload or {}
-    local myJob, cid = requireBoss(src)
-    if not myJob then return fail(cid) end
+    local myJob, cid, refusal = requireBoss(src)
+    if not myJob then return refusal end
     local label = job.getLabel(myJob) or myJob
 
     local targetCid = tostring(payload.citizenid or '')
-    if targetCid == '' then return fail('No employee selected') end
-    if targetCid == cid then return fail("You can't demote yourself") end
+    if targetCid == '' then return fail('services.noEmployeeSelected', 'No employee selected') end
+    if targetCid == cid then return fail('services.canTDemoteYourself', "You can't demote yourself") end
 
     local info = memberInfo(myJob, targetCid)
-    if not info then return fail('Employee not found') end
-    if info.grade >= job.getGrade(src) then return fail("You can't demote someone of equal or higher rank") end
+    if not info then return fail('services.employeeNotFound', 'Employee not found') end
+    if info.grade >= job.getGrade(src) then return fail('services.canTDemoteSomeoneEqual', "You can't demote someone of equal or higher rank") end
 
     local prevGrade
     for _, g in ipairs(society.getGrades(myJob)) do
         if g.level < info.grade then prevGrade = g.level end
     end
-    if not prevGrade then return fail('They are already at the lowest rank') end
+    if not prevGrade then return fail('services.theyAlreadyLowestRank', 'They are already at the lowest rank') end
 
     if info.activeHere then
-        if not job.set(info.src, myJob, prevGrade) then return fail('Could not update their grade') end
+        if not job.set(info.src, myJob, prevGrade) then return fail('services.couldNotUpdateTheirGrade', 'Could not update their grade') end
         jobstore.addSaved(targetCid, myJob, prevGrade)
     elseif info.saved then
         jobstore.addSaved(targetCid, myJob, prevGrade)
     else
-        return fail('That player must be online to be demoted')
+        return fail('services.playerMustOnlineDemoted', 'That player must be online to be demoted')
     end
 
     if info.src then
+        local gradeName = society.gradeLabel(myJob, prevGrade)
         TriggerClientEvent('sd-phone:client:notify', info.src, {
             app = 'services', appId = 'services', title = label,
-            body = ('You were demoted to %s.'):format(society.gradeLabel(myJob, prevGrade)),
+            bodyKey = 'services.youWereDemoted', body = ('You were demoted to %s.'):format(gradeName),
+            bodyVars = { grade = gradeName },
             time = 'now',
         })
         TriggerClientEvent('sd-phone:client:services:jobsChanged', info.src, {})
@@ -582,10 +595,10 @@ end
 ---@return table
 function actions.quit(src)
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('services.playerNotFound', 'Player not found') end
     local myJob = job.getName(src)
-    if not myJob or BLACKLIST[myJob] then return fail("You're not in a job") end
-    if not job.set(src, UNEMPLOYED, 0) then return fail('Could not update your job') end
+    if not myJob or BLACKLIST[myJob] then return fail('services.reNotJob', "You're not in a job") end
+    if not job.set(src, UNEMPLOYED, 0) then return fail('services.couldNotUpdateJob', 'Could not update your job') end
     jobstore.removeSaved(cid, myJob)
     job.leave(src, myJob)
     actions.notifyRoster(myJob)
@@ -609,16 +622,16 @@ end
 function actions.callCompany(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local entry = byJob[tostring(payload.job or '')]
-    if not entry then return fail('Unknown company') end
-    if not entry.canCall then return fail("You can't call this company") end
+    if not entry then return fail('services.unknownCompany', 'Unknown company') end
+    if not entry.canCall then return fail('services.canTCallCompany', "You can't call this company") end
     local myCid = player.getIdentifier(src)
-    if not myCid then return fail('Player not found') end
-    if job.getName(src) == entry.job then return fail("You can't call the company you work for") end
+    if not myCid then return fail('services.playerNotFound', 'Player not found') end
+    if job.getName(src) == entry.job then return fail('services.canTCallCompanyWork', "You can't call the company you work for") end
     -- Hoisted out of callGroup: rejecting downstream meant a caller who is already on a call still
     -- paid the whole roster walk. Ahead of the cooldown too, so a mis-tap mid-call costs nothing.
-    if calls.isBusy(src) then return fail('You are already on a call') end
+    if calls.isBusy(src) then return fail('services.alreadyCall', 'You are already on a call') end
     -- Ahead of the roster walk: a successful dial rings every on-duty employee.
-    if not util.cooldown(myCid, 'services:callCompany', 3000) then return fail('Please wait a moment') end
+    if not util.cooldown(myCid, 'services:callCompany', 3000) then return fail('services.pleaseWaitMoment', 'Please wait a moment') end
 
     local targets   = {}
     local anyOnDuty = false
@@ -636,7 +649,8 @@ function actions.callCompany(src, payload)
         end
     end
     if #targets == 0 then
-        return fail(anyOnDuty and 'No one is available to take your call' or 'No one is on duty right now')
+        if anyOnDuty then return fail('services.noOneAvailableTakeCall', 'No one is available to take your call') end
+        return fail('services.noOneDutyRightNow', 'No one is on duty right now')
     end
 
     return calls.callGroup(src, targets, entry.label, entry.callNumber)
@@ -696,7 +710,7 @@ end
 ---@return table
 function actions.inbox(src)
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('services.playerNotFound', 'Player not found') end
 
     local myNumber = digits(settings.getPhoneNumber(cid) or '')
     local myJob    = job.getName(src)
@@ -756,20 +770,20 @@ end
 function actions.markThreadRead(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('services.playerNotFound', 'Player not found') end
     local key = tostring(payload.key or '')
-    if key == '' then return fail('Missing thread') end
+    if key == '' then return fail('services.missingThread', 'Missing thread') end
     -- A dropped mark-read only leaves a badge that clears on the next open, so this can sit well
     -- below any plausible reader: 90 thread opens a minute is already unreachable by hand.
-    if not util.rateLimit(cid, 'services:markRead', MSG_WINDOW, READ_MAX) then return fail('Please wait a moment') end
+    if not util.rateLimit(cid, 'services:markRead', MSG_WINDOW, READ_MAX) then return fail('services.pleaseWaitMoment', 'Please wait a moment') end
 
     -- Both branches put `key` straight into the read table's composite primary key, so an
     -- unvetted key is one new row per distinct value. Only keys the inbox actually hands out pass.
     if payload.scope == 'job' then
         local myJob = job.getName(src)
-        if not (myJob and byJob[myJob]) then return fail('Missing thread') end
+        if not (myJob and byJob[myJob]) then return fail('services.missingThread', 'Missing thread') end
         local citizenNumber = digits(key):sub(1, 32)
-        if not msgstore.threadExists(myJob, citizenNumber) then return fail('Missing thread') end
+        if not msgstore.threadExists(myJob, citizenNumber) then return fail('services.missingThread', 'Missing thread') end
         msgstore.markRead(cid, myJob, citizenNumber, os.time())
     else
         local myNumber = digits(settings.getPhoneNumber(cid) or '')
@@ -777,7 +791,7 @@ function actions.markThreadRead(src, payload)
         local jobKey = key:sub(1, 64)
         -- Configured companies are the whole of the normal case; the probe only covers a thread
         -- left behind by a company since removed from configs/services.lua.
-        if not byJob[jobKey] and not msgstore.threadExists(jobKey, myNumber) then return fail('Missing thread') end
+        if not byJob[jobKey] and not msgstore.threadExists(jobKey, myNumber) then return fail('services.missingThread', 'Missing thread') end
         msgstore.markRead(cid, jobKey, myNumber, os.time())
     end
     return ok()
@@ -815,21 +829,21 @@ end
 function actions.messageCompany(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local entry = byJob[tostring(payload.job or '')]
-    if not entry then return fail('Unknown company') end
+    if not entry then return fail('services.unknownCompany', 'Unknown company') end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('services.playerNotFound', 'Player not found') end
     -- Every accepted message stores a row, wakes every on-duty employee and rebuilds the sender's
     -- whole inbox, so the gates go ahead of all three: one bounds a burst, one the sustained rate.
     if not util.cooldown(cid, 'services:messageCompany', 1000)
         or not util.rateLimit(cid, 'services:messageCompany', MSG_WINDOW, MSG_MAX) then
-        return fail('Please wait a moment')
+        return fail('services.pleaseWaitMoment', 'Please wait a moment')
     end
 
-    local kind, body, meta = parseDraft(payload)
-    if not kind then return fail(body) end
+    local kind, body, meta, refusal = parseDraft(payload)
+    if not kind then return refusal end
 
     local myNumber = digits(settings.ensurePhoneNumber(cid) or '')
-    if myNumber == '' then return fail('No phone number') end
+    if myNumber == '' then return fail('services.noPhoneNumber', 'No phone number') end
     local myName = player.getName(src)
 
     msgstore.insert({
@@ -856,23 +870,23 @@ end
 function actions.replyCompany(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('services.playerNotFound', 'Player not found') end
     local myJob = job.getName(src)
     local entry = myJob and byJob[myJob]
-    if not entry then return fail("You're not in a company") end
+    if not entry then return fail('services.reNotCompany', "You're not in a company") end
 
     if not util.cooldown(cid, 'services:replyCompany', 1000)
         or not util.rateLimit(cid, 'services:replyCompany', MSG_WINDOW, REPLY_MAX) then
-        return fail('Please wait a moment')
+        return fail('services.pleaseWaitMoment', 'Please wait a moment')
     end
 
     local citizenNumber = digits(payload.citizen):sub(1, 32)
-    if citizenNumber == '' then return fail('No recipient') end
+    if citizenNumber == '' then return fail('services.noRecipient', 'No recipient') end
     -- Staff answer existing conversations; they never open one. Without this an employee mints a
     -- brand-new company thread per call, and the inbox rebuild runs a query per thread.
-    if not msgstore.threadExists(entry.job, citizenNumber) then return fail('No such conversation') end
-    local kind, body, meta = parseDraft(payload)
-    if not kind then return fail(body) end
+    if not msgstore.threadExists(entry.job, citizenNumber) then return fail('services.noSuchConversation', 'No such conversation') end
+    local kind, body, meta, refusal = parseDraft(payload)
+    if not kind then return refusal end
 
     msgstore.insert({
         id = msgstore.newId(), job = entry.job,

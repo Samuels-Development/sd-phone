@@ -162,23 +162,23 @@ end
 ---@param payload table client payload { bets = { { id, amount } } }
 ---@return table envelope { success, message?, data? }
 function roulette.spin(src, payload)
-    local cid = shared.cidOf(src); if not cid then return util.fail('Player not found') end
-    if not util.cooldown(cid, 'games:rouletteSpin', COOLDOWN) then return util.fail('Slow down') end
+    local cid = shared.cidOf(src); if not cid then return util.fail('games.playerNotFound', 'Player not found') end
+    if not util.cooldown(cid, 'games:rouletteSpin', COOLDOWN) then return util.fail('games.slowDown', 'Slow down') end
 
     local placed = payload.bets
-    if type(placed) ~= 'table' or #placed == 0 then return util.fail('Place a bet first') end
-    if #placed > MAX_BETS then return util.fail('Too many bets') end
+    if type(placed) ~= 'table' or #placed == 0 then return util.fail('games.placeBetFirst', 'Place a bet first') end
+    if #placed > MAX_BETS then return util.fail('games.tooManyBets', 'Too many bets') end
 
     -- Duplicate spots merge into one entry before the stake is summed, so a client stacking the
     -- same id repeatedly pays and is paid exactly as if it had sent one larger chip.
     local order, byId, stake = {}, {}, 0
     for i = 1, #placed do
         local entry = placed[i]
-        if type(entry) ~= 'table' then return util.fail('Bet not recognised') end
+        if type(entry) ~= 'table' then return util.fail('games.betNotRecognised', 'Bet not recognised') end
         local amount = shared.wager(entry.amount, MIN_CHIP, MAX_STAKE)
-        if not amount then return util.fail('Enter a valid amount') end
+        if not amount then return util.fail('games.enterValidAmount', 'Enter a valid amount') end
         local pockets, odds = roulette.resolve(entry.id)
-        if not pockets then return util.fail('Bet not recognised') end
+        if not pockets then return util.fail('games.betNotRecognised', 'Bet not recognised') end
         local bet = byId[entry.id]
         if bet then
             bet.amount = bet.amount + amount
@@ -189,10 +189,10 @@ function roulette.spin(src, payload)
         end
         stake = stake + amount
     end
-    if stake > MAX_STAKE then return util.fail('Table limit reached') end
+    if stake > MAX_STAKE then return util.fail('games.tableLimitReached', 'Table limit reached') end
 
     local bal = chips.remove(cid, stake)
-    if not bal then return util.fail('Not enough chips') end
+    if not bal then return util.fail('games.notEnoughChips', 'Not enough chips') end
 
     local pocket = math.random(0, 36)
     local hits, win = {}, 0

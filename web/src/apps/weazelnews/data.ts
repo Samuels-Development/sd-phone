@@ -1,4 +1,5 @@
 
+import { t } from '@/i18n';
 import bg3  from '@/assets/photos/background3.webp';
 import bg4  from '@/assets/photos/background4.webp';
 import bg5  from '@/assets/photos/background5.webp';
@@ -27,6 +28,20 @@ export type Category =
 export const CATEGORIES: readonly ('All' | Category)[] = [
     'All', 'Local', 'Crime', 'Politics', 'Business', 'Sports', 'Entertainment', 'Tech', 'Weather',
 ] as const;
+
+export function categoryLabel(c: 'All' | Category): string {
+    switch (c) {
+        case 'All':           return t('weazelnews.categoryAll', 'All');
+        case 'Local':         return t('weazelnews.categoryLocal', 'Local');
+        case 'Crime':         return t('weazelnews.categoryCrime', 'Crime');
+        case 'Politics':      return t('weazelnews.categoryPolitics', 'Politics');
+        case 'Business':      return t('weazelnews.categoryBusiness', 'Business');
+        case 'Sports':        return t('weazelnews.categorySports', 'Sports');
+        case 'Entertainment': return t('weazelnews.categoryEntertainment', 'Entertainment');
+        case 'Tech':          return t('weazelnews.categoryTech', 'Tech');
+        case 'Weather':       return t('weazelnews.categoryWeather', 'Weather');
+    }
+}
 
 export interface Article {
     id:       string;
@@ -58,8 +73,8 @@ export interface NewsFeed {
 }
 
 export function formatViews(n: number): string {
-    if (n >= 1_000_000) return trim(n / 1_000_000) + 'M';
-    if (n >= 1_000)     return trim(n / 1_000) + 'K';
+    if (n >= 1_000_000) return t('weazelnews.viewsMillions', '{n}M', { n: trim(n / 1_000_000) });
+    if (n >= 1_000)     return t('weazelnews.viewsThousands', '{n}K', { n: trim(n / 1_000) });
     return String(n);
 }
 

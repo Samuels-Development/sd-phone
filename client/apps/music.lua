@@ -75,7 +75,7 @@ RegisterNetEvent('sd-phone:client:music:receive', function(data)
     SendNUIMessage({ action = 'sd-phone:music:receive', data = data })
     SendNUIMessage({ action = 'sd-phone:notification', data = {
         app   = 'music',
-        title = 'Music',
+        titleKey = 'music.musicTitle', title = 'Music',
         body  = (data and data.kind == 'playlist')
             and 'A playlist was added to your library.'
             or  'A song was added to your library.',

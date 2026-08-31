@@ -1,3 +1,5 @@
+import { t } from '@/i18n';
+
 export interface CardColor {
     id:         string;
     label:      string;
@@ -155,6 +157,46 @@ export function cardColor(id: string | undefined): CardColor {
 
 export function cardPattern(id: string | undefined): CardPattern {
     return CARD_PATTERNS.find(p => p.id === id) ?? CARD_PATTERNS[0];
+}
+
+export function cardColorLabel(color: CardColor): string {
+    switch (color.id) {
+        case 'emerald':   return t('banking.cardColorEmerald', 'Emerald');
+        case 'crimson':   return t('banking.cardColorCrimson', 'Crimson');
+        case 'cobalt':    return t('banking.cardColorCobalt', 'Cobalt');
+        case 'navy':      return t('banking.cardColorNavy', 'Navy');
+        case 'bronze':    return t('banking.cardColorBronze', 'Bronze');
+        case 'graphite':  return t('banking.cardColorGraphite', 'Graphite');
+        case 'teal':      return t('banking.cardColorTeal', 'Teal');
+        case 'violet':    return t('banking.cardColorViolet', 'Violet');
+        case 'slate':     return t('banking.cardColorSlate', 'Slate');
+        case 'amber':     return t('banking.cardColorAmber', 'Amber');
+        case 'rose':      return t('banking.cardColorRose', 'Rose');
+        case 'midnight':  return t('banking.cardColorMidnight', 'Midnight');
+        case 'mint':      return t('banking.cardColorMint', 'Mint');
+        case 'burgundy':  return t('banking.cardColorBurgundy', 'Burgundy');
+        default:          return color.label;
+    }
+}
+
+export function cardPatternLabel(pattern: CardPattern): string {
+    switch (pattern.id) {
+        case 'wave':        return t('banking.cardPatternWaves', 'Waves');
+        case 'meander':     return t('banking.cardPatternMaze', 'Maze');
+        case 'pinstripe':   return t('banking.cardPatternPinstripe', 'Pinstripe');
+        case 'guilloche':   return t('banking.cardPatternGuilloche', 'Guilloche');
+        case 'crosshatch':  return t('banking.cardPatternCrosshatch', 'Crosshatch');
+        case 'chevron':     return t('banking.cardPatternChevron', 'Chevron');
+        case 'dots':        return t('banking.cardPatternDots', 'Dots');
+        case 'grid':        return t('banking.cardPatternGrid', 'Grid');
+        case 'diamond':     return t('banking.cardPatternDiamond', 'Diamond');
+        case 'scales':      return t('banking.cardPatternScales', 'Scales');
+        case 'topo':        return t('banking.cardPatternContour', 'Contour');
+        case 'circuit':     return t('banking.cardPatternCircuit', 'Circuit');
+        case 'carbon':      return t('banking.cardPatternCarbon', 'Carbon');
+        case 'none':        return t('banking.cardPatternPlain', 'Plain');
+        default:            return pattern.label;
+    }
 }
 
 export function presetFor(bankId: string | undefined): CardStyle {

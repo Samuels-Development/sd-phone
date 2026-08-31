@@ -2,6 +2,8 @@
 local config  = require 'configs.config'
 ---@type table Floating checkpoint billboards (client.racing.markers).
 local markers = require 'client.racing.markers'
+---@type table Locale bridge (bridge.shared.locale): t(key, english, vars) for in-world text.
+local locale  = require 'bridge.shared.locale'
 
 ---@type table Racing settings (configs/racing.lua).
 local cfg <const> = type(config.Racing) == 'table' and config.Racing or {}
@@ -24,14 +26,19 @@ local function boards()
     return boardModule
 end
 
----@type table<string, string> Why the flag dropped without you, keyed by the board's own verdict.
-local NOT_LINED_UP <const> = {
-    vehicle = 'You were not in the driver\'s seat, so you did not start.',
-    turn    = 'You were facing the wrong way, so you did not start.',
-    backup  = 'You were past the start line, so you did not start.',
-    far     = 'You were not at the start line, so you did not start.',
-    default = 'You were not lined up, so you did not start.',
-}
+---Why the flag dropped without you, keyed by the board's own verdict. Looked up on demand rather
+---than held as a constant table, so every line is translated after the locale catalogue has loaded.
+---@param why string|nil board verdict
+---@return string
+local function notLinedUp(why)
+    local reasons = {
+        vehicle = locale.t('racing.notLinedUpVehicle', 'You were not in the driver\'s seat, so you did not start.'),
+        turn    = locale.t('racing.notLinedUpTurn', 'You were facing the wrong way, so you did not start.'),
+        backup  = locale.t('racing.notLinedUpBackup', 'You were past the start line, so you did not start.'),
+        far     = locale.t('racing.notLinedUpFar', 'You were not at the start line, so you did not start.'),
+    }
+    return reasons[why or ''] or locale.t('racing.notLinedUpDefault', 'You were not lined up, so you did not start.')
+end
 
 ---@type number Horizontal metres from a gate midpoint that count as reaching it.
 local CHECKPOINT_RADIUS <const> = tonumber(raceCfg.CheckpointRadius) or 14.0
@@ -487,7 +494,11 @@ local function startPhasing(data)
         if faded == phasedEntities then phasedEntities = {} end
 
         if expired and active and active.id == data.id then
-            lib.notify({ title = 'Racing', description = 'Phasing is over, contact is live.', type = 'inform' })
+            lib.notify({
+                title       = locale.t('apps.racing', 'Racing'),
+                description = locale.t('racing.phasingOver', 'Phasing is over, contact is live.'),
+                type        = 'inform',
+            })
         end
     end)
 end
@@ -547,8 +558,9 @@ function race.armDnf(seconds)
     dnfDeadline = GetGameTimer() + seconds * 1000
     SendNUIMessage({ action = 'sd-phone:racing:hud:dnf', data = { seconds = seconds } })
     lib.notify({
-        title = 'Racing',
-        description = ('Finish within %d seconds or you are out.'):format(seconds),
+        title = locale.t('apps.racing', 'Racing'),
+        description = locale.t('racing.finishWithinSeconds', 'Finish within {n} seconds or you are out.',
+            { n = seconds }),
         type = 'warning',
     })
 end
@@ -574,8 +586,9 @@ function race.stop(finished)
     if finished then
         PlaySoundFrontend(-1, 'ScreenFlash', 'WastedSounds', true)
         lib.notify({
-            title = 'Racing',
-            description = ('Race finished in %s'):format(raceClock(GetGameTimer() - state.startedAt)),
+            title = locale.t('apps.racing', 'Racing'),
+            description = locale.t('racing.raceFinishedIn', 'Race finished in {time}',
+                { time = raceClock(GetGameTimer() - state.startedAt) }),
             type = 'success',
         })
     end
@@ -595,8 +608,9 @@ local function finishTrial(state)
     local data = type(res) == 'table' and res.success and res.data or nil
     if not data then
         lib.notify({
-            title = 'Time trial',
-            description = (type(res) == 'table' and res.message) or 'That run could not be recorded.',
+            title = locale.t('racing.modeTrial', 'Time trial'),
+            description = (type(res) == 'table' and res.message)
+                or locale.t('racing.trialNotRecorded', 'That run could not be recorded.'),
             type = 'error',
         })
         return
@@ -604,14 +618,17 @@ local function finishTrial(state)
 
     local line
     if not data.personalBest then
-        line = ('%s · your first time here'):format(raceClock(data.timeMs))
+        line = locale.t('racing.trialFirstTime', '{time} · your first time here',
+            { time = raceClock(data.timeMs) })
     elseif data.improved then
-        line = ('%s · personal best by %s'):format(raceClock(data.timeMs), raceClock(data.personalBest - data.bestLapMs))
+        line = locale.t('racing.trialPersonalBest', '{time} · personal best by {delta}',
+            { time = raceClock(data.timeMs), delta = raceClock(data.personalBest - data.bestLapMs) })
     else
-        line = ('%s · %s off your best'):format(raceClock(data.timeMs), raceClock(data.bestLapMs - data.personalBest))
+        line = locale.t('racing.trialOffBest', '{time} · {delta} off your best',
+            { time = raceClock(data.timeMs), delta = raceClock(data.bestLapMs - data.personalBest) })
     end
 
-    lib.notify({ title = 'Time trial', description = line, type = data.improved and 'success' or 'inform' })
+    lib.notify({ title = locale.t('racing.modeTrial', 'Time trial'), description = line, type = data.improved and 'success' or 'inform' })
 end
 
 ---The progression loop: one gate at a time, 2D distance to its midpoint, everything else follows.
@@ -708,7 +725,7 @@ function race.begin(data)
         if not data.trial then
             local why = boards().ineligible(data.id)
             if why then
-                lib.notify({ title = 'Racing', description = NOT_LINED_UP[why] or NOT_LINED_UP.default, type = 'error' })
+                lib.notify({ title = locale.t('apps.racing', 'Racing'), description = notLinedUp(why), type = 'error' })
                 lib.callback.await('sd-phone:server:racing:notStarted', false, { raceId = data.id })
                 return
             end
@@ -749,7 +766,11 @@ function race.begin(data)
             FreezeEntityPosition(held, false)
             countdownFrozen = nil
             SendNUIMessage({ action = 'sd-phone:racing:hud:hide' })
-            lib.notify({ title = 'Racing', description = 'That track has no checkpoints to race.', type = 'error' })
+            lib.notify({
+                title       = locale.t('apps.racing', 'Racing'),
+                description = locale.t('racing.trackNoCheckpoints', 'That track has no checkpoints to race.'),
+                type        = 'error',
+            })
             return
         end
 
@@ -777,8 +798,9 @@ function race.begin(data)
                 countdownFrozen = nil
                 SendNUIMessage({ action = 'sd-phone:racing:hud:hide' })
                 lib.notify({
-                    title = 'Racing',
-                    description = (type(started) == 'table' and started.message) or 'That run could not be started.',
+                    title = locale.t('apps.racing', 'Racing'),
+                    description = (type(started) == 'table' and started.message)
+                        or locale.t('racing.trialNotStarted', 'That run could not be started.'),
                     type = 'error',
                 })
                 return
@@ -837,14 +859,22 @@ end
 function race.beginTrial(trackId, laps)
     if not ENABLED then return end
     if active then
-        lib.notify({ title = 'Time trial', description = 'You are already on a run.', type = 'error' })
+        lib.notify({
+            title       = locale.t('racing.modeTrial', 'Time trial'),
+            description = locale.t('racing.alreadyOnRun', 'You are already on a run.'),
+            type        = 'error',
+        })
         return
     end
 
     CreateThread(function()
         local points = fetchRoute(trackId)
         if #points < 2 then
-            lib.notify({ title = 'Time trial', description = 'That track has no checkpoints to race.', type = 'error' })
+            lib.notify({
+                title       = locale.t('racing.modeTrial', 'Time trial'),
+                description = locale.t('racing.trackNoCheckpoints', 'That track has no checkpoints to race.'),
+                type        = 'error',
+            })
             return
         end
 
@@ -855,13 +885,21 @@ function race.beginTrial(trackId, laps)
 
         if math.sqrt(dx * dx + dy * dy) > TRIAL_START_RADIUS then
             SetNewWaypoint(start[1] + 0.0, start[2] + 0.0)
-            lib.notify({ title = 'Time trial', description = 'Waypoint set to the start line.', type = 'inform' })
+            lib.notify({
+                title       = locale.t('racing.modeTrial', 'Time trial'),
+                description = locale.t('racing.waypointToStartLine', 'Waypoint set to the start line.'),
+                type        = 'inform',
+            })
             return
         end
 
         local vehicle = GetVehiclePedIsIn(ped, false)
         if vehicle == 0 or GetPedInVehicleSeat(vehicle, -1) ~= ped then
-            lib.notify({ title = 'Time trial', description = 'Get in the driver\'s seat to start the clock.', type = 'error' })
+            lib.notify({
+                title       = locale.t('racing.modeTrial', 'Time trial'),
+                description = locale.t('racing.getInDriverSeat', 'Get in the driver\'s seat to start the clock.'),
+                type        = 'error',
+            })
             return
         end
 

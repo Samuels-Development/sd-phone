@@ -1,4 +1,5 @@
-import { apiCall } from '@/core/api';
+import { apiCall, failText } from '@/core/api';
+import { t } from '@/i18n';
 import { getGameRender, type GameRender } from '@/render';
 import { pickVideoMime, videoStreamingSupported } from '@/shared/liveMedia';
 
@@ -109,7 +110,7 @@ async function upload(blob: Blob, mime: string, duration: number, forMeta: Recor
         total,
     });
     if (begun.success !== true) {
-        emit({ uploading: false, error: begun.message ?? 'Could not start the upload' });
+        emit({ uploading: false, error: failText(begun, t('mdt.recUploadStartFailed', 'Could not start the upload'))});
         return;
     }
 
@@ -121,12 +122,12 @@ async function upload(blob: Blob, mime: string, duration: number, forMeta: Recor
             part = await encodeSlice(blob.slice(from, to));
         } catch {
             void apiCall('sd-phone:mdt:recCancel', {});
-            emit({ uploading: false, error: 'Could not read the recording' });
+            emit({ uploading: false, error: t('mdt.recReadFailed', 'Could not read the recording') });
             return;
         }
         if (!part) {
             void apiCall('sd-phone:mdt:recCancel', {});
-            emit({ uploading: false, error: 'Could not read the recording' });
+            emit({ uploading: false, error: t('mdt.recReadFailed', 'Could not read the recording') });
             return;
         }
         await apiCall('sd-phone:mdt:recSlice', { seq, part });
@@ -138,7 +139,7 @@ export async function startRecording(forMeta: RecorderMeta, profile: RecorderPro
 
     const mime = recordingSupported() ? pickVideoMime() : '';
     if (!mime) {
-        emit({ error: 'This terminal cannot record' });
+        emit({ error: t('mdt.recUnsupported', 'This terminal cannot record') });
         return false;
     }
 
@@ -148,7 +149,7 @@ export async function startRecording(forMeta: RecorderMeta, profile: RecorderPro
     try {
         const feed = await getGameRender();
         if (!feed) {
-            emit({ error: 'This terminal cannot record' });
+            emit({ error: t('mdt.recUnsupported', 'This terminal cannot record') });
             return false;
         }
         render = feed;
@@ -169,7 +170,7 @@ export async function startRecording(forMeta: RecorderMeta, profile: RecorderPro
         const octx = off.getContext('2d');
         if (!octx) {
             teardown();
-            emit({ error: 'This terminal cannot record' });
+            emit({ error: t('mdt.recUnsupported', 'This terminal cannot record') });
             return false;
         }
         octx.imageSmoothingEnabled = true;
@@ -208,7 +209,7 @@ export async function startRecording(forMeta: RecorderMeta, profile: RecorderPro
         return true;
     } catch {
         teardown();
-        emit({ recording: false, startedAt: null, error: 'Could not start recording' });
+        emit({ recording: false, startedAt: null, error: t('mdt.recStartFailed', 'Could not start recording') });
         return false;
     }
 }

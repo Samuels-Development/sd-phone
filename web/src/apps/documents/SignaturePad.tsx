@@ -162,11 +162,11 @@ export interface SignatureStyle {
 
 // Great Vibes ships in the bundle (main.tsx); the rest fall back through fonts CEF/Windows
 // carries. Each style renders the typed name onto the same PNG pipeline drawn signatures use.
-export const SIGNATURE_STYLES: SignatureStyle[] = [
-    { id: 'elegant', label: 'Elegant',    fontFamily: '"Great Vibes", "Snell Roundhand", cursive',                 fontWeight: 400, fontSize: 64 },
-    { id: 'script',  label: 'Script',     fontFamily: '"Segoe Script", "Snell Roundhand", "Bradley Hand", cursive', fontWeight: 400, fontSize: 44 },
-    { id: 'formal',  label: 'Formal',     fontFamily: 'Georgia, "Times New Roman", serif',                          fontWeight: 600, fontStyle: 'italic', fontSize: 52 },
-    { id: 'typed',   label: 'Typewriter', fontFamily: '"Courier New", Courier, monospace',                          fontWeight: 700, fontSize: 42 },
+export const signatureStyles = (): SignatureStyle[] => [
+    { id: 'elegant', label: t('documents.sigStyleElegant', 'Elegant'),       fontFamily: '"Great Vibes", "Snell Roundhand", cursive',                 fontWeight: 400, fontSize: 64 },
+    { id: 'script',  label: t('documents.sigStyleScript', 'Script'),         fontFamily: '"Segoe Script", "Snell Roundhand", "Bradley Hand", cursive', fontWeight: 400, fontSize: 44 },
+    { id: 'formal',  label: t('documents.sigStyleFormal', 'Formal'),         fontFamily: 'Georgia, "Times New Roman", serif',                          fontWeight: 600, fontStyle: 'italic', fontSize: 52 },
+    { id: 'typed',   label: t('documents.sigStyleTypewriter', 'Typewriter'), fontFamily: '"Courier New", Courier, monospace',                          fontWeight: 700, fontSize: 42 },
 ];
 
 function fontOf(style: SignatureStyle): string {

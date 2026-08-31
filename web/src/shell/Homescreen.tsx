@@ -801,7 +801,7 @@ export function Homescreen({ apps, dock, firstPageApps, wallpaper, onLaunchApp, 
                     if (!fromDock) setSlots(prev => normalize(prev.map((x, i) => (i === from ? null : x))));
                 } else {
                     const key = newFolderKey();
-                    setFolders(prev => ({ ...prev, [key]: { name: 'Folder', appIds: [targetId, dragged] } }));
+                    setFolders(prev => ({ ...prev, [key]: { name: t('shell.folderDefaultName', 'Folder'), appIds: [targetId, dragged] } }));
                     setSlots(prev => normalize(prev.map((x, i) => (i === to ? FOLDER_PREFIX + key : (!fromDock && i === from) ? null : x))));
                     setOpenFolder(key); setRenameFolder(key);
                 }
@@ -1293,7 +1293,7 @@ export function Homescreen({ apps, dock, firstPageApps, wallpaper, onLaunchApp, 
                     editing={editing}
                     autoEdit={renameFolder === openFolder}
                     wallpaper={wallpaper}
-                    onRename={(name) => setFolders(prev => ({ ...prev, [openFolder]: { ...prev[openFolder], name: name.trim() || 'Folder' } }))}
+                    onRename={(name) => setFolders(prev => ({ ...prev, [openFolder]: { ...prev[openFolder], name: name.trim() || t('shell.folderDefaultName', 'Folder') } }))}
                     onSwap={(a, b) => setFolders(prev => {
                         const ids = [...prev[openFolder].appIds];
                         [ids[a], ids[b]] = [ids[b], ids[a]];
@@ -1444,7 +1444,7 @@ function FolderOverlay({ name, apps, badges, editing: homeEditing, autoEdit, wal
 
     const [editName, setEditName] = useState(autoEdit);
     const [draft, setDraft] = useState(name);
-    function commitName() { setEditName(false); const n = draft.trim() || 'Folder'; if (n !== name) onRename(n); }
+    function commitName() { setEditName(false); const n = draft.trim() || t('shell.folderDefaultName', 'Folder'); if (n !== name) onRename(n); }
 
     const [dragIdx, setDragIdx] = useState<number | null>(null);
     const [dragDelta, setDragDelta] = useState({ x: 0, y: 0 });

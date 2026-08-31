@@ -164,8 +164,8 @@ end)
 ---@param payload table
 ---@return table envelope; data.sent is the serialized sent copy on success
 exports('sendMailFromPlayer', function(source, payload)
-    if type(source) ~= 'number' then return fail('Acting player source is required') end
-    if type(payload) ~= 'table' then return fail('Payload must be a table') end
+    if type(source) ~= 'number' then return fail('mail.actingPlayerSourceRequired', 'Acting player source is required') end
+    if type(payload) ~= 'table' then return fail('mail.payloadMustTable', 'Payload must be a table') end
     return dispatchSend(actions.send(source, payload))
 end)
 

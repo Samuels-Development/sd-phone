@@ -6,7 +6,7 @@ import { useIosPush } from '@/hooks/useIosPush';
 import { Scroller } from '@/ui/Scroller';
 import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
 import { Toggle } from '@/ui/Toggle';
-import { CATEGORIES, type Article as ArticleT, type ArticleDraft, type Category, WEAZEL_RED } from './data';
+import { CATEGORIES, categoryLabel, type Article as ArticleT, type ArticleDraft, type Category, WEAZEL_RED } from './data';
 
 export function EditArticle({ initial, dark, onClose, onSave }: {
     initial:  ArticleT | null;
@@ -87,7 +87,7 @@ export function EditArticle({ initial, dark, onClose, onSave }: {
                                 }`}
                                 style={active ? { background: WEAZEL_RED } : undefined}
                             >
-                                {c}
+                                {categoryLabel(c)}
                             </button>
                         );
                     })}

@@ -189,11 +189,11 @@ function actions.create(src, payload)
     if not cid then return { success = false } end
     if type(payload) ~= 'table' then payload = {} end
     if not util.rateLimit(cid, 'marketplace:write', WRITE_WINDOW, WRITE_MAX) then
-        return { success = false, message = 'Slow down' }
+        return { success = false, messageKey = 'marketplace.slowDown', message = 'Slow down' }
     end
 
     if store.countFor(cid) >= MP.MaxListingsPerPlayer then
-        return { success = false, message = 'You have too many active listings' }
+        return { success = false, messageKey = 'marketplace.haveTooManyActiveListings', message = 'You have too many active listings' }
     end
 
     local f, err = parseFields(payload, cid)
@@ -225,20 +225,20 @@ function actions.update(src, payload)
     if not cid then return { success = false } end
     if type(payload) ~= 'table' then payload = {} end
     if not util.rateLimit(cid, 'marketplace:write', WRITE_WINDOW, WRITE_MAX) then
-        return { success = false, message = 'Slow down' }
+        return { success = false, messageKey = 'marketplace.slowDown', message = 'Slow down' }
     end
 
     local id = tonumber(payload.id)
     id = id and math.tointeger(id)
-    if not id then return { success = false, message = 'Bad listing id' } end
-    if store.ownerOf(id) ~= cid then return { success = false, message = 'Not your listing' } end
+    if not id then return { success = false, messageKey = 'marketplace.badListingId', message = 'Bad listing id' } end
+    if store.ownerOf(id) ~= cid then return { success = false, messageKey = 'marketplace.notListing', message = 'Not your listing' } end
 
     local f, err = parseFields(payload, cid)
     if not f then return { success = false, message = err } end
 
     store.update(id, f.title, f.body, f.price, f.image, f.images, f.number, f.email)
     local row = store.byId(id)
-    if not row then return { success = false, message = 'Listing not found' } end
+    if not row then return { success = false, messageKey = 'marketplace.listingNotFound', message = 'Listing not found' } end
     broadcastFeed(src, { type = 'updated', item = toListing(row, nil) })
     return { success = true, data = { listing = toListing(row, cid) } }
 end
@@ -252,12 +252,12 @@ function actions.delete(src, id)
     local cid = cidOf(src)
     if not cid then return { success = false } end
     if not util.rateLimit(cid, 'marketplace:write', WRITE_WINDOW, WRITE_MAX) then
-        return { success = false, message = 'Slow down' }
+        return { success = false, messageKey = 'marketplace.slowDown', message = 'Slow down' }
     end
     id = tonumber(id)
     id = id and math.tointeger(id)
-    if not id then return { success = false, message = 'Bad listing id' } end
-    if store.ownerOf(id) ~= cid then return { success = false, message = 'Not your listing' } end
+    if not id then return { success = false, messageKey = 'marketplace.badListingId', message = 'Bad listing id' } end
+    if store.ownerOf(id) ~= cid then return { success = false, messageKey = 'marketplace.notListing', message = 'Not your listing' } end
     store.delete(id)
     broadcastFeed(src, { type = 'removed', id = tostring(id) })
     return { success = true, data = { id = tostring(id) } }

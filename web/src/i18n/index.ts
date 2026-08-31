@@ -148,6 +148,14 @@ export function t(key: string, fallback: string, vars?: Record<string, string | 
     return s;
 }
 
+let appLabelSource: () => Record<string, string> = () => ({});
+
+export function setAppLabelSource(source: () => Record<string, string>): void {
+    appLabelSource = source;
+}
+
 export function appLabel(app: { id: string; label: string }): string {
+    const custom = appLabelSource()[app.id];
+    if (custom) return custom;
     return t('apps.' + app.id, app.label);
 }

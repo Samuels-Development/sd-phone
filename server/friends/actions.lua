@@ -199,26 +199,26 @@ function actions.add(src, phone)
     if not owner then return { success = false } end
     if not util.cooldown(owner, 'friends:edit', EDIT_GAP)
         or not util.rateLimit(owner, 'friends:edit', EDIT_WINDOW, EDIT_MAX) then
-        return { success = false, message = 'Slow down' }
+        return { success = false, messageKey = 'friends.slowDown', message = 'Slow down' }
     end
 
     local number = digits(phone)
-    if number == '' then return { success = false, message = 'Enter a number' } end
+    if number == '' then return { success = false, messageKey = 'friends.enterNumber', message = 'Enter a number' } end
 
     local myNumber = digits(settings.ensurePhoneNumber(owner))
-    if number == myNumber then return { success = false, message = 'That is your own number' } end
+    if number == myNumber then return { success = false, messageKey = 'friends.ownNumber', message = 'That is your own number' } end
 
     local fcid = settings.getCitizenByNumber(number)
-    if not fcid then return { success = false, message = 'No phone is registered to that number' } end
-    if fcid == owner then return { success = false, message = 'That is your own number' } end
+    if not fcid then return { success = false, messageKey = 'friends.noPhoneRegisteredNumber', message = 'No phone is registered to that number' } end
+    if fcid == owner then return { success = false, messageKey = 'friends.ownNumber', message = 'That is your own number' } end
 
     local edge = store.edge(owner, fcid)
     if edge then
-        if flag(edge.pending) then return { success = false, message = 'Request already sent' } end
-        return { success = false, message = 'Already added' }
+        if flag(edge.pending) then return { success = false, messageKey = 'friends.requestAlreadySent', message = 'Request already sent' } end
+        return { success = false, messageKey = 'friends.alreadyAdded', message = 'Already added' }
     end
     if store.count(owner) >= config.MaxFriends then
-        return { success = false, message = 'Friend limit reached' }
+        return { success = false, messageKey = 'friends.friendLimitReached', message = 'Friend limit reached' }
     end
 
     store.add(owner, fcid, os.date('!%Y-%m-%dT%H:%M:%S.000Z'), true)
@@ -247,11 +247,11 @@ function actions.respond(src, msgId, phone, accept)
 
     local number = digits(phone)
     local rcid = number ~= '' and settings.getCitizenByNumber(number) or nil
-    if not rcid then return { success = false, message = 'Request not found' } end
+    if not rcid then return { success = false, messageKey = 'friends.requestNotFound', message = 'Request not found' } end
 
     local edge = store.edge(rcid, owner)
     if not edge or not flag(edge.pending) then
-        return { success = false, message = 'This request is no longer active' }
+        return { success = false, messageKey = 'friends.requestNoLongerActive', message = 'This request is no longer active' }
     end
 
     if accept then
@@ -278,7 +278,7 @@ function actions.respond(src, msgId, phone, accept)
         TriggerClientEvent('sd-phone:client:notify', rsrc, {
             app   = 'maps',
             appId = 'maps',
-            title = 'Maps',
+            titleKey = 'maps.mapsTitle', title = 'Maps',
             body  = ('%s %s your location sharing request.'):format(
                 shown, accept and 'accepted' or 'declined'),
             time  = 'now',
@@ -325,7 +325,7 @@ function actions.remove(src, id)
     if not owner or type(id) ~= 'string' or id == '' then return { success = false } end
     if not util.cooldown(owner, 'friends:edit', EDIT_GAP)
         or not util.rateLimit(owner, 'friends:edit', EDIT_WINDOW, EDIT_MAX) then
-        return { success = false, message = 'Slow down' }
+        return { success = false, messageKey = 'friends.slowDown', message = 'Slow down' }
     end
     store.remove(owner, id)
     invalidateRoster(owner, id)

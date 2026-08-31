@@ -97,11 +97,11 @@ function actions.rename(src, id, name)
     local cid = cidOf(src)
     if not cid then return { success = false } end
     id = memoId(id)
-    if not id then return { success = false, message = 'Bad memo id' } end
-    if store.ownerOf(id) ~= cid then return { success = false, message = 'Not your memo' } end
+    if not id then return { success = false, messageKey = 'voicememos.badMemoId', message = 'Bad memo id' } end
+    if store.ownerOf(id) ~= cid then return { success = false, messageKey = 'voicememos.notMemo', message = 'Not your memo' } end
 
     name = trim(name)
-    if name == '' then return { success = false, message = 'Name required' } end
+    if name == '' then return { success = false, messageKey = 'voicememos.nameRequired', message = 'Name required' } end
     if #name > VM.MaxNameLength then name = name:sub(1, VM.MaxNameLength) end
 
     store.rename(id, name)
@@ -118,14 +118,16 @@ function actions.requestShare(src, target, id)
     local cid = cidOf(src)
     if not cid then return { success = false } end
     id = memoId(id)
-    if not id then return { success = false, message = 'Bad memo id' } end
+    if not id then return { success = false, messageKey = 'voicememos.badMemoId', message = 'Bad memo id' } end
 
     local row = store.getById(id)
-    if not row or row.citizenid ~= cid then return { success = false, message = 'Not your memo' } end
+    if not row or row.citizenid ~= cid then return { success = false, messageKey = 'voicememos.notMemo', message = 'Not your memo' } end
 
     local payload = { name = row.name, url = row.url, duration = tonumber(row.duration) or 0 }
-    local okSent, msg = share.request(src, target, 'voice', payload)
-    if not okSent then return { success = false, message = msg or 'Could not send request' } end
+    local okSent, refusal = share.request(src, target, 'voice', payload)
+    if not okSent then
+        return refusal or { success = false, messageKey = 'voicememos.couldNotSendRequest', message = 'Could not send request' }
+    end
     return { success = true }
 end
 
@@ -154,8 +156,8 @@ function actions.delete(src, id)
     local cid = cidOf(src)
     if not cid then return { success = false } end
     id = memoId(id)
-    if not id then return { success = false, message = 'Bad memo id' } end
-    if store.ownerOf(id) ~= cid then return { success = false, message = 'Not your memo' } end
+    if not id then return { success = false, messageKey = 'voicememos.badMemoId', message = 'Bad memo id' } end
+    if store.ownerOf(id) ~= cid then return { success = false, messageKey = 'voicememos.notMemo', message = 'Not your memo' } end
 
     store.delete(id)
     return { success = true, data = { id = tostring(id) } }

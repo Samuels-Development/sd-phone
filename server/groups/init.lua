@@ -148,12 +148,14 @@ lib.callback.register('sd-phone:server:groups:invite', function(src, payload)
     if result.success and result.data and result.data.invite then
         local targetSrc = result.data.targetSource
         local inv = result.data.invite
+        local invitedBy = inv.invitedBy or 'Someone'
         pushTo(targetSrc, 'sd-phone:client:groups:inviteReceived', inv)
         pushTo(targetSrc, 'sd-phone:client:notify', {
             app   = 'groups',
             appId = 'groups',
             title = inv.groupName or 'Group invite',
-            body  = ('%s invited you to join'):format(inv.invitedBy or 'Someone'),
+            bodyKey = 'groups.invitedToJoin', body = ('%s invited you to join'):format(invitedBy),
+            bodyVars = { name = invitedBy },
             time  = 'now',
         })
         -- Aimed at another player on their say-so, so it must stay one indexed count rather than

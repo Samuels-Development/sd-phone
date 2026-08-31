@@ -82,7 +82,7 @@ export function ActivityWidget({ size, width, height, theme = 'dark' }: {
                     <Rings size={ring} values={values} />
                     <div className="text-[12px] font-semibold tabular-nums" style={{ color: p.fg }}>
                         {steps.toLocaleString()}
-                        <span className="ml-1 text-[10px] font-medium" style={{ color: p.sub }}>{t('health.steps', 'steps')}</span>
+                        <span className="ml-1 text-[10px] font-medium" style={{ color: p.sub }}>{t('health.stepsUnit', 'steps')}</span>
                     </div>
                 </div>
             </WidgetTile>
@@ -96,8 +96,8 @@ export function ActivityWidget({ size, width, height, theme = 'dark' }: {
                 <Rings size={size === 'lg' ? Math.min(width - 60, height * 0.52) : ring} values={values} />
                 <div className={`flex min-w-0 flex-1 flex-col justify-center gap-2.5 ${size === 'lg' ? 'w-full flex-row justify-around' : ''}`}>
                     <Stat icon={Footprints} color="#ff375f" fg={p.fg} unit={t('health.steps', 'Steps')} value={steps.toLocaleString()} />
-                    <Stat icon={Route}      color="#a3f930" fg={p.fg} unit={t('health.distance', 'Distance')} value={`${km} km`} />
-                    <Stat icon={Heart}      color="#04d3ec" fg={p.fg} unit={t('health.heartRate', 'Heart')} value={hr ? `${hr} bpm` : '—'} />
+                    <Stat icon={Route}      color="#a3f930" fg={p.fg} unit={t('health.distance', 'Distance')} value={t('health.kmValue', '{n} km', { n: km })} />
+                    <Stat icon={Heart}      color="#04d3ec" fg={p.fg} unit={t('health.heart', 'Heart')} value={hr ? t('health.bpmValue', '{n} bpm', { n: hr }) : '—'} />
                 </div>
             </div>
         </WidgetTile>

@@ -78,7 +78,9 @@ local function announce(cid, doc, opts, resource)
     if not (type(opts) == 'table' and opts.notify == false) then
         notifications.notifyCid(cid, {
             app = 'documents', appId = 'documents', time = 'now',
-            title = 'Files', body = ('New document: %s'):format(doc.name),
+            titleKey = 'documents.filesTitle', title = 'Files',
+            bodyKey = 'documents.newDocumentAdded', body = ('New document: %s'):format(doc.name),
+            bodyVars = { document = doc.name },
         })
     end
 end

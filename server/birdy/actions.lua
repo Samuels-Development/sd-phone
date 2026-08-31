@@ -64,9 +64,9 @@ local BUDGET_WINDOW = 86400000
 ---@return table|nil refusal
 local function throttle(cid, key)
     local budget = WRITE_BUDGET[key] or { 2000, 60 }
-    if not util.cooldown(cid, 'birdy:' .. key, budget[1]) then return fail('Slow down') end
+    if not util.cooldown(cid, 'birdy:' .. key, budget[1]) then return fail('birdy.slowDown', 'Slow down') end
     if not util.rateLimit(cid, 'birdy:' .. key, BUDGET_WINDOW, budget[2]) then
-        return fail('Daily limit reached')
+        return fail('birdy.dailyLimitReached', 'Daily limit reached')
     end
     return nil
 end
@@ -248,37 +248,37 @@ end
 ---@return table envelope
 function actions.register(source, payload)
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('birdy.playerNotFound', 'Player not found') end
     local slow = throttle(cid, 'register'); if slow then return slow end
     payload = tbl(payload)
 
     local name = trimmed(payload.name)
-    if not name or #name < 1 then return fail('Name is required') end
-    if #name > birdyCfg.MaxNameLength then return fail('Name is too long') end
+    if not name or #name < 1 then return fail('birdy.nameRequired', 'Name is required') end
+    if #name > birdyCfg.MaxNameLength then return fail('birdy.nameTooLong', 'Name is too long') end
 
     local handle = normalizeHandle(payload.username)
     if not handle or #handle < birdyCfg.MinHandleLength then
-        return fail(('Username needs at least %d letters, numbers or _'):format(birdyCfg.MinHandleLength))
+        return fail('birdy.usernameNeedsLeastLetters', 'Username needs at least {n} letters, numbers or _', { n = birdyCfg.MinHandleLength })
     end
     if #handle > birdyCfg.MaxHandleLength then
-        return fail(('Username must be %d characters or fewer'):format(birdyCfg.MaxHandleLength))
+        return fail('birdy.usernameMustCharactersFewer', 'Username must be {n} characters or fewer', { n = birdyCfg.MaxHandleLength })
     end
 
     local password = payload.password
     if type(password) ~= 'string' or #password < birdyCfg.MinPasswordLength then
-        return fail(('Password must be at least %d characters'):format(birdyCfg.MinPasswordLength))
+        return fail('birdy.passwordMustLeastCharacters', 'Password must be at least {n} characters', { n = birdyCfg.MinPasswordLength })
     end
-    if #password > birdyCfg.MaxPasswordLength then return fail('Password is too long') end
+    if #password > birdyCfg.MaxPasswordLength then return fail('birdy.passwordTooLong', 'Password is too long') end
 
     local bio = trimmed(payload.bio) or ''
-    if #bio > birdyCfg.MaxBioLength then return fail('Bio is too long') end
+    if #bio > birdyCfg.MaxBioLength then return fail('birdy.bioTooLong', 'Bio is too long') end
 
     if not trimmed(payload.email) or trimmed(payload.email) == '' then
-        return fail('Email is required so you can recover the account')
+        return fail('birdy.emailRequiredSoCanRecover', 'Email is required so you can recover the account')
     end
 
     if store.getProfileByHandle(handle) or acctStore.getAccount('birdy', handle) then
-        return fail('That username is taken')
+        return fail('birdy.usernameTaken', 'That username is taken')
     end
 
     local acctRes = acctActions.createAccount('birdy', {
@@ -289,7 +289,7 @@ function actions.register(source, payload)
 
     if not store.insertAccount(handle, cid, name, store.hashPassword(password), bio, birdyCfg.DefaultVerified == true, os.date('%B %Y')) then
         acctStore.deleteAccount(acctRes.data.account.id)
-        return fail('Failed to create the account')
+        return fail('birdy.failedCreateAccount', 'Failed to create the account')
     end
     acctStore.setSession('birdy', cid, acctRes.data.account.id)
     store.setLoggedIn(handle, true)
@@ -304,7 +304,7 @@ end
 ---@return table envelope
 function actions.login(source, payload)
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('birdy.playerNotFound', 'Player not found') end
     payload = tbl(payload)
 
     local raw = trimmed(payload.username) or ''
@@ -323,10 +323,10 @@ function actions.login(source, payload)
         end
     end
     if not acc or not acctActions.verifyPassword(acc, payload.password) then
-        return fail('Wrong username or password')
+        return fail('birdy.wrongUsernamePassword', 'Wrong username or password')
     end
     local prof = store.getProfileByHandle(acc.username)
-    if not prof then return fail('That account has no Birdy profile') end
+    if not prof then return fail('birdy.accountHasNoBirdyProfile', 'That account has no Birdy profile') end
 
     acctStore.setSession('birdy', cid, acc.id)
     store.setLoggedIn(prof.handle, true)
@@ -364,7 +364,7 @@ function actions.profile(source, payload)
     elseif me ~= '' then
         prof = store.getProfileByHandle(me)
     end
-    if not prof then return fail('Profile not found') end
+    if not prof then return fail('birdy.profileNotFound', 'Profile not found') end
 
     local data = serializeProfile(prof)
     local isMe = me ~= '' and prof.handle == me
@@ -389,7 +389,7 @@ function actions.profilePosts(source, payload)
     elseif me ~= '' then
         target = me
     end
-    if not target then return fail('Profile not found') end
+    if not target then return fail('birdy.profileNotFound', 'Profile not found') end
     local kind = (payload and payload.kind) or 'posts'
 
     -- Protected profiles expose posts only to themselves and their followers.
@@ -458,15 +458,15 @@ end
 ---@param payload { name?: string, bio?: string, protected?: boolean, avatar?: string|false, banner?: string|false }|nil
 ---@return table envelope
 function actions.updateProfile(source, payload)
-    local prof = viewer(source); if not prof then return fail('Not signed in') end
+    local prof = viewer(source); if not prof then return fail('birdy.notSigned', 'Not signed in') end
     payload = tbl(payload)
 
     local name = trimmed(payload.name) or prof.displayName
-    if #name < 1 then return fail('Name is required') end
-    if #name > birdyCfg.MaxNameLength then return fail('Name is too long') end
+    if #name < 1 then return fail('birdy.nameRequired', 'Name is required') end
+    if #name > birdyCfg.MaxNameLength then return fail('birdy.nameTooLong', 'Name is too long') end
 
     local bio = trimmed(payload.bio) or ''
-    if #bio > birdyCfg.MaxBioLength then return fail('Bio is too long') end
+    if #bio > birdyCfg.MaxBioLength then return fail('birdy.bioTooLong', 'Bio is too long') end
 
     local function imageUrl(v, fallback)
         local u = trimmed(v)
@@ -489,7 +489,7 @@ end
 ---@return table envelope { enabled, price, account, verified, verifiedType }
 function actions.verificationOffer(source)
     local prof = viewer(source)
-    if not prof then return fail('Not signed in') end
+    if not prof then return fail('birdy.notSigned', 'Not signed in') end
 
     local cfg = birdyCfg.Verification
     return ok({
@@ -507,11 +507,11 @@ end
 ---@return table envelope { me } on success
 function actions.purchaseVerification(source)
     local prof, cid = viewer(source)
-    if not prof or not cid then return fail('Not signed in') end
+    if not prof or not cid then return fail('birdy.notSigned', 'Not signed in') end
 
     local cfg = birdyCfg.Verification
-    if not (cfg and cfg.Enabled) then return fail('Verification is not available') end
-    if prof.verified then return fail('This account is already verified') end
+    if not (cfg and cfg.Enabled) then return fail('birdy.verificationNotAvailable', 'Verification is not available') end
+    if prof.verified then return fail('birdy.accountAlreadyVerified', 'This account is already verified') end
 
     local slow = throttle(cid, 'verify'); if slow then return slow end
 
@@ -519,15 +519,15 @@ function actions.purchaseVerification(source)
     local account = cfg.Account or 'bank'
 
     if price > 0 then
-        if (tonumber(money.get(source, account)) or 0) < price then return fail('Not enough money') end
-        if not money.remove(source, account, price, 'Birdy verification') then return fail('Payment failed') end
+        if (tonumber(money.get(source, account)) or 0) < price then return fail('birdy.notEnoughMoney', 'Not enough money') end
+        if not money.remove(source, account, price, 'Birdy verification') then return fail('birdy.paymentFailed', 'Payment failed') end
     end
 
     -- Nothing here is transactional, so the charge is undone by hand if the badge write misses.
     -- Without this a player whose account vanished mid-purchase is simply out the money.
     if store.setVerified(prof.handle, 'blue') == 0 then
         if price > 0 then money.add(source, account, price, 'Birdy verification refund') end
-        return fail('Could not verify this account')
+        return fail('birdy.couldNotVerifyAccount', 'Could not verify this account')
     end
 
     return ok({ me = serializeAuthor(store.getProfileByHandle(prof.handle)) })
@@ -541,13 +541,13 @@ end
 function actions.changePassword(source, payload)
     local cid = player.getIdentifier(source)
     local acc = cid and acctStore.getSessionAccount('birdy', cid) or nil
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('birdy.notSigned', 'Not signed in') end
     payload = tbl(payload)
     local password = payload and payload.password
     if type(password) ~= 'string' or #password < birdyCfg.MinPasswordLength then
-        return fail(('Password must be at least %d characters'):format(birdyCfg.MinPasswordLength))
+        return fail('birdy.passwordMustLeastCharacters', 'Password must be at least {n} characters', { n = birdyCfg.MinPasswordLength })
     end
-    if #password > birdyCfg.MaxPasswordLength then return fail('Password is too long') end
+    if #password > birdyCfg.MaxPasswordLength then return fail('birdy.passwordTooLong', 'Password is too long') end
     acctStore.setPassword(acc.id, acctStore.hashPassword(password))
     acctStore.syncVaultPassword('birdy', acc.username, password)
     local prof = store.getProfileByHandle(acc.username)
@@ -562,7 +562,7 @@ end
 function actions.deleteAccount(source)
     local cid = player.getIdentifier(source)
     local acc = cid and acctStore.getSessionAccount('birdy', cid) or nil
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('birdy.notSigned', 'Not signed in') end
     local prof = store.getProfileByHandle(acc.username)
     if prof then store.deleteAccount(prof.handle) end
     acctStore.deleteAccount(acc.id)
@@ -592,11 +592,11 @@ function actions.post(source, payload)
     payload = tbl(payload)
     local me = optionalViewerHandle(source)
     local id = payload and payload.id
-    if type(id) ~= 'string' or id == '' then return fail('Post id required') end
+    if type(id) ~= 'string' or id == '' then return fail('birdy.postIdRequired', 'Post id required') end
 
     store.bumpViews(id, me)
     local row = store.getPost(id, me)
-    if not row then return fail('Post not found') end
+    if not row then return fail('birdy.postNotFound', 'Post not found') end
 
     local post = serializePost(row)
     local replyRows = store.listReplies(id, me)
@@ -613,17 +613,17 @@ end
 ---@param payload { body?: string, images?: string[] }|nil
 ---@return table envelope
 function actions.create(source, payload)
-    local prof, cid = viewer(source); if not prof or not cid then return fail('Player not found') end
+    local prof, cid = viewer(source); if not prof or not cid then return fail('birdy.playerNotFound', 'Player not found') end
     local muted = moderation.guard(cid, 'birdy'); if muted then return muted end
     local slow = throttle(cid, 'create'); if slow then return slow end
     payload = tbl(payload)
     local body = trimmed(payload and payload.body) or ''
     local images = sanitizeImages(payload and payload.images)
-    if body == '' and not images then return fail('Post cannot be empty') end
-    if #body > birdyCfg.MaxPostLength then return fail('Post is too long') end
+    if body == '' and not images then return fail('birdy.postCannotEmpty', 'Post cannot be empty') end
+    if #body > birdyCfg.MaxPostLength then return fail('birdy.postTooLong', 'Post is too long') end
 
     local id = store.newId()
-    if not store.insertPost(id, prof.handle, body, nil, images) then return fail('Failed to post') end
+    if not store.insertPost(id, prof.handle, body, nil, images) then return fail('birdy.failedPost', 'Failed to post') end
 
     -- First-party hook: one server-local event per created post; the citizenid is the character
     -- who posted, which is not necessarily the one that created the account.
@@ -659,7 +659,8 @@ function actions.create(source, payload)
     util.pushMany('sd-phone:client:birdy:notification', targets, {})
     util.pushMany('sd-phone:client:notify', targets, {
         app = 'birdy', appId = 'birdy', title = 'Squawk',
-        body = ('%s posted: %s'):format(prof.displayName, preview),
+        bodyKey = 'birdy.postedPreview', body = ('%s posted: %s'):format(prof.displayName, preview),
+        bodyVars = { name = prof.displayName, preview = preview },
         time = 'now', quietInApp = true,
     })
 
@@ -675,22 +676,22 @@ end
 ---@param payload { parentId?: string, body?: string, images?: string[] }|nil
 ---@return table envelope
 function actions.reply(source, payload)
-    local prof, cid = viewer(source); if not prof or not cid then return fail('Player not found') end
+    local prof, cid = viewer(source); if not prof or not cid then return fail('birdy.playerNotFound', 'Player not found') end
     local muted = moderation.guard(cid, 'birdy'); if muted then return muted end
     local slow = throttle(cid, 'reply'); if slow then return slow end
     payload = tbl(payload)
     local parentId = payload and payload.parentId
     local body = trimmed(payload and payload.body) or ''
     local images = sanitizeImages(payload and payload.images)
-    if type(parentId) ~= 'string' or parentId == '' then return fail('Missing post') end
-    if body == '' and not images then return fail('Reply cannot be empty') end
-    if #body > birdyCfg.MaxPostLength then return fail('Reply is too long') end
+    if type(parentId) ~= 'string' or parentId == '' then return fail('birdy.missingPost', 'Missing post') end
+    if body == '' and not images then return fail('birdy.replyCannotEmpty', 'Reply cannot be empty') end
+    if #body > birdyCfg.MaxPostLength then return fail('birdy.replyTooLong', 'Reply is too long') end
 
     local parentAuthor = store.getPostAuthor(parentId)
-    if not parentAuthor then return fail('Post not found') end
+    if not parentAuthor then return fail('birdy.postNotFound', 'Post not found') end
 
     local id = store.newId()
-    if not store.insertPost(id, prof.handle, body, parentId, images) then return fail('Failed to reply') end
+    if not store.insertPost(id, prof.handle, body, parentId, images) then return fail('birdy.failedReply', 'Failed to reply') end
 
     local notify = nil
     if parentAuthor ~= prof.handle then
@@ -708,15 +709,15 @@ end
 ---@param payload { id?: string }|nil
 ---@return table envelope
 function actions.deletePost(source, payload)
-    local prof, cid = viewer(source); if not prof or not cid then return fail('Player not found') end
+    local prof, cid = viewer(source); if not prof or not cid then return fail('birdy.playerNotFound', 'Player not found') end
     payload = tbl(payload)
     local id = payload and payload.id
-    if type(id) ~= 'string' or id == '' then return fail('Missing post') end
+    if type(id) ~= 'string' or id == '' then return fail('birdy.missingPost', 'Missing post') end
     local slow = throttle(cid, 'deletePost'); if slow then return slow end
 
     local author = store.getPostAuthor(id)
-    if not author then return fail('Post not found') end
-    if author ~= prof.handle then return fail('Not your post') end
+    if not author then return fail('birdy.postNotFound', 'Post not found') end
+    if author ~= prof.handle then return fail('birdy.notPost', 'Not your post') end
 
     store.deletePost(id)
     store.invalidateTrending()
@@ -729,14 +730,14 @@ end
 ---@param payload { id?: string }|nil
 ---@return table envelope
 function actions.toggleLike(source, payload)
-    local prof, cid = viewer(source); if not prof or not cid then return fail('Player not found') end
+    local prof, cid = viewer(source); if not prof or not cid then return fail('birdy.playerNotFound', 'Player not found') end
     payload = tbl(payload)
     local id = payload and payload.id
-    if type(id) ~= 'string' or id == '' then return fail('Missing post') end
+    if type(id) ~= 'string' or id == '' then return fail('birdy.missingPost', 'Missing post') end
     local slow = throttle(cid, 'like'); if slow then return slow end
 
     local author = store.getPostAuthor(id)
-    if not author then return fail('Post not found') end
+    if not author then return fail('birdy.postNotFound', 'Post not found') end
 
     local nowLiked
     if store.isLiked(id, prof.handle) then
@@ -765,16 +766,16 @@ end
 ---@param payload { id?: string }|nil
 ---@return table envelope
 function actions.toggleRepost(source, payload)
-    local prof, cid = viewer(source); if not prof or not cid then return fail('Player not found') end
+    local prof, cid = viewer(source); if not prof or not cid then return fail('birdy.playerNotFound', 'Player not found') end
     payload = tbl(payload)
     local id = payload and payload.id
-    if type(id) ~= 'string' or id == '' then return fail('Missing post') end
+    if type(id) ~= 'string' or id == '' then return fail('birdy.missingPost', 'Missing post') end
     local slow = throttle(cid, 'repost'); if slow then return slow end
 
     local author = store.getPostAuthor(id)
-    if not author then return fail('Post not found') end
+    if not author then return fail('birdy.postNotFound', 'Post not found') end
 
-    if author == prof.handle then return fail('You cannot repost your own post') end
+    if author == prof.handle then return fail('birdy.cannotRepostOwnPost', 'You cannot repost your own post') end
 
     local nowReposted
     if store.isReposted(id, prof.handle) then
@@ -805,7 +806,7 @@ end
 ---@param payload { kind?: 'followers'|'following', handle?: string }|nil
 ---@return table envelope
 function actions.followList(source, payload)
-    local prof = viewer(source); if not prof then return fail('Player not found') end
+    local prof = viewer(source); if not prof then return fail('birdy.playerNotFound', 'Player not found') end
     payload = tbl(payload)
 
     local kind = payload.kind == 'following' and 'following' or 'followers'
@@ -845,13 +846,13 @@ end
 ---@param payload { handle?: string }|nil
 ---@return table envelope
 function actions.toggleFollow(source, payload)
-    local prof, cid = viewer(source); if not prof or not cid then return fail('Player not found') end
+    local prof, cid = viewer(source); if not prof or not cid then return fail('birdy.playerNotFound', 'Player not found') end
     payload = tbl(payload)
     local handle = payload and payload.handle and normalizeHandle(payload.handle)
-    if not handle or handle == '' or #handle > 32 then return fail('Missing account') end
-    if handle == prof.handle then return fail('You cannot follow yourself') end
+    if not handle or handle == '' or #handle > 32 then return fail('birdy.missingAccount', 'Missing account') end
+    if handle == prof.handle then return fail('birdy.cannotFollowYourself', 'You cannot follow yourself') end
     local target = store.getProfileByHandle(handle)
-    if not target then return fail('Missing account') end
+    if not target then return fail('birdy.missingAccount', 'Missing account') end
     local slow = throttle(cid, 'follow'); if slow then return slow end
 
     local notify = nil
@@ -878,7 +879,7 @@ end
 ---@param source number player server id
 ---@return table envelope
 function actions.notifications(source)
-    local prof = viewer(source); if not prof then return fail('Player not found') end
+    local prof = viewer(source); if not prof then return fail('birdy.playerNotFound', 'Player not found') end
     local rows = store.listNotifications(prof.handle, birdyCfg.NotificationLimit)
 
     local actors = {}
@@ -1025,7 +1026,7 @@ end
 ---@param source number player server id
 ---@return table envelope
 function actions.dmList(source)
-    local prof = viewer(source); if not prof then return fail('Player not found') end
+    local prof = viewer(source); if not prof then return fail('birdy.playerNotFound', 'Player not found') end
     local msgs = store.listMessagesFor(prof.handle)
 
     local function isRead(v) return v == true or v == 1 or v == '1' end
@@ -1068,10 +1069,10 @@ end
 ---@param payload { id?: string }|nil
 ---@return table envelope
 function actions.dmThread(source, payload)
-    local prof = viewer(source); if not prof then return fail('Player not found') end
+    local prof = viewer(source); if not prof then return fail('birdy.playerNotFound', 'Player not found') end
     payload = tbl(payload)
     local other = payload and payload.id
-    if type(other) ~= 'string' or other == '' then return fail('Missing conversation') end
+    if type(other) ~= 'string' or other == '' then return fail('birdy.missingConversation', 'Missing conversation') end
 
     local rows = store.listThread(prof.handle, other)
     local messages = {}
@@ -1092,10 +1093,10 @@ end
 ---@param payload { id?: string }|nil
 ---@return table envelope
 function actions.markRead(source, payload)
-    local prof = viewer(source); if not prof then return fail('Player not found') end
+    local prof = viewer(source); if not prof then return fail('birdy.playerNotFound', 'Player not found') end
     payload = tbl(payload)
     local other = payload and payload.id
-    if type(other) ~= 'string' or other == '' then return fail('Missing conversation') end
+    if type(other) ~= 'string' or other == '' then return fail('birdy.missingConversation', 'Missing conversation') end
     store.markThreadRead(prof.handle, other)
     return ok()
 end
@@ -1106,11 +1107,11 @@ end
 ---@param payload { handle?: string }|nil
 ---@return table envelope
 function actions.dmResolve(source, payload)
-    local prof = viewer(source); if not prof then return fail('Player not found') end
+    local prof = viewer(source); if not prof then return fail('birdy.playerNotFound', 'Player not found') end
     payload = tbl(payload)
     local tp = store.getProfileByHandle(normalizeHandle(payload.handle or '') or '')
-    if not tp then return fail('Account not found') end
-    if tp.handle == prof.handle then return fail('You cannot message yourself') end
+    if not tp then return fail('birdy.accountNotFound', 'Account not found') end
+    if tp.handle == prof.handle then return fail('birdy.cannotMessageYourself', 'You cannot message yourself') end
     return ok({ id = tp.handle, user = serializeAuthor(tp) })
 end
 
@@ -1120,21 +1121,21 @@ end
 ---@param payload table { to, kind, body, gifUrl, amount, requested, duration, audioUrl, waveform, wpCode, wpSub }
 ---@return table envelope
 function actions.dmSend(source, payload)
-    local prof, cid = viewer(source); if not prof or not cid then return fail('Player not found') end
+    local prof, cid = viewer(source); if not prof or not cid then return fail('birdy.playerNotFound', 'Player not found') end
     local muted = moderation.guard(cid, 'birdy'); if muted then return muted end
     local slow = throttle(cid, 'dm'); if slow then return slow end
     payload = tbl(payload)
     local to = normalizeHandle(payload.to or payload.toHandle or '')
-    if not to or to == '' or #to > 32 then return fail('Missing recipient') end
-    if to == prof.handle then return fail('You cannot message yourself') end
+    if not to or to == '' or #to > 32 then return fail('birdy.missingRecipient', 'Missing recipient') end
+    if to == prof.handle then return fail('birdy.cannotMessageYourself', 'You cannot message yourself') end
     -- Without this a DM addressed to a made-up handle is stored forever: no owner can open it,
     -- and no account-delete or wipe path reaches it.
-    if not store.getProfileByHandle(to) then return fail('Account not found') end
+    if not store.getProfileByHandle(to) then return fail('birdy.accountNotFound', 'Account not found') end
 
     local kind = VALID_DM_KINDS[payload.kind] and payload.kind or 'text'
     local body = (trimmed(payload.body) or ''):sub(1, birdyCfg.MaxDmLength)
     local meta = sanitizeDmMeta(kind, payload)
-    if not dmHasContent(kind, body, meta) then return fail('Message cannot be empty') end
+    if not dmHasContent(kind, body, meta) then return fail('birdy.messageCannotEmpty', 'Message cannot be empty') end
 
     if kind == 'money' and not meta.requested then
         -- The money lands in a character's account, not the Squawk account, so it needs whichever
@@ -1144,15 +1145,18 @@ function actions.dmSend(source, payload)
         for _, c in ipairs(acc and acctStore.sessionCitizens('birdy', acc.id) or {}) do
             if player.getSourceByIdentifier(c) then toCid = c break end
         end
-        if not toCid then return fail('They need to be online to receive money') end
+        if not toCid then return fail('birdy.theyNeedOnlineReceiveMoney', 'They need to be online to receive money') end
         local number = settings.getPhoneNumber(toCid)
-        if not number then return fail('Payment failed') end
+        if not number then return fail('birdy.paymentFailed', 'Payment failed') end
         local res = banking.send(source, { number = number, amount = meta.amount, note = 'Birdy payment' })
-        if not res or not res.success then return fail(res and res.message or 'Payment failed') end
+        if not res or not res.success then
+            if res and res.message then return res end
+            return fail('birdy.paymentFailed', 'Payment failed')
+        end
     end
 
     local id = store.newId()
-    if not store.insertDm(id, prof.handle, to, kind, body, meta) then return fail('Failed to send') end
+    if not store.insertDm(id, prof.handle, to, kind, body, meta) then return fail('birdy.failedSend', 'Failed to send') end
 
     local row = store.getDm(id)
     return ok({
@@ -1170,15 +1174,15 @@ end
 ---@param payload { id?: string, emoji?: string }|nil
 ---@return table envelope
 function actions.dmReact(source, payload)
-    local prof, cid = viewer(source); if not prof or not cid then return fail('Player not found') end
+    local prof, cid = viewer(source); if not prof or not cid then return fail('birdy.playerNotFound', 'Player not found') end
     payload = tbl(payload)
     local slow = throttle(cid, 'react'); if slow then return slow end
     local row = type(payload.id) == 'string' and store.getDm(payload.id) or nil
-    if not row then return fail('Message not found') end
-    if row.from_handle ~= prof.handle and row.to_handle ~= prof.handle then return fail('Message not found') end
+    if not row then return fail('birdy.messageNotFound', 'Message not found') end
+    if row.from_handle ~= prof.handle and row.to_handle ~= prof.handle then return fail('birdy.messageNotFound', 'Message not found') end
 
     local emoji = tostring(payload.emoji or '')
-    if not REACTION_SET[emoji] then return fail('Invalid reaction') end
+    if not REACTION_SET[emoji] then return fail('birdy.invalidReaction', 'Invalid reaction') end
 
     local reactions = store.decodeJson(row.reactions)
     local users = reactions[emoji] or {}

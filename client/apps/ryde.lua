@@ -1,3 +1,5 @@
+---@type table Locale bridge (bridge.shared.locale): t(key, english, vars) for in-world text.
+local locale = require 'bridge.shared.locale'
 ---@type fun(nuiAction: string, serverEvent: string) NUI->server pass-through registrar (client.nui).
 local proxy = require 'client.nui'
 
@@ -41,7 +43,7 @@ end)
 ---@return string name display label, raw zone code, or 'Unknown area'
 local function zoneName(x, y, z)
     local code = GetNameOfZone(x + 0.0, y + 0.0, (z or 0.0) + 0.0)
-    if not code or code == '' then return 'Unknown area' end
+    if not code or code == '' then return locale.t('ryde.unknownArea', 'Unknown area') end
     local label = GetLabelText(code)
     if label and label ~= '' and label ~= 'NULL' then return label end
     return code

@@ -185,16 +185,16 @@ end
 ---@param payload table client payload { player, banker, tie, ppair, bpair }
 ---@return table envelope { success, message?, data? }
 function baccarat.deal(src, payload)
-    local cid = shared.cidOf(src); if not cid then return util.fail('Player not found') end
-    if not util.cooldown(cid, 'games:baccaratDeal', COOLDOWN) then return util.fail('Slow down') end
+    local cid = shared.cidOf(src); if not cid then return util.fail('games.playerNotFound', 'Player not found') end
+    if not util.cooldown(cid, 'games:baccaratDeal', COOLDOWN) then return util.fail('games.slowDown', 'Slow down') end
 
     local bets, stake = readBets(payload)
-    if not bets then return util.fail('Enter a valid amount') end
-    if stake <= 0 then return util.fail('Place a bet') end
-    if stake > MAX_TOTAL then return util.fail('Table limit') end
+    if not bets then return util.fail('games.enterValidAmount', 'Enter a valid amount') end
+    if stake <= 0 then return util.fail('games.placeBet', 'Place a bet') end
+    if stake > MAX_TOTAL then return util.fail('games.tableLimit', 'Table limit') end
 
     local bal = chips.remove(cid, stake)
-    if not bal then return util.fail('Not enough chips') end
+    if not bal then return util.fail('games.notEnoughChips', 'Not enough chips') end
 
     local res       = baccarat.resolveHand(deck.fresh(SHOE_DECKS))
     local pays, win = baccarat.payouts(bets, res)

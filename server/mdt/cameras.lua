@@ -252,16 +252,18 @@ end
 ---@param kind string camera kind
 ---@return integer|nil unitSrc
 ---@return table|nil officer identity
----@return string|nil reason refusal when the camera cannot be watched
+---@return table|nil refusal failure envelope when the camera cannot be watched
 local function resolveTarget(cid, kind)
     local unitSrc = player.getSourceByIdentifier(cid)
-    if not unitSrc or not GetPlayerName(unitSrc) then return nil, nil, 'That unit is no longer on the air' end
+    if not unitSrc or not GetPlayerName(unitSrc) then
+        return nil, nil, util.fail('mdt.unitNoLongerAir', 'That unit is no longer on the air')
+    end
 
     local officer = cameraOfficer(unitSrc)
-    if not officer then return nil, nil, 'That unit is no longer on the air' end
+    if not officer then return nil, nil, util.fail('mdt.unitNoLongerAir', 'That unit is no longer on the air') end
 
     if kind == 'dashcam' and not dashVehicle(unitSrc) then
-        return nil, nil, 'That unit is not in a marked vehicle'
+        return nil, nil, util.fail('mdt.unitNotMarkedVehicle', 'That unit is not in a marked vehicle')
     end
 
     return unitSrc, officer, nil
@@ -271,7 +273,7 @@ end
 ---refreshes on a timer, so a terminal that died without leaving stops answering here and its seat
 ---expires on its own.
 cameras.list = access.gated('cameras.view', function(src, _payload, me)
-    if not ENABLED then return util.fail('Cameras are not available') end
+    if not ENABLED then return util.fail('mdt.camerasNotAvailable', 'Cameras are not available') end
 
     local now = GetGameTimer()
     local out = {}
@@ -343,29 +345,29 @@ end)
 ---player to attach a camera to them, and a server id is already public to every client in the
 ---session, whereas a live position is exactly the thing a tampered client should not be handed.
 cameras.watch = access.audited('cameras.view', function(src, payload, me)
-    if not ENABLED then return util.fail('Cameras are not available') end
+    if not ENABLED then return util.fail('mdt.camerasNotAvailable', 'Cameras are not available') end
     if not util.rateLimit(me.citizenid, 'mdt:cameras:watch', WATCH_WINDOW, MAX_WATCHES) then
-        return util.fail('Too many requests, try again in a moment')
+        return util.fail('mdt.tooManyRequestsTryAgain', 'Too many requests, try again in a moment')
     end
 
     local kind, cid = splitCameraId(payload.cameraId)
-    if not kind or not cid then return util.fail('Unknown camera') end
+    if not kind or not cid then return util.fail('mdt.unknownCamera', 'Unknown camera') end
 
     -- Your own bodycam shows the back of your own head from a camera on your own chest, which is
     -- worth nothing to anybody. Your own DASHCAM is a different matter: it points out of the
     -- windscreen at the stop you are standing in front of, so that one stays open to you.
     if kind == 'bodycam' and cid == me.citizenid then
-        return util.fail('That is your own bodycam')
+        return util.fail('mdt.ownBodycam', 'That is your own bodycam')
     end
 
     local unitSrc, officer, refusal = resolveTarget(cid, kind)
-    if not unitSrc or not officer then return util.fail(refusal or 'Unknown camera') end
+    if not unitSrc or not officer then return refusal or util.fail('mdt.unknownCamera', 'Unknown camera') end
 
     -- A routing bucket is a separate copy of the world. An officer in another one can never be in
     -- this terminal's scope however far the watcher travels, so refuse plainly rather than handing
     -- back a target the client will sit on forever waiting to resolve.
     if GetPlayerRoutingBucket(unitSrc) ~= GetPlayerRoutingBucket(src) then
-        return util.fail('That unit is not reachable from here')
+        return util.fail('mdt.unitNotReachableFromHere', 'That unit is not reachable from here')
     end
 
     local id  = cameraId(kind, cid)
@@ -376,7 +378,7 @@ cameras.watch = access.audited('cameras.view', function(src, payload, me)
     -- it is itself inside.
     local reWatch = watchers[id] ~= nil and watchers[id][src] ~= nil
     if not reWatch and MAX_VIEWERS > 0 and viewerCount(id, now) >= MAX_VIEWERS then
-        return util.fail('That camera has as many terminals on it as it takes')
+        return util.fail('mdt.cameraHasAsManyTerminals', 'That camera has as many terminals on it as it takes')
     end
 
     -- Read AFTER the count, never before it: counting an empty camera forgets it, and a table

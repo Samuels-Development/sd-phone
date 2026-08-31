@@ -44,7 +44,7 @@ local tradeBusy = {}
 ---@param fn fun(): table handler body returning the response envelope
 ---@return table result response envelope, or the busy rejection
 local function withTradeGate(cid, fn)
-    if tradeBusy[cid] then return { success = false, message = 'Please wait' } end
+    if tradeBusy[cid] then return { success = false, messageKey = 'stocks.pleaseWait', message = 'Please wait' } end
     tradeBusy[cid] = true
     local ok, result = pcall(fn)
     tradeBusy[cid] = nil
@@ -118,14 +118,14 @@ function actions.deposit(src, payload)
     payload = type(payload) == 'table' and payload or {}
     return withTradeGate(cid, function()
         local amount = wholeDollars(payload.amount)
-        if amount < (ST.MinTrade or 1)         then return { success = false, message = 'Enter a valid amount' } end
-        if amount > (ST.MaxTrade or math.huge) then return { success = false, message = 'Amount is too large' } end
+        if amount < (ST.MinTrade or 1)         then return { success = false, messageKey = 'stocks.enterValidAmount', message = 'Enter a valid amount' } end
+        if amount > (ST.MaxTrade or math.huge) then return { success = false, messageKey = 'stocks.amountTooLarge', message = 'Amount is too large' } end
 
         local bal = bank.getBalance(src) or 0
-        if bal < amount then return { success = false, message = 'Insufficient bank funds' } end
+        if bal < amount then return { success = false, messageKey = 'stocks.insufficientBankFunds', message = 'Insufficient bank funds' } end
 
         if not bank.removeMoney(src, amount, 'Brokerage deposit') then
-            return { success = false, message = 'Could not take that from your account' }
+            return { success = false, messageKey = 'stocks.couldNotTakeFromAccount', message = 'Could not take that from your account' }
         end
         local cash = store.ensureWallet(cid, ST.StartingCash) + amount
         store.setWallet(cid, cash)
@@ -145,16 +145,16 @@ function actions.withdraw(src, payload)
     payload = type(payload) == 'table' and payload or {}
     return withTradeGate(cid, function()
         local amount = wholeDollars(payload.amount)
-        if amount < (ST.MinTrade or 1) then return { success = false, message = 'Enter a valid amount' } end
+        if amount < (ST.MinTrade or 1) then return { success = false, messageKey = 'stocks.enterValidAmount', message = 'Enter a valid amount' } end
 
         local cash = store.ensureWallet(cid, ST.StartingCash)
-        if cash < amount then return { success = false, message = 'Insufficient brokerage cash' } end
+        if cash < amount then return { success = false, messageKey = 'stocks.insufficientBrokerageCash', message = 'Insufficient brokerage cash' } end
 
         cash = cash - amount
         store.setWallet(cid, cash)
         if not bank.addMoney(src, amount, 'Brokerage withdrawal') then
             store.setWallet(cid, cash + amount)
-            return { success = false, message = 'Could not reach your account' }
+            return { success = false, messageKey = 'stocks.couldNotReachAccount', message = 'Could not reach your account' }
         end
 
         return { success = true, data = { cash = cash, bank = bank.getBalance(src) or 0 } }
@@ -172,30 +172,30 @@ function actions.buy(src, payload)
     payload = type(payload) == 'table' and payload or {}
     return withTradeGate(cid, function()
         local symbol = tostring(payload.symbol or '')
-        if not engine.meta(symbol) then return { success = false, message = 'Unknown asset' } end
+        if not engine.meta(symbol) then return { success = false, messageKey = 'stocks.unknownAsset', message = 'Unknown asset' } end
         if not util.rateLimit(cid, 'stocks:trade', TRADE_WINDOW, TRADE_MAX) then
-            return { success = false, message = 'Slow down' }
+            return { success = false, messageKey = 'stocks.slowDown', message = 'Slow down' }
         end
 
         local amount = wholeDollars(payload.amount)
-        if amount < (ST.MinTrade or 1)         then return { success = false, message = 'Enter a valid amount' } end
-        if amount > (ST.MaxTrade or math.huge) then return { success = false, message = 'Amount is too large' } end
+        if amount < (ST.MinTrade or 1)         then return { success = false, messageKey = 'stocks.enterValidAmount', message = 'Enter a valid amount' } end
+        if amount > (ST.MaxTrade or math.huge) then return { success = false, messageKey = 'stocks.amountTooLarge', message = 'Amount is too large' } end
 
         local price = engine.priceOf(symbol)
-        if not price or price <= 0 then return { success = false, message = 'No price available' } end
+        if not price or price <= 0 then return { success = false, messageKey = 'stocks.noPriceAvailable', message = 'No price available' } end
 
         local fee       = lib.math.round(amount * (ST.Commission or 0))
         local totalCost = amount + fee
 
         local cash = store.ensureWallet(cid, ST.StartingCash)
-        if cash < totalCost then return { success = false, message = 'Insufficient brokerage cash' } end
+        if cash < totalCost then return { success = false, messageKey = 'stocks.insufficientBrokerageCash', message = 'Insufficient brokerage cash' } end
 
         local existing = store.getHolding(cid, symbol)
 
         -- The order moves the market before it fills, so it buys at the price it created, not the
         -- one it quoted. Filling pre-impact let a buy/sell round trip pocket its own impact.
         local fill = engine.applyImpact(symbol, amount, true) or price
-        if fill <= 0 then return { success = false, message = 'No price available' } end
+        if fill <= 0 then return { success = false, messageKey = 'stocks.noPriceAvailable', message = 'No price available' } end
 
         local units  = amount / fill
         local oldQty = existing and tonumber(existing.quantity) or 0
@@ -224,32 +224,32 @@ function actions.sell(src, payload)
     payload = type(payload) == 'table' and payload or {}
     return withTradeGate(cid, function()
         local symbol = tostring(payload.symbol or '')
-        if not engine.meta(symbol) then return { success = false, message = 'Unknown asset' } end
+        if not engine.meta(symbol) then return { success = false, messageKey = 'stocks.unknownAsset', message = 'Unknown asset' } end
         if not util.rateLimit(cid, 'stocks:trade', TRADE_WINDOW, TRADE_MAX) then
-            return { success = false, message = 'Slow down' }
+            return { success = false, messageKey = 'stocks.slowDown', message = 'Slow down' }
         end
 
         local existing = store.getHolding(cid, symbol)
         local heldQty  = existing and tonumber(existing.quantity) or 0
-        if heldQty <= 0 then return { success = false, message = "You don't own any" } end
+        if heldQty <= 0 then return { success = false, messageKey = 'stocks.donTOwnAny', message = "You don't own any" } end
 
         local price = engine.priceOf(symbol)
-        if not price or price <= 0 then return { success = false, message = 'No price available' } end
+        if not price or price <= 0 then return { success = false, messageKey = 'stocks.noPriceAvailable', message = 'No price available' } end
 
         local unitsToSell
         if payload.all then
             unitsToSell = heldQty
         else
             local amount = wholeDollars(payload.amount)
-            if amount < (ST.MinTrade or 1) then return { success = false, message = 'Enter a valid amount' } end
+            if amount < (ST.MinTrade or 1) then return { success = false, messageKey = 'stocks.enterValidAmount', message = 'Enter a valid amount' } end
             unitsToSell = math.min(amount / price, heldQty)
         end
-        if unitsToSell <= 0 then return { success = false, message = 'Nothing to sell' } end
+        if unitsToSell <= 0 then return { success = false, messageKey = 'stocks.nothingSell', message = 'Nothing to sell' } end
 
         -- Same rule as the buy: the sale moves the price down before it fills. The order's own
         -- notional at the quoted price sizes the impact, exactly as it did when applied afterwards.
         local fill = engine.applyImpact(symbol, unitsToSell * price, false) or price
-        if fill <= 0 then return { success = false, message = 'No price available' } end
+        if fill <= 0 then return { success = false, messageKey = 'stocks.noPriceAvailable', message = 'No price available' } end
 
         local gross = unitsToSell * fill
         local fee   = lib.math.round(gross * (ST.Commission or 0))
@@ -282,7 +282,7 @@ function actions.holders(src, payload)
     if not cid then return { success = false } end
     payload = type(payload) == 'table' and payload or {}
     local symbol = tostring(payload.symbol or '')
-    if not engine.meta(symbol) then return { success = false, message = 'Unknown asset' } end
+    if not engine.meta(symbol) then return { success = false, messageKey = 'stocks.unknownAsset', message = 'Unknown asset' } end
 
     local supply = engine.supplyOf(symbol)
     local stats  = store.holderStats(symbol)

@@ -838,8 +838,8 @@ export function PayphoneUI() {
                                     type="button"
                                     onClick={() => void insertCoin()}
                                     disabled={!needsCoin || phase !== 'idle'}
-                                    aria-label={t('payphone.insertCoin', 'Insert coin')}
-                                    title={needsCoin ? t('payphone.insertCoin', 'Insert coin') : undefined}
+                                    aria-label={t('payphone.insertCoinButton', 'Insert coin')}
+                                    title={needsCoin ? t('payphone.insertCoinButton', 'Insert coin') : undefined}
                                     className="rounded-[12px] p-3"
                                     style={{
                                         ...RECESS,

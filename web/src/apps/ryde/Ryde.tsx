@@ -50,7 +50,7 @@ function Shell() {
                 )}
             </div>
 
-            <TabBar tabs={RYDE_TABS} active={g.tab} onChange={g.setTab} />
+            <TabBar tabs={rydeTabs()} active={g.tab} onChange={g.setTab} />
 
             {g.accountOpen && <AccountOverlay onClosed={() => g.setAccountOpen(false)} />}
 
@@ -87,7 +87,7 @@ function AccountOverlay({ onClosed }: { onClosed: () => void }) {
     );
 }
 
-const RYDE_TABS: TabBarItem<'home' | 'activity' | 'driver' | 'leaderboard'>[] = [
+const rydeTabs = (): TabBarItem<'home' | 'activity' | 'driver' | 'leaderboard'>[] => [
     { id: 'home',        label: t('ryde.tabRide', 'Ride'),        icon: a => <MapPin className="h-[33px] w-[33px]" strokeWidth={a ? 2.2 : 1.9} /> },
     { id: 'activity',    label: t('ryde.activity', 'Activity'),   icon: a => <Clock  className="h-[33px] w-[33px]" strokeWidth={a ? 2.2 : 1.9} /> },
     { id: 'driver',      label: t('ryde.drive', 'Drive'),         icon: a => <Car    className="h-[33px] w-[33px]" strokeWidth={a ? 2.2 : 1.9} /> },

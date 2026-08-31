@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, Copy, Heart, MoreHorizontal, Wallpaper } from 'lucide-react';
 
-import { t } from '@/i18n';
+import { getLocaleTag, t } from '@/i18n';
 import { apiSharePhoto, type Photo } from '@/core/photosApi';
 import { useThemeStore } from '@/stores/themeStore';
 import { ActionSheet } from '@/ui/ActionSheet';
@@ -12,7 +12,7 @@ import { VideoView } from './VideoView';
 function fmtDate(iso: string): string {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return '';
-    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
+    return d.toLocaleDateString(getLocaleTag(), { day: 'numeric', month: 'long' });
 }
 
 function fmtTime(iso: string): string {

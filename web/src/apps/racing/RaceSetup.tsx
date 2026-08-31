@@ -17,6 +17,7 @@ import {
     CLASS_ORDER, DEFAULT_SETUP, classAtOrBelow, formatMoney,
     type CameraMode, type PhasingMode, type RaceClass, type RaceSetupDraft, type TrackRow,
 } from './data';
+import { failText } from '@/core/api';
 
 const STACK_WIDTH = 560;
 
@@ -35,7 +36,7 @@ function secondsLabel(seconds: number): string {
 
 function phasingOptions(): SelectOption<PhasingMode>[] {
     return [
-        { value: 'off',   label: t('racing.phasingOff', 'Off, cars collide') },
+        { value: 'off',   label: t('racing.phasingOffOption', 'Off, cars collide') },
         { value: 'full',  label: t('racing.phasingFull', 'On for the whole race') },
         { value: 'timed', label: t('racing.phasingTimed', 'On for the first stretch') },
     ];
@@ -44,8 +45,8 @@ function phasingOptions(): SelectOption<PhasingMode>[] {
 function cameraOptions(): SelectOption<CameraMode>[] {
     return [
         { value: 'none',  label: t('racing.cameraFree', 'Driver picks') },
-        { value: 'first', label: t('racing.cameraFirst', 'First person only') },
-        { value: 'third', label: t('racing.cameraThird', 'Third person only') },
+        { value: 'first', label: t('racing.cameraFirstOnly', 'First person only') },
+        { value: 'third', label: t('racing.cameraThirdOnly', 'Third person only') },
     ];
 }
 
@@ -158,7 +159,7 @@ export function RaceSetup({ track, onBack }: { track: TrackRow; onBack: () => vo
         });
         setBusy(false);
         if (!result.success) {
-            setError(result.message ?? t('racing.hostFailed', 'That race could not be opened.'));
+            setError(failText(result, t('racing.hostFailed', 'That race could not be opened.')));
             return;
         }
         const start = result.data?.start;

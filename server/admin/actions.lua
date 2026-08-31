@@ -118,7 +118,7 @@ function actions.search(source, payload)
         local cursor = payload and type(payload.cursor) == 'string' and payload.cursor or nil
         hits, nextCursor = store.listRecentPlayers(cursor, PAGE)
     else
-        return fail('Type at least 2 characters')
+        return fail('admin.typeLeast2Characters', 'Type at least 2 characters')
     end
 
     -- Fold `sim:<number>` profile rows onto the character who activated them (deduped).
@@ -179,7 +179,7 @@ end
 ---@return table envelope
 function actions.overview(source, payload)
     local cid = cleanCid(payload and payload.cid)
-    if not cid then return fail('Missing player') end
+    if not cid then return fail('admin.missingPlayer', 'Missing player') end
 
     local data = store.playerOverview(cid) or {}
     local names, online = resolveNames({ cid })
@@ -240,26 +240,26 @@ end
 ---@return table envelope { number }
 function actions.setNumber(source, payload)
     local cid = cleanCid(payload and payload.cid)
-    if not cid then return fail('Missing player') end
+    if not cid then return fail('admin.missingPlayer', 'Missing player') end
     local digits = util.digits(payload and payload.number)
     -- Any length this server recognises, not just the one it generates, so a number issued
     -- before config.Phone.Number.Length changed can still be corrected.
     if not util.validNumberLength(digits) then
-        return fail(('Phone numbers are %s digits'):format(table.concat(util.numberLengths, ' or ')))
+        return fail('admin.phoneNumbersDigits', 'Phone numbers are {lengths} digits', { lengths = table.concat(util.numberLengths, ' or ') })
     end
 
     if simState.active then
         local target = sourceByRealCid(cid)
-        if not target then return fail('Player must be online with the phone + SIM on them') end
+        if not target then return fail('admin.playerMustOnlineWithPhone', 'Player must be online with the phone + SIM on them') end
         local okSet, err = exports['sd-phone']:setSimNumber(target, digits)
         if not okSet then
-            if err == 'taken' then return fail('That number is already taken') end
-            if err == 'no_sim' then return fail('Player has no SIM in their phone') end
-            return fail('Could not change the SIM number')
+            if err == 'taken' then return fail('admin.numberAlreadyTaken', 'That number is already taken') end
+            if err == 'no_sim' then return fail('admin.playerHasNoSimTheir', 'Player has no SIM in their phone') end
+            return fail('admin.couldNotChangeSimNumber', 'Could not change the SIM number')
         end
     else
         local owner = settings.getCitizenByNumber(digits)
-        if owner and owner ~= cid then return fail('That number is already taken') end
+        if owner and owner ~= cid then return fail('admin.numberAlreadyTaken', 'That number is already taken') end
         settings.setPhoneNumber(cid, digits)
     end
 
@@ -274,13 +274,13 @@ end
 ---@param payload { number?: string }|nil
 ---@return table envelope { number, identity, ownerCid, ownerName, createdAt, boundProfile, holder }
 function actions.simLookup(source, payload)
-    if not simState.active then return fail('Unique phones are not enabled') end
+    if not simState.active then return fail('admin.uniquePhonesNotEnabled', 'Unique phones are not enabled') end
     local digits = util.digits(payload and payload.number)
-    if digits == '' then return fail('Enter a number') end
+    if digits == '' then return fail('admin.enterNumber', 'Enter a number') end
 
     local simStore = require 'server.sim.store'
     local row = simStore.get(digits)
-    if not row then return fail('No SIM is registered with that number') end
+    if not row then return fail('admin.noSimRegisteredWithNumber', 'No SIM is registered with that number') end
 
     local out = {
         number       = row.number,
@@ -327,7 +327,7 @@ end
 ---@param payload { q?: string, cursor?: number }|nil
 ---@return table envelope { numbers, nextCursor }
 function actions.numbers(source, payload)
-    if not simState.active then return fail('Unique phones are not enabled') end
+    if not simState.active then return fail('admin.uniquePhonesNotEnabled', 'Unique phones are not enabled') end
     local q = util.trim(payload and payload.q)
     if #q > 64 then q = q:sub(1, 64) end
     local offset = math.max(0, math.floor(tonumber(payload and payload.cursor) or 0))
@@ -368,15 +368,15 @@ end
 ---@param payload { cid?: string, bind?: boolean }|nil
 ---@return table envelope { number }
 function actions.giveSim(source, payload)
-    if not simState.active then return fail('Unique phones are not enabled') end
+    if not simState.active then return fail('admin.uniquePhonesNotEnabled', 'Unique phones are not enabled') end
     local cid = cleanCid(payload and payload.cid)
-    if not cid then return fail('Missing player') end
+    if not cid then return fail('admin.missingPlayer', 'Missing player') end
     local target = sourceByRealCid(cid)
-    if not target then return fail('Player must be online to receive a SIM') end
+    if not target then return fail('admin.playerMustOnlineReceiveSim', 'Player must be online to receive a SIM') end
 
     local bind = payload and payload.bind == true
     local number = exports['sd-phone']:giveSimCard(target, bind and { citizenid = cid } or nil)
-    if not number then return fail('Could not create the SIM card') end
+    if not number then return fail('admin.couldNotCreateSimCard', 'Could not create the SIM card') end
 
     local aCid, aName = adminIdent(source)
     store.audit(aCid, aName, 'give-sim', cid, (bind and 'bound sim ' or 'blank sim ') .. number)
@@ -389,8 +389,8 @@ end
 ---@return table envelope
 function actions.resetPasscode(source, payload)
     local cid = cleanCid(payload and payload.cid)
-    if not cid then return fail('Missing player') end
-    if store.resetPasscode(cid) == 0 then return fail('That player has no phone settings yet') end
+    if not cid then return fail('admin.missingPlayer', 'Missing player') end
+    if store.resetPasscode(cid) == 0 then return fail('admin.playerHasNoPhoneSettings', 'That player has no phone settings yet') end
     local aCid, aName = adminIdent(source)
     store.audit(aCid, aName, 'reset-passcode', cid, '')
     return ok()
@@ -402,9 +402,9 @@ end
 ---@return table envelope { installed }
 function actions.setApp(source, payload)
     local cid = cleanCid(payload and payload.cid)
-    if not cid then return fail('Missing player') end
+    if not cid then return fail('admin.missingPlayer', 'Missing player') end
     local id = payload and payload.id
-    if type(id) ~= 'string' or not DOWNLOADABLE[id] then return fail('That app can\'t be managed') end
+    if type(id) ~= 'string' or not DOWNLOADABLE[id] then return fail('admin.appCanTManaged', 'That app can\'t be managed') end
     local install = payload and payload.install == true
 
     local installed, keep = settings.getInstalledApps(cid) or {}, {}
@@ -427,14 +427,14 @@ end
 ---@return table envelope
 function actions.resetAccountPassword(source, payload)
     local accountId = tonumber(payload and payload.accountId)
-    if not accountId then return fail('Missing account') end
+    if not accountId then return fail('admin.missingAccount', 'Missing account') end
     local password = payload and payload.password
     if type(password) ~= 'string' or #password < 4 or #password > 64 then
-        return fail('Password must be 4-64 characters')
+        return fail('admin.passwordMust464Characters', 'Password must be 4-64 characters')
     end
 
     local acc = acctStore.getAccountById(accountId)
-    if not acc then return fail('Account not found') end
+    if not acc then return fail('admin.accountNotFound', 'Account not found') end
 
     acctStore.setPassword(acc.id, acctStore.hashPassword(password))
     if acc.app == 'mail' then
@@ -453,7 +453,7 @@ end
 ---@return table envelope
 function actions.forceLogout(source, payload)
     local cid = cleanCid(payload and payload.cid)
-    if not cid then return fail('Missing player') end
+    if not cid then return fail('admin.missingPlayer', 'Missing player') end
     local app = payload and payload.app
 
     -- The Squawk flag is resolved through the session, so it has to clear before the session does.
@@ -499,7 +499,7 @@ end
 ---@return table envelope
 function actions.birdyDeletePost(source, payload)
     local id = payload and payload.id
-    if type(id) ~= 'string' or id == '' or #id > 16 then return fail('Missing post') end
+    if type(id) ~= 'string' or id == '' or #id > 16 then return fail('admin.missingPost', 'Missing post') end
 
     local aCid, aName = adminIdent(source)
 
@@ -508,7 +508,7 @@ function actions.birdyDeletePost(source, payload)
     local kept = bin.keep('birdy', id, nil, aCid, aName)
 
     local removed = store.deleteBirdyPost(id)
-    if removed == 0 then return fail('Post not found') end
+    if removed == 0 then return fail('admin.postNotFound', 'Post not found') end
     -- A queue entry pointing at a row that no longer exists is noise someone has to read to
     -- dismiss, so removing the post retires its flags with it.
     flags.clearFor('birdy', id)
@@ -523,13 +523,13 @@ end
 ---@return table envelope
 function actions.birdySetVerified(source, payload)
     local handle = util.trim(payload and payload.handle):lower()
-    if handle == '' or #handle > 32 then return fail('Missing account') end
+    if handle == '' or #handle > 32 then return fail('admin.missingAccount', 'Missing account') end
 
     -- Not named `ok`: that is the envelope helper this function returns through.
     local vtype, valid = verify.parse(payload and payload.type)
-    if not valid then return fail('Badge type must be one of: ' .. verify.list()) end
+    if not valid then return fail('admin.badgeTypeMustOne', 'Badge type must be one of: {list}', { list = verify.list() }) end
 
-    if store.setBirdyVerified(handle, vtype) == 0 then return fail('No Birdy profile') end
+    if store.setBirdyVerified(handle, vtype) == 0 then return fail('admin.noBirdyProfile', 'No Birdy profile') end
 
     local aCid, aName = adminIdent(source)
     store.audit(aCid, aName, vtype and 'birdy-verify' or 'birdy-unverify', nil,
@@ -545,7 +545,7 @@ end
 function actions.content(source, payload)
     local app = payload and payload.app
     local known, deletable, threaded = store.contentInfo(type(app) == 'string' and app or '')
-    if not known then return fail('Unknown app') end
+    if not known then return fail('admin.unknownApp', 'Unknown app') end
 
     local q = util.trim(payload and payload.q)
     if q == '' then q = nil end
@@ -573,9 +573,9 @@ end
 function actions.contentThread(source, payload)
     local app = payload and payload.app
     local known, _, threaded = store.contentInfo(type(app) == 'string' and app or '')
-    if not known or not threaded then return fail('That content has no thread') end
+    if not known or not threaded then return fail('admin.contentHasNoThread', 'That content has no thread') end
     local id = payload and payload.id
-    if (type(id) ~= 'string' and type(id) ~= 'number') or tostring(id) == '' then return fail('Missing id') end
+    if (type(id) ~= 'string' and type(id) ~= 'number') or tostring(id) == '' then return fail('admin.missingId', 'Missing id') end
 
     local items = store.contentThread(app, tostring(id))
 
@@ -600,11 +600,11 @@ end
 function actions.contentThreadDelete(source, payload)
     local app = payload and payload.app
     local known = store.contentInfo(type(app) == 'string' and app or '')
-    if not known or not store.threadDeletable(app) then return fail('That can\'t be deleted') end
+    if not known or not store.threadDeletable(app) then return fail('admin.canTDeleted', 'That can\'t be deleted') end
     local id = payload and payload.id
-    if (type(id) ~= 'string' and type(id) ~= 'number') or tostring(id) == '' then return fail('Missing id') end
+    if (type(id) ~= 'string' and type(id) ~= 'number') or tostring(id) == '' then return fail('admin.missingId', 'Missing id') end
 
-    if store.deleteThreadItem(app, tostring(id)) == 0 then return fail('Not found') end
+    if store.deleteThreadItem(app, tostring(id)) == 0 then return fail('admin.notFound', 'Not found') end
     local aCid, aName = adminIdent(source)
     store.audit(aCid, aName, 'delete-comment', nil, ('%s %s'):format(app, tostring(id)))
     return ok()
@@ -618,9 +618,9 @@ end
 function actions.contentDelete(source, payload)
     local app = payload and payload.app
     local known, deletable = store.contentInfo(type(app) == 'string' and app or '')
-    if not known or not deletable then return fail('That content can\'t be deleted') end
+    if not known or not deletable then return fail('admin.contentCanTDeleted', 'That content can\'t be deleted') end
     local id = payload and payload.id
-    if (type(id) ~= 'string' and type(id) ~= 'number') or tostring(id) == '' then return fail('Missing id') end
+    if (type(id) ~= 'string' and type(id) ~= 'number') or tostring(id) == '' then return fail('admin.missingId', 'Missing id') end
 
     local aCid, aName = adminIdent(source)
 
@@ -628,7 +628,7 @@ function actions.contentDelete(source, payload)
     -- moment later there is nothing left to copy.
     local kept = bin.keep(app, tostring(id), nil, aCid, aName)
 
-    if store.deleteContent(app, tostring(id)) == 0 then return fail('Not found') end
+    if store.deleteContent(app, tostring(id)) == 0 then return fail('admin.notFound', 'Not found') end
     -- A queue entry pointing at a row that no longer exists is noise someone has to read to
     -- dismiss, so removing the content retires its flags with it.
     flags.clearFor(app, tostring(id))
@@ -663,11 +663,11 @@ end
 ---@return table envelope
 function actions.binRestore(source, payload)
     local id = tonumber(payload and payload.id)
-    if not id then return fail('Missing entry') end
+    if not id then return fail('admin.missingEntry', 'Missing entry') end
 
     local aCid, aName = adminIdent(source)
-    local okRestore, err = bin.restore(id, aName)
-    if not okRestore then return fail(err or 'Restore failed') end
+    local okRestore, refusal = bin.restore(id, aName)
+    if not okRestore then return refusal or fail('admin.restoreFailed', 'Restore failed') end
 
     store.audit(aCid, aName, 'restore-content', nil, 'bin entry ' .. id)
     return ok()
@@ -706,7 +706,7 @@ end
 ---@return table envelope { filed, scanned, openCount }
 function actions.flagsScan(source)
     local okSweep, filed, scanned = pcall(flags.sweep)
-    if not okSweep then return fail('Scan failed') end
+    if not okSweep then return fail('admin.scanFailed', 'Scan failed') end
 
     local aCid, aName = adminIdent(source)
     store.audit(aCid, aName, 'flags-scan', nil, ('%d filed from %d rows'):format(filed, scanned))
@@ -720,11 +720,11 @@ end
 function actions.flagResolve(source, payload)
     local id = tonumber(payload and payload.id)
     local status = payload and payload.status
-    if not id then return fail('Missing flag') end
-    if not FLAG_STATUS[status] then return fail('Unknown status') end
+    if not id then return fail('admin.missingFlag', 'Missing flag') end
+    if not FLAG_STATUS[status] then return fail('admin.unknownStatus', 'Unknown status') end
 
     local aCid, aName = adminIdent(source)
-    if flags.resolve(id, status, aCid, aName) == 0 then return fail('Not found') end
+    if flags.resolve(id, status, aCid, aName) == 0 then return fail('admin.notFound', 'Not found') end
     store.audit(aCid, aName, 'flag-' .. status, nil, 'flag ' .. id)
     return ok({ openCount = flags.openCount() })
 end
@@ -735,7 +735,7 @@ end
 ---@return table envelope { messages, nextCursor }
 function actions.messages(source, payload)
     local cid = cleanCid(payload and payload.cid)
-    if not cid then return fail('Missing player') end
+    if not cid then return fail('admin.missingPlayer', 'Missing player') end
     local messages, nextCursor = store.listMessagesFor(cid, payload and payload.cursor, PAGE)
     return ok({ messages = messages, nextCursor = nextCursor })
 end
@@ -746,7 +746,7 @@ end
 ---@return table envelope { calls, nextCursor }
 function actions.calls(source, payload)
     local cid = cleanCid(payload and payload.cid)
-    if not cid then return fail('Missing player') end
+    if not cid then return fail('admin.missingPlayer', 'Missing player') end
     local calls, nextCursor = store.listCallsFor(cid, payload and payload.cursor, PAGE)
     return ok({ calls = calls, nextCursor = nextCursor })
 end
@@ -760,9 +760,9 @@ local MAX_MUTE_SECS = 365 * 24 * 3600
 ---@return table envelope { mutes }
 function actions.mute(source, payload)
     local cid = cleanCid(payload and payload.cid)
-    if not cid then return fail('Missing player') end
+    if not cid then return fail('admin.missingPlayer', 'Missing player') end
     local scopes = payload and payload.scopes
-    if type(scopes) ~= 'table' or #scopes == 0 then return fail('Pick at least one scope') end
+    if type(scopes) ~= 'table' or #scopes == 0 then return fail('admin.pickLeastOneScope', 'Pick at least one scope') end
 
     local duration = tonumber(payload and payload.duration)
     if duration then
@@ -773,7 +773,7 @@ function actions.mute(source, payload)
 
     local aCid, aName = adminIdent(source)
     local applied = moderation.mute(cid, scopes, duration, reason, aCid, aName)
-    if applied == 0 then return fail('No valid scopes') end
+    if applied == 0 then return fail('admin.noValidScopes', 'No valid scopes') end
 
     store.audit(aCid, aName, 'mute', cid, ('%s / %s / %s'):format(
         table.concat(scopes, ','),
@@ -788,7 +788,7 @@ end
 ---@return table envelope { mutes }
 function actions.unmute(source, payload)
     local cid = cleanCid(payload and payload.cid)
-    if not cid then return fail('Missing player') end
+    if not cid then return fail('admin.missingPlayer', 'Missing player') end
     local scope = payload and payload.scope
     if type(scope) ~= 'string' or scope == '' then scope = nil end
 
@@ -821,11 +821,11 @@ end
 ---@return table envelope { rows }
 function actions.wipePhone(source, payload)
     local cid = cleanCid(payload and payload.cid)
-    if not cid then return fail('Missing player') end
-    if (payload and payload.confirm) ~= cid then return fail('Confirmation mismatch') end
+    if not cid then return fail('admin.missingPlayer', 'Missing player') end
+    if (payload and payload.confirm) ~= cid then return fail('admin.confirmationMismatch', 'Confirmation mismatch') end
 
     local wiped, rows = wipe.wipeCid(cid)
-    if not wiped then return fail('Wipe failed') end
+    if not wiped then return fail('admin.wipeFailed', 'Wipe failed') end
 
     local tsrc = player.getSourceByIdentifier(cid)
     if tsrc then TriggerClientEvent('sd-phone:client:wipe', tsrc) end

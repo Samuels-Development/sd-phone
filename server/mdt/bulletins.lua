@@ -86,23 +86,23 @@ end)
 ---server-side on first insert only.
 bulletins.save = access.audited('bulletins.manage', function(_src, payload, me)
     local title = util.limitedString(payload.title, MAX_TITLE)
-    if not title then return util.fail('Give the bulletin a title') end
+    if not title then return util.fail('mdt.giveBulletinTitle', 'Give the bulletin a title') end
     local body = util.limitedString(payload.body, MAX_BODY)
-    if not body then return util.fail('Write the bulletin') end
+    if not body then return util.fail('mdt.writeBulletin', 'Write the bulletin') end
 
     local now = os.time()
     local id
     if payload.id ~= nil then
         id = bulletinId(payload.id)
-        if not id then return util.fail('Bulletin not found') end
+        if not id then return util.fail('mdt.bulletinNotFound', 'Bulletin not found') end
     end
 
     if id then
         local existing = MySQL.single.await(
             'SELECT department FROM phone_mdt_bulletins WHERE id = ?', { id })
-        if not existing then return util.fail('Bulletin not found') end
+        if not existing then return util.fail('mdt.bulletinNotFound', 'Bulletin not found') end
         if existing.department ~= '' and existing.department ~= me.job then
-            return util.fail('That bulletin belongs to another department')
+            return util.fail('mdt.bulletinBelongsAnotherDepartment', 'That bulletin belongs to another department')
         end
         MySQL.update.await(
             'UPDATE phone_mdt_bulletins SET title = ?, body = ?, updated_at = ? WHERE id = ?',
@@ -119,7 +119,7 @@ bulletins.save = access.audited('bulletins.manage', function(_src, payload, me)
         SELECT id, title, body, author_cid, author_name, author_callsign, created_at, updated_at
         FROM phone_mdt_bulletins WHERE id = ?
     ]], { id })
-    if not row then return util.fail('Bulletin not found') end
+    if not row then return util.fail('mdt.bulletinNotFound', 'Bulletin not found') end
 
     broadcast()
     return util.ok({ bulletin = pub(row) }),
@@ -129,13 +129,13 @@ end)
 ---Takes a notice off the board.
 bulletins.delete = access.audited('bulletins.manage', function(_src, payload, me)
     local id = bulletinId(payload.id)
-    if not id then return util.fail('Bulletin not found') end
+    if not id then return util.fail('mdt.bulletinNotFound', 'Bulletin not found') end
 
     local existing = MySQL.single.await(
         'SELECT title, department FROM phone_mdt_bulletins WHERE id = ?', { id })
-    if not existing then return util.fail('Bulletin not found') end
+    if not existing then return util.fail('mdt.bulletinNotFound', 'Bulletin not found') end
     if existing.department ~= '' and existing.department ~= me.job then
-        return util.fail('That bulletin belongs to another department')
+        return util.fail('mdt.bulletinBelongsAnotherDepartment', 'That bulletin belongs to another department')
     end
 
     MySQL.update.await('DELETE FROM phone_mdt_bulletins WHERE id = ?', { id })

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { t } from '@/i18n';
 import { useTheme } from '@/stores/themeStore';
 
 
@@ -139,7 +140,7 @@ export function TimeWheel({ value, onChange, open }: { value: string; onChange: 
 
     const hours   = Array.from({ length: 12 }, (_, i) => String(i + 1));
     const minutes = Array.from({ length: 60 }, (_, i) => pad2(i));
-    const periods = ['AM', 'PM'];
+    const periods = [t('time.am', 'AM'), t('time.pm', 'PM')];
 
     function emit(nh12: number, nm: number, nperiod: number) {
         let nh24 = nh12 % 12;

@@ -62,12 +62,12 @@ local STREAM_KINDS = { cam = true, live = true }
 ---@type table<string, boolean> Roles a token may be minted for.
 local ROLES = { session = true, publish = true, watch = true }
 
----@type string Refusal answered when a caller asks faster than any terminal legitimately would.
-local BUSY = 'Too many requests, try again in a moment'
----@type string Refusal answered for a stream name no feature owns.
-local UNKNOWN_STREAM = 'That stream does not exist'
----@type string Refusal answered when the feature that owns a stream would not have it watched.
-local REFUSED = 'You cannot watch that stream'
+---@type table Refusal answered when a caller asks faster than any terminal legitimately would.
+local BUSY = util.fail('media.tooManyRequestsTryAgain', 'Too many requests, try again in a moment')
+---@type table Refusal answered for a stream name no feature owns.
+local UNKNOWN_STREAM = util.fail('media.streamDoesNotExist', 'That stream does not exist')
+---@type table Refusal answered when the feature that owns a stream would not have it watched.
+local REFUSED = util.fail('media.cannotWatchStream', 'You cannot watch that stream')
 
 ---@type boolean Whether the relay may run inside this resource (configs/media.lua SelfHost).
 local SELF_HOST = CFG.SelfHost ~= false
@@ -317,10 +317,10 @@ end
 ---token by stream name and be routed back to the code that actually knows the answer.
 ---
 ---`entitle` is handed the requesting source and the stream being asked for, and returns the grant
----to sign (`{ key, role, gen }`) or nil plus a refusal message. It runs the feature's own
+---to sign (`{ key, role, gen }`) or nil plus a keyed refusal envelope. It runs the feature's own
 ---permission check: nothing in this module inspects a job, a duty state or a follower list.
 ---@param feature string '<app>:<kind>', e.g. 'photogram:live'
----@param handler { entitle: fun(src: integer, req: { streamId: string, role: string }): table|nil, string|nil }
+---@param handler { entitle: fun(src: integer, req: { streamId: string, role: string }): table|nil, table|nil }
 function media.registerFeature(feature, handler)
     if type(feature) ~= 'string' or feature == '' then return end
     if type(handler) ~= 'table' or type(handler.entitle) ~= 'function' then return end
@@ -437,7 +437,7 @@ end
 ---Where the relay is, and whether there is one. Called once per phone session before anything
 ---tries to open a socket, so a server without a relay never constructs one at all.
 lib.callback.register('sd-phone:server:relay:endpoint', function(src)
-    if not util.rateLimit(player.getIdentifier(src), 'relay:endpoint', 60000, 10) then return util.fail(BUSY) end
+    if not util.rateLimit(player.getIdentifier(src), 'relay:endpoint', 60000, 10) then return BUSY end
     if not resolve() then return util.ok({ enabled = false }) end
 
     return util.ok({
@@ -460,7 +460,7 @@ end)
 ---that is not an error the player did anything about: the feature falls back and keeps playing.
 lib.callback.register('sd-phone:server:relay:token', function(src, payload)
     if type(payload) ~= 'table' then payload = {} end
-    if not util.rateLimit(player.getIdentifier(src), 'relay:token', 10000, 40) then return util.fail(BUSY) end
+    if not util.rateLimit(player.getIdentifier(src), 'relay:token', 10000, 40) then return BUSY end
     if not resolve() then return util.ok({ enabled = false }) end
 
     if payload.role == 'session' then
@@ -471,17 +471,20 @@ lib.callback.register('sd-phone:server:relay:token', function(src, payload)
     end
 
     local streamId = payload.streamId
-    if not media.validStreamId(streamId) then return util.fail(UNKNOWN_STREAM) end
+    if not media.validStreamId(streamId) then return UNKNOWN_STREAM end
 
     local feature = streamId:match('^(%l+:%l+):')
     local handler = features[feature]
-    if not handler then return util.fail(UNKNOWN_STREAM) end
+    if not handler then return UNKNOWN_STREAM end
     if not media.featureEnabled(feature) then return util.ok({ enabled = false }) end
 
     local role = payload.role == 'publish' and 'publish' or 'watch'
-    local okCall, grant, message = pcall(handler.entitle, src, { streamId = streamId, role = role })
-    if not okCall then return util.fail(REFUSED) end
-    if type(grant) ~= 'table' then return util.fail(type(message) == 'string' and message or REFUSED) end
+    local okCall, grant, refusal = pcall(handler.entitle, src, { streamId = streamId, role = role })
+    if not okCall then return REFUSED end
+    if type(grant) ~= 'table' then
+        if type(refusal) == 'table' then return refusal end
+        return REFUSED
+    end
 
     -- The grant may narrow the request (a viewer asking to publish gets watch) but never widen it
     -- into a session token, which is the one role no stream permission has anything to say about.

@@ -11,28 +11,30 @@ import { resolveWallpaper } from '@/shell/wallpapers';
 import { NavBar } from '@/ui/NavBar';
 import { PromptDialog } from '@/ui/PromptDialog';
 
-const WALLPAPER_LABELS = [
-    'Daybreak',          // bg3
-    'Cotton Candy',      // bg4
-    'Marble',            // bg5
-    'Prism',             // bg6
-    'Tidal',             // bg7
-    'Spectrum',          // bg8
-    'Halo',              // bg9
-    'Deep Current',      // bg10
-    'Eclipse',           // bg11
-    'Ink Bloom',         // bg12
-    'Lavender Mist',     // bg13
-    'Seafoam',           // bg14
-    'Tide Pool',         // bg15
-    'Loop',              // bg16
-    'Carnival',          // bg17
-    'Oil Slick',         // bg18
-    'Meadow',            // bg19
-    'Onyx',              // bg20
-    'Neon Loop',         // bg21
-    'Ember',             // bg22
-];
+function wallpaperLabels(): string[] {
+    return [
+        t('settings.wallpaperDaybreak', 'Daybreak'),
+        t('settings.wallpaperCottonCandy', 'Cotton Candy'),
+        t('settings.wallpaperMarble', 'Marble'),
+        t('settings.wallpaperPrism', 'Prism'),
+        t('settings.wallpaperTidal', 'Tidal'),
+        t('settings.wallpaperSpectrum', 'Spectrum'),
+        t('settings.wallpaperHalo', 'Halo'),
+        t('settings.wallpaperDeepCurrent', 'Deep Current'),
+        t('settings.wallpaperEclipse', 'Eclipse'),
+        t('settings.wallpaperInkBloom', 'Ink Bloom'),
+        t('settings.wallpaperLavenderMist', 'Lavender Mist'),
+        t('settings.wallpaperSeafoam', 'Seafoam'),
+        t('settings.wallpaperTidePool', 'Tide Pool'),
+        t('settings.wallpaperLoop', 'Loop'),
+        t('settings.wallpaperCarnival', 'Carnival'),
+        t('settings.wallpaperOilSlick', 'Oil Slick'),
+        t('settings.wallpaperMeadow', 'Meadow'),
+        t('settings.wallpaperOnyx', 'Onyx'),
+        t('settings.wallpaperNeonLoop', 'Neon Loop'),
+        t('settings.wallpaperEmber', 'Ember'),
+    ];
+}
 
 export function WallpaperPickerPage({ target, onBack }: { target: WallpaperTarget; onBack: () => void }) {
     const { goBack, pageStyle } = useIosPush(onBack);
@@ -57,6 +59,7 @@ export function WallpaperPickerPage({ target, onBack }: { target: WallpaperTarge
         setWallpaper(src, target);
     }
 
+    const labels = wallpaperLabels();
     const isSelected = (src: string) => resolveWallpaper(selected) === src;
 
     return (
@@ -110,7 +113,7 @@ export function WallpaperPickerPage({ target, onBack }: { target: WallpaperTarge
                             <WallTile
                                 key={i}
                                 src={src}
-                                label={WALLPAPER_LABELS[i] ?? t('settings.wallpaperNumbered', 'Wallpaper {n}', { n: i + 1 })}
+                                label={labels[i] ?? t('settings.wallpaperNumbered', 'Wallpaper {n}', { n: i + 1 })}
                                 selected={isSelected(src)}
                                 onSelect={() => apply(src)}
                             />

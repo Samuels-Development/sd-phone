@@ -1,3 +1,5 @@
+---@type table Locale bridge (bridge.shared.locale): t(key, english, vars) for in-world text.
+local locale = require 'bridge.shared.locale'
 ---@type table Notify bridge (bridge.client.notify): local notification popups.
 local notify = require 'bridge.client.notify'
 ---@type fun(raw: any): VehicleModel Stored model value to hash/spawn/display (client.vehiclename).
@@ -85,7 +87,7 @@ RegisterNUICallback('sd-phone:garages:waypoint', function(payload, cb)
     local y = type(payload) == 'table' and tonumber(payload.y) or nil
     if not x or not y then return cb({ success = false }) end
     SetNewWaypoint(x + 0.0, y + 0.0)
-    notify.show({ description = 'Waypoint set.', type = 'success' })
+    notify.show({ description = locale.t('garages.waypointSet', 'Waypoint set.'), type = 'success' })
     cb({ success = true })
 end)
 
@@ -171,23 +173,29 @@ local DRIVE_FROM   = math.max(5, tonumber(VALET.DriveFrom) or 75)
 ---@type string Valet driver model.
 local VALET_PED    = type(VALET.Ped) == 'string' and VALET.Ped or 'S_M_Y_XMech_01'
 
----@type table<string, string> Server refusal code -> message shown to the player.
-local VALET_ERRORS = {
-    disabled      = 'Valet is unavailable.',
-    notFound      = 'Vehicle not found.',
-    impounded     = 'Impounded vehicles must be collected from the impound.',
-    notStored     = 'That vehicle is not in a garage.',
-    notRoad       = 'This vehicle cannot be delivered by road.',
-    cooldown      = 'You have already called a valet recently.',
-    inVehicle     = 'You cannot call a valet while driving.',
-    combat        = 'Too dangerous to call a valet right now.',
-    blockedArea   = 'A valet cannot deliver here.',
-    funds         = 'You cannot afford the valet fee.',
-    noSpace       = 'No road nearby. Move somewhere a vehicle can reach you.',
-    spawnFailed   = 'The vehicle could not be placed. Try again.',
-    streamFailed  = 'The vehicle did not arrive. Try again.',
-    takeOutFailed = 'The garage would not release the vehicle.',
-}
+---Server refusal code -> the message shown to the player. Looked up on demand rather than held
+---as a constant table, so every line is translated after the locale catalogue has loaded.
+---@param reason string|nil refusal code from the server
+---@return string
+local function valetError(reason)
+    local messages = {
+        disabled      = locale.t('garages.valetDisabled', 'Valet is unavailable.'),
+        notFound      = locale.t('garages.valetNotFound', 'Vehicle not found.'),
+        impounded     = locale.t('garages.valetImpounded', 'Impounded vehicles must be collected from the impound.'),
+        notStored     = locale.t('garages.valetNotStored', 'That vehicle is not in a garage.'),
+        notRoad       = locale.t('garages.valetNotRoad', 'This vehicle cannot be delivered by road.'),
+        cooldown      = locale.t('garages.valetCooldown', 'You have already called a valet recently.'),
+        inVehicle     = locale.t('garages.valetInVehicle', 'You cannot call a valet while driving.'),
+        combat        = locale.t('garages.valetCombat', 'Too dangerous to call a valet right now.'),
+        blockedArea   = locale.t('garages.valetBlockedArea', 'A valet cannot deliver here.'),
+        funds         = locale.t('garages.valetFunds', 'You cannot afford the valet fee.'),
+        noSpace       = locale.t('garages.valetNoSpace', 'No road nearby. Move somewhere a vehicle can reach you.'),
+        spawnFailed   = locale.t('garages.valetSpawnFailed', 'The vehicle could not be placed. Try again.'),
+        streamFailed  = locale.t('garages.valetStreamFailed', 'The vehicle did not arrive. Try again.'),
+        takeOutFailed = locale.t('garages.valetTakeOutFailed', 'The garage would not release the vehicle.'),
+    }
+    return messages[reason or ''] or messages.disabled
+end
 
 ---@type integer GetGameTimer of the player's last health drop (0 = never).
 local lastHurt = 0
@@ -374,7 +382,7 @@ local function driveToPlayer(veh)
         SetBlipSprite(blip, 225)
         SetBlipColour(blip, 5)
         BeginTextCommandSetBlipName('STRING')
-        AddTextComponentSubstringPlayerName('Valet')
+        AddTextComponentSubstringPlayerName(locale.t('garages.valetBlip', 'Valet'))
         EndTextCommandSetBlipName(blip)
 
         local deadline  = GetGameTimer() + DRIVE_TIMEOUT_MS
@@ -412,7 +420,8 @@ local function driveToPlayer(veh)
             if DoesBlipExist(blip) then RemoveBlip(blip) end
         else
             notify.show({
-                description = 'Your valet got stuck. Your vehicle is marked on your map.',
+                description = locale.t('garages.valetStuck',
+                    'Your valet got stuck. Your vehicle is marked on your map.'),
                 type = 'error',
             })
         end
@@ -424,20 +433,20 @@ end
 RegisterNUICallback('sd-phone:garages:valet', function(payload, cb)
     local plate = type(payload) == 'table' and payload.plate or nil
     if type(plate) ~= 'string' or plate == '' then
-        notify.show({ description = VALET_ERRORS.notFound, type = 'error' })
+        notify.show({ description = valetError('notFound'), type = 'error' })
         return cb({ success = false })
     end
 
     local info = getValetInfo()
     if not info.enabled then
-        notify.show({ description = VALET_ERRORS.disabled, type = 'error' })
+        notify.show({ description = valetError('disabled'), type = 'error' })
         return cb({ success = false })
     end
 
     local drive = VALET.Drive ~= false
     local pos, heading, dist, facing = awaitSpawn(drive and DRIVE_FROM or 3.0)
     if not pos then
-        notify.show({ description = VALET_ERRORS.noSpace, type = 'error' })
+        notify.show({ description = valetError('noSpace'), type = 'error' })
         return cb({ success = false })
     end
 
@@ -450,9 +459,10 @@ RegisterNUICallback('sd-phone:garages:valet', function(payload, cb)
 
     if type(res) ~= 'table' or not res.success then
         local reason  = type(res) == 'table' and res.reason or nil
-        local message = VALET_ERRORS[reason or ''] or VALET_ERRORS.disabled
+        local message = valetError(reason)
         if reason == 'blockedArea' and type(res.detail) == 'string' then
-            message = ('A valet cannot deliver to %s.'):format(res.detail)
+            message = locale.t('garages.valetBlockedAreaAt', 'A valet cannot deliver to {place}.',
+                { place = res.detail })
         end
         notify.show({ description = message, type = 'error' })
         return cb({ success = false })
@@ -460,7 +470,7 @@ RegisterNUICallback('sd-phone:garages:valet', function(payload, cb)
 
     local veh = awaitEntity(res.netId)
     if not veh then
-        notify.show({ description = VALET_ERRORS.streamFailed, type = 'error' })
+        notify.show({ description = valetError('streamFailed'), type = 'error' })
         return cb({ success = false })
     end
 
@@ -474,10 +484,10 @@ RegisterNUICallback('sd-phone:garages:valet', function(payload, cb)
     local driving = res.drive and dist >= DRIVE_MIN and facing
     if driving then
         driveToPlayer(veh)
-        notify.show({ description = 'Your valet is on the way.', type = 'success' })
+        notify.show({ description = locale.t('garages.valetOnTheWay', 'Your valet is on the way.'), type = 'success' })
     else
         SetVehicleDoorsLocked(veh, 1)
-        notify.show({ description = 'Your vehicle is waiting nearby.', type = 'success' })
+        notify.show({ description = locale.t('garages.valetWaitingNearby', 'Your vehicle is waiting nearby.'), type = 'success' })
     end
 
     cb({ success = true, drive = driving })

@@ -67,7 +67,7 @@ function jobs.list(src)
     end
 
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('services.playerNotFound', 'Player not found') end
 
     local activeJob = job.getName(src)
 
@@ -117,21 +117,21 @@ end
 ---@return table
 function jobs.switch(src, payload)
     payload = type(payload) == 'table' and payload or {}
-    if not job.supportsMultijob() then return fail('Not available here') end
+    if not job.supportsMultijob() then return fail('services.notAvailableHere', 'Not available here') end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('services.playerNotFound', 'Player not found') end
 
     local target = tostring(payload.job or '')
-    if target == '' or BLACKLIST[target] then return fail('Invalid job') end
+    if target == '' or BLACKLIST[target] then return fail('services.invalidJob', 'Invalid job') end
 
     local map = store.getSaved(cid)
     local info = map[target]
-    if not info then return fail("You haven't got that job saved") end
+    if not info then return fail('services.havenTGotJobSaved', "You haven't got that job saved") end
     local fromJob = job.getName(src)
-    if fromJob == target then return fail('That job is already active') end
+    if fromJob == target then return fail('services.jobAlreadyActive', 'That job is already active') end
 
     if not job.set(src, target, info.grade or 0) then
-        return fail('Could not switch to that job')
+        return fail('services.couldNotSwitchJob', 'Could not switch to that job')
     end
     if OFF_DUTY then job.setDuty(src, false) end
 
@@ -148,16 +148,16 @@ end
 ---@return table
 function jobs.remove(src, payload)
     payload = type(payload) == 'table' and payload or {}
-    if not job.supportsMultijob() then return fail('Not available here') end
+    if not job.supportsMultijob() then return fail('services.notAvailableHere', 'Not available here') end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('services.playerNotFound', 'Player not found') end
 
     local target = tostring(payload.job or '')
-    if target == '' then return fail('No job selected') end
+    if target == '' then return fail('services.noJobSelected', 'No job selected') end
 
     local wasActive = job.getName(src) == target
     if wasActive then
-        if not job.set(src, UNEMPLOYED, 0) then return fail('Could not update your job') end
+        if not job.set(src, UNEMPLOYED, 0) then return fail('services.couldNotUpdateJob', 'Could not update your job') end
         job.setDuty(src, false)
     end
 
@@ -174,17 +174,17 @@ end
 ---@return table
 function jobs.accept(src, payload)
     payload = type(payload) == 'table' and payload or {}
-    if not job.supportsMultijob() then return fail('Not available here') end
+    if not job.supportsMultijob() then return fail('services.notAvailableHere', 'Not available here') end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('services.playerNotFound', 'Player not found') end
 
     local id  = tostring(payload.id or '')
     local inv = store.getInvite(cid, id)
-    if not inv then return fail('That offer is no longer available') end
+    if not inv then return fail('services.offerNoLongerAvailable', 'That offer is no longer available') end
 
     local map = store.getSaved(cid)
     if MAX > 0 and not map[inv.job] and savedCount(map) >= MAX then
-        return fail('You already have the maximum number of jobs')
+        return fail('services.alreadyHaveMaximumNumberJobs', 'You already have the maximum number of jobs')
     end
 
     store.addSaved(cid, inv.job, inv.grade or 0)
@@ -200,7 +200,7 @@ end
 function jobs.decline(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('services.playerNotFound', 'Player not found') end
     store.deleteInvite(cid, tostring(payload.id or ''))
     return jobs.list(src)
 end

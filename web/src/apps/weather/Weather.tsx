@@ -87,7 +87,7 @@ export function Weather({ onClose }: { onClose: () => void }) {
                     </div>
                     <div className="text-[18px] font-medium">{WEATHER_LABEL[city.nowCode]}</div>
                     <div className="mt-1 text-[14px] text-white/80">
-                        H:{city.daily[0].high}°  L:{city.daily[0].low}°
+                        {t('weather.highLow', 'H:{high}° L:{low}°', { high: city.daily[0].high, low: city.daily[0].low })}
                     </div>
                 </div>
 
@@ -109,7 +109,7 @@ export function Weather({ onClose }: { onClose: () => void }) {
                 <div className="grid grid-cols-2 gap-2 px-3 pb-6 pt-2">
                     <Tile label={t('weather.feelsLike', 'Feels Like')} value={`${city.feelsLikeF}°`} />
                     <Tile label={t('weather.humidity', 'Humidity')}   value={`${city.humidity}%`} />
-                    <Tile label={t('weather.wind', 'Wind')}       value={`${city.windMph} mph`} />
+                    <Tile label={t('weather.wind', 'Wind')}       value={t('weather.windMph', '{speed} mph', { speed: city.windMph })} />
                     <Tile label={t('weather.uvIndex', 'UV Index')}   value={`${city.uvIndex}`} />
                     <Tile
                         label={t('weather.sunrise', 'Sunrise')}

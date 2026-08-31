@@ -35,45 +35,51 @@ const ENTITY_SECTION: Record<string, MdtSection> = {
     officer: 'employees',
 };
 
-const VERBS: Record<string, string> = {
-    view:     'Watched',
-    save:     'Filed',
-    create:   'Created',
-    edit:     'Edited',
-    update:   'Updated',
-    delete:   'Deleted',
-    issue:    'Issued',
-    close:    'Closed',
-    book:     'Booked',
-    assign:   'Assigned',
-    note:     'Added a note to',
-    notes:    'Updated notes on',
-    flags:    'Changed flags on',
-    mugshot:  'Changed the mugshot on',
-    dismiss:  'Dismissed',
-    manage:   'Updated',
-    grade:    'Re-graded',
-    callsign: 'Set the callsign on',
-    radio:    'Set the radio channel on',
-    link:     'Linked',
-    send:     'Transmitted on',
-};
+function verbLabel(verb: string): string | undefined {
+    switch (verb) {
+        case 'view':     return t('mdt.logVerbView', 'Watched');
+        case 'save':     return t('mdt.logVerbSave', 'Filed');
+        case 'create':   return t('mdt.logVerbCreate', 'Created');
+        case 'edit':     return t('mdt.logVerbEdit', 'Edited');
+        case 'update':   return t('mdt.logVerbUpdate', 'Updated');
+        case 'delete':   return t('mdt.logVerbDelete', 'Deleted');
+        case 'issue':    return t('mdt.logVerbIssue', 'Issued');
+        case 'close':    return t('mdt.logVerbClose', 'Closed');
+        case 'book':     return t('mdt.logVerbBook', 'Booked');
+        case 'assign':   return t('mdt.logVerbAssign', 'Assigned');
+        case 'note':     return t('mdt.logVerbNote', 'Added a note to');
+        case 'notes':    return t('mdt.logVerbNotes', 'Updated notes on');
+        case 'flags':    return t('mdt.logVerbFlags', 'Changed flags on');
+        case 'mugshot':  return t('mdt.logVerbMugshot', 'Changed the mugshot on');
+        case 'dismiss':  return t('mdt.logVerbDismiss', 'Dismissed');
+        case 'manage':   return t('mdt.logVerbManage', 'Updated');
+        case 'grade':    return t('mdt.logVerbGrade', 'Re-graded');
+        case 'callsign': return t('mdt.logVerbCallsign', 'Set the callsign on');
+        case 'radio':    return t('mdt.logVerbRadio', 'Set the radio channel on');
+        case 'link':     return t('mdt.logVerbLink', 'Linked');
+        case 'send':     return t('mdt.logVerbSend', 'Transmitted on');
+        default:         return undefined;
+    }
+}
 
-const NOUNS: Record<string, string> = {
-    weapons:   'firearm record',
-    cameras:   'a unit camera',
-    reports:   'report',
-    cases:     'case',
-    warrants:  'warrant',
-    offences:  'offence',
-    persons:   'person record',
-    vehicles:  'vehicle record',
-    bulletins: 'bulletin',
-    roster:    'officer',
-    jail:      'a suspect',
-    chat:      'the channel',
-    me:        'own profile',
-};
+function nounLabel(noun: string): string | undefined {
+    switch (noun) {
+        case 'weapons':   return t('mdt.logNounWeapons', 'firearm record');
+        case 'cameras':   return t('mdt.logNounCameras', 'a unit camera');
+        case 'reports':   return t('mdt.logNounReports', 'report');
+        case 'cases':     return t('mdt.logNounCases', 'case');
+        case 'warrants':  return t('mdt.logNounWarrants', 'warrant');
+        case 'offences':  return t('mdt.logNounOffences', 'offence');
+        case 'persons':   return t('mdt.logNounPersons', 'person record');
+        case 'vehicles':  return t('mdt.logNounVehicles', 'vehicle record');
+        case 'bulletins': return t('mdt.logNounBulletins', 'bulletin');
+        case 'roster':    return t('mdt.logNounRoster', 'officer');
+        case 'jail':      return t('mdt.logNounJail', 'a suspect');
+        case 'chat':      return t('mdt.logNounChat', 'the channel');
+        case 'me':        return t('mdt.logNounMe', 'own profile');
+        default:          return undefined;
+    }
+}
 
 function titleCase(raw: string): string {
     return raw
@@ -85,9 +91,9 @@ function titleCase(raw: string): string {
 function actionLine(action: string): string {
     const parts = action.split('.').filter(Boolean);
     if (parts.length < 2) return titleCase(action);
-    const noun = NOUNS[parts[0]];
-    const verb = VERBS[parts[parts.length - 1]];
-    if (noun && verb) return `${verb} ${noun}`;
+    const noun = nounLabel(parts[0]);
+    const verb = verbLabel(parts[parts.length - 1]);
+    if (noun && verb) return t('mdt.logLine', '{verb} {noun}', { verb, noun });
     return titleCase(parts.join(' '));
 }
 

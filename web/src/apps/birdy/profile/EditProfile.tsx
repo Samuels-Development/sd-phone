@@ -10,6 +10,7 @@ import { apiDeleteAccount, apiPurchaseVerification, apiUpdateProfile, apiVerific
 import { ChangePasswordPage } from '@/shared/ChangePasswordPage';
 import { AVATAR_EMPTY, BG, BLUE, CARD, LINE_STRONG, META, TEXT, type BirdyProfile } from '../data';
 import { VerifiedBadge } from '../ui';
+import { failText } from '@/core/api';
 
 const RED = '#ff3b30';
 
@@ -71,7 +72,7 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onSignOutAl
         setBusy(false);
         setConfirmVerify(false);
         if (res.ok) dismiss(() => onSaved({ ...profile, verified: true, verifiedType: 'blue' }));
-        else setVerifyError(res.message ?? t('squawk.verifyFailed', 'Something went wrong. Please try again.'));
+        else setVerifyError(failText(res, t('squawk.verifyFailed', 'Something went wrong. Please try again.')));
     }
 
     return (

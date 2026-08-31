@@ -1,6 +1,7 @@
 
 import type { CSSProperties } from 'react';
 
+import { t } from '@/i18n';
 import { readJson, writeJson } from '@/lib/storage';
 
 export interface LockClock {
@@ -21,28 +22,33 @@ export const DEFAULT_LOCK_CLOCK: LockClock = {
 };
 
 
-export const CLOCK_FONTS = [
-    { id: 'rounded',    label: 'Rounded'    },
-    { id: 'sans',       label: 'Sans'       },
-    { id: 'serif',      label: 'Serif'      },
-    { id: 'serifLight', label: 'Serif Thin' },
-    { id: 'italic',     label: 'Italic'     },
-    { id: 'italicSans', label: 'Slant'      },
-    { id: 'script',     label: 'Script'     },
-    { id: 'mono',       label: 'Mono'       },
-    { id: 'typewriter', label: 'Typewriter' },
-    { id: 'light',      label: 'Light'      },
-    { id: 'condensed',  label: 'Condensed'  },
-    { id: 'wide',       label: 'Wide'       },
-    { id: 'black',      label: 'Black'      },
-    { id: 'outline',    label: 'Outline'    },
-    { id: 'striped',    label: 'Striped'    },
-    { id: 'shadow',     label: 'Shadow'     },
-    { id: 'neon',       label: 'Neon'       },
-    { id: 'pop',        label: 'Pop'        },
-    { id: 'chrome',     label: 'Chrome'     },
-    { id: 'retro',      label: 'Retro'      },
-] as const;
+interface ClockOption {
+    id:    string;
+    label: string;
+}
+
+export const clockFonts = (): ClockOption[] => [
+    { id: 'rounded',    label: t('shell.clockFontRounded', 'Rounded') },
+    { id: 'sans',       label: t('shell.clockFontSans', 'Sans') },
+    { id: 'serif',      label: t('shell.clockFontSerif', 'Serif') },
+    { id: 'serifLight', label: t('shell.clockFontSerifLight', 'Serif Thin') },
+    { id: 'italic',     label: t('shell.clockFontItalic', 'Italic') },
+    { id: 'italicSans', label: t('shell.clockFontItalicSans', 'Slant') },
+    { id: 'script',     label: t('shell.clockFontScript', 'Script') },
+    { id: 'mono',       label: t('shell.clockFontMono', 'Mono') },
+    { id: 'typewriter', label: t('shell.clockFontTypewriter', 'Typewriter') },
+    { id: 'light',      label: t('shell.clockFontLight', 'Light') },
+    { id: 'condensed',  label: t('shell.clockFontCondensed', 'Condensed') },
+    { id: 'wide',       label: t('shell.clockFontWide', 'Wide') },
+    { id: 'black',      label: t('shell.clockFontBlack', 'Black') },
+    { id: 'outline',    label: t('shell.clockFontOutline', 'Outline') },
+    { id: 'striped',    label: t('shell.clockFontStriped', 'Striped') },
+    { id: 'shadow',     label: t('shell.clockFontShadow', 'Shadow') },
+    { id: 'neon',       label: t('shell.clockFontNeon', 'Neon') },
+    { id: 'pop',        label: t('shell.clockFontPop', 'Pop') },
+    { id: 'chrome',     label: t('shell.clockFontChrome', 'Chrome') },
+    { id: 'retro',      label: t('shell.clockFontRetro', 'Retro') },
+];
 
 const STACK_ROUND  = '"SF Pro Rounded", ui-rounded, -apple-system, "Segoe UI", Inter, system-ui, sans-serif';
 const STACK_SANS   = 'Inter, "SF Pro Display", -apple-system, "Segoe UI", system-ui, sans-serif';
@@ -93,13 +99,13 @@ function clockDateStyle(color: string): CSSProperties {
 }
 
 
-export const CLOCK_LAYOUTS = [
-    { id: 'centered', label: 'Centered'    },
-    { id: 'stacked',  label: 'Stacked'     },
-    { id: 'left',     label: 'Left'         },
-    { id: 'right',    label: 'Right'        },
-    { id: 'dateTop',  label: 'Date on top' },
-] as const;
+export const clockLayouts = (): ClockOption[] => [
+    { id: 'centered', label: t('shell.clockLayoutCentered', 'Centered') },
+    { id: 'stacked',  label: t('shell.clockLayoutStacked', 'Stacked') },
+    { id: 'left',     label: t('shell.clockLayoutLeft', 'Left') },
+    { id: 'right',    label: t('shell.clockLayoutRight', 'Right') },
+    { id: 'dateTop',  label: t('shell.clockLayoutDateTop', 'Date on top') },
+];
 
 
 export const CLOCK_COLORS = [

@@ -100,40 +100,49 @@ end
 ---other app is a plain handle capped at 30 with a character whitelist.
 ---@param app string account app key
 ---@param raw any client-supplied username
----@return string|nil username, string|nil err
+---@return string|nil username
+---@return table? refusal keyed refusal envelope when username is nil
 local function validUsername(app, raw)
     local u = trim(raw):lower()
     if app == 'mail' then
         if #u < 5 or #u > 64 or u:find('%s') or not u:find('@', 1, true) then
-            return nil, 'That email address looks invalid'
+            return nil, fail('accounts.emailAddressLooksInvalid', 'That email address looks invalid')
         end
         return u, nil
     end
-    if #u < 3 then return nil, 'Username needs at least 3 characters' end
-    if #u > 30 then return nil, 'Username must be 30 characters or fewer' end
-    if not u:match('^[%w_%.]+$') then return nil, 'Letters, numbers, _ and . only' end
+    if #u < 3 then return nil, fail('accounts.usernameNeedsLeast3Characters', 'Username needs at least 3 characters') end
+    if #u > 30 then
+        return nil, fail('accounts.usernameMust30CharactersFewer', 'Username must be 30 characters or fewer')
+    end
+    if not u:match('^[%w_%.]+$') then return nil, fail('accounts.lettersNumbersOnly', 'Letters, numbers, _ and . only') end
     return u, nil
 end
 
 ---Validates a password: 6-64 characters, strings only.
 ---@param raw any client-supplied password
----@return string|nil password, string|nil err
+---@return string|nil password
+---@return table? refusal keyed refusal envelope when password is nil
 local function validPassword(raw)
-    if type(raw) ~= 'string' or #raw < 6 then return nil, 'Password must be at least 6 characters' end
-    if #raw > 64 then return nil, 'Password must be 64 characters or fewer' end
+    if type(raw) ~= 'string' or #raw < 6 then
+        return nil, fail('accounts.passwordMustLeast6Characters', 'Password must be at least 6 characters')
+    end
+    if #raw > 64 then
+        return nil, fail('accounts.passwordMust64CharactersFewer', 'Password must be 64 characters or fewer')
+    end
     return raw, nil
 end
 
 ---Validates an optional recovery email: nil when blank, otherwise it must resolve to an existing
 ---Mail-app account (a bare username gets the mail domain appended).
 ---@param raw any client-supplied email
----@return string|nil email, string|nil err
+---@return string|nil email
+---@return table? refusal keyed refusal envelope when the address was given but is unknown
 local function validEmail(raw)
     local e = trim(raw):lower()
     if e == '' then return nil, nil end
     if not e:find('@', 1, true) then e = e .. '@' .. MAIL_DOMAIN end
     if not mailStore.getAccount(e) then
-        return nil, 'No Mail account with that address exists'
+        return nil, fail('accounts.noMailAccountAddressExists', 'No Mail account with that address exists')
     end
     return e, nil
 end
@@ -158,22 +167,24 @@ actions.accountLimit = accountLimit
 ---config allows; nil while there is room. 0 configured means unlimited.
 ---@param app string account app key
 ---@param count integer accounts this character has created in the app
----@return string|nil refusal
+---@return table|nil refusal keyed refusal envelope, nil while there is room
 function actions.accountCapMessage(app, count)
     local limit = accountLimit(app)
     if limit <= 0 or count < limit then return nil end
-    return limit == 1
-        and 'You already have an account for this app'
-        or ('You can have at most %d accounts for this app'):format(limit)
+    if limit == 1 then
+        return fail('accounts.alreadyHaveAccountApp', 'You already have an account for this app')
+    end
+    return fail('accounts.haveAtMostAccountsApp', 'You can have at most {n} accounts for this app', { n = limit })
 end
 
 ---Validates an optional recovery phone: nil when blank, otherwise 7-15 digits.
 ---@param raw any client-supplied phone number
----@return string|nil phone, string|nil err
+---@return string|nil phone
+---@return table? refusal keyed refusal envelope when the number was given but is unusable
 local function validPhone(raw)
     local p = digits(raw)
     if p == '' then return nil, nil end
-    if #p < 7 or #p > 15 then return nil, 'That phone number looks invalid' end
+    if #p < 7 or #p > 15 then return nil, fail('accounts.phoneNumberLooksInvalid', 'That phone number looks invalid') end
     return p, nil
 end
 
@@ -187,37 +198,37 @@ end
 ---@return table envelope on success data = { account }
 function actions.createAccount(app, payload, cid)
     payload = payload or {}
-    local username, ue = validUsername(app, payload.username); if not username then return fail(ue) end
-    local password, pe = validPassword(payload.password); if not password then return fail(pe) end
-    local email, ee = validEmail(payload.email); if ee then return fail(ee) end
-    local phone, he = validPhone(payload.phone); if he then return fail(he) end
+    local username, ur = validUsername(app, payload.username); if not username then return ur end
+    local password, pr = validPassword(payload.password); if not password then return pr end
+    local email, er = validEmail(payload.email); if er then return er end
+    local phone, hr = validPhone(payload.phone); if hr then return hr end
 
     -- Recovery codes go to this number, so one the caller does not own is useless to them and
     -- lets a character sidestep the per-app contact-uniqueness cap below.
     if phone and cid then
         local mine = digits(settings.getPhoneNumber(cid))
         if mine ~= '' and phone ~= mine then
-            return fail('Use your own phone number so you can recover the account')
+            return fail('accounts.useOwnPhoneNumberSo', 'Use your own phone number so you can recover the account')
         end
     end
     if not email and not phone then
-        return fail('Add an email or phone number so you can recover the account')
+        return fail('accounts.addEmailPhoneNumberSo', 'Add an email or phone number so you can recover the account')
     end
     local displayName = trim(payload.name)
     if displayName == '' then displayName = username end
-    if #displayName > 50 then return fail('Name must be 50 characters or fewer') end
+    if #displayName > 50 then return fail('accounts.nameMust50CharactersFewer', 'Name must be 50 characters or fewer') end
 
-    if store.getAccount(app, username) then return fail('That username is taken') end
+    if store.getAccount(app, username) then return fail('accounts.usernameTaken', 'That username is taken') end
 
     -- Accounts may share a recovery email and number; what caps a character is how many they
     -- have created here. Usernames stay unique per app, so the accounts remain distinguishable.
     if cid then
         local capped = actions.accountCapMessage(app, store.countAccountsFor(app, cid))
-        if capped then return fail(capped) end
+        if capped then return capped end
     end
 
     local id = store.insertAccount(app, username, displayName, store.hashPassword(password), email, phone, cid)
-    if not id then return fail('Failed to create the account') end
+    if not id then return fail('accounts.failedCreateAccount', 'Failed to create the account') end
     return ok({ account = store.getAccountById(id) })
 end
 
@@ -237,13 +248,13 @@ end
 function actions.register(source, payload)
     payload = payload or {}
     local app = payload.app
-    if not DIRECT_APPS[app] then return fail('Unknown app') end
-    local cid = player.getIdentifier(source); if not cid then return fail('Player not found') end
-    if not util.cooldown(cid, 'accounts:register', 1500) then return fail('Slow down') end
+    if not DIRECT_APPS[app] then return fail('accounts.unknownApp', 'Unknown app') end
+    local cid = player.getIdentifier(source); if not cid then return fail('accounts.playerNotFound', 'Player not found') end
+    if not util.cooldown(cid, 'accounts:register', 1500) then return fail('accounts.slowDown', 'Slow down') end
     -- Failed attempts count too, and a player setting up all four apps hits several of them
     -- ('username taken', weak password), so the budget has to clear a whole first-session setup.
     if not util.rateLimit(cid, 'accounts:register', 600000, 30) then
-        return fail('Too many sign-up attempts. Try again shortly')
+        return fail('accounts.tooManySignUpAttempts', 'Too many sign-up attempts. Try again shortly')
     end
 
     local res = actions.createAccount(app, payload, cid)
@@ -260,16 +271,16 @@ end
 function actions.login(source, payload)
     payload = payload or {}
     local app = payload.app
-    if not DIRECT_APPS[app] then return fail('Unknown app') end
-    local cid = player.getIdentifier(source); if not cid then return fail('Player not found') end
+    if not DIRECT_APPS[app] then return fail('accounts.unknownApp', 'Unknown app') end
+    local cid = player.getIdentifier(source); if not cid then return fail('accounts.playerNotFound', 'Player not found') end
 
     if not util.cooldown(cid, 'accounts:login', 1000)
         or not util.rateLimit(cid, 'accounts:login', GUESS_WINDOW, LOGIN_MAX) then
-        return fail('Too many sign-in attempts. Try again shortly')
+        return fail('accounts.tooManySignAttemptsTry', 'Too many sign-in attempts. Try again shortly')
     end
 
     local raw = trim(payload.username):lower()
-    if raw == '' then return fail('Wrong username or password') end
+    if raw == '' then return fail('accounts.wrongUsernamePassword', 'Wrong username or password') end
 
     local acc = store.getAccount(app, raw)
     if not acc then
@@ -279,7 +290,7 @@ function actions.login(source, payload)
         if #matches == 1 then acc = matches[1] end
     end
     if not acc or not actions.verifyPassword(acc, payload.password) then
-        return fail('Wrong username or password')
+        return fail('accounts.wrongUsernamePassword', 'Wrong username or password')
     end
     store.setSession(app, cid, acc.id)
     return ok({ me = publicAccount(acc) })
@@ -293,7 +304,7 @@ function actions.logout(source, payload)
     local app = payload and payload.app
     -- SWITCH_APPS rather than DIRECT_APPS: Squawk registers itself, but it still needs a plain
     -- logout, or the switcher is its only way out of an account.
-    if not SWITCH_APPS[app] then return fail('Unknown app') end
+    if not SWITCH_APPS[app] then return fail('accounts.unknownApp', 'Unknown app') end
     local cid = player.getIdentifier(source)
     if not cid then return ok({ switchedTo = nil }) end
 
@@ -338,11 +349,11 @@ end
 ---when they are at it. Read-only; the create paths enforce the same cap themselves.
 ---@param source number player server id
 ---@param payload table|nil client-supplied { app }
----@return table envelope on success data = { limit, count, canCreate, message? }
+---@return table envelope on success data = { limit, count, canCreate, message?, messageKey?, messageVars? }
 function actions.capacity(source, payload)
     local app = payload and payload.app
-    if not ALL_APPS[app] then return fail('Unknown app') end
-    local cid = player.getIdentifier(source); if not cid then return fail('Player not found') end
+    if not ALL_APPS[app] then return fail('accounts.unknownApp', 'Unknown app') end
+    local cid = player.getIdentifier(source); if not cid then return fail('accounts.playerNotFound', 'Player not found') end
 
     -- Mail predates the engine, so its mailboxes are counted off its own created_by_cid rather
     -- than the engine's account table, exactly as its own create path does.
@@ -352,7 +363,14 @@ function actions.capacity(source, payload)
         or store.countAccountsFor(key, cid)
 
     local capped = actions.accountCapMessage(key, count)
-    return ok({ limit = accountLimit(key), count = count, canCreate = capped == nil, message = capped })
+    return ok({
+        limit       = accountLimit(key),
+        count       = count,
+        canCreate   = capped == nil,
+        message     = capped and capped.message or nil,
+        messageKey  = capped and capped.messageKey or nil,
+        messageVars = capped and capped.messageVars or nil,
+    })
 end
 
 ---Signs the caller out of one app's accounts, or out of every account app when no app is given.
@@ -362,9 +380,9 @@ end
 function actions.signOutAll(source, payload)
     payload = type(payload) == 'table' and payload or {}
     local app = payload.app
-    if app ~= nil and not ALL_APPS[app] then return fail('Unknown app') end
-    local cid = player.getIdentifier(source); if not cid then return fail('Player not found') end
-    if not util.cooldown(cid, 'accounts:signOutAll', 1000) then return fail('Slow down') end
+    if app ~= nil and not ALL_APPS[app] then return fail('accounts.unknownApp', 'Unknown app') end
+    local cid = player.getIdentifier(source); if not cid then return fail('accounts.playerNotFound', 'Player not found') end
+    if not util.cooldown(cid, 'accounts:signOutAll', 1000) then return fail('accounts.slowDown', 'Slow down') end
 
     return ok({ signedOut = actions.signOutEverywhere(cid, app) })
 end
@@ -376,8 +394,8 @@ end
 ---@return table envelope on success data = { accounts, active }
 function actions.switchable(source, payload)
     local app = payload and payload.app
-    if not SWITCH_APPS[app] then return fail('Unknown app') end
-    local cid = player.getIdentifier(source); if not cid then return fail('Player not found') end
+    if not SWITCH_APPS[app] then return fail('accounts.unknownApp', 'Unknown app') end
+    local cid = player.getIdentifier(source); if not cid then return fail('accounts.playerNotFound', 'Player not found') end
 
     -- Live sessions, not vault entries: the switcher moves between accounts the player is
     -- actually signed into, so signing out of one drops it from the list until they add it back.
@@ -408,8 +426,8 @@ end
 ---@return table envelope on success data = { accounts }
 function actions.signInOptions(source, payload)
     local app = payload and payload.app
-    if not SWITCH_APPS[app] then return fail('Unknown app') end
-    local cid = player.getIdentifier(source); if not cid then return fail('Player not found') end
+    if not SWITCH_APPS[app] then return fail('accounts.unknownApp', 'Unknown app') end
+    local cid = player.getIdentifier(source); if not cid then return fail('accounts.playerNotFound', 'Player not found') end
 
     local held = {}
     for _, acc in ipairs(store.listSessionAccounts(app, cid)) do held[acc.username:lower()] = true end
@@ -435,12 +453,12 @@ end
 function actions.switchAccount(source, payload)
     payload = payload or {}
     local app = payload.app
-    if not SWITCH_APPS[app] then return fail('Unknown app') end
-    local cid = player.getIdentifier(source); if not cid then return fail('Player not found') end
-    if not util.cooldown(cid, 'accounts:switch', 500) then return fail('Slow down') end
+    if not SWITCH_APPS[app] then return fail('accounts.unknownApp', 'Unknown app') end
+    local cid = player.getIdentifier(source); if not cid then return fail('accounts.playerNotFound', 'Player not found') end
+    if not util.cooldown(cid, 'accounts:switch', 500) then return fail('accounts.slowDown', 'Slow down') end
 
     local username = trim(payload.username):lower()
-    if username == '' then return fail('Pick an account') end
+    if username == '' then return fail('accounts.pickAccount', 'Pick an account') end
 
     -- Already signed into it: switching is just making that session the active one, so no
     -- password is involved. This is the path the switcher takes.
@@ -456,11 +474,11 @@ function actions.switchAccount(source, payload)
     for _, row in ipairs(store.listVaultEntries(cid)) do
         if row.app == app and row.username:lower() == username then saved = row break end
     end
-    if not saved then return fail('No saved password for that account') end
+    if not saved then return fail('accounts.noSavedPasswordAccount', 'No saved password for that account') end
 
     local acc = store.getAccount(app, saved.username)
     if not acc or not actions.verifyPassword(acc, saved.password) then
-        return fail('Saved password no longer works. Sign in again')
+        return fail('accounts.savedPasswordNoLongerWorks', 'Saved password no longer works. Sign in again')
     end
 
     store.setSession(app, cid, acc.id)
@@ -474,7 +492,7 @@ end
 ---@return table envelope data = { loggedIn, me? }
 function actions.me(source, payload)
     local app = payload and payload.app
-    if not DIRECT_APPS[app] then return fail('Unknown app') end
+    if not DIRECT_APPS[app] then return fail('accounts.unknownApp', 'Unknown app') end
     local cid = player.getIdentifier(source)
     if not cid then return ok({ loggedIn = false }) end
     local acc = store.getSessionAccount(app, cid)
@@ -557,16 +575,16 @@ end
 function actions.requestReset(source, payload)
     payload = payload or {}
     local app = payload.app
-    if not ALL_APPS[app] then return fail('Unknown app') end
+    if not ALL_APPS[app] then return fail('accounts.unknownApp', 'Unknown app') end
 
-    local cid = player.getIdentifier(source); if not cid then return fail('Player not found') end
+    local cid = player.getIdentifier(source); if not cid then return fail('accounts.playerNotFound', 'Player not found') end
 
     local identity = trim(payload.identity)
-    if identity == '' then return fail('Enter the username, email or phone number on the account') end
+    if identity == '' then return fail('accounts.enterUsernameEmailPhoneNumber', 'Enter the username, email or phone number on the account') end
 
     if not util.cooldown(cid, 'accounts:requestReset', 2000)
         or not util.rateLimit(cid, 'accounts:requestReset', REQUEST_WINDOW * 1000, MAX_REQUESTS) then
-        return fail('Too many codes requested. Try again in a few minutes')
+        return fail('accounts.tooManyCodesRequestedTry', 'Too many codes requested. Try again in a few minutes')
     end
 
     local acc, channel = resolveRecovery(app, identity)
@@ -593,7 +611,7 @@ end
 function actions.suggestCode(source, payload)
     payload = payload or {}
     local app = payload.app
-    if not ALL_APPS[app] then return fail('Unknown app') end
+    if not ALL_APPS[app] then return fail('accounts.unknownApp', 'Unknown app') end
     local cid = player.getIdentifier(source)
     if not cid then return ok({}) end
 
@@ -629,25 +647,25 @@ end
 function actions.confirmReset(source, payload)
     payload = payload or {}
     local app = payload.app
-    if not ALL_APPS[app] then return fail('Unknown app') end
+    if not ALL_APPS[app] then return fail('accounts.unknownApp', 'Unknown app') end
 
     local acc = (resolveRecovery(app, trim(payload.identity)))
-    if not acc then return fail('That code has expired. Request a new one') end
+    if not acc then return fail('accounts.codeHasExpiredRequestNew', 'That code has expired. Request a new one') end
 
     local key = resetKey(app, acc.id)
     local entry = resetCodes[key]
     if not entry or os.time() > entry.expires then
         resetCodes[key] = nil
-        return fail('That code has expired. Request a new one')
+        return fail('accounts.codeHasExpiredRequestNew', 'That code has expired. Request a new one')
     end
     entry.attempts = entry.attempts + 1
     if entry.attempts > MAX_ATTEMPTS then
         resetCodes[key] = nil
-        return fail('Too many wrong attempts. Request a new code')
+        return fail('accounts.tooManyWrongAttemptsRequest', 'Too many wrong attempts. Request a new code')
     end
-    if digits(payload.code) ~= entry.code then return fail('Wrong code') end
+    if digits(payload.code) ~= entry.code then return fail('accounts.wrongCode', 'Wrong code') end
 
-    local password, pe = validPassword(payload.password); if not password then return fail(pe) end
+    local password, pr = validPassword(payload.password); if not password then return pr end
 
     store.setPassword(acc.id, store.hashPassword(password))
     if app == 'mail' then
@@ -666,20 +684,20 @@ end
 function actions.changePassword(source, payload)
     payload = payload or {}
     local app = payload.app
-    if not ALL_APPS[app] then return fail('Unknown app') end
-    local cid = player.getIdentifier(source); if not cid then return fail('Player not found') end
+    if not ALL_APPS[app] then return fail('accounts.unknownApp', 'Unknown app') end
+    local cid = player.getIdentifier(source); if not cid then return fail('accounts.playerNotFound', 'Player not found') end
     if not util.cooldown(cid, 'accounts:changePassword', 1000)
         or not util.rateLimit(cid, 'accounts:changePassword', GUESS_WINDOW, CHANGE_MAX) then
-        return fail('Too many attempts. Try again shortly')
+        return fail('accounts.tooManyAttemptsTryAgain', 'Too many attempts. Try again shortly')
     end
 
     local username = trim(payload.identity or '')
-    if username == '' then return fail('Account is required') end
+    if username == '' then return fail('accounts.accountRequired', 'Account is required') end
     local acc = store.getAccount(app, username)
     if not acc or not ownsAccount(app, cid, acc) or not actions.verifyPassword(acc, payload.currentPassword) then
-        return fail('Current password is incorrect')
+        return fail('accounts.currentPasswordIncorrect', 'Current password is incorrect')
     end
-    local password, pe = validPassword(payload.newPassword); if not password then return fail(pe) end
+    local password, pr = validPassword(payload.newPassword); if not password then return pr end
     store.setPassword(acc.id, store.hashPassword(password))
     if app == 'mail' then
         mailStore.setPasswordHash(acc.username, mailStore.hashPassword(password))
@@ -696,21 +714,21 @@ end
 function actions.savePassword(source, payload)
     payload = payload or {}
     local app = payload.app
-    if not ALL_APPS[app] then return fail('Unknown app') end
-    local cid = player.getIdentifier(source); if not cid then return fail('Player not found') end
+    if not ALL_APPS[app] then return fail('accounts.unknownApp', 'Unknown app') end
+    local cid = player.getIdentifier(source); if not cid then return fail('accounts.playerNotFound', 'Player not found') end
 
     local username = trim(payload.username):lower()
     local password = payload.password
     if username == '' or type(password) ~= 'string' or password == '' then
-        return fail('Nothing to save')
+        return fail('accounts.nothingSave', 'Nothing to save')
     end
-    if #username > 64 then return fail('Username must be 64 characters or fewer') end
-    if #password > 64 then return fail('Password must be 64 characters or fewer') end
+    if #username > 64 then return fail('accounts.usernameMust64CharactersFewer', 'Username must be 64 characters or fewer') end
+    if #password > 64 then return fail('accounts.passwordMust64CharactersFewer', 'Password must be 64 characters or fewer') end
     local email = trim(payload.email):lower()
     if email ~= '' and not email:find('@', 1, true) then email = email .. '@' .. MAIL_DOMAIN end
-    if #email > 120 then return fail('That email address looks invalid') end
+    if #email > 120 then return fail('accounts.emailAddressLooksInvalid', 'That email address looks invalid') end
     local phone = digits(payload.phone)
-    if #phone > 20 then return fail('That phone number looks invalid') end
+    if #phone > 20 then return fail('accounts.phoneNumberLooksInvalid', 'That phone number looks invalid') end
 
     store.saveVaultEntry(cid, app, username, password,
         email ~= '' and email or nil,
@@ -732,10 +750,10 @@ end
 ---@param payload { id?: number }|nil
 ---@return table envelope
 function actions.deletePassword(source, payload)
-    local cid = player.getIdentifier(source); if not cid then return fail('Player not found') end
+    local cid = player.getIdentifier(source); if not cid then return fail('accounts.playerNotFound', 'Player not found') end
     local id = tonumber(payload and payload.id)
     if not id or id ~= id or id == math.huge or id == -math.huge or id ~= math.floor(id) then
-        return fail('Entry not found')
+        return fail('accounts.entryNotFound', 'Entry not found')
     end
     store.deleteVaultEntry(cid, id)
     return ok()
@@ -746,7 +764,7 @@ end
 ---@return table envelope data = { number }
 function actions.myNumber(source)
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('accounts.playerNotFound', 'Player not found') end
     return ok({ number = settings.getPhoneNumber(cid) })
 end
 

@@ -56,9 +56,9 @@ end)
 ---never from the payload, and only that department's terminals are pushed to.
 chat.send = access.gated('chat.send', function(_src, payload, me)
     local body = util.limitedString(payload.body, MAX_LENGTH)
-    if not body then return util.fail('Write something first') end
+    if not body then return util.fail('mdt.writeSomethingFirst', 'Write something first') end
     if not util.rateLimit(me.citizenid, 'mdt:chat:send', RATE_WINDOW, RATE_MAX) then
-        return util.fail('Slow down')
+        return util.fail('mdt.slowDown', 'Slow down')
     end
 
     seq = seq + 1

@@ -1,4 +1,4 @@
-import { apiCall, apiData } from '@/core/api';
+import { apiCall, apiData, failText } from '@/core/api';
 import { isFiveM } from '@/core/nui';
 import {
     emptyPage,
@@ -826,7 +826,7 @@ export async function mdtRegisterWeapon(input: WeaponInput): Promise<WeaponDetai
         return next;
     }
     const res = await apiCall<{ weapon: WeaponDetail }>('sd-phone:mdt:weapons:create', input);
-    if (!res.success || !res.data) return res.message ?? '';
+    if (!res.success || !res.data) return failText(res, '');
     return pinWeapon(res.data.weapon);
 }
 
@@ -896,7 +896,7 @@ export async function mdtCameras(): Promise<CameraGrid> {
 export async function mdtCameraWatch(cameraId: string): Promise<string | null> {
     if (!isFiveM) return 'Cameras only work in game';
     const res = await apiCall('sd-phone:mdt:cameras:watch', { cameraId });
-    if (res.success !== true) return res.message ?? 'Could not reach that unit';
+    if (res.success !== true) return failText(res, 'Could not reach that unit');
     return null;
 }
 
@@ -927,7 +927,7 @@ export async function mdtRecordingShare(
 ): Promise<string | null> {
     if (!isFiveM) return null;
     const res = await apiCall('sd-phone:mdt:recordings:share', { id, citizenid, toMdt, toPhone });
-    return res.success === true ? null : (res.message ?? 'That could not be sent');
+    return res.success === true ? null : (failText(res, 'That could not be sent'));
 }
 
 export async function mdtReports(opts: { query?: string; type?: ReportType | 'All'; page?: number } = {}): Promise<Page<ReportSummary>> {

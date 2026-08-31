@@ -1,3 +1,4 @@
+import { getLocaleTag } from '@/i18n';
 import { readJson, writeJson } from '@/lib/storage';
 import { format12h } from '@/lib/time';
 
@@ -54,12 +55,20 @@ export function addMonths(d: Date, n: number): Date {
     return new Date(d.getFullYear(), d.getMonth() + n, 1);
 }
 
-export const MONTH_NAMES = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-];
+function localeDateNames(count: number, dateFor: (i: number) => Date, opts: Intl.DateTimeFormatOptions): string[] {
+    const names: string[] = [];
+    for (let i = 0; i < count; i++) {
+        Object.defineProperty(names, i, {
+            enumerable: true,
+            get: () => dateFor(i).toLocaleDateString(getLocaleTag(), opts),
+        });
+    }
+    return names;
+}
 
-export const WEEKDAY_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+export const MONTH_NAMES = localeDateNames(12, i => new Date(2001, i, 1), { month: 'long' });
+
+export const WEEKDAY_SHORT = localeDateNames(7, i => new Date(2001, 6, 1 + i), { weekday: 'narrow' });
 
 export function monthGrid(d: Date): Date[] {
     const first = new Date(d.getFullYear(), d.getMonth(), 1);
@@ -72,10 +81,7 @@ export function monthGrid(d: Date): Date[] {
     return out;
 }
 
-export function formatLongDate(d: Date): string {
-    const wk = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getDay()];
-    return `${wk}, ${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`;
-}
+export { formatLongDate } from '@/lib/time';
 
 export function formatTime(hhmm: string): string {
     const [hStr, mStr] = hhmm.split(':');

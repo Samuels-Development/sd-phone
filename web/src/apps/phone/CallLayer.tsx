@@ -21,6 +21,7 @@ import { acceptVideo, requestVideo, stopVideo } from './calls/webrtc';
 import { useCallStore } from '@/stores/callStore';
 import { t } from '@/i18n';
 import { formatDuration } from '@/lib/time';
+import { failText } from '@/core/api';
 
 function fmtElapsed(seconds: number): string {
     return formatDuration(seconds);
@@ -186,7 +187,7 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
         const digits = target.replace(/\D/g, '');
         if (!digits) return;
         const res = await addToCall(digits);
-        if (!res.success) { setAddError(res.message ?? t('phone.couldNotAdd','Could not add that number')); return; }
+        if (!res.success) { setAddError(failText(res, t('phone.couldNotAdd','Could not add that number'))); return; }
         setAddOpen(false); setAddDigits(''); setAddError(null);
     }
 

@@ -3,6 +3,8 @@ local config  = require 'configs.config'
 
 ---@type table Race running state, so a board never shows while the player is mid-run.
 local race    = require 'client.racing.race'
+---@type table Locale bridge (bridge.shared.locale): t(key, english, vars) for in-world text.
+local locale  = require 'bridge.shared.locale'
 
 local RACING  = type(config.Racing) == 'table' and config.Racing or {}
 local RACE    = type(RACING.Race) == 'table' and RACING.Race or {}
@@ -80,7 +82,7 @@ local function syncBlips()
                 SetBlipScale(handle, 0.9)
                 SetBlipAsShortRange(handle, true)
                 BeginTextCommandSetBlipName('STRING')
-                AddTextComponentSubstringPlayerName(entry.name or 'Race')
+                AddTextComponentSubstringPlayerName(entry.name or locale.t('racing.modeRace', 'Race'))
                 EndTextCommandSetBlipName(handle)
                 Blips[entry.id] = handle
             end
@@ -215,16 +217,17 @@ local function toggle(entry)
         if entry.joined then
             local res = lib.callback.await('sd-phone:server:racing:leave', false, { raceId = entry.id })
             if type(res) == 'table' and res.message then
-                lib.notify({ title = 'Racing', description = res.message, type = res.success and 'info' or 'error' })
+                lib.notify({ title = locale.t('apps.racing', 'Racing'), description = res.message, type = res.success and 'info' or 'error' })
             end
         else
             local fee = math.max(0, math.floor(tonumber(entry.entryFee) or 0))
             local go  = true
             if fee > 0 then
                 go = lib.alertDialog({
-                    header   = 'Race buy-in',
-                    content  = ('Joining **%s** costs **$%s**. The money comes back if you leave before the start.')
-                        :format(entry.name or 'this race', fee),
+                    header   = locale.t('racing.buyInHeader', 'Race buy-in'),
+                    content  = locale.t('racing.buyInConfirm',
+                        'Joining **{race}** costs **${amount}**. The money comes back if you leave before the start.',
+                        { race = entry.name or locale.t('racing.thisRace', 'this race'), amount = fee }),
                     centered = true,
                     cancel   = true,
                 }) == 'confirm'
@@ -236,7 +239,7 @@ local function toggle(entry)
                     modelHash = currentModel(),
                 })
                 if type(res) == 'table' and res.message then
-                    lib.notify({ title = 'Racing', description = res.message, type = res.success and 'success' or 'error' })
+                    lib.notify({ title = locale.t('apps.racing', 'Racing'), description = res.message, type = res.success and 'success' or 'error' })
                 end
             end
         end

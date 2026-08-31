@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Check, Loader2, Lock, WifiOff } from 'lucide-react';
 
 import { t } from '@/i18n';
-import { apiCall, apiData } from '@/core/api';
+import { apiCall, apiData, failText } from '@/core/api';
 import { isFiveM } from '@/core/nui';
 import type { WifiNetwork, WifiState } from '@/core/types';
 import { useWifiConnected, useWifiNetworks, useWifiStore } from '@/stores/wifiStore';
@@ -95,7 +95,7 @@ export function WifiPage({ onBack }: { onBack: () => void }) {
         setBusyId(net.id);
         const res = await apiCall<void>('sd-phone:wifi:connect', { id: net.id, password: password ?? '' });
         setBusyId(null);
-        if (!res.success) return res.message ?? t('settings.wifiJoinFailed', 'Could not join that network.');
+        if (!res.success) return failText(res, t('settings.wifiJoinFailed', 'Could not join that network.'));
         await refresh();
         return null;
     }, [refresh]);

@@ -40,3 +40,6 @@ jobs:
 
       - name: Knip (dead-code)
         run: npm run knip
+
+      - name: i18n (key collisions + en.json in sync)
+        run: npm run i18n:check

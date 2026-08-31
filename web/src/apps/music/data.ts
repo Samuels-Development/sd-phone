@@ -1,4 +1,5 @@
 
+import { t } from '@/i18n';
 import { isFiveM } from '@/core/nui';
 import { apiCall } from '@/core/api';
 import { readJson } from '@/lib/storage';
@@ -164,10 +165,10 @@ export async function fetchYouTubeMeta(url: string): Promise<{ title: string; ar
         const r = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
         if (r.ok) {
             const j = await r.json() as { title?: string; author_name?: string };
-            return { title: j.title || 'YouTube video', artist: j.author_name || 'YouTube' };
+            return { title: j.title || t('music.youtubeVideo', 'YouTube video'), artist: j.author_name || 'YouTube' };
         }
     } catch { /* ignore */ }
-    return { title: 'YouTube video', artist: 'YouTube' };
+    return { title: t('music.youtubeVideo', 'YouTube video'), artist: 'YouTube' };
 }
 
 export { formatDuration as fmt } from '@/lib/time';
@@ -209,11 +210,12 @@ export function coverColor(seed: string): [number, number, number] {
 }
 
 export function titleFromUrl(url: string): string {
+    const untitled = t('music.untitledTrack', 'Track');
     try {
-        const path = new URL(url).pathname.split('/').pop() || 'Track';
-        return decodeURIComponent(path.replace(/\.[a-z0-9]+$/i, '')).replace(/[-_]+/g, ' ').trim() || 'Track';
+        const path = new URL(url).pathname.split('/').pop() || untitled;
+        return decodeURIComponent(path.replace(/\.[a-z0-9]+$/i, '')).replace(/[-_]+/g, ' ').trim() || untitled;
     } catch {
-        return 'Track';
+        return untitled;
     }
 }
 
@@ -268,10 +270,10 @@ export interface AlbumGroup  { key: string; album: string; artist: string; track
 
 export function groupByArtist(tracks: Track[]): ArtistGroup[] {
     const map = new Map<string, Track[]>();
-    for (const t of tracks) {
-        const name = t.artist.trim() || 'Unknown artist';
+    for (const track of tracks) {
+        const name = track.artist.trim() || t('music.unknownArtist', 'Unknown artist');
         const list = map.get(name);
-        if (list) list.push(t); else map.set(name, [t]);
+        if (list) list.push(track); else map.set(name, [track]);
     }
     return [...map.entries()]
         .map(([name, ts]) => ({ name, tracks: ts }))

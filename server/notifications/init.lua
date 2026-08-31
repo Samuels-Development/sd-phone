@@ -69,8 +69,12 @@ function notifications.notifyCid(cid, data)
         app        = color and (color:gsub('^%l', string.upper) .. ' Phone') or 'Other Phone',
         appId      = data.appId,
         image      = data.image,
+        titleKey   = data.titleKey,
         title      = data.title,
+        titleVars  = data.titleVars,
+        bodyKey    = data.bodyKey,
         body       = data.body,
+        bodyVars   = data.bodyVars,
         time       = data.time,
         otherPhone = true,
         -- The buzzing phone's frame colour (peek shell tint) and its NUI profile key (device

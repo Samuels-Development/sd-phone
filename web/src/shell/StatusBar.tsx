@@ -35,7 +35,7 @@ export function StatusBar({ use24h, signal, showWifi, wifiBars = null, battery, 
                 {airplane ? (
                     <Airplane size={23} />
                 ) : noSim ? (
-                    <span className="font-sf text-[13px] font-semibold leading-none opacity-80">No SIM</span>
+                    <span className="font-sf text-[13px] font-semibold leading-none opacity-80">{t('shell.noSim', 'No SIM')}</span>
                 ) : noService ? (
                     <>
                         <span className="font-sf text-[13px] font-semibold leading-none opacity-80">{t('shell.noService', 'No Service')}</span>

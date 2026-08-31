@@ -182,7 +182,7 @@ function PalettePreview({ vars, dark }: { vars: CSSProperties; dark: boolean }) 
                 </div>
 
                 <div className="overflow-hidden rounded-[12px] bg-surface">
-                    <PreviewRow icon={<Phone className="h-[15px] w-[15px]" strokeWidth={2.5} />} tint="#34C759" label={t('settings.displayBrightness', 'Display')} dark={dark} divider />
+                    <PreviewRow icon={<Phone className="h-[15px] w-[15px]" strokeWidth={2.5} />} tint="#34C759" label={t('settings.display', 'Display')} dark={dark} divider />
                     <PreviewRow icon={<MessageCircle className="h-[15px] w-[15px]" strokeWidth={2.5} />} tint="#0A84FF" label={t('settings.notifications', 'Notifications')} dark={dark} divider />
                     <PreviewRow icon={<Star className="h-[15px] w-[15px]" strokeWidth={2.5} />} tint="#FF9500" label={t('settings.wallpaper', 'Wallpaper')} dark={dark} toggle />
                 </div>

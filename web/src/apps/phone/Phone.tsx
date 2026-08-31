@@ -18,6 +18,7 @@ import {
 import { dialCall } from './callsApi';
 import { useContacts, useContactsStore, saveNewContact } from '@/stores/contactsStore';
 import { t } from '@/i18n';
+import { failText } from '@/core/api';
 
 interface CallTarget { number: string; name?: string; video?: boolean }
 
@@ -90,7 +91,7 @@ export function Phone({ onClose: _onClose }: { onClose: () => void }) {
     async function placeCall(target: CallTarget) {
         if (!target.number) return;
         const res = await dialCall(target.number, target.name, target.video === true);
-        if (!res.success) setDialError(res.message ?? t('phone.unableToPlaceCall','Unable to place call'));
+        if (!res.success) setDialError(failText(res, t('phone.unableToPlaceCall','Unable to place call')));
     }
 
     useNuiEvent('sd-phone:call:ended', useCallback(() => {

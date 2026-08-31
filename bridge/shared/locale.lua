@@ -27,13 +27,19 @@ local function flatten(prefix, source, target)
     end
 end
 
----Localised lookup; returns `key` when no translation exists. Replacement values are %-escaped
----before substitution.
+---Localised lookup; falls back to `english` when the catalogue has no entry for the key, and to
+---the key itself when there is no fallback either. Replacement values are %-escaped before
+---substitution. Passing the replacements table as the second argument is still accepted.
 ---@param key string
+---@param english? string|table<string, any> English text, or the replacements table
 ---@param replacements? table<string, any>
 ---@return string
-function locale.t(key, replacements)
-    local lstr = dict[key]
+function locale.t(key, english, replacements)
+    if type(english) == 'table' then
+        english, replacements = nil, english
+    end
+
+    local lstr = dict[key] or english
     if lstr and replacements then
         for k, v in pairs(replacements) do
             local safe = tostring(v):gsub('%%', '%%%%')

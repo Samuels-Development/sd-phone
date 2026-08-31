@@ -91,10 +91,10 @@ export function HomePane() {
                     icon={FileText}
                     title={query.trim()
                         ? t('mdt.noReportMatches', 'No Matches')
-                        : t('mdt.noReports', 'No Reports Filed')}
+                        : t('mdt.homeNoReports', 'No Reports Filed')}
                     subtitle={query.trim()
                         ? t('mdt.noReportMatchesSub', 'No recent report matches that search.')
-                        : t('mdt.noReportsSub', 'Paperwork filed by the department shows up here first.')}
+                        : t('mdt.homeNoReportsSub', 'Paperwork filed by the department shows up here first.')}
                 />
             )}
         >

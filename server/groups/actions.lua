@@ -113,7 +113,7 @@ actions.serializeInvite = serializeInvite
 ---@param source number
 ---@return { success: true, data: { groups: any[], invites: any[], activeGroupId: string|nil } }|{ success: false, message: string }
 function actions.list(source)
-    local me = whois(source); if not me then return fail('Player not found') end
+    local me = whois(source); if not me then return fail('groups.playerNotFound', 'Player not found') end
 
     local groupRows   = store.listForMember(me.cid)
     local invitePairs = store.listInvitesFor(me.cid)
@@ -148,17 +148,20 @@ local colorFor = util.colorFor
 
 
 ---Normalizes and validates a player-supplied group name: type-checked, trimmed, then
----length-gated by configs/groups.lua. Returns the trimmed name or `nil, message`.
+---length-gated by configs/groups.lua. Returns the trimmed name or `nil` plus a keyed refusal.
 ---@param raw any
----@return string|nil normalized, string? message
+---@return string|nil normalized
+---@return table? refusal keyed refusal envelope when normalized is nil
 local function validateName(raw)
-    if type(raw) ~= 'string' then return nil, 'Group name is required' end
+    if type(raw) ~= 'string' then return nil, fail('groups.groupNameRequired', 'Group name is required') end
     local trimmed = raw:gsub('^%s+', ''):gsub('%s+$', '')
     if #trimmed < groupsCfg.MinNameLength then
-        return nil, ('Group name must be at least %d characters'):format(groupsCfg.MinNameLength)
+        return nil, fail('groups.groupNameMustLeastCharacters', 'Group name must be at least {n} characters',
+            { n = groupsCfg.MinNameLength })
     end
     if #trimmed > groupsCfg.MaxNameLength then
-        return nil, ('Group name must be %d characters or fewer'):format(groupsCfg.MaxNameLength)
+        return nil, fail('groups.groupNameMustCharactersFewer', 'Group name must be {n} characters or fewer',
+            { n = groupsCfg.MaxNameLength })
     end
     return trimmed, nil
 end
@@ -169,23 +172,23 @@ end
 ---@return table
 function actions.create(source, payload)
     payload = asTable(payload)
-    local me = whois(source); if not me then return fail('Player not found') end
+    local me = whois(source); if not me then return fail('groups.playerNotFound', 'Player not found') end
 
-    local name, err = validateName(payload.name)
-    if not name then return fail(err) end
+    local name, refusal = validateName(payload.name)
+    if not name then return refusal end
 
     if not util.cooldown(me.cid, 'groups:create', CREATE_GAP_MS) then
-        return fail('Slow down')
+        return fail('groups.slowDown', 'Slow down')
     end
 
     if store.countOwnedBy(me.cid) >= groupsCfg.MaxOwnedPerPlayer then
-        return fail(('You can lead at most %d groups'):format(groupsCfg.MaxOwnedPerPlayer))
+        return fail('groups.leadAtMostGroups', 'You can lead at most {n} groups', { n = groupsCfg.MaxOwnedPerPlayer })
     end
 
     local id = store.newId()
     local members = { { citizenid = me.cid, name = me.name, joined_at = os.time() } }
     if not store.insertGroup(id, name, me.cid, colorFor(name), members) then
-        return fail('Failed to create group')
+        return fail('groups.failedCreateGroup', 'Failed to create group')
     end
 
     local row = store.getGroup(id)
@@ -199,48 +202,48 @@ end
 ---@return table
 function actions.invite(source, payload)
     payload = asTable(payload)
-    local me = whois(source); if not me then return fail('Player not found') end
+    local me = whois(source); if not me then return fail('groups.playerNotFound', 'Player not found') end
 
     local groupId = payload.groupId
     local targetSrc = tonumber(payload.targetSource)
     if not groupId or not targetSrc then
-        return fail('Group id and target player id are required')
+        return fail('groups.groupIdTargetPlayerId', 'Group id and target player id are required')
     end
 
     if not util.cooldown(me.cid, 'groups:invite', INVITE_GAP_MS)
         or not util.rateLimit(me.cid, 'groups:invite', INVITE_WINDOW_MS, INVITE_PER_WINDOW) then
-        return fail('Slow down')
+        return fail('groups.slowDown', 'Slow down')
     end
 
     local group = store.getGroup(groupId)
-    if not group then return fail('Group not found') end
+    if not group then return fail('groups.groupNotFound', 'Group not found') end
     if group.leader_cid ~= me.cid then
-        return fail('Only the group leader can send invites')
+        return fail('groups.onlyGroupLeaderCanSend', 'Only the group leader can send invites')
     end
 
     local target = whois(targetSrc)
-    if not target then return fail('That player is not online') end
-    if target.cid == me.cid then return fail('You are already in the group') end
+    if not target then return fail('groups.playerNotOnline', 'That player is not online') end
+    if target.cid == me.cid then return fail('groups.alreadyGroup', 'You are already in the group') end
 
     if store.isMember(groupId, target.cid) then
-        return fail(target.name .. ' is already in the group')
+        return fail('groups.targetAlreadyGroup', '{name} is already in the group', { name = target.name })
     end
     if store.hasPendingInvite(groupId, target.cid) then
-        return fail(target.name .. ' already has a pending invite')
+        return fail('groups.targetAlreadyPendingInvite', '{name} already has a pending invite', { name = target.name })
     end
 
     if #group.members >= groupsCfg.MaxMembersPerGroup then
-        return fail(('Group already at %d members'):format(groupsCfg.MaxMembersPerGroup))
+        return fail('groups.groupAlreadyMembers', 'Group already at {n} members', { n = groupsCfg.MaxMembersPerGroup })
     end
     if store.countInvitesForGroup(groupId) >= groupsCfg.MaxPendingInvitesPerGroup then
-        return fail('Too many pending invites for this group')
+        return fail('groups.tooManyPendingInvitesGroup', 'Too many pending invites for this group')
     end
 
     if not util.cooldown(me.cid, 'groups:invite:' .. target.cid, INVITE_SAME_TARGET_MS) then
-        return fail(target.name .. ' was invited recently')
+        return fail('groups.targetInvitedRecently', '{name} was invited recently', { name = target.name })
     end
     if not util.rateLimit(target.cid, 'groups:inviteRecv', INVITE_RECV_WINDOW_MS, INVITE_RECV_PER_WINDOW) then
-        return fail(target.name .. ' has too many pending invites right now')
+        return fail('groups.targetTooManyPendingInvites', '{name} has too many pending invites right now', { name = target.name })
     end
 
     local inviteId = store.newId()
@@ -251,7 +254,7 @@ function actions.invite(source, payload)
         invited_name = me.name,
     }
     if not store.addInvite(groupId, invite) then
-        return fail('Failed to send invite')
+        return fail('groups.failedSendInvite', 'Failed to send invite')
     end
 
     return ok({
@@ -275,22 +278,22 @@ end
 ---@return table
 function actions.accept(source, payload)
     payload = asTable(payload)
-    local me = whois(source); if not me then return fail('Player not found') end
+    local me = whois(source); if not me then return fail('groups.playerNotFound', 'Player not found') end
 
     local hit = store.findInvite(payload.inviteId or '')
-    if not hit then return fail('Invite no longer valid') end
-    if hit.invite.target_cid ~= me.cid then return fail('That invite is for someone else') end
+    if not hit then return fail('groups.inviteNoLongerValid', 'Invite no longer valid') end
+    if hit.invite.target_cid ~= me.cid then return fail('groups.inviteSomeoneElse', 'That invite is for someone else') end
 
     if #hit.group.members >= groupsCfg.MaxMembersPerGroup then
         store.removeInvite(hit.invite.id)
-        return fail('Group is full')
+        return fail('groups.groupFull', 'Group is full')
     end
 
     store.addMember(hit.group.id, me.cid, me.name)
     store.removeInvite(hit.invite.id)
 
     local row = store.getGroup(hit.group.id)
-    if not row then return fail('Group was disbanded') end
+    if not row then return fail('groups.groupDisbanded', 'Group was disbanded') end
 
     return ok({
         group  = actions.serializeGroup(row, me.cid, player.onlineCidMap()),
@@ -304,11 +307,11 @@ end
 ---@return table
 function actions.decline(source, payload)
     payload = asTable(payload)
-    local me = whois(source); if not me then return fail('Player not found') end
+    local me = whois(source); if not me then return fail('groups.playerNotFound', 'Player not found') end
 
     local hit = store.findInvite(payload.inviteId or '')
     if hit and hit.invite.target_cid ~= me.cid then
-        return fail('That invite is for someone else')
+        return fail('groups.inviteSomeoneElse', 'That invite is for someone else')
     end
     store.removeInvite(payload.inviteId or '')
     return ok()
@@ -320,15 +323,15 @@ end
 ---@return table
 function actions.leave(source, payload)
     payload = asTable(payload)
-    local me = whois(source); if not me then return fail('Player not found') end
+    local me = whois(source); if not me then return fail('groups.playerNotFound', 'Player not found') end
 
     local group = store.getGroup(payload.groupId or '')
-    if not group then return fail('Group not found') end
+    if not group then return fail('groups.groupNotFound', 'Group not found') end
     if group.leader_cid == me.cid then
-        return fail('Leaders must disband — leave is for members')
+        return fail('groups.leadersMustDisbandLeaveMembers', 'Leaders must disband — leave is for members')
     end
     if not store.isMember(group.id, me.cid) then
-        return fail('You are not in that group')
+        return fail('groups.notGroup', 'You are not in that group')
     end
 
     store.removeMember(group.id, me.cid)
@@ -343,12 +346,12 @@ end
 ---@return table
 function actions.disband(source, payload)
     payload = asTable(payload)
-    local me = whois(source); if not me then return fail('Player not found') end
+    local me = whois(source); if not me then return fail('groups.playerNotFound', 'Player not found') end
 
     local group = store.getGroup(payload.groupId or '')
-    if not group then return fail('Group not found') end
+    if not group then return fail('groups.groupNotFound', 'Group not found') end
     if group.leader_cid ~= me.cid then
-        return fail('Only the leader can disband the group')
+        return fail('groups.onlyLeaderCanDisbandGroup', 'Only the leader can disband the group')
     end
 
     local memberCids = {}
@@ -367,21 +370,21 @@ end
 ---@return table
 function actions.kick(source, payload)
     payload = asTable(payload)
-    local me = whois(source); if not me then return fail('Player not found') end
+    local me = whois(source); if not me then return fail('groups.playerNotFound', 'Player not found') end
 
     local group = store.getGroup(payload.groupId or '')
-    if not group then return fail('Group not found') end
+    if not group then return fail('groups.groupNotFound', 'Group not found') end
     if group.leader_cid ~= me.cid then
-        return fail('Only the leader can remove members')
+        return fail('groups.onlyLeaderCanRemoveMembers', 'Only the leader can remove members')
     end
     if payload.citizenid == me.cid then
-        return fail('Use disband to remove yourself as leader')
+        return fail('groups.useDisbandRemoveYourselfAs', 'Use disband to remove yourself as leader')
     end
     if payload.citizenid == group.leader_cid then
-        return fail('Cannot remove the leader')
+        return fail('groups.cannotRemoveLeader', 'Cannot remove the leader')
     end
     if not store.isMember(group.id, payload.citizenid or '') then
-        return fail('That player is not in the group')
+        return fail('groups.playerNotGroup', 'That player is not in the group')
     end
 
     store.removeMember(group.id, payload.citizenid)
@@ -396,22 +399,22 @@ end
 ---@return table
 function actions.setAvatar(source, payload)
     payload = asTable(payload)
-    local me = whois(source); if not me then return fail('Player not found') end
+    local me = whois(source); if not me then return fail('groups.playerNotFound', 'Player not found') end
 
     local group = store.getGroup(payload.groupId or '')
-    if not group then return fail('Group not found') end
+    if not group then return fail('groups.groupNotFound', 'Group not found') end
     if group.leader_cid ~= me.cid then
-        return fail('Only the leader can change the group photo')
+        return fail('groups.onlyLeaderCanChangeGroup', 'Only the leader can change the group photo')
     end
 
     local avatar = payload.avatar
-    if type(avatar) ~= 'string' then return fail('A photo is required') end
+    if type(avatar) ~= 'string' then return fail('groups.photoRequired', 'A photo is required') end
     avatar = avatar:gsub('^%s+', ''):gsub('%s+$', '')
-    if avatar == '' then return fail('A photo is required') end
+    if avatar == '' then return fail('groups.photoRequired', 'A photo is required') end
     if #avatar > 512 then avatar = avatar:sub(1, 512) end
 
     if not store.setAvatar(group.id, avatar) then
-        return fail('Failed to update group photo')
+        return fail('groups.failedUpdateGroupPhoto', 'Failed to update group photo')
     end
 
     local memberCids = {}
@@ -427,7 +430,7 @@ end
 ---@return table
 function actions.setActive(source, payload)
     payload = asTable(payload)
-    local me = whois(source); if not me then return fail('Player not found') end
+    local me = whois(source); if not me then return fail('groups.playerNotFound', 'Player not found') end
 
     local groupId = payload.groupId
     if groupId == nil or groupId == '' then
@@ -436,11 +439,11 @@ function actions.setActive(source, payload)
     end
 
     if not store.isMember(groupId, me.cid) then
-        return fail('You are not a member of that group')
+        return fail('groups.notMemberGroup', 'You are not a member of that group')
     end
 
     if not store.setActiveGroupId(me.cid, groupId) then
-        return fail('Failed to set active group')
+        return fail('groups.failedSetActiveGroup', 'Failed to set active group')
     end
     return ok({ activeGroupId = groupId })
 end

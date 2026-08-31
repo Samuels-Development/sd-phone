@@ -283,7 +283,7 @@ export function AppSwitcher({
                                     and flickers in CEF). */}
                                 <button
                                     type="button"
-                                    aria-label={`Close ${appDef ? appLabel(appDef) : appId}`}
+                                    aria-label={t('shell.closeApp', 'Close {label}', { label: appDef ? appLabel(appDef) : appId })}
                                     onClick={e => { e.stopPropagation(); onRemove(appId); }}
                                     className="shrink-0 flex h-[30px] w-[30px] items-center justify-center rounded-full text-white transition-colors duration-200 active:bg-white/30"
                                     style={{

@@ -25,7 +25,7 @@ end
 ---than a callback that never returns.
 ---@return table envelope
 function shared.shut()
-    return util.fail('That game is closed on this server')
+    return util.fail('games.gameClosedServer', 'That game is closed on this server')
 end
 
 ---@param src integer player server id

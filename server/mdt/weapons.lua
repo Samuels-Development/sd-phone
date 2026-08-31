@@ -172,13 +172,13 @@ end
 ---@param value any client-supplied citizenid
 ---@return string|nil citizenid nil when the field was left empty
 ---@return string|nil name display name, nil when the field was left empty
----@return string|nil refusal set when the identifier belongs to nobody
+---@return table|nil refusal failure envelope, set when the identifier belongs to nobody
 local function ownerFrom(value)
     local cid = util.limitedString(value, MAX_CID)
     if not cid then return nil, nil, nil end
 
     local citizen = frameworkRecords.getCitizen(cid)
-    if not citizen then return nil, nil, 'No citizen holds that ID' end
+    if not citizen then return nil, nil, util.fail('mdt.noCitizenHoldsId', 'No citizen holds that ID') end
     return cid, citizen.name or cid, nil
 end
 
@@ -212,22 +212,22 @@ end
 ---weapon and the buyer but has no serial until one is issued.
 ---@param data table { serial?, name, class?, owner?, notes?, registeredBy?, requireSerial? }
 ---@return string|nil serial the serial the record was filed under
----@return string? message refusal reason when serial is nil
+---@return table? refusal failure envelope when serial is nil
 function weapons.register(data)
-    if type(data) ~= 'table' then return nil, 'No firearm given' end
+    if type(data) ~= 'table' then return nil, util.fail('mdt.noFirearmGiven', 'No firearm given') end
 
     local serial = serialOf(data.serial)
     if not serial then
-        if data.requireSerial then return nil, 'A serial number is required' end
+        if data.requireSerial then return nil, util.fail('mdt.serialNumberRequired', 'A serial number is required') end
         serial = weapons.newSerial()
-        if not serial then return nil, 'Could not issue a serial number' end
+        if not serial then return nil, util.fail('mdt.couldNotIssueSerialNumber', 'Could not issue a serial number') end
     end
 
     local name = util.limitedString(data.name, MAX_NAME)
-    if not name then return nil, 'Name the firearm' end
+    if not name then return nil, util.fail('mdt.nameFirearm', 'Name the firearm') end
 
     local class = util.limitedString(data.class, 16) or 'other'
-    if not CLASSES[class] then return nil, 'Pick a valid firearm class' end
+    if not CLASSES[class] then return nil, util.fail('mdt.pickValidFirearmClass', 'Pick a valid firearm class') end
 
     local owner, ownerName, refusal = ownerFrom(data.owner)
     if refusal then return nil, refusal end
@@ -236,7 +236,7 @@ function weapons.register(data)
     local by = util.limitedString(data.registeredBy, MAX_CID)
 
     if MySQL.scalar.await('SELECT 1 FROM phone_mdt_weapons WHERE serial = ? LIMIT 1', { serial }) then
-        return nil, 'That serial is already on the registry'
+        return nil, util.fail('mdt.serialAlreadyRegistry', 'That serial is already on the registry')
     end
 
     local now = os.time()
@@ -298,7 +298,7 @@ weapons.search = access.gated('weapons.view', function(_, payload)
 
     local status = util.limitedString(payload.status, 16)
     if status and status ~= 'all' then
-        if not STATUSES[status] then return util.fail('Pick a valid registry status') end
+        if not STATUSES[status] then return util.fail('mdt.pickValidRegistryStatus', 'Pick a valid registry status') end
         where[#where + 1] = 'status = ?'
         params[#params + 1] = status
     end
@@ -330,10 +330,10 @@ end)
 ---One firearm in full.
 weapons.get = access.gated('weapons.view', function(_, payload)
     local serial = serialOf(payload.serial)
-    if not serial then return util.fail('No serial number given') end
+    if not serial then return util.fail('mdt.noSerialNumberGiven', 'No serial number given') end
 
     local weapon = readOne(serial)
-    if not weapon then return util.fail('No firearm registered on that serial') end
+    if not weapon then return util.fail('mdt.noFirearmRegisteredSerial', 'No firearm registered on that serial') end
     return util.ok({ weapon = weapon })
 end)
 
@@ -349,10 +349,10 @@ weapons.create = access.audited('weapons.edit', function(_, payload, me)
         registeredBy  = me.citizenid,
         requireSerial = true,
     })
-    if not serial then return util.fail(refusal) end
+    if not serial then return refusal end
 
     local weapon = readOne(serial)
-    if not weapon then return util.fail('That could not be registered') end
+    if not weapon then return util.fail('mdt.couldNotRegistered', 'That could not be registered') end
 
     return util.ok({ weapon = weapon }), {
         entityType = 'weapon',
@@ -365,15 +365,15 @@ end)
 ---leaves the stored value alone, and an empty owner clears the registration rather than failing.
 weapons.update = access.audited('weapons.edit', function(_, payload, me)
     local serial = serialOf(payload.serial)
-    if not serial then return util.fail('No serial number given') end
+    if not serial then return util.fail('mdt.noSerialNumberGiven', 'No serial number given') end
 
     local current = MySQL.single.await('SELECT * FROM phone_mdt_weapons WHERE serial = ? LIMIT 1', { serial })
-    if not current then return util.fail('No firearm registered on that serial') end
+    if not current then return util.fail('mdt.noFirearmRegisteredSerial', 'No firearm registered on that serial') end
 
     local status = STATUSES[current.status] and current.status or 'registered'
     if payload.status ~= nil then
         local wanted = util.limitedString(payload.status, 16)
-        if not wanted or not STATUSES[wanted] then return util.fail('Pick a valid registry status') end
+        if not wanted or not STATUSES[wanted] then return util.fail('mdt.pickValidRegistryStatus', 'Pick a valid registry status') end
         status = wanted
     end
 
@@ -381,7 +381,7 @@ weapons.update = access.audited('weapons.edit', function(_, payload, me)
     if payload.owner ~= nil then
         local refusal
         owner, ownerName, refusal = ownerFrom(payload.owner)
-        if refusal then return util.fail(refusal) end
+        if refusal then return refusal end
     end
 
     local notes = current.notes or ''
@@ -404,7 +404,7 @@ weapons.update = access.audited('weapons.edit', function(_, payload, me)
     })
 
     local weapon = readOne(serial)
-    if not weapon then return util.fail('No firearm registered on that serial') end
+    if not weapon then return util.fail('mdt.noFirearmRegisteredSerial', 'No firearm registered on that serial') end
 
     return util.ok({ weapon = weapon }), {
         entityType = 'weapon',

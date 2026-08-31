@@ -336,7 +336,7 @@ lib.callback.register('sd-phone:server:darkchat:ban', function(src, payload)
         TriggerClientEvent('sd-phone:client:notify', tgt, {
             app = 'darkchat', appId = 'darkchat', time = 'now',
             title = res.data.roomName,
-            body  = 'You have been banned from this room.',
+            bodyKey = 'darkchat.youWereBanned', body = 'You have been banned from this room.',
         })
     end
     broadcastMembers(res.data.roomId, src)

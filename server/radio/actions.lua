@@ -61,7 +61,7 @@ end
 ---range covers it, and a covered band needs the caller's CURRENT job to match ANY covering range.
 ---@param src integer player server id
 ---@param freq any raw client frequency (clamped here)
----@return table verdict { allowed: boolean, message?: string }
+---@return table verdict { allowed: boolean, messageKey?: string, message?: string, messageVars?: table }
 function actions.canTune(src, freq)
     freq = clampFreq(freq)
     local ranges = config.Radio and config.Radio.RestrictedRanges
@@ -77,7 +77,12 @@ function actions.canTune(src, freq)
         end
     end
     if restricted then
-        return { allowed = false, message = ('%.1f MHz is reserved for %s.'):format(freq, label or 'authorized units') }
+        return {
+            allowed     = false,
+            messageKey  = 'radio.frequencyReservedFor',
+            message     = '{freq} MHz is reserved for {who}.',
+            messageVars = { freq = ('%.1f'):format(freq), who = label or 'authorized units' },
+        }
     end
     return { allowed = true }
 end
@@ -142,8 +147,8 @@ function actions.addSaved(src, payload)
     if not cid then return { success = false } end
     if type(payload) ~= 'table' then payload = {} end
     local label = trim(payload.label):sub(1, 40)
-    if label == '' then return { success = false, message = 'Name required' } end
-    if store.countSaved(cid) >= SAVED_CAP then return { success = false, message = 'Saved list is full' } end
+    if label == '' then return { success = false, messageKey = 'radio.nameRequired', message = 'Name required' } end
+    if store.countSaved(cid) >= SAVED_CAP then return { success = false, messageKey = 'radio.savedListFull', message = 'Saved list is full' } end
     local freq = clampFreq(payload.freq or payload.frequency)
     local id   = store.addSaved(cid, label, freq, os.time())
     return { success = true, data = { id = tostring(id), label = label, freq = freq } }
@@ -158,9 +163,9 @@ function actions.updateSaved(src, payload)
     if not cid then return { success = false } end
     if type(payload) ~= 'table' then payload = {} end
     local id = tonumber(payload.id)
-    if not id or id % 1 ~= 0 then return { success = false, message = 'Bad id' } end
+    if not id or id % 1 ~= 0 then return { success = false, messageKey = 'radio.badId', message = 'Bad id' } end
     local label = trim(payload.label):sub(1, 40)
-    if label == '' then return { success = false, message = 'Name required' } end
+    if label == '' then return { success = false, messageKey = 'radio.nameRequired', message = 'Name required' } end
     local freq = clampFreq(payload.freq or payload.frequency)
     store.updateSaved(cid, id, label, freq)
     return { success = true, data = { id = tostring(id), label = label, freq = freq } }
@@ -175,7 +180,7 @@ function actions.removeSaved(src, payload)
     if not cid then return { success = false } end
     if type(payload) ~= 'table' then payload = {} end
     local id = tonumber(payload.id)
-    if not id or id % 1 ~= 0 then return { success = false, message = 'Bad id' } end
+    if not id or id % 1 ~= 0 then return { success = false, messageKey = 'radio.badId', message = 'Bad id' } end
     store.removeSaved(cid, id)
     return { success = true, data = { id = tostring(id) } }
 end

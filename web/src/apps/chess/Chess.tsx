@@ -30,14 +30,14 @@ const GAME   = 'chess';
 const ACCENT = '#769656';
 registerGameSides(GAME, ['w', 'b']);
 
-const CHESS_CONFIG: GameStartConfig = {
+const chessConfig = (): GameStartConfig => ({
     icon: ChessIcon,
     title: t('chess.title','Chess'),
     accent: ACCENT,
     sideOptions: [{ id: 'w', label: t('chess.white','White') }, { id: 'b', label: t('chess.black','Black') }, { id: 'random', label: t('chess.random','Random') }],
     difficultyOptions: [{ id: 'easy', label: t('chess.easy','Easy') }, { id: 'medium', label: t('chess.medium','Medium') }, { id: 'hard', label: t('chess.hard','Hard') }],
     onlineBlurb: t('chess.onlineBlurb','Create public or private lobbies, invite players by server ID, and accept invites.'),
-};
+});
 const sideLabel = (s: Side) => (s === 'random' ? t('chess.random','Random') : s === 'w' ? t('chess.white','White') : t('chess.black','Black'));
 
 const PVAL: Record<string, number> = { Q: 9, R: 5, B: 3, N: 3, P: 1, K: 0 };
@@ -192,6 +192,7 @@ export function Chess({ onClose: _onClose }: Props) {
     const oppAdv = Math.max(0, oppColor === 'w' ? info.diff : -info.diff);
     const youAdv = Math.max(0, humanColor === 'w' ? info.diff : -info.diff);
 
+    const startConfig = chessConfig();
     const screenKey = screen === 'lobby' ? (lobby ? 'lobby-room' : 'lobby-hub') : screen;
 
     return (
@@ -213,13 +214,13 @@ export function Chess({ onClose: _onClose }: Props) {
 
             <div key={screenKey} className="flex min-h-0 flex-1 flex-col animate-swipe-in-left">
             {screen === 'home' && (
-                <StartScreen config={CHESS_CONFIG} stats={stats} hasInvite={!!incoming} onPlayCpu={startCpu} onPlayOnline={() => setScreen('lobby')} onLeaderboard={openLeaderboard} />
+                <StartScreen config={startConfig} stats={stats} hasInvite={!!incoming} onPlayCpu={startCpu} onPlayOnline={() => setScreen('lobby')} onLeaderboard={openLeaderboard} />
             )}
 
             {screen === 'lobby' && (lobby ? (
                 <LobbyRoom lobby={lobby} inviteError={inviteError} accent={ACCENT} sideLabel={sideLabel} onInvite={online.invite} onStart={online.start} onLeave={online.leave} onKick={online.kick} onSetWager={online.setWager} onSetReady={online.ready} />
             ) : (
-                <OnlineHub lobbies={lobbies} incoming={incoming} error={hubError} accent={ACCENT} sideOptions={CHESS_CONFIG.sideOptions} onCreate={online.create} onJoin={online.join} onAccept={online.accept} onDecline={online.decline} onRefresh={online.refresh} />
+                <OnlineHub lobbies={lobbies} incoming={incoming} error={hubError} accent={ACCENT} sideOptions={startConfig.sideOptions} onCreate={online.create} onJoin={online.join} onAccept={online.accept} onDecline={online.decline} onRefresh={online.refresh} />
             ))}
 
             {screen === 'leaderboard' && (

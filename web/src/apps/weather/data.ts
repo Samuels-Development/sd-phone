@@ -239,7 +239,7 @@ export function formatHour(offsetMin: number, baseHour?: number): string {
     const h = baseHour !== undefined
         ? (baseHour + Math.round(offsetMin / 60)) % 24
         : new Date(Date.now() + offsetMin * 60_000).getHours();
-    const p = h >= 12 ? 'PM' : 'AM';
+    const p = h >= 12 ? t('time.pm', 'PM') : t('time.am', 'AM');
     const h12 = h % 12 === 0 ? 12 : h % 12;
     return `${h12} ${p}`;
 }

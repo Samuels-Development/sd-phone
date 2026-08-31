@@ -15,6 +15,7 @@ import { REELS, STRIP_LEN, type SlotSymbolId } from './strips';
 import { LINES, PAYLINES, PAY_ORDER, SUITS_PAY, TRIPLE_PAY } from './paytable';
 import { SlotSymbol } from './SlotSymbol';
 import { type SlotLine, type SlotResult, slotsSpin } from './slotsApi';
+import { failText } from '@/core/api';
 
 const CELL = 104;
 const REEL_W = 112;
@@ -225,7 +226,7 @@ export function Slots({ chips, onChips, onBack, onCashier }: CasinoGameProps) {
             setBlurred([false, false, false]);
             onChips(chipsRef.current + stake);
             if (res.message === 'Not enough chips') setNeedChips(true);
-            else setError(res.message ?? t('casino.somethingWrong', 'Something went wrong'));
+            else setError(failText(res, t('casino.somethingWrong', 'Something went wrong')));
             return;
         }
         pending.current = res.data;

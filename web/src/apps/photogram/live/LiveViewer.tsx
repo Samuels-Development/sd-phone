@@ -230,7 +230,7 @@ export function LiveViewer({ liveId, host, onClose }: { liveId: string; host: Us
                         onClick={() => onClose()}
                         className="mt-1 rounded-full bg-white px-6 py-2.5 text-[16px] font-semibold text-black active:opacity-80"
                     >
-                        Done
+                        {t('photogram.done', 'Done')}
                     </button>
                 </div>
             )}

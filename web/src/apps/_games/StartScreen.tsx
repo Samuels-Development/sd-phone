@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChevronRight, Coins, Cpu, Globe, Trophy, Users, Wallet } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
+import { t } from '@/i18n';
 import type { Side } from './onlineApi';
 import type { GameStats, Tally } from './statsApi';
 
@@ -32,7 +33,7 @@ interface StartScreenProps {
 
 export function StartScreen({ config, stats, hasInvite, chips, buyIn, onCashier, onPlayCpu, onPlayOnline, onLeaderboard }: StartScreenProps) {
     const { icon: Icon, title, accent, sideOptions, difficultyOptions, onlineBlurb, hideSetup, hideOnline, soloLabel, soloBlurb } = config;
-    const cpuLabel = soloLabel ?? 'vs Computer';
+    const cpuLabel = soloLabel ?? t('games.vsComputer', 'vs Computer');
     const cantAfford = buyIn !== undefined && chips !== undefined && chips < buyIn;
     const [side, setSide] = useState<Side>(sideOptions[0].id);
     const [diff, setDiff] = useState<string>(difficultyOptions ? difficultyOptions[Math.min(1, difficultyOptions.length - 1)].id : 'medium');
@@ -48,7 +49,7 @@ export function StartScreen({ config, stats, hasInvite, chips, buyIn, onCashier,
                 <button type="button" onClick={onCashier} className="mx-auto mt-2.5 flex items-center gap-1.5 active:opacity-70">
                     <Coins className="h-[19px] w-[19px]" strokeWidth={2.5} style={{ color: accent }} />
                     <span className="text-[22px] font-extrabold tabular-nums text-white">{chips.toLocaleString('en-US')}</span>
-                    <span className="ml-0.5 text-[13px] font-semibold text-white/50">chips</span>
+                    <span className="ml-0.5 text-[13px] font-semibold text-white/50">{t('games.chips', 'chips')}</span>
                 </button>
             )}
 
@@ -60,12 +61,12 @@ export function StartScreen({ config, stats, hasInvite, chips, buyIn, onCashier,
 
                 {!hideSetup && (
                     <>
-                        <Label>Play as</Label>
+                        <Label>{t('games.playAs', 'Play as')}</Label>
                         <Segmented value={side} onChange={setSide} options={sideOptions} />
                         {difficultyOptions && (
                             <>
                                 <div className="h-3" />
-                                <Label>Difficulty</Label>
+                                <Label>{t('games.difficulty', 'Difficulty')}</Label>
                                 <Segmented value={diff} onChange={setDiff} options={difficultyOptions} />
                             </>
                         )}
@@ -74,8 +75,8 @@ export function StartScreen({ config, stats, hasInvite, chips, buyIn, onCashier,
 
                 {buyIn !== undefined && (
                     <div className="mt-3 flex items-center justify-between text-[13px]">
-                        <span className="font-semibold text-white/45">Buy-in</span>
-                        <span className="font-bold text-white">{buyIn.toLocaleString('en-US')} chips</span>
+                        <span className="font-semibold text-white/45">{t('games.buyIn', 'Buy-in')}</span>
+                        <span className="font-bold text-white">{t('games.chipsAmount', '{n} chips', { n: buyIn.toLocaleString('en-US') })}</span>
                     </div>
                 )}
                 <button
@@ -84,16 +85,16 @@ export function StartScreen({ config, stats, hasInvite, chips, buyIn, onCashier,
                     className="mt-4 w-full rounded-[14px] py-3 text-center text-[17px] font-bold text-white active:opacity-80"
                     style={{ background: accent }}
                 >
-                    {cantAfford ? 'Get chips to play' : 'Play'}
+                    {cantAfford ? t('games.getChipsToPlay', 'Get chips to play') : t('games.play', 'Play')}
                 </button>
             </div>
 
             {!hideOnline && (
                 <div className="mt-4 rounded-[18px] p-4" style={{ background: 'rgba(255,255,255,0.07)' }}>
                     <div className="mb-1 flex items-center gap-2 text-[15px] font-bold text-white">
-                        <Globe className="h-[18px] w-[18px]" strokeWidth={2.2} /> Online
+                        <Globe className="h-[18px] w-[18px]" strokeWidth={2.2} /> {t('games.online', 'Online')}
                         {hasInvite && (
-                            <span className="ml-0.5 rounded-full px-2 py-[2px] text-[10px] font-extrabold uppercase tracking-wide text-white" style={{ background: accent }}>Invite</span>
+                            <span className="ml-0.5 rounded-full px-2 py-[2px] text-[10px] font-extrabold uppercase tracking-wide text-white" style={{ background: accent }}>{t('games.inviteBadge', 'Invite')}</span>
                         )}
                     </div>
                     <p className="mb-3 text-[13px] text-white/55">{onlineBlurb}</p>
@@ -103,7 +104,7 @@ export function StartScreen({ config, stats, hasInvite, chips, buyIn, onCashier,
                         className="flex w-full items-center justify-center gap-2 rounded-[14px] py-3 text-center text-[17px] font-bold text-white active:opacity-80"
                         style={{ background: hasInvite ? accent : 'rgba(255,255,255,0.16)' }}
                     >
-                        Play Online
+                        {t('games.playOnline', 'Play Online')}
                         {hasInvite && <span className="h-2 w-2 rounded-full bg-white" />}
                     </button>
                 </div>
@@ -113,11 +114,11 @@ export function StartScreen({ config, stats, hasInvite, chips, buyIn, onCashier,
                 {onCashier ? (
                     <div className="flex gap-3">
                         <button type="button" onClick={onCashier} className="flex flex-1 items-center justify-center gap-2 rounded-[16px] py-3.5 text-[15px] font-bold text-white active:opacity-80" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                            <Wallet className="h-[18px] w-[18px]" strokeWidth={2.2} style={{ color: accent }} /> Cashier
+                            <Wallet className="h-[18px] w-[18px]" strokeWidth={2.2} style={{ color: accent }} /> {t('games.cashier', 'Cashier')}
                             <ChevronRight className="h-[16px] w-[16px] text-white/40" strokeWidth={2.4} />
                         </button>
                         <button type="button" onClick={onLeaderboard} className="flex flex-1 items-center justify-center gap-2 rounded-[16px] py-3.5 text-[15px] font-bold text-white active:opacity-80" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                            <Trophy className="h-[18px] w-[18px] text-[#FFD54F]" strokeWidth={2.2} /> Leaderboard
+                            <Trophy className="h-[18px] w-[18px] text-[#FFD54F]" strokeWidth={2.2} /> {t('games.leaderboard', 'Leaderboard')}
                             <ChevronRight className="h-[16px] w-[16px] text-white/40" strokeWidth={2.4} />
                         </button>
                     </div>
@@ -129,19 +130,19 @@ export function StartScreen({ config, stats, hasInvite, chips, buyIn, onCashier,
                         style={{ background: 'rgba(255,255,255,0.06)' }}
                     >
                         <span className="flex items-center gap-2.5 text-[16px] font-bold text-white">
-                            <Trophy className="h-[19px] w-[19px] text-[#FFD54F]" strokeWidth={2.2} /> Leaderboard
+                            <Trophy className="h-[19px] w-[19px] text-[#FFD54F]" strokeWidth={2.2} /> {t('games.leaderboard', 'Leaderboard')}
                         </span>
                         <ChevronRight className="h-[19px] w-[19px] text-white/40" strokeWidth={2.4} />
                     </button>
                 )}
 
                 <div className="rounded-[16px] px-4 py-3" style={{ background: 'rgba(255,255,255,0.05)' }}>
-                    <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-white/40">Record</div>
-                    <StatRow label={cpuLabel} t={stats.cpu} Icon={Cpu} />
+                    <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-white/40">{t('games.record', 'Record')}</div>
+                    <StatRow label={cpuLabel} tally={stats.cpu} Icon={Cpu} />
                     {!hideOnline && (
                         <>
                             <div className="my-2 h-px bg-white/10" />
-                            <StatRow label="vs Players" t={stats.online} Icon={Users} />
+                            <StatRow label={t('games.vsPlayers', 'vs Players')} tally={stats.online} Icon={Users} />
                         </>
                     )}
                     {chips !== undefined && (
@@ -149,11 +150,11 @@ export function StartScreen({ config, stats, hasInvite, chips, buyIn, onCashier,
                             <div className="my-2 h-px bg-white/10" />
                             <div className="flex items-center justify-between">
                                 <span className="flex items-center gap-2 text-[15px] font-bold text-white/85">
-                                    <Coins className="h-[17px] w-[17px]" strokeWidth={2.2} style={{ color: accent }} /> Chips
+                                    <Coins className="h-[17px] w-[17px]" strokeWidth={2.2} style={{ color: accent }} /> {t('games.chipsLabel', 'Chips')}
                                 </span>
                                 <span className="flex items-center gap-3.5 text-[14px] font-semibold">
-                                    <span><span className="font-extrabold text-[#9CCC65]">+{stats.won.toLocaleString('en-US')}</span> won</span>
-                                    <span><span className="font-extrabold text-[#FF8A80]">-{stats.lost.toLocaleString('en-US')}</span> lost</span>
+                                    <span><span className="font-extrabold text-[#9CCC65]">+{stats.won.toLocaleString('en-US')}</span> {t('games.wonSuffix', 'won')}</span>
+                                    <span><span className="font-extrabold text-[#FF8A80]">-{stats.lost.toLocaleString('en-US')}</span> {t('games.lostSuffix', 'lost')}</span>
                                 </span>
                             </div>
                         </>
@@ -165,7 +166,7 @@ export function StartScreen({ config, stats, hasInvite, chips, buyIn, onCashier,
     );
 }
 
-function StatRow({ label, t, Icon }: { label: string; t: Tally; Icon: LucideIcon }) {
+function StatRow({ label, tally, Icon }: { label: string; tally: Tally; Icon: LucideIcon }) {
     return (
         <div className="flex items-center justify-between">
             <span className="flex items-center gap-2 text-[15px] font-bold text-white/85">
@@ -173,9 +174,9 @@ function StatRow({ label, t, Icon }: { label: string; t: Tally; Icon: LucideIcon
                 {label}
             </span>
             <span className="flex items-center gap-3.5 text-[14px] font-semibold text-white/80">
-                <span><span className="font-extrabold text-[#9CCC65]">{t.wins}</span> W</span>
-                <span><span className="font-extrabold text-[#FF8A80]">{t.losses}</span> L</span>
-                <span><span className="font-extrabold text-white">{t.draws}</span> D</span>
+                <span><span className="font-extrabold text-[#9CCC65]">{tally.wins}</span> {t('games.winsShort', 'W')}</span>
+                <span><span className="font-extrabold text-[#FF8A80]">{tally.losses}</span> {t('games.lossesShort', 'L')}</span>
+                <span><span className="font-extrabold text-white">{tally.draws}</span> {t('games.drawsShort', 'D')}</span>
             </span>
         </div>
     );

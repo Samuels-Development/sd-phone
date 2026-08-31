@@ -18,6 +18,7 @@ import {
     CLASS_TONE, RACING_ACCENT, racingAccentFill, racingAccentSoft, racingAccentText, racingStat,
     racingStatLabel, STATUS_TONE,
 } from './racingTheme';
+import { failText } from '@/core/api';
 
 const RANKED_PRIZE_SPLIT = [0.75, 0.15, 0.10];
 const PRIZE_PLACES = [1, 2, 3];
@@ -162,7 +163,7 @@ export function RaceDetail({ race, now, standings, onRaces, onStandings, onRefre
         const res = await racingJoin(race.id);
         setBusy(false);
         if (!res.success || !res.data) {
-            setError(res.message ?? t('racing.joinFailed', 'You could not be put on that grid.'));
+            setError(failText(res, t('racing.joinFailed', 'You could not be put on that grid.')));
             onRefresh();
             return;
         }
@@ -176,7 +177,7 @@ export function RaceDetail({ race, now, standings, onRaces, onStandings, onRefre
         const res = await racingLeave(race.id);
         setBusy(false);
         if (!res.success || !res.data) {
-            setError(res.message ?? t('racing.leaveFailed', 'You could not be taken off that grid.'));
+            setError(failText(res, t('racing.leaveFailed', 'You could not be taken off that grid.')));
             onRefresh();
             return;
         }
@@ -190,7 +191,7 @@ export function RaceDetail({ race, now, standings, onRaces, onStandings, onRefre
         const res = await racingSpectate(race.id);
         setBusy(false);
         if (!res.success || !res.data) {
-            setError(res.message ?? t('racing.spectateFailed', 'That race could not be followed.'));
+            setError(failText(res, t('racing.spectateFailed', 'That race could not be followed.')));
             return;
         }
         setError('');
@@ -268,7 +269,7 @@ export function RaceDetail({ race, now, standings, onRaces, onStandings, onRefre
                         icon={<MapPin className="h-[15px] w-[15px]" strokeWidth={2.4} />}
                         onClick={() => void waypoint()}
                     >
-                        {t('racing.setWaypoint', 'Route to start')}
+                        {t('racing.routeToStart', 'Route to start')}
                     </Action>
                 )}
             </div>

@@ -107,7 +107,7 @@ end)
 ---@param payload table
 ---@return { success: boolean, message?: string }
 exports('messageCompany', function(source, payload)
-    if type(source) ~= 'number' then return util.fail('Player not found') end
+    if type(source) ~= 'number' then return util.fail('services.playerNotFound', 'Player not found') end
     local result = actions.messageCompany(source, payload)
     return { success = result.success == true, message = result.message }
 end)

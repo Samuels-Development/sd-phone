@@ -7,7 +7,7 @@ import { t } from '@/i18n';
 import { BankCard } from './BankCard';
 import {
     BANK_BRANDS, CARD_COLORS, CARD_PATTERNS,
-    cardColor, isPreset, presetFor, resolveStyle, type CardStyle,
+    cardColor, cardColorLabel, cardPatternLabel, isPreset, presetFor, resolveStyle, type CardStyle,
 } from './bankBrands';
 
 function SectionLabel({ children }: { children: string }) {
@@ -89,7 +89,7 @@ export function BankCardPicker({ holder, last4, expiry, current, onPick, onClose
                                 <button
                                     key={c.id}
                                     type="button"
-                                    aria-label={c.label}
+                                    aria-label={cardColorLabel(c)}
                                     aria-pressed={on}
                                     onClick={() => apply({ ...draft, color: c.id })}
                                     className={`relative h-[42px] w-[42px] shrink-0 rounded-full transition-transform active:scale-95 ${
@@ -115,7 +115,7 @@ export function BankCardPicker({ holder, last4, expiry, current, onPick, onClose
                                 <button
                                     key={p.id}
                                     type="button"
-                                    aria-label={p.label}
+                                    aria-label={cardPatternLabel(p)}
                                     aria-pressed={on}
                                     onClick={() => apply({ ...draft, pattern: p.id })}
                                     className={`relative h-[46px] w-[46px] shrink-0 overflow-hidden rounded-[13px] transition-transform active:scale-95 ${

@@ -244,7 +244,7 @@ export function Discover({ onOpenPost, onOpenProfile, refreshKey }: {
                     <div className="px-0.5"><GridSkeleton count={12} /></div>
                 ) : shown.length === 0 ? (
                     <div className="dark">
-                        <EmptyState icon={Video} title={t('vibez.noVibes', 'No posts yet')} circleClassName="bg-white/10" />
+                        <EmptyState icon={Video} title={t('vibez.noPosts', 'No posts yet')} circleClassName="bg-white/10" />
                     </div>
                 ) : (
                     <PostGrid posts={shown} onOpenPost={onOpenPost} />

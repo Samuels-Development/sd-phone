@@ -105,16 +105,16 @@ end
 ---the notepad. The caller's OWN number is deliberately not sent: a booth cannot ring the phone in
 ---your own pocket, so a shortcut for it is a control that can only fail. Read-only.
 lib.callback.register('sd-phone:server:payphone:state', function(src, payload)
-    if not cfg.Enabled then return fail('Payphones are disabled') end
+    if not cfg.Enabled then return fail('payphone.payphonesDisabled', 'Payphones are disabled') end
     payload = type(payload) == 'table' and payload or {}
     local location = locationKey(payload.location)
-    if not location or not nearLocation(src, location) then return fail('No payphone here') end
+    if not location or not nearLocation(src, location) then return fail('payphone.noPayphoneHere', 'No payphone here') end
 
     local favorites = {}
     local cid = player.getIdentifier(src)
     -- Bounds the contacts read this callback pays for; opening a booth is a target interaction,
     -- so no player reaches a second one inside the gap.
-    if not util.cooldown(cid, 'payphone:state', 500) then return fail('Slow down') end
+    if not util.cooldown(cid, 'payphone:state', 500) then return fail('payphone.slowDown', 'Slow down') end
     if cid then
         if cfg.ShowFavorites ~= false then
             for _, row in ipairs(contacts.listContacts(cid)) do
@@ -140,12 +140,12 @@ lib.callback.register('sd-phone:server:payphone:insertCoin', function(src, paylo
     if not coinEnabled() then return ok({ credited = true }) end
     payload = type(payload) == 'table' and payload or {}
     local location = locationKey(payload.location)
-    if not location or not nearLocation(src, location) then return fail('No payphone here') end
+    if not location or not nearLocation(src, location) then return fail('payphone.noPayphoneHere', 'No payphone here') end
     if credits[src] then return ok({ credited = true }) end
 
     local cost = tonumber(coinCfg().Cost) or 1
     local account = coinCfg().Account or 'cash'
-    if money.get(src, account) < cost then return fail('No coins') end
+    if money.get(src, account) < cost then return fail('payphone.outOfCoins', 'No coins') end
     money.remove(src, account, cost, 'payphone-call')
     credits[src] = true
     return ok({ credited = true })
@@ -154,20 +154,20 @@ end)
 ---Answers a ringing booth: promotes the ring into a live call with the answerer as the booth
 ---side. The answerer must actually be standing at that booth.
 lib.callback.register('sd-phone:server:payphone:answer', function(src, payload)
-    if not cfg.Enabled then return fail('Payphones are disabled') end
+    if not cfg.Enabled then return fail('payphone.payphonesDisabled', 'Payphones are disabled') end
     payload = type(payload) == 'table' and payload or {}
     local location = locationKey(payload.location)
-    if not location or not nearLocation(src, location) then return fail('No payphone here') end
+    if not location or not nearLocation(src, location) then return fail('payphone.noPayphoneHere', 'No payphone here') end
     return calls.answerBoothRing(src, payload.channel)
 end)
 
 ---Places a call from the booth: caller identity is the booth's static number (or withheld when
 ---Anonymous), never the player's own.
 lib.callback.register('sd-phone:server:payphone:dial', function(src, payload)
-    if not cfg.Enabled then return fail('Payphones are disabled') end
+    if not cfg.Enabled then return fail('payphone.payphonesDisabled', 'Payphones are disabled') end
     payload = type(payload) == 'table' and payload or {}
     local location = locationKey(payload.location)
-    if not location or not nearLocation(src, location) then return fail('No payphone here') end
+    if not location or not nearLocation(src, location) then return fail('payphone.noPayphoneHere', 'No payphone here') end
 
     -- The one number a booth must never reach is the phone in the caller's own pocket: it rings
     -- a device standing at the booth, and answering it means driving two screens at once. The
@@ -175,16 +175,16 @@ lib.callback.register('sd-phone:server:payphone:dial', function(src, payload)
     -- offers the number as a shortcut, so the refusal has to live here rather than in the UI.
     local mine = playerNumber(src)
     if mine and digits(mine) ~= '' and digits(mine) == digits(payload.number) then
-        return fail('You can\'t call yourself')
+        return fail('payphone.canTCallYourself', 'You can\'t call yourself')
     end
 
     -- Coin toll: dialing without a paid credit is refused server-side, and a
     -- successful dial consumes the credit (failed dials keep it for a retry).
-    if coinEnabled() and not credits[src] then return fail('Insert coin first') end
+    if coinEnabled() and not credits[src] then return fail('payphone.insertCoinFirst', 'Insert coin first') end
 
     -- The booth-number read below is an argument to dialPayphone, so it is paid BEFORE that
     -- call's own dial budget; without a gate here a refused dial still costs a lookup each time.
-    if not util.cooldown(player.getIdentifier(src), 'payphone:dial', 500) then return fail('Slow down') end
+    if not util.cooldown(player.getIdentifier(src), 'payphone:dial', 500) then return fail('payphone.slowDown', 'Slow down') end
 
     local result = calls.dialPayphone(src, {
         number       = payload.number,

@@ -210,7 +210,7 @@ function ProfileBody({ profile }: { profile: RacerProfileData }) {
                     value={profile.avgPosition > 0 ? profile.avgPosition.toFixed(1) : t('racing.none', 'None')}
                 />
                 <Stat
-                    label={t('racing.totalTime', 'Time raced')}
+                    label={t('racing.timeRaced', 'Time raced')}
                     value={formatDuration(profile.totalTimeSec, { withHours: true })}
                 />
                 <Stat

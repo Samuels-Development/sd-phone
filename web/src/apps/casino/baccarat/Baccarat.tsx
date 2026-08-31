@@ -20,6 +20,7 @@ import { playBigWin, playCardDeal, playChipPlace, playLose, playPush, playWin } 
 import { BetSpot } from './BetSpot';
 import { type BaccaratResult, baccaratDeal } from './baccaratApi';
 import { type BaccaratBets, type BaccaratSpot, MAX_TOTAL, MIN_BET, emptyBets, spotMax, stakeOf, totalOf } from './logic';
+import { failText } from '@/core/api';
 
 const GAME = 'baccarat';
 const CHIP_KEY = 'sd-phone:baccarat:chip';
@@ -174,7 +175,7 @@ export function Baccarat({ chips, onChips, onBack, onCashier }: CasinoGameProps)
         if (!reply.ok || !reply.data) {
             setPhase('betting');
             onChips(chipsRef.current + stake);
-            flash(reply.message ?? t('casino.somethingWrong', 'Something went wrong'));
+            flash(failText(reply, t('casino.somethingWrong', 'Something went wrong')));
             return;
         }
 

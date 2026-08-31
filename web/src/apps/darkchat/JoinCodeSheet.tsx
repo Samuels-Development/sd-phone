@@ -23,7 +23,7 @@ export function JoinCodeSheet({ onClose, onJoin, error }: {
                         right={<SheetAction label={t('darkchat.join', 'Join')} onClick={go} disabled={!canGo} />}
                     />
                     <SheetField
-                        label={t('darkchat.roomCode', 'Room code')}
+                        label={t('darkchat.roomCodeField', 'Room code')}
                         hint={t('darkchat.askForCode', "Ask the room's creator for the 6-character code.")}
                         error={error}
                         value={code}

@@ -4,6 +4,9 @@ local bin = {}
 ---@type table Admin persistence layer (server.admin.store): row snapshots + restores.
 local store = require 'server.admin.store'
 
+---@type table Shared helpers (server.util): the ok/fail response envelopes.
+local util = require 'server.util'
+
 ---@type integer Days a snapshot is kept before the sweep drops it.
 local KEEP_DAYS = 30
 
@@ -97,23 +100,24 @@ end
 ---leave the audit log describing a row that exists.
 ---@param id integer bin row id
 ---@param adminName string
----@return boolean ok, string|nil err
+---@return boolean ok
+---@return table? refusal keyed refusal envelope when ok is false
 function bin.restore(id, adminName)
     local entry = MySQL.single.await(
         'SELECT app, payload, restored_at FROM phone_admin_bin WHERE id = ?', { id })
-    if not entry then return false, 'Not found' end
-    if entry.restored_at then return false, 'Already restored' end
+    if not entry then return false, util.fail('admin.notFound', 'Not found') end
+    if entry.restored_at then return false, util.fail('admin.alreadyRestored', 'Already restored') end
 
     local okJson, row = pcall(json.decode, entry.payload)
-    if not okJson or type(row) ~= 'table' then return false, 'Unreadable snapshot' end
+    if not okJson or type(row) ~= 'table' then return false, util.fail('admin.unreadableSnapshot', 'Unreadable snapshot') end
 
-    local okRestore, err = store.restoreRow(entry.app, row)
-    if not okRestore then return false, err end
+    local okRestore, refusal = store.restoreRow(entry.app, row)
+    if not okRestore then return false, refusal end
 
     MySQL.update.await(
         'UPDATE phone_admin_bin SET restored_at = ?, restored_by = ? WHERE id = ?',
         { os.time(), adminName, id })
-    return true, nil
+    return true
 end
 
 ---Drops entries past the keep window. A bin that grows forever is a copy of every deleted post

@@ -10,24 +10,24 @@ import { Slider } from '@/ui/Slider';
 import { Toggle } from '@/ui/Toggle';
 import { ACCENT_PRESETS, accentCss, accentRecipe, customAccentId, isCustomAccentId } from './accentRamp';
 
-const LABEL: Record<string, string> = {
-    blue:   t('settings.accentBlue', 'Blue'),
-    indigo: t('settings.accentIndigo', 'Indigo'),
-    purple: t('settings.accentPurple', 'Purple'),
-    pink:   t('settings.accentPink', 'Pink'),
-    red:    t('settings.accentRed', 'Red'),
-    orange: t('settings.accentOrange', 'Orange'),
-    yellow: t('settings.accentYellow', 'Yellow'),
-    green:  t('settings.accentGreen', 'Green'),
-    mint:   t('settings.accentMint', 'Mint'),
-    teal:   t('settings.accentTeal', 'Teal'),
-    brown:  t('settings.accentBrown', 'Brown'),
-    gray:   t('settings.accentGray', 'Graphite'),
-};
-
 export function AccentColourPage({ onBack }: { onBack: () => void }) {
     const { goBack, pageStyle } = useIosPush(onBack);
     const { theme, accent, setAccent } = useTheme('theme', 'accent', 'setAccent');
+
+    const LABEL: Record<string, string> = {
+        blue:   t('settings.accentBlue', 'Blue'),
+        indigo: t('settings.accentIndigo', 'Indigo'),
+        purple: t('settings.accentPurple', 'Purple'),
+        pink:   t('settings.accentPink', 'Pink'),
+        red:    t('settings.accentRed', 'Red'),
+        orange: t('settings.accentOrange', 'Orange'),
+        yellow: t('settings.accentYellow', 'Yellow'),
+        green:  t('settings.accentGreen', 'Green'),
+        mint:   t('settings.accentMint', 'Mint'),
+        teal:   t('settings.accentTeal', 'Teal'),
+        brown:  t('settings.accentBrown', 'Brown'),
+        gray:   t('settings.accentGray', 'Graphite'),
+    };
 
     const mode = theme === 'dark' ? 'dark' : 'light';
     const custom = isCustomAccentId(accent);
@@ -41,7 +41,7 @@ export function AccentColourPage({ onBack }: { onBack: () => void }) {
         <div className="absolute inset-0 z-30 flex flex-col bg-base text-black dark:text-white" style={pageStyle}>
             <div className="h-11 shrink-0" aria-hidden />
             <NavBar
-                backLabel={t('settings.displayBrightness', 'Display')}
+                backLabel={t('settings.display', 'Display')}
                 onBack={goBack}
                 title={t('settings.accentColour', 'Accent Colour')}
                 hairline

@@ -171,10 +171,10 @@ end)
 ---One patient sheet: identity, the medical file, and the EMS paperwork they appear in.
 medical.patientsGet = access.gated('patients.view', function(_, payload, me)
     local citizenid = util.limitedString(payload.citizenid, 64)
-    if not citizenid then return util.fail('No patient selected') end
+    if not citizenid then return util.fail('mdt.noPatientSelected', 'No patient selected') end
 
     local citizen = frameworkRecords.getCitizen(citizenid)
-    if not citizen then return util.fail('That patient is not on file') end
+    if not citizen then return util.fail('mdt.patientNotFile', 'That patient is not on file') end
 
     return util.ok({
         patient = {
@@ -193,7 +193,7 @@ end)
 ---medics editing different halves of a sheet do not overwrite each other.
 medical.patientsUpdate = access.audited('patients.edit', function(_, payload, me)
     local citizenid = util.limitedString(payload.citizenid, 64)
-    if not citizenid then return util.fail('No patient selected') end
+    if not citizenid then return util.fail('mdt.noPatientSelected', 'No patient selected') end
 
     local current = fileOf(citizenid)
 

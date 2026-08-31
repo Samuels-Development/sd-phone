@@ -6,6 +6,7 @@ import { useDeckActive } from '@/shell/deckActive';
 import type { HoldemAction, HoldemHandEnd, HoldemStatePush } from './data';
 import { actApi, leaveApi, sitApi, syncApi } from './holdemApi';
 import { playCheckRap, playChipStack, playDealFlop, playFoldSlide, playPotPush } from '../sfx';
+import { failText } from '@/core/api';
 
 const SHOWDOWN_MS = 5200;
 
@@ -96,7 +97,7 @@ export function useHoldemTable(tableId: string | null): HoldemTableCtl {
         setBusy(true);
         const res = await sitApi(tableId, seat, buyIn);
         setBusy(false);
-        if (!res.ok) { setError(res.message ?? null); return false; }
+        if (!res.ok) { setError(failText(res, null)); return false; }
         if (res.data) setState(normalizeState(res.data));
         return true;
     }, [tableId, busy]);
@@ -108,7 +109,7 @@ export function useHoldemTable(tableId: string | null): HoldemTableCtl {
         clearEndTimer();
         setHandEnd(null);
         setState(null);
-        if (!res.ok) { setError(res.message ?? null); return null; }
+        if (!res.ok) { setError(failText(res, null)); return null; }
         return res.data ? res.data.chips : null;
     }, [clearEndTimer]);
 

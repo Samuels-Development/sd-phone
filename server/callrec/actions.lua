@@ -94,14 +94,14 @@ end
 ---@return table result
 function actions.rename(src, id, name)
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('callrec.playerNotFound', 'Player not found') end
 
     local rowId = math.floor(tonumber(id) or 0)
-    if rowId <= 0 then return fail('Missing recording') end
+    if rowId <= 0 then return fail('callrec.missingRecording', 'Missing recording') end
 
     local label = util.trim(name):sub(1, 120)
     if store.rename(cid, rowId, label ~= '' and label or nil) == 0 then
-        return fail('Recording not found')
+        return fail('callrec.recordingNotFound', 'Recording not found')
     end
     return ok({ id = tostring(rowId), label = label ~= '' and label or nil })
 end
@@ -113,11 +113,11 @@ end
 ---@return table result
 function actions.delete(src, id)
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('callrec.playerNotFound', 'Player not found') end
 
     local rowId = math.floor(tonumber(id) or 0)
-    if rowId <= 0 then return fail('Missing recording') end
-    if store.delete(cid, rowId) == 0 then return fail('Recording not found') end
+    if rowId <= 0 then return fail('callrec.missingRecording', 'Missing recording') end
+    if store.delete(cid, rowId) == 0 then return fail('callrec.recordingNotFound', 'Recording not found') end
     return ok({ id = tostring(rowId) })
 end
 

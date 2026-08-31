@@ -1,5 +1,7 @@
 ---@type table Maps app config (configs.maps): pin caps, waypoint behaviour, live-location knobs.
 local config = require 'configs.maps'
+---@type table Locale bridge (bridge.shared.locale): t(key, english, vars) for in-world text.
+local locale = require 'bridge.shared.locale'
 ---@type table Notify bridge (bridge.client.notify): local notification popups.
 local notify = require 'bridge.client.notify'
 
@@ -27,13 +29,13 @@ end)
 RegisterNUICallback('sd-phone:maps:waypoint', function(data, cb)
     local x, y = tonumber(data and data.x), tonumber(data and data.y)
     if not x or not y then
-        notify.show({ description = 'Could not set waypoint.', type = 'error' })
+        notify.show({ description = locale.t('maps.waypointFailed', 'Could not set waypoint.'), type = 'error' })
         cb({ success = false })
         return
     end
 
     SetNewWaypoint(x + 0.0, y + 0.0)
-    notify.show({ description = 'Waypoint set.', type = 'success' })
+    notify.show({ description = locale.t('maps.waypointSet', 'Waypoint set.'), type = 'success' })
 
     if config.CloseOnWaypoint then
         exports['sd-phone']:close()

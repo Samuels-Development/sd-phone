@@ -164,15 +164,19 @@ end
 ---@return table[] lines resolved charge lines
 ---@return integer months
 ---@return integer fine
----@return string? message failure reason when report or suspect is nil
+---@return table? refusal failure envelope when report or suspect is nil
 local function quoteFor(me, payload)
     local reportRef = util.limitedString(payload.reportRef, 16)
     local citizenid = util.limitedString(payload.citizenid, 64)
-    if not reportRef or not citizenid then return nil, nil, {}, 0, 0, 'Pick a report and a suspect' end
+    if not reportRef or not citizenid then
+        return nil, nil, {}, 0, 0, util.fail('mdt.pickReportSuspect', 'Pick a report and a suspect')
+    end
 
     local report, suspect, rows = paperwork.suspectCharges(me, reportRef, citizenid)
-    if not report then return nil, nil, {}, 0, 0, 'That report is not available' end
-    if not suspect then return report, nil, {}, 0, 0, 'That citizen is not a suspect on that report' end
+    if not report then return nil, nil, {}, 0, 0, util.fail('mdt.reportNotAvailable', 'That report is not available') end
+    if not suspect then
+        return report, nil, {}, 0, 0, util.fail('mdt.citizenNotSuspectReport', 'That citizen is not a suspect on that report')
+    end
 
     local lines, months, fine = offences.totalFor(rows)
     if months > MAX_MONTHS then months = MAX_MONTHS end
@@ -209,8 +213,8 @@ end)
 ---What a report's charges actually cost this suspect, and whether either half has already been
 ---enforced. Every figure the booking dialog shows comes from here and none of them is editable.
 jail.quote = access.gated('jail.view', function(_, payload, me)
-    local report, suspect, lines, months, fine, message = quoteFor(me, payload)
-    if not report or not suspect then return util.fail(message) end
+    local report, suspect, lines, months, fine, refusal = quoteFor(me, payload)
+    if not report or not suspect then return refusal end
 
     local charges = {}
     for i = 1, #lines do
@@ -244,9 +248,9 @@ end)
 ---Books a suspect: a sentence, a citation, or both. Nothing here trusts a client figure, the
 ---ledger is claimed before the world is touched, and a refused sentence hands its claim back.
 jail.book = access.audited('jail.book', function(_, payload, me)
-    local report, suspect, lines, months, fine, message = quoteFor(me, payload)
-    if not report or not suspect then return util.fail(message) end
-    if #lines == 0 then return util.fail('That suspect has no charges on this report') end
+    local report, suspect, lines, months, fine, refusal = quoteFor(me, payload)
+    if not report or not suspect then return refusal end
+    if #lines == 0 then return util.fail('mdt.suspectHasNoChargesReport', 'That suspect has no charges on this report') end
 
     local reportRef = report.ref
     local citizenid = suspect.citizenid
@@ -264,32 +268,32 @@ jail.book = access.audited('jail.book', function(_, payload, me)
     local wantJail = payload.jail == true and sentence > 0
     local wantFine = payload.fine == true and charged > 0
     if payload.jail == true and not prison.available() then
-        return util.fail('There is no jail system on this server')
+        return util.fail('mdt.thereNoJailSystemServer', 'There is no jail system on this server')
     end
     if not wantJail and not wantFine then
-        return util.fail('Nothing to enforce: pick a sentence or a fine')
+        return util.fail('mdt.nothingEnforcePickSentenceFine', 'Nothing to enforce: pick a sentence or a fine')
     end
 
     local jailedAlready, finedAlready = ledger(reportRef, citizenid)
     if wantJail and jailedAlready then
-        return util.fail(('%s has already been jailed for %s'):format(suspect.name, reportRef))
+        return util.fail('mdt.hasAlreadyBeenJailed', '{name} has already been jailed for {report}', { name = suspect.name, report = reportRef })
     end
     if wantFine and finedAlready then
-        return util.fail(('%s has already been fined for %s'):format(suspect.name, reportRef))
+        return util.fail('mdt.hasAlreadyBeenFined', '{name} has already been fined for {report}', { name = suspect.name, report = reportRef })
     end
 
     local target = player.getSourceByIdentifier(citizenid)
-    if not target then return util.fail('The suspect has to be online to be booked') end
+    if not target then return util.fail('mdt.suspectHasOnlineBooked', 'The suspect has to be online to be booked') end
 
     local held, cash = 0, 0
     if wantFine then
         held = tonumber(money.get(target, ACCOUNT)) or 0
         cash = ACCOUNT == 'cash' and 0 or (tonumber(money.get(target, 'cash')) or 0)
-        if held + cash < charged then return util.fail('The suspect cannot cover that fine') end
+        if held + cash < charged then return util.fail('mdt.suspectCannotCoverFine', 'The suspect cannot cover that fine') end
     end
 
     if not claim(reportRef, citizenid, wantJail, wantFine) then
-        return util.fail(('%s has already been booked for %s'):format(suspect.name, reportRef))
+        return util.fail('mdt.hasAlreadyBeenBooked', '{name} has already been booked for {report}', { name = suspect.name, report = reportRef })
     end
 
     local sentenced = false
@@ -297,7 +301,7 @@ jail.book = access.audited('jail.book', function(_, payload, me)
         sentenced = prison.sendToJail(target, sentence)
         if not sentenced then
             release(reportRef, citizenid, 'jailed')
-            if not wantFine then return util.fail('The sentence could not be served') end
+            if not wantFine then return util.fail('mdt.sentenceCouldNotServed', 'The sentence could not be served') end
         end
     end
 
@@ -317,7 +321,7 @@ jail.book = access.audited('jail.book', function(_, payload, me)
 
         if not debited then
             release(reportRef, citizenid, 'fined')
-            if not sentenced then return util.fail('The citation could not be collected') end
+            if not sentenced then return util.fail('mdt.citationCouldNotCollected', 'The citation could not be collected') end
         end
     end
 
@@ -334,7 +338,7 @@ jail.book = access.audited('jail.book', function(_, payload, me)
     end
 
     local ref = store.nextRef('arrest')
-    if not ref then return util.fail('Could not allocate an arrest number') end
+    if not ref then return util.fail('mdt.couldNotAllocateArrestNumber', 'Could not allocate an arrest number') end
 
     MySQL.insert.await([[
         INSERT INTO phone_mdt_arrests
@@ -350,7 +354,7 @@ jail.book = access.audited('jail.book', function(_, payload, me)
     stampArrest(reportRef, citizenid, ref)
 
     local row = MySQL.single.await('SELECT * FROM phone_mdt_arrests WHERE ref = ? LIMIT 1', { ref })
-    if not row then return util.fail('The booking could not be recorded') end
+    if not row then return util.fail('mdt.bookingCouldNotRecorded', 'The booking could not be recorded') end
 
     return util.ok({ arrest = shapeOf(row) }), {
         entityType = 'arrest',

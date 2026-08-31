@@ -1,7 +1,7 @@
 import { fetchNui, isFiveM } from '@/core/nui';
 import { CONTACTS, RAW_CALLS, type Contact, type RawCall } from './data';
 import { t } from '@/i18n';
-import { apiCall, apiData } from '@/core/api';
+import { apiCall, apiData, failText } from '@/core/api';
 import { colorFor, initialsFor } from '@/lib/format';
 
 export interface ContactInput {
@@ -55,7 +55,7 @@ export async function addContactApi(input: ContactInput): Promise<Contact> {
         };
     }
     const res = await apiCall<Contact>('sd-phone:contacts:add', input);
-    if (!res.success || !res.data) throw new Error(res.message ?? t('phone.failedToAddContactErr','Failed to add contact'));
+    if (!res.success || !res.data) throw new Error(failText(res, t('phone.failedToAddContactErr','Failed to add contact')));
     return res.data;
 }
 

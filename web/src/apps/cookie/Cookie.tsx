@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Check, CloudOff, CloudRain, Crown, Lock, Pencil, RotateCcw, Trophy } from 'lucide-react';
 
 import {
-    ACHIEVEMENTS, EMPTY_SAVE, costOf, deriveStats, fmt, fmtRate, getUpgrades,
+    EMPTY_SAVE, costOf, deriveStats, fmt, fmtRate, getAchievements, getUpgrades,
     leaderboard, loadGame, normalizeSave, rankWithYou, saveGame,
     type LeaderRow, type SaveState,
 } from './game';
@@ -127,7 +127,7 @@ export function Cookie({ onClose: _onClose }: Props) {
     useEffect(() => {
         const { clickPower, cps } = deriveStats(save.owned);
         const ctx = { earned: save.earned, cps, clickPower, owned: save.owned };
-        const newly = ACHIEVEMENTS.filter(a => a.test(ctx) && !save.achievements.includes(a.id));
+        const newly = getAchievements().filter(a => a.test(ctx) && !save.achievements.includes(a.id));
         if (!newly.length) return;
         setSave(p => ({ ...p, achievements: [...p.achievements, ...newly.map(a => a.id)] }));
         newly.forEach(a => pushToast(a.name));
@@ -528,12 +528,13 @@ function StoreTab({ save, onBuy }: { save: SaveState; onBuy: (id: string) => voi
 }
 
 function AchievementsTab({ unlocked }: { unlocked: string[] }) {
+    const items = getAchievements();
     return (
         <div className="flex flex-col gap-2">
             <div className="px-1 pb-0.5 text-[12px] font-semibold text-[#9C6B33]">
-                {t('cookie.unlockedCount', '{n} of {total} unlocked', { n: unlocked.length, total: ACHIEVEMENTS.length })}
+                {t('cookie.unlockedCount', '{n} of {total} unlocked', { n: unlocked.length, total: items.length })}
             </div>
-            {ACHIEVEMENTS.map(a => {
+            {items.map(a => {
                 const got = unlocked.includes(a.id);
                 return (
                     <div

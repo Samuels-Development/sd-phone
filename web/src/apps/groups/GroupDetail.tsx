@@ -149,7 +149,9 @@ export function GroupDetail({
                     <div className="text-[17px] text-ios-gray">
                         {isLeader ? t('groups.you', 'You') : group.leaderName}
                         {' · '}
-                        {members.length} {t('groups.member', 'member')}{members.length !== 1 ? 's' : ''}
+                        {members.length === 1
+                            ? t('groups.oneMember', '1 member')
+                            : t('groups.memberCount', '{n} members', { n: members.length })}
                         {group.onlineCount > 0 && (
                             <>
                                 {' · '}
@@ -203,7 +205,7 @@ export function GroupDetail({
                                                 className="flex h-12 w-12 items-center justify-center rounded-full text-[17px] font-semibold text-white"
                                                 style={{ background: colorFor(m.id) }}
                                             >
-                                                {initialsFor(isMe ? 'Me' : m.name)}
+                                                {initialsFor(isMe ? t('groups.me', 'Me') : m.name)}
                                             </div>
                                             {m.online && (
                                                 <span

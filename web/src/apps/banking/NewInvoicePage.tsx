@@ -9,6 +9,7 @@ import { t } from '@/i18n';
 import { digits } from '@/lib/format';
 import { formatPhonePartial } from '@/lib/phone';
 import { createPersonalInvoice, type PersonalInvoice } from './bankingApi';
+import { failText } from '@/core/api';
 
 const DRAFT_KEY = 'banking:newInvoice';
 
@@ -55,7 +56,7 @@ export function NewInvoicePage({ onClose, onSent }: {
             clearDraft();
             dismiss(() => { onSent(invoices); onClose(); });
         } else {
-            setError(res.message ?? t('banking.somethingWentWrong', 'Something went wrong'));
+            setError(failText(res, t('banking.somethingWentWrong', 'Something went wrong')));
         }
     }
 

@@ -9,6 +9,7 @@ import { t } from '@/i18n';
 import { digits } from '@/lib/format';
 import { formatPhonePartial } from '@/lib/phone';
 import { createInvoice } from './servicesApi';
+import { failText } from '@/core/api';
 
 const DRAFT_KEY = 'services:newInvoice';
 
@@ -55,7 +56,7 @@ export function NewInvoicePage({ onClose, onSent }: {
             clearDraft();
             dismiss(() => { onSent(); onClose(); });
         } else {
-            setError(res.message ?? t('services.somethingWentWrong', 'Something went wrong'));
+            setError(failText(res, t('services.somethingWentWrong', 'Something went wrong')));
         }
     }
 

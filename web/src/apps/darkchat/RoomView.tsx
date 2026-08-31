@@ -97,7 +97,9 @@ export function RoomView({ room, nickname, onBack, onSend, onReact, onLeave, onM
                     <span className="flex items-center gap-1 text-[13px] text-white/45">
                         <Users className="h-[12px] w-[12px]" strokeWidth={2.4} />
                         {room.isPrivate
-                            ? <>{room.members} {room.members === 1 ? t('darkchat.member', 'member') : t('darkchat.members', 'members')} <span className="text-white/25">·</span> {t('darkchat.codeLabel', 'Code')} {room.code}</>
+                            ? <>{room.members === 1
+                                ? t('darkchat.memberOne', '{count} member', { count: room.members })
+                                : t('darkchat.memberOther', '{count} members', { count: room.members })} <span className="text-white/25">·</span> {t('darkchat.codeLabel', 'Code')} {room.code}</>
                             : <>{room.members} {t('darkchat.activeLabel', 'Active')}</>}
                     </span>
                 </div>

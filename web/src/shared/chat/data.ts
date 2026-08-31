@@ -1,3 +1,6 @@
+import { getLocaleTag, t } from '@/i18n';
+import { format12h } from '@/lib/time';
+
 export type MsgKind = 'text' | 'image' | 'gif' | 'voice' | 'location' | 'money' | 'locrequest';
 
 export interface Reaction {
@@ -168,39 +171,43 @@ export function unreadCount(c: Conversation): number {
 
 export function fmtConvTime(ts: number): string {
     const diff = Date.now() - ts;
-    if (diff < MIN)    return 'Just now';
+    if (diff < MIN)    return t('time.justNow', 'Just now');
     if (diff < HR)     return `${Math.round(diff / MIN)}m`;
-    if (diff < DAY)    return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    if (diff < 7*DAY)  return new Date(ts).toLocaleDateString([], { weekday: 'short' });
-    return new Date(ts).toLocaleDateString([], { month: 'numeric', day: 'numeric' });
+    const d = new Date(ts);
+    if (diff < DAY)    return format12h(d.getHours(), d.getMinutes());
+    if (diff < 7*DAY)  return [
+        t('time.sun', 'Sun'), t('time.mon', 'Mon'), t('time.tue', 'Tue'), t('time.wed', 'Wed'),
+        t('time.thu', 'Thu'), t('time.fri', 'Fri'), t('time.sat', 'Sat'),
+    ][d.getDay()];
+    return d.toLocaleDateString(getLocaleTag(), { month: 'numeric', day: 'numeric' });
 }
 
 export function fmtChatSeparator(ts: number): { lead: string; time: string } {
     const d    = new Date(ts);
-    const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const time = format12h(d.getHours(), d.getMinutes());
 
     const startOfToday  = new Date(); startOfToday.setHours(0, 0, 0, 0);
     const startOfMsgDay = new Date(ts);  startOfMsgDay.setHours(0, 0, 0, 0);
     const dayDiff = Math.round((startOfToday.getTime() - startOfMsgDay.getTime()) / DAY);
 
     let lead: string;
-    if (dayDiff <= 0)     lead = 'Today';
-    else if (dayDiff === 1) lead = 'Yesterday';
-    else if (dayDiff < 7)   lead = d.toLocaleDateString([], { weekday: 'long' });
-    else                    lead = d.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
+    if (dayDiff <= 0)     lead = t('time.today', 'Today');
+    else if (dayDiff === 1) lead = t('time.yesterday', 'Yesterday');
+    else if (dayDiff < 7)   lead = d.toLocaleDateString(getLocaleTag(), { weekday: 'long' });
+    else                    lead = d.toLocaleDateString(getLocaleTag(), { month: 'long', day: 'numeric', year: 'numeric' });
 
     return { lead, time };
 }
 
 export function convName(c: Conversation): string {
     if (c.groupName) return c.groupName;
-    return c.participants[0]?.name ?? 'Unknown';
+    return c.participants[0]?.name ?? t('messages.unknown', 'Unknown');
 }
 
 export function convPreview(c: Conversation): string {
     const m = lastMsg(c);
     if (!m) return '';
-    const prefix = m.from === 'me' ? 'You: ' : c.groupName ? `${c.participants.find(p=>p.id===m.from)?.name.split(' ')[0] ?? 'Unknown'}: ` : '';
+    const prefix = m.from === 'me' ? `${t('messages.you', 'You')}: ` : c.groupName ? `${c.participants.find(p=>p.id===m.from)?.name.split(' ')[0] ?? t('messages.unknown', 'Unknown')}: ` : '';
     return prefix + m.body;
 }
 

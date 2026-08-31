@@ -4,7 +4,7 @@ import { Bell, Globe, Plus, Timer as TimerIcon } from 'lucide-react';
 import { t } from '@/i18n';
 import { useTheme } from '@/stores/themeStore';
 import { useSessionState } from '@/hooks/useSessionState';
-import { TabBar, type TabBarItem } from '@/ui/TabBar';
+import { TabBar } from '@/ui/TabBar';
 import { Alarms } from './Alarms';
 import { NewAlarm } from './NewAlarm';
 import { Stopwatch } from './Stopwatch';
@@ -73,20 +73,22 @@ export function Clock({ onClose }: { onClose: () => void }) {
                 )}
             </div>
 
-            <TabBar tabs={TABS} active={tab} onChange={setTab} />
+            <TabBar<TabId>
+                active={tab}
+                onChange={setTab}
+                tabs={[
+                    { id: 'worldclock', label: t('clock.worldClock', 'World Clock'), icon: a => <Globe     className="h-[33px] w-[33px]" strokeWidth={a ? 2.2 : 1.9} /> },
+                    { id: 'alarm',      label: t('clock.alarms', 'Alarms'),          icon: a => <Bell      className="h-[33px] w-[33px]" strokeWidth={a ? 2.2 : 1.9} /> },
+                    { id: 'stopwatch',  label: t('clock.stopwatch', 'Stopwatch'),    icon: a => <StopwatchSvg className="h-[33px] w-[33px]" strokeWidth={a ? 2.2 : 1.9} /> },
+                    { id: 'timer',      label: t('clock.timers', 'Timers'),          icon: a => <TimerIcon className="h-[33px] w-[33px]" strokeWidth={a ? 2.2 : 1.9} /> },
+                ]}
+            />
 
             <button type="button" onClick={onClose} aria-label={t('clock.closeClock', 'Close Clock')}
                 className="absolute inset-x-0 bottom-0 h-7 cursor-default" />
         </div>
     );
 }
-
-const TABS: TabBarItem<TabId>[] = [
-    { id: 'worldclock', label: t('clock.worldClock', 'World Clock'), icon: a => <Globe     className="h-[33px] w-[33px]" strokeWidth={a ? 2.2 : 1.9} /> },
-    { id: 'alarm',      label: t('clock.alarms', 'Alarms'),      icon: a => <Bell      className="h-[33px] w-[33px]" strokeWidth={a ? 2.2 : 1.9} /> },
-    { id: 'stopwatch',  label: t('clock.stopwatch', 'Stopwatch'),   icon: a => <StopwatchSvg className="h-[33px] w-[33px]" strokeWidth={a ? 2.2 : 1.9} /> },
-    { id: 'timer',      label: t('clock.timers', 'Timers'),      icon: a => <TimerIcon className="h-[33px] w-[33px]" strokeWidth={a ? 2.2 : 1.9} /> },
-];
 
 function StopwatchSvg({ className, strokeWidth = 2 }: { className?: string; strokeWidth?: number }) {
     return (

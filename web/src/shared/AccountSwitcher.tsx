@@ -4,6 +4,7 @@ import { Check, Plus, UserRound } from 'lucide-react';
 import { t } from '@/i18n';
 import { Sheet } from '@/ui/Sheet';
 import { accountsSwitch, accountsSwitchable, type SwitchableAccount } from '@/core/accountsApi';
+import { failText } from '@/core/api';
 
 interface Props {
     app:        string;
@@ -29,7 +30,7 @@ export function AccountSwitcher({ app, forceDark = false, onClose, onSwitched, o
         setBusy(username);
         const res = await accountsSwitch(app, username);
         setBusy(null);
-        if (!res.ok) { setError(res.message ?? t('accounts.switchFailed', 'Could not switch account')); return; }
+        if (!res.ok) { setError(failText(res, t('accounts.switchFailed', 'Could not switch account'))); return; }
         setActive(username);
         onSwitched(username);
         onClose();

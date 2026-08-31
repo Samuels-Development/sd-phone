@@ -6,8 +6,8 @@ import { Sheet } from '@/ui/Sheet';
 import { t } from '@/i18n';
 import { resolveWallpaper } from './wallpapers';
 import {
-    CLOCK_FONTS, CLOCK_LAYOUTS, CLOCK_COLORS, CLOCK_SCALE_MIN, CLOCK_SCALE_MAX,
-    Clockface, clockFontStyle, type LockClock,
+    CLOCK_COLORS, CLOCK_SCALE_MIN, CLOCK_SCALE_MAX,
+    Clockface, clockFontStyle, clockFonts, clockLayouts, type LockClock,
 } from './lockClock';
 
 
@@ -53,7 +53,7 @@ export function LockClockEditor({ config, time, date, wallpaper, onChange, onClo
                         <div key={tab} className={anim}>
                         {tab === 'font' ? (
                             <div className="grid grid-cols-4 gap-3">
-                                {CLOCK_FONTS.map(f => {
+                                {clockFonts().map(f => {
                                     const sel = config.font === f.id;
                                     return (
                                         <button
@@ -72,7 +72,7 @@ export function LockClockEditor({ config, time, date, wallpaper, onChange, onClo
                         ) : (
                             <>
                             <div className="grid grid-cols-2 gap-3">
-                                {CLOCK_LAYOUTS.map(l => {
+                                {clockLayouts().map(l => {
                                     const sel = config.layout === l.id;
                                     return (
                                         <button

@@ -100,6 +100,14 @@ interface Photo {
 
 const MODE_OPTIONS = ['VIDEO', 'PHOTO', 'LANDSCAPE'] as const;
 
+function modeLabel(mode: typeof MODE_OPTIONS[number]): string {
+    switch (mode) {
+        case 'VIDEO':     return t('camera.modeVideo', 'VIDEO');
+        case 'LANDSCAPE': return t('camera.modeLandscape', 'LANDSCAPE');
+        default:          return t('camera.modePhoto', 'PHOTO');
+    }
+}
+
 const UPLOAD_ERROR_MS = 4200;
 
 function uploadFailureText(code: string | undefined): string {
@@ -836,7 +844,7 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
                                         isActive ? 'text-[#FFD60A]' : 'text-white/55 hover:text-white/85',
                                     ].join(' ')}
                                 >
-                                    {m}
+                                    {modeLabel(m)}
                                 </button>
                             );
                         })}

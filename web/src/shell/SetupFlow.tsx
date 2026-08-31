@@ -13,6 +13,7 @@ import { resolveWallpaper } from './wallpapers';
 import { AlertDialog } from '@/ui/AlertDialog';
 import logoUrl from '@/assets/logo.png';
 import { t } from '@/i18n';
+import { formatLongDate } from '@/lib/time';
 import { SUPPORTED_LOCALES, useLocaleStore } from '@/stores/localeStore';
 import type { LocaleOption } from '@/stores/localeStore';
 
@@ -707,6 +708,8 @@ function ThemeCard({
     );
 }
 
+const PREVIEW_DATE = new Date(2025, 5, 21);
+
 function PhonePreview({ dark }: { dark: boolean }) {
     const screenBg = dark
         ? 'linear-gradient(175deg, #1a0f40 0%, #241657 32%, #2E1C72 62%, #160b38 100%)'
@@ -726,7 +729,7 @@ function PhonePreview({ dark }: { dark: boolean }) {
 
                 <div className="mt-[38px] text-center leading-none" style={{ color: ink }}>
                     <div className="text-[27px] font-semibold tracking-tight">11:42</div>
-                    <div className="mt-1 text-[9px] font-medium opacity-70">Saturday, June 21</div>
+                    <div className="mt-1 text-[9px] font-medium opacity-70">{formatLongDate(PREVIEW_DATE)}</div>
                 </div>
 
                 <div className="absolute inset-x-[10px] bottom-[12px] flex flex-col gap-2">

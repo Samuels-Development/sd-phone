@@ -416,19 +416,19 @@ end)
 
 records.personsGet = access.gated('persons.view', function(_, payload, me)
     local citizenid = util.limitedString(payload.citizenid, 64)
-    if not citizenid then return util.fail('No citizen selected') end
+    if not citizenid then return util.fail('mdt.noCitizenSelected', 'No citizen selected') end
 
     local person = composePerson(me, citizenid)
-    if not person then return util.fail('No record for that citizen') end
+    if not person then return util.fail('mdt.noRecordCitizen', 'No record for that citizen') end
     return util.ok({ person = person })
 end)
 
 records.personsNotes = access.audited('persons.edit', function(_, payload, me)
     local citizenid = util.limitedString(payload.citizenid, 64)
-    if not citizenid then return util.fail('No citizen selected') end
+    if not citizenid then return util.fail('mdt.noCitizenSelected', 'No citizen selected') end
 
     local person = composePerson(me, citizenid)
-    if not person then return util.fail('No record for that citizen') end
+    if not person then return util.fail('mdt.noRecordCitizen', 'No record for that citizen') end
 
     writeOverlay(citizenid, 'notes', util.limitedString(payload.notes, MAX_NOTES) or '', me.citizenid)
     person = composePerson(me, citizenid)
@@ -442,10 +442,10 @@ end)
 
 records.personsFlags = access.audited('persons.edit', function(_, payload, me)
     local citizenid = util.limitedString(payload.citizenid, 64)
-    if not citizenid then return util.fail('No citizen selected') end
+    if not citizenid then return util.fail('mdt.noCitizenSelected', 'No citizen selected') end
 
     local person = composePerson(me, citizenid)
-    if not person then return util.fail('No record for that citizen') end
+    if not person then return util.fail('mdt.noRecordCitizen', 'No record for that citizen') end
 
     local flags = sanitizeFlags(payload.flags)
     writeOverlay(citizenid, 'flags', json.encode(flags), me.citizenid)
@@ -460,13 +460,13 @@ end)
 
 records.personsMugshot = access.audited('persons.edit', function(_, payload, me)
     local citizenid = util.limitedString(payload.citizenid, 64)
-    if not citizenid then return util.fail('No citizen selected') end
+    if not citizenid then return util.fail('mdt.noCitizenSelected', 'No citizen selected') end
 
     local person = composePerson(me, citizenid)
-    if not person then return util.fail('No record for that citizen') end
+    if not person then return util.fail('mdt.noRecordCitizen', 'No record for that citizen') end
 
     local url = util.limitedString(payload.url, MAX_URL)
-    if url and not url:match('^https?://') then return util.fail('A mugshot must be a web address') end
+    if url and not url:match('^https?://') then return util.fail('mdt.mugshotMustWebAddress', 'A mugshot must be a web address') end
 
     writeOverlay(citizenid, 'mugshot', url, me.citizenid)
     person = composePerson(me, citizenid)
@@ -507,18 +507,18 @@ end)
 
 records.vehiclesGet = access.gated('vehicles.view', function(_, payload)
     local plate = plateOf(payload.plate)
-    if not plate then return util.fail('No plate selected') end
+    if not plate then return util.fail('mdt.noPlateSelected', 'No plate selected') end
 
     local vehicle = composeVehicle(plate)
-    if not vehicle then return util.fail('No vehicle registered on that plate') end
+    if not vehicle then return util.fail('mdt.noVehicleRegisteredPlate', 'No vehicle registered on that plate') end
     return util.ok({ vehicle = vehicle })
 end)
 
 records.vehiclesUpdate = access.audited('vehicles.edit', function(_, payload, me)
     local plate = plateOf(payload.plate)
-    if not plate then return util.fail('No plate selected') end
+    if not plate then return util.fail('mdt.noPlateSelected', 'No plate selected') end
     if not frameworkRecords.vehicleByPlate(plate) then
-        return util.fail('No vehicle registered on that plate')
+        return util.fail('mdt.noVehicleRegisteredPlate', 'No vehicle registered on that plate')
     end
 
     local current = vehicleOverlay(plate)
@@ -526,7 +526,7 @@ records.vehiclesUpdate = access.audited('vehicles.edit', function(_, payload, me
     local status = current.status
     if payload.status ~= nil then
         local wanted = util.limitedString(payload.status, 16)
-        if not wanted or not STATUSES[wanted] then return util.fail('Pick a valid registration status') end
+        if not wanted or not STATUSES[wanted] then return util.fail('mdt.pickValidRegistrationStatus', 'Pick a valid registration status') end
         status = wanted
     end
 
@@ -542,7 +542,7 @@ records.vehiclesUpdate = access.audited('vehicles.edit', function(_, payload, me
     local image = current.image
     if payload.image ~= nil then
         image = util.limitedString(payload.image, MAX_URL)
-        if image and not image:match('^https?://') then return util.fail('A photo must be a web address') end
+        if image and not image:match('^https?://') then return util.fail('mdt.photoMustWebAddress', 'A photo must be a web address') end
     end
 
     local stolen = current.stolen
@@ -560,7 +560,7 @@ records.vehiclesUpdate = access.audited('vehicles.edit', function(_, payload, me
     ]], { plate, notes, points, status, stolen and 1 or 0, bolo and 1 or 0, image, me.citizenid, os.time() })
 
     local vehicle = composeVehicle(plate)
-    if not vehicle then return util.fail('No vehicle registered on that plate') end
+    if not vehicle then return util.fail('mdt.noVehicleRegisteredPlate', 'No vehicle registered on that plate') end
 
     return util.ok({ vehicle = vehicle }), {
         entityType = 'vehicle',

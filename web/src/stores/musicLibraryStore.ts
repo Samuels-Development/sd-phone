@@ -5,6 +5,10 @@ import {
     loadFolders, loadTracks, newId, songKey, titleFromUrl,
     type Folder, type IncomingTrack, type Track,
 } from '@/apps/music/data';
+import { t } from '@/i18n';
+
+const sharedArtist   = () => t('music.sharedArtist', 'Shared');
+const sharedPlaylist = () => t('music.sharedPlaylist', 'Shared Playlist');
 
 // The music LIBRARY (tracks + playlist folders), persisted by the zustand
 // persist middleware. Lives in a store because it mutates while the Music app
@@ -46,16 +50,16 @@ export const useMusicLibrary = create<MusicLibraryState>()(
 
             addReceivedTracks: (incoming) => {
                 const existing = get().tracks;
-                const haveKey = new Set(existing.map(t => songKey(t.url)));
+                const haveKey = new Set(existing.map(song => songKey(song.url)));
                 const fresh: Track[] = [];
-                for (const t of incoming) {
-                    if (!t || !t.url) continue;
-                    const key = songKey(t.url);
+                for (const song of incoming) {
+                    if (!song || !song.url) continue;
+                    const key = songKey(song.url);
                     if (haveKey.has(key)) continue;
                     haveKey.add(key);
                     fresh.push({
-                        id: newId(), url: t.url, addedAt: Date.now(),
-                        title: t.title || titleFromUrl(t.url), artist: t.artist || 'Shared', album: t.album,
+                        id: newId(), url: song.url, addedAt: Date.now(),
+                        title: song.title || titleFromUrl(song.url), artist: song.artist || sharedArtist(), album: song.album,
                     });
                 }
                 if (fresh.length) set({ tracks: [...fresh, ...existing] });
@@ -64,24 +68,24 @@ export const useMusicLibrary = create<MusicLibraryState>()(
 
             addReceivedPlaylist: (name, incoming) => {
                 const existing = get().tracks;
-                const byKey = new Map(existing.map(t => [songKey(t.url), t]));
+                const byKey = new Map(existing.map(song => [songKey(song.url), song]));
                 const toAdd: Track[] = [];
                 const trackIds: string[] = [];
-                for (const t of incoming) {
-                    if (!t || !t.url) continue;
-                    const key = songKey(t.url);
+                for (const song of incoming) {
+                    if (!song || !song.url) continue;
+                    const key = songKey(song.url);
                     const have = byKey.get(key);
                     if (have) { if (!trackIds.includes(have.id)) trackIds.push(have.id); continue; }
                     const nt: Track = {
-                        id: newId(), url: t.url, addedAt: Date.now(),
-                        title: t.title || titleFromUrl(t.url), artist: t.artist || 'Shared', album: t.album,
+                        id: newId(), url: song.url, addedAt: Date.now(),
+                        title: song.title || titleFromUrl(song.url), artist: song.artist || sharedArtist(), album: song.album,
                     };
                     byKey.set(key, nt);
                     toAdd.push(nt);
                     trackIds.push(nt.id);
                 }
                 if (trackIds.length === 0) return;
-                const folder: Folder = { id: 'f' + Math.random().toString(36).slice(2, 10), name: (name || 'Shared Playlist').slice(0, 60), trackIds };
+                const folder: Folder = { id: 'f' + Math.random().toString(36).slice(2, 10), name: (name || sharedPlaylist()).slice(0, 60), trackIds };
                 set(s => ({
                     tracks:  toAdd.length ? [...toAdd, ...s.tracks] : s.tracks,
                     folders: [folder, ...s.folders],

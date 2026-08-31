@@ -207,7 +207,7 @@ end
 function actions.open(src, roomId)
     local cid = cidOf(src)
     if not cid then return { success = false } end
-    if not canAccess(roomId, cid) then return { success = false, message = 'No access to that room' } end
+    if not canAccess(roomId, cid) then return { success = false, messageKey = 'darkchat.noAccessRoom', message = 'No access to that room' } end
     return { success = true, data = { messages = buildMessages(roomId, cid) } }
 end
 
@@ -223,13 +223,13 @@ function actions.send(src, roomId, payload)
     local muted = moderation.guard(cid, 'darkchat'); if muted then return muted end
     if not util.cooldown(cid, 'darkchat:send', SEND_GAP_MS)
         or not util.rateLimit(cid, 'darkchat:send', SEND_WINDOW_MS, SEND_PER_WINDOW) then
-        return { success = false, message = 'Slow down' }
+        return { success = false, messageKey = 'darkchat.slowDown', message = 'Slow down' }
     end
-    if type(roomId) ~= 'string' then return { success = false, message = 'Bad room' } end
-    if not canAccess(roomId, cid) then return { success = false, message = 'No access to that room' } end
+    if type(roomId) ~= 'string' then return { success = false, messageKey = 'darkchat.badRoom', message = 'Bad room' } end
+    if not canAccess(roomId, cid) then return { success = false, messageKey = 'darkchat.noAccessRoom', message = 'No access to that room' } end
 
     local nick = store.getNickname(cid)
-    if not nick or nick == '' then return { success = false, message = 'Pick a nickname first' } end
+    if not nick or nick == '' then return { success = false, messageKey = 'darkchat.pickNicknameFirst', message = 'Pick a nickname first' } end
 
     payload = payload or {}
     local kind = VALID_KINDS[payload.kind] and payload.kind or 'text'
@@ -238,15 +238,15 @@ function actions.send(src, roomId, payload)
     local meta = {}
 
     if kind == 'text' then
-        if body == '' then return { success = false, message = 'Empty message' } end
+        if body == '' then return { success = false, messageKey = 'darkchat.emptyMessage', message = 'Empty message' } end
     elseif kind == 'image' or kind == 'gif' then
         local url = sanitizeStr(raw.mediaUrl, 1024)
-        if not url then return { success = false, message = 'Missing media' } end
+        if not url then return { success = false, messageKey = 'darkchat.missingMedia', message = 'Missing media' } end
         meta.mediaUrl = url
         if body == '' then body = (kind == 'gif') and 'GIF' or '📷 Photo' end
     elseif kind == 'voice' then
         local url = sanitizeStr(raw.audioUrl, 1024)
-        if not url then return { success = false, message = 'Missing audio' } end
+        if not url then return { success = false, messageKey = 'darkchat.missingAudio', message = 'Missing audio' } end
         meta.audioUrl = url
         meta.duration = lib.math.clamp(math.floor(tonumber(raw.duration) or 1), 1, 600)
         if type(raw.waveform) == 'table' then
@@ -291,16 +291,16 @@ function actions.react(src, roomId, messageId, emoji)
     local cid = cidOf(src)
     if not cid then return { success = false } end
     if type(roomId) ~= 'string' then return { success = false } end
-    if not canAccess(roomId, cid) then return { success = false, message = 'No access to that room' } end
+    if not canAccess(roomId, cid) then return { success = false, messageKey = 'darkchat.noAccessRoom', message = 'No access to that room' } end
 
     messageId = tonumber(messageId)
     if not messageId or messageId ~= messageId or messageId == math.huge or messageId == -math.huge then
-        return { success = false, message = 'Bad message' }
+        return { success = false, messageKey = 'darkchat.badMessage', message = 'Bad message' }
     end
     emoji = sanitizeStr(emoji, 32)
-    if not emoji or not REACTION_SET[emoji] then return { success = false, message = 'Bad emoji' } end
+    if not emoji or not REACTION_SET[emoji] then return { success = false, messageKey = 'darkchat.badEmoji', message = 'Bad emoji' } end
 
-    if store.messageRoom(messageId) ~= roomId then return { success = false, message = 'No such message' } end
+    if store.messageRoom(messageId) ~= roomId then return { success = false, messageKey = 'darkchat.noSuchMessage', message = 'No such message' } end
 
     store.toggleReaction(messageId, cid, emoji, os.time())
     return { success = true, data = { messageId = tostring(messageId), reactions = store.reactionsFor(messageId, cid) } }
@@ -316,10 +316,10 @@ function actions.create(src, name, code)
     local cid = cidOf(src)
     if not cid then return { success = false } end
     name = trim(name)
-    if #name < DC.MinRoomNameLength then return { success = false, message = 'Name too short' } end
+    if #name < DC.MinRoomNameLength then return { success = false, messageKey = 'darkchat.nameTooShort', message = 'Name too short' } end
     if #name > DC.MaxRoomNameLength then name = name:sub(1, DC.MaxRoomNameLength) end
     if store.privateCountFor(cid) >= DC.MaxPrivateRoomsPerPlayer then
-        return { success = false, message = 'You have too many rooms' }
+        return { success = false, messageKey = 'darkchat.haveTooManyRooms', message = 'You have too many rooms' }
     end
 
     code = sanitizeCode(code)
@@ -344,14 +344,14 @@ function actions.join(src, code)
     local cid = cidOf(src)
     if not cid then return { success = false } end
     code = sanitizeCode(code)
-    if code == '' then return { success = false, message = 'Enter a code' } end
+    if code == '' then return { success = false, messageKey = 'darkchat.codeRequired', message = 'Enter a code' } end
 
     local row = store.roomByCode(code)
-    if not row then return { success = false, message = 'No room with that code' } end
-    if store.isBanned(row.id, cid) then return { success = false, message = 'You are banned from this room' } end
+    if not row then return { success = false, messageKey = 'darkchat.noRoomWithCode', message = 'No room with that code' } end
+    if store.isBanned(row.id, cid) then return { success = false, messageKey = 'darkchat.bannedFromRoom', message = 'You are banned from this room' } end
 
     if not store.isMember(row.id, cid) and store.privateCountFor(cid) >= DC.MaxPrivateRoomsPerPlayer then
-        return { success = false, message = 'You have too many rooms' }
+        return { success = false, messageKey = 'darkchat.haveTooManyRooms', message = 'You have too many rooms' }
     end
 
     store.addMember(row.id, cid, os.time())
@@ -369,8 +369,8 @@ end
 function actions.leave(src, roomId)
     local cid = cidOf(src)
     if not cid then return { success = false } end
-    if type(roomId) ~= 'string' then return { success = false, message = 'Bad room' } end
-    if PUBLIC_BY_ID[roomId] then return { success = false, message = 'Cannot leave a public room' } end
+    if type(roomId) ~= 'string' then return { success = false, messageKey = 'darkchat.badRoom', message = 'Bad room' } end
+    if PUBLIC_BY_ID[roomId] then return { success = false, messageKey = 'darkchat.cannotLeavePublicRoom', message = 'Cannot leave a public room' } end
     store.removeMember(roomId, cid)
     return { success = true, data = { roomId = roomId } }
 end
@@ -383,7 +383,7 @@ function actions.setNickname(src, nick)
     local cid = cidOf(src)
     if not cid then return { success = false } end
     nick = trim(nick)
-    if #nick < DC.MinNicknameLength then return { success = false, message = 'Nickname too short' } end
+    if #nick < DC.MinNicknameLength then return { success = false, messageKey = 'darkchat.nicknameTooShort', message = 'Nickname too short' } end
     if #nick > DC.MaxNicknameLength then nick = nick:sub(1, DC.MaxNicknameLength) end
     store.setNickname(cid, nick)
     return { success = true, data = { nickname = nick } }
@@ -406,11 +406,11 @@ end
 function actions.roomInfo(src, roomId)
     local cid = cidOf(src)
     if not cid then return { success = false } end
-    if type(roomId) ~= 'string' or PUBLIC_BY_ID[roomId] then return { success = false, message = 'No settings for this room' } end
-    if not store.isMember(roomId, cid) then return { success = false, message = 'No access to that room' } end
+    if type(roomId) ~= 'string' or PUBLIC_BY_ID[roomId] then return { success = false, messageKey = 'darkchat.noSettingsRoom', message = 'No settings for this room' } end
+    if not store.isMember(roomId, cid) then return { success = false, messageKey = 'darkchat.noAccessRoom', message = 'No access to that room' } end
 
     local room = store.roomById(roomId)
-    if not room then return { success = false, message = 'No such room' } end
+    if not room then return { success = false, messageKey = 'darkchat.noSuchRoom', message = 'No such room' } end
 
     local isCreator = room.owner == cid
     local data = {
@@ -450,8 +450,8 @@ end
 function actions.setNotifications(src, roomId, enabled)
     local cid = cidOf(src)
     if not cid then return { success = false } end
-    if type(roomId) ~= 'string' or PUBLIC_BY_ID[roomId] then return { success = false, message = 'No settings for this room' } end
-    if not store.isMember(roomId, cid) then return { success = false, message = 'No access to that room' } end
+    if type(roomId) ~= 'string' or PUBLIC_BY_ID[roomId] then return { success = false, messageKey = 'darkchat.noSettingsRoom', message = 'No settings for this room' } end
+    if not store.isMember(roomId, cid) then return { success = false, messageKey = 'darkchat.noAccessRoom', message = 'No access to that room' } end
     local on = enabled == true or enabled == 1
     store.setNotifications(roomId, cid, on)
     return { success = true, data = { enabled = on } }
@@ -487,15 +487,15 @@ end
 function actions.kick(src, roomId, token)
     local cid = cidOf(src)
     if not cid then return { success = false } end
-    if type(roomId) ~= 'string' or PUBLIC_BY_ID[roomId] then return { success = false, message = 'Cannot remove from this room' } end
+    if type(roomId) ~= 'string' or PUBLIC_BY_ID[roomId] then return { success = false, messageKey = 'darkchat.cannotRemoveFromRoom', message = 'Cannot remove from this room' } end
 
     local room = store.roomById(roomId)
-    if not room then return { success = false, message = 'No such room' } end
-    if room.owner ~= cid then return { success = false, message = 'Only the room creator can remove members' } end
+    if not room then return { success = false, messageKey = 'darkchat.noSuchRoom', message = 'No such room' } end
+    if room.owner ~= cid then return { success = false, messageKey = 'darkchat.onlyRoomCreatorCanRemove', message = 'Only the room creator can remove members' } end
 
     local targetCid = resolveMemberToken(roomId, token)
-    if not targetCid then return { success = false, message = 'No such member' } end
-    if targetCid == room.owner then return { success = false, message = 'You cannot remove yourself' } end
+    if not targetCid then return { success = false, messageKey = 'darkchat.noSuchMember', message = 'No such member' } end
+    if targetCid == room.owner then return { success = false, messageKey = 'darkchat.cannotRemoveYourself', message = 'You cannot remove yourself' } end
 
     store.removeMember(roomId, targetCid)
     return { success = true, data = { roomId = roomId, memberId = token, targetCid = targetCid } }
@@ -511,15 +511,15 @@ end
 function actions.ban(src, roomId, token)
     local cid = cidOf(src)
     if not cid then return { success = false } end
-    if type(roomId) ~= 'string' or PUBLIC_BY_ID[roomId] then return { success = false, message = 'Cannot ban from this room' } end
+    if type(roomId) ~= 'string' or PUBLIC_BY_ID[roomId] then return { success = false, messageKey = 'darkchat.cannotBanFromRoom', message = 'Cannot ban from this room' } end
 
     local room = store.roomById(roomId)
-    if not room then return { success = false, message = 'No such room' } end
-    if room.owner ~= cid then return { success = false, message = 'Only the room creator can ban members' } end
+    if not room then return { success = false, messageKey = 'darkchat.noSuchRoom', message = 'No such room' } end
+    if room.owner ~= cid then return { success = false, messageKey = 'darkchat.onlyRoomCreatorCanBan', message = 'Only the room creator can ban members' } end
 
     local targetCid = resolveMemberToken(roomId, token)
-    if not targetCid then return { success = false, message = 'No such member' } end
-    if targetCid == room.owner then return { success = false, message = 'You cannot ban yourself' } end
+    if not targetCid then return { success = false, messageKey = 'darkchat.noSuchMember', message = 'No such member' } end
+    if targetCid == room.owner then return { success = false, messageKey = 'darkchat.cannotBanYourself', message = 'You cannot ban yourself' } end
 
     local name = ''
     for _, m in ipairs(store.membersWithNames(roomId)) do
@@ -562,14 +562,14 @@ end
 function actions.unban(src, roomId, token)
     local cid = cidOf(src)
     if not cid then return { success = false } end
-    if type(roomId) ~= 'string' or PUBLIC_BY_ID[roomId] then return { success = false, message = 'No bans in this room' } end
+    if type(roomId) ~= 'string' or PUBLIC_BY_ID[roomId] then return { success = false, messageKey = 'darkchat.noBansRoom', message = 'No bans in this room' } end
 
     local room = store.roomById(roomId)
-    if not room then return { success = false, message = 'No such room' } end
-    if room.owner ~= cid then return { success = false, message = 'Only the room creator can unban members' } end
+    if not room then return { success = false, messageKey = 'darkchat.noSuchRoom', message = 'No such room' } end
+    if room.owner ~= cid then return { success = false, messageKey = 'darkchat.onlyRoomCreatorCanUnban', message = 'Only the room creator can unban members' } end
 
     local targetCid = resolveBanToken(roomId, token)
-    if not targetCid then return { success = false, message = 'No such ban' } end
+    if not targetCid then return { success = false, messageKey = 'darkchat.noSuchBan', message = 'No such ban' } end
 
     store.removeBan(roomId, targetCid)
     return { success = true, data = { roomId = roomId, memberId = token } }
@@ -584,15 +584,20 @@ end
 function actions.regenCode(src, roomId)
     local cid = cidOf(src)
     if not cid then return { success = false } end
-    if type(roomId) ~= 'string' or PUBLIC_BY_ID[roomId] then return { success = false, message = 'This room has no code' } end
+    if type(roomId) ~= 'string' or PUBLIC_BY_ID[roomId] then return { success = false, messageKey = 'darkchat.roomHasNoCode', message = 'This room has no code' } end
 
     local room = store.roomById(roomId)
-    if not room then return { success = false, message = 'No such room' } end
-    if room.owner ~= cid then return { success = false, message = 'Only the room creator can change the code' } end
+    if not room then return { success = false, messageKey = 'darkchat.noSuchRoom', message = 'No such room' } end
+    if room.owner ~= cid then return { success = false, messageKey = 'darkchat.onlyRoomCreatorCanChange', message = 'Only the room creator can change the code' } end
 
     local left = codeCooldownLeft(room)
     if left > 0 then
-        return { success = false, message = ('Wait %ds before changing the code again'):format(left) }
+        return {
+            success     = false,
+            messageKey  = 'darkchat.waitBeforeChangingCode',
+            message     = 'Wait {n}s before changing the code again',
+            messageVars = { n = left },
+        }
     end
 
     local code

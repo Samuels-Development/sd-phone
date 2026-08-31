@@ -1,3 +1,4 @@
+import { getLocaleTag } from '@/i18n';
 import { isFiveM } from './nui';
 import { apiCall, apiData } from './api';
 
@@ -232,8 +233,5 @@ export function groupByDay(photos: Photo[]): { key: string; label: string; photo
 function formatDayLabel(isoDay: string): string {
     const d = new Date(isoDay + 'T00:00:00Z');
     if (Number.isNaN(d.getTime())) return isoDay;
-    const day   = d.getUTCDate();
-    const month = d.toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' });
-    const year  = d.getUTCFullYear();
-    return `${day} ${month}, ${year}`;
+    return d.toLocaleDateString(getLocaleTag(), { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 }

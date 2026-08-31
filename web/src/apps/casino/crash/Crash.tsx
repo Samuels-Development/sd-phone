@@ -23,6 +23,7 @@ import {
 } from './crashApi';
 import { CurveChart } from './CurveChart';
 import { FairnessSheet, type FairRound } from './FairnessSheet';
+import { failText } from '@/core/api';
 
 interface CrashClock { offset: number; startedAt: number; serverMx: number }
 
@@ -272,7 +273,7 @@ export function Crash({ chips, onChips, onBack, onCashier }: CasinoGameProps) {
         setBusy(false);
         if (!r.ok || !r.data) {
             if (r.message === 'Not enough chips') setNeedChips(true);
-            else setError(r.message ?? t('casino.somethingWrong', 'Something went wrong'));
+            else setError(failText(r, t('casino.somethingWrong', 'Something went wrong')));
             return;
         }
         const data = r.data;
@@ -288,7 +289,7 @@ export function Crash({ chips, onChips, onBack, onCashier }: CasinoGameProps) {
         const r = await cashOutCrash(roundId);
         cashing.current = false;
         if (!r.ok || !r.data) {
-            setError(r.message ?? t('crash.roundOver', 'Round is over'));
+            setError(failText(r, t('crash.roundOver', 'Round is over')));
             return;
         }
         const data = r.data;

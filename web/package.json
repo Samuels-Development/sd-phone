@@ -10,7 +10,11 @@
         "preview": "vite preview",
         "lint": "oxlint src",
         "test": "vitest run --passWithNoTests",
-        "knip": "knip"
+        "knip": "knip",
+        "i18n:check": "node scripts/i18n.mjs check",
+        "i18n:gen": "node scripts/i18n.mjs gen",
+        "i18n:status": "node scripts/i18n.mjs status",
+        "i18n:prune": "node scripts/i18n.mjs prune"
     },
     "dependencies": {
         "@fontsource/great-vibes": "^5.3.0",

@@ -88,24 +88,6 @@ function DensityPreview({ density, wallpaper, scale }: { density: Density; wallp
     );
 }
 
-const DOCK_LABEL: Record<DockStyle, string> = {
-    glass:   t('settings.dockGlass', 'Glass'),
-    tinted:  t('settings.dockTinted', 'Tinted'),
-    solid:   t('settings.dockSolid', 'Solid'),
-    outline: t('settings.dockOutline', 'Outline'),
-    clear:   t('settings.dockClear', 'Clear'),
-    hidden:  t('settings.dockHidden', 'Hidden'),
-};
-
-const DOCK_HINT: Record<DockStyle, string> = {
-    glass:   t('settings.dockGlassHint', 'A frosted tray. The default.'),
-    tinted:  t('settings.dockTintedHint', 'Frosted in your accent colour.'),
-    solid:   t('settings.dockSolidHint', 'A flat dark tray, no frosting.'),
-    outline: t('settings.dockOutlineHint', 'A thin outline, nothing inside.'),
-    clear:   t('settings.dockClearHint', 'Icons only, no tray.'),
-    hidden:  t('settings.dockHiddenHint', 'No dock at all.'),
-};
-
 function DockPreview({ style, wallpaper }: { style: DockStyle; wallpaper: string }) {
     const tray =
         style === 'glass'   ? { background: 'rgba(255,255,255,0.3)',    border: '0.5px solid rgba(255,255,255,0.5)' }
@@ -148,6 +130,24 @@ export function HomeDensityPage({ onBack }: { onBack: () => void }) {
         dockStyle, setDockStyle,
         wallpaperParallax, setWallpaperParallax,
     } = useTheme('homeDensity', 'setHomeDensity', 'homeIconScale', 'setHomeIconScale', 'wallpaperHome', 'dockStyle', 'setDockStyle', 'wallpaperParallax', 'setWallpaperParallax');
+
+    const DOCK_LABEL: Record<DockStyle, string> = {
+        glass:   t('settings.dockGlass', 'Glass'),
+        tinted:  t('settings.dockTinted', 'Tinted'),
+        solid:   t('settings.dockSolid', 'Solid'),
+        outline: t('settings.dockOutline', 'Outline'),
+        clear:   t('settings.dockClear', 'Clear'),
+        hidden:  t('settings.dockHidden', 'Hidden'),
+    };
+
+    const DOCK_HINT: Record<DockStyle, string> = {
+        glass:   t('settings.dockGlassHint', 'A frosted tray. The default.'),
+        tinted:  t('settings.dockTintedHint', 'Frosted in your accent colour.'),
+        solid:   t('settings.dockSolidHint', 'A flat dark tray, no frosting.'),
+        outline: t('settings.dockOutlineHint', 'A thin outline, nothing inside.'),
+        clear:   t('settings.dockClearHint', 'Icons only, no tray.'),
+        hidden:  t('settings.dockHiddenHint', 'No dock at all.'),
+    };
 
     return (
         <div

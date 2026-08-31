@@ -84,14 +84,14 @@ export function Music({ onClose: _onClose }: { onClose: () => void }) {
         const clean = url.trim();
         if (!clean || !isSourceAllowed(clean)) return;
         const id = newId();
-        const t: Track = {
+        const track: Track = {
             id, url: clean,
             title:  title.trim() || titleFromUrl(clean),
-            artist: artist.trim() || (youtubeId(clean) ? 'YouTube' : 'Unknown artist'),
+            artist: artist.trim() || (youtubeId(clean) ? 'YouTube' : t('music.unknownArtist', 'Unknown artist')),
             album:  album.trim() || undefined,
             addedAt: Date.now(),
         };
-        commitTracks([t, ...tracks]);
+        commitTracks([track, ...tracks]);
         if (youtubeId(clean) && !title.trim()) {
             void fetchYouTubeMeta(clean).then(meta => {
                 if (!meta.title) return;

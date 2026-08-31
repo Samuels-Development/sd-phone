@@ -11,32 +11,6 @@ import type { FacePart } from '@/shell/chassis';
 import { SHELLS, shellsFor } from '@/shell/shells';
 import type { Shell } from '@/shell/shells';
 
-const LABEL: Record<string, string> = {
-    ios:       t('settings.shellIos', 'Rounded'),
-    android:   t('settings.shellAndroid', 'Flat'),
-    edge:      t('settings.shellEdge', 'Slim'),
-    classic:   t('settings.shellClassic', 'Classic'),
-    compact:   t('settings.shellCompact', 'Compact'),
-    droplet:   t('settings.shellDroplet', 'Droplet'),
-    dual:      t('settings.shellDual', 'Dual'),
-    rugged:    t('settings.shellRugged', 'Rugged'),
-    gaming:    t('settings.shellGaming', 'Gaming'),
-    waterfall: t('settings.shellWaterfall', 'Waterfall'),
-};
-
-const DESC: Record<string, string> = {
-    ios:       t('settings.shellIosHint', 'Softly rounded rail with a pill cutout. The default look.'),
-    android:   t('settings.shellAndroidHint', 'Flat matte sides, tighter corners and a small camera hole in the middle.'),
-    edge:      t('settings.shellEdgeHint', 'The thinnest border of the lot, squared-off sides and a tiny pinhole camera.'),
-    classic:   t('settings.shellClassicHint', 'Thicker border with a centred notch hanging from the top edge.'),
-    compact:   t('settings.shellCompactHint', 'Wide top and bottom borders, with the camera outside the screen instead of in it.'),
-    droplet:   t('settings.shellDropletHint', 'Barely-there borders and a tiny teardrop dipping down for the camera.'),
-    dual:      t('settings.shellDualHint', 'The thinnest borders of the lot, with a wide twin-camera cutout in the middle.'),
-    rugged:    t('settings.shellRuggedHint', 'Armoured body with a thick protective border, deep buttons and a spare side key.'),
-    gaming:    t('settings.shellGamingHint', 'The boxiest of the set, with even borders and shoulder triggers down the right side.'),
-    waterfall: t('settings.shellWaterfallHint', 'A near frameless body whose glass rolls over all four edges, with a ringed sensor pill and one orange power key.'),
-};
-
 const PREVIEW_H = 116;
 const STATUS_ICONS = [
     { x: 333, w: 21 },
@@ -366,11 +340,37 @@ export function PhoneShellPage({ onBack }: { onBack: () => void }) {
     const options = shellsFor(device.id).filter(s => shellsAllowed.includes(s.id));
     const list = options.length ? options : SHELLS.filter(s => s.id === shell);
 
+    const LABEL: Record<string, string> = {
+        ios:       t('settings.shellIos', 'Rounded'),
+        android:   t('settings.shellAndroid', 'Flat'),
+        edge:      t('settings.shellEdge', 'Slim'),
+        classic:   t('settings.shellClassic', 'Classic'),
+        compact:   t('settings.shellCompact', 'Compact'),
+        droplet:   t('settings.shellDroplet', 'Droplet'),
+        dual:      t('settings.shellDual', 'Dual'),
+        rugged:    t('settings.shellRugged', 'Rugged'),
+        gaming:    t('settings.shellGaming', 'Gaming'),
+        waterfall: t('settings.shellWaterfall', 'Waterfall'),
+    };
+
+    const DESC: Record<string, string> = {
+        ios:       t('settings.shellIosHint', 'Softly rounded rail with a pill cutout. The default look.'),
+        android:   t('settings.shellAndroidHint', 'Flat matte sides, tighter corners and a small camera hole in the middle.'),
+        edge:      t('settings.shellEdgeHint', 'The thinnest border of the lot, squared-off sides and a tiny pinhole camera.'),
+        classic:   t('settings.shellClassicHint', 'Thicker border with a centred notch hanging from the top edge.'),
+        compact:   t('settings.shellCompactHint', 'Wide top and bottom borders, with the camera outside the screen instead of in it.'),
+        droplet:   t('settings.shellDropletHint', 'Barely-there borders and a tiny teardrop dipping down for the camera.'),
+        dual:      t('settings.shellDualHint', 'The thinnest borders of the lot, with a wide twin-camera cutout in the middle.'),
+        rugged:    t('settings.shellRuggedHint', 'Armoured body with a thick protective border, deep buttons and a spare side key.'),
+        gaming:    t('settings.shellGamingHint', 'The boxiest of the set, with even borders and shoulder triggers down the right side.'),
+        waterfall: t('settings.shellWaterfallHint', 'A near frameless body whose glass rolls over all four edges, with a ringed sensor pill and one orange power key.'),
+    };
+
     return (
         <div className="absolute inset-0 z-30 flex flex-col bg-base text-black dark:text-white" style={pageStyle}>
             <div className="h-11 shrink-0" aria-hidden />
             <NavBar
-                backLabel={t('settings.displayBrightness', 'Display')}
+                backLabel={t('settings.display', 'Display')}
                 onBack={goBack}
                 title={t('settings.phoneShell', 'Phone Shell')}
                 hairline

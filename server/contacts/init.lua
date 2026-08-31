@@ -80,7 +80,7 @@ end)
 ---@param fields { name?: string, phone: string, email?: string, address?: string, avatar?: string }
 ---@return table
 exports('addContact', function(source, fields)
-    if type(source) ~= 'number' then return fail('Invalid source') end
+    if type(source) ~= 'number' then return fail('contacts.invalidSource', 'Invalid source') end
     local result = actions.add(source, fields)
     if result.success then
         TriggerClientEvent('sd-phone:client:contacts:shared', source, result.data)
@@ -94,7 +94,7 @@ end)
 ---@param number string|number phone number, any format
 ---@return table
 exports('removeContactByNumber', function(source, number)
-    if type(source) ~= 'number' then return fail('Invalid source') end
+    if type(source) ~= 'number' then return fail('contacts.invalidSource', 'Invalid source') end
     return actions.removeByNumber(source, number)
 end)
 

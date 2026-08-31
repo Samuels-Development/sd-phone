@@ -21,6 +21,7 @@ import { GalleryTab } from './GalleryTab';
 import { PhotoPicker } from './PhotoPicker';
 import { PhotoTabBar, type PhotosTab } from './PhotoTabBar';
 import { PhotoViewer } from './PhotoViewer';
+import { failText } from '@/core/api';
 
 interface ViewerState { source: 'gallery' | 'album'; index: number }
 interface CreateState { addIds: string[] }
@@ -425,7 +426,7 @@ export function Photos({ onClose }: { onClose: () => void }) {
                         const trimmed = url.trim();
                         if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) return t('photos.importInvalidUrl', 'Enter a full image URL');
                         const r = await apiSavePhotoFromUrl(trimmed);
-                        if (!r.ok) return r.message ?? t('photos.importFailed', 'Could not import that image');
+                        if (!r.ok) return failText(r, t('photos.importFailed', 'Could not import that image'));
                         setImportOpen(false);
                         return null;
                     }}

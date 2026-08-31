@@ -256,14 +256,14 @@ end)
 ---One case in full, with its docket timeline.
 court.get = access.gated('court.view', function(_, payload)
     local row = rowFor(payload.ref)
-    if not row then return util.fail('That case is not on the docket') end
+    if not row then return util.fail('mdt.caseNotDocket', 'That case is not on the docket') end
     return util.ok({ file = detailOf(row, notesFor(row.id)) })
 end)
 
 ---Court history for one citizen, newest first. Read by the person record.
 court.forCitizen = access.gated('court.view', function(_, payload)
     local cid = util.limitedString(payload.citizenid, 64)
-    if not cid then return util.fail('Unknown citizen') end
+    if not cid then return util.fail('mdt.unknownCitizen', 'Unknown citizen') end
 
     local rows = MySQL.query.await([[
         SELECT * FROM phone_mdt_court_cases WHERE citizenid = ?
@@ -279,18 +279,18 @@ end)
 ---rows for this defendant, so what the court is trying can never be dictated by the client.
 court.fileCase = access.audited('court.file', function(_, payload, me)
     local cid = util.limitedString(payload.citizenid, 64)
-    if not cid then return util.fail('Pick a defendant') end
+    if not cid then return util.fail('mdt.pickDefendant', 'Pick a defendant') end
 
     local title = util.limitedString(payload.title, MAX_TITLE)
-    if not title then return util.fail('A case needs a title') end
+    if not title then return util.fail('mdt.caseTitleRequired', 'A case needs a title') end
 
     local reportRef = util.limitedString(payload.reportRef, 16)
     local defendant, raw = nil, {}
 
     if reportRef then
         local report, suspect, rows = paperwork.suspectCharges(me, reportRef, cid)
-        if not report then return util.fail('That report is not available') end
-        if not suspect then return util.fail('That citizen is not a suspect on that report') end
+        if not report then return util.fail('mdt.reportNotAvailable', 'That report is not available') end
+        if not suspect then return util.fail('mdt.citizenNotSuspectReport', 'That citizen is not a suspect on that report') end
         defendant = suspect.name
         raw = rows
     elseif type(payload.charges) == 'table' then
@@ -303,7 +303,7 @@ court.fileCase = access.audited('court.file', function(_, payload, me)
     end
 
     local lines = offences.totalFor(raw)
-    if #lines == 0 then return util.fail('A case needs at least one charge') end
+    if #lines == 0 then return util.fail('mdt.caseNeedsLeastOneCharge', 'A case needs at least one charge') end
 
     if not defendant then defendant = store.namesFor({ cid })[cid] end
 
@@ -320,7 +320,7 @@ court.fileCase = access.audited('court.file', function(_, payload, me)
     end
 
     local ref = store.nextRef('court')
-    if not ref then return util.fail('Could not allocate a case number') end
+    if not ref then return util.fail('mdt.couldNotAllocateCaseNumber', 'Could not allocate a case number') end
 
     -- The filer takes the chair their department sits in: an attorney who files is prosecuting it,
     -- a judge who files is the one hearing it.
@@ -343,7 +343,7 @@ court.fileCase = access.audited('court.file', function(_, payload, me)
     })
 
     local row = MySQL.single.await('SELECT * FROM phone_mdt_court_cases WHERE ref = ? LIMIT 1', { ref })
-    if not row then return util.fail('The case could not be filed') end
+    if not row then return util.fail('mdt.caseCouldNotFiled', 'The case could not be filed') end
 
     return util.ok({ file = detailOf(row, {}) }), {
         entityType = 'court',
@@ -356,9 +356,9 @@ end)
 ---because the court controls its own calendar.
 court.manage = access.audited('court.manage', function(_, payload, me)
     local row = rowFor(payload.ref)
-    if not row then return util.fail('That case is not on the docket') end
+    if not row then return util.fail('mdt.caseNotDocket', 'That case is not on the docket') end
     if row.status == 'closed' or row.status == 'dismissed' then
-        return util.fail('That case has already been decided')
+        return util.fail('mdt.caseHasAlreadyBeenDecided', 'That case has already been decided')
     end
 
     local sets, params = {}, {}
@@ -371,7 +371,7 @@ court.manage = access.audited('court.manage', function(_, payload, me)
 
     if payload.title ~= nil then
         local title = util.limitedString(payload.title, MAX_TITLE)
-        if not title then return util.fail('A case needs a title') end
+        if not title then return util.fail('mdt.caseTitleRequired', 'A case needs a title') end
         sets[#sets + 1] = 'title = ?'
         params[#params + 1] = title
     end
@@ -422,7 +422,7 @@ court.manage = access.audited('court.manage', function(_, payload, me)
         end
     end
 
-    if #sets == 0 then return util.fail('Nothing to change') end
+    if #sets == 0 then return util.fail('mdt.nothingChange', 'Nothing to change') end
 
     sets[#sets + 1] = 'updated_at = ?'
     params[#params + 1] = os.time()
@@ -432,7 +432,7 @@ court.manage = access.audited('court.manage', function(_, payload, me)
         ('UPDATE phone_mdt_court_cases SET %s WHERE id = ?'):format(table.concat(sets, ', ')), params)
 
     local fresh = MySQL.single.await('SELECT * FROM phone_mdt_court_cases WHERE id = ? LIMIT 1', { row.id })
-    if not fresh then return util.fail('That case is not on the docket') end
+    if not fresh then return util.fail('mdt.caseNotDocket', 'That case is not on the docket') end
 
     return util.ok({ file = detailOf(fresh, notesFor(row.id)) }), {
         entityType = 'court',
@@ -445,10 +445,10 @@ end)
 ---way a real docket is. Both counsel and the bench may write.
 court.note = access.audited('court.file', function(_, payload, me)
     local row = rowFor(payload.ref)
-    if not row then return util.fail('That case is not on the docket') end
+    if not row then return util.fail('mdt.caseNotDocket', 'That case is not on the docket') end
 
     local body = util.limitedString(payload.body, MAX_NOTE)
-    if not body then return util.fail('Write something first') end
+    if not body then return util.fail('mdt.writeSomethingFirst', 'Write something first') end
 
     local kind = oneOf(payload.kind, NOTE_KINDS, 'note')
     -- Only the bench enters a ruling on the record.
@@ -474,13 +474,13 @@ end)
 ---department that holds the defendant carries it out.
 court.rule = access.audited('court.rule', function(_, payload, me)
     local row = rowFor(payload.ref)
-    if not row then return util.fail('That case is not on the docket') end
+    if not row then return util.fail('mdt.caseNotDocket', 'That case is not on the docket') end
     if row.status == 'closed' or row.status == 'dismissed' then
-        return util.fail('That case has already been decided')
+        return util.fail('mdt.caseHasAlreadyBeenDecided', 'That case has already been decided')
     end
 
     local verdict = oneOf(payload.verdict, VERDICTS, nil)
-    if not verdict then return util.fail('Pick a verdict') end
+    if not verdict then return util.fail('mdt.pickVerdict', 'Pick a verdict') end
 
     local months, fine = 0, 0
     if verdict == 'guilty' or verdict == 'plea' then
@@ -506,7 +506,7 @@ court.rule = access.audited('court.rule', function(_, payload, me)
     })
 
     local fresh = MySQL.single.await('SELECT * FROM phone_mdt_court_cases WHERE id = ? LIMIT 1', { row.id })
-    if not fresh then return util.fail('That case is not on the docket') end
+    if not fresh then return util.fail('mdt.caseNotDocket', 'That case is not on the docket') end
 
     return util.ok({ file = detailOf(fresh, notesFor(row.id)) }), {
         entityType = 'court',
@@ -593,13 +593,13 @@ end)
 ---Files an expungement petition against a citizen's record.
 court.petition = access.audited('expunge.file', function(_, payload, me)
     local cid = util.limitedString(payload.citizenid, 64)
-    if not cid then return util.fail('Pick a citizen') end
+    if not cid then return util.fail('mdt.pickCitizen', 'Pick a citizen') end
 
     local reason = util.limitedString(payload.reason, MAX_BODY)
-    if not reason then return util.fail('A petition needs a reason') end
+    if not reason then return util.fail('mdt.petitionNeedsReason', 'A petition needs a reason') end
 
     local ref = store.nextRef('expunge')
-    if not ref then return util.fail('Could not allocate a petition number') end
+    if not ref then return util.fail('mdt.couldNotAllocatePetitionNumber', 'Could not allocate a petition number') end
 
     local names = store.namesFor({ cid })
     local now = os.time()
@@ -614,7 +614,7 @@ court.petition = access.audited('expunge.file', function(_, payload, me)
     })
 
     local row = MySQL.single.await('SELECT * FROM phone_mdt_expungements WHERE ref = ? LIMIT 1', { ref })
-    if not row then return util.fail('The petition could not be filed') end
+    if not row then return util.fail('mdt.petitionCouldNotFiled', 'The petition could not be filed') end
 
     return util.ok({ petition = petitionOf(row) }), {
         entityType = 'expunge',
@@ -629,8 +629,8 @@ end)
 court.rulePetition = access.audited('expunge.rule', function(_, payload, me)
     local key = util.limitedString(payload.ref, 16)
     local row = key and MySQL.single.await('SELECT * FROM phone_mdt_expungements WHERE ref = ? LIMIT 1', { key })
-    if not row then return util.fail('That petition no longer exists') end
-    if row.status ~= 'pending' then return util.fail('That petition has already been ruled on') end
+    if not row then return util.fail('mdt.petitionNoLongerExists', 'That petition no longer exists') end
+    if row.status ~= 'pending' then return util.fail('mdt.petitionHasAlreadyBeenRuled', 'That petition has already been ruled on') end
 
     local grant = payload.grant == true
     local cleared = 0
@@ -668,7 +668,7 @@ court.rulePetition = access.audited('expunge.rule', function(_, payload, me)
     })
 
     local fresh = MySQL.single.await('SELECT * FROM phone_mdt_expungements WHERE id = ? LIMIT 1', { row.id })
-    if not fresh then return util.fail('That petition no longer exists') end
+    if not fresh then return util.fail('mdt.petitionNoLongerExists', 'That petition no longer exists') end
 
     return util.ok({ petition = petitionOf(fresh) }), {
         entityType = 'expunge',

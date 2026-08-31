@@ -127,7 +127,7 @@ export function Feed({ posts, tab, onTab, lives, onOpenLive, myHandle, loading, 
                                         title={tab === 'following' ? t('vibez.noFollowing', 'Nothing here yet') : t('vibez.noVibes', 'No vibes yet')}
                                         subtitle={tab === 'following'
                                             ? t('vibez.noFollowingHint', 'Follow creators to fill this feed.')
-                                            : t('vibez.noVibesHint', 'Be the first — record a clip and post it.')}
+                                            : t('vibez.noVibesHint', 'Be the first, record a clip and post it.')}
                                         circleClassName="bg-white/10"
                                     />
                                 </div>

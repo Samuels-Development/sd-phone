@@ -21,6 +21,7 @@ import { useMaskedPhone, useStreamerHidden } from '@/stores/themeStore';
 import { HIDDEN_TEXT } from '@/shell/streamerMode';
 import { NewInvoicePage } from './NewInvoicePage';
 import { ReceivedInvoices } from './ReceivedInvoices';
+import { failText } from '@/core/api';
 
 type Segment = 'received' | 'sent';
 
@@ -69,7 +70,7 @@ export function InvoicesTab({ received, receivedLoading, onRefetchReceived, onPa
     async function doCancel(inv: PersonalInvoice) {
         const res = await cancelPersonalInvoice(inv.id);
         if (res.success) refetchSent();
-        else setError(res.message ?? t('banking.somethingWentWrong', 'Something went wrong'));
+        else setError(failText(res, t('banking.somethingWentWrong', 'Something went wrong')));
     }
 
     const sentList = sent ?? [];

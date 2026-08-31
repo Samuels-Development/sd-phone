@@ -131,7 +131,7 @@ end
 ---@return table result
 function actions.sync(src)
     local cid = cidOf(src)
-    if not cid then return fail('Not signed in') end
+    if not cid then return fail('streaks.notSigned', 'Not signed in') end
 
     local today = os.date('%Y-%m-%d')
     local gallery = {}
@@ -154,17 +154,17 @@ end
 function actions.post(src, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = cidOf(src)
-    if not cid then return fail('Not signed in') end
+    if not cid then return fail('streaks.notSigned', 'Not signed in') end
 
     local imageUrl = trim(payload.imageUrl)
-    if not lib.string.startsWith(imageUrl, 'http') then return fail('Invalid image') end
+    if not lib.string.startsWith(imageUrl, 'http') then return fail('streaks.invalidImage', 'Invalid image') end
     imageUrl = imageUrl:sub(1, 512)
 
     local caption = trim(payload.caption):sub(1, CFG.MaxCaptionLength)
     if caption == '' then caption = nil end
 
     local today = os.date('%Y-%m-%d')
-    if store.postForDay(cid, today) then return fail('You have already posted today') end
+    if store.postForDay(cid, today) then return fail('streaks.haveAlreadyPostedToday', 'You have already posted today') end
 
     local s = store.getStreak(cid)
     local current = s and tonumber(s.current_streak) or 0
@@ -182,7 +182,7 @@ function actions.post(src, payload)
     local authorName = player.getName(src):sub(1, 80)
     local createdAt  = os.time()
     local postId = store.insertPost(cid, authorName, imageUrl, caption, current, today, createdAt)
-    if not postId then return fail('You have already posted today') end
+    if not postId then return fail('streaks.haveAlreadyPostedToday', 'You have already posted today') end
 
     store.upsertStreak(cid, current, longest, today)
 
@@ -229,7 +229,7 @@ end
 function actions.gallery(src, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = cidOf(src)
-    if not cid then return fail('Not signed in') end
+    if not cid then return fail('streaks.notSigned', 'Not signed in') end
 
     local before = posInt(payload.before)
     local out = {}
@@ -247,12 +247,12 @@ end
 function actions.like(src, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = cidOf(src)
-    if not cid then return fail('Not signed in') end
+    if not cid then return fail('streaks.notSigned', 'Not signed in') end
 
     local postId = posInt(payload.postId)
-    if not postId then return fail('Post not found') end
+    if not postId then return fail('streaks.postNotFound', 'Post not found') end
     local row = store.getPostRow(postId)
-    if not row then return fail('Post not found') end
+    if not row then return fail('streaks.postNotFound', 'Post not found') end
 
     local likedByMe
     if store.isLiked(row.id, cid) then
@@ -276,7 +276,7 @@ end
 ---@return table result
 function actions.leaderboard(src)
     local cid = cidOf(src)
-    if not cid then return fail('Not signed in') end
+    if not cid then return fail('streaks.notSigned', 'Not signed in') end
 
     local out = {}
     for i, row in ipairs(store.leaderboard(CFG.LeaderboardSize)) do

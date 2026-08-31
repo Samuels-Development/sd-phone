@@ -13,6 +13,7 @@ import { digits } from '@/lib/format';
 import { useMaskedPhone } from '@/stores/themeStore';
 import { fmtMoney } from './data';
 import { cancelInvoice, fetchSentInvoices, type SentInvoice } from './servicesApi';
+import { failText } from '@/core/api';
 
 // Business sent-invoices list, mirroring the Wallet's Sent segment: contact-resolved identity,
 // reference codes in the title, status chips and cancel on pending rows.
@@ -50,7 +51,7 @@ export function InvoicesPage({ onClose }: { onClose: () => void }) {
         const res = await cancelInvoice(inv.id);
         setBusy(false);
         if (res.success) refetch();
-        else setError(res.message ?? t('services.somethingWentWrong', 'Something went wrong'));
+        else setError(failText(res, t('services.somethingWentWrong', 'Something went wrong')));
     }
 
     return (

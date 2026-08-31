@@ -84,54 +84,62 @@ end
 ---Normalizes a player-supplied own address (bare username or full email) into the canonical
 ---local@Domain form. Foreign domains are rejected; the finished address is length-capped.
 ---@param raw any
----@return string|nil normalized, string? message
+---@return string|nil normalized
+---@return table? refusal keyed refusal envelope when normalized is nil
 local function validateEmail(raw)
     local trimmed = trim(raw):lower()
     local at = trimmed:find('@', 1, true)
     local localPart = at and trimmed:sub(1, at - 1) or trimmed
     if at and trimmed:sub(at + 1) ~= mailCfg.Domain then
-        return nil, ('Email addresses are @%s only'):format(mailCfg.Domain)
+        return nil, fail('mail.emailAddressesDomainOnly', 'Email addresses are @{domain} only',
+            { domain = mailCfg.Domain })
     end
     if #localPart < 2 then
-        return nil, 'Username must be at least 2 characters'
+        return nil, fail('mail.usernameMustLeast2Characters', 'Username must be at least 2 characters')
     end
     if not localPart:match('^[%w][%w%.%_%-]*$') then
-        return nil, 'Letters, numbers, dots, dashes and _ only'
+        return nil, fail('mail.lettersNumbersDotsDashes', 'Letters, numbers, dots, dashes and _ only')
     end
     local email = localPart .. '@' .. mailCfg.Domain
     if #email > mailCfg.MaxEmailLength then
-        return nil, ('Email must be %d characters or fewer'):format(mailCfg.MaxEmailLength)
+        return nil, fail('mail.emailMustCharactersFewer', 'Email must be {n} characters or fewer',
+            { n = mailCfg.MaxEmailLength })
     end
     return email, nil
 end
 
 ---Validates password length against the configs/mail.lua bounds.
 ---@param raw any
----@return string|nil normalized, string? message
+---@return string|nil normalized
+---@return table? refusal keyed refusal envelope when normalized is nil
 local function validatePassword(raw)
-    if type(raw) ~= 'string' then return nil, 'Password is required' end
+    if type(raw) ~= 'string' then return nil, fail('mail.passwordRequired', 'Password is required') end
     if #raw < mailCfg.MinPasswordLength then
-        return nil, ('Password must be at least %d characters'):format(mailCfg.MinPasswordLength)
+        return nil, fail('mail.passwordMustLeastCharacters', 'Password must be at least {n} characters',
+            { n = mailCfg.MinPasswordLength })
     end
     if #raw > mailCfg.MaxPasswordLength then
-        return nil, ('Password must be %d characters or fewer'):format(mailCfg.MaxPasswordLength)
+        return nil, fail('mail.passwordMustCharactersFewer', 'Password must be {n} characters or fewer',
+            { n = mailCfg.MaxPasswordLength })
     end
     return raw, nil
 end
 
 ---Validates display-name length against the configs/mail.lua bounds; the name is trimmed.
 ---@param raw any
----@return string|nil normalized, string? message
+---@return string|nil normalized
+---@return table? refusal keyed refusal envelope when normalized is nil
 local function validateDisplayName(raw)
     local trimmed = trim(raw)
     if #trimmed < mailCfg.MinNameLength then
-        return nil, ('Name must be at least %d character%s'):format(
-            mailCfg.MinNameLength,
-            mailCfg.MinNameLength == 1 and '' or 's'
-        )
+        return nil, fail('mail.nameMustLeastCharacters', 'Name must be at least {n} character{s}', {
+            n = mailCfg.MinNameLength,
+            s = mailCfg.MinNameLength == 1 and '' or 's',
+        })
     end
     if #trimmed > mailCfg.MaxNameLength then
-        return nil, ('Name must be %d characters or fewer'):format(mailCfg.MaxNameLength)
+        return nil, fail('mail.nameMustCharactersFewer', 'Name must be {n} characters or fewer',
+            { n = mailCfg.MaxNameLength })
     end
     return trimmed, nil
 end
@@ -291,7 +299,7 @@ end
 ---@param source number
 ---@return table
 function actions.list(source)
-    local me = whois(source); if not me then return fail('Player not found') end
+    local me = whois(source); if not me then return fail('mail.playerNotFound', 'Player not found') end
     local accounts = store.listAccountsForCitizen(me.cid)
 
     local outAccounts = {}
@@ -336,14 +344,14 @@ end
 ---@return table
 function actions.signUp(source, payload)
     payload = payload or {}
-    local me = whois(source); if not me then return fail('Player not found') end
+    local me = whois(source); if not me then return fail('mail.playerNotFound', 'Player not found') end
 
-    local email, ee = validateEmail(payload.email); if not email then return fail(ee) end
-    local password, pe = validatePassword(payload.password); if not password then return fail(pe) end
-    local displayName, ne = validateDisplayName(payload.displayName); if not displayName then return fail(ne) end
+    local email, ee = validateEmail(payload.email); if not email then return ee end
+    local password, pe = validatePassword(payload.password); if not password then return pe end
+    local displayName, ne = validateDisplayName(payload.displayName); if not displayName then return ne end
 
     if not util.cooldown(me.cid, 'mail:signUp', SIGNUP_GAP_MS) then
-        return fail('Please wait before creating another account')
+        return fail('mail.pleaseWaitBeforeCreatingAnother', 'Please wait before creating another account')
     end
     -- The same cap every other app gets, from configs/accounts.lua, but counted off Mail's own
     -- created_by_cid: it predates the accounts engine, so it is accurate for mailboxes made
@@ -351,25 +359,25 @@ function actions.signUp(source, payload)
     -- refusal that call discards - which is how a 4th mailbox used to get written with no
     -- engine account behind it, unrecoverable and missing from the Passwords app.
     local capped = acctActions.accountCapMessage('mail', store.countAccountsCreatedBy(me.cid))
-    if capped then return fail(capped) end
+    if capped then return capped end
 
     local phone = (tostring(payload.phone or '')):gsub('%D', '')
     if phone ~= '' and (#phone < 7 or #phone > 15) then
-        return fail('That phone number looks invalid')
+        return fail('mail.phoneNumberLooksInvalid', 'That phone number looks invalid')
     end
     -- The number is deliberately NOT unique: one person runs several mailboxes off one phone.
     -- Recovery stays possible because a reset is identified by the address, not by the number.
     if store.getAccount(email) then
-        return fail('That email is already registered')
+        return fail('mail.emailAlreadyRegistered', 'That email is already registered')
     end
 
     local sessions = store.listAccountsForCitizen(me.cid)
     if #sessions >= mailCfg.MaxAccountsPerPlayer then
-        return fail(('You can have at most %d accounts signed in'):format(mailCfg.MaxAccountsPerPlayer))
+        return fail('mail.mostAccountsSignedIn', 'You can have at most {n} accounts signed in', { n = mailCfg.MaxAccountsPerPlayer })
     end
 
     if not store.insertAccount(email, store.hashPassword(password), displayName, me.cid) then
-        return fail('Failed to create account')
+        return fail('mail.failedCreateAccount', 'Failed to create account')
     end
     store.addSession(email, me.cid)
 
@@ -386,7 +394,7 @@ function actions.signUp(source, payload)
     end
 
     local acc = store.getAccount(email)
-    if not acc then return fail('Account vanished after creation') end
+    if not acc then return fail('mail.accountVanishedAfterCreation', 'Account vanished after creation') end
     return ok({ account = serializeAccount(acc) })
 end
 
@@ -397,14 +405,14 @@ end
 ---@return table
 function actions.signIn(source, payload)
     payload = payload or {}
-    local me = whois(source); if not me then return fail('Player not found') end
+    local me = whois(source); if not me then return fail('mail.playerNotFound', 'Player not found') end
 
-    local email, ee = validateEmail(payload.email); if not email then return fail(ee) end
+    local email, ee = validateEmail(payload.email); if not email then return ee end
     if type(payload.password) ~= 'string' or payload.password == '' then
-        return fail('Password is required')
+        return fail('mail.passwordRequired', 'Password is required')
     end
     if #payload.password > MAX_SIGNIN_PASSWORD_LEN then
-        return fail('Email or password is incorrect')
+        return fail('mail.emailPasswordIncorrect', 'Email or password is incorrect')
     end
 
     local acc = store.getAccount(email)
@@ -415,7 +423,7 @@ function actions.signIn(source, payload)
         if not valid then valid = acc.password_hash == store.hashPassword(payload.password) end
     end
     if not valid then
-        return fail('Email or password is incorrect')
+        return fail('mail.emailPasswordIncorrect', 'Email or password is incorrect')
     end
 
     local sessions = store.listAccountsForCitizen(me.cid)
@@ -425,7 +433,7 @@ function actions.signIn(source, payload)
         end
     end
     if #sessions >= mailCfg.MaxAccountsPerPlayer then
-        return fail(('You can have at most %d accounts signed in'):format(mailCfg.MaxAccountsPerPlayer))
+        return fail('mail.mostAccountsSignedIn', 'You can have at most {n} accounts signed in', { n = mailCfg.MaxAccountsPerPlayer })
     end
 
     store.addSession(email, me.cid)
@@ -439,10 +447,10 @@ end
 ---@return table
 function actions.signOut(source, payload)
     payload = payload or {}
-    local me = whois(source); if not me then return fail('Player not found') end
+    local me = whois(source); if not me then return fail('mail.playerNotFound', 'Player not found') end
 
     local email = trim(payload.email):lower()
-    if email == '' then return fail('Email is required') end
+    if email == '' then return fail('mail.emailRequired', 'Email is required') end
 
     store.removeSession(email, me.cid)
     return ok({ email = email })
@@ -455,23 +463,23 @@ end
 ---@return table
 function actions.send(source, payload)
     payload = payload or {}
-    local me = whois(source); if not me then return fail('Player not found') end
+    local me = whois(source); if not me then return fail('mail.playerNotFound', 'Player not found') end
 
-    if not util.cooldown(me.cid, 'mail:send', SEND_GAP_MS) then return fail('Slow down') end
+    if not util.cooldown(me.cid, 'mail:send', SEND_GAP_MS) then return fail('mail.slowDown', 'Slow down') end
 
     local fromEmail = trim(payload.fromEmail):lower()
-    if fromEmail == '' then return fail('Sender account is required') end
+    if fromEmail == '' then return fail('mail.senderAccountRequired', 'Sender account is required') end
 
     local sender = store.getAccount(fromEmail)
-    if not sender then return fail('Sender account not found') end
+    if not sender then return fail('mail.senderAccountNotFound', 'Sender account not found') end
 
     if not lib.table.contains(sender.logged_in_citizens, me.cid) then
-        return fail('You are not signed into that account')
+        return fail('mail.notSignedIntoAccount', 'You are not signed into that account')
     end
 
     local toRaw = payload.to or {}
-    if type(toRaw) ~= 'table' or #toRaw == 0 then return fail('At least one recipient is required') end
-    if #toRaw > MAX_RECIPIENTS then return fail('Too many recipients') end
+    if type(toRaw) ~= 'table' or #toRaw == 0 then return fail('mail.leastOneRecipientRequired', 'At least one recipient is required') end
+    if #toRaw > MAX_RECIPIENTS then return fail('mail.tooManyRecipients', 'Too many recipients') end
 
     local recipients = {}
     local seen = {}
@@ -482,7 +490,7 @@ function actions.send(source, payload)
             seen[addr] = true
         end
     end
-    if #recipients == 0 then return fail('No valid recipient addresses') end
+    if #recipients == 0 then return fail('mail.noValidRecipientAddresses', 'No valid recipient addresses') end
 
     local subject = trim(payload.subject)
     if #subject > MAX_SUBJECT_LEN then subject = subject:sub(1, MAX_SUBJECT_LEN) end
@@ -556,11 +564,11 @@ end
 ---@param mail { to: string|string[], subject?: string, body?: string, from?: { name?: string, email?: string } }
 ---@return table envelope; data.delivered counts recipient accounts that existed
 function actions.systemSend(mail)
-    if type(mail) ~= 'table' then return fail('Mail payload must be a table') end
+    if type(mail) ~= 'table' then return fail('mail.mailPayloadMustTable', 'Mail payload must be a table') end
 
     local toRaw = type(mail.to) == 'string' and { mail.to } or mail.to
-    if type(toRaw) ~= 'table' or #toRaw == 0 then return fail('At least one recipient is required') end
-    if #toRaw > MAX_RECIPIENTS then return fail('Too many recipients') end
+    if type(toRaw) ~= 'table' or #toRaw == 0 then return fail('mail.leastOneRecipientRequired', 'At least one recipient is required') end
+    if #toRaw > MAX_RECIPIENTS then return fail('mail.tooManyRecipients', 'Too many recipients') end
 
     local recipients = {}
     local seen = {}
@@ -571,7 +579,7 @@ function actions.systemSend(mail)
             seen[addr] = true
         end
     end
-    if #recipients == 0 then return fail('No valid recipient addresses') end
+    if #recipients == 0 then return fail('mail.noValidRecipientAddresses', 'No valid recipient addresses') end
 
     local from = type(mail.from) == 'table' and mail.from or {}
     local fromName = trim(from.name)
@@ -657,25 +665,25 @@ end
 ---@return table
 function actions.saveDraft(source, payload)
     payload = payload or {}
-    local me = whois(source); if not me then return fail('Player not found') end
+    local me = whois(source); if not me then return fail('mail.playerNotFound', 'Player not found') end
 
-    if not util.cooldown(me.cid, 'mail:saveDraft', DRAFT_GAP_MS) then return fail('Slow down') end
+    if not util.cooldown(me.cid, 'mail:saveDraft', DRAFT_GAP_MS) then return fail('mail.slowDown', 'Slow down') end
 
     local fromEmail = trim(payload.fromEmail):lower()
-    if fromEmail == '' then return fail('Sender account is required') end
+    if fromEmail == '' then return fail('mail.senderAccountRequired', 'Sender account is required') end
 
     local sender = store.getAccount(fromEmail)
-    if not sender then return fail('Sender account not found') end
+    if not sender then return fail('mail.senderAccountNotFound', 'Sender account not found') end
 
     if not lib.table.contains(sender.logged_in_citizens, me.cid) then
-        return fail('You are not signed into that account')
+        return fail('mail.notSignedIntoAccount', 'You are not signed into that account')
     end
 
     local recipients = {}
     local seen = {}
     local toRaw = payload.to
     if type(toRaw) == 'table' then
-        if #toRaw > MAX_RECIPIENTS then return fail('Too many recipients') end
+        if #toRaw > MAX_RECIPIENTS then return fail('mail.tooManyRecipients', 'Too many recipients') end
         for i = 1, #toRaw do
             local addr = trim(toRaw[i]):lower()
             if addr ~= '' and #addr <= mailCfg.MaxEmailLength and not seen[addr] and looksLikeEmail(addr) then
@@ -713,16 +721,16 @@ end
 ---@param accountEmail string
 ---@return string|nil cid, table|nil err
 local function requireOwnership(source, accountEmail)
-    local me = whois(source); if not me then return nil, fail('Player not found') end
-    if type(accountEmail) ~= 'string' or accountEmail == '' then return nil, fail('Account email is required') end
+    local me = whois(source); if not me then return nil, fail('mail.playerNotFound', 'Player not found') end
+    if type(accountEmail) ~= 'string' or accountEmail == '' then return nil, fail('mail.accountEmailRequired', 'Account email is required') end
     -- Gated here rather than per action: getAccount below is the whole-blob decode every one of
     -- these mutators pays twice, and markRead/toggleFlag/move are reachable at unlimited rate.
     if not util.rateLimit(me.cid, 'mail:mutate', MUTATE_WINDOW_MS, MUTATE_PER_WINDOW) then
-        return nil, fail('Slow down')
+        return nil, fail('mail.slowDown', 'Slow down')
     end
-    local acc = store.getAccount(accountEmail); if not acc then return nil, fail('Account not found') end
+    local acc = store.getAccount(accountEmail); if not acc then return nil, fail('mail.accountNotFound', 'Account not found') end
     if lib.table.contains(acc.logged_in_citizens, me.cid) then return me.cid, nil end
-    return nil, fail('You are not signed into that account')
+    return nil, fail('mail.notSignedIntoAccount', 'You are not signed into that account')
 end
 
 ---Marks a message as read. Ownership-gated; a bogus message id is a no-op.
@@ -799,7 +807,7 @@ function actions.move(source, payload)
     local _, err = requireOwnership(source, payload.accountEmail); if err then return err end
     local folder = payload.folder
     if folder ~= 'inbox' and folder ~= 'drafts' and folder ~= 'sent' and folder ~= 'spam' and folder ~= 'bin' then
-        return { success = false, message = 'Bad folder' }
+        return { success = false, messageKey = 'mail.badFolder', message = 'Bad folder' }
     end
     store.mutateMessage(payload.accountEmail, payload.messageId or '', function(m)
         -- Returning nil would hard-delete; a same-folder move must be a no-op.
@@ -838,16 +846,16 @@ function actions.saveAttachment(source, payload)
     local cid, err = requireOwnership(source, payload.accountEmail); if err then return err end
 
     local acc = store.getAccount(payload.accountEmail)
-    if not acc then return fail('Account not found') end
+    if not acc then return fail('mail.accountNotFound', 'Account not found') end
     local msg
     for i = 1, #acc.messages do
         if acc.messages[i].id == payload.messageId then msg = acc.messages[i]; break end
     end
-    if not msg then return fail('Message not found') end
+    if not msg then return fail('mail.messageNotFound', 'Message not found') end
 
     -- Client indices are zero-based over the message's attachments array.
     local att = type(msg.attachments) == 'table' and msg.attachments[(tonumber(payload.index) or -1) + 1] or nil
-    if type(att) ~= 'table' then return fail('Attachment not found') end
+    if type(att) ~= 'table' then return fail('mail.attachmentNotFound', 'Attachment not found') end
 
     -- Each branch is idempotent: an identical item already in the target app short-circuits to
     -- success, so re-saving after an app reopen cannot pile up duplicates.
@@ -858,7 +866,7 @@ function actions.saveAttachment(source, payload)
         -- that guards photos:saveUrl does not apply here.
         local photosActions = require 'server.photos.actions'
         local res = photosActions.saveFromUrl(source, att.url)
-        if not (res and res.success) then return fail('Could not save to Photos') end
+        if not (res and res.success) then return fail('mail.couldNotSavePhotos', 'Could not save to Photos') end
         if res.data and res.data.photo then
             TriggerClientEvent('sd-phone:client:photos:added', source, res.data.photo)
         end
@@ -869,7 +877,7 @@ function actions.saveAttachment(source, payload)
         if voiceStore.hasUrl(cid, att.url) then return ok() end
         local voiceActions = require 'server.voicememos.actions'
         if not voiceActions.deliverShare(source, { name = att.name, url = att.url, duration = att.duration }) then
-            return fail('Could not save to Voice Memos')
+            return fail('mail.couldNotSaveVoiceMemos', 'Could not save to Voice Memos')
         end
         return ok()
     end
@@ -879,7 +887,7 @@ function actions.saveAttachment(source, payload)
         if notesStore.hasBody(cid, body) then return ok() end
         local notesActions = require 'server.notes.actions'
         if not notesActions.deliverShare(source, { body = body, sketches = {}, images = {} }) then
-            return fail('Could not save to Notes')
+            return fail('mail.couldNotSaveNotes', 'Could not save to Notes')
         end
         return ok()
     end
@@ -898,11 +906,11 @@ function actions.saveAttachment(source, payload)
             size = att.size, source = att.source, signable = att.signable,
             signatures = att.signatures, fromName = msg.from and msg.from.name or nil, quiet = true,
         }) then
-            return fail('Could not save to Files')
+            return fail('mail.couldNotSaveFiles', 'Could not save to Files')
         end
         return ok()
     end
-    return fail('This attachment cannot be saved')
+    return fail('mail.attachmentCannotSaved', 'This attachment cannot be saved')
 end
 
 ---Per-attachment saved flags for a stored mail, checked against the caller's own Photos /
@@ -916,12 +924,12 @@ function actions.attachmentSaveStates(source, payload)
     local cid, err = requireOwnership(source, payload.accountEmail); if err then return err end
 
     local acc = store.getAccount(payload.accountEmail)
-    if not acc then return fail('Account not found') end
+    if not acc then return fail('mail.accountNotFound', 'Account not found') end
     local msg
     for i = 1, #acc.messages do
         if acc.messages[i].id == payload.messageId then msg = acc.messages[i]; break end
     end
-    if not msg then return fail('Message not found') end
+    if not msg then return fail('mail.messageNotFound', 'Message not found') end
 
     local atts = type(msg.attachments) == 'table' and msg.attachments or {}
     local saved = {}
@@ -978,7 +986,7 @@ end
 ---@param source number
 ---@return table envelope
 function actions.savedEmails(source)
-    local who = whois(source); if not who then return fail('No player') end
+    local who = whois(source); if not who then return fail('mail.noPlayer', 'No player') end
     return ok(savedEmailState(who.cid))
 end
 
@@ -987,14 +995,14 @@ end
 ---@param payload { email?: string }|nil
 ---@return table envelope
 function actions.saveEmail(source, payload)
-    local who = whois(source); if not who then return fail('No player') end
+    local who = whois(source); if not who then return fail('mail.noPlayer', 'No player') end
     local email = type(payload) == 'table' and trim(payload.email) or nil
     email = email and email:lower() or nil
     if not email or #email == 0 or #email > 128 or not looksLikeEmail(email) then
-        return fail('Invalid email address')
+        return fail('mail.invalidEmailAddress', 'Invalid email address')
     end
     if not store.addSavedEmail(who.cid, email, mailCfg.MaxSavedEmails) then
-        return fail('Saved email limit reached')
+        return fail('mail.savedEmailLimitReached', 'Saved email limit reached')
     end
     return ok(savedEmailState(who.cid))
 end
@@ -1005,11 +1013,11 @@ end
 ---@param payload { email?: string }|nil
 ---@return table envelope
 function actions.declineEmail(source, payload)
-    local who = whois(source); if not who then return fail('No player') end
+    local who = whois(source); if not who then return fail('mail.noPlayer', 'No player') end
     local email = type(payload) == 'table' and trim(payload.email) or nil
     email = email and email:lower() or nil
     if not email or #email == 0 or #email > 128 or not looksLikeEmail(email) then
-        return fail('Invalid email address')
+        return fail('mail.invalidEmailAddress', 'Invalid email address')
     end
     store.declineSavedEmail(who.cid, email)
     return ok(savedEmailState(who.cid))
@@ -1020,10 +1028,10 @@ end
 ---@param payload { email?: string }|nil
 ---@return table envelope
 function actions.removeSavedEmail(source, payload)
-    local who = whois(source); if not who then return fail('No player') end
+    local who = whois(source); if not who then return fail('mail.noPlayer', 'No player') end
     local email = type(payload) == 'table' and trim(payload.email) or nil
     email = email and email:lower() or nil
-    if not email or #email == 0 then return fail('Invalid email address') end
+    if not email or #email == 0 then return fail('mail.invalidEmailAddress', 'Invalid email address') end
     store.removeSavedEmail(who.cid, email)
     return ok(savedEmailState(who.cid))
 end

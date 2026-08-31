@@ -1353,10 +1353,11 @@ end
 ---anything the caller passed, so a restore can only ever rebuild the row it copied.
 ---@param app string adapter key
 ---@param row table the snapshot taken by store.snapshotRow
----@return boolean ok, string|nil err
+---@return boolean ok
+---@return table? refusal keyed refusal envelope when ok is false
 function store.restoreRow(app, row)
     local source = binSource(app)
-    if not source then return false, 'That app cannot be restored into' end
+    if not source then return false, util.fail('admin.appCannotRestoredInto', 'That app cannot be restored into') end
 
     local stamps = datetimeColumns(source.table)
     local columns, marks, values = {}, {}, {}
@@ -1364,7 +1365,7 @@ function store.restoreRow(app, row)
         -- Column names come from a snapshot this server wrote, never from a payload, but they are
         -- concatenated into SQL rather than bound, so anything unexpected is refused outright.
         if type(column) ~= 'string' or not column:match('^[%w_]+$') then
-            return false, 'Unreadable snapshot'
+            return false, util.fail('admin.unreadableSnapshot', 'Unreadable snapshot')
         end
         -- A DATETIME or TIMESTAMP column is read back as epoch milliseconds, and MariaDB refuses
         -- to take that number as a datetime. Without turning it back into a stamp, a restore into
@@ -1377,11 +1378,11 @@ function store.restoreRow(app, row)
         marks[#marks + 1]     = '?'
         values[#values + 1]   = value
     end
-    if #columns == 0 then return false, 'Empty snapshot' end
+    if #columns == 0 then return false, util.fail('admin.emptySnapshot', 'Empty snapshot') end
 
     local okInsert, err = pcall(MySQL.insert.await, ('INSERT INTO %s (%s) VALUES (%s)')
         :format(source.table, table.concat(columns, ', '), table.concat(marks, ', ')), values)
-    if not okInsert then return false, tostring(err) end
+    if not okInsert then return false, util.fail(tostring(err)) end
     return true, nil
 end
 

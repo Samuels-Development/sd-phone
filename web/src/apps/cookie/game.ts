@@ -66,7 +66,7 @@ const cpsAt    = (n: number) => (s: AchCtx) => s.cps >= n;
 const clickAt  = (n: number) => (s: AchCtx) => s.clickPower >= n;
 const ownAt    = (id: string, n: number) => (s: AchCtx) => (s.owned[id] ?? 0) >= n;
 
-export const ACHIEVEMENTS: Achievement[] = [
+export const getAchievements = (): Achievement[] => [
     { id: 'a100',  name: t('cookie.achA100Name', 'Crumbs'),        desc: t('cookie.achA100Desc', 'Bake 100 cookies'),   test: earnedAt(100) },
     { id: 'a1k',   name: t('cookie.achA1kName', 'Snack Time'),     desc: t('cookie.achA1kDesc', 'Bake 1K cookies'),     test: earnedAt(1_000) },
     { id: 'a10k',  name: t('cookie.achA10kName', 'Cookie Jar'),    desc: t('cookie.achA10kDesc', 'Bake 10K cookies'),   test: earnedAt(10_000) },

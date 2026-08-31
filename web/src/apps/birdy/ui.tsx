@@ -28,16 +28,19 @@ const BADGE_FILL: Record<string, string> = {
     grey: '#829aab',
 };
 
-const BADGE_LABEL: Record<string, string> = {
-    blue: t('squawk.verified', 'Verified'),
-    gold: t('squawk.verifiedBusiness', 'Verified business'),
-    grey: t('squawk.verifiedGovernment', 'Verified government account'),
-};
+function badgeLabel(type: string): string {
+    const labels: Record<string, string> = {
+        blue: t('squawk.verified', 'Verified'),
+        gold: t('squawk.verifiedBusiness', 'Verified business'),
+        grey: t('squawk.verifiedGovernment', 'Verified government account'),
+    };
+    return labels[type] ?? labels.blue;
+}
 
 export function VerifiedBadge({ size = 16, type = 'blue' }: { size?: number; type?: string }) {
     const fill = BADGE_FILL[type] ?? BADGE_FILL.blue;
     return (
-        <svg viewBox="0 0 24 24" width={size} height={size} aria-label={BADGE_LABEL[type] ?? BADGE_LABEL.blue} className="shrink-0">
+        <svg viewBox="0 0 24 24" width={size} height={size} aria-label={badgeLabel(type)} className="shrink-0">
             {type === 'gold'
                 ? <rect x="1" y="1" width="22" height="22" rx="7" fill={fill} />
                 : <circle cx="12" cy="12" r="11" fill={fill} />}

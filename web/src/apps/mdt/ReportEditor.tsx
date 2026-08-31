@@ -169,7 +169,7 @@ export function ReportEditor({ reportRef, onSaved, onDeleted, onClose }: {
         });
         setSaving(false);
         if (!next) {
-            setError(t('mdt.saveFailed', 'That could not be saved. Check every charge is on a listed suspect.'));
+            setError(t('mdt.saveFailedCharges', 'That could not be saved. Check every charge is on a listed suspect.'));
             return;
         }
         setDraft(null);
@@ -676,7 +676,7 @@ export function ReportLinker({ linked = [], title, onPick, onClose }: {
                             autoFocus
                             value={query}
                             onChange={setQuery}
-                            placeholder={t('mdt.searchReports', 'Title or reference')}
+                            placeholder={t('mdt.searchTitleOrRef', 'Title or reference')}
                             pillClassName="gap-2 rounded-[9px] bg-black/[0.05] px-2.5 py-[6px] dark:bg-white/[0.08]"
                             iconClassName="h-[15px] w-[15px] text-black/45 dark:text-white/45"
                             textClassName="text-[14px] font-medium text-black placeholder-black/40 dark:text-white dark:placeholder-white/40"

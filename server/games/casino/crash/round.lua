@@ -319,23 +319,23 @@ end
 ---@param payload table { amount, auto }
 ---@return table envelope
 function round.placeBet(src, payload)
-    local cid = shared.cidOf(src); if not cid then return util.fail('Player not found') end
-    if not util.cooldown(cid, 'games:crashBet', BET_COOLDOWN) then return util.fail('Slow down') end
-    if r.phase ~= 'betting' then return util.fail('Bets are closed') end
-    if r.bets[cid] then return util.fail('You already have a bet this round') end
+    local cid = shared.cidOf(src); if not cid then return util.fail('games.playerNotFound', 'Player not found') end
+    if not util.cooldown(cid, 'games:crashBet', BET_COOLDOWN) then return util.fail('games.slowDown', 'Slow down') end
+    if r.phase ~= 'betting' then return util.fail('games.betsClosed', 'Bets are closed') end
+    if r.bets[cid] then return util.fail('games.alreadyHaveBetRound', 'You already have a bet this round') end
 
     local amount = shared.wager(payload.amount, MIN_BET, MAX_BET)
-    if not amount then return util.fail('Enter a valid amount') end
+    if not amount then return util.fail('games.enterValidAmount', 'Enter a valid amount') end
 
     local auto
     if payload.auto ~= nil and payload.auto ~= false then
         local target = tonumber(payload.auto)
-        if not util.finite(target) then return util.fail('Enter a valid auto cash out') end
+        if not util.finite(target) then return util.fail('games.enterValidAutoCashOut', 'Enter a valid auto cash out') end
         target = math.floor(target)
         -- The ceiling itself is refused: the bust is clamped to MAX_X100, and an auto only pays
         -- when it is strictly under the bust, so a target of exactly MAX_X100 could never fire.
         if target < MIN_AUTO or target >= curve.MAX_X100 then
-            return util.fail('Enter a valid auto cash out')
+            return util.fail('games.enterValidAutoCashOut', 'Enter a valid auto cash out')
         end
         auto = target
     end
@@ -352,14 +352,14 @@ function round.placeBet(src, payload)
     local bal = chips.remove(cid, amount)
     if not bal then
         r.bets[cid] = nil
-        return util.fail('Not enough chips')
+        return util.fail('games.notEnoughChips', 'Not enough chips')
     end
     if r.phase ~= 'betting' or r.id ~= roundId then
         -- The window shut while the debit was in flight; the stake never joined a round, so it
         -- goes straight back rather than riding a round the player did not see open.
         r.bets[cid] = nil
         chips.add(cid, amount)
-        return util.fail('Bets are closed')
+        return util.fail('games.betsClosed', 'Bets are closed')
     end
 
     bet.stake = amount
@@ -376,16 +376,16 @@ end
 ---@param payload table { id }
 ---@return table envelope
 function round.cashout(src, payload)
-    local cid = shared.cidOf(src); if not cid then return util.fail('Player not found') end
-    if not util.cooldown(cid, 'games:crashCashout', CASH_COOLDOWN) then return util.fail('Slow down') end
-    if r.phase ~= 'running' then return util.fail('Round is over') end
-    if payload.id ~= r.id then return util.fail('Round is over') end
+    local cid = shared.cidOf(src); if not cid then return util.fail('games.playerNotFound', 'Player not found') end
+    if not util.cooldown(cid, 'games:crashCashout', CASH_COOLDOWN) then return util.fail('games.slowDown', 'Slow down') end
+    if r.phase ~= 'running' then return util.fail('games.roundOver', 'Round is over') end
+    if payload.id ~= r.id then return util.fail('games.roundOver', 'Round is over') end
 
     local bet = r.bets[cid]
-    if not bet or bet.settled or bet.stake <= 0 then return util.fail('No live bet') end
+    if not bet or bet.settled or bet.stake <= 0 then return util.fail('games.noLiveBet', 'No live bet') end
 
     local mx = curve.multAt(GetGameTimer() - r.startedAt)
-    if mx >= r.bustX100 then return util.fail('Round is over') end
+    if mx >= r.bustX100 then return util.fail('games.roundOver', 'Round is over') end
 
     bet.settled = true
     bet.mx      = mx

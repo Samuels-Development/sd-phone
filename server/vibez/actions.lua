@@ -48,9 +48,9 @@ local function throttle(src, key)
     local cid = player.getIdentifier(src)
     if not cid then return nil end
     local budget = WRITE_BUDGET[key]
-    if not util.cooldown(cid, 'vibez:' .. key, budget[1]) then return fail('Slow down') end
+    if not util.cooldown(cid, 'vibez:' .. key, budget[1]) then return fail('vibez.slowDown', 'Slow down') end
     if not util.rateLimit(cid, 'vibez:' .. key, BUDGET_WINDOW, budget[2]) then
-        return fail('Daily limit reached')
+        return fail('vibez.dailyLimitReached', 'Daily limit reached')
     end
     return nil
 end
@@ -284,7 +284,7 @@ end
 function actions.feed(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     ensureProfile(acc)
     local rows = payload.tab == 'following'
         and store.followingPosts(acc.username, 60)
@@ -300,7 +300,7 @@ end
 ---@return table result { posts, trends }
 function actions.discover(src)
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     ensureProfile(acc)
 
     local out = {}
@@ -328,9 +328,9 @@ end
 function actions.post(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     local row = store.getPost(acc.username, trim(payload.id))
-    if not row then return fail('Vibe not found') end
+    if not row then return fail('vibez.vibeNotFound', 'Vibe not found') end
     local comments = {}
     for _, c in ipairs(store.commentsFor(row.id, acc.username, 200)) do comments[#comments + 1] = serializeComment(c) end
     return ok({ post = serializePost(row), comments = comments })
@@ -344,13 +344,13 @@ end
 function actions.create(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     local muted = moderation.guard(player.getIdentifier(src), 'vibez'); if muted then return muted end
     local slow = throttle(src, 'create'); if slow then return slow end
     ensureProfile(acc)
 
     local video = sanitizeUrl(payload.video)
-    if not video then return fail('Pick a video first') end
+    if not video then return fail('vibez.pickVideoFirst', 'Pick a video first') end
     local thumb   = sanitizeUrl(payload.thumb)
     local caption = trim(payload.caption):sub(1, 300)
     local sound   = trim(payload.sound):sub(1, 120)
@@ -395,10 +395,10 @@ end
 function actions.deletePost(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     local row = store.getPostRow(trim(payload.id))
-    if not row then return fail('Vibe not found') end
-    if row.author ~= acc.username then return fail('Not your vibe') end
+    if not row then return fail('vibez.vibeNotFound', 'Vibe not found') end
+    if row.author ~= acc.username then return fail('vibez.notVibe', 'Not your vibe') end
     store.deletePost(row.id)
     broadcast('postRemoved', { postId = row.id })
     return ok()
@@ -412,10 +412,10 @@ end
 function actions.toggleLike(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     local slow = throttle(src, 'like'); if slow then return slow end
     local row = store.getPostRow(trim(payload.id))
-    if not row then return fail('Vibe not found') end
+    if not row then return fail('vibez.vibeNotFound', 'Vibe not found') end
 
     local nowLiked
     if store.isLiked(row.id, acc.username) then
@@ -439,9 +439,9 @@ end
 function actions.toggleSave(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     local row = store.getPostRow(trim(payload.id))
-    if not row then return fail('Vibe not found') end
+    if not row then return fail('vibez.vibeNotFound', 'Vibe not found') end
 
     local nowSaved
     if store.isSaved(row.id, acc.username) then
@@ -460,7 +460,7 @@ end
 function actions.addView(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     local id = trim(payload.id)
     if id ~= '' and store.getPostRow(id) then store.addView(id) end
     return ok()
@@ -473,9 +473,9 @@ end
 function actions.comments(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     local row = store.getPostRow(trim(payload.postId))
-    if not row then return fail('Vibe not found') end
+    if not row then return fail('vibez.vibeNotFound', 'Vibe not found') end
     local out = {}
     for _, c in ipairs(store.commentsFor(row.id, acc.username, 200)) do out[#out + 1] = serializeComment(c) end
     return ok({ comments = out })
@@ -489,12 +489,12 @@ end
 function actions.addComment(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     local muted = moderation.guard(player.getIdentifier(src), 'vibez'); if muted then return muted end
     local slow = throttle(src, 'comment'); if slow then return slow end
 
     local row = store.getPostRow(trim(payload.postId))
-    if not row then return fail('Vibe not found') end
+    if not row then return fail('vibez.vibeNotFound', 'Vibe not found') end
 
     local text = trim(payload.text):sub(1, 500)
 
@@ -502,7 +502,7 @@ function actions.addComment(src, payload)
     -- Only http(s) is stored: the URL is handed straight back to an <img> on every viewer's phone.
     local gifUrl = trim(payload.gifUrl):sub(1, 512)
     if gifUrl ~= '' and not gifUrl:match('^https?://') then gifUrl = '' end
-    if text == '' and gifUrl == '' then return fail('Empty comment') end
+    if text == '' and gifUrl == '' then return fail('vibez.emptyComment', 'Empty comment') end
 
     local id = store.newId()
     store.insertComment(id, row.id, acc.username, text, os.time(), gifUrl ~= '' and gifUrl or nil)
@@ -526,9 +526,9 @@ end
 function actions.toggleCommentLike(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     local row = store.getCommentRow(trim(payload.commentId))
-    if not row then return fail('Comment not found') end
+    if not row then return fail('vibez.commentNotFound', 'Comment not found') end
 
     local nowLiked
     if store.isCommentLiked(row.id, acc.username) then
@@ -570,12 +570,12 @@ end
 function actions.profile(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     ensureProfile(acc)
     local target = trim(payload.handle)
     if target == '' then target = acc.username else target = target:lower() end
     local profile = serializeProfile(acc, target)
-    if not profile then return fail('Profile not found') end
+    if not profile then return fail('vibez.profileNotFound', 'Profile not found') end
     return ok({ profile = profile })
 end
 
@@ -586,7 +586,7 @@ end
 function actions.profilePosts(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     local target = trim(payload.handle)
     if target == '' then target = acc.username else target = target:lower() end
     local out = {}
@@ -599,7 +599,7 @@ end
 ---@return table result { posts }
 function actions.likedPosts(src)
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     local out = {}
     for _, p in ipairs(store.likedPosts(acc.username, 60)) do out[#out + 1] = serializePost(p) end
     return ok({ posts = out })
@@ -610,7 +610,7 @@ end
 ---@return table result { posts }
 function actions.savedPosts(src)
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     local out = {}
     for _, p in ipairs(store.savedPosts(acc.username, 60)) do out[#out + 1] = serializePost(p) end
     return ok({ posts = out })
@@ -624,7 +624,7 @@ end
 function actions.updateProfile(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     local existing = ensureProfile(acc)
 
     local name = trim(payload.name):sub(1, 64)
@@ -648,11 +648,11 @@ end
 function actions.toggleFollow(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     local target = trim(payload.handle):lower()
-    if target == '' or target == acc.username then return fail('Bad target') end
+    if target == '' or target == acc.username then return fail('vibez.badTarget', 'Bad target') end
     local slow = throttle(src, 'follow'); if slow then return slow end
-    if not store.getProfile(target) then return fail('Account not found') end
+    if not store.getProfile(target) then return fail('vibez.accountNotFound', 'Account not found') end
 
     local following
     if store.isFollowing(acc.username, target) then
@@ -675,7 +675,7 @@ end
 function actions.followList(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     local target = trim(payload.handle)
     if target == '' then target = acc.username else target = target:lower() end
     local kind = payload.kind == 'following' and 'following' or 'followers'
@@ -698,7 +698,7 @@ end
 function actions.search(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     local query = trim(payload.query):sub(1, 64):lower()
     if query == '' then return ok({ users = {}, posts = {} }) end
     local out = {}
@@ -725,7 +725,7 @@ end
 ---@return table result { lives }
 function actions.lives(src)
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     return ok({ lives = live.activeForViewer(acc.username) })
 end
 
@@ -734,7 +734,7 @@ end
 ---@return table result { notifications }
 function actions.activity(src)
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
 
     local rows = store.notificationsFor(acc.username, 60)
     local postIds = {}
@@ -756,7 +756,7 @@ end
 ---@return table result { activity }
 function actions.counts(src)
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     return ok({ activity = store.unseenNotificationCount(acc.username) })
 end
 
@@ -767,7 +767,7 @@ end
 function actions.dismissNotification(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     local id = trim(payload.id)
     if id ~= '' then store.deleteNotification(id, acc.username) end
     return ok()
@@ -779,7 +779,7 @@ end
 ---@return table result
 function actions.deleteAccount(src)
     local acc = viewerAccount(src)
-    if not acc then return fail('Not signed in') end
+    if not acc then return fail('vibez.notSigned', 'Not signed in') end
     store.wipeUser(acc.username)
     -- The engine row owns the name and the per-app quota, so leaving it behind keeps the handle
     -- reserved and the cap spent against an account that no longer exists.

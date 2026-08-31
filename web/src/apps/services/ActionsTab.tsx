@@ -13,6 +13,7 @@ import {
     demote, deposit, fire, hire, promote, quitCompany, setDuty, setJobCalls, setJobMessages, withdraw,
     type Grade, type MyCompany, type ServiceResult,
 } from './servicesApi';
+import { failText } from '@/core/api';
 
 function nextGrade(grades: Grade[], current: number): Grade | null {
     return grades.filter(g => g.level > current).sort((a, b) => a.level - b.level)[0] ?? null;
@@ -44,7 +45,7 @@ export function ActionsTab({ myCompany, multijob = false, invoicesEnabled = fals
         const res = await p;
         setBusy(false);
         if (res.success) onChanged(res.data?.myCompany);
-        else setError(res.message ?? t('services.somethingWentWrong', 'Something went wrong'));
+        else setError(failText(res, t('services.somethingWentWrong', 'Something went wrong')));
     }
 
     async function sendOffer(input: string) {
@@ -55,7 +56,7 @@ export function ActionsTab({ myCompany, multijob = false, invoicesEnabled = fals
         const res = await hire(serverId, 0);
         setBusy(false);
         if (res.success) { onChanged(res.data?.myCompany); setNotice(t('services.jobOfferSent', 'Job offer sent. They can accept it in Services → Jobs.')); }
-        else setError(res.message ?? t('services.somethingWentWrong', 'Something went wrong'));
+        else setError(failText(res, t('services.somethingWentWrong', 'Something went wrong')));
     }
 
     async function toggle(field: 'duty' | 'jobCalls' | 'jobMessages', value: boolean) {
@@ -64,7 +65,7 @@ export function ActionsTab({ myCompany, multijob = false, invoicesEnabled = fals
         const setter = field === 'duty' ? setDuty : field === 'jobCalls' ? setJobCalls : setJobMessages;
         const res = await setter(value);
         if (res.success) onChanged(res.data?.myCompany);
-        else { onChanged({ ...myCompany, [field]: !value }); setError(res.message ?? t('services.somethingWentWrong', 'Something went wrong')); }
+        else { onChanged({ ...myCompany, [field]: !value }); setError(failText(res, t('services.somethingWentWrong', 'Something went wrong'))); }
     }
 
     if (!myCompany) {

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 
+import { t } from '@/i18n';
 import { customAccent, useCustomAppsStore } from '@/stores/customAppsStore';
 
 const S = 60;
@@ -440,7 +441,10 @@ function ClockIcon() {
 function CalendarIcon() {
     const now = new Date();
     const day = now.getDate();
-    const dayName = ['SUN','MON','TUE','WED','THU','FRI','SAT'][now.getDay()];
+    const dayName = [
+        t('time.sun', 'Sun'), t('time.mon', 'Mon'), t('time.tue', 'Tue'), t('time.wed', 'Wed'),
+        t('time.thu', 'Thu'), t('time.fri', 'Fri'), t('time.sat', 'Sat'),
+    ][now.getDay()].toUpperCase();
     return (
         <svg viewBox={`0 0 ${S} ${S}`} width={S} height={S}>
             <rect width={S} height={S} fill="white" />

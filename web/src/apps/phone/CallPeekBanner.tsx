@@ -19,7 +19,7 @@ export function CallPeekBanner({ name, number }: { name?: string; number: string
                     </span>
                     <div className="min-w-0 flex-1">
                         <div className="text-[16px] font-semibold leading-tight text-black/55 dark:text-white/55">
-                            {t('phone.incomingCall', 'Incoming call')}
+                            {t('phone.incomingCallStatus', 'Incoming call')}
                         </div>
                         <p className="mt-1 truncate text-[22px] font-semibold leading-tight text-black dark:text-white">{who}</p>
                     </div>

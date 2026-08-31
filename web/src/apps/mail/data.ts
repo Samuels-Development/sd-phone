@@ -1,7 +1,7 @@
 
 import { fetchNui, isFiveM } from '@/core/nui';
 import { t } from '@/i18n';
-import { apiCall, apiData, type Envelope } from '@/core/api';
+import { apiCall, apiData, failText, type Envelope } from '@/core/api';
 import { readJson, writeJson } from '@/lib/storage';
 import { format12h, formatListDate } from '@/lib/time';
 import { newId } from '@/lib/format';
@@ -253,7 +253,7 @@ export async function signUp(input: { email: string; password: string; displayNa
     }
     const res = await apiCall<{ account: MailAccount }>('sd-phone:mail:signUp', input);
     if (res.success && res.data) return res.data.account;
-    return res.message ?? t('mail.errCreateAccount', 'Could not create account');
+    return failText(res, t('mail.errCreateAccount', 'Could not create account'));
 }
 
 export async function signIn(input: { email: string; password: string }): Promise<MailAccount | string> {
@@ -265,7 +265,7 @@ export async function signIn(input: { email: string; password: string }): Promis
     }
     const res = await apiCall<{ account: MailAccount }>('sd-phone:mail:signIn', input);
     if (res.success && res.data) return res.data.account;
-    return res.message ?? t('mail.errSignIn', 'Could not sign in');
+    return failText(res, t('mail.errSignIn', 'Could not sign in'));
 }
 
 export async function signOut(email: string): Promise<void> {
@@ -362,7 +362,7 @@ export async function sendMail(input: {
     }
     const res = await apiCall<{ sent: MailMessage }>('sd-phone:mail:send', input);
     if (res.success && res.data) return res.data.sent;
-    return res.message ?? 'Could not send mail';
+    return failText(res, 'Could not send mail');
 }
 
 export async function saveDraft(input: {
@@ -390,7 +390,7 @@ export async function saveDraft(input: {
     }
     const res = await apiCall<{ draft: MailMessage }>('sd-phone:mail:saveDraft', input);
     if (res.success && res.data) return res.data.draft;
-    return res.message ?? 'Could not save draft';
+    return failText(res, 'Could not save draft');
 }
 
 export async function markRead(accountEmail: string, messageId: string): Promise<void> {

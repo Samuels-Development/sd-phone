@@ -1,5 +1,5 @@
 import { fetchNui, isFiveM } from '@/core/nui';
-import { apiCall, apiData as call } from '@/core/api';
+import { apiCall, apiData as call, failText } from '@/core/api';
 import {
     SEED_BOARD, SEED_CONFIG, SEED_GALLERY, SEED_STATE,
     type LeaderboardEntry, type StreakConfig, type StreakMilestone, type StreakPost, type StreakState,
@@ -38,7 +38,7 @@ export async function streaksPost(p: { imageUrl: string; caption?: string }): Pr
         return { ok: true, state: { ...SEED_STATE, current: post.dayStreak, postedToday: true, todayPost: post, resetInSeconds: 29640 }, post, reward: null };
     }
     const res = await apiCall<Omit<PostResult, 'ok'>>('sd-phone:streaks:post', p);
-    if (!res.success) return { ok: false, message: res.message ?? 'Could not post' };
+    if (!res.success) return { ok: false, message: failText(res, 'Could not post')};
     return { ok: true, ...(res.data ?? {}) };
 }
 

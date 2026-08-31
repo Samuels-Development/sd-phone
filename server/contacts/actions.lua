@@ -44,7 +44,7 @@ local MAX_BLOCKED = 300
 ---digits, a nameless contact falls back to the typed number, lengths capped.
 ---@param payload any client-supplied contact fields
 ---@return { name: string, phone: string, email: string|nil, address: string|nil, avatar: string|nil }|nil fields
----@return string? err refusal message when fields is nil
+---@return table? refusal keyed refusal envelope when fields is nil
 local function validate(payload)
     if type(payload) ~= 'table' then payload = {} end
     local name    = trim(payload.name)
@@ -56,20 +56,24 @@ local function validate(payload)
     if #avatar > 512 then avatar = avatar:sub(1, 512) end
 
     if name == '' and phone == '' then
-        return nil, 'A name or number is required'
+        return nil, fail('contacts.nameNumberRequired', 'A name or number is required')
     end
     if name == '' then name = typed end
     if #name > cfg.MaxNameLength then
-        return nil, ('Name must be %d characters or fewer'):format(cfg.MaxNameLength)
+        return nil, fail('contacts.nameMustCharactersFewer', 'Name must be {n} characters or fewer',
+            { n = cfg.MaxNameLength })
     end
     if #phone > cfg.MaxPhoneLength then
-        return nil, ('Number must be %d characters or fewer'):format(cfg.MaxPhoneLength)
+        return nil, fail('contacts.numberMustCharactersFewer', 'Number must be {n} characters or fewer',
+            { n = cfg.MaxPhoneLength })
     end
     if #email > cfg.MaxEmailLength then
-        return nil, ('Email must be %d characters or fewer'):format(cfg.MaxEmailLength)
+        return nil, fail('contacts.emailMustCharactersFewer', 'Email must be {n} characters or fewer',
+            { n = cfg.MaxEmailLength })
     end
     if #address > cfg.MaxAddressLength then
-        return nil, ('Address must be %d characters or fewer'):format(cfg.MaxAddressLength)
+        return nil, fail('contacts.addressMustCharactersFewer', 'Address must be {n} characters or fewer',
+            { n = cfg.MaxAddressLength })
     end
 
     return {
@@ -122,7 +126,7 @@ end
 ---@return table
 function actions.list(source)
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('contacts.playerNotFound', 'Player not found') end
 
     local contactRows = store.listContacts(cid)
     local contacts = {}
@@ -148,7 +152,7 @@ end
 ---@return table
 function actions.saveCard(source, payload)
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('contacts.playerNotFound', 'Player not found') end
     settings.setCard(cid, type(payload) == 'table' and payload or {})
     return ok(settings.getCard(cid))
 end
@@ -160,31 +164,31 @@ end
 ---@return table
 function actions.add(source, payload)
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('contacts.playerNotFound', 'Player not found') end
 
-    local fields, err = validate(payload)
-    if not fields then return fail(err) end
+    local fields, refusal = validate(payload)
+    if not fields then return refusal end
 
     local newDigits = (tostring(fields.phone):gsub('%D', ''))
     if newDigits == '' then
-        return fail('Enter a phone number')
+        return fail('contacts.enterPhoneNumber', 'Enter a phone number')
     end
     if not settings.getCitizenByNumber(newDigits) then
-        return fail('That number isn\'t in service')
+        return fail('contacts.numberIsnTService', 'That number isn\'t in service')
     end
 
     local ownNumber = settings.getPhoneNumber(cid)
     if ownNumber and (tostring(ownNumber):gsub('%D', '')) == newDigits then
-        return fail('You can\'t add your own number')
+        return fail('contacts.canTAddOwnNumber', 'You can\'t add your own number')
     end
     for _, row in ipairs(store.listContacts(cid)) do
         if (tostring(row.phone):gsub('%D', '')) == newDigits then
-            return fail('You already have a contact with this number')
+            return fail('contacts.alreadyHaveContactWithNumber', 'You already have a contact with this number')
         end
     end
 
     if store.countContacts(cid) >= cfg.MaxContactsPerPlayer then
-        return fail(('You can store at most %d contacts'):format(cfg.MaxContactsPerPlayer))
+        return fail('contacts.storeAtMostContacts', 'You can store at most {n} contacts', { n = cfg.MaxContactsPerPlayer })
     end
 
     local id = store.newId()
@@ -197,7 +201,7 @@ function actions.add(source, payload)
         color   = colorFor(fields.name),
     }
     if not store.insertContact(id, cid, record) then
-        return fail('Failed to save contact')
+        return fail('contacts.failedSaveContact', 'Failed to save contact')
     end
 
     -- First-party hook: one server-local event per saved contact; the payload carries a citizenid.
@@ -216,13 +220,13 @@ end
 ---@return table
 function actions.requestShare(source, target, payload)
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('contacts.playerNotFound', 'Player not found') end
 
-    local fields, err = validate(payload)
-    if not fields then return fail(err) end
+    local fields, refusal = validate(payload)
+    if not fields then return refusal end
 
-    local okSent, msg = share.request(source, target, 'contact', fields)
-    if not okSent then return fail(msg or 'Could not send request') end
+    local okSent, refusal = share.request(source, target, 'contact', fields)
+    if not okSent then return refusal or fail('contacts.couldNotSendRequest', 'Could not send request') end
     return ok()
 end
 
@@ -280,17 +284,17 @@ end
 function actions.update(source, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('contacts.playerNotFound', 'Player not found') end
 
     local id = type(payload.id) == 'string' and payload.id or ''
-    if id == '' then return fail('Contact id is required') end
-    if not store.getContact(id, cid) then return fail('Contact not found') end
+    if id == '' then return fail('contacts.contactIdRequired', 'Contact id is required') end
+    if not store.getContact(id, cid) then return fail('contacts.contactNotFound', 'Contact not found') end
 
-    local fields, err = validate(payload)
-    if not fields then return fail(err) end
+    local fields, refusal = validate(payload)
+    if not fields then return refusal end
 
     if not store.updateContact(id, cid, fields) then
-        return fail('Failed to update contact')
+        return fail('contacts.failedUpdateContact', 'Failed to update contact')
     end
 
     return ok(serializeContact(store.getContact(id, cid)))
@@ -304,11 +308,11 @@ end
 function actions.delete(source, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('contacts.playerNotFound', 'Player not found') end
 
     local id = type(payload.id) == 'string' and payload.id or ''
     local row = store.getContact(id, cid)
-    if not row or not store.deleteContact(id, cid) then return fail('Contact not found') end
+    if not row or not store.deleteContact(id, cid) then return fail('contacts.contactNotFound', 'Contact not found') end
 
     -- First-party hook: one server-local event per deleted contact; the payload carries a citizenid.
     TriggerEvent('sd-phone:server:contacts:removed', {
@@ -324,10 +328,10 @@ end
 ---@return table
 function actions.removeByNumber(source, number)
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('contacts.playerNotFound', 'Player not found') end
 
     local digits = (tostring(number or ''):gsub('%D', ''))
-    if digits == '' then return fail('A number is required') end
+    if digits == '' then return fail('contacts.numberRequired', 'A number is required') end
 
     local removed = 0
     for _, row in ipairs(store.listContacts(cid)) do
@@ -355,13 +359,13 @@ end
 function actions.favorite(source, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('contacts.playerNotFound', 'Player not found') end
 
     local id = type(payload.id) == 'string' and payload.id or ''
-    if not store.getContact(id, cid) then return fail('Contact not found') end
+    if not store.getContact(id, cid) then return fail('contacts.contactNotFound', 'Contact not found') end
 
     local fav = payload.favorite == true
-    if not store.setFavorite(id, cid, fav) then return fail('Failed to update favourite') end
+    if not store.setFavorite(id, cid, fav) then return fail('contacts.failedUpdateFavourite', 'Failed to update favourite') end
     return ok({ id = id, favorite = fav })
 end
 
@@ -373,14 +377,14 @@ end
 function actions.logCall(source, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('contacts.playerNotFound', 'Player not found') end
 
-    if not util.cooldown(cid, 'contacts:logCall', LOG_CALL_GAP_MS) then return fail('Slow down') end
+    if not util.cooldown(cid, 'contacts:logCall', LOG_CALL_GAP_MS) then return fail('contacts.slowDown', 'Slow down') end
 
     local number = trim(payload.number)
-    if number == '' then return fail('A number is required') end
+    if number == '' then return fail('contacts.numberRequired', 'A number is required') end
     if #number > cfg.MaxPhoneLength then
-        return fail(('Number must be %d characters or fewer'):format(cfg.MaxPhoneLength))
+        return fail('contacts.numberMustCharactersFewer', 'Number must be {n} characters or fewer', { n = cfg.MaxPhoneLength })
     end
 
     local direction = VALID_DIRECTIONS[payload.direction] and payload.direction or 'outgoing'
@@ -398,7 +402,7 @@ function actions.logCall(source, payload)
         duration  = duration,
         calledAt  = os.time(),
     }
-    if not store.insertCall(id, cid, call) then return fail('Failed to log call') end
+    if not store.insertCall(id, cid, call) then return fail('contacts.failedLogCall', 'Failed to log call') end
     store.pruneCalls(cid, cfg.MaxRecents)
 
     -- One indexed missed-call count, not the seven-store snapshot: a logged call can only move
@@ -422,10 +426,10 @@ end
 function actions.deleteRecent(source, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('contacts.playerNotFound', 'Player not found') end
 
     local id = type(payload.id) == 'string' and payload.id or ''
-    if not store.deleteCall(id, cid) then return fail('Call not found') end
+    if not store.deleteCall(id, cid) then return fail('contacts.callNotFound', 'Call not found') end
     return ok({ id = id })
 end
 
@@ -434,7 +438,7 @@ end
 ---@return table
 function actions.clearRecents(source)
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('contacts.playerNotFound', 'Player not found') end
 
     store.clearCalls(cid)
     return ok()
@@ -446,7 +450,7 @@ end
 ---@return table
 function actions.markCallsSeen(source)
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('contacts.playerNotFound', 'Player not found') end
 
     store.markMissedSeen(cid)
     badges.pushApp(source, 'phone')
@@ -461,10 +465,10 @@ end
 function actions.block(source, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
-    if not util.cooldown(cid, 'contacts:block', BLOCK_GAP_MS) then return fail('Slow down') end
+    if not cid then return fail('contacts.playerNotFound', 'Player not found') end
+    if not util.cooldown(cid, 'contacts:block', BLOCK_GAP_MS) then return fail('contacts.slowDown', 'Slow down') end
     if store.blockedCount(cid) >= MAX_BLOCKED then
-        return fail(('You can block at most %d numbers'):format(MAX_BLOCKED))
+        return fail('contacts.blockAtMostNumbers', 'You can block at most {n} numbers', { n = MAX_BLOCKED })
     end
     store.blockNumber(cid, payload.number)
     return ok({ blocked = true })
@@ -477,8 +481,8 @@ end
 function actions.unblock(source, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
-    if not util.cooldown(cid, 'contacts:block', BLOCK_GAP_MS) then return fail('Slow down') end
+    if not cid then return fail('contacts.playerNotFound', 'Player not found') end
+    if not util.cooldown(cid, 'contacts:block', BLOCK_GAP_MS) then return fail('contacts.slowDown', 'Slow down') end
     store.unblockNumber(cid, payload.number)
     return ok({ blocked = false })
 end
@@ -490,7 +494,7 @@ end
 ---@return table
 function actions.blockedList(source)
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('contacts.playerNotFound', 'Player not found') end
     return ok({ blocked = store.listBlocked(cid, MAX_BLOCKED) })
 end
 
@@ -502,7 +506,7 @@ end
 function actions.isBlocked(source, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(source)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('contacts.playerNotFound', 'Player not found') end
     return ok({ blocked = store.isBlocked(cid, payload.number) })
 end
 

@@ -130,7 +130,7 @@ export function WidgetGallery({
                                     onClick={() => { if (!onAdd(def.kind, size, align, theme)) setFull(def.kind); }}
                                     className="mt-3 rounded-full bg-ios-blue px-5 py-2 text-[15px] font-semibold text-white active:opacity-70"
                                 >
-                                    {t('widgets.add', 'Add Widget')}
+                                    {t('widgets.addWidget', 'Add Widget')}
                                 </button>
                                 {failed && (
                                     <span className="mt-2 text-[12px] text-[#ff9f0a]">

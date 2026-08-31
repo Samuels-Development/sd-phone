@@ -128,17 +128,17 @@ end)
 ---read from the row here rather than taken from the payload, so this cannot be used to post an
 ---arbitrary link into somebody else's phone.
 recordings.share = access.audited('cameras.view', function(_src, payload, me)
-    if not ENABLED then return util.fail('Recording is not available') end
+    if not ENABLED then return util.fail('mdt.recordingNotAvailable', 'Recording is not available') end
 
     local id = tonumber(payload.id)
     local targetCid = util.limitedString(payload.citizenid, 64)
     local toMdt   = payload.toMdt ~= false
     local toPhone = payload.toPhone == true
 
-    if not id then return util.fail('No such recording') end
-    if not targetCid then return util.fail('Pick somebody to send it to') end
-    if not toMdt and not toPhone then return util.fail('Pick where to send it') end
-    if targetCid == me.citizenid then return util.fail('That is already your recording') end
+    if not id then return util.fail('mdt.noSuchRecording', 'No such recording') end
+    if not targetCid then return util.fail('mdt.pickSomebodySend', 'Pick somebody to send it to') end
+    if not toMdt and not toPhone then return util.fail('mdt.pickWhereSend', 'Pick where to send it') end
+    if targetCid == me.citizenid then return util.fail('mdt.alreadyRecording', 'That is already your recording') end
 
     local row = MySQL.single.await([[
         SELECT camera_id, kind, officer_cid, officer_name, callsign, plate, model,
@@ -146,7 +146,7 @@ recordings.share = access.audited('cameras.view', function(_src, payload, me)
         FROM phone_mdt_bodycam_recs
         WHERE id = ? AND watcher_cid = ?
     ]], { math.floor(id), me.citizenid })
-    if not row then return util.fail('No such recording') end
+    if not row then return util.fail('mdt.noSuchRecording', 'No such recording') end
 
     local targetSrc = player.getSourceByIdentifier(targetCid)
     local sent = {}
@@ -169,13 +169,13 @@ recordings.share = access.audited('cameras.view', function(_src, payload, me)
 
         -- Addressed by citizenid rather than source, so footage sent to somebody who is offline is
         -- still waiting on their phone when they come back rather than being dropped on the floor.
+        local kindName = row.kind == 'dashcam' and 'dashcam' or 'bodycam'
+        local unitName = row.officer_name ~= '' and row.officer_name or 'a unit'
         notifications.notifyCid(targetCid, {
             app = 'mdt', appId = 'mdt', time = 'now',
-            title = 'MDT',
-            body  = ('%s sent you %s footage of %s'):format(
-                me.name,
-                row.kind == 'dashcam' and 'dashcam' or 'bodycam',
-                row.officer_name ~= '' and row.officer_name or 'a unit'),
+            titleKey = 'mdt.mdtTitle', title = 'MDT',
+            bodyKey = 'mdt.sentYouFootage', body = ('%s sent you %s footage of %s'):format(me.name, kindName, unitName),
+            bodyVars = { name = me.name, kind = kindName, unit = unitName },
         })
     end
 
@@ -193,8 +193,9 @@ recordings.share = access.audited('cameras.view', function(_src, payload, me)
 
         notifications.notifyCid(targetCid, {
             app = 'photos', appId = 'photos', time = 'now',
-            title = 'Photos',
-            body  = ('%s shared a video with you'):format(me.name),
+            titleKey = 'photos.photosTitle', title = 'Photos',
+            bodyKey = 'mdt.sharedVideo', body = ('%s shared a video with you'):format(me.name),
+            bodyVars = { name = me.name },
         })
     end
 
@@ -208,16 +209,16 @@ end)
 ---Deletes one of the caller's own recordings. Scoped to the terminal that took it: footage is
 ---evidence, and one dispatcher clearing another's is not a thing this offers.
 recordings.delete = access.audited('cameras.view', function(_src, payload, me)
-    if not ENABLED then return util.fail('Recording is not available') end
+    if not ENABLED then return util.fail('mdt.recordingNotAvailable', 'Recording is not available') end
 
     local id = tonumber(payload.id)
-    if not id then return util.fail('No such recording') end
+    if not id then return util.fail('mdt.noSuchRecording', 'No such recording') end
 
     local affected = MySQL.update.await(
         'DELETE FROM phone_mdt_bodycam_recs WHERE id = ? AND watcher_cid = ?',
         { math.floor(id), me.citizenid }
     )
-    if not affected or affected < 1 then return util.fail('No such recording') end
+    if not affected or affected < 1 then return util.fail('mdt.noSuchRecording', 'No such recording') end
 
     return util.ok({ id = math.floor(id) }), {
         entityType = 'camera',

@@ -436,7 +436,7 @@ export function CourtCase({ caseRef, onSaved, onClose, onChanged }: {
 
                     <div className="mt-5">
                         <MdtEvidence
-                            label={t('mdt.evidence', 'Exhibits')}
+                            label={t('mdt.courtExhibits', 'Exhibits')}
                             items={draft.evidence}
                             onChange={evidence => setDraft(d => ({ ...d, evidence }))}
                         />
@@ -615,7 +615,7 @@ export function CourtCase({ caseRef, onSaved, onClose, onChanged }: {
                 {(file.evidence.length > 0 || canManage) && (
                     <div className="mt-5">
                         <MdtEvidence
-                            label={t('mdt.evidence', 'Exhibits')}
+                            label={t('mdt.courtExhibits', 'Exhibits')}
                             items={file.evidence}
                             onChange={canManage ? evidence => void manage({ ref: file.ref, evidence }) : undefined}
                         />

@@ -427,28 +427,28 @@ end
 ---@return table envelope
 function racegen.join(src, cid, raceId, modelHash)
     local race = racegen.get(raceId)
-    if not race then return util.fail('That race is no longer available') end
-    if racegen.hasStarted(race) then return util.fail('That race has already started') end
-    if racegen.isMember(race, cid) then return util.fail('You are already registered for that race') end
-    if racegen.isFull(race) then return util.fail('That race is full') end
+    if not race then return util.fail('racing.raceNoLongerAvailable', 'That race is no longer available') end
+    if racegen.hasStarted(race) then return util.fail('racing.raceHasAlreadyStarted', 'That race has already started') end
+    if racegen.isMember(race, cid) then return util.fail('racing.alreadyRegisteredRace', 'You are already registered for that race') end
+    if racegen.isFull(race) then return util.fail('racing.raceFull', 'That race is full') end
 
     local mine = actions.classForModel(modelHash)
     if actions.classRank(mine) > actions.classRank(race.class) then
-        return util.fail(('Your vehicle is class %s and this race tops out at class %s'):format(mine, race.class))
+        return util.fail('racing.vehicleClassRaceTopsOut', 'Your vehicle is class {yours} and this race tops out at class {max}', { yours = mine, max = race.class })
     end
 
     if not budget(cid, 'racing:join', RATES.Join) then
-        return util.fail('Too many race sign-ups, wait a moment')
+        return util.fail('racing.tooManyRaceSignUps', 'Too many race sign-ups, wait a moment')
     end
 
     local fee = math.max(0, int(race.entryFee, 0))
     local paid, account = running().chargeBuyIn(src, cid, fee)
-    if not paid then return util.fail('You cannot afford the buy-in for that race') end
+    if not paid then return util.fail('racing.cannotAffordBuyRace', 'You cannot afford the buy-in for that race') end
 
     addMember(race, cid, account)
     if not racegen.isMember(race, cid) then
         if fee > 0 then running().refundBuyIn(src, account, fee) end
-        return util.fail('You could not be registered for that race')
+        return util.fail('racing.couldNotRegisteredRace', 'You could not be registered for that race')
     end
 
     broadcastChanged()
@@ -463,11 +463,11 @@ end
 function racegen.leave(src, cid, raceId)
     local race = racegen.get(raceId)
     if not race or not racegen.isMember(race, cid) then
-        return util.fail('You are not registered for that race')
+        return util.fail('racing.notRegisteredRace', 'You are not registered for that race')
     end
-    if racegen.hasStarted(race) then return util.fail('That race has already started') end
+    if racegen.hasStarted(race) then return util.fail('racing.raceHasAlreadyStarted', 'That race has already started') end
     if not budget(cid, 'racing:leave', RATES.Leave) then
-        return util.fail('Too many changes, wait a moment')
+        return util.fail('racing.tooManyChangesWaitMoment', 'Too many changes, wait a moment')
     end
 
     local account = racegen.memberAccount(race, cid)
@@ -487,14 +487,14 @@ end
 ---@return table envelope
 function racegen.host(src, cid, payload)
     local trackId = tonumber(payload.trackId)
-    if not util.finite(trackId) then return util.fail('That track is no longer available') end
+    if not util.finite(trackId) then return util.fail('racing.trackNoLongerAvailable', 'That track is no longer available') end
 
     local _, byId = store.trackCache()
     local track   = byId[tostring(math.floor(trackId))]
-    if not track then return util.fail('That track is no longer available') end
+    if not track then return util.fail('racing.trackNoLongerAvailable', 'That track is no longer available') end
 
     if not budget(cid, 'racing:host', RATES.Host) then
-        return util.fail('Too many races hosted, wait a moment')
+        return util.fail('racing.tooManyRacesHostedWait', 'Too many races hosted, wait a moment')
     end
 
     local delay   = clamp(payload.delay, int(LIMITS.DelayMin, 10), int(LIMITS.DelayMax, 600), 30)

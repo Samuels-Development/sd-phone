@@ -17,6 +17,7 @@ import {
 } from './data';
 import { t } from '@/i18n';
 import { useStreamerHidden } from '@/stores/themeStore';
+import { failText } from '@/core/api';
 
 const HISTORY_CAP = 48;
 
@@ -92,7 +93,7 @@ export function Stocks({ onClose }: { onClose: () => void }) {
           : trade.mode === 'withdraw' ? await withdraw(amount)
           : trade.mode === 'buy'      ? await buy(trade.symbol!, amount)
           :                             await sell(trade.symbol!, all ? { all: true } : { amount });
-        if (!r.success) return r.message ?? t('stocks.somethingWrong', 'Something went wrong');
+        if (!r.success) return failText(r, t('stocks.somethingWrong', 'Something went wrong'));
         await refresh();
         return null;
     }

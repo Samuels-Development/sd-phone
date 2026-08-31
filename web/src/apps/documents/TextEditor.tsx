@@ -8,7 +8,7 @@ import { AlertDialog } from '@/ui/AlertDialog';
 import { Sheet } from '@/ui/Sheet';
 import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
 import { apiGetSignature, apiSetSignature, apiSignDoc } from './documentsApi';
-import { SIGNATURE_STYLES, SignaturePad, renderTypedSignature, type SignaturePadHandle } from './SignaturePad';
+import { SignaturePad, renderTypedSignature, signatureStyles, type SignaturePadHandle } from './SignaturePad';
 import { MAX_TEXT_LENGTH, formatDocDate, type DocFile, type DocSignature } from './data';
 
 interface Props {
@@ -466,7 +466,7 @@ export function SignSheet({ docId, docName, onClose, onSigned, signAction }: {
     const [mode,    setMode]    = useState<SignMode>('draw');
     const [hasInk,  setHasInk]  = useState(false);
     const [typed,   setTyped]   = useState('');
-    const [styleId, setStyleId] = useState(SIGNATURE_STYLES[0].id);
+    const [styleId, setStyleId] = useState(signatureStyles()[0].id);
     const [busy,    setBusy]    = useState(false);
     const [error,   setError]   = useState<string | null>(null);
     const [confirming, setConfirming] = useState(false);
@@ -500,7 +500,7 @@ export function SignSheet({ docId, docName, onClose, onSigned, signAction }: {
         if (mode !== 'saved') {
             const image = mode === 'draw'
                 ? padRef.current?.toImage()
-                : await renderTypedSignature(typed, SIGNATURE_STYLES.find(s => s.id === styleId) ?? SIGNATURE_STYLES[0]);
+                : await renderTypedSignature(typed, signatureStyles().find(s => s.id === styleId) ?? signatureStyles()[0]);
             if (!image) { setBusy(false); return; }
             const stored = await apiSetSignature(image);
             if (!stored) {
@@ -555,7 +555,7 @@ export function SignSheet({ docId, docName, onClose, onSigned, signAction }: {
                                         className="rounded-[12px] border border-black/10 bg-white px-4 py-3 text-[17px] text-black outline-none placeholder:text-ios-gray3 focus:border-ios-blue"
                                     />
                                     <div className="flex flex-col gap-2">
-                                        {SIGNATURE_STYLES.map(s => (
+                                        {signatureStyles().map(s => (
                                             <button
                                                 key={s.id}
                                                 type="button"

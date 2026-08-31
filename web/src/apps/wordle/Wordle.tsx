@@ -29,7 +29,7 @@ const PAL: Record<string, string> = {
     track: '#2A2A2C', correct: ACCENT, present: '#C9B458', absent: '#3A3A3C', danger: '#E0413B',
 };
 
-const WORDLE_CONFIG: GameStartConfig = {
+const wordleConfig = (): GameStartConfig => ({
     icon: WordleIcon,
     title: t('wordle.title', 'Penta'),
     accent: ACCENT,
@@ -38,7 +38,7 @@ const WORDLE_CONFIG: GameStartConfig = {
     soloLabel: t('wordle.solo', 'Solo'),
     soloBlurb: t('wordle.soloBlurb', 'Guess the 5-letter word in 6 tries, and beat the 2:00 clock.'),
     hideSetup: true,
-};
+});
 const sideLabel = (s: Side) => (s === 'random' ? t('wordle.random', 'Random') : s === 'a' ? t('wordle.player1', 'Player 1') : t('wordle.player2', 'Player 2'));
 
 export function Wordle({ onClose: _onClose }: Props) {
@@ -105,6 +105,7 @@ export function Wordle({ onClose: _onClose }: Props) {
         void loadLeaderboard(GAME).then(d => { setLeaderboard(d); setLbLoading(false); });
     }
 
+    const startConfig = wordleConfig();
     const inMatch = screen === 'game' && !resolved && !ended;
     const title = screen === 'lobby' ? (lobby ? t('wordle.lobby', 'Lobby') : t('wordle.playOnline', 'Play Online')) : screen === 'leaderboard' ? t('wordle.leaderboard', 'Leaderboard') : t('wordle.title', 'Penta');
 
@@ -129,7 +130,7 @@ export function Wordle({ onClose: _onClose }: Props) {
 
             <div key={screen} className="flex min-h-0 flex-1 flex-col animate-swipe-in-left">
                 {screen === 'home' && (
-                    <StartScreen config={WORDLE_CONFIG} stats={serverStats} hasInvite={!!incoming} onPlayCpu={() => startSolo()} onPlayOnline={() => setScreen('lobby')} onLeaderboard={openLeaderboard} />
+                    <StartScreen config={startConfig} stats={serverStats} hasInvite={!!incoming} onPlayCpu={() => startSolo()} onPlayOnline={() => setScreen('lobby')} onLeaderboard={openLeaderboard} />
                 )}
 
                 {screen === 'solo' && (
@@ -139,7 +140,7 @@ export function Wordle({ onClose: _onClose }: Props) {
                 {screen === 'lobby' && (lobby ? (
                     <LobbyRoom lobby={lobby} inviteError={inviteError} accent={ACCENT} sideLabel={sideLabel} wagered currency="bank" onInvite={online.invite} onStart={online.start} onLeave={online.leave} onKick={online.kick} onSetWager={online.setWager} onSetReady={online.ready} />
                 ) : (
-                    <OnlineHub lobbies={lobbies} incoming={incoming} error={hubError} accent={ACCENT} sideOptions={WORDLE_CONFIG.sideOptions} wagered chooseSide={false} currency="bank" onCreate={online.create} onJoin={online.join} onAccept={online.accept} onDecline={online.decline} onRefresh={online.refresh} />
+                    <OnlineHub lobbies={lobbies} incoming={incoming} error={hubError} accent={ACCENT} sideOptions={startConfig.sideOptions} wagered chooseSide={false} currency="bank" onCreate={online.create} onJoin={online.join} onAccept={online.accept} onDecline={online.decline} onRefresh={online.refresh} />
                 ))}
 
                 {screen === 'leaderboard' && (

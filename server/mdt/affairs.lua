@@ -241,7 +241,7 @@ end)
 ---One file in full, with its investigation notes.
 affairs.get = access.gated('affairs.view', function(_, payload, me)
     local row = rowFor(payload.ref, me)
-    if not row then return util.fail('That file is not available') end
+    if not row then return util.fail('mdt.fileNotAvailable', 'That file is not available') end
     return util.ok({ file = detailOf(row, notesFor(row.id)) })
 end)
 
@@ -249,7 +249,7 @@ end)
 ---same key as the board rather than a weaker one.
 affairs.forOfficer = access.gated('affairs.view', function(_, payload, me)
     local cid = util.limitedString(payload.citizenid, 64)
-    if not cid then return util.fail('Unknown officer') end
+    if not cid then return util.fail('mdt.unknownOfficer', 'Unknown officer') end
 
     local rows = MySQL.query.await([[
         SELECT * FROM phone_mdt_ia_cases
@@ -267,18 +267,18 @@ end)
 ---and never the filer: self-reporting through IA is not a thing.
 affairs.file = access.audited('affairs.file', function(_, payload, me)
     local cid = util.limitedString(payload.citizenid, 64)
-    if not cid then return util.fail('Pick an officer') end
-    if cid == me.citizenid then return util.fail('You cannot file a complaint against yourself') end
+    if not cid then return util.fail('mdt.pickOfficer', 'Pick an officer') end
+    if cid == me.citizenid then return util.fail('mdt.cannotFileComplaintAgainstYourself', 'You cannot file a complaint against yourself') end
 
     local grade, jobName = access.gradeOf(cid)
-    if grade == nil then return util.fail('Unknown officer') end
-    if jobName and jobName ~= me.job then return util.fail('That officer is not in your department') end
+    if grade == nil then return util.fail('mdt.unknownOfficer', 'Unknown officer') end
+    if jobName and jobName ~= me.job then return util.fail('mdt.officerNotDepartment', 'That officer is not in your department') end
 
     local title = util.limitedString(payload.title, MAX_TITLE)
-    if not title then return util.fail('A complaint needs a title') end
+    if not title then return util.fail('mdt.complaintNeedsTitle', 'A complaint needs a title') end
 
     local ref = store.nextRef('ia')
-    if not ref then return util.fail('Could not allocate a file number') end
+    if not ref then return util.fail('mdt.couldNotAllocateFileNumber', 'Could not allocate a file number') end
 
     local names = store.namesFor({ cid })
     local now = os.time()
@@ -298,7 +298,7 @@ affairs.file = access.audited('affairs.file', function(_, payload, me)
     })
 
     local row = MySQL.single.await('SELECT * FROM phone_mdt_ia_cases WHERE ref = ? LIMIT 1', { ref })
-    if not row then return util.fail('The complaint could not be filed') end
+    if not row then return util.fail('mdt.complaintCouldNotFiled', 'The complaint could not be filed') end
 
     return util.ok({ file = detailOf(row, {}) }), {
         entityType = 'ia',
@@ -311,8 +311,8 @@ end)
 ---The finding is NOT settable here, so an investigator cannot quietly resolve their own file.
 affairs.update = access.audited('affairs.investigate', function(_, payload, me)
     local row = rowFor(payload.ref, me)
-    if not row then return util.fail('That file is not available') end
-    if row.status == 'closed' then return util.fail('That file is closed') end
+    if not row then return util.fail('mdt.fileNotAvailable', 'That file is not available') end
+    if row.status == 'closed' then return util.fail('mdt.fileClosed', 'That file is closed') end
 
     local sets, params = {}, {}
 
@@ -336,7 +336,7 @@ affairs.update = access.audited('affairs.investigate', function(_, payload, me)
 
     if payload.title ~= nil then
         local title = util.limitedString(payload.title, MAX_TITLE)
-        if not title then return util.fail('A complaint needs a title') end
+        if not title then return util.fail('mdt.complaintNeedsTitle', 'A complaint needs a title') end
         sets[#sets + 1] = 'title = ?'
         params[#params + 1] = title
     end
@@ -365,7 +365,7 @@ affairs.update = access.audited('affairs.investigate', function(_, payload, me)
         end
     end
 
-    if #sets == 0 then return util.fail('Nothing to change') end
+    if #sets == 0 then return util.fail('mdt.nothingChange', 'Nothing to change') end
 
     sets[#sets + 1] = 'updated_at = ?'
     params[#params + 1] = os.time()
@@ -375,7 +375,7 @@ affairs.update = access.audited('affairs.investigate', function(_, payload, me)
         ('UPDATE phone_mdt_ia_cases SET %s WHERE id = ?'):format(table.concat(sets, ', ')), params)
 
     local fresh = MySQL.single.await('SELECT * FROM phone_mdt_ia_cases WHERE id = ? LIMIT 1', { row.id })
-    if not fresh then return util.fail('That file is not available') end
+    if not fresh then return util.fail('mdt.fileNotAvailable', 'That file is not available') end
 
     return util.ok({ file = detailOf(fresh, notesFor(row.id)) }), {
         entityType = 'ia',
@@ -388,10 +388,10 @@ end)
 ---fact is not evidence of anything.
 affairs.note = access.audited('affairs.investigate', function(_, payload, me)
     local row = rowFor(payload.ref, me)
-    if not row then return util.fail('That file is not available') end
+    if not row then return util.fail('mdt.fileNotAvailable', 'That file is not available') end
 
     local body = util.limitedString(payload.body, MAX_NOTE)
-    if not body then return util.fail('Write something first') end
+    if not body then return util.fail('mdt.writeSomethingFirst', 'Write something first') end
 
     local now = os.time()
     MySQL.insert.await([[
@@ -413,11 +413,11 @@ end)
 ---unless the department is small enough that the same rank does both.
 affairs.close = access.audited('affairs.close', function(_, payload, me)
     local row = rowFor(payload.ref, me)
-    if not row then return util.fail('That file is not available') end
-    if row.status == 'closed' then return util.fail('That file is already closed') end
+    if not row then return util.fail('mdt.fileNotAvailable', 'That file is not available') end
+    if row.status == 'closed' then return util.fail('mdt.fileAlreadyClosed', 'That file is already closed') end
 
     local disposition = oneOf(payload.disposition, DISPOSITIONS, nil)
-    if not disposition then return util.fail('Pick a finding') end
+    if not disposition then return util.fail('mdt.pickFinding', 'Pick a finding') end
 
     local discipline = oneOf(payload.discipline, DISCIPLINE, 'none')
     if disposition ~= 'sustained' then discipline = 'none' end
@@ -433,7 +433,7 @@ affairs.close = access.audited('affairs.close', function(_, payload, me)
     })
 
     local fresh = MySQL.single.await('SELECT * FROM phone_mdt_ia_cases WHERE id = ? LIMIT 1', { row.id })
-    if not fresh then return util.fail('That file is not available') end
+    if not fresh then return util.fail('mdt.fileNotAvailable', 'That file is not available') end
 
     return util.ok({ file = detailOf(fresh, notesFor(row.id)) }), {
         entityType = 'ia',

@@ -148,25 +148,25 @@ end
 ---@param payload table { id: string, password: string|nil }
 ---@return { success: boolean, message: string|nil }
 lib.callback.register('sd-phone:server:wifi:connect', function(source, payload)
-    if #NETWORKS == 0 then return util.fail('Wi-Fi is unavailable') end
+    if #NETWORKS == 0 then return util.fail('common.wiFiUnavailable', 'Wi-Fi is unavailable') end
 
     local cid = player.getIdentifier(source)
 
     if not util.rateLimit(cid, 'wifi:connect', CONNECT_WINDOW, CONNECT_PER_WINDOW) then
-        return util.fail('Too many attempts, wait a moment')
+        return util.fail('common.tooManyAttemptsWaitMoment', 'Too many attempts, wait a moment')
     end
 
     local body = type(payload) == 'table' and payload or {}
     local net = wifi.find(type(body.id) == 'string' and body.id or nil, NETWORKS)
-    if not net then return util.fail('Network not found') end
+    if not net then return util.fail('common.networkNotFound', 'Network not found') end
 
     local pos = coordsOf(source)
     if not pos or wifi.strength(pos.x, pos.y, pos.z, net) <= DROP_BELOW then
-        return util.fail('Network out of range')
+        return util.fail('common.networkOutRange', 'Network out of range')
     end
 
     if not wifi.accepts(net, type(body.password) == 'string' and body.password or nil) then
-        return util.fail('Incorrect password')
+        return util.fail('common.incorrectPassword', 'Incorrect password')
     end
 
     connections[source] = net.id
@@ -185,7 +185,7 @@ end)
 ---@return table envelope { success, data: { enabled: boolean, known: table } }
 lib.callback.register('sd-phone:server:wifi:state', function(source)
     local cid = player.getIdentifier(source)
-    if not cid then return util.fail('No character') end
+    if not cid then return util.fail('common.noCharacter', 'No character') end
     return util.ok(store.get(cid))
 end)
 
@@ -196,7 +196,7 @@ end)
 ---@return table envelope { success, data: { enabled: boolean } }
 lib.callback.register('sd-phone:server:wifi:setEnabled', function(source, payload)
     local cid = player.getIdentifier(source)
-    if not cid then return util.fail('No character') end
+    if not cid then return util.fail('common.noCharacter', 'No character') end
 
     local on = type(payload) == 'table' and payload.on == true
     store.setEnabled(cid, on)

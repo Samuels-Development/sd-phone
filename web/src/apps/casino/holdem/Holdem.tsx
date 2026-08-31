@@ -23,6 +23,7 @@ import { NO_CREATE, handCatLabel, mySeat, potTotal, seatOf } from './data';
 import type { HoldemCreateLimits, HoldemCreateOpts, HoldemLobby, HoldemTableInfo } from './data';
 import { createApi, tablesApi } from './holdemApi';
 import { useHoldemTable } from './useHoldemTable';
+import { failText } from '@/core/api';
 
 const ACCENT = TABLE.chip;
 
@@ -57,7 +58,7 @@ export function Holdem({ chips, onChips, onBack, onCashier }: CasinoGameProps) {
     const onCreate = useCallback(async (opts: HoldemCreateOpts) => {
         const res = await createApi(opts);
         if (!res.ok || !res.data) {
-            fail(res.message ?? t('holdem.createFailed', 'That table could not be opened.'));
+            fail(failText(res, t('holdem.createFailed', 'That table could not be opened.')));
             return;
         }
         setLobby(await tablesApi());

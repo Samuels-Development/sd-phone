@@ -317,8 +317,8 @@ end
 lib.callback.register('sd-phone:server:games:createLobby', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local game = payload.game
-    if not configs[game] then return fail('Unknown game') end
-    if busy(src) then return fail("You're already in a lobby or game") end
+    if not configs[game] then return fail('games.unknownGame', 'Unknown game') end
+    if busy(src) then return fail('games.reAlreadyLobbyGame', "You're already in a lobby or game") end
     local sides = sidesOf(game)
     local side = payload.color
     if side ~= sides[1] and side ~= sides[2] then side = 'random' end
@@ -350,13 +350,13 @@ end)
 ---or mid-escrow, or when the lobby is full or private.
 lib.callback.register('sd-phone:server:games:joinLobby', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
-    if busy(src) then return fail("You're already in a lobby or game") end
+    if busy(src) then return fail('games.reAlreadyLobbyGame', "You're already in a lobby or game") end
     local lobby = payload.id and lobbies[payload.id]
-    if not lobby then return fail('That lobby no longer exists') end
-    if lobby.gameId or lobby.starting then return fail('That lobby is mid-game') end
-    if #lobby.members >= 2 then return fail('That lobby is full') end
+    if not lobby then return fail('games.lobbyNoLongerExists', 'That lobby no longer exists') end
+    if lobby.gameId or lobby.starting then return fail('games.lobbyMidGame', 'That lobby is mid-game') end
+    if #lobby.members >= 2 then return fail('games.lobbyFull', 'That lobby is full') end
     local invited = invites[src] and invites[src].lobbyId == lobby.id
-    if not lobby.public and not invited then return fail('That lobby is private') end
+    if not lobby.public and not invited then return fail('games.lobbyPrivate', 'That lobby is private') end
     invites[src] = nil
     lobby.members[#lobby.members + 1] = { src = src, name = nameOf(src), ready = false, returned = true }
     inLobby[src] = lobby.id
@@ -380,25 +380,28 @@ end)
 lib.callback.register('sd-phone:server:games:inviteLobby', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local lobby = inLobby[src] and lobbies[inLobby[src]]
-    if not lobby or lobby.host ~= src then return fail("You're not hosting a lobby") end
-    if #lobby.members >= 2 then return fail('Your lobby is full') end
+    if not lobby or lobby.host ~= src then return fail('games.reNotHostingLobby', "You're not hosting a lobby") end
+    if #lobby.members >= 2 then return fail('games.lobbyFull2', 'Your lobby is full') end
     local target = tonumber(payload.target)
-    if not target or target ~= target or target == math.huge then return fail('Enter a valid server ID') end
+    if not target or target ~= target or target == math.huge then return fail('games.enterValidServerId', 'Enter a valid server ID') end
     target = math.floor(target)
-    if target < 1 then return fail('Enter a valid server ID') end
-    if target == src then return fail("You can't invite yourself") end
-    if not online(target) then return fail('That player is not online') end
-    if busy(target) then return fail('That player is busy') end
+    if target < 1 then return fail('games.enterValidServerId', 'Enter a valid server ID') end
+    if target == src then return fail('games.canTInviteYourself', "You can't invite yourself") end
+    if not online(target) then return fail('games.playerNotOnline', 'That player is not online') end
+    if busy(target) then return fail('games.playerBusy', 'That player is busy') end
     -- Checked last so a mistyped server id never spends the budget, and gated on the TARGET as
     -- well as the host so colluding lobbies still cannot flood one player's notifications.
-    if not util.cooldown(cidOf(src), 'games:invite', 3000) then return fail('Slow down') end
-    if not util.cooldown(cidOf(target), 'games:invited', 10000) then return fail('That player was just invited') end
+    if not util.cooldown(cidOf(src), 'games:invite', 3000) then return fail('games.slowDown', 'Slow down') end
+    if not util.cooldown(cidOf(target), 'games:invited', 10000) then return fail('games.playerJustInvited', 'That player was just invited') end
     invites[target] = { lobbyId = lobby.id, fromName = lobby.hostName }
     pushClient(target, lobby.game, 'invited', { fromSrc = tostring(src), fromName = lobby.hostName, lobbyId = lobby.id })
     local title = titleOf(lobby.game)
     TriggerClientEvent('sd-phone:client:notify', target, {
-        app = lobby.game, appId = lobby.game, title = title .. ' invite',
-        body = ('%s invited you to a %s lobby'):format(lobby.hostName, title), time = 'now',
+        app = lobby.game, appId = lobby.game,
+        titleKey = 'games.gameInvite', title = ('%s invite'):format(title),
+        titleVars = { game = title },
+        bodyKey = 'games.invitedToLobby', body = ('%s invited you to a %s lobby'):format(lobby.hostName, title),
+        bodyVars = { name = lobby.hostName, game = title }, time = 'now',
     })
     return ok()
 end)
@@ -419,15 +422,19 @@ end)
 ---refused while the session is live or mid-escrow.
 lib.callback.register('sd-phone:server:games:kickMember', function(src)
     local lobby = inLobby[src] and lobbies[inLobby[src]]
-    if not lobby or lobby.host ~= src then return fail("You're not hosting a lobby") end
-    if lobby.gameId or lobby.starting then return fail('The game is in progress') end
+    if not lobby or lobby.host ~= src then return fail('games.reNotHostingLobby', "You're not hosting a lobby") end
+    if lobby.gameId or lobby.starting then return fail('games.gameProgress', 'The game is in progress') end
     for i = #lobby.members, 1, -1 do
         local m = lobby.members[i]
         if m.src ~= lobby.host then
             inLobby[m.src] = nil
             pushClient(m.src, lobby.game, 'lobbyClosed', {})
             if online(m.src) then
-                TriggerClientEvent('sd-phone:client:notify', m.src, { app = lobby.game, appId = lobby.game, title = titleOf(lobby.game), body = 'You were removed from the lobby', time = 'now' })
+                TriggerClientEvent('sd-phone:client:notify', m.src, {
+                    app = lobby.game, appId = lobby.game, title = titleOf(lobby.game),
+                    bodyKey = 'games.removedFromLobby', body = 'You were removed from the lobby',
+                    time = 'now',
+                })
             end
             table.remove(lobby.members, i)
         end
@@ -441,9 +448,9 @@ end)
 lib.callback.register('sd-phone:server:games:setWager', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local lobby = inLobby[src] and lobbies[inLobby[src]]
-    if not lobby or lobby.host ~= src then return fail("You're not hosting a lobby") end
+    if not lobby or lobby.host ~= src then return fail('games.reNotHostingLobby', "You're not hosting a lobby") end
     local opp = lobbyOpponent(lobby)
-    if opp and opp.ready then return fail('Wager is locked, your opponent is ready') end
+    if opp and opp.ready then return fail('games.wagerLockedOpponentReady', 'Wager is locked, your opponent is ready') end
     lobby.wager = sanitizeWager(payload.wager)
     pushLobby(lobby)
     return ok(lobbyState(lobby, src))
@@ -454,8 +461,8 @@ end)
 lib.callback.register('sd-phone:server:games:setReady', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local lobby = inLobby[src] and lobbies[inLobby[src]]
-    if not lobby then return fail('Not in a lobby') end
-    if lobby.host == src then return fail('The host sets the terms') end
+    if not lobby then return fail('games.notLobby', 'Not in a lobby') end
+    if lobby.host == src then return fail('games.hostSetsTerms', 'The host sets the terms') end
     for _, m in ipairs(lobby.members) do
         if m.src == src then m.ready = payload.ready and true or false break end
     end
@@ -467,11 +474,11 @@ end)
 ---the finished session and clears the opponent's ready; refused while a pot is unsettled.
 lib.callback.register('sd-phone:server:games:returnToLobby', function(src)
     local lobby = inLobby[src] and lobbies[inLobby[src]]
-    if not lobby then return fail('Lobby no longer exists') end
+    if not lobby then return fail('games.lobbyNoLongerExists2', 'Lobby no longer exists') end
     local gid = lobby.gameId
     if gid then
         local g = games[gid]
-        if g and g.wager and g.wager > 0 and not g.settled then return fail('Settling the wager, one moment') end
+        if g and g.wager and g.wager > 0 and not g.settled then return fail('games.settlingWagerOneMoment', 'Settling the wager, one moment') end
         if g then endGame(gid) end
         lobby.gameId = nil
         for _, m in ipairs(lobby.members) do if m.src ~= lobby.host then m.ready = false end end
@@ -487,11 +494,11 @@ end)
 lib.callback.register('sd-phone:server:games:startLobby', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local lobby = payload.id and lobbies[payload.id]
-    if not lobby or lobby.host ~= src then return fail("You're not hosting that lobby") end
-    if lobby.gameId or lobby.starting then return fail('A game is already in progress') end
-    if #lobby.members < 2 then return fail('Waiting for an opponent') end
+    if not lobby or lobby.host ~= src then return fail('games.reNotHostingLobby2', "You're not hosting that lobby") end
+    if lobby.gameId or lobby.starting then return fail('games.gameAlreadyProgress', 'A game is already in progress') end
+    if #lobby.members < 2 then return fail('games.waitingOpponent', 'Waiting for an opponent') end
     local oppm = lobbyOpponent(lobby)
-    if not oppm or not oppm.ready then return fail('Waiting for your opponent to ready up') end
+    if not oppm or not oppm.ready then return fail('games.waitingOpponentReadyUp', 'Waiting for your opponent to ready up') end
 
     local game  = lobby.game
     local sides = sidesOf(game)
@@ -502,21 +509,21 @@ lib.callback.register('sd-phone:server:games:startLobby', function(src, payload)
     if wager > 0 then
         if wagerGet(hostSrc, game) < wager then
             lobby.starting = nil
-            return fail('You can’t cover the wager')
+            return fail('games.canTCoverWager', 'You can’t cover the wager')
         end
         if wagerGet(oppSrc, game) < wager then
             lobby.starting = nil
-            return fail('Your opponent can’t cover the wager')
+            return fail('games.opponentCanTCoverWager', 'Your opponent can’t cover the wager')
         end
         if not wagerTake(hostSrc, game, wager, 'wager') then
             lobby.starting = nil
-            return fail('You can’t cover the wager')
+            return fail('games.canTCoverWager', 'You can’t cover the wager')
         end
         if not wagerTake(oppSrc, game, wager, 'wager') then
             wagerGive(hostSrc, game, wager, 'wager-refund')
             if currencyOf(game) == 'chips' then pushChips(hostSrc, game) end
             lobby.starting = nil
-            return fail('Your opponent can’t cover the wager')
+            return fail('games.opponentCanTCoverWager', 'Your opponent can’t cover the wager')
         end
         if currencyOf(game) == 'chips' then
             pushChips(hostSrc, game); pushChips(oppSrc, game)
@@ -555,9 +562,9 @@ end)
 lib.callback.register('sd-phone:server:games:setupReady', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local g = games[payload.gameId]
-    if not g then return fail('Game over') end
+    if not g then return fail('games.gameOver', 'Game over') end
     local mySide = sideOf(g, src)
-    if not mySide then return fail('Not your game') end
+    if not mySide then return fail('games.notGame', 'Not your game') end
 
     local sides = sidesOf(g.game)
     if not sides then return ok() end
@@ -585,11 +592,11 @@ end)
 lib.callback.register('sd-phone:server:games:move', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local g = games[payload.gameId]
-    if not g then return fail('Game over') end
+    if not g then return fail('games.gameOver', 'Game over') end
     local mySide = sideOf(g, src)
-    if not mySide then return fail('Not your game') end
-    if not boundedPayload(payload.move) then return fail('Bad move') end
-    if not util.rateLimit(cidOf(src), 'games:relay', RELAY_WINDOW, RELAY_MAX) then return fail('Slow down') end
+    if not mySide then return fail('games.notGame', 'Not your game') end
+    if not boundedPayload(payload.move) then return fail('games.badMove', 'Bad move') end
+    if not util.rateLimit(cidOf(src), 'games:relay', RELAY_WINDOW, RELAY_MAX) then return fail('games.slowDown', 'Slow down') end
     if configs[g.game] and configs[g.game].freeRelay then
         local opp = opponentOf(g, src)
         if online(opp) then pushClient(opp, g.game, 'move', { gameId = payload.gameId, move = payload.move }) end
@@ -601,10 +608,10 @@ lib.callback.register('sd-phone:server:games:move', function(src, payload)
     if configs[g.game] and configs[g.game].requiresSetup then
         local sides = sidesOf(g.game)
         if not sides or not (g.ready[sides[1]] and g.ready[sides[2]]) then
-            return fail('Opponent is still deploying')
+            return fail('games.opponentStillDeploying', 'Opponent is still deploying')
         end
     end
-    if g.turn ~= mySide then return fail('Not your turn') end
+    if g.turn ~= mySide then return fail('games.notTurn', 'Not your turn') end
 
     g.turn = otherSide(g.game, mySide)
     local opp = g.players[g.turn]
@@ -698,7 +705,7 @@ end)
 lib.callback.register('sd-phone:server:games:stats', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local cid = cidOf(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('games.playerNotFound', 'Player not found') end
     return ok(stats.statsFor(cid, payload.game))
 end)
 
@@ -707,9 +714,9 @@ end)
 lib.callback.register('sd-phone:server:games:record', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local cid = cidOf(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('games.playerNotFound', 'Player not found') end
     local s = stats.record(cid, payload.game, payload.mode, payload.result, nameOf(src), payload.amount)
-    if not s then return fail('Bad result') end
+    if not s then return fail('games.badResult', 'Bad result') end
     return ok(s)
 end)
 
@@ -724,9 +731,9 @@ end)
 lib.callback.register('sd-phone:server:games:submitScore', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local cid = cidOf(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('games.playerNotFound', 'Player not found') end
     local s = stats.submitScore(cid, payload.game, payload.score, nameOf(src))
-    if not s then return fail('Bad score') end
+    if not s then return fail('games.badScore', 'Bad score') end
     return ok(s)
 end)
 

@@ -61,7 +61,7 @@ function actions.saveAlarm(src, payload)
     if type(payload) ~= 'table' then payload = {} end
 
     local id = payload.id
-    if type(id) ~= 'string' or id == '' or #id > 40 then return { success = false, message = 'Bad alarm id' } end
+    if type(id) ~= 'string' or id == '' or #id > 40 then return { success = false, messageKey = 'clock.badAlarmId', message = 'Bad alarm id' } end
 
     local exists = store.alarmExists(cid, id)
     if alarmCount[cid] == nil then
@@ -72,7 +72,7 @@ function actions.saveAlarm(src, payload)
     end
     if not exists then
         local held = alarmCount[cid]
-        if held >= MAX_ALARMS then return { success = false, message = 'Alarm limit reached' } end
+        if held >= MAX_ALARMS then return { success = false, messageKey = 'clock.alarmLimitReached', message = 'Alarm limit reached' } end
         alarmCount[cid] = held + 1
     end
 
@@ -102,7 +102,7 @@ end
 function actions.deleteAlarm(src, id)
     local cid = cidOf(src)
     if not cid then return { success = false } end
-    if type(id) ~= 'string' or id == '' then return { success = false, message = 'Bad alarm id' } end
+    if type(id) ~= 'string' or id == '' then return { success = false, messageKey = 'clock.badAlarmId', message = 'Bad alarm id' } end
     store.deleteAlarm(cid, id)
     -- Dropped rather than decremented: the next save reseeds from the table, so a delete that hit
     -- nothing can never leave the counter below the real row count.
@@ -127,8 +127,8 @@ function actions.addRecent(src, seconds)
     local cid = cidOf(src)
     if not cid then return { success = false } end
     local s = math.floor(tonumber(seconds) or 0)
-    if s ~= s or s <= 0 or s > 86400 then return { success = false, message = 'Bad duration' } end
-    if not util.cooldown(cid, 'clock:recent', 1000) then return { success = false, message = 'Slow down' } end
+    if s ~= s or s <= 0 or s > 86400 then return { success = false, messageKey = 'clock.badDuration', message = 'Bad duration' } end
+    if not util.cooldown(cid, 'clock:recent', 1000) then return { success = false, messageKey = 'clock.slowDown', message = 'Slow down' } end
     store.addRecent(cid, s, os.time())
     return { success = true }
 end

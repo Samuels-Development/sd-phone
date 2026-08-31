@@ -99,14 +99,14 @@ function actions.save(src, payload)
     if type(payload) ~= 'table' then payload = {} end
 
     local id = payload.id
-    if type(id) ~= 'string' or id == '' or #id > 40 then return { success = false, message = 'Bad note id' } end
+    if type(id) ~= 'string' or id == '' or #id > 40 then return { success = false, messageKey = 'notes.badNoteId', message = 'Bad note id' } end
 
     if not util.rateLimit(cid, 'notes:save', SAVE_WINDOW, SAVE_MAX) then
-        return { success = false, message = 'Slow down a moment' }
+        return { success = false, messageKey = 'notes.slowDownMoment', message = 'Slow down a moment' }
     end
 
     if not store.exists(cid, id) and store.countFor(cid) >= N.MaxNotesPerPlayer then
-        return { success = false, message = 'Note limit reached' }
+        return { success = false, messageKey = 'notes.noteLimitReached', message = 'Note limit reached' }
     end
 
     local body = type(payload.body) == 'string' and payload.body or ''
@@ -117,7 +117,7 @@ function actions.save(src, payload)
     local sketchesJson = json.encode(sketches)
     local imagesJson   = json.encode(images)
     if #sketchesJson > MAX_MEDIA_JSON or #imagesJson > MAX_MEDIA_JSON then
-        return { success = false, message = 'Note is too large' }
+        return { success = false, messageKey = 'notes.noteTooLarge', message = 'Note is too large' }
     end
 
     local createdAt = type(payload.createdAt) == 'string' and #payload.createdAt <= 40 and payload.createdAt
@@ -136,7 +136,7 @@ end
 function actions.delete(src, id)
     local cid = cidOf(src)
     if not cid then return { success = false } end
-    if type(id) ~= 'string' or id == '' then return { success = false, message = 'Bad note id' } end
+    if type(id) ~= 'string' or id == '' then return { success = false, messageKey = 'notes.badNoteId', message = 'Bad note id' } end
     store.delete(cid, id)
     return { success = true, data = { id = id } }
 end
@@ -158,11 +158,13 @@ function actions.requestShare(src, target, payload)
     local sketches = sanitizeList(payload.sketches, N.MaxSketches, MAX_SKETCH_BYTES)
     local images   = sanitizeList(payload.images, N.MaxImages, MAX_IMAGE_BYTES)
     if body:gsub('%s', '') == '' and #sketches == 0 and #images == 0 then
-        return { success = false, message = 'Nothing to share' }
+        return { success = false, messageKey = 'notes.nothingShare', message = 'Nothing to share' }
     end
 
-    local okSent, msg = share.request(src, target, 'note', { body = body, sketches = sketches, images = images })
-    if not okSent then return { success = false, message = msg or 'Could not send request' } end
+    local okSent, refusal = share.request(src, target, 'note', { body = body, sketches = sketches, images = images })
+    if not okSent then
+        return refusal or { success = false, messageKey = 'notes.couldNotSendRequest', message = 'Could not send request' }
+    end
     return { success = true }
 end
 

@@ -186,7 +186,7 @@ end
 ---Browse-grid categories for the GIF picker: live trending search terms, each resolved to a tile
 ---image via one limit=1 search. Cached for CATEGORIES_TTL and shared by every player. Read-only.
 lib.callback.register('sd-phone:server:gifs:categories', function(src)
-    if not hasKey() then return fail('GIPHY API key not configured') end
+    if not hasKey() then return fail('gifs.giphyApiKeyNotConfigured', 'GIPHY API key not configured') end
 
     if categoriesCache and (GetGameTimer() - categoriesCacheAt) < CATEGORIES_TTL then
         return ok(categoriesCache)
@@ -241,7 +241,7 @@ local FEATURED_TTL = 5 * 60 * 1000
 ---Trending GIFs for the picker's featured tab, served from a shared 5-minute cache; the page size
 ---comes from config. A failed fetch is not cached. Read-only.
 lib.callback.register('sd-phone:server:gifs:featured', function(src)
-    if not hasKey() then return fail('GIPHY API key not configured') end
+    if not hasKey() then return fail('gifs.giphyApiKeyNotConfigured', 'GIPHY API key not configured') end
     if featuredCache and (GetGameTimer() - featuredCacheAt) < FEATURED_TTL then return ok(featuredCache) end
     if not mayFetch(src) then return ok(featuredCache or { gifs = {}, next = '' }) end
 
@@ -281,10 +281,10 @@ end
 ---the page size comes from config. Results are shared across players for SEARCH_TTL. Read-only.
 ---@param payload table { q?: string, pos?: string|number }
 lib.callback.register('sd-phone:server:gifs:search', function(src, payload)
-    if not hasKey() then return fail('GIPHY API key not configured') end
+    if not hasKey() then return fail('gifs.giphyApiKeyNotConfigured', 'GIPHY API key not configured') end
     if type(payload) ~= 'table' then payload = {} end
     local q = util.trim(tostring(payload.q or ''):sub(1, 128))
-    if q == '' then return fail('Empty query') end
+    if q == '' then return fail('gifs.emptyQuery', 'Empty query') end
 
     -- Digits only: the offset is a number to GIPHY, and the old substring let arbitrary text
     -- through into the query string.

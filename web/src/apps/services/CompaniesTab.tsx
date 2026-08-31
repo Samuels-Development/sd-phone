@@ -13,6 +13,7 @@ import { t } from '@/i18n';
 import { ServiceAvatar } from './ServiceAvatar';
 import { type Company } from './data';
 import { callCompany, messageCompany } from './servicesApi';
+import { failText } from '@/core/api';
 
 export function CompaniesTab({ companies, onMessaged }: { companies: Company[]; onMessaged?: () => void }) {
     const [msgTo, setMsgTo] = useState<Company | null>(null);
@@ -35,7 +36,7 @@ export function CompaniesTab({ companies, onMessaged }: { companies: Company[]; 
 
     async function call(c: Company) {
         const res = await callCompany(c.id);
-        if (!res.success) setError(res.message ?? t('services.couldntCall', "Couldn't place the call."));
+        if (!res.success) setError(failText(res, t('services.couldntCall', "Couldn't place the call.")));
     }
 
     return (

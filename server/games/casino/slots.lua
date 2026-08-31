@@ -142,13 +142,13 @@ slots.strips = STRIPS
 ---@return table envelope { success, message?, data? }
 function slots.spin(src, payload)
     if not shared.enabled('slots') then return shared.shut() end
-    local cid = shared.cidOf(src); if not cid then return util.fail('Player not found') end
-    if not util.cooldown(cid, 'games:slotsSpin', COOLDOWN) then return util.fail('Slow down') end
+    local cid = shared.cidOf(src); if not cid then return util.fail('games.playerNotFound', 'Player not found') end
+    if not util.cooldown(cid, 'games:slotsSpin', COOLDOWN) then return util.fail('games.slowDown', 'Slow down') end
     local bet = shared.wager(payload.bet, MIN_BET, MAX_BET)
-    if not bet then return util.fail('Enter a valid amount') end
+    if not bet then return util.fail('games.enterValidAmount', 'Enter a valid amount') end
     local stake = bet * LINES
     local bal = chips.remove(cid, stake)
-    if not bal then return util.fail('Not enough chips') end
+    if not bal then return util.fail('games.notEnoughChips', 'Not enough chips') end
     local stops, grid = roll()
     local lines, win  = slots.evaluate(grid, bet)
     if win > 0 then bal = chips.add(cid, win) end

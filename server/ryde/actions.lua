@@ -139,7 +139,8 @@ local function notifyBank(cid, body)
     local src = srcOf(cid)
     if not src then return end
     TriggerClientEvent('sd-phone:client:notify', src, {
-        app = 'bank', appId = 'bank', quietInApp = true, time = 'now', title = 'Bank', body = body,
+        app = 'bank', appId = 'bank', quietInApp = true, time = 'now',
+        titleKey = 'banking.bankTitle', title = 'Bank', body = body,
     })
 end
 
@@ -284,8 +285,8 @@ end
 ---@return table result { requestId } on success
 function actions.requestRide(src, payload)
     local rdr = rider(src)
-    if not rdr then return fail('Could not resolve your character.') end
-    if riderActive[rdr.cid] then return fail('You already have an active ride.') end
+    if not rdr then return fail('ryde.couldNotResolveCharacter', 'Could not resolve your character.') end
+    if riderActive[rdr.cid] then return fail('ryde.alreadyHaveActiveRide', 'You already have an active ride.') end
 
     local p = type(payload) == 'table' and payload or {}
     local pickup  = type(p.pickup)  == 'table' and p.pickup  or nil
@@ -295,12 +296,12 @@ function actions.requestRide(src, payload)
     local dx = dropoff and finite(dropoff.x)
     local dy = dropoff and finite(dropoff.y)
     if not (px and py and dx and dy) then
-        return fail('Pick a destination first.')
+        return fail('ryde.pickDestinationFirst', 'Pick a destination first.')
     end
     -- Checked after validation so a mis-picked destination never spends the budget. A request/cancel
     -- loop is otherwise free, and each pass fans out to every driver plus a server-wide broadcast.
     if not util.cooldown(rdr.cid, 'ryde:request', REQUEST_COOLDOWN) then
-        return fail('You just requested a ride. Give it a moment.')
+        return fail('ryde.justRequestedRideGiveMoment', 'You just requested a ride. Give it a moment.')
     end
 
     local req = {
@@ -337,7 +338,7 @@ function actions.respond(src, payload)
     local p = type(payload) == 'table' and payload or {}
     local trip = p.tripId and trips[p.tripId] or nil
     if not (trip and trip.riderCid == cid and trip.status == 'offered') then
-        return fail('No pending offer.')
+        return fail('ryde.noPendingOffer', 'No pending offer.')
     end
 
     if p.accept then
@@ -370,7 +371,7 @@ end
 ---@return table result
 function actions.setOnline(src, payload)
     local acc = account(src)
-    if not acc then return fail('Sign in to Ryde first.') end
+    if not acc then return fail('ryde.signRydeFirst', 'Sign in to Ryde first.') end
     local p = type(payload) == 'table' and payload or {}
 
     if p.online then
@@ -390,7 +391,7 @@ function actions.setOnline(src, payload)
         return ok({ online = true, requests = pending, waiting = #pending })
     end
 
-    if driverActive[acc.username] then return fail('Finish your current trip before going offline.') end
+    if driverActive[acc.username] then return fail('ryde.finishCurrentTripBeforeGoing', 'Finish your current trip before going offline.') end
     online[acc.username] = nil
     return ok({ online = false, waiting = waitingCount() })
 end
@@ -400,7 +401,7 @@ end
 ---@return table result { count }
 function actions.waitingCount(src)
     local acc = account(src)
-    if not acc then return fail('Sign in to Ryde first.') end
+    if not acc then return fail('ryde.signRydeFirst', 'Sign in to Ryde first.') end
     return ok({ count = waitingCount() })
 end
 
@@ -410,7 +411,7 @@ end
 ---@return table result { requests }
 function actions.requestsBoard(src)
     local acc = account(src)
-    if not acc then return fail('Sign in to Ryde first.') end
+    if not acc then return fail('ryde.signRydeFirst', 'Sign in to Ryde first.') end
     if not online[acc.username] then return ok({ requests = {} }) end
     local pending = {}
     for _, r in pairs(requests) do pending[#pending + 1] = publicRequest(r) end
@@ -424,26 +425,26 @@ end
 ---@return table result { tripId } on success
 function actions.accept(src, payload)
     local acc = account(src)
-    if not acc then return fail('Sign in to Ryde first.') end
-    if not online[acc.username] then return fail('Go online to accept rides.') end
-    if driverActive[acc.username] then return fail('You already have an active trip.') end
+    if not acc then return fail('ryde.signRydeFirst', 'Sign in to Ryde first.') end
+    if not online[acc.username] then return fail('ryde.goOnlineAcceptRides', 'Go online to accept rides.') end
+    if driverActive[acc.username] then return fail('ryde.alreadyHaveActiveTrip', 'You already have an active trip.') end
 
     local p = type(payload) == 'table' and payload or {}
     local req = p.requestId and requests[p.requestId] or nil
-    if not req then return fail('That ride is no longer available.') end
-    if req.riderCid == acc._cid then return fail('You cannot accept your own request.') end
+    if not req then return fail('ryde.rideNoLongerAvailable', 'That ride is no longer available.') end
+    if req.riderCid == acc._cid then return fail('ryde.cannotAcceptOwnRequest', 'You cannot accept your own request.') end
 
     local fare = finite(p.fare)
     fare = fare and math.floor(fare) or 0
-    if fare < (config.MinFare or 1) then return fail('Enter a fare.') end
-    if fare > (config.MaxFare or 100000) then return fail('That fare is too high.') end
+    if fare < (config.MinFare or 1) then return fail('ryde.fareRequired', 'Enter a fare.') end
+    if fare > (config.MaxFare or 100000) then return fail('ryde.fareTooHigh', 'That fare is too high.') end
 
     local drv = online[acc.username]
     local driverNumber = settings.ensurePhoneNumber(acc._cid)
     local riderNumber  = settings.ensurePhoneNumber(req.riderCid)
-    if not online[acc.username] then return fail('Go online to accept rides.') end
-    if driverActive[acc.username] then return fail('You already have an active trip.') end
-    if not requests[req.id] then return fail('That ride is no longer available.') end
+    if not online[acc.username] then return fail('ryde.goOnlineAcceptRides', 'Go online to accept rides.') end
+    if driverActive[acc.username] then return fail('ryde.alreadyHaveActiveTrip', 'You already have an active trip.') end
+    if not requests[req.id] then return fail('ryde.rideNoLongerAvailable', 'That ride is no longer available.') end
 
     local trip = {
         id = store.newId(), requestId = req.id,
@@ -461,8 +462,9 @@ function actions.accept(src, payload)
     local riderSrc = srcOf(trip.riderCid)
     if riderSrc then
         TriggerClientEvent('sd-phone:client:notify', riderSrc, {
-            app = 'ryde', appId = 'ryde', quietInApp = true, time = 'now',
-            title = 'Ryde', body = ('%s offered a fare of $%d'):format(trip.driverName, fare),
+            app = 'ryde', appId = 'ryde', quietInApp = true, time = 'now', title = 'Ryde',
+            bodyKey = 'ryde.driverOfferedFare', body = ('%s offered a fare of $%d'):format(trip.driverName, fare),
+            bodyVars = { name = trip.driverName, amount = fare },
         })
     end
     print(('^3[sd-phone:ryde]^0 %s offered $%d on request %s (trip %s)'):format(acc.name, fare, req.id, trip.id))
@@ -476,16 +478,16 @@ end
 ---@return table result { status }
 function actions.tripStatus(src, payload)
     local acc = account(src)
-    if not acc then return fail('Sign in to Ryde first.') end
+    if not acc then return fail('ryde.signRydeFirst', 'Sign in to Ryde first.') end
     local p = type(payload) == 'table' and payload or {}
     local trip = p.tripId and trips[p.tripId] or nil
-    if not (trip and trip.driverUsername == acc.username) then return fail('No active trip.') end
-    if trip.status == 'offered' then return fail('No active trip.') end
+    if not (trip and trip.driverUsername == acc.username) then return fail('ryde.noActiveTrip', 'No active trip.') end
+    if trip.status == 'offered' then return fail('ryde.noActiveTrip', 'No active trip.') end
 
     local nextStatus = p.status
-    if nextStatus ~= 'arriving' and nextStatus ~= 'in_progress' then return fail('Invalid status.') end
+    if nextStatus ~= 'arriving' and nextStatus ~= 'in_progress' then return fail('ryde.invalidStatus', 'Invalid status.') end
     if nextStatus == 'in_progress' and not inSameVehicle(trip) then
-        return fail('Your rider needs to be in your vehicle to start the trip.')
+        return fail('ryde.riderNeedsVehicleStartTrip', 'Your rider needs to be in your vehicle to start the trip.')
     end
     trip.status = nextStatus
 
@@ -507,10 +509,10 @@ end
 ---@return table result { same }
 function actions.sameVehicle(src, payload)
     local acc = account(src)
-    if not acc then return fail('Sign in to Ryde first.') end
+    if not acc then return fail('ryde.signRydeFirst', 'Sign in to Ryde first.') end
     local p = type(payload) == 'table' and payload or {}
     local trip = p.tripId and trips[p.tripId] or nil
-    if not (trip and trip.driverUsername == acc.username) then return fail('No active trip.') end
+    if not (trip and trip.driverUsername == acc.username) then return fail('ryde.noActiveTrip', 'No active trip.') end
     return ok({ same = inSameVehicle(trip) })
 end
 
@@ -521,13 +523,13 @@ end
 ---@return table result { rideId, fare, paid }
 function actions.complete(src, payload)
     local acc = account(src)
-    if not acc then return fail('Sign in to Ryde first.') end
+    if not acc then return fail('ryde.signRydeFirst', 'Sign in to Ryde first.') end
     local p = type(payload) == 'table' and payload or {}
     local trip = p.tripId and trips[p.tripId] or nil
-    if not (trip and trip.driverUsername == acc.username) then return fail('No active trip.') end
-    if trip.status ~= 'in_progress' then return fail('Pick up your rider before completing the trip.') end
+    if not (trip and trip.driverUsername == acc.username) then return fail('ryde.noActiveTrip', 'No active trip.') end
+    if trip.status ~= 'in_progress' then return fail('ryde.pickUpRiderBeforeCompleting', 'Pick up your rider before completing the trip.') end
     if not withinOf(srcOf(trip.driverCid), trip.dropoff.x, trip.dropoff.y, 250.0) then
-        return fail('Drive to the drop-off to complete the trip.')
+        return fail('ryde.driveDropOffCompleteTrip', 'Drive to the drop-off to complete the trip.')
     end
 
     trips[trip.id] = nil
@@ -603,7 +605,7 @@ function actions.cancel(src)
         end
         return ok({})
     end
-    return fail('Nothing to cancel.')
+    return fail('ryde.nothingCancel', 'Nothing to cancel.')
 end
 
 ---Rider rates their own finished ride 1-5 stars, optionally tipping rider bank -> driver bank;
@@ -613,18 +615,18 @@ end
 ---@return table result { rated, tipPaid }
 function actions.rate(src, payload)
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Could not resolve your character.') end
+    if not cid then return fail('ryde.couldNotResolveCharacter', 'Could not resolve your character.') end
     local p = type(payload) == 'table' and payload or {}
     local stars = finite(p.stars)
     stars = stars and math.floor(stars) or 0
-    if stars < 1 or stars > 5 then return fail('Pick 1 to 5 stars.') end
+    if stars < 1 or stars > 5 then return fail('ryde.pick15Stars', 'Pick 1 to 5 stars.') end
 
     local ride = type(p.rideId) == 'string' and store.getRide(p.rideId) or nil
-    if not (ride and ride.rider_username == cid) then return fail('Ride not found.') end
-    if ride.rating ~= nil then return fail('You already rated this trip.') end
+    if not (ride and ride.rider_username == cid) then return fail('ryde.rideNotFound', 'Ride not found.') end
+    if ride.rating ~= nil then return fail('ryde.alreadyRatedTrip', 'You already rated this trip.') end
 
     local affected = store.setRideRating(ride.id, stars)
-    if not (affected and affected > 0) then return fail('Could not save your rating.') end
+    if not (affected and affected > 0) then return fail('ryde.couldNotSaveRating', 'Could not save your rating.') end
 
     local drvUser = ride.driver_username
     if drvUser and drvUser ~= '' then store.addRating(drvUser, stars) end
@@ -725,7 +727,7 @@ end
 ---@return table result { rider, driver, lastEnded, requests }
 function actions.sync(src)
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Could not resolve your character.') end
+    if not cid then return fail('ryde.couldNotResolveCharacter', 'Could not resolve your character.') end
     local acc    = account(src)
     local rider  = riderActivePayload(cid)
     local driver = acc and driverActivePayload(acc.username) or nil
@@ -751,12 +753,12 @@ function actions.watchTrip(src, payload)
     local p = type(payload) == 'table' and payload or {}
     if not p.on then tripViewers[src] = nil; return ok({}) end
     local trip = p.tripId and trips[p.tripId] or nil
-    if not trip then tripViewers[src] = nil; return fail('No such trip.') end
+    if not trip then tripViewers[src] = nil; return fail('ryde.noSuchTrip', 'No such trip.') end
     local cid = player.getIdentifier(src)
     local acc = account(src)
     local isRider  = trip.riderCid == cid
     local isDriver = acc and trip.driverUsername == acc.username
-    if not (isRider or isDriver) then return fail('Not your trip.') end
+    if not (isRider or isDriver) then return fail('ryde.notTrip', 'Not your trip.') end
     tripViewers[src] = { tripId = p.tripId, role = isDriver and 'driver' or 'rider' }
     return ok({})
 end
@@ -801,7 +803,7 @@ end)
 ---@return table result { asRider, asDriver }
 function actions.history(src)
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Could not resolve your character.') end
+    if not cid then return fail('ryde.couldNotResolveCharacter', 'Could not resolve your character.') end
     local acc = account(src)
     local driverKey = (acc and acc.username) or cid
     local rows = store.ridesForUser(cid, driverKey)
@@ -844,7 +846,7 @@ end
 ---@return table result
 function actions.me(src)
     local acc = account(src)
-    if not acc then return fail('Sign in to Ryde first.') end
+    if not acc then return fail('ryde.signRydeFirst', 'Sign in to Ryde first.') end
     local d = store.getDriver(acc.username)
     local rating = (d and d.rating_count > 0) and (d.rating_sum / d.rating_count) or 5.0
     return ok({
@@ -866,7 +868,7 @@ end
 ---@return table result
 function actions.deleteAccount(src)
     local acc = account(src)
-    if not acc then return fail('Sign in to Ryde first.') end
+    if not acc then return fail('ryde.signRydeFirst', 'Sign in to Ryde first.') end
 
     online[acc.username] = nil
     local tripId = driverActive[acc.username]

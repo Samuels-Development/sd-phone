@@ -287,17 +287,21 @@ end
 ---@param src integer player server id
 ---@param targetCid string the officer being acted on
 ---@return boolean ok
----@return string? reason refusal reason when ok is false
+---@return table? refusal failure envelope when ok is false
 function access.belowMe(src, targetCid)
     local me = access.identity(src)
-    if not me then return false, 'You do not have MDT access' end
-    if type(targetCid) ~= 'string' or targetCid == '' then return false, 'Unknown officer' end
-    if targetCid == me.citizenid then return false, 'You cannot do that to your own record' end
+    if not me then return false, util.fail('mdt.doNotHaveMdtAccess', 'You do not have MDT access') end
+    if type(targetCid) ~= 'string' or targetCid == '' then return false, util.fail('mdt.unknownOfficer', 'Unknown officer') end
+    if targetCid == me.citizenid then
+        return false, util.fail('mdt.cannotDoOwnRecord', 'You cannot do that to your own record')
+    end
 
     local grade, jobName = access.gradeOf(targetCid)
-    if grade == nil then return false, 'Unknown officer' end
-    if jobName and jobName ~= me.job then return false, 'That officer is not in your department' end
-    if grade >= me.grade then return false, 'That officer is not below your rank' end
+    if grade == nil then return false, util.fail('mdt.unknownOfficer', 'Unknown officer') end
+    if jobName and jobName ~= me.job then
+        return false, util.fail('mdt.officerNotDepartment', 'That officer is not in your department')
+    end
+    if grade >= me.grade then return false, util.fail('mdt.officerNotBelowRank', 'That officer is not below your rank') end
     return true
 end
 
@@ -363,12 +367,12 @@ function access.audience()
     return out
 end
 
----@type string Refusal shown when the caller's job carries no terminal at all.
-local NO_ACCESS = 'You do not have access to this terminal'
----@type string Refusal shown when the caller's grade is below the key's threshold.
-local NO_RANK = 'Your rank does not allow that'
----@type string Refusal shown when a handler faulted instead of answering.
-local NO_ANSWER = 'That did not go through'
+---@type table Refusal shown when the caller's job carries no terminal at all.
+local NO_ACCESS = util.fail('mdt.doNotHaveAccessTerminal', 'You do not have access to this terminal')
+---@type table Refusal shown when the caller's grade is below the key's threshold.
+local NO_RANK = util.fail('mdt.rankDoesNotAllow', 'Your rank does not allow that')
+---@type table Refusal shown when a handler faulted instead of answering.
+local NO_ANSWER = util.fail('mdt.didNotGoThrough', 'That did not go through')
 
 ---Runs a handler under pcall, so a fault answers the client instead of leaving its callback
 ---pending forever. The error is printed, never swallowed.
@@ -383,9 +387,9 @@ local function run(label, fn, src, payload, me)
     local ok, res, audit = pcall(fn, src, payload, me)
     if not ok then
         print(('^1[sd-phone:mdt]^0 %s failed: %s'):format(label, res))
-        return util.fail(NO_ANSWER)
+        return NO_ANSWER
     end
-    if type(res) ~= 'table' then return util.fail(NO_ANSWER) end
+    if type(res) ~= 'table' then return NO_ANSWER end
     return res, audit
 end
 
@@ -397,8 +401,8 @@ end
 function access.gated(key, fn)
     return function(src, payload)
         local me = access.identity(src)
-        if not me then return util.fail(NO_ACCESS) end
-        if not access.can(src, key) then return util.fail(NO_RANK) end
+        if not me then return NO_ACCESS end
+        if not access.can(src, key) then return NO_RANK end
         if type(payload) ~= 'table' then payload = {} end
         return (run(key, fn, src, payload, me))
     end
@@ -414,8 +418,8 @@ end
 function access.audited(key, fn)
     return function(src, payload)
         local me = access.identity(src)
-        if not me then return util.fail(NO_ACCESS) end
-        if not access.can(src, key) then return util.fail(NO_RANK) end
+        if not me then return NO_ACCESS end
+        if not access.can(src, key) then return NO_RANK end
         if type(payload) ~= 'table' then payload = {} end
 
         local res, audit = run(key, fn, src, payload, me)
@@ -435,7 +439,7 @@ end
 function access.open(fn)
     return function(src, payload)
         local me = access.identity(src)
-        if not me then return util.fail(NO_ACCESS) end
+        if not me then return NO_ACCESS end
         if type(payload) ~= 'table' then payload = {} end
         return (run('open', fn, src, payload, me))
     end

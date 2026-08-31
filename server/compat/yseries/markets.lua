@@ -46,18 +46,18 @@ end
 ---@return table
 local function adjust(username, data, sign, reasonTag)
     if type(data) ~= 'table' then
-        return { success = false, message = 'data must be a table' }
+        return { success = false, messageKey = 'compat.dataMustTable', message = 'data must be a table' }
     end
 
     local symbol = type(data.symbol) == 'string' and data.symbol:upper() or nil
     local amount = tonumber(data.amount)
     if not symbol or not amount or amount <= 0 then
-        return { success = false, message = 'symbol and a positive amount are required' }
+        return { success = false, messageKey = 'compat.symbolPositiveAmountRequired', message = 'symbol and a positive amount are required' }
     end
 
     local identity = identityFor(username)
     if not identity then
-        return { success = false, message = 'no Markets account for that username' }
+        return { success = false, messageKey = 'compat.noMarketsAccountUsername', message = 'no Markets account for that username' }
     end
 
     if data.metadata ~= nil then

@@ -117,7 +117,7 @@ export function PostDetail({ post, me, onBack, onToggleLike, onToggleRepost, onT
                             icon={<MessageCircle className="h-7 w-7" strokeWidth={1.8} />}
                             circleClassName="bg-hairline/[0.06] text-label/35"
                             title={t('squawk.noRepliesYet', 'No replies yet')}
-                            subtitle={t('squawk.repliesEmptySubtitle', 'When someone replies to this post, it will show up here.')}
+                            subtitle={t('squawk.postRepliesEmptySubtitle', 'When someone replies to this post, it will show up here.')}
                             subtitleClassName="text-ios-gray"
                         />
                     </div>

@@ -1,3 +1,5 @@
+---@type table Locale bridge (bridge.shared.locale): t(key, english, vars) for in-world text.
+local locale = require 'bridge.shared.locale'
 ---@type table Notify bridge (bridge.client.notify): backend-agnostic toast notifications.
 local notify = require 'bridge.client.notify'
 -- Loaded for side effects: registers the owner-context exec callback for the housing bridge.
@@ -16,7 +18,7 @@ RegisterNUICallback('sd-phone:homes:waypoint', function(payload, cb)
     local y = type(payload) == 'table' and tonumber(payload.y) or nil
     if not x or not y then return cb({ success = false }) end
     SetNewWaypoint(x + 0.0, y + 0.0)
-    notify.show({ description = 'Waypoint set.', type = 'success' })
+    notify.show({ description = locale.t('homes.waypointSet', 'Waypoint set.'), type = 'success' })
     cb({ success = true })
 end)
 

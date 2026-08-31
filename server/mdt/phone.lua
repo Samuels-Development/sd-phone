@@ -92,7 +92,7 @@ end
 ---The handset itself: who it is registered to, what it holds, and who it refuses.
 phone.summary = access.gated('phone.view', function(_, payload, me)
     local citizenid = subjectOf(payload)
-    if not citizenid then return util.fail('No citizen given') end
+    if not citizenid then return util.fail('mdt.noCitizenGiven', 'No citizen given') end
 
     local number = numberOf(citizenid)
     if not number then

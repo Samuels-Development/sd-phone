@@ -187,7 +187,7 @@ end)
 warrants.get = access.gated('warrants.view', function(_, payload)
     local ref = util.limitedString(payload.ref, 16)
     local row = ref and MySQL.single.await('SELECT * FROM phone_mdt_warrants WHERE ref = ? LIMIT 1', { ref })
-    if not row then return util.fail('That warrant no longer exists') end
+    if not row then return util.fail('mdt.warrantNoLongerExists', 'That warrant no longer exists') end
     return util.ok({ warrant = shapeOf(row, os.time()) })
 end)
 
@@ -195,7 +195,7 @@ end)
 ---this suspect, so the counters can never be dictated by the client.
 warrants.issue = access.audited('warrants.issue', function(_, payload, me)
     local citizenid = util.limitedString(payload.citizenid, 64)
-    if not citizenid then return util.fail('Pick a citizen') end
+    if not citizenid then return util.fail('mdt.pickCitizen', 'Pick a citizen') end
 
     local reportRef = util.limitedString(payload.reportRef, 16)
     local reportId, subject
@@ -203,8 +203,8 @@ warrants.issue = access.audited('warrants.issue', function(_, payload, me)
     local raw = {}
     if reportRef then
         local report, suspect, rows = paperwork.suspectCharges(me, reportRef, citizenid)
-        if not report then return util.fail('That report is not available') end
-        if not suspect then return util.fail('That citizen is not a suspect on that report') end
+        if not report then return util.fail('mdt.reportNotAvailable', 'That report is not available') end
+        if not suspect then return util.fail('mdt.citizenNotSuspectReport', 'That citizen is not a suspect on that report') end
         reportId = report.id
         subject  = suspect.name
         raw      = rows
@@ -218,7 +218,7 @@ warrants.issue = access.audited('warrants.issue', function(_, payload, me)
     end
 
     local lines = offences.totalFor(raw)
-    if #lines == 0 then return util.fail('A warrant needs at least one charge') end
+    if #lines == 0 then return util.fail('mdt.warrantNeedsLeastOneCharge', 'A warrant needs at least one charge') end
 
     if not subject then subject = store.namesFor({ citizenid })[citizenid] end
 
@@ -244,7 +244,7 @@ warrants.issue = access.audited('warrants.issue', function(_, payload, me)
     if bond > MAX_BOND then bond = MAX_BOND end
 
     local ref = store.nextRef('warrant')
-    if not ref then return util.fail('Could not allocate a warrant number') end
+    if not ref then return util.fail('mdt.couldNotAllocateWarrantNumber', 'Could not allocate a warrant number') end
 
     local now = os.time()
     MySQL.insert.await([[
@@ -259,7 +259,7 @@ warrants.issue = access.audited('warrants.issue', function(_, payload, me)
     })
 
     local row = MySQL.single.await('SELECT * FROM phone_mdt_warrants WHERE ref = ? LIMIT 1', { ref })
-    if not row then return util.fail('The warrant could not be issued') end
+    if not row then return util.fail('mdt.warrantCouldNotIssued', 'The warrant could not be issued') end
 
     announce(citizenid, true)
 
@@ -275,13 +275,13 @@ end)
 warrants.close = access.audited('warrants.close', function(_, payload, me)
     local ref = util.limitedString(payload.ref, 16)
     local row = ref and MySQL.single.await('SELECT * FROM phone_mdt_warrants WHERE ref = ? LIMIT 1', { ref })
-    if not row then return util.fail('That warrant no longer exists') end
+    if not row then return util.fail('mdt.warrantNoLongerExists', 'That warrant no longer exists') end
     if row.department ~= '' and row.department ~= me.job then
-        return util.fail('That warrant belongs to another department')
+        return util.fail('mdt.warrantBelongsAnotherDepartment', 'That warrant belongs to another department')
     end
 
     local now = os.time()
-    if (tonumber(row.expiry) or 0) <= now then return util.fail('That warrant is already closed') end
+    if (tonumber(row.expiry) or 0) <= now then return util.fail('mdt.warrantAlreadyClosed', 'That warrant is already closed') end
 
     MySQL.update.await('UPDATE phone_mdt_warrants SET expiry = ? WHERE id = ?', { now, row.id })
     row.expiry = now
@@ -301,10 +301,10 @@ end)
 warrants.void = access.audited('warrants.void', function(_, payload, me)
     local ref = util.limitedString(payload.ref, 16)
     local row = ref and MySQL.single.await('SELECT * FROM phone_mdt_warrants WHERE ref = ? LIMIT 1', { ref })
-    if not row then return util.fail('That warrant no longer exists') end
+    if not row then return util.fail('mdt.warrantNoLongerExists', 'That warrant no longer exists') end
 
     local now = os.time()
-    if (tonumber(row.expiry) or 0) <= now then return util.fail('That warrant is already closed') end
+    if (tonumber(row.expiry) or 0) <= now then return util.fail('mdt.warrantAlreadyClosed', 'That warrant is already closed') end
 
     MySQL.update.await('UPDATE phone_mdt_warrants SET expiry = ? WHERE id = ?', { now, row.id })
     row.expiry = now

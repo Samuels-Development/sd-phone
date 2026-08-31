@@ -320,7 +320,7 @@ end)
 ---at most once every 5s, so the panel reflects the live inventory. Read-only.
 lib.callback.register('sd-phone:server:sim:get', function(source)
     local realCid = player.getRealIdentifier(source)
-    if not realCid then return util.fail('Player not found') end
+    if not realCid then return util.fail('sim.playerNotFound', 'Player not found') end
     -- A rescan is an inventory search per carried phone plus registry writes. Shares the push
     -- window so the panel is never more than one session-cache generation behind either way.
     local now = GetGameTimer()
@@ -398,22 +398,22 @@ end)
 ---Ejects the installed SIM (metadata mode): clears the phone item's number and hands the
 ---sim_card item back with its number intact. The phone loses service immediately.
 lib.callback.register('sd-phone:server:sim:eject', function(source)
-    if state.builtin then return util.fail('This phone\'s SIM is built in.') end
+    if state.builtin then return util.fail('sim.phoneSSimBuilt', 'This phone\'s SIM is built in.') end
     if state.mode ~= 'metadata' or config.Sim.AllowEject == false then
-        return util.fail('Take the SIM out of the phone\'s SIM tray instead.')
+        return util.fail('sim.takeSimOutPhoneS', 'Take the SIM out of the phone\'s SIM tray instead.')
     end
     local s = session.resolve(source)
     -- The ACTIVE ENTRY's number is the physically installed SIM; the session-level number can
     -- be a character-mode innate number that no card carries.
     local simNumber = s and s.active and s.active.number or nil
     if not s or not simNumber or not s.active.slot then
-        return util.fail('No SIM card is installed.')
+        return util.fail('sim.noSimCardInstalled', 'No SIM card is installed.')
     end
     if not inv.canCarry(source, config.Sim.SimItem, 1) then
-        return util.fail('You have no room for the SIM card.')
+        return util.fail('sim.haveNoRoomSimCard', 'You have no room for the SIM card.')
     end
     if not siminv.setPhoneSim(source, s.active.slot, nil) then
-        return util.fail('Could not eject the SIM card.')
+        return util.fail('sim.couldNotEjectSimCard', 'Could not eject the SIM card.')
     end
     siminv.giveSimItem(source, simNumber)
     session.push(source)
@@ -462,18 +462,18 @@ end
 ---takes the first snapshot immediately. A copy of the password lands in the Passwords app.
 lib.callback.register('sd-phone:server:sim:backup:set', function(source, payload)
     if not (config.Sim.Backup and config.Sim.Backup.Enabled ~= false) then
-        return util.fail('Cloud backup is disabled.')
+        return util.fail('sim.cloudBackupDisabled', 'Cloud backup is disabled.')
     end
     local realCid = player.getRealIdentifier(source)
-    if not realCid then return util.fail('Player not found') end
+    if not realCid then return util.fail('sim.playerNotFound', 'Player not found') end
     payload = type(payload) == 'table' and payload or {}
     local s = session.resolve(source)
-    if not s or not s.identity then return util.fail('Install a SIM card first.') end
+    if not s or not s.identity then return util.fail('sim.installSimCardFirst', 'Install a SIM card first.') end
 
     if payload.on == true then
         local password = type(payload.password) == 'string' and payload.password or ''
         if #password < 4 or #password > 32 then
-            return util.fail('Backup password must be 4-32 characters.')
+            return util.fail('sim.backupPasswordMust432', 'Backup password must be 4-32 characters.')
         end
         local accounts = require 'server.accounts.store'
         local existing = simStore.getBackupPassword(realCid)
@@ -481,7 +481,7 @@ lib.callback.register('sd-phone:server:sim:backup:set', function(source, payload
         -- becomes the new one (also the recovery path for a forgotten password).
         if existing and simStore.profileCount(realCid) > 0 then
             if not accounts.verifyPassword(password, existing) then
-                return util.fail('Wrong backup password. It\'s saved in the Passwords app of your backed-up phone.')
+                return util.fail('sim.wrongBackupPasswordSSaved', 'Wrong backup password. It\'s saved in the Passwords app of your backed-up phone.')
             end
         else
             simStore.setBackupPassword(realCid, accounts.hashPassword(password))
@@ -491,7 +491,7 @@ lib.callback.register('sd-phone:server:sim:backup:set', function(source, payload
         if not profile then
             local cap = tonumber(config.Sim.Backup.MaxProfiles) or 3
             if simStore.profileCount(realCid) >= cap then
-                return util.fail(('You can back up at most %d phones. Delete a backup first.'):format(cap))
+                return util.fail('sim.backUpAtMostPhones', 'You can back up at most {n} phones. Delete a backup first.', { n = cap })
             end
         end
         -- Enabling a phone that is already enrolled and freshly snapshotted changes nothing, so
@@ -499,11 +499,11 @@ lib.callback.register('sd-phone:server:sim:backup:set', function(source, payload
         if profile and profile.enabled and (os.time() - (profile.syncedAt or 0)) < MANUAL_SYNC_MIN_GAP then
             return util.ok()
         end
-        if syncBusy[source] then return util.fail('A backup is already running.') end
+        if syncBusy[source] then return util.fail('sim.backupAlreadyRunning', 'A backup is already running.') end
         -- Armed only here, so a wrong password or a disable still answers immediately: enabling
         -- runs the same ~60-statement snapshot as "Back Up Now", and off/on cycling reaches it.
         if not util.cooldown(realCid, 'sim:backupSet', 5000) then
-            return util.fail('Backed up moments ago. Try again in a few seconds.')
+            return util.fail('sim.backedUpMomentsAgoTry', 'Backed up moments ago. Try again in a few seconds.')
         end
 
         local cloudId = (profile and isCloudIdentity(profile.identity)) and profile.identity
@@ -526,21 +526,21 @@ end)
 ---Manual "Back Up Now" for the caller's phone (its own profile only).
 lib.callback.register('sd-phone:server:sim:backup:sync', function(source)
     if not (config.Sim.Backup and config.Sim.Backup.Enabled ~= false) then
-        return util.fail('Cloud backup is disabled.')
+        return util.fail('sim.cloudBackupDisabled', 'Cloud backup is disabled.')
     end
     local realCid = player.getRealIdentifier(source)
-    if not realCid then return util.fail('Player not found') end
+    if not realCid then return util.fail('sim.playerNotFound', 'Player not found') end
     local s = session.resolve(source)
-    if not s or not s.identity then return util.fail('No phone to back up.') end
+    if not s or not s.identity then return util.fail('sim.noPhoneBackUp', 'No phone to back up.') end
     local profile = simStore.getProfile(realCid, s.identity)
     if not profile or not profile.enabled then
-        return util.fail('Cloud Backup is not enabled on this phone.')
+        return util.fail('sim.cloudBackupNotEnabledPhone', 'Cloud Backup is not enabled on this phone.')
     end
 
-    if syncBusy[source] then return util.fail('A backup is already running.') end
+    if syncBusy[source] then return util.fail('sim.backupAlreadyRunning', 'A backup is already running.') end
     local since = os.time() - (profile.syncedAt or 0)
     if since < MANUAL_SYNC_MIN_GAP then
-        return util.fail(('Backed up moments ago. Try again in %ds.'):format(MANUAL_SYNC_MIN_GAP - since))
+        return util.fail('sim.backedUpMomentsAgoTryIn', 'Backed up moments ago. Try again in {seconds}s.', { seconds = MANUAL_SYNC_MIN_GAP - since })
     end
 
     syncBusy[source] = true
@@ -553,11 +553,11 @@ end)
 ---Toggles auto-sync (snapshot on holster, throttled) for the caller's phone.
 lib.callback.register('sd-phone:server:sim:backup:setAuto', function(source, payload)
     local realCid = player.getRealIdentifier(source)
-    if not realCid then return util.fail('Player not found') end
+    if not realCid then return util.fail('sim.playerNotFound', 'Player not found') end
     local s = session.resolve(source)
-    if not s or not s.identity then return util.fail('No phone.') end
+    if not s or not s.identity then return util.fail('sim.noPhone', 'No phone.') end
     if not simStore.getProfile(realCid, s.identity) then
-        return util.fail('Cloud Backup is not enabled on this phone.')
+        return util.fail('sim.cloudBackupNotEnabledPhone', 'Cloud Backup is not enabled on this phone.')
     end
     payload = type(payload) == 'table' and payload or {}
     simStore.setProfileAuto(realCid, s.identity, payload.on == true)
@@ -568,11 +568,11 @@ end)
 ---deleted from any phone (freeing a slot for a new phone).
 lib.callback.register('sd-phone:server:sim:backup:delete', function(source, payload)
     local realCid = player.getRealIdentifier(source)
-    if not realCid then return util.fail('Player not found') end
+    if not realCid then return util.fail('sim.playerNotFound', 'Player not found') end
     payload = type(payload) == 'table' and payload or {}
     local device = type(payload.device) == 'string' and payload.device or ''
     local profile = simStore.getProfile(realCid, device)
-    if not profile then return util.fail('Backup profile not found.') end
+    if not profile then return util.fail('sim.backupProfileNotFound', 'Backup profile not found.') end
     if isCloudIdentity(profile.identity) then backup.wipe(profile.identity) end
     simStore.deleteProfile(realCid, device)
     return util.ok()
@@ -610,16 +610,16 @@ end)
 ---profile enrollment - the source phone keeps backing itself up.
 lib.callback.register('sd-phone:server:sim:backup:restore', function(source, payload)
     if not (config.Sim.Backup and config.Sim.Backup.Enabled ~= false) then
-        return util.fail('Cloud backup is disabled.')
+        return util.fail('sim.cloudBackupDisabled', 'Cloud backup is disabled.')
     end
     local realCid = player.getRealIdentifier(source)
-    if not realCid then return util.fail('Player not found') end
+    if not realCid then return util.fail('sim.playerNotFound', 'Player not found') end
     payload = type(payload) == 'table' and payload or {}
     local s = session.resolve(source)
     -- Device mode restores onto the phone's own identity, no SIM/number required; legacy needs
     -- the installed SIM (its identity + number ARE the phone).
-    if not s or not s.identity then return util.fail('Install a SIM card first.') end
-    if not state.device and not s.number then return util.fail('Install a SIM card first.') end
+    if not s or not s.identity then return util.fail('sim.installSimCardFirst', 'Install a SIM card first.') end
+    if not state.device and not s.number then return util.fail('sim.installSimCardFirst', 'Install a SIM card first.') end
 
     local profile
     if type(payload.device) == 'string' and payload.device ~= '' then
@@ -633,14 +633,14 @@ lib.callback.register('sd-phone:server:sim:backup:restore', function(source, pay
                 candidates[#candidates + 1] = p
             end
         end
-        if #candidates > 1 then return util.fail('Pick which backup to restore.') end
+        if #candidates > 1 then return util.fail('sim.pickWhichBackupRestore', 'Pick which backup to restore.') end
         profile = candidates[1]
     end
-    if not profile then return util.fail('No cloud backup found for this character.') end
+    if not profile then return util.fail('sim.noCloudBackupFoundCharacter', 'No cloud backup found for this character.') end
     local isCloud = isCloudIdentity(profile.identity)
-    if isCloud and profile.syncedAt == nil then return util.fail('That backup has never completed.') end
+    if isCloud and profile.syncedAt == nil then return util.fail('sim.backupHasNeverCompleted', 'That backup has never completed.') end
     if not isCloud and profile.identity == s.identity then
-        return util.fail('This phone already holds the backed-up data.')
+        return util.fail('sim.phoneAlreadyHoldsBackedUp', 'This phone already holds the backed-up data.')
     end
 
     local stored = simStore.getBackupPassword(realCid)
@@ -648,15 +648,15 @@ lib.callback.register('sd-phone:server:sim:backup:restore', function(source, pay
         local given = type(payload.password) == 'string' and payload.password or ''
         local accounts = require 'server.accounts.store'
         if not accounts.verifyPassword(given, stored) then
-            return util.fail('Wrong backup password.')
+            return util.fail('sim.wrongBackupPassword', 'Wrong backup password.')
         end
     end
 
-    if syncBusy[source] then return util.fail('A backup is already running.') end
+    if syncBusy[source] then return util.fail('sim.backupAlreadyRunning', 'A backup is already running.') end
     -- Checked after the password so a fumbled one can be retried at once. A restore is idempotent
     -- (the rows are remapped, so a repeat writes nothing) but costs the full copy every time.
     if not util.cooldown(realCid, 'sim:backupRestore', 30000) then
-        return util.fail('Restored moments ago. Try again in a moment.')
+        return util.fail('sim.restoredMomentsAgoTryAgain', 'Restored moments ago. Try again in a moment.')
     end
 
     -- Snapshot untouched: restore copies OUT of the cloud. Live room state (groups, mail

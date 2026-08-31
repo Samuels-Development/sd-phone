@@ -123,9 +123,9 @@ export function Lobby({ chips, onPlay, onCashier, onLeaderboards, onRules }: {
                         <div key={game} className="flex items-center justify-between py-[3px]">
                             <span className="text-[15px] font-bold text-white/85">{GAME_LABEL[game]()}</span>
                             <span className="flex items-center gap-3.5 text-[14px] font-semibold tabular-nums text-white/80">
-                                <span><span className="font-extrabold text-[#9CCC65]">{stats[game].cpu.wins}</span> W</span>
-                                <span><span className="font-extrabold text-[#FF8A80]">{stats[game].cpu.losses}</span> L</span>
-                                <span><span className="font-extrabold text-white">{stats[game].cpu.draws}</span> D</span>
+                                <span><span className="font-extrabold text-[#9CCC65]">{stats[game].cpu.wins}</span> {t('casino.winsShort', 'W')}</span>
+                                <span><span className="font-extrabold text-[#FF8A80]">{stats[game].cpu.losses}</span> {t('casino.lossesShort', 'L')}</span>
+                                <span><span className="font-extrabold text-white">{stats[game].cpu.draws}</span> {t('casino.drawsShort', 'D')}</span>
                             </span>
                         </div>
                     ))}

@@ -206,9 +206,11 @@ local PROFILE_COLUMNS = {
 ---@param cid string citizenid
 ---@param fields table<string, any> keys from PROFILE_COLUMNS
 ---@return table|nil profile
----@return string? reason failure reason when profile is nil
+---@return table? refusal failure envelope when profile is nil
 function store.updateProfile(cid, fields)
-    if type(cid) ~= 'string' or cid == '' or type(fields) ~= 'table' then return nil, 'Unknown officer' end
+    if type(cid) ~= 'string' or cid == '' or type(fields) ~= 'table' then
+        return nil, util.fail('mdt.unknownOfficer', 'Unknown officer')
+    end
 
     local sets, args = {}, {}
     for key, column in pairs(PROFILE_COLUMNS) do
@@ -226,7 +228,7 @@ function store.updateProfile(cid, fields)
 
     local ok = pcall(MySQL.update.await,
         ('UPDATE phone_mdt_profiles SET %s WHERE citizenid = ?'):format(table.concat(sets, ', ')), args)
-    if not ok then return nil, 'That callsign is already in use' end
+    if not ok then return nil, util.fail('mdt.callsignAlreadyUse', 'That callsign is already in use') end
 
     return readProfile(cid)
 end

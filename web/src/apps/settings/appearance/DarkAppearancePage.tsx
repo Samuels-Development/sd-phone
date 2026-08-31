@@ -11,32 +11,6 @@ import { PaletteChip, CustomPalettesSection } from './PaletteRows';
 import { PaletteEditorPage } from './PaletteEditorPage';
 import { Toggle } from '@/ui/Toggle';
 
-const PALETTES: { id: DarkTheme; label: string; swatch: { base: string; surface: string; control: string } }[] = [
-    { id: 'graphite', label: t('settings.darkGraphite', 'Graphite'), swatch: { base: '#0B0B0D', surface: '#1C1C1E', control: '#3A3A3C' } },
-    { id: 'black',    label: t('settings.darkBlack', 'Black'),       swatch: { base: '#000000', surface: '#161618', control: '#313134' } },
-    { id: 'warm',     label: t('settings.darkWarm', 'Warm'),         swatch: { base: '#0C0B0A', surface: '#1D1C1B', control: '#3A3937' } },
-    { id: 'midnight', label: t('settings.darkMidnight', 'Midnight'), swatch: { base: '#0A0C12', surface: '#181C26', control: '#333948' } },
-    { id: 'moss',     label: t('settings.darkMoss', 'Moss'),         swatch: { base: '#0A0D0B', surface: '#191E1A', control: '#343B35' } },
-    { id: 'plum',     label: t('settings.darkPlum', 'Plum'),         swatch: { base: '#0D0A10', surface: '#1E1922', control: '#3B3441' } },
-    { id: 'slate', label: t('settings.darkSlate', 'Slate'), swatch: { base: '#0B0D10', surface: '#1B1F24', control: '#373D45' } },
-    { id: 'ocean', label: t('settings.darkOcean', 'Ocean'), swatch: { base: '#080D0E', surface: '#161E20', control: '#2F3B3E' } },
-    { id: 'rose', label: t('settings.darkRose', 'Rose'), swatch: { base: '#0F0A0C', surface: '#21191C', control: '#3F3438' } },
-    { id: 'clay', label: t('settings.darkClay', 'Clay'), swatch: { base: '#0E0B09', surface: '#201B17', control: '#3E3730' } },
-];
-
-const DESC: Record<DarkTheme, string> = {
-    graphite: t('settings.darkGraphiteHint', 'Soft charcoal. Layers read clearly, easiest on the eyes.'),
-    black:    t('settings.darkBlackHint', 'True black. Deep and high-contrast, best on OLED.'),
-    warm:     t('settings.darkWarmHint', 'A faint warm tint. Cozier, less clinical.'),
-    midnight: t('settings.darkMidnightHint', 'A cool blue cast. Calm, and easy at night.'),
-    moss:     t('settings.darkMossHint', 'A quiet green tint. Muted and natural.'),
-    plum:     t('settings.darkPlumHint', 'A soft violet cast. Moody without being loud.'),
-    slate: t('settings.darkSlateHint', 'A cool grey-blue. Neutral, a touch crisper than Graphite.'),
-    ocean: t('settings.darkOceanHint', 'Deep teal. Cold and clean, like water at night.'),
-    rose: t('settings.darkRoseHint', 'A muted red cast. Warm without going orange.'),
-    clay: t('settings.darkClayHint', 'Earthy brown. The warmest of the set.'),
-};
-
 export function DarkAppearancePage({ onBack }: { onBack: () => void }) {
     const { goBack, pageStyle } = useIosPush(onBack);
     const { darkTheme, setDarkTheme, customPalettes } = useTheme('darkTheme', 'setDarkTheme', 'customPalettes');
@@ -54,10 +28,36 @@ export function DarkAppearancePage({ onBack }: { onBack: () => void }) {
         );
     }
 
+    const PALETTES: { id: DarkTheme; label: string; swatch: { base: string; surface: string; control: string } }[] = [
+        { id: 'graphite', label: t('settings.darkGraphite', 'Graphite'), swatch: { base: '#0B0B0D', surface: '#1C1C1E', control: '#3A3A3C' } },
+        { id: 'black',    label: t('settings.darkBlack', 'Black'),       swatch: { base: '#000000', surface: '#161618', control: '#313134' } },
+        { id: 'warm',     label: t('settings.darkWarm', 'Warm'),         swatch: { base: '#0C0B0A', surface: '#1D1C1B', control: '#3A3937' } },
+        { id: 'midnight', label: t('settings.darkMidnight', 'Midnight'), swatch: { base: '#0A0C12', surface: '#181C26', control: '#333948' } },
+        { id: 'moss',     label: t('settings.darkMoss', 'Moss'),         swatch: { base: '#0A0D0B', surface: '#191E1A', control: '#343B35' } },
+        { id: 'plum',     label: t('settings.darkPlum', 'Plum'),         swatch: { base: '#0D0A10', surface: '#1E1922', control: '#3B3441' } },
+        { id: 'slate', label: t('settings.darkSlate', 'Slate'), swatch: { base: '#0B0D10', surface: '#1B1F24', control: '#373D45' } },
+        { id: 'ocean', label: t('settings.darkOcean', 'Ocean'), swatch: { base: '#080D0E', surface: '#161E20', control: '#2F3B3E' } },
+        { id: 'rose', label: t('settings.darkRose', 'Rose'), swatch: { base: '#0F0A0C', surface: '#21191C', control: '#3F3438' } },
+        { id: 'clay', label: t('settings.darkClay', 'Clay'), swatch: { base: '#0E0B09', surface: '#201B17', control: '#3E3730' } },
+    ];
+
+    const DESC: Record<DarkTheme, string> = {
+        graphite: t('settings.darkGraphiteHint', 'Soft charcoal. Layers read clearly, easiest on the eyes.'),
+        black:    t('settings.darkBlackHint', 'True black. Deep and high-contrast, best on OLED.'),
+        warm:     t('settings.darkWarmHint', 'A faint warm tint. Cozier, less clinical.'),
+        midnight: t('settings.darkMidnightHint', 'A cool blue cast. Calm, and easy at night.'),
+        moss:     t('settings.darkMossHint', 'A quiet green tint. Muted and natural.'),
+        plum:     t('settings.darkPlumHint', 'A soft violet cast. Moody without being loud.'),
+        slate: t('settings.darkSlateHint', 'A cool grey-blue. Neutral, a touch crisper than Graphite.'),
+        ocean: t('settings.darkOceanHint', 'Deep teal. Cold and clean, like water at night.'),
+        rose: t('settings.darkRoseHint', 'A muted red cast. Warm without going orange.'),
+        clay: t('settings.darkClayHint', 'Earthy brown. The warmest of the set.'),
+    };
+
     return (
         <div className="absolute inset-0 z-30 flex flex-col bg-base text-black dark:text-white" style={pageStyle}>
             <div className="h-11 shrink-0" aria-hidden />
-            <NavBar backLabel={t('settings.displayBrightness', 'Display')} onBack={goBack} title={t('settings.darkAppearance', 'Dark Appearance')} hairline />
+            <NavBar backLabel={t('settings.display', 'Display')} onBack={goBack} title={t('settings.darkAppearance', 'Dark Appearance')} hairline />
 
             <div className="flex-1 overflow-y-auto no-scrollbar">
                 <div className="mt-6 flex flex-col gap-7 px-4 pb-12">
@@ -108,7 +108,7 @@ function Preview() {
             <div className="flex flex-col gap-4 p-4">
 
                 <div className="overflow-hidden rounded-[11px] bg-surface">
-                    <PreviewRow left={<Dot className="bg-ios-blue" />} label={t('settings.wifi', 'Wi-Fi')} value="Home" divider />
+                    <PreviewRow left={<Dot className="bg-ios-blue" />} label={t('settings.wifi', 'Wi-Fi')} value={t('settings.previewWifiNetwork', 'Home')} divider />
                     <PreviewRow left={<Dot className="bg-ios-green" />} label={t('settings.bluetooth', 'Bluetooth')} right={<Toggle on />} divider />
                     <PreviewRow left={<Dot className="bg-ios-gray" />} label={t('settings.general', 'General')} />
                 </div>

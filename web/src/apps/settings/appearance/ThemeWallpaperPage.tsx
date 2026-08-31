@@ -38,7 +38,7 @@ export function ThemeWallpaperPage({ draft, showAppNames, wallpaper, pinned, onT
             <NavBar
                 backLabel={t('settings.iconThemeEditBack', 'Theme')}
                 onBack={goBack}
-                title={t('settings.iconThemeWallpaper', 'Wallpaper')}
+                title={t('settings.wallpaper', 'Wallpaper')}
                 hairline
             />
 

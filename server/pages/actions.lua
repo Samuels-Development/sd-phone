@@ -184,11 +184,11 @@ function actions.create(src, payload)
     if not cid then return { success = false } end
     if type(payload) ~= 'table' then payload = {} end
     if not util.rateLimit(cid, 'pages:write', WRITE_WINDOW, WRITE_MAX) then
-        return { success = false, message = 'Slow down' }
+        return { success = false, messageKey = 'pages.slowDown', message = 'Slow down' }
     end
 
     if store.countFor(cid) >= PG.MaxPostsPerPlayer then
-        return { success = false, message = 'You have too many active posts' }
+        return { success = false, messageKey = 'pages.haveTooManyActivePosts', message = 'You have too many active posts' }
     end
 
     local f, err = parseFields(payload, cid)
@@ -220,20 +220,20 @@ function actions.update(src, payload)
     if not cid then return { success = false } end
     if type(payload) ~= 'table' then payload = {} end
     if not util.rateLimit(cid, 'pages:write', WRITE_WINDOW, WRITE_MAX) then
-        return { success = false, message = 'Slow down' }
+        return { success = false, messageKey = 'pages.slowDown', message = 'Slow down' }
     end
 
     local id = tonumber(payload.id)
     id = id and math.tointeger(id)
-    if not id then return { success = false, message = 'Bad post id' } end
-    if store.ownerOf(id) ~= cid then return { success = false, message = 'Not your post' } end
+    if not id then return { success = false, messageKey = 'pages.badPostId', message = 'Bad post id' } end
+    if store.ownerOf(id) ~= cid then return { success = false, messageKey = 'pages.notPost', message = 'Not your post' } end
 
     local f, err = parseFields(payload, cid)
     if not f then return { success = false, message = err } end
 
     store.update(id, f.title, f.body, f.price, f.image, f.images, f.number, f.email)
     local row = store.byId(id)
-    if not row then return { success = false, message = 'Post not found' } end
+    if not row then return { success = false, messageKey = 'pages.postNotFound', message = 'Post not found' } end
     broadcastFeed(src, { type = 'updated', item = toPost(row, nil) })
     return { success = true, data = { post = toPost(row, cid) } }
 end
@@ -247,12 +247,12 @@ function actions.delete(src, id)
     local cid = cidOf(src)
     if not cid then return { success = false } end
     if not util.rateLimit(cid, 'pages:write', WRITE_WINDOW, WRITE_MAX) then
-        return { success = false, message = 'Slow down' }
+        return { success = false, messageKey = 'pages.slowDown', message = 'Slow down' }
     end
     id = tonumber(id)
     id = id and math.tointeger(id)
-    if not id then return { success = false, message = 'Bad post id' } end
-    if store.ownerOf(id) ~= cid then return { success = false, message = 'Not your post' } end
+    if not id then return { success = false, messageKey = 'pages.badPostId', message = 'Bad post id' } end
+    if store.ownerOf(id) ~= cid then return { success = false, messageKey = 'pages.notPost', message = 'Not your post' } end
     store.delete(id)
     broadcastFeed(src, { type = 'removed', id = tostring(id) })
     return { success = true, data = { id = tostring(id) } }

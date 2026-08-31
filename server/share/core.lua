@@ -88,25 +88,32 @@ end
 ---@param target any client-supplied recipient server id
 ---@param kind string share kind
 ---@param payload table kind-specific share data, handed to the handler on accept
----@return boolean ok, string? message failure reason
+---@return boolean ok
+---@return table? refusal keyed refusal envelope when ok is false
 function core.request(src, target, kind, payload)
     target = tonumber(target)
-    if not target then return false, 'Invalid recipient' end
+    if not target then return false, util.fail('share.invalidRecipient', 'Invalid recipient') end
     -- Sharing to yourself needs no second player, so it is the one path with no proximity cost
     -- at all; the picker never offers it either.
-    if target == src then return false, 'Invalid recipient' end
-    if not handlers[kind] then return false, 'Unknown share type' end
-    if not core.canShareTo(src, target) then return false, 'Recipient is no longer nearby' end
+    if target == src then return false, util.fail('share.invalidRecipient', 'Invalid recipient') end
+    if not handlers[kind] then return false, util.fail('share.unknownShareType', 'Unknown share type') end
+    if not core.canShareTo(src, target) then
+        return false, util.fail('share.recipientNoLongerNearby', 'Recipient is no longer nearby')
+    end
 
     -- Gated only once the request would otherwise be accepted, so a recipient who walked away
     -- never costs the sender their next attempt.
     if not util.cooldown(player.getIdentifier(src), 'airshare', REQUEST_COOLDOWN) then
-        return false, 'Slow down a moment'
+        return false, util.fail('share.slowDownMoment', 'Slow down a moment')
     end
     local sent, inbound = pruneExpired(src, target)
-    if sent >= MAX_PENDING then return false, 'Too many pending shares' end
-    if inbound >= MAX_PENDING then return false, 'Recipient has too many pending shares' end
-    if not util.encodedSize(payload, MAX_PAYLOAD_BYTES) then return false, 'That is too large to share' end
+    if sent >= MAX_PENDING then return false, util.fail('share.tooManyPendingShares', 'Too many pending shares') end
+    if inbound >= MAX_PENDING then
+        return false, util.fail('share.recipientHasTooManyPending', 'Recipient has too many pending shares')
+    end
+    if not util.encodedSize(payload, MAX_PAYLOAD_BYTES) then
+        return false, util.fail('share.tooLargeShare', 'That is too large to share')
+    end
 
     local id = ('as%d'):format(nextReqId)
     nextReqId = nextReqId + 1
@@ -128,12 +135,15 @@ function core.respond(src, id, accept)
     local req = requests[id]
     if not req or req.target ~= src then return { success = false } end
     requests[id] = nil
-    if os.time() > req.expires then return { success = false, message = 'Request expired' } end
+    if os.time() > req.expires then return { success = false, messageKey = 'share.requestExpired', message = 'Request expired' } end
+
+    local who, what = player.getName(src), kindLabel(req.kind)
 
     if not accept then
         TriggerClientEvent('sd-phone:client:notify', req.fromSrc, {
             app = 'phone', title = 'AirShare',
-            body = ('%s declined your %s.'):format(player.getName(src), kindLabel(req.kind)),
+            bodyKey = 'share.declinedYourShare', body = ('%s declined your %s.'):format(who, what),
+            bodyVars = { name = who, kind = what },
         })
         return { success = true }
     end
@@ -145,7 +155,8 @@ function core.respond(src, id, accept)
     if delivered == true then
         TriggerClientEvent('sd-phone:client:notify', req.fromSrc, {
             app = 'phone', title = 'AirShare',
-            body = ('%s accepted your %s.'):format(player.getName(src), kindLabel(req.kind)),
+            bodyKey = 'share.acceptedYourShare', body = ('%s accepted your %s.'):format(who, what),
+            bodyVars = { name = who, kind = what },
         })
         return { success = true }
     end
@@ -156,11 +167,12 @@ function core.respond(src, id, accept)
     -- The recipient gets the handler's specific reason; the sender only needs to know it missed.
     TriggerClientEvent('sd-phone:client:notify', src, {
         app = 'phone', title = 'AirShare',
-        body = reason or ('That %s could not be saved.'):format(kindLabel(req.kind)),
+        body = reason or ('That %s could not be saved.'):format(what),
     })
     TriggerClientEvent('sd-phone:client:notify', req.fromSrc, {
         app = 'phone', title = 'AirShare',
-        body = ('%s could not save your %s.'):format(player.getName(src), kindLabel(req.kind)),
+        bodyKey = 'share.couldNotSaveYourShare', body = ('%s could not save your %s.'):format(who, what),
+        bodyVars = { name = who, kind = what },
     })
     return { success = false, message = reason }
 end

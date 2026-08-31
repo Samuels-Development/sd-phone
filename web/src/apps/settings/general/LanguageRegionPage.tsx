@@ -28,20 +28,20 @@ export function LanguageRegionPage({ onBack }: { onBack: () => void }) {
         <SubPage title={t('settings.languageRegion', 'Language & Region')} onBack={onBack} sub={subNode}>
             <ListGroup>
                 <ListRow label={t('settings.language', 'Language')} value={current} onPress={() => setPicking(true)} divider />
-                <ListRow label={t('settings.region', 'Region')}   value="United States" />
+                <ListRow label={t('settings.region', 'Region')}   value={t('settings.regionUnitedStates', 'United States')} />
             </ListGroup>
 
             <ListGroup header={t('settings.regionFormats', 'Region formats')}>
-                <ListRow label={t('settings.calendar', 'Calendar')}    value="Gregorian"  divider />
-                <ListRow label={t('settings.temperature', 'Temperature')} value="°F"         divider />
-                <ListRow label={t('settings.measurement', 'Measurement')} value="Imperial"   />
+                <ListRow label={t('settings.calendar', 'Calendar')}    value={t('settings.calendarGregorian', 'Gregorian')} divider />
+                <ListRow label={t('settings.temperature', 'Temperature')} value={t('settings.temperatureFahrenheit', '°F')} divider />
+                <ListRow label={t('settings.measurement', 'Measurement')} value={t('settings.measurementImperial', 'Imperial')} />
             </ListGroup>
 
             <ListGroup header={t('settings.numberFormats', 'Number formats')}>
-                <ListRow label={t('settings.number', 'Number')}   value="1,234.56"          chevron={false} divider />
+                <ListRow label={t('settings.number', 'Number')}   value={t('settings.numberSample', '1,234.56')} chevron={false} divider />
                 <ListRow label={t('settings.currency', 'Currency')} value="USD ($)"           chevron={false} divider />
                 <ListRow label={t('settings.date', 'Date')}     value={formatMediumDate(new Date())} chevron={false} divider />
-                <ListRow label={t('settings.time', 'Time')}     value="8:22 PM"           chevron={false} />
+                <ListRow label={t('settings.time', 'Time')}     value={t('settings.timeSample', '8:22 PM')} chevron={false} />
             </ListGroup>
         </SubPage>
     );

@@ -16,32 +16,6 @@ import { PhoneShellPage } from './PhoneShellPage';
 import { accentCss } from './accentRamp';
 import { isCustomPaletteId } from './paletteRamp';
 
-const DARK_THEME_LABEL: Record<DarkTheme, string> = {
-    graphite: t('settings.darkGraphite', 'Graphite'),
-    black:    t('settings.darkBlack', 'Black'),
-    warm:     t('settings.darkWarm', 'Warm'),
-    midnight: t('settings.darkMidnight', 'Midnight'),
-    moss:     t('settings.darkMoss', 'Moss'),
-    plum:     t('settings.darkPlum', 'Plum'),
-    slate: t('settings.darkSlate', 'Slate'),
-    ocean: t('settings.darkOcean', 'Ocean'),
-    rose: t('settings.darkRose', 'Rose'),
-    clay: t('settings.darkClay', 'Clay'),
-};
-
-const LIGHT_THEME_LABEL: Record<LightTheme, string> = {
-    silver:   t('settings.lightSilver', 'Silver'),
-    snow:     t('settings.lightSnow', 'Snow'),
-    linen:    t('settings.lightLinen', 'Linen'),
-    sky:      t('settings.lightSky', 'Sky'),
-    mint:     t('settings.lightMint', 'Mint'),
-    blush:    t('settings.lightBlush', 'Blush'),
-    sand:     t('settings.lightSand', 'Sand'),
-    lavender: t('settings.lightLavender', 'Lavender'),
-    stone:    t('settings.lightStone', 'Stone'),
-    dusk:     t('settings.lightDusk', 'Dusk'),
-};
-
 export function DisplayBrightnessPage({ onBack }: { onBack: () => void }) {
     const { goBack, pageStyle } = useIosPush(onBack);
     const {
@@ -57,6 +31,46 @@ export function DisplayBrightnessPage({ onBack }: { onBack: () => void }) {
         accent,
         shellChoice,
     } = useTheme('theme', 'setTheme', 'darkTheme', 'lightTheme', 'brightness', 'setBrightness', 'phoneScale', 'setPhoneScale', 'chatTextScale', 'setChatTextScale', 'phoneAlign', 'setPhoneAlign', 'phoneTilt', 'setPhoneTilt', 'openAnim', 'setOpenAnim', 'customPalettes', 'accent', 'shellChoice');
+
+    const DARK_THEME_LABEL: Record<DarkTheme, string> = {
+        graphite: t('settings.darkGraphite', 'Graphite'),
+        black:    t('settings.darkBlack', 'Black'),
+        warm:     t('settings.darkWarm', 'Warm'),
+        midnight: t('settings.darkMidnight', 'Midnight'),
+        moss:     t('settings.darkMoss', 'Moss'),
+        plum:     t('settings.darkPlum', 'Plum'),
+        slate: t('settings.darkSlate', 'Slate'),
+        ocean: t('settings.darkOcean', 'Ocean'),
+        rose: t('settings.darkRose', 'Rose'),
+        clay: t('settings.darkClay', 'Clay'),
+    };
+
+    const LIGHT_THEME_LABEL: Record<LightTheme, string> = {
+        silver:   t('settings.lightSilver', 'Silver'),
+        snow:     t('settings.lightSnow', 'Snow'),
+        linen:    t('settings.lightLinen', 'Linen'),
+        sky:      t('settings.lightSky', 'Sky'),
+        mint:     t('settings.lightMint', 'Mint'),
+        blush:    t('settings.lightBlush', 'Blush'),
+        sand:     t('settings.lightSand', 'Sand'),
+        lavender: t('settings.lightLavender', 'Lavender'),
+        stone:    t('settings.lightStone', 'Stone'),
+        dusk:     t('settings.lightDusk', 'Dusk'),
+    };
+
+    const ANIM_LABEL: Record<OpenAnim, string> = {
+        slide: t('settings.openAnimSlide', 'Slide'),
+        fade:  t('settings.openAnimFade', 'Fade'),
+        pop:   t('settings.openAnimPop', 'Pop'),
+        flip:  t('settings.openAnimFlip', 'Flip'),
+    };
+
+    const ANIM_HINT: Record<OpenAnim, string> = {
+        slide: t('settings.openAnimSlideHint', 'Slides in from the edge it is anchored to.'),
+        fade:  t('settings.openAnimFadeHint', 'Fades in where it sits, with no movement.'),
+        pop:   t('settings.openAnimPopHint', 'Springs up from small to full size.'),
+        flip:  t('settings.openAnimFlipHint', 'Swings in on its side like a turning page.'),
+    };
 
     const isDark     = theme === 'dark';
     const trackEmpty = isDark ? 'rgb(var(--control))' : 'rgb(var(--surface))';
@@ -348,7 +362,7 @@ export function DisplayBrightnessPage({ onBack }: { onBack: () => void }) {
                         <div className="flex flex-col items-center gap-3 rounded-[12px] bg-surface px-4 py-4">
                             <PositionPicker value={phoneAlign} onChange={setPhoneAlign} isDark={isDark} />
                             <span className="text-[13px] text-ios-gray">
-                                {ALIGN_LABEL[phoneAlign]}
+                                {alignLabel(phoneAlign)}
                             </span>
                         </div>
                         <p className="mt-1.5 px-1 text-[12px] leading-snug text-ios-gray">
@@ -366,17 +380,20 @@ export function DisplayBrightnessPage({ onBack }: { onBack: () => void }) {
     );
 }
 
-const ALIGN_LABEL: Record<PhoneAlign, string> = {
-    'top-left':      t('settings.alignTopLeft', 'Top Left'),
-    'top-center':    t('settings.alignTopCenter', 'Top Center'),
-    'top-right':     t('settings.alignTopRight', 'Top Right'),
-    'middle-left':   t('settings.alignMiddleLeft', 'Middle Left'),
-    'middle-center': t('settings.alignCenter', 'Center'),
-    'middle-right':  t('settings.alignMiddleRight', 'Middle Right'),
-    'bottom-left':   t('settings.alignBottomLeft', 'Bottom Left'),
-    'bottom-center': t('settings.alignBottomCenter', 'Bottom Center'),
-    'bottom-right':  t('settings.alignBottomRight', 'Bottom Right'),
-};
+function alignLabel(align: PhoneAlign): string {
+    const labels: Record<PhoneAlign, string> = {
+        'top-left':      t('settings.alignTopLeft', 'Top Left'),
+        'top-center':    t('settings.alignTopCenter', 'Top Center'),
+        'top-right':     t('settings.alignTopRight', 'Top Right'),
+        'middle-left':   t('settings.alignMiddleLeft', 'Middle Left'),
+        'middle-center': t('settings.alignCenter', 'Center'),
+        'middle-right':  t('settings.alignMiddleRight', 'Middle Right'),
+        'bottom-left':   t('settings.alignBottomLeft', 'Bottom Left'),
+        'bottom-center': t('settings.alignBottomCenter', 'Bottom Center'),
+        'bottom-right':  t('settings.alignBottomRight', 'Bottom Right'),
+    };
+    return labels[align];
+}
 
 const POSITIONS: PhoneAlign[] = [
     'top-left',    'top-center',    'top-right',
@@ -415,7 +432,7 @@ function PositionPicker({
                             key={pos}
                             type="button"
                             onClick={() => onChange(pos)}
-                            aria-label={ALIGN_LABEL[pos]}
+                            aria-label={alignLabel(pos)}
                             className="flex items-center justify-center active:opacity-60"
                         >
                             {selected ? (
@@ -450,20 +467,6 @@ function PositionPicker({
 
 const PREVIEW_W = 78;
 const PREVIEW_H = 118;
-
-const ANIM_LABEL: Record<OpenAnim, string> = {
-    slide: t('settings.openAnimSlide', 'Slide'),
-    fade:  t('settings.openAnimFade', 'Fade'),
-    pop:   t('settings.openAnimPop', 'Pop'),
-    flip:  t('settings.openAnimFlip', 'Flip'),
-};
-
-const ANIM_HINT: Record<OpenAnim, string> = {
-    slide: t('settings.openAnimSlideHint', 'Slides in from the edge it is anchored to.'),
-    fade:  t('settings.openAnimFadeHint', 'Fades in where it sits, with no movement.'),
-    pop:   t('settings.openAnimPopHint', 'Springs up from small to full size.'),
-    flip:  t('settings.openAnimFlipHint', 'Swings in on its side like a turning page.'),
-};
 
 function TiltSliderRow({ label, value, trackEmpty, onChange }: {
     label:      string;

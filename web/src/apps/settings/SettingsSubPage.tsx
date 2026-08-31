@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import { t } from '@/i18n';
 import { NavBar } from '@/ui/NavBar';
 import { PushLayer } from '@/shell/PushLayer';
 import { useIosPush } from '@/hooks/useIosPush';
@@ -14,7 +15,7 @@ interface PageProps {
     children:   ReactNode;
 }
 
-export function SubPage({ title, backLabel = 'General', onBack, sub, children }: PageProps) {
+export function SubPage({ title, backLabel = t('settings.general', 'General'), onBack, sub, children }: PageProps) {
     const { goBack, pageStyle } = useIosPush(onBack);
     return (
         <PushLayer pageStyle={pageStyle} className="z-20" sub={sub}>

@@ -12,6 +12,10 @@ local deck   = require 'server.games.casino.deck'
 local eval   = require 'server.games.casino.holdem.eval'
 ---@type table Pot layering (server.games.casino.holdem.pot): side pots and odd-chip awards.
 local pot    = require 'server.games.casino.holdem.pot'
+---@type table Shared server helpers (server.util): the keyed refusal envelope.
+local util   = require 'server.util'
+---@type fun(key: string, message?: string, vars?: table): table Keyed refusal envelope builder.
+local fail   = util.fail
 
 ---@type table Hold'em settings (config.Casino.Holdem), hoisted with defaults so a config written
 ---before this section existed cannot leave a table with no action clock.
@@ -761,25 +765,27 @@ end
 ---@param seatIndex any client-supplied seat index
 ---@param buyIn any client-supplied buy-in
 ---@return table|nil view seat view, nil on refusal
----@return string? message refusal reason
+---@return table? refusal keyed refusal envelope when view is nil
 function holdem.sit(src, cid, name, tableId, seatIndex, buyIn)
     local T = rooms[tostring(tableId)]
-    if not T then return nil, 'Table not found' end
-    if T.frozen then return nil, 'Table is closed' end
-    if seated[cid] then return nil, 'You are already seated at a table' end
+    if not T then return nil, fail('games.tableNotFound', 'Table not found') end
+    if T.frozen then return nil, fail('games.tableClosed', 'Table is closed') end
+    if seated[cid] then return nil, fail('games.alreadySeatedTable', 'You are already seated at a table') end
 
     local index = tonumber(seatIndex)
     index = index and math.floor(index) or 0
-    if index < 1 or index > SEATS then return nil, 'Seat not found' end
+    if index < 1 or index > SEATS then return nil, fail('games.seatNotFound', 'Seat not found') end
     local s = T.seats[index]
-    if s.cid then return nil, 'Seat taken' end
+    if s.cid then return nil, fail('games.seatTaken', 'Seat taken') end
 
     local amount = tonumber(buyIn)
     if not amount or amount ~= amount or amount == math.huge or amount == -math.huge then
-        return nil, 'Enter a valid amount'
+        return nil, fail('games.enterValidAmount', 'Enter a valid amount')
     end
     amount = math.floor(amount)
-    if amount < T.minBuyIn or amount > T.maxBuyIn then return nil, 'Buy in is outside the table limits' end
+    if amount < T.minBuyIn or amount > T.maxBuyIn then
+        return nil, fail('games.buyOutsideTableLimits', 'Buy in is outside the table limits')
+    end
 
     -- Claimed before the debit: chips.remove awaits, and a second holdemSit inside that window would
     -- otherwise buy the same chair twice. `buying` also keeps the stand-up sweep off a chair that is
@@ -791,7 +797,7 @@ function holdem.sit(src, cid, name, tableId, seatIndex, buyIn)
     if not bal then
         seated[cid] = nil
         T.seats[index] = emptySeat(index)
-        return nil, 'Not enough chips'
+        return nil, fail('games.notEnoughChips', 'Not enough chips')
     end
 
     s.buying = false
@@ -808,19 +814,19 @@ end
 ---Stands a character up. The caller credits the returned amount, because that write awaits.
 ---@param cid string citizenid
 ---@return integer|nil amount chips coming off the table, nil when they are not seated
----@return string? message refusal reason
+---@return table? refusal keyed refusal envelope when amount is nil
 function holdem.leave(cid)
     local tableId = seated[cid]
-    if not tableId then return nil, 'Not seated' end
+    if not tableId then return nil, fail('games.notSeated', 'Not seated') end
     local T = rooms[tableId]
     if not T then
         seated[cid] = nil
-        return nil, 'Not seated'
+        return nil, fail('games.notSeated', 'Not seated')
     end
     local s = seatOf(T, cid)
     if not s then
         seated[cid] = nil
-        return nil, 'Not seated'
+        return nil, fail('games.notSeated', 'Not seated')
     end
     return dropSeat(T, s)
 end
@@ -852,17 +858,17 @@ end
 ---@param action any client-supplied action
 ---@param to any client-supplied raise total
 ---@return table|nil result empty on success (the state arrives by push), nil on refusal
----@return string? message refusal reason
+---@return table? refusal keyed refusal envelope when result is nil
 function holdem.act(cid, tableId, handId, action, to)
     local T = rooms[tostring(tableId)]
-    if not T then return nil, 'Table not found' end
-    if T.frozen then return nil, 'Table is closed' end
+    if not T then return nil, fail('games.tableNotFound', 'Table not found') end
+    if T.frozen then return nil, fail('games.tableClosed', 'Table is closed') end
     local hand = tonumber(handId)
-    if not hand or math.floor(hand) ~= T.handId then return nil, 'That hand has moved on' end
+    if not hand or math.floor(hand) ~= T.handId then return nil, fail('games.handHasMovedOn', 'That hand has moved on') end
 
     local s = T.actor and T.seats[T.actor]
-    if not s or s.cid ~= cid or s.state ~= 'in' then return nil, 'Not your turn' end
-    if not applyAction(T, s, action, to) then return nil, 'That move is not allowed' end
+    if not s or s.cid ~= cid or s.state ~= 'in' then return nil, fail('games.notTurn', 'Not your turn') end
+    if not applyAction(T, s, action, to) then return nil, fail('games.moveNotAllowed', 'That move is not allowed') end
 
     s.misses = 0
     T.actor = nextSeat(T, s.i, isLive)
@@ -876,10 +882,10 @@ end
 ---@param tableId any client-supplied table id
 ---@param src integer player server id
 ---@return table|nil view, nil when the table id is not one of ours
----@return string? message refusal reason
+---@return table? refusal keyed refusal envelope when view is nil
 function holdem.sync(cid, tableId, src)
     local T = rooms[tostring(tableId)]
-    if not T then return nil, 'Table not found' end
+    if not T then return nil, fail('games.tableNotFound', 'Table not found') end
     local s = seatOf(T, cid)
     if s then s.src = src end
     return holdem.view(T, cid), nil
@@ -964,19 +970,22 @@ end
 ---@param ownerName string display name of the creator
 ---@param opts any client-supplied { name, sb, bb, minBuyIn, maxBuyIn }
 ---@return string|nil id the new table id, nil on refusal
----@return string? message refusal reason
+---@return table? refusal keyed refusal envelope when id is nil
 function holdem.create(cid, ownerName, opts)
-    if not PT_ENABLED then return nil, 'Players cannot open tables here' end
+    if not PT_ENABLED then
+        return nil, fail('games.playersCannotOpenTables', 'Players cannot open tables here')
+    end
     opts = type(opts) == 'table' and opts or {}
 
     local mine, total = countPlayerTables(cid)
     if mine >= PT_MAX_PER_PLAYER then
-        return nil, PT_MAX_PER_PLAYER == 1
-            and 'You already have a table open. Close that one first.'
-            or ('You already have %d tables open'):format(mine)
+        if PT_MAX_PER_PLAYER == 1 then
+            return nil, fail('games.alreadyHaveTableOpen', 'You already have a table open. Close that one first.')
+        end
+        return nil, fail('games.alreadyHaveTablesOpen', 'You already have {n} tables open', { n = mine })
     end
     if total >= PT_MAX_TOTAL then
-        return nil, 'The floor is full right now, try again when a table closes'
+        return nil, fail('games.floorFullRightNow', 'The floor is full right now, try again when a table closes')
     end
 
     local sb = clamp(intOr(opts.sb, PT_MIN_BLIND), PT_MIN_BLIND, PT_MAX_BLIND)

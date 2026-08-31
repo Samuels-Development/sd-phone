@@ -29,10 +29,10 @@ end
 ---@return table envelope
 ---@return table audit row written by access.audited
 cctv.watch = access.audited('cctv.view', function(_, payload, me)
-    if not ENABLED then return util.fail('Cameras are not available') end
+    if not ENABLED then return util.fail('mdt.camerasNotAvailable', 'Cameras are not available') end
 
     local id = util.limitedString(payload.cameraId, 64)
-    if not id or not KNOWN[id] then return util.fail('No such camera') end
+    if not id or not KNOWN[id] then return util.fail('mdt.noSuchCamera', 'No such camera') end
 
     return util.ok({ cameraId = id }), {
         entityType = 'camera',

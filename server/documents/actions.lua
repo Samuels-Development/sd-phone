@@ -88,17 +88,17 @@ local function sanitizeSignatureImage(v)
 end
 
 ---Resolves a client-supplied target folder id: nil/empty means root, otherwise the id must
----belong to the caller. Returns (nil) for root, (id) when valid, or (nil, err) when missing.
+---belong to the caller. Returns (nil) for root, (id) when valid, or (nil, refusal) when missing.
 ---@param cid string acting citizenid
 ---@param folderId any client-supplied folder id
 ---@return string|nil folderId
----@return string? err
+---@return table? refusal keyed refusal envelope when the folder was named but is not the caller's
 local function resolveFolderId(cid, folderId)
     if type(folderId) ~= 'string' or folderId == '' then return nil end
     for _, row in ipairs(store.listFolders(cid)) do
         if row.id == folderId then return folderId end
     end
-    return nil, 'Folder not found'
+    return nil, fail('documents.folderNotFound', 'Folder not found')
 end
 
 ---Resolves a folder NAME under root case-insensitively for the export path, auto-creating the
@@ -155,7 +155,7 @@ end
 ---@return table result envelope with { folders, docs }
 function actions.list(src)
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('documents.playerNotFound', 'Player not found') end
 
     local folders = {}
     for _, row in ipairs(store.listFolders(cid)) do folders[#folders + 1] = serializeFolder(row) end
@@ -180,11 +180,11 @@ end
 function actions.get(src, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('documents.playerNotFound', 'Player not found') end
 
     local id = type(payload.id) == 'string' and payload.id or ''
     local row = store.getDoc(cid, id)
-    if not row then return fail('Document not found') end
+    if not row then return fail('documents.documentNotFound', 'Document not found') end
     local doc = serializeDoc(row)
     if row.kind == 'text' then attachSignatures(doc, id, cid) end
     return ok({ doc = doc })
@@ -198,22 +198,22 @@ end
 function actions.createFolder(src, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('documents.playerNotFound', 'Player not found') end
 
     local name = trim(payload.name)
-    if name == '' then return fail('A name is required') end
+    if name == '' then return fail('documents.nameMissing', 'A name is required') end
     if #name > cfg.MaxNameLength then name = name:sub(1, cfg.MaxNameLength) end
 
     if store.countFolders(cid) >= cfg.MaxFolders then
-        return fail(('You can store at most %d folders'):format(cfg.MaxFolders))
+        return fail('documents.storeAtMostFolders', 'You can store at most {n} folders', { n = cfg.MaxFolders })
     end
 
     local parentId
     if type(payload.parentId) == 'string' and payload.parentId ~= '' then
         local parentOf, exists = folderMaps(cid)
-        if not exists[payload.parentId] then return fail('Folder not found') end
+        if not exists[payload.parentId] then return fail('documents.folderNotFound', 'Folder not found') end
         if depthOf(parentOf, payload.parentId) + 1 > cfg.MaxFolderDepth then
-            return fail(('Folders can be nested at most %d deep'):format(cfg.MaxFolderDepth))
+            return fail('documents.foldersNestedAtMostDeep', 'Folders can be nested at most {n} deep', { n = cfg.MaxFolderDepth })
         end
         parentId = payload.parentId
     end
@@ -231,18 +231,18 @@ end
 function actions.createDoc(src, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('documents.playerNotFound', 'Player not found') end
 
     local name = trim(payload.name)
-    if name == '' then return fail('A name is required') end
+    if name == '' then return fail('documents.nameMissing', 'A name is required') end
     if #name > cfg.MaxNameLength then name = name:sub(1, cfg.MaxNameLength) end
 
     if store.countDocs(cid) >= cfg.MaxDocuments then
-        return fail(('You can store at most %d documents'):format(cfg.MaxDocuments))
+        return fail('documents.storeAtMostDocuments', 'You can store at most {n} documents', { n = cfg.MaxDocuments })
     end
 
-    local folderId, ferr = resolveFolderId(cid, payload.folderId)
-    if ferr then return fail(ferr) end
+    local folderId, refusal = resolveFolderId(cid, payload.folderId)
+    if refusal then return refusal end
 
     local id, ts = newId(), os.time()
     store.createDoc(cid, {
@@ -263,21 +263,21 @@ end
 function actions.save(src, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('documents.playerNotFound', 'Player not found') end
 
     local id = type(payload.id) == 'string' and payload.id or ''
     local content = type(payload.content) == 'string' and payload.content or ''
     if #content > cfg.MaxTextLength then
-        return fail(('Document must be %d characters or fewer'):format(cfg.MaxTextLength))
+        return fail('documents.documentMustCharactersFewer', 'Document must be {n} characters or fewer', { n = cfg.MaxTextLength })
     end
 
     local row = store.getDoc(cid, id)
-    if not row then return fail('Document not found') end
-    if isTruthy(row.locked) then return fail('This document is locked') end
-    if store.hasSignatures(id) then return fail('This document has been signed and can no longer be edited') end
+    if not row then return fail('documents.documentNotFound', 'Document not found') end
+    if isTruthy(row.locked) then return fail('documents.documentLocked', 'This document is locked') end
+    if store.hasSignatures(id) then return fail('documents.documentHasBeenSignedCan', 'This document has been signed and can no longer be edited') end
 
     local ts, size = os.time(), #content
-    if store.updateContent(cid, id, content, size, ts) == 0 then return fail('Could not save document') end
+    if store.updateContent(cid, id, content, size, ts) == 0 then return fail('documents.couldNotSaveDocument', 'Could not save document') end
     return ok({ updatedAt = ts, size = size })
 end
 
@@ -288,19 +288,19 @@ end
 function actions.rename(src, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('documents.playerNotFound', 'Player not found') end
 
     local id = type(payload.id) == 'string' and payload.id or ''
     local name = trim(payload.name)
-    if name == '' then return fail('A name is required') end
+    if name == '' then return fail('documents.nameMissing', 'A name is required') end
     if #name > cfg.MaxNameLength then name = name:sub(1, cfg.MaxNameLength) end
 
     local row = store.getDoc(cid, id)
-    if not row then return fail('Document not found') end
-    if isTruthy(row.locked) then return fail('This document is locked') end
-    if store.hasSignatures(id) then return fail('This document has been signed and can no longer be renamed') end
+    if not row then return fail('documents.documentNotFound', 'Document not found') end
+    if isTruthy(row.locked) then return fail('documents.documentLocked', 'This document is locked') end
+    if store.hasSignatures(id) then return fail('documents.documentHasBeenSignedCan2', 'This document has been signed and can no longer be renamed') end
 
-    if store.renameDoc(cid, id, name, os.time()) == 0 then return fail('Could not rename document') end
+    if store.renameDoc(cid, id, name, os.time()) == 0 then return fail('documents.couldNotRenameDocument', 'Could not rename document') end
     return ok({})
 end
 
@@ -311,14 +311,14 @@ end
 function actions.renameFolder(src, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('documents.playerNotFound', 'Player not found') end
 
     local id = type(payload.id) == 'string' and payload.id or ''
     local name = trim(payload.name)
-    if name == '' then return fail('A name is required') end
+    if name == '' then return fail('documents.nameMissing', 'A name is required') end
     if #name > cfg.MaxNameLength then name = name:sub(1, cfg.MaxNameLength) end
 
-    if store.renameFolder(cid, id, name) == 0 then return fail('Folder not found') end
+    if store.renameFolder(cid, id, name) == 0 then return fail('documents.folderNotFound', 'Folder not found') end
     return ok({})
 end
 
@@ -330,19 +330,19 @@ end
 function actions.move(src, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('documents.playerNotFound', 'Player not found') end
 
     local id = type(payload.id) == 'string' and payload.id or ''
-    if id == '' then return fail('Document id is required') end
+    if id == '' then return fail('documents.documentIdRequired', 'Document id is required') end
 
     local row = store.getDoc(cid, id)
-    if not row then return fail('Document not found') end
-    if isTruthy(row.locked) then return fail('This document is locked') end
+    if not row then return fail('documents.documentNotFound', 'Document not found') end
+    if isTruthy(row.locked) then return fail('documents.documentLocked', 'This document is locked') end
 
-    local folderId, ferr = resolveFolderId(cid, payload.folderId)
-    if ferr then return fail(ferr) end
+    local folderId, refusal = resolveFolderId(cid, payload.folderId)
+    if refusal then return refusal end
 
-    if store.moveDoc(cid, id, folderId) == 0 then return fail('Document not found') end
+    if store.moveDoc(cid, id, folderId) == 0 then return fail('documents.documentNotFound', 'Document not found') end
     return ok({})
 end
 
@@ -355,14 +355,14 @@ end
 function actions.delete(src, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('documents.playerNotFound', 'Player not found') end
 
     local id = type(payload.id) == 'string' and payload.id or ''
     local row = store.getDoc(cid, id)
-    if not row then return fail('Document not found') end
-    if row.deletable ~= nil and not isTruthy(row.deletable) then return fail('This document cannot be deleted') end
+    if not row then return fail('documents.documentNotFound', 'Document not found') end
+    if row.deletable ~= nil and not isTruthy(row.deletable) then return fail('documents.documentCannotDeleted', 'This document cannot be deleted') end
 
-    if store.deleteDoc(cid, id) == 0 then return fail('Could not delete document') end
+    if store.deleteDoc(cid, id) == 0 then return fail('documents.couldNotDeleteDocument', 'Could not delete document') end
     store.deleteSignaturesForDocs({ id })
     return ok({})
 end
@@ -376,10 +376,10 @@ end
 function actions.deleteFolder(src, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('documents.playerNotFound', 'Player not found') end
 
     local id = type(payload.id) == 'string' and payload.id or ''
-    if id == '' then return fail('Folder id is required') end
+    if id == '' then return fail('documents.folderIdRequired', 'Folder id is required') end
 
     local childrenOf, exists = {}, {}
     for _, row in ipairs(store.listFolders(cid)) do
@@ -390,7 +390,7 @@ function actions.deleteFolder(src, payload)
             bucket[#bucket + 1] = row.id
         end
     end
-    if not exists[id] then return fail('Folder not found') end
+    if not exists[id] then return fail('documents.folderNotFound', 'Folder not found') end
 
     local idList, inSet, stack = {}, {}, { id }
     while #stack > 0 do
@@ -425,14 +425,14 @@ end
 function actions.duplicate(src, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('documents.playerNotFound', 'Player not found') end
 
     local id = type(payload.id) == 'string' and payload.id or ''
     local row = store.getDoc(cid, id)
-    if not row then return fail('Document not found') end
+    if not row then return fail('documents.documentNotFound', 'Document not found') end
 
     if store.countDocs(cid) >= cfg.MaxDocuments then
-        return fail(('You can store at most %d documents'):format(cfg.MaxDocuments))
+        return fail('documents.storeAtMostDocuments', 'You can store at most {n} documents', { n = cfg.MaxDocuments })
     end
 
     local name = (trim(row.name) .. ' copy')
@@ -458,22 +458,22 @@ end
 function actions.importImage(src, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('documents.playerNotFound', 'Player not found') end
 
     local name = trim(payload.name)
-    if name == '' then return fail('A name is required') end
+    if name == '' then return fail('documents.nameMissing', 'A name is required') end
     if #name > cfg.MaxNameLength then name = name:sub(1, cfg.MaxNameLength) end
 
     local url = trim(payload.url)
-    if not url:match('^https?://') then return fail('A valid image URL is required') end
-    if #url > 1024 then return fail('Image URL is too long') end
+    if not url:match('^https?://') then return fail('documents.validImageUrlRequired', 'A valid image URL is required') end
+    if #url > 1024 then return fail('documents.imageUrlTooLong', 'Image URL is too long') end
 
     if store.countDocs(cid) >= cfg.MaxDocuments then
-        return fail(('You can store at most %d documents'):format(cfg.MaxDocuments))
+        return fail('documents.storeAtMostDocuments', 'You can store at most {n} documents', { n = cfg.MaxDocuments })
     end
 
-    local folderId, ferr = resolveFolderId(cid, payload.folderId)
-    if ferr then return fail(ferr) end
+    local folderId, refusal = resolveFolderId(cid, payload.folderId)
+    if refusal then return refusal end
 
     local id, ts = newId(), os.time()
     store.createDoc(cid, {
@@ -624,7 +624,7 @@ end
 ---@return table result envelope with { image }
 function actions.getSignature(src)
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('documents.playerNotFound', 'Player not found') end
     return ok({ image = store.getPersonalSignature(cid) })
 end
 
@@ -635,10 +635,10 @@ end
 function actions.setSignature(src, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('documents.playerNotFound', 'Player not found') end
 
     local image = sanitizeSignatureImage(payload.image)
-    if not image then return fail('That signature could not be saved') end
+    if not image then return fail('documents.signatureCouldNotSaved', 'That signature could not be saved') end
     store.setPersonalSignature(cid, image, os.time())
     return ok({})
 end
@@ -652,17 +652,17 @@ end
 function actions.sign(src, payload)
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('documents.playerNotFound', 'Player not found') end
 
     local id = type(payload.id) == 'string' and payload.id or ''
     local row = store.getDoc(cid, id)
-    if not row then return fail('Document not found') end
-    if row.kind ~= 'text' then return fail('Only text documents can be signed') end
-    if row.signable ~= nil and not isTruthy(row.signable) then return fail('This document cannot be signed') end
-    if store.hasSigned(id, cid) then return fail('You have already signed this document') end
+    if not row then return fail('documents.documentNotFound', 'Document not found') end
+    if row.kind ~= 'text' then return fail('documents.onlyTextDocumentsCanSigned', 'Only text documents can be signed') end
+    if row.signable ~= nil and not isTruthy(row.signable) then return fail('documents.documentCannotSigned', 'This document cannot be signed') end
+    if store.hasSigned(id, cid) then return fail('documents.haveAlreadySignedDocument', 'You have already signed this document') end
 
     local image = store.getPersonalSignature(cid)
-    if not image then return fail('Draw your signature first') end
+    if not image then return fail('documents.drawSignatureFirst', 'Draw your signature first') end
 
     store.addSignature({
         id = newId(), docId = id, citizenid = cid,
@@ -692,22 +692,22 @@ end
 ---@return table result envelope
 function actions.requestSignature(src, target, payload)
     if type(payload) ~= 'table' then payload = {} end
-    if not cfg.AllowShare then return fail('Sharing is disabled') end
+    if not cfg.AllowShare then return fail('documents.sharingDisabled', 'Sharing is disabled') end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('documents.playerNotFound', 'Player not found') end
 
     local id = type(payload.id) == 'string' and payload.id or ''
     local row = store.getDoc(cid, id)
-    if not row then return fail('Document not found') end
-    if isTruthy(row.locked) then return fail('This document cannot be shared') end
-    if row.kind ~= 'text' then return fail('Only text documents can be signed') end
-    if row.signable ~= nil and not isTruthy(row.signable) then return fail('This document cannot be signed') end
-    if not store.hasSigned(id, cid) then return fail('Sign the document yourself first') end
+    if not row then return fail('documents.documentNotFound', 'Document not found') end
+    if isTruthy(row.locked) then return fail('documents.documentCannotShared', 'This document cannot be shared') end
+    if row.kind ~= 'text' then return fail('documents.onlyTextDocumentsCanSigned', 'Only text documents can be signed') end
+    if row.signable ~= nil and not isTruthy(row.signable) then return fail('documents.documentCannotSigned', 'This document cannot be signed') end
+    if not store.hasSigned(id, cid) then return fail('documents.signDocumentYourselfFirst', 'Sign the document yourself first') end
 
-    local okSent, msg = share.request(src, target, 'signature-request', {
+    local okSent, refusal = share.request(src, target, 'signature-request', {
         docId = id, ownerCid = cid, fromName = player.getName(src) or 'Someone',
     })
-    if not okSent then return fail(msg or 'Could not send request') end
+    if not okSent then return refusal or fail('documents.couldNotSendRequest', 'Could not send request') end
     return ok({})
 end
 
@@ -749,31 +749,34 @@ function actions.respondSignRequest(src, payload)
     pruneSignRequests()
     if type(payload) ~= 'table' then payload = {} end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('documents.playerNotFound', 'Player not found') end
 
     local requestId = type(payload.requestId) == 'string' and payload.requestId or ''
     local req = signRequests[requestId]
-    if not req or req.targetCid ~= cid then return fail('Request not found or expired') end
+    if not req or req.targetCid ~= cid then return fail('documents.requestNotFoundExpired', 'Request not found or expired') end
     signRequests[requestId] = nil
 
     local ownerSrc = player.getSourceByIdentifier(req.ownerCid)
 
     if payload.accept ~= true then
         if ownerSrc then
+            local who = player.getName(src) or 'Someone'
             TriggerClientEvent('sd-phone:client:notify', ownerSrc, {
-                app = 'documents', appId = 'documents', time = 'now', title = 'Files',
-                body = ('%s declined to sign "%s"'):format(player.getName(src) or 'Someone', req.docName),
+                app = 'documents', appId = 'documents', time = 'now',
+                titleKey = 'documents.filesTitle', title = 'Files',
+                bodyKey = 'documents.declinedToSign', body = ('%s declined to sign "%s"'):format(who, req.docName),
+                bodyVars = { name = who, document = req.docName },
             })
         end
         return ok({})
     end
 
     local row = store.getDoc(req.ownerCid, req.docId)
-    if not row then return fail('The document no longer exists') end
-    if store.hasSigned(req.docId, cid) then return fail('You have already signed this document') end
+    if not row then return fail('documents.documentNoLongerExists', 'The document no longer exists') end
+    if store.hasSigned(req.docId, cid) then return fail('documents.haveAlreadySignedDocument', 'You have already signed this document') end
 
     local image = store.getPersonalSignature(cid)
-    if not image then return fail('Draw your signature first') end
+    if not image then return fail('documents.drawSignatureFirst', 'Draw your signature first') end
 
     store.addSignature({
         id = newId(), docId = req.docId, citizenid = cid,
@@ -794,10 +797,13 @@ function actions.respondSignRequest(src, payload)
 
     if ownerSrc then
         local ownerDoc = attachSignatures(serializeDoc(row), req.docId, req.ownerCid)
+        local who = player.getName(src) or 'Someone'
         TriggerClientEvent('sd-phone:client:documents:added', ownerSrc, { doc = ownerDoc })
         TriggerClientEvent('sd-phone:client:notify', ownerSrc, {
-            app = 'documents', appId = 'documents', time = 'now', title = 'Files',
-            body = ('%s signed "%s"'):format(player.getName(src) or 'Someone', req.docName),
+            app = 'documents', appId = 'documents', time = 'now',
+            titleKey = 'documents.filesTitle', title = 'Files',
+            bodyKey = 'documents.signedDocument', body = ('%s signed "%s"'):format(who, req.docName),
+            bodyVars = { name = who, document = req.docName },
         })
     end
 
@@ -812,14 +818,14 @@ end
 ---@return table result envelope
 function actions.requestShare(src, target, payload)
     if type(payload) ~= 'table' then payload = {} end
-    if not cfg.AllowShare then return fail('Sharing is disabled') end
+    if not cfg.AllowShare then return fail('documents.sharingDisabled', 'Sharing is disabled') end
     local cid = player.getIdentifier(src)
-    if not cid then return fail('Player not found') end
+    if not cid then return fail('documents.playerNotFound', 'Player not found') end
 
     local id = type(payload.id) == 'string' and payload.id or ''
     local row = store.getDoc(cid, id)
-    if not row then return fail('Document not found') end
-    if isTruthy(row.locked) then return fail('This document cannot be shared') end
+    if not row then return fail('documents.documentNotFound', 'Document not found') end
+    if isTruthy(row.locked) then return fail('documents.documentCannotShared', 'This document cannot be shared') end
 
     -- Signatures travel with the copy (read server-side here, re-inserted server-side on
     -- delivery), so a signed contract stays verifiably signed on the recipient's phone.
@@ -828,7 +834,7 @@ function actions.requestShare(src, target, payload)
         sigs[#sigs + 1] = { citizenid = s.citizenid, signer = s.signer, image = s.image, created_at = s.created_at }
     end
 
-    local okSent, msg = share.request(src, target, 'document', {
+    local okSent, refusal = share.request(src, target, 'document', {
         name    = row.name,
         kind    = row.kind,
         content = row.content,
@@ -839,7 +845,7 @@ function actions.requestShare(src, target, payload)
         fromName = player.getName(src),
         signatures = sigs,
     })
-    if not okSent then return fail(msg or 'Could not send request') end
+    if not okSent then return refusal or fail('documents.couldNotSendRequest', 'Could not send request') end
     return ok({})
 end
 
@@ -907,7 +913,9 @@ function actions.deliverShare(targetSrc, payload)
     if payload.quiet ~= true then
         TriggerClientEvent('sd-phone:client:notify', targetSrc, {
             app = 'documents', appId = 'documents', time = 'now',
-            title = 'Files', body = ('%s shared "%s" with you'):format(fromName, name),
+            titleKey = 'documents.filesTitle', title = 'Files',
+            bodyKey = 'documents.sharedWithYou', body = ('%s shared "%s" with you'):format(fromName, name),
+            bodyVars = { name = fromName, document = name },
         })
     end
     return true

@@ -1,7 +1,7 @@
 
 import { fetchNui, isFiveM } from '@/core/nui';
 import { t } from '@/i18n';
-import { apiCall, apiData, type Envelope } from '@/core/api';
+import { apiCall, apiData, failText, type Envelope } from '@/core/api';
 import { newId as libNewId } from '@/lib/format';
 
 
@@ -124,14 +124,14 @@ export async function createGroup(name: string): Promise<Group | string> {
     }
     const res = await apiCall<Group>('sd-phone:groups:create', { name });
     if (res.success && res.data) return res.data;
-    return res.message ?? 'Failed to create group';
+    return failText(res, 'Failed to create group');
 }
 
 export async function inviteMember(groupId: string, targetSource: number): Promise<true | string> {
     if (!isFiveM) return true;
     const res = await apiCall<unknown>('sd-phone:groups:invite', { groupId, targetSource });
     if (res.success) return true;
-    return res.message ?? t('groups.failedSendInvite', 'Failed to send invite');
+    return failText(res, t('groups.failedSendInvite', 'Failed to send invite'));
 }
 
 export async function acceptInvite(inviteId: string): Promise<Group | string> {
@@ -153,7 +153,7 @@ export async function acceptInvite(inviteId: string): Promise<Group | string> {
     }
     const res = await apiCall<{ group: Group }>('sd-phone:groups:accept', { inviteId });
     if (res.success && res.data) return res.data.group;
-    return res.message ?? 'Failed to accept invite';
+    return failText(res, 'Failed to accept invite');
 }
 
 export async function declineInvite(inviteId: string): Promise<void> {
@@ -168,7 +168,7 @@ export async function leaveGroup(groupId: string): Promise<true | string> {
     }
     const res = await apiCall<unknown>('sd-phone:groups:leave', { groupId });
     if (res.success) return true;
-    return res.message ?? 'Failed to leave group';
+    return failText(res, 'Failed to leave group');
 }
 
 export async function disbandGroup(groupId: string): Promise<true | string> {
@@ -178,14 +178,14 @@ export async function disbandGroup(groupId: string): Promise<true | string> {
     }
     const res = await apiCall<unknown>('sd-phone:groups:disband', { groupId });
     if (res.success) return true;
-    return res.message ?? 'Failed to disband group';
+    return failText(res, 'Failed to disband group');
 }
 
 export async function kickMember(groupId: string, citizenid: string): Promise<true | string> {
     if (!isFiveM) return true;
     const res = await apiCall<unknown>('sd-phone:groups:kick', { groupId, citizenid });
     if (res.success) return true;
-    return res.message ?? 'Failed to remove member';
+    return failText(res, 'Failed to remove member');
 }
 
 export async function setGroupAvatar(groupId: string, avatar: string): Promise<true | string> {
@@ -196,7 +196,7 @@ export async function setGroupAvatar(groupId: string, avatar: string): Promise<t
     }
     const res = await apiCall<unknown>('sd-phone:groups:setAvatar', { groupId, avatar });
     if (res.success) return true;
-    return res.message ?? 'Failed to update group photo';
+    return failText(res, 'Failed to update group photo');
 }
 
 export async function setActiveGroup(groupId: string | null): Promise<true | string> {
@@ -209,5 +209,5 @@ export async function setActiveGroup(groupId: string | null): Promise<true | str
         { groupId },
     );
     if (res.success) return true;
-    return res.message ?? 'Failed to update active group';
+    return failText(res, 'Failed to update active group');
 }

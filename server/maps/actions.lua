@@ -91,10 +91,10 @@ function actions.save(src, payload)
     if not cid then return { success = false } end
 
     local incoming = type(payload) == 'table' and payload.markers or nil
-    if type(incoming) ~= 'table' then return { success = false, message = 'Bad payload' } end
+    if type(incoming) ~= 'table' then return { success = false, messageKey = 'maps.badPayload', message = 'Bad payload' } end
     -- Rejected outright rather than truncated: every element that fails sanitizeMarker is dropped
     -- without growing `clean`, so the MaxMarkers break below never fires on an array of junk.
-    if #incoming > MAX_INCOMING then return { success = false, message = 'Too many pins' } end
+    if #incoming > MAX_INCOMING then return { success = false, messageKey = 'maps.tooManyPins', message = 'Too many pins' } end
 
     local clean = {}
     for i = 1, #incoming do
@@ -117,15 +117,17 @@ end
 ---@return table result { success, message? }
 function actions.requestShare(src, target, payload)
     local m = sanitizeMarker(type(payload) == 'table' and payload.marker or nil)
-    if not m then return { success = false, message = 'Invalid pin' } end
+    if not m then return { success = false, messageKey = 'maps.invalidPin', message = 'Invalid pin' } end
     -- Spent only once the share would actually go out, mirroring share.core's own gate: a
     -- recipient who walked away must not cost the sender their immediate retry.
     if share.canShareTo(src, tonumber(target)) and not util.cooldown(cidOf(src), 'maps:sharePin', SHARE_COOLDOWN) then
-        return { success = false, message = 'Slow down' }
+        return { success = false, messageKey = 'maps.slowDown', message = 'Slow down' }
     end
 
-    local okSent, msg = share.request(src, target, 'pin', m)
-    if not okSent then return { success = false, message = msg or 'Could not send request' } end
+    local okSent, refusal = share.request(src, target, 'pin', m)
+    if not okSent then
+        return refusal or { success = false, messageKey = 'maps.couldNotSendRequest', message = 'Could not send request' }
+    end
     return { success = true }
 end
 
@@ -156,8 +158,10 @@ function actions.deliverShare(targetSrc, m)
     TriggerClientEvent('sd-phone:client:maps:pinAdded', targetSrc, marker)
 
     TriggerClientEvent('sd-phone:client:notify', targetSrc, {
-        app = 'maps', appId = 'maps', title = 'Maps',
-        body = ('Pin "%s" was added to your Maps.'):format(m.label),
+        app = 'maps', appId = 'maps',
+        titleKey = 'maps.mapsTitle', title = 'Maps',
+        bodyKey = 'maps.pinAdded', body = ('Pin "%s" was added to your Maps.'):format(m.label),
+        bodyVars = { label = m.label },
         time = 'now',
     })
     return true

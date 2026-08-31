@@ -1,4 +1,6 @@
 
+import { t } from '@/i18n';
+
 import nimbus   from '@/assets/tones/ringtones/nimbus.mp3';
 import meridian from '@/assets/tones/ringtones/meridian.mp3';
 import lantern  from '@/assets/tones/ringtones/lantern.mp3';
@@ -25,26 +27,30 @@ export interface Tone {
     url:  string;
 }
 
+function tone(id: string, url: string, name: () => string): Tone {
+    return { id, url, get name() { return name(); } };
+}
+
 export const RINGTONES: Tone[] = [
-    { id: 'nimbus',   name: 'Nimbus',   url: nimbus },
-    { id: 'meridian', name: 'Meridian', url: meridian },
-    { id: 'lantern',  name: 'Lantern',  url: lantern },
-    { id: 'prism',    name: 'Prism',    url: prism },
-    { id: 'solstice', name: 'Solstice', url: solstice },
-    { id: 'vesper',   name: 'Vesper',   url: vesper },
-    { id: 'drift',    name: 'Drift',    url: drift },
-    { id: 'ember',    name: 'Ember',    url: ember },
+    tone('nimbus',   nimbus,   () => t('settings.toneNimbus', 'Nimbus')),
+    tone('meridian', meridian, () => t('settings.toneMeridian', 'Meridian')),
+    tone('lantern',  lantern,  () => t('settings.toneLantern', 'Lantern')),
+    tone('prism',    prism,    () => t('settings.tonePrism', 'Prism')),
+    tone('solstice', solstice, () => t('settings.toneSolstice', 'Solstice')),
+    tone('vesper',   vesper,   () => t('settings.toneVesper', 'Vesper')),
+    tone('drift',    drift,    () => t('settings.toneDrift', 'Drift')),
+    tone('ember',    ember,    () => t('settings.toneEmber', 'Ember')),
 ];
 
 export const NOTIFICATION_TONES: Tone[] = [
-    { id: 'quill',   name: 'Quill',   url: quill },
-    { id: 'dew',     name: 'Dew',     url: dew },
-    { id: 'wisp',    name: 'Wisp',    url: wisp },
-    { id: 'blip',    name: 'Blip',    url: blip },
-    { id: 'murmur',  name: 'Murmur',  url: murmur },
-    { id: 'spark',   name: 'Spark',   url: spark },
-    { id: 'flicker', name: 'Flicker', url: flicker },
-    { id: 'cinder',  name: 'Cinder',  url: cinder },
+    tone('quill',   quill,   () => t('settings.toneQuill', 'Quill')),
+    tone('dew',     dew,     () => t('settings.toneDew', 'Dew')),
+    tone('wisp',    wisp,    () => t('settings.toneWisp', 'Wisp')),
+    tone('blip',    blip,    () => t('settings.toneBlip', 'Blip')),
+    tone('murmur',  murmur,  () => t('settings.toneMurmur', 'Murmur')),
+    tone('spark',   spark,   () => t('settings.toneSpark', 'Spark')),
+    tone('flicker', flicker, () => t('settings.toneFlicker', 'Flicker')),
+    tone('cinder',  cinder,  () => t('settings.toneCinder', 'Cinder')),
 ];
 
 export const DEFAULT_RINGTONE     = 'nimbus';

@@ -1,4 +1,5 @@
-import { t } from '@/i18n';
+import { getLocaleTag, t } from '@/i18n';
+import { formatMediumDate } from '@/lib/time';
 
 export interface Contact {
     id:        string;
@@ -88,7 +89,7 @@ function fmtTimeOfDay(epoch: number): string {
 }
 
 function fmtDate(epoch: number): string {
-    return new Date(epoch * 1000).toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' });
+    return formatMediumDate(epoch);
 }
 
 function fmtListTime(epoch: number): string {
@@ -97,8 +98,8 @@ function fmtListTime(epoch: number): string {
     const days = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86_400_000);
     if (days <= 0)  return fmtTimeOfDay(epoch);
     if (days === 1) return t('phone.yesterday','Yesterday');
-    if (days < 7)   return d.toLocaleDateString([], { weekday: 'long' });
-    return d.toLocaleDateString([], { day: 'numeric', month: 'numeric', year: '2-digit' });
+    if (days < 7)   return d.toLocaleDateString(getLocaleTag(), { weekday: 'long' });
+    return d.toLocaleDateString(getLocaleTag(), { day: 'numeric', month: 'numeric', year: '2-digit' });
 }
 
 function fmtDuration(seconds: number): string {

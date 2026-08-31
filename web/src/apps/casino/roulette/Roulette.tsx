@@ -19,6 +19,7 @@ import { BALL_REST_R, BALL_TRACK_R, WHEEL_SIZE, Wheel } from './WheelFace';
 import { type PlacedBet, type RouletteResult, rouletteSpin } from './rouletteApi';
 import { betInfo, mergeBets, stakeOf } from './bets';
 import { POCKET_ANGLE, colorOf } from './wheel';
+import { failText } from '@/core/api';
 
 const TABLE_MAX  = 25000;
 const MAX_BETS   = 20;
@@ -202,7 +203,7 @@ export function Roulette({ chips, onChips, onBack, onCashier }: CasinoGameProps)
             spinning.current = false;
             setPhase('betting');
             onChips(chipsRef.current + total);
-            flash(reply.message ?? t('casino.somethingWrong', 'Something went wrong'));
+            flash(failText(reply, t('casino.somethingWrong', 'Something went wrong')));
             return;
         }
         setLastBets(bets);

@@ -1,3 +1,5 @@
+import { t } from '@/i18n';
+
 export type RaceClass = 'D' | 'C' | 'B' | 'A' | 'S';
 
 export type RaceMode = 'circuit' | 'sprint';
@@ -377,10 +379,10 @@ export function routeLengthMetres(points: RoutePoint[]): number {
 
 export function startsInLabel(startsAt: number, nowSeconds: number): string {
     const left = Math.max(0, startsAt - nowSeconds);
-    if (left < 60) return `${left}s`;
+    if (left < 60) return t('racing.secondsShort', '{n}s', { n: left });
     const mins = Math.floor(left / 60);
-    if (mins < 60) return `${mins}m`;
-    return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+    if (mins < 60) return t('racing.minutesShort', '{m}m', { m: mins });
+    return t('racing.hoursMinutes', '{h}h {m}m', { h: Math.floor(mins / 60), m: mins % 60 });
 }
 
 export function clampHudScale(value: number): number {

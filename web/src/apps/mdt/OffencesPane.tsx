@@ -86,7 +86,7 @@ export function OffencesPane() {
                                     {offence.label}
                                 </span>
                                 <span className={`shrink-0 tabular-nums ${mdtRowMeta}`}>
-                                    {offence.months > 0 ? `${offence.months}m` : '-'}
+                                    {offence.months > 0 ? t('mdt.monthsShort', '{n}m', { n: offence.months }) : '-'}
                                     {' · '}
                                     {formatMoney(offence.fine, { whole: true })}
                                 </span>

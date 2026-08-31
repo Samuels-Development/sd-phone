@@ -5,7 +5,7 @@ import { Camera, ChevronRight, Flashlight } from 'lucide-react';
 import { device } from '@device';
 import { useGrid } from '@/device/grid';
 import { APP_LABEL_CLASS, appLabelStyle } from '@/shell/appLabel';
-import { t } from '@/i18n';
+import { appLabel, t } from '@/i18n';
 import { formatClockTime, formatLongDate, useDisplayClock } from '@/hooks/useClock';
 import { useIosPush } from '@/hooks/useIosPush';
 import { PushLayer } from '../SettingsSubPage';
@@ -244,7 +244,7 @@ function HomePreview({ wallpaper, blurred, animating }: { wallpaper: string; blu
                     className="absolute"
                     style={{ left: PAD_X + (i % COLS) * COL_STRIDE, top: stripTop + ROW_Y0 + Math.floor(i / COLS) * ROW_STRIDE, width: ICON }}
                 >
-                    <PreviewIcon icon={app.icon} label={app.label} />
+                    <PreviewIcon icon={app.icon} label={appLabel({ id: app.icon, label: app.label })} />
                 </div>
             ))}
 

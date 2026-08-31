@@ -6,6 +6,7 @@ import { AlertDialog } from '@/ui/AlertDialog';
 import { ChangePasswordForm } from './AppAuth';
 import type { AppAuthTheme } from './AppAuth';
 import { accountsChangePassword, accountsListPasswords, accountsMe, accountsSavePassword } from '@/core/accountsApi';
+import { failText } from '@/core/api';
 
 export function ChangePasswordPage({ app, appName, icon, theme, identity: identityProp, onClose }: {
     app:       string;
@@ -66,7 +67,7 @@ export function ChangePasswordPage({ app, appName, icon, theme, identity: identi
                 savedPassword={savedPassword}
                 onSubmit={async (current, next) => {
                     const r = await accountsChangePassword(app, identity ?? '', current, next);
-                    if (!r.ok) return r.message ?? t('common.couldNotChangePassword', 'Could not change password');
+                    if (!r.ok) return failText(r, t('common.couldNotChangePassword', 'Could not change password'));
                     // The server only UPDATEs an existing vault row; offer to create one otherwise.
                     if (!hasVaultEntry.current) pendingOffer.current = next;
                     return null;

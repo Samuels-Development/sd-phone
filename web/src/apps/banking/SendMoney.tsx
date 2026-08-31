@@ -10,6 +10,7 @@ import { ContactPickerSheet } from '@/shared/ContactPickerSheet';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { formatPhonePartial } from '@/lib/phone';
 import { sendMoney, sendTarget, type BankTx, type SendMode, type SendTarget } from './bankingApi';
+import { failText } from '@/core/api';
 
 const MAX_ID_DIGITS = 5;
 
@@ -191,7 +192,7 @@ function AmountStage({ balance, target, toLabel, amount, setAmount, anon, setAno
         const res = await sendMoney(target, amountNum, anon);
         setBusy(false);
         if (res.success && res.data) onSent(res.data.balance, res.data.transaction);
-        else setError(res.message ?? t('banking.transferFailed', 'Transfer failed'));
+        else setError(failText(res, t('banking.transferFailed', 'Transfer failed')));
     }
 
     return (
@@ -242,7 +243,7 @@ function AmountStage({ balance, target, toLabel, amount, setAmount, anon, setAno
                     />
                 </div>
                 <div className={`mt-5 rounded-full px-5 py-2.5 text-[18.5px] font-semibold ${error ? 'bg-ios-red/10 text-ios-red' : 'bg-black/[0.06] text-black/65 dark:bg-white/10 dark:text-white/70'}`}>
-                    {error ?? t('banking.available', '${amount} available', { amount: balance.toLocaleString('en-US') })}
+                    {error ?? t('banking.availableAmount', '${amount} available', { amount: balance.toLocaleString('en-US') })}
                 </div>
 
                 {allowAnonymous && (

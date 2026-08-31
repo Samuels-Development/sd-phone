@@ -123,7 +123,7 @@ export function Banking({ onClose: _onClose }: { onClose: () => void }) {
                     <button
                         type="button"
                         onClick={() => setPickingCard(true)}
-                        aria-label={t('banking.chooseCard', 'Choose Your Bank')}
+                        aria-label={t('banking.chooseBank', 'Choose Your Bank')}
                         className="block w-full rounded-[20px] transition-transform active:scale-[0.985]"
                     >
                         <BankCard holder={holder} last4={cardLast4} expiry={CARD_EXPIRY} style={cardStyle} />

@@ -25,10 +25,10 @@ function ago(iso: string): string {
     if (!Number.isFinite(ms) || ms < 0) return '';
     const m = Math.floor(ms / 60000);
     if (m < 1) return t('banking.justNow', 'now');
-    if (m < 60) return `${m}m`;
+    if (m < 60) return t('time.minutesShort', '{n}m', { n: m });
     const h = Math.floor(m / 60);
-    if (h < 24) return `${h}h`;
-    return `${Math.floor(h / 24)}d`;
+    if (h < 24) return t('time.hoursShort', '{n}h', { n: h });
+    return t('time.daysShort', '{n}d', { n: Math.floor(h / 24) });
 }
 
 function Row({ tx, p, up }: { tx: BankTx; p: Palette; up: string }) {

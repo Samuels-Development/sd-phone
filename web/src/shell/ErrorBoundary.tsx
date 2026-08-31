@@ -1,6 +1,8 @@
 import { Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 
+import { t } from '@/i18n';
+
 interface Props { children: ReactNode }
 interface State { failed: boolean }
 
@@ -36,8 +38,7 @@ export class ErrorBoundary extends Component<Props, State> {
                     boxShadow: '0 6px 24px rgba(0,0,0,0.45)',
                 }}
             >
-                The phone hit an error and had to stop. Ask an admin to restart sd-phone, and check
-                the F8 console for the details to report.
+                {t('shell.crashMessage', 'The phone hit an error and had to stop. Ask an admin to restart sd-phone, and check the F8 console for the details to report.')}
             </div>
         );
     }

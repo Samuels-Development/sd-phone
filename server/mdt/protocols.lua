@@ -79,13 +79,13 @@ end)
 ---Creates or replaces one protocol, keyed on its code.
 protocols.save = access.audited('protocols.manage', function(_, payload)
     local code = util.limitedString(payload.code, 16)
-    if not code then return util.fail('A code is required') end
+    if not code then return util.fail('mdt.codeRequired', 'A code is required') end
 
     local label = util.limitedString(payload.label, tonumber(LIMITS.ProtocolTitle) or 120)
-    if not label then return util.fail('A title is required') end
+    if not label then return util.fail('mdt.titleRequired', 'A title is required') end
 
     local category = type(payload.category) == 'string' and payload.category or ''
-    if not CATEGORIES[category] then return util.fail('Pick a valid category') end
+    if not CATEGORIES[category] then return util.fail('mdt.pickValidCategory', 'Pick a valid category') end
 
     local priority = type(payload.priority) == 'string' and payload.priority or ''
     if not PRIORITIES[priority] then priority = 'routine' end
@@ -112,7 +112,7 @@ end)
 ---Removes one protocol.
 protocols.delete = access.audited('protocols.manage', function(_, payload)
     local code = util.limitedString(payload.code, 16)
-    if not code or not protocols.byCode(code) then return util.fail('That protocol no longer exists') end
+    if not code or not protocols.byCode(code) then return util.fail('mdt.protocolNoLongerExists', 'That protocol no longer exists') end
 
     MySQL.update.await('DELETE FROM phone_mdt_protocols WHERE `code` = ?', { code })
     protocols.invalidate()

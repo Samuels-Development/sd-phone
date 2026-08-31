@@ -459,7 +459,7 @@ local function OpenPhone()
     if phoneState.open then return end
 
     if phoneDisabled then
-        notify.show({ description = 'You can\'t use your phone right now.', type = 'error' })
+        notify.show({ description = locale.t('phone.blocked_dead', 'You can\'t use your phone right now.'), type = 'error' })
         return
     end
 
@@ -471,11 +471,11 @@ local function OpenPhone()
     local ped = cache.ped
 
     if config.Phone.BlockWhileDead and IsEntityDead(ped) then
-        notify.show({ description = 'You can\'t use your phone right now.', type = 'error' })
+        notify.show({ description = locale.t('phone.blocked_dead', 'You can\'t use your phone right now.'), type = 'error' })
         return
     end
     if config.Phone.BlockWhileSwimming and IsPedSwimming(ped) then
-        notify.show({ description = 'You can\'t use your phone while swimming.', type = 'error' })
+        notify.show({ description = locale.t('phone.blocked_swim', 'You can\'t use your phone while swimming.'), type = 'error' })
         return
     end
 
@@ -599,7 +599,7 @@ local function TogglePhone()
 
     local res = lib.callback.await('sd-phone:server:phone:resolveOpen', false, currentFrameColor)
     if not res then
-        notify.show({ description = 'You don\'t have a phone.', type = 'error' })
+        notify.show({ description = locale.t('phone.noPhone', 'You don\'t have a phone.'), type = 'error' })
         return
     end
     local color = res

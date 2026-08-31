@@ -67,21 +67,22 @@ lib.callback.register('sd-phone:server:music:share', function(src, payload)
     local built
     if payload.kind == 'music-track' then
         local track = safeTrack(payload.track)
-        if not track then return { success = false, message = 'Nothing to share' } end
+        if not track then return { success = false, messageKey = 'music.nothingShare', message = 'Nothing to share' } end
         built = { track = track }
     elseif payload.kind == 'music-playlist' then
         local raw, tracks = type(payload.tracks) == 'table' and payload.tracks or {}, {}
         for i = 1, math.min(#raw, MAX_SHARE_TRACKS) do
             tracks[#tracks + 1] = safeTrack(raw[i])
         end
-        if #tracks == 0 then return { success = false, message = 'Nothing to share' } end
+        if #tracks == 0 then return { success = false, messageKey = 'music.nothingShare', message = 'Nothing to share' } end
         built = { name = util.limitedString(payload.name, 100) or 'Shared Playlist', tracks = tracks }
     else
-        return { success = false, message = 'Unknown share type' }
+        return { success = false, messageKey = 'music.unknownShareType', message = 'Unknown share type' }
     end
 
-    local ok, message = share.request(src, payload.target, payload.kind, built)
-    return { success = ok == true, message = message }
+    local sent, refusal = share.request(src, payload.target, payload.kind, built)
+    if sent then return { success = true } end
+    return refusal or { success = false }
 end)
 
 ---Gives a track straight to a player's music library (exports['sd-phone']:giveTrack), skipping

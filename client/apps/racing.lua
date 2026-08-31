@@ -1,5 +1,7 @@
 ---@type fun(nuiAction: string, serverEvent: string) NUI->server pass-through registrar (client.nui).
 local proxyCallback = require 'client.nui'
+---@type table Locale bridge (bridge.shared.locale): t(key, english, vars) for in-world text.
+local locale        = require 'bridge.shared.locale'
 ---@type table Notify bridge (bridge.client.notify): backend-agnostic toast notifications.
 local notify        = require 'bridge.client.notify'
 ---@type table Live race engine (client.racing.race): route, gates, HUD and progression.
@@ -84,13 +86,13 @@ RegisterNUICallback('sd-phone:racing:waypoint', function(payload, cb)
     local x = type(payload) == 'table' and tonumber(payload.x) or nil
     local y = type(payload) == 'table' and tonumber(payload.y) or nil
     if not x or not y then
-        notify.show({ description = 'Could not set waypoint.', type = 'error' })
+        notify.show({ description = locale.t('racing.waypointFailed', 'Could not set waypoint.'), type = 'error' })
         cb({ success = false })
         return
     end
 
     SetNewWaypoint(x + 0.0, y + 0.0)
-    notify.show({ description = 'Waypoint set.', type = 'success' })
+    notify.show({ description = locale.t('racing.waypointSet', 'Waypoint set.'), type = 'success' })
     cb({ success = true })
 end)
 

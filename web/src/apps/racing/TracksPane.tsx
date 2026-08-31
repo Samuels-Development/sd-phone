@@ -20,6 +20,7 @@ import { racingImportTracks, racingStartCreator, racingTracks, racingWaypoint } 
 import { RACING_ACCENT, racingAccentFill, racingAccentText, racingJsonField, racingJsonPlaceholder, racingSheetHint } from './racingTheme';
 import { useRacingSession } from './useRacingSession';
 import { TRACKS_PER_PAGE, type TrackRow, type TrackSort } from './data';
+import { failText } from '@/core/api';
 
 const MASTER_WIDTH = 408;
 
@@ -171,7 +172,7 @@ function ImportSheet({ onClose, onDone }: { onClose: () => void; onDone: () => v
         const res = await racingImportTracks(text);
         setBusy(false);
         if (!res.success) {
-            setError(res.message ?? t('racing.importFailed', 'Nothing could be imported.'));
+            setError(failText(res, t('racing.importFailed', 'Nothing could be imported.')));
             return;
         }
         if (res.data && res.data.failed.length > 0) setFailed(res.data.failed);
