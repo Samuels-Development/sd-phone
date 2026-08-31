@@ -89,7 +89,7 @@ export function getCatalogVersion(): number {
 
 const LOCALE_TAGS: Record<string, string> = {
     en: 'en-US', fr: 'fr-FR', es: 'es-ES', de: 'de-DE', it: 'it-IT',
-    pt: 'pt-PT', nl: 'nl-NL', pl: 'pl-PL', da: 'da-DK', no: 'nb-NO',
+    pt: 'pt-PT', nl: 'nl-NL', pl: 'pl-PL', da: 'da-DK', no: 'nb-NO', ru: 'ru-RU',
 };
 
 /** BCP-47 tag for the active locale, for Intl/toLocaleDateString calls. */
