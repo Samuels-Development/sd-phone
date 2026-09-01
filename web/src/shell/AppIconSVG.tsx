@@ -1498,24 +1498,28 @@ function IdIcon() {
     return (
         <svg viewBox={`0 0 ${S} ${S}`} width={S} height={S}>
             <defs>
-                <LinearGrad id={u('idbg')} top="#4A5566" mid="#2C3440" bot="#171C24" angle={155} />
-                <LinearGrad id={u('idcard')} top="#FFFFFF" bot="#E6E9EF" angle={170} />
-                <LinearGrad id={u('idband')} top="#4AA3FF" bot="#0A6CDE" angle={160} />
-                <filter id={u('idsh')} x="-20%" y="-20%" width="140%" height="150%">
-                    <feDropShadow dx="0" dy="1.6" stdDeviation="1.4" floodColor="#000" floodOpacity="0.45" />
+                <LinearGrad id={u('idbg')} top="#FFFFFF" bot="#EDEDF0" angle={170} />
+                <LinearGrad id={u('idfront')} top="#F7F8FA" bot="#DFE3EA" angle={170} />
+                <LinearGrad id={u('idpocket')} top="#3A3A3E" bot="#151517" angle={175} />
+                <filter id={u('idsh')} x="-20%" y="-30%" width="140%" height="170%">
+                    <feDropShadow dx="0" dy="1.2" stdDeviation="1" floodColor="#000" floodOpacity="0.28" />
                 </filter>
             </defs>
             <rect width={S} height={S} fill={`url(#${u('idbg')})`} />
             <g filter={`url(#${u('idsh')})`}>
-                <rect x="8" y="15.5" width="44" height="29" rx="5.5" fill={`url(#${u('idcard')})`} />
+                <rect x="9" y="8"    width="42" height="26" rx="4.5" fill="#1E5BC6" />
+                <rect x="9" y="12.5" width="42" height="26" rx="4.5" fill="#34C759" />
+                <rect x="9" y="17"   width="42" height="26" rx="4.5" fill="#FFCC00" />
+                <rect x="9" y="21.5" width="42" height="26" rx="4.5" fill="#FF3B30" />
+                <rect x="9" y="26"   width="42" height="26" rx="4.5" fill={`url(#${u('idfront')})`} />
             </g>
-            <path d="M8 21 a5.5 5.5 0 0 1 5.5 -5.5 h33 a5.5 5.5 0 0 1 5.5 5.5 v2.2 h-44 z" fill={`url(#${u('idband')})`} />
-            <circle cx="20.5" cy="32.5" r="4.6" fill="#8A93A3" />
-            <path d="M12.8 43 a7.7 7.7 0 0 1 15.4 0 z" fill="#8A93A3" />
-            <rect x="31.5" y="29" width="16" height="2.6" rx="1.3" fill="#B4BBC7" />
-            <rect x="31.5" y="34" width="12" height="2.6" rx="1.3" fill="#C9CED8" />
-            <rect x="31.5" y="39" width="14" height="2.6" rx="1.3" fill="#C9CED8" />
-            <path d={`M0 0 H${S} V17 Q${S / 2} 24 0 17 Z`} fill="rgba(255,255,255,0.08)" />
+            <circle cx="18.5" cy="35" r="4.2" fill="#8E8E93" />
+            <path d="M11.6 44.5 a6.9 6.9 0 0 1 13.8 0 z" fill="#8E8E93" />
+            <rect x="28" y="31.5" width="16" height="2.8" rx="1.4" fill="#48484A" />
+            <rect x="28" y="36.5" width="11" height="2.8" rx="1.4" fill="#AEAEB2" />
+            <rect x="28" y="41.5" width="14" height="2.8" rx="1.4" fill="#AEAEB2" />
+            <rect x="6" y="41" width="48" height="14" rx="5" fill={`url(#${u('idpocket')})`} />
+            <rect x="6" y="41" width="48" height="1.2" fill="rgba(255,255,255,0.18)" />
         </svg>
     );
 }

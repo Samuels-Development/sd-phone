@@ -159,9 +159,9 @@ function actions.buildCards(src)
     if jobName and jobName ~= '' and jobName ~= 'unemployed' then
         local label = job.getLabel(jobName) or jobName
         local fields = {}
-        push(fields, field('employer', label), field('rank', gradeLabel(src)), field('callsign', citizen.callsign))
+        push(fields, field('rank', gradeLabel(src)), field('callsign', citizen.callsign), field('citizen', cid))
         cards[#cards + 1] = {
-            key = 'job', kind = 'job', title = label, subtitle = gradeLabel(src),
+            key = 'job', kind = 'job', title = label,
             color = (CFG.JobColors or {})[jobName] or util.colorFor(jobName),
             name = name, portrait = portrait, issuer = label, fields = fields,
         }

@@ -13,7 +13,6 @@ export function fieldLabel(key: string): string {
         case 'citizen':     return t('id.fieldCitizen', 'Citizen No.');
         case 'phone':       return t('id.fieldPhone', 'Phone');
         case 'class':       return t('id.fieldClass', 'Class');
-        case 'employer':    return t('id.fieldEmployer', 'Employer');
         case 'rank':        return t('id.fieldRank', 'Rank');
         case 'callsign':    return t('id.fieldCallsign', 'Callsign');
         default:            return key;
@@ -31,7 +30,7 @@ export function fieldValue(key: string, value: string): string {
 }
 
 export function kindLabel(kind: IdCardKind): string {
-    if (kind === 'state')   return t('id.kindState', 'State ID');
+    if (kind === 'state')   return t('id.kindState', 'Identification');
     if (kind === 'licence') return t('id.kindLicence', 'Licence');
     return t('id.kindJob', 'Badge');
 }
@@ -69,8 +68,8 @@ export const SEED_CARDS: IdCardData[] = [
         fields: [{ key: 'class', value: 'weapon' }, { key: 'citizen', value: 'LSC48219' }, { key: 'dob', value: '1994-03-12' }],
     },
     {
-        key: 'job', kind: 'job', title: 'Los Santos Police', subtitle: 'Sergeant', color: '#1D4ED8', issuer: 'Los Santos Police',
+        key: 'job', kind: 'job', title: 'Los Santos Police', color: '#1D4ED8', issuer: 'Los Santos Police',
         name: 'Marcus Reyes', portrait: SEED_PORTRAIT,
-        fields: [{ key: 'employer', value: 'Los Santos Police' }, { key: 'rank', value: 'Sergeant' }, { key: 'callsign', value: '1-ADAM-12' }],
+        fields: [{ key: 'rank', value: 'Sergeant' }, { key: 'callsign', value: '1-ADAM-12' }, { key: 'citizen', value: 'LSC48219' }],
     },
 ];

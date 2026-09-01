@@ -21,6 +21,8 @@ function Seal({ className }: { className?: string }) {
     );
 }
 
+const SHADOW = { textShadow: '0 1px 3px rgba(0,0,0,0.35)' };
+
 export function IdCard({ card, className = '' }: { card: IdCardData; className?: string }) {
     const fields = card.fields.slice(0, 4);
     return (
@@ -38,15 +40,17 @@ export function IdCard({ card, className = '' }: { card: IdCardData; className?:
 
             <div className="absolute inset-x-0 top-0 flex items-start justify-between px-4 pt-[13px]">
                 <div className="min-w-0 pr-3">
-                    <div className="text-[9px] font-bold uppercase tracking-[0.24em] text-white/60">{kindLabel(card.kind)}</div>
-                    <div className="truncate text-[19px] font-extrabold leading-tight tracking-[-0.01em]" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.35)' }}>{cardTitle(card)}</div>
+                    <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/65">{kindLabel(card.kind)}</div>
+                    <div className="truncate text-[24px] font-extrabold leading-[1.1] tracking-[-0.01em]" style={SHADOW}>{cardTitle(card)}</div>
                 </div>
-                <div className="shrink-0 pt-[3px] text-right text-[8.5px] font-bold uppercase leading-[1.3] tracking-[0.16em] text-white/55">
-                    {card.issuer}
-                </div>
+                {card.kind !== 'job' && (
+                    <div className="max-w-[48%] shrink-0 pt-[4px] text-right text-[10px] font-bold uppercase leading-[1.3] tracking-[0.14em] text-white/60">
+                        {card.issuer}
+                    </div>
+                )}
             </div>
 
-            <div className="absolute inset-x-4 bottom-[13px] top-[37%] flex gap-[14px]">
+            <div className="absolute inset-x-4 bottom-[14px] top-[36%] flex gap-[14px]">
                 <div className="h-full shrink-0 overflow-hidden rounded-[10px] bg-white/15 ring-1 ring-white/25" style={{ aspectRatio: '3 / 4' }}>
                     {card.portrait ? (
                         <img src={card.portrait} alt="" className="h-full w-full object-cover" draggable={false} />
@@ -58,13 +62,13 @@ export function IdCard({ card, className = '' }: { card: IdCardData; className?:
                 </div>
 
                 <div className="flex min-w-0 flex-1 flex-col">
-                    <div className="line-clamp-2 text-[15px] font-bold uppercase leading-[1.15] tracking-[0.04em]" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.35)' }}>{card.name}</div>
-                    {card.subtitle && <div className="mt-0.5 truncate text-[11px] font-semibold text-white/80">{card.subtitle}</div>}
-                    <div className="mt-auto grid grid-cols-2 gap-x-3 gap-y-[6px]">
+                    <div className="line-clamp-2 text-[19px] font-bold uppercase leading-[1.12] tracking-[0.03em]" style={SHADOW}>{card.name}</div>
+                    {card.subtitle && <div className="mt-0.5 truncate text-[13px] font-semibold text-white/85">{card.subtitle}</div>}
+                    <div className="mt-auto grid grid-cols-2 gap-x-3 gap-y-[7px]">
                         {fields.map(f => (
                             <div key={f.key} className="min-w-0">
-                                <div className="text-[8px] font-bold uppercase tracking-[0.14em] text-white/55">{fieldLabel(f.key)}</div>
-                                <div className="truncate text-[12px] font-semibold tabular-nums leading-tight text-white/95">{fieldValue(f.key, f.value)}</div>
+                                <div className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-white/60">{fieldLabel(f.key)}</div>
+                                <div className="truncate text-[15px] font-semibold tabular-nums leading-tight text-white" style={SHADOW}>{fieldValue(f.key, f.value)}</div>
                             </div>
                         ))}
                     </div>
