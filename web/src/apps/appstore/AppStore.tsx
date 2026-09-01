@@ -15,6 +15,7 @@ import { AppDetail } from './AppDetail';
 import { getCustomApp } from '@/stores/customAppsStore';
 import { t, appLabel } from '@/i18n';
 import type { AppDef } from '@/core/types';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 function getDescriptions(): Record<string, string> {
     return {
@@ -129,7 +130,7 @@ export function AppStore({ onClose: _onClose, apps, installed, onInstall, onOpen
 
     return (
         <div className="absolute inset-0 flex flex-col bg-base font-sf">
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <h1 className="px-5 pb-2 pt-1 text-[32px] font-bold tracking-tight text-black dark:text-white">{t('appstore.title', 'Apps')}</h1>
 

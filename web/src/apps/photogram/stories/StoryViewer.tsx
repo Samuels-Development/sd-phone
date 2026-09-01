@@ -7,6 +7,7 @@ import { apiMarkStorySeen } from '../photogramApi';
 import { isVideoUrl } from '../create/Media';
 import { VerifiedCheck } from '../ui';
 import { useDeckActive } from '@/shell/deckActive';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 export function StoryViewer({ stories, startIndex, onClose }: { stories: StoryGroup[]; startIndex: number; onClose: () => void }) {
     const [si, setSi] = useState(startIndex);
@@ -55,7 +56,7 @@ export function StoryViewer({ stories, startIndex, onClose }: { stories: StoryGr
 
     return (
         <div className="absolute inset-0 z-50 flex flex-col bg-black" style={{ animation: 'ios-sheet-backdrop-in 0.2s ease-out' }}>
-            <div className="h-[56px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="flex gap-1 px-2.5 pt-1">
                 {story.frames.map((f, i) => {

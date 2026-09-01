@@ -10,6 +10,7 @@ import { ancestorZoom, trackFractionY } from '@/lib/zoom';
 import { t } from '@/i18n';
 import { getFolderLabels, shortEmail, unreadCount } from './data';
 import type { Folder, MailAccount, MailMessage } from './data';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 interface Props {
     accounts:         MailAccount[];
@@ -119,7 +120,7 @@ export function MailboxList({
 
     return (
         <div className="absolute inset-0 flex flex-col bg-base text-black dark:text-white">
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="flex items-center justify-between px-5 pb-0.5">
                 <button
@@ -326,7 +327,7 @@ export function MailboxList({
                     <button
                         type="button"
                         onClick={() => setConfirmDeleteAcc(true)}
-                        className="mt-3 w-full rounded-[10px] bg-[#ff3b30] py-4 text-center text-[18px] font-semibold text-white active:opacity-80"
+                        className="mt-3 w-full rounded-[10px] bg-ios-red py-4 text-center text-[18px] font-semibold text-white active:opacity-80"
                     >
                         {t('mail.deleteAccount', 'Delete Account')}
                     </button>

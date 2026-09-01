@@ -19,6 +19,7 @@ import { warmPhotos, apiSavePhotoFromUrl } from '@/core/photosApi';
 import { IG, type DM, type DMsg, type SharedPost } from '../data';
 import { MediaThumb } from '../create/Media';
 import { avatarFor } from '../photogramApi';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 type Panel = 'emoji' | 'voice' | null;
 
@@ -132,7 +133,7 @@ export function ChatView({ convo, onBack, onSend, onReact, onOpenPost, animateIn
 
     return (
         <div className="absolute inset-0 z-20 flex flex-col overflow-hidden" style={{ background: SURFACE, ...pageStyle }}>
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="shrink-0">
                 <div className="flex items-center gap-2 px-2 pb-3">

@@ -11,6 +11,7 @@ import { AlertDialog } from '@/ui/AlertDialog';
 import { formatPhonePartial } from '@/lib/phone';
 import { sendMoney, sendTarget, type BankTx, type SendMode, type SendTarget } from './bankingApi';
 import { failText } from '@/core/api';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 const MAX_ID_DIGITS = 5;
 
@@ -66,7 +67,7 @@ export function SendMoney({ balance, allowAnonymous = false, onClose, onSent }: 
             className="absolute inset-0 z-30 flex flex-col bg-base font-sf"
             style={pageStyle}
         >
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="flex h-11 shrink-0 items-center justify-between px-3">
                 <button
@@ -200,7 +201,7 @@ function AmountStage({ balance, target, toLabel, amount, setAmount, anon, setAno
             className="absolute inset-0 z-10 flex flex-col bg-base font-sf"
             style={pageStyle}
         >
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="flex h-11 shrink-0 items-center justify-between px-3">
                 <button

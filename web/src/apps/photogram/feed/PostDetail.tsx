@@ -4,6 +4,7 @@ import { useIosPush } from '@/hooks/useIosPush';
 import { t } from '@/i18n';
 import { type Post, type User } from '../data';
 import { PostCard } from './PostCard';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 export function PostDetail({ post, me, onBack, onLike, onDoubleLike, onSave, onComment, onOpenProfile, onShare, onDelete, animateIn = true }: {
     post:         Post;
@@ -22,7 +23,7 @@ export function PostDetail({ post, me, onBack, onLike, onDoubleLike, onSave, onC
 
     return (
         <div className="absolute inset-0 z-40 flex flex-col bg-[#f2f2f2] font-sf" style={pageStyle}>
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="relative flex shrink-0 items-center px-2 pb-2">
                 <button type="button" onClick={goBack} aria-label={t('photogram.back', 'Back')} className="text-black active:opacity-50">

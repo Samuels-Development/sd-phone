@@ -11,6 +11,7 @@ import { ChangePasswordPage } from '@/shared/ChangePasswordPage';
 import { AVATAR_EMPTY, BG, BLUE, CARD, LINE_STRONG, META, TEXT, type BirdyProfile } from '../data';
 import { VerifiedBadge } from '../ui';
 import { failText } from '@/core/api';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 const RED = '#ff3b30';
 
@@ -86,7 +87,7 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onSignOutAl
                 willChange: 'transform',
             }}
         >
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
             <header className="flex items-center justify-between px-4 py-2.5">
                 <button type="button" onClick={() => dismiss(onCancel)} className="text-[17px]" style={{ color: BLUE }}>{t('squawk.cancel', 'Cancel')}</button>
                 <div className="text-[17px] font-semibold">{t('squawk.editProfile', 'Edit profile')}</div>

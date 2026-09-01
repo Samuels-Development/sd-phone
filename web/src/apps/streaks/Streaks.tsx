@@ -13,6 +13,7 @@ import { LeaderboardTab } from './LeaderboardTab';
 import { MeTab } from './MeTab';
 import { RewardsView } from './RewardsView';
 import { StreaksTabBar } from './StreaksTabBar';
+import { Spinner } from '@/ui/Spinner';
 
 const SB_H = 61;
 const PAGE = 30;
@@ -174,7 +175,7 @@ export function Streaks({ onClose: _onClose }: { onClose: () => void }) {
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 {loading || !state || !config ? (
                     <div className="flex flex-1 items-center justify-center">
-                        <span className="h-7 w-7 animate-spin rounded-full border-[3px] border-black/15 border-t-black/50 dark:border-white/15 dark:border-t-white/60" />
+                        <Spinner />
                     </div>
                 ) : (
                     <div

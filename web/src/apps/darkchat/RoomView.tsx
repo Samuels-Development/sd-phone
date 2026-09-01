@@ -16,6 +16,7 @@ import { apiSavePhotoFromUrl } from '@/core/photosApi';
 import { Composer } from './Composer';
 import { RoomSettingsSheet } from './RoomSettingsSheet';
 import { toBubbleMsg, type ChatMessage, type DarkChatDraft, type Room } from './data';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 export function RoomView({ room, nickname, onBack, onSend, onReact, onLeave, onMemberRemoved, onCodeChanged, animateIn = true }: {
     room:     Room;
@@ -85,7 +86,7 @@ export function RoomView({ room, nickname, onBack, onSend, onReact, onLeave, onM
             className="dark absolute inset-0 z-20 flex flex-col bg-base"
             style={{ ...pageStyle, willChange: 'transform' }}
         >
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <header className="relative flex shrink-0 items-center justify-between border-b border-white/10 px-3 pb-2.5 pt-[15px]">
                 <button type="button" onClick={goBack} aria-label={t('darkchat.back', 'Back')} className="z-10 text-ios-blue active:opacity-60">

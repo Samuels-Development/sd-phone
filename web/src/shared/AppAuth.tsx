@@ -12,6 +12,7 @@ import { formatPhone } from '@/lib/phone';
 import { useStreamerHidden } from '@/stores/themeStore';
 import { HIDDEN_TEXT } from '@/shell/streamerMode';
 import { failText } from '@/core/api';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 interface AppAuthField {
     key:         string;
@@ -330,7 +331,7 @@ function Welcome({ appName, tagline, icon, theme, onCreate, onLogin, onForgot, o
             className={`relative flex h-full flex-col ${light ? 'text-white' : 'text-black'}`}
             style={{ background: theme.welcomeBg }}
         >
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
             {onDismiss && (
                 <button
                     type="button"
@@ -642,7 +643,7 @@ function AuthForm({ mode, appName, icon, theme, fields, notice, myNumber, myEmai
 
     return (
         <div className="relative flex h-full flex-col text-black" style={{ background: formBg }}>
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
             <header className="flex items-center px-3 py-2">
                 <button type="button" onClick={onBack} className="flex items-center active:opacity-60" style={{ color: theme.accent }}>
                     <ChevronLeft className="h-[28px] w-[28px]" strokeWidth={2.4} />
@@ -824,7 +825,7 @@ function ResetForm({ phase, appName, icon, theme, identity, onIdentity, myNumber
 
     return (
         <div className="relative flex h-full flex-col text-black" style={{ background: formBg }}>
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
             <header className="flex items-center px-3 py-2">
                 <button type="button" onClick={() => { setError(null); onBack(); }} className="flex items-center active:opacity-60" style={{ color: theme.accent }}>
                     <ChevronLeft className="h-[28px] w-[28px]" strokeWidth={2.4} />
@@ -1021,7 +1022,7 @@ export function ChangePasswordForm({ appName, icon, theme, identity, savedPasswo
 
     return (
         <div className="absolute inset-0 z-40 flex flex-col text-black" style={{ background: formBg, ...pageStyle }}>
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
             <header className="flex items-center px-3 py-2">
                 <button type="button" onClick={goBack} className="flex items-center active:opacity-60" style={{ color: theme.accent }}>
                     <ChevronLeft className="h-[28px] w-[28px]" strokeWidth={2.4} />

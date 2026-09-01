@@ -4,6 +4,7 @@ import { t } from '@/i18n';
 import { IdCard } from '@/apps/id/IdCard';
 import { DetailsList } from '@/apps/id/DetailsList';
 import { cardTitle, formatCountdown, type ReceivedIdCard } from '@/apps/id/data';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 export function ReceivedIdLayer({ shown, onDone }: {
     shown:  ReceivedIdCard;
@@ -37,7 +38,7 @@ export function ReceivedIdLayer({ shown, onDone }: {
                 ? 'ios-sheet-down 0.26s cubic-bezier(0.32,0,0.68,1) forwards'
                 : 'ios-sheet-up 0.34s cubic-bezier(0.32,0.72,0,1)' }}
         >
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="shrink-0 px-5 pb-3 pt-2 text-center">
                 <div className="text-[15px] font-semibold text-ios-gray">{t('id.shownBy', 'Shown by {name}', { name: shown.fromName })}</div>

@@ -22,6 +22,7 @@ import { PhotoPicker } from './PhotoPicker';
 import { PhotoTabBar, type PhotosTab } from './PhotoTabBar';
 import { PhotoViewer } from './PhotoViewer';
 import { failText } from '@/core/api';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 interface ViewerState { source: 'gallery' | 'album'; index: number }
 interface CreateState { addIds: string[] }
@@ -275,7 +276,7 @@ export function Photos({ onClose }: { onClose: () => void }) {
 
     return (
         <div className="absolute inset-0 z-10 flex flex-col bg-base text-black dark:text-white">
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="relative flex-1 min-h-0">
                 {loading ? (
@@ -370,7 +371,7 @@ export function Photos({ onClose }: { onClose: () => void }) {
                         tabIndex={selectBarUp ? undefined : -1}
                         disabled={gallerySelected.size === 0}
                         onClick={() => setConfirmDelete({ ids: Array.from(gallerySelected), fromSelect: true })}
-                        className="flex flex-1 flex-col items-center gap-1.5 py-1 text-[#ff3b30] disabled:opacity-40"
+                        className="flex flex-1 flex-col items-center gap-1.5 py-1 text-ios-red disabled:opacity-40"
                     >
                         <Trash2 className="h-[33px] w-[33px]" strokeWidth={1.9} />
                         <span className="text-[15px] font-bold tracking-tight">{t('photos.delete','Delete')}</span>

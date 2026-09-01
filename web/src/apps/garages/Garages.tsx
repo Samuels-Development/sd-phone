@@ -14,6 +14,7 @@ import { useSessionState } from '@/hooks/useSessionState';
 import { VEHICLES, type ValetInfo, type Vehicle, type VehicleStatus } from './data';
 import { t } from '@/i18n';
 import { Pill, type PillTone } from '@/ui/Pill';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 const ACCENTS = ['#FF3B30', '#0A84FF', '#30B0C7', '#FF9500', '#5E5CE6', '#34C759', '#AF52DE', '#FF2D55'];
 
@@ -86,7 +87,7 @@ export function Garages({ onClose: _onClose }: { onClose: () => void }) {
 
     return (
         <div className="absolute inset-0 flex flex-col bg-base font-sf">
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="px-5 pb-2 pt-1">
                 <div className="flex items-center justify-between">
@@ -291,7 +292,7 @@ function VehicleDetail({ v, showImages, valet, onBack, onDelivered, animateIn = 
 
     return (
         <div className="absolute inset-0 z-20 flex flex-col bg-base font-sf" style={pageStyle}>
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <NavBar backLabel={t('garages.title', 'Garages')} onBack={goBack} />
 

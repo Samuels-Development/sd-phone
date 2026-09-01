@@ -501,13 +501,13 @@ export function LockNotifCard({ item, onOpen, onDismiss }: { item: NotificationI
             className={[
                 'flex w-full animate-notif-drop touch-pan-y select-none items-start gap-3 rounded-[27px] px-[18px] py-4 text-left shadow-[0_6px_24px_rgba(0,0,0,0.16)]',
                 frostedWallpaper ? 'bg-white/70' : 'bg-white/55 backdrop-blur-2xl backdrop-saturate-150',
-                item.emergency ? 'ring-[1.5px] ring-inset ring-[#FF3B30]/75' : 'ring-1 ring-black/[0.04]',
+                item.emergency ? 'ring-[1.5px] ring-inset ring-ios-red/75' : 'ring-1 ring-black/[0.04]',
             ].join(' ')}
         >
             <NotifIcon item={item} size={47} />
             <div className="min-w-0 flex-1 pt-0.5">
                 {item.emergency && (
-                    <span className="mb-[2px] block text-[13.5px] font-bold uppercase leading-[1.15] tracking-[0.09em] text-[#FF3B30]">
+                    <span className="mb-[2px] block text-[13.5px] font-bold uppercase leading-[1.15] tracking-[0.09em] text-ios-red">
                         {t('shell.emergencyAlert', 'Emergency Alert')}
                     </span>
                 )}

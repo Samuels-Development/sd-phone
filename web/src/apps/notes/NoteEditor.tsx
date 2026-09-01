@@ -16,6 +16,7 @@ import { formatLastEdited, joinTitle, splitTitle, shareNote } from "./data";
 import type { Note } from "./data";
 import { SketchCanvas } from "./SketchCanvas";
 import { t } from "@/i18n";
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 interface Props {
   note: Note;
@@ -121,7 +122,7 @@ export function NoteEditor({
       className="absolute inset-0 z-20 flex flex-col bg-base text-black dark:text-white"
       style={pageStyle}
     >
-      <div className="h-[58px] shrink-0" aria-hidden />
+      <StatusBarSpacer />
 
       <div className="flex items-center gap-2 px-2 pb-0.5 pt-4">
         <button

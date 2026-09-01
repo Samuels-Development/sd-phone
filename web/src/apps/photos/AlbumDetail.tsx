@@ -5,6 +5,7 @@ import { useIosPush } from '@/hooks/useIosPush';
 import { t } from '@/i18n';
 import type { Photo } from '@/core/photosApi';
 import { PhotoTile } from './PhotoTile';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 export function AlbumDetail({
     title, photos, isCustom, onBack, onPhotoTap, onAddPhotos, onRemovePhotos,
@@ -36,7 +37,7 @@ export function AlbumDetail({
 
     return (
         <div className="absolute inset-0 z-20 flex flex-col bg-base" style={pageStyle}>
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
             <div className="flex h-11 shrink-0 items-center justify-between px-2">
                 <button type="button" onClick={goBack} className="flex items-center text-ios-blue">
                     <ChevronLeft className="h-7 w-7" strokeWidth={2.4} />
@@ -109,7 +110,7 @@ export function AlbumDetail({
                         tabIndex={selectMode ? undefined : -1}
                         disabled={selected.size === 0}
                         onClick={() => { onRemovePhotos?.(Array.from(selected)); exitSelect(); }}
-                        className="flex flex-1 flex-col items-center gap-1.5 py-1 text-[#ff3b30] disabled:opacity-40"
+                        className="flex flex-1 flex-col items-center gap-1.5 py-1 text-ios-red disabled:opacity-40"
                     >
                         <Trash2 className="h-[33px] w-[33px]" strokeWidth={1.9} />
                         <span className="text-[15px] font-bold tracking-tight">

@@ -6,6 +6,7 @@ import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
 import { ChangePasswordPage } from '@/shared/ChangePasswordPage';
 import { Toggle } from '@/ui/Toggle';
 import { IG, type ProfileData } from '../data';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 export function EditProfile({ profile, onCancel, onSave, onSignOut, onSignOutAll, onSwitchAccount, onDelete, switchTo }: {
     onSwitchAccount: () => void;
@@ -47,7 +48,7 @@ export function EditProfile({ profile, onCancel, onSave, onSignOut, onSignOutAll
                 willChange: 'transform',
             }}
         >
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
             <header className="flex items-center justify-between px-4 pb-2">
                 <button type="button" onClick={() => dismiss(onCancel)} className="text-[17px] text-black active:opacity-50">{t('photogram.cancel', 'Cancel')}</button>
                 <span className="text-[18px] font-semibold text-black">{t('photogram.editProfile', 'Edit profile')}</span>

@@ -8,6 +8,7 @@ import { useIosPush } from '@/hooks/useIosPush';
 import { apiFollowList, apiToggleFollow } from '../birdyApi';
 import { BG, BLUE, LINE_STRONG, META, PILL, TEXT, type BirdyFollowUser } from '../data';
 import { Avatar, RichText, VerifiedBadge } from '../ui';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 export function FollowList({ kind, handle, onBack }: {
     kind:    'followers' | 'following';
@@ -19,7 +20,7 @@ export function FollowList({ kind, handle, onBack }: {
 
     return (
         <div className="absolute inset-0 z-20 flex flex-col" style={{ background: BG, ...pageStyle }}>
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
             <header className="flex shrink-0 items-center border-b border-hairline/10 px-2 pb-2.5 pt-2">
                 <button type="button" onClick={goBack} aria-label={t('squawk.back', 'Back')} className="flex h-9 w-9 items-center justify-center text-label active:opacity-60">
                     <ArrowLeft className="h-6 w-6" strokeWidth={2.2} />

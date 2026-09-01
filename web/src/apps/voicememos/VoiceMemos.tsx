@@ -14,6 +14,7 @@ import {
     deleteMemo, fetchMemos, fmtDuration, fmtMemoDate, renameMemo, shareMemo, uploadMemo, type VoiceMemo,
 } from './voiceApi';
 import { t } from '@/i18n';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 function pickMime(): string | undefined {
     const c = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
@@ -126,7 +127,7 @@ export function VoiceMemos({ onClose: _onClose }: { onClose: () => void }) {
 
     return (
         <div className="absolute inset-0 z-10 flex flex-col bg-base font-sf text-black dark:text-white">
-            <div className="h-[61px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
             <div className="px-5 pb-1 pt-1 text-[34px] font-bold tracking-tight">{t('voicememos.title', 'Voice Memos')}</div>
 
             <SearchBar value={query} onChange={setQuery} className="mx-4 mb-2 mt-1" />

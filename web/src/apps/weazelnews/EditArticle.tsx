@@ -7,6 +7,7 @@ import { Scroller } from '@/ui/Scroller';
 import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
 import { Toggle } from '@/ui/Toggle';
 import { CATEGORIES, categoryLabel, type Article as ArticleT, type ArticleDraft, type Category, WEAZEL_RED } from './data';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 export function EditArticle({ initial, dark, onClose, onSave }: {
     initial:  ArticleT | null;
@@ -50,7 +51,7 @@ export function EditArticle({ initial, dark, onClose, onSave }: {
 
     return (
         <div className={`absolute inset-0 z-40 flex flex-col font-sf ${sheet}`} style={pageStyle}>
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="flex h-11 shrink-0 items-center justify-between px-4">
                 <button type="button" onClick={goBack} className="text-[16px]" style={{ color: WEAZEL_RED }}>{t('weazelnews.cancel', 'Cancel')}</button>

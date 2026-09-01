@@ -10,6 +10,7 @@ import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
 import { BG, BLUE, LINE, MAX_POST_LENGTH } from '../data';
 import { Avatar } from '../ui';
 import type { BirdyAuthor } from '../data';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 const MAX_IMAGES = 3;
 
@@ -78,7 +79,7 @@ export function Composer({ me, onClose, onPost }: {
                 boxShadow: '0 -8px 30px rgba(0,0,0,0.18)',
             }}
         >
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <header className="flex items-center justify-between px-4 py-2.5">
                 <button type="button" onClick={requestClose} className="text-[16px]" style={{ color: BLUE }}>

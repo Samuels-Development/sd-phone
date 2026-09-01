@@ -148,7 +148,7 @@ function MemberRow({ contact, displayName, onRemove }: { contact: Contact; displ
                     aria-label={t('messages.removeMemberAria', 'Remove {name}', { name: displayName })}
                     className="shrink-0 pl-2 active:opacity-60"
                 >
-                    <span className="flex h-[26px] w-[26px] items-center justify-center rounded-full bg-[#ff3b30]">
+                    <span className="flex h-[26px] w-[26px] items-center justify-center rounded-full bg-ios-red">
                         <span className="h-[2.5px] w-[13px] rounded-full bg-white" />
                     </span>
                 </button>

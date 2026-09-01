@@ -6,6 +6,7 @@ import { CircularProgress } from '@/ui/CircularProgress';
 import { getCustomApp } from '@/stores/customAppsStore';
 import { t, appLabel } from '@/i18n';
 import type { AppDef } from '@/core/types';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 const HEAVY = new Set(['cookie', 'wordle', 'flappy', 'blocks', 'casino', 'climber', 'connectfour', 'photogram', 'vibez', 'cherry', 'birdy', 'camera', 'maps', 'music', 'weazelnews', 'streaks']);
 const LIGHT = new Set(['calculator', 'notes', 'clock', 'weather', 'voicememos', 'settings', 'calendar']);
@@ -52,7 +53,7 @@ export function AppDetail({ app, desc, installed, downloadProgress, onBack, onIn
             }}
             onTransitionEnd={() => { if (!shown) onBack(); }}
         >
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="flex items-center px-3 pb-1">
                 <button type="button" onClick={() => setShown(false)} className="flex items-center text-ios-blue active:opacity-60">

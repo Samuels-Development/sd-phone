@@ -26,6 +26,7 @@ import {
     messageCompany, replyCompany,
     type Inbox, type InboxMessage, type InboxThread, type ServiceDraft,
 } from './servicesApi';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 type Scope = 'personal' | 'job';
 
@@ -198,7 +199,7 @@ function Conversation({ scope, thread, onBack, onSent }: {
             className={`absolute inset-0 z-20 flex min-h-0 flex-col bg-surface font-sf dark:bg-base ${isDark ? 'dark' : ''}`}
             style={{ ...pageStyle, willChange: 'transform' }}
         >
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="flex items-center px-2 pb-2.5 pt-0.5">
                 <div className="flex flex-1 items-center">

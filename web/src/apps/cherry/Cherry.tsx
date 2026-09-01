@@ -28,6 +28,7 @@ import { MatchOverlay, SwipeDeck } from './SwipeDeck';
 import { EditProfile } from './EditProfile';
 import { Matches } from './Matches';
 import { MatchChat } from './MatchChat';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 type View = 'deck' | 'profile' | 'matches' | { chatId: string };
 
@@ -322,7 +323,7 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
 
     return (
         <div className={`absolute inset-0 flex flex-col bg-[#e5e5e5] font-sf ${justAuthed ? 'animate-swipe-in-left' : ''}`}>
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="flex shrink-0 items-center justify-between px-6 pb-6 pt-3">
                 <button type="button" aria-label={t('cherry.yourProfile', 'Your profile')} onClick={() => setView('profile')}

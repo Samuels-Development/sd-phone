@@ -123,7 +123,7 @@ function CompanyCard({ company, onLocate, onCall, onMessage }: {
                         ? t('services.dutyOpen', 'Staff on duty')
                         : t('services.dutyClosed', 'Nobody on duty')}
                     className={`absolute -right-px -top-px h-[15px] w-[15px] rounded-full ring-[3px] ring-surface ${
-                        company.onDuty ? 'bg-[#34c759]' : 'bg-[#ff3b30]'
+                        company.onDuty ? 'bg-[#34c759]' : 'bg-ios-red'
                     }`}
                 />
             </div>

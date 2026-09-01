@@ -25,6 +25,7 @@ import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
 import { warmPhotos, apiSavePhotoFromUrl } from '@/core/photosApi';
 import { BG, BLUE, CARD, LINE, PILL, type BirdyConversation, type BirdyMessage } from '../data';
 import { Avatar } from '../ui';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 type Panel = 'emoji' | 'money' | 'voice' | null;
 
@@ -177,7 +178,7 @@ export function ChatView({ convo, onBack, onSend, onReact, onPayRequest, animate
             }}
             onAnimationEnd={e => { if (e.target === e.currentTarget && closing) onBack(); }}
         >
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="shrink-0">
                 <div className="flex items-center gap-2 px-2 pb-3">

@@ -30,6 +30,7 @@ import { Notifications } from './discover/Notifications';
 import { PostDetail } from './feed/PostDetail';
 import { Profile } from './profile/Profile';
 import { Search } from './discover/Search';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 type Tab = 'home' | 'search' | 'notifications' | 'messages';
 
@@ -320,7 +321,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
         <Push onClose={() => setOpenPostId(null)} z={postOverProfile ? 30 : 20} animateIn={animateNav}>
             {close => (
                 <div className="flex h-full flex-col">
-                    <div className="h-[54px] shrink-0" aria-hidden />
+                    <StatusBarSpacer />
                     <div className="min-h-0 flex-1">
                         {openPost
                             ? (
@@ -465,7 +466,7 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                     />
                 ) : (
                     <div className="absolute inset-0 z-20 flex flex-col" style={{ background: BG }}>
-                        <div className="h-[58px] shrink-0" aria-hidden />
+                        <StatusBarSpacer />
                         <div className="flex shrink-0 items-center px-2 pb-3">
                             <button type="button" onClick={() => setOpenConvoId(null)} aria-label={t('squawk.back', 'Back')} className="active:opacity-60" style={{ color: BLUE }}>
                                 <ChevronLeft className="h-[38px] w-[38px]" strokeWidth={2.4} />

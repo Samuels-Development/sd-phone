@@ -13,6 +13,7 @@ import { SearchBar } from '@/ui/SearchBar';
 import { accountsDeletePassword, accountsListPasswords, type VaultEntry } from '@/core/accountsApi';
 import { SlideOver } from '@/ui/SlideOver';
 import { t } from '@/i18n';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 const APP_LABELS: Record<string, string> = {
     photogram: 'Photogram', cherry: 'Cherry', vibez: 'Clout', birdy: 'Squawk', mail: 'Mail',
@@ -54,7 +55,7 @@ export function Passwords({ onClose }: { onClose: () => void }) {
     return (
         <div className="absolute inset-0 z-10 overflow-hidden bg-base font-sf text-black dark:text-white">
             <div className="flex h-full flex-col">
-                <div className="h-[54px] shrink-0" aria-hidden />
+                <StatusBarSpacer />
 
                 <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-10">
                     <h1 className="pt-3 text-[32px] font-extrabold tracking-tight">{t('passwords.title', 'Passwords')}</h1>
@@ -113,7 +114,7 @@ function Detail({ entry, onBack, onDelete }: { entry: VaultEntry; onBack: () => 
 
     return (
         <div className="flex h-full flex-col bg-base text-black dark:text-white">
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
             <header className="flex items-center px-3 py-2">
                 <button type="button" onClick={onBack} className="flex items-center text-ios-blue active:opacity-60">
                     <ChevronLeft className="h-[28px] w-[28px]" strokeWidth={2.4} />

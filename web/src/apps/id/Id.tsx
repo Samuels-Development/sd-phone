@@ -18,6 +18,8 @@ import { IdCard } from './IdCard';
 import { CardDetail } from './CardDetail';
 import { devCapturePortrait, idHeadshot, idList, idSetPortrait } from './idApi';
 import { CARD_RATIO, cardTitle, formatCountdown, type ReceivedIdCard } from './data';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
+import { Spinner } from '@/ui/Spinner';
 
 const PEEK   = 74;
 const CARD_W = device.screen.w - 40;
@@ -104,7 +106,7 @@ export function Id({ onClose: _onClose }: { onClose: () => void }) {
 
     return (
         <div className="absolute inset-0 flex flex-col bg-base font-sf">
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="flex shrink-0 items-end justify-between px-5 pb-2 pt-1">
                 <h1 className="text-[34px] font-bold tracking-tight text-black dark:text-white">{t('id.id', 'ID')}</h1>
@@ -122,7 +124,7 @@ export function Id({ onClose: _onClose }: { onClose: () => void }) {
             <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar px-5 pb-8">
                 {pending ? (
                     <div className="flex h-full items-center justify-center">
-                        <span className="h-7 w-7 animate-spin rounded-full border-[3px] border-black/15 border-t-black/50 dark:border-white/15 dark:border-t-white/60" />
+                        <Spinner />
                     </div>
                 ) : cards.length === 0 ? (
                     <EmptyState center icon={IdCardGlyph} title={t('id.noCards', 'No Cards')} subtitle={t('id.noCardsSub', 'Your identity documents will appear here.')} />

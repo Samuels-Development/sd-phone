@@ -8,6 +8,7 @@ import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { IG } from '../data';
 import { apiFollowList, apiToggleFollow, type FollowStatus, type FollowUser } from '../photogramApi';
 import { VerifiedCheck } from '../ui';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 type Kind = 'followers' | 'following';
 
@@ -25,7 +26,7 @@ export function FollowList({ username, initial, onBack, onOpenProfile, onChanged
 
     return (
         <div className="absolute inset-0 z-50 flex flex-col bg-[#f2f2f2] font-sf" style={pageStyle}>
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
             <div className="relative flex shrink-0 items-center px-2 pb-2">
                 <button type="button" onClick={goBack} aria-label={t('photogram.back', 'Back')} className="text-black active:opacity-50">
                     <ChevronLeft className="h-[36px] w-[36px]" strokeWidth={2.2} />

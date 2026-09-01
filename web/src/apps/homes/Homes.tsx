@@ -14,6 +14,7 @@ import { NavBar } from '@/ui/NavBar';
 import { HOMES, DEV_CAPS, type Home, type HomesCaps, type KeyHolder } from './data';
 import { t } from '@/i18n';
 import { Pill } from '@/ui/Pill';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 const ACCENTS = ['#5E5CE6', '#0A84FF', '#30B0C7', '#FF9500', '#34C759', '#FF3B30', '#AF52DE', '#FF2D55'];
 
@@ -49,7 +50,7 @@ export function Homes({ onClose: _onClose }: { onClose: () => void }) {
 
     return (
         <div className="absolute inset-0 flex flex-col bg-base font-sf">
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="px-5 pb-2 pt-1">
                 <h1 className="text-[32px] font-bold tracking-tight text-black dark:text-white">{t('homes.title','Homes')}</h1>
@@ -163,7 +164,7 @@ function HomeDetail({ h, caps, onBack, animateIn = true }: { h: Home; caps: Home
 
     return (
         <div className="absolute inset-0 z-20 flex flex-col bg-base font-sf" style={pageStyle}>
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <NavBar backLabel={t('homes.backHomes','Homes')} onBack={goBack} />
 

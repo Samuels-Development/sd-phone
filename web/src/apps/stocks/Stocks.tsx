@@ -18,6 +18,7 @@ import {
 import { t } from '@/i18n';
 import { useStreamerHidden } from '@/stores/themeStore';
 import { failText } from '@/core/api';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 const HISTORY_CAP = 48;
 
@@ -108,7 +109,7 @@ export function Stocks({ onClose }: { onClose: () => void }) {
 
     return (
         <div className="absolute inset-0 z-10 flex flex-col bg-base text-black dark:text-white">
-            <div className="h-[61px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="px-5 pb-1 pt-1 text-[34px] font-bold tracking-tight">{t('stocks.stocks', 'Stocks')}</div>
 

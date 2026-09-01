@@ -122,7 +122,7 @@ function NotificationBanner({ item, onDismiss, onOpen }: {
             className={[
                 'flex cursor-pointer items-start gap-2.5 rounded-[22px] bg-elevated/75 px-3 py-3 shadow-[0_10px_34px_rgba(0,0,0,0.20)] backdrop-blur-2xl backdrop-saturate-150 dark:bg-elevated/75',
                 item.emergency
-                    ? 'ring-[1.5px] ring-inset ring-[#FF3B30]/75 dark:ring-[#FF3B30]/75'
+                    ? 'ring-[1.5px] ring-inset ring-ios-red/75 dark:ring-ios-red/75'
                     : 'ring-1 ring-black/[0.06] dark:ring-white/10',
             ].join(' ')}
             style={{ willChange: 'transform', ...style }}
@@ -130,7 +130,7 @@ function NotificationBanner({ item, onDismiss, onOpen }: {
             <NotifIcon item={item} />
             <div className="min-w-0 flex-1 pt-px">
                 {item.emergency && (
-                    <span className="mb-[1px] block text-[12.5px] font-bold uppercase leading-[1.15] tracking-[0.09em] text-[#FF3B30]">
+                    <span className="mb-[1px] block text-[12.5px] font-bold uppercase leading-[1.15] tracking-[0.09em] text-ios-red">
                         {t('shell.emergencyAlert', 'Emergency Alert')}
                     </span>
                 )}

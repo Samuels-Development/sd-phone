@@ -86,7 +86,7 @@ function FavoriteRow({ contact, editing, onRemove, onInfo, onCall }: {
                     type="button"
                     aria-label={t('phone.removeFromFavoritesAria','Remove {name} from favorites',{ name: contact.name })}
                     onClick={() => onRemove(contact.id)}
-                    className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-[#ff3b30] active:opacity-70"
+                    className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-ios-red active:opacity-70"
                 >
                     <Minus className="h-[18px] w-[18px] text-white" strokeWidth={3} />
                 </button>

@@ -4,6 +4,7 @@ import { GripVertical, Plus, X } from 'lucide-react';
 import { t } from '@/i18n';
 import { useIosPush } from '@/hooks/useIosPush';
 import { WEAZEL_RED } from './data';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 const MAX_LINES = 8;
 
@@ -74,7 +75,7 @@ export function EditBreaking({ initial, dark, onClose, onSave }: {
 
     return (
         <div className={`absolute inset-0 z-40 flex flex-col font-sf ${sheet}`} style={pageStyle}>
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="flex h-11 shrink-0 items-center justify-between px-4">
                 <button type="button" onClick={goBack} className="text-[16px]" style={{ color: WEAZEL_RED }}>{t('weazelnews.cancel', 'Cancel')}</button>

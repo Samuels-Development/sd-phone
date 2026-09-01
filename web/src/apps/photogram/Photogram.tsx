@@ -40,6 +40,7 @@ import { EditProfile } from './profile/EditProfile';
 import { LiveStream } from './live/LiveStream';
 import { LiveViewer } from './live/LiveViewer';
 import { AlertDialog } from '@/ui/AlertDialog';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
     const { authed, setAuthed, authChecked, justAuthed, setJustAuthed, myNumber, myEmails, savedLogin, savedAccounts, refreshAccounts } = useAppAuth('photogram',
@@ -323,7 +324,7 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
 
     return (
         <div className={`absolute inset-0 flex flex-col bg-[#f2f2f2] font-sf ${justAuthed ? 'animate-swipe-in-left' : ''}`}>
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <TabPane key={tab} animate={animateNav}>

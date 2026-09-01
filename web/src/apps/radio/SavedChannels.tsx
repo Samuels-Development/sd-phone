@@ -6,6 +6,7 @@ import { PromptDialog } from '@/ui/PromptDialog';
 import { AlertDialog } from '@/ui/AlertDialog';
 import type { SavedStation } from './radioApi';
 import { t } from '@/i18n';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 const fmtFreq = (f: number) => f.toFixed(1);
 const cleanFreq = (v: string) => {
@@ -34,7 +35,7 @@ export function SavedChannels({ saved, currentFreq, canSave, activeFreq, onTune,
 
     return (
         <div className="absolute inset-0 z-20 flex flex-col bg-base font-sf text-black dark:text-white" style={pageStyle}>
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="px-2 pb-0.5">
                 <button type="button" onClick={goBack} className="flex items-center gap-0.5 text-ios-blue active:opacity-60">
@@ -90,7 +91,7 @@ export function SavedChannels({ saved, currentFreq, canSave, activeFreq, onTune,
                                         type="button"
                                         onClick={() => setConfirmDel(s)}
                                         aria-label={t('radio.deleteStation', 'Delete {label}', { label: s.label })}
-                                        className="flex items-center px-3.5 text-ios-gray transition-colors hover:bg-[#ff3b30]/10 hover:text-[#ff3b30] active:opacity-60"
+                                        className="flex items-center px-3.5 text-ios-gray transition-colors hover:bg-ios-red/10 hover:text-ios-red active:opacity-60"
                                     >
                                         <Trash2 className="h-[20px] w-[20px]" strokeWidth={2} />
                                     </button>

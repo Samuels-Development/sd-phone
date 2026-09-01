@@ -13,6 +13,7 @@ import { SearchBar } from '@/ui/SearchBar';
 import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
 import { FileRow, FolderRow } from './DocRow';
 import { childDocs, childFolders, countChildren, MAX_NAME_LENGTH, type DocFile, type DocFolder, type DocList } from './data';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 interface Props {
     list:           DocList;
@@ -56,7 +57,7 @@ function FolderView({ folderId, title, backLabel, list, onBack, onOpenFolder, on
             className="absolute inset-0 z-10 flex flex-col bg-base text-black dark:text-white"
             style={pageStyle}
         >
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             {onBack && (
                 <div className="flex items-center justify-between px-2 pt-1">

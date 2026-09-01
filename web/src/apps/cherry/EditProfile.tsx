@@ -10,6 +10,7 @@ import { Toggle } from '@/ui/Toggle';
 import { portalToPhoneScreen } from '@/ui/portal';
 import { cherryBlockedList, cherryUnblock, type BlockedEntry } from './cherryApi';
 import { CHERRY, type Gender, type InterestedIn, type MyProfile } from './data';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 const MAX_PHOTOS = 6;
 
@@ -306,7 +307,7 @@ function BlockedSheet({ onClose }: { onClose: () => void }) {
                 willChange: 'transform',
             }}
         >
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
             <div className="flex shrink-0 items-center justify-between px-5 pb-3 pt-1">
                 <h2 className="text-[26px] font-bold tracking-tight text-black">{t('cherry.blocked', 'Blocked')}</h2>
                 <button

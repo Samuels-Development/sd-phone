@@ -14,6 +14,7 @@ import { ListingDetail } from '@/apps/_classifieds/ListingDetail';
 import { useClassifiedsFeed } from '@/apps/_classifieds/useClassifiedsFeed';
 import { useContactActions } from '@/apps/_classifieds/useContactActions';
 import { PagesTabBar, type PagesTab } from './PagesTabBar';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 export function Pages({ onClose: _onClose }: { onClose: () => void }) {
     const [tab,      setTab]      = useSessionState<PagesTab>('pages:tab', 'browse');
@@ -88,7 +89,7 @@ export function Pages({ onClose: _onClose }: { onClose: () => void }) {
 
     return (
         <div className="absolute inset-0 flex flex-col bg-base font-sf">
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="flex flex-1 flex-col overflow-hidden">
                 <div key={tab} className="flex min-h-0 flex-1 flex-col animate-swipe-in-left">

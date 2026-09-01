@@ -193,7 +193,7 @@ function AlbumCardTile({ card, editMode, onOpen, onDelete }: {
                     type="button"
                     onClick={onDelete}
                     aria-label={t('photos.deleteName', 'Delete {name}', { name: card.title })}
-                    className="absolute -left-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-[#ff3b30] text-white shadow"
+                    className="absolute -left-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-ios-red text-white shadow"
                 >
                     <Minus className="h-4 w-4" strokeWidth={3} />
                 </button>

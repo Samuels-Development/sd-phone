@@ -5,6 +5,7 @@ import { useIosPush } from '@/hooks/useIosPush';
 import { t } from '@/i18n';
 import { groupTx, type BankTx } from './bankingApi';
 import { TxRows, fmtAmount } from './TxRow';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 export function AllTransactions({ transactions, onBack, onSelectTx }: { transactions: BankTx[]; onBack: () => void; onSelectTx?: (tx: BankTx) => void }) {
     const { goBack, pageStyle } = useIosPush(onBack);
@@ -15,7 +16,7 @@ export function AllTransactions({ transactions, onBack, onSelectTx }: { transact
 
     return (
         <div className="absolute inset-0 z-20 flex flex-col bg-base text-black dark:text-white" style={pageStyle}>
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="px-2 pb-0.5">
                 <button type="button" onClick={goBack} className="flex items-center gap-0.5 text-ios-blue active:opacity-60">
@@ -34,7 +35,7 @@ export function AllTransactions({ transactions, onBack, onSelectTx }: { transact
                         <div className="flex items-baseline justify-between px-1 pb-2 pt-1">
                             <span className="text-[17px] font-semibold">{day.label}</span>
                             <span className={`text-[17px] font-semibold tabular-nums ${
-                                day.total > 0 ? 'text-[#34c759]' : day.total < 0 ? 'text-[#ff3b30]' : 'text-black/45 dark:text-white/45'
+                                day.total > 0 ? 'text-[#34c759]' : day.total < 0 ? 'text-ios-red' : 'text-black/45 dark:text-white/45'
                             }`}>
                                 {fmtAmount(day.total)}
                             </span>

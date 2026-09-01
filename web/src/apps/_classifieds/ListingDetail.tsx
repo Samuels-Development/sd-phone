@@ -8,6 +8,7 @@ import { Scroller } from '@/ui/Scroller';
 import { MailGlyph, MessageGlyph, PhoneGlyph } from '@/shell/AppGlyphs';
 import { fmtPrice, type ClassifiedItem } from './types';
 import { t } from '@/i18n';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 export function ListingDetail({ item, backLabel, itemNoun = t('classifieds.post', 'Post'), onBack, onMessage, onCall, onEmail, onEdit, onDelete, animateIn = true }: {
     item:      ClassifiedItem;
@@ -84,7 +85,7 @@ export function ListingDetail({ item, backLabel, itemNoun = t('classifieds.post'
                 willChange: 'transform',
             }}
         >
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="flex h-11 shrink-0 items-center px-2">
                 <button type="button" onClick={() => dismiss(onBack)} className="flex items-center gap-0.5 text-[17px] text-ios-blue active:opacity-60">

@@ -14,6 +14,7 @@ import { useMaskedPhone } from '@/stores/themeStore';
 import { fmtMoney } from './data';
 import { cancelInvoice, fetchSentInvoices, type SentInvoice } from './servicesApi';
 import { failText } from '@/core/api';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 // Business sent-invoices list, mirroring the Wallet's Sent segment: contact-resolved identity,
 // reference codes in the title, status chips and cancel on pending rows.
@@ -64,7 +65,7 @@ export function InvoicesPage({ onClose }: { onClose: () => void }) {
                 willChange: 'transform',
             }}
         >
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="flex h-11 shrink-0 items-center px-2">
                 <button type="button" onClick={dismiss} className="flex items-center gap-0.5 text-[17px] text-ios-blue active:opacity-60">

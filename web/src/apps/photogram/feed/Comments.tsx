@@ -7,6 +7,7 @@ import { EmojiPanel } from '@/shared/chat/EmojiPanel';
 import { GifPickerSheet } from '@/shared/chat/GifPickerSheet';
 import { IG, type Comment as IGComment, type Post, type User } from '../data';
 import { VerifiedCheck } from '../ui';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 export function Comments({ post, me, comments, onBack, onSubmit, onToggleLike, onOpenProfile, animateIn = true }: {
     post:         Post;
@@ -34,7 +35,7 @@ export function Comments({ post, me, comments, onBack, onSubmit, onToggleLike, o
 
     return (
         <div className="absolute inset-0 z-40 flex flex-col bg-[#f2f2f2] font-sf" style={pageStyle}>
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="relative flex shrink-0 items-center px-2 pb-2">
                 <button type="button" onClick={goBack} aria-label={t('photogram.back', 'Back')} className="text-black active:opacity-50">

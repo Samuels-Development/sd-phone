@@ -8,6 +8,7 @@ import { t } from '@/i18n';
 import { initialsFor } from './data';
 import type { Group, Invite } from './data';
 import { Pill } from '@/ui/Pill';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 interface Props {
     groups:          Group[];
@@ -43,7 +44,7 @@ export function GroupsList({
     return (
         <div className="absolute inset-0 flex flex-col bg-base text-black dark:text-white">
 
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="flex items-center justify-between px-5 pb-2 pt-0.5">
                 <h1 className="text-[34px] font-bold tracking-tight text-black dark:text-white">{t('groups.groups', 'Groups')}</h1>

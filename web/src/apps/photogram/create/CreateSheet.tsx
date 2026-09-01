@@ -7,6 +7,7 @@ import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
 import { IG } from '../data';
 import { MediaThumb } from './Media';
 import { apiCurrentZone } from '../photogramApi';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 export function CreateSheet({ onClose, onPost, animateIn = true }: {
     onClose: () => void;
@@ -51,7 +52,7 @@ export function CreateSheet({ onClose, onPost, animateIn = true }: {
                 willChange: 'transform',
             }}
         >
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
             <header className="relative flex items-center justify-between px-4 pb-2">
                 <button type="button" onClick={() => dismiss(onClose)} className="text-[17px] text-black active:opacity-50">{t('photogram.cancel', 'Cancel')}</button>
                 <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-[18px] font-semibold text-black">{t('photogram.newPost', 'New post')}</span>

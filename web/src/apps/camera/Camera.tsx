@@ -712,7 +712,7 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
 
                 {recording && (
                     <div className="absolute left-1/2 top-3 z-30 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1 backdrop-blur">
-                        <span className="h-2 w-2 rounded-full bg-[#ff3b30] motion-safe:animate-pulse" />
+                        <span className="h-2 w-2 rounded-full bg-ios-red motion-safe:animate-pulse" />
                         <span className="text-[12px] font-semibold tabular-nums text-white">{formatDuration(recSecs)}</span>
                     </div>
                 )}
@@ -899,8 +899,8 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
                             <span
                                 className={
                                     recording
-                                        ? 'block h-[26px] w-[26px] rounded-[7px] bg-[#ff3b30] transition-all duration-150'
-                                        : 'block h-[61px] w-[61px] rounded-full bg-[#ff3b30] transition-all duration-150 group-active:scale-90'
+                                        ? 'block h-[26px] w-[26px] rounded-[7px] bg-ios-red transition-all duration-150'
+                                        : 'block h-[61px] w-[61px] rounded-full bg-ios-red transition-all duration-150 group-active:scale-90'
                                 }
                             />
                         ) : (

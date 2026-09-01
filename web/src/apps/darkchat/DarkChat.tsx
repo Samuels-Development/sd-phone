@@ -14,6 +14,7 @@ import { RoomView } from './RoomView';
 import { CreateRoomSheet } from './CreateRoomSheet';
 import { JoinCodeSheet } from './JoinCodeSheet';
 import { NicknameSheet } from './NicknameSheet';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 type SheetKind = 'create' | 'join' | 'nickname' | null;
 
@@ -268,7 +269,7 @@ export function DarkChat({ onClose: _onClose }: { onClose: () => void }) {
 
     return (
         <div className="dark absolute inset-0 flex flex-col bg-base font-sf">
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <RoomsList
                 publicRooms={publicRooms}

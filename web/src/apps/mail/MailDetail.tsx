@@ -7,6 +7,7 @@ import { useIosPush } from '@/hooks/useIosPush';
 import { AttachmentsView } from './Attachments';
 import { avatarColor, formatFullDate, formatMailTime, initials } from './data';
 import type { Folder, MailMessage } from './data';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 interface Props {
     msg:        MailMessage;
@@ -42,7 +43,7 @@ export function MailDetail({ msg, backLabel, prevId, nextId, onBack, onOpenSibli
             className="absolute inset-0 z-30 flex flex-col bg-base text-black dark:text-white"
             style={pageStyle}
         >
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="flex items-center px-2 pb-1">
                 <button

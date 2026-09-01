@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { t } from '@/i18n';
 import { groupByDay, type Photo } from '@/core/photosApi';
 import { PhotoTile } from './PhotoTile';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 export function PhotoPicker({ photos, existingIds, onConfirm, onClose }: {
     photos:      Photo[];
@@ -38,7 +39,7 @@ export function PhotoPicker({ photos, existingIds, onConfirm, onClose }: {
             className="absolute inset-0 z-50 flex flex-col bg-base"
             style={{ animation: leaving ? 'ios-sheet-down 0.26s cubic-bezier(0.32,0,0.68,1) forwards' : 'ios-sheet-up 0.34s cubic-bezier(0.32,0.72,0,1)' }}
         >
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
             <div className="flex h-11 shrink-0 items-center justify-between px-4">
                 <button type="button" onClick={() => dismiss(onClose)} className="text-[16px] font-medium text-ios-blue">
                     {t('photos.cancel', 'Cancel')}

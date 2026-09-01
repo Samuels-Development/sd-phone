@@ -10,6 +10,7 @@ import { digits } from '@/lib/format';
 import { formatPhonePartial } from '@/lib/phone';
 import { createInvoice } from './servicesApi';
 import { failText } from '@/core/api';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 const DRAFT_KEY = 'services:newInvoice';
 
@@ -71,7 +72,7 @@ export function NewInvoicePage({ onClose, onSent }: {
                     willChange: 'transform',
                 }}
             >
-                <div className="h-[58px] shrink-0" aria-hidden />
+                <StatusBarSpacer />
 
                 <div className="flex h-11 shrink-0 items-center justify-between px-2">
                     <button type="button" onClick={cancel} className="flex items-center gap-0.5 text-[17px] text-ios-blue active:opacity-60">

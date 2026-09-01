@@ -10,6 +10,7 @@ import { AlertDialog } from '@/ui/AlertDialog';
 import { SavedChannels } from './SavedChannels';
 import { getRadio, setRadio, listSaved, addSaved, updateSaved, removeSaved, type SavedStation } from './radioApi';
 import { t } from '@/i18n';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 const fmtFreq   = (f: number) => f.toFixed(1);
 const clampFreq = (f: number) => Math.min(999.9, Math.max(1.0, Math.round(f * 10) / 10));
@@ -125,7 +126,7 @@ export function Radio({ onClose: _onClose }: { onClose: () => void }) {
 
     return (
         <div className="absolute inset-0 z-10 flex flex-col bg-base font-sf text-black dark:text-white">
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
             <div className="px-5 pb-1 pt-0.5 text-[34px] font-bold tracking-tight">{t('radio.title', 'Radio')}</div>
 
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto no-scrollbar px-4 pb-5 pt-1.5">
@@ -178,7 +179,7 @@ export function Radio({ onClose: _onClose }: { onClose: () => void }) {
                         onClick={() => (on ? turnOff() : tuneIn())}
                         disabled={!on && (!canTune || !loaded)}
                         className={`flex flex-1 items-center justify-center gap-2 rounded-full py-3 text-[18px] font-semibold shadow-sm ${anim} active:opacity-80 ${
-                            on ? 'bg-[#ff3b30] text-white' : (canTune && loaded ? 'bg-[#34c759] text-white' : 'bg-black/15 text-black/30 dark:bg-white/10 dark:text-white/30')
+                            on ? 'bg-ios-red text-white' : (canTune && loaded ? 'bg-[#34c759] text-white' : 'bg-black/15 text-black/30 dark:bg-white/10 dark:text-white/30')
                         }`}
                     >
                         <Power className="h-[19px] w-[19px]" strokeWidth={2.4} /> {on ? t('radio.turnOff', 'Turn Off') : t('radio.tuneIn', 'Tune In')}

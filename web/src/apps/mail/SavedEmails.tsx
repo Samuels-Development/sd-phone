@@ -8,6 +8,7 @@ import { EmptyState } from '@/ui/EmptyState';
 import { PromptDialog } from '@/ui/PromptDialog';
 import { Sheet } from '@/ui/Sheet';
 import { isEmailish } from './mailSuggest';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 /** Compose's quick picker: tap an address to append it to the To field. */
 export function SavedEmailsSheet({ emails, onPick, onClose }: {
@@ -86,7 +87,7 @@ export function SavedEmailsPage({ emails, onAdd, onRemove, onBack }: {
             className="absolute inset-0 z-20 flex flex-col bg-base text-black dark:text-white"
             style={pageStyle}
         >
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="flex items-center px-2 pb-0.5">
                 <button
@@ -129,7 +130,7 @@ export function SavedEmailsPage({ emails, onAdd, onRemove, onBack }: {
                                         type="button"
                                         onClick={() => setConfirmRemove(email)}
                                         aria-label={t('mail.removeSavedEmail', 'Remove saved email')}
-                                        className="shrink-0 text-[#ff3b30] active:opacity-60"
+                                        className="shrink-0 text-ios-red active:opacity-60"
                                     >
                                         <Trash2 className="h-[20px] w-[20px]" strokeWidth={2} />
                                     </button>

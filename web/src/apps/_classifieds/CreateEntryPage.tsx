@@ -8,6 +8,7 @@ import { useSessionState, clearSessionState } from '@/hooks/useSessionState';
 import { ContactFields } from './ContactFields';
 import type { ClassifiedDraft, ClassifiedItem } from './types';
 import { t } from '@/i18n';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 export function CreateEntryPage({ pageTitle = t('classifieds.newPost', 'New Post'), backLabel, bodyPlaceholder = t('classifieds.yourPost', 'Your post'), submitLabel = t('classifieds.post', 'Post'), showPrice = true, initial, draftKey, animateIn = true, onCancel, onCreate }: {
     pageTitle?: string;
@@ -73,7 +74,7 @@ export function CreateEntryPage({ pageTitle = t('classifieds.newPost', 'New Post
                     willChange: 'transform',
                 }}
             >
-                <div className="h-[58px] shrink-0" aria-hidden />
+                <StatusBarSpacer />
 
                 <div className="flex h-11 shrink-0 items-center justify-between px-2">
                     <button type="button" onClick={cancel} className="flex items-center gap-0.5 text-[17px] text-ios-blue active:opacity-60">

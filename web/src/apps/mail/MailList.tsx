@@ -8,6 +8,7 @@ import { AlertDialog } from '@/ui/AlertDialog';
 import { SearchBar } from '@/ui/SearchBar';
 import { getFolders, formatMailTime, inFolder, previewBody } from './data';
 import type { Folder, MailMessage } from './data';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 interface Props {
     folder:    Folder;
@@ -87,7 +88,7 @@ export function MailList({ folder, accountId, accountName, messages, onBack, onO
             className="absolute inset-0 z-20 flex flex-col bg-base text-black dark:text-white"
             style={pageStyle}
         >
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="flex items-center px-2 pb-0.5">
                 <button

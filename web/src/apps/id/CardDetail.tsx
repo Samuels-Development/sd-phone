@@ -9,6 +9,7 @@ import { IdCard } from './IdCard';
 import { DetailsList } from './DetailsList';
 import { idShare } from './idApi';
 import { cardTitle, formatCountdown, type IdCardData, type ReceivedIdCard } from './data';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 function useCountdown(expiresAt: number | undefined): string | null {
     const [left, setLeft] = useState(() => (expiresAt ? expiresAt - Date.now() : 0));
@@ -34,7 +35,7 @@ export function CardDetail({ card, received, sharePortrait = null, onBack }: {
 
     return (
         <div className="absolute inset-0 z-20 flex flex-col bg-base font-sf" style={pageStyle}>
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
             <NavBar backLabel={t('id.id', 'ID')} onBack={goBack} title={cardTitle(card)} />
 
             <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar px-5 pb-8 pt-2">

@@ -8,6 +8,7 @@ import { ServiceMessagesTab } from './ServiceMessagesTab';
 import { ActionsTab } from './ActionsTab';
 import { ServicesTabBar, type ServicesTab } from './ServicesTabBar';
 import { fetchDirectory, fetchInbox, markThreadRead, type Directory, type Inbox, type MyCompany } from './servicesApi';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 const EMPTY_INBOX: Inbox = { personal: [], job: [], hasJob: false };
 
@@ -63,7 +64,7 @@ export function Services({ onClose: _onClose }: { onClose: () => void }) {
 
     return (
         <div className="absolute inset-0 flex flex-col bg-base font-sf">
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="flex flex-1 flex-col overflow-hidden">
                 <div key={activeTab} className="flex min-h-0 flex-1 flex-col animate-swipe-in-left">

@@ -12,6 +12,7 @@ import { ChatView } from './ChatView';
 import { IG, nowTime, type DM, type DMsg, type User } from '../data';
 import { apiDmList, apiDmReact, apiDmSend, apiDmThread, apiSearch, type Conversation, type FollowUser } from '../photogramApi';
 import { VerifiedCheck } from '../ui';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 export function DirectMessages({ me, onClose, onOpenPost, animateIn = true }: { me: User; onClose: () => void; onOpenPost?: (id: string) => void; animateIn?: boolean }) {
     const { goBack, pageStyle } = useIosPush(onClose, animateIn);
@@ -94,7 +95,7 @@ export function DirectMessages({ me, onClose, onOpenPost, animateIn = true }: { 
 
     return (
         <div className="absolute inset-0 z-40 flex flex-col overflow-hidden bg-[#f2f2f2] font-sf" style={pageStyle}>
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
             <List me={me} onClose={goBack} convos={convos} onOpen={(h) => openThread(h, true)} onCompose={() => setComposing(true)} />
 
             {open && (
@@ -184,7 +185,7 @@ function NewMessage({ onClose, onPick }: { onClose: () => void; onPick: (handle:
 
     return (
         <div className="absolute inset-0 z-50 flex flex-col bg-[#f2f2f2] font-sf" style={{ animation: 'ios-sheet-up 0.32s cubic-bezier(0.32,0.72,0,1)' }}>
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
             <div className="flex items-center justify-between px-4 pb-2">
                 <button type="button" onClick={onClose} className="text-[16px] text-black active:opacity-50">{t('photogram.cancel', 'Cancel')}</button>
                 <span className="text-[16px] font-semibold text-black">{t('photogram.newMessage', 'New message')}</span>

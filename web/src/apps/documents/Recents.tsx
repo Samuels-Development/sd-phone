@@ -7,6 +7,7 @@ import { GroupCard } from '@/ui/ListGroup';
 import { SearchBar } from '@/ui/SearchBar';
 import { FileRow } from './DocRow';
 import { RECENTS_LIMIT, type DocFile, type DocList } from './data';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 interface Props {
     list:      DocList;
@@ -26,7 +27,7 @@ export function Recents({ list, onOpenDoc, onMoreDoc }: Props) {
 
     return (
         <div className="absolute inset-0 z-10 flex flex-col bg-base text-black dark:text-white">
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="px-4 pt-1">
                 <h1 className="text-[34px] font-bold tracking-tight">{t('documents.recents', 'Recents')}</h1>

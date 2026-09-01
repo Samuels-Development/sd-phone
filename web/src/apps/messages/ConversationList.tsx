@@ -13,6 +13,7 @@ import { SearchBar } from '@/ui/SearchBar';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { PromptDialog } from '@/ui/PromptDialog';
 import { t } from '@/i18n';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 interface ConversationListProps {
     conversations: Conversation[];
@@ -90,7 +91,7 @@ export function ConversationList({ conversations, onOpen, onCompose, onMarkRead,
 
     return (
         <div className="flex flex-1 flex-col bg-base overflow-hidden">
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="flex items-center justify-between px-5 pb-0.5">
                 <button type="button" onClick={toggleEditing} className="text-[17px] text-ios-blue active:opacity-60">

@@ -5,6 +5,7 @@ import { t } from '@/i18n';
 import { respondSignRequestApi } from './documentsApi';
 import { RichBody, SignatureBlock, SignSheet } from './TextEditor';
 import type { DocFile } from './data';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 export interface SignRequestData {
     requestId: string;
@@ -41,7 +42,7 @@ export function SignRequestLayer({ request, onDone }: {
                 ? 'ios-sheet-down 0.26s cubic-bezier(0.32,0,0.68,1) forwards'
                 : 'ios-sheet-up 0.34s cubic-bezier(0.32,0.72,0,1)' }}
         >
-            <div className="h-[54px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="shrink-0 px-5 pb-2 pt-2 text-center">
                 <div className="text-[15px] font-semibold text-ios-gray">

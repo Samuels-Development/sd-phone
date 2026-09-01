@@ -10,6 +10,7 @@ import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
 import { apiGetSignature, apiSetSignature, apiSignDoc } from './documentsApi';
 import { SignaturePad, renderTypedSignature, signatureStyles, type SignaturePadHandle } from './SignaturePad';
 import { MAX_TEXT_LENGTH, formatDocDate, type DocFile, type DocSignature } from './data';
+import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 interface Props {
     doc:       DocFile;
@@ -111,7 +112,7 @@ export function TextEditor({ doc, backLabel, onBack, onSave, onSigned, animateIn
             className="absolute inset-0 z-30 flex flex-col bg-base text-black dark:text-white"
             style={pageStyle}
         >
-            <div className="h-[58px] shrink-0" aria-hidden />
+            <StatusBarSpacer />
 
             <div className="flex items-center gap-2 px-2 pb-1 pt-3">
                 <button
