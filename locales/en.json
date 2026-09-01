@@ -2040,6 +2040,7 @@
     "waypoint": "Waypoint"
   },
   "id": {
+    "copied": "Copied",
     "details": "Details",
     "disappearsIn": "Disappears in {time}",
     "fieldCallsign": "Callsign",
@@ -2071,6 +2072,7 @@
     "shownToYou": "Shown to You",
     "stateId": "State ID",
     "takePhoto": "Take Photo",
+    "tapToCopy": "Tap a row to copy it.",
     "useGamePhoto": "Use Game Photo"
   },
   "live": {

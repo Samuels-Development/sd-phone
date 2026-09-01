@@ -3,12 +3,12 @@ import { Share } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { NavBar } from '@/ui/NavBar';
-import { ListGroup, ListRow } from '@/ui/ListGroup';
 import { ShareSheet } from '@/shared/ShareSheet';
 import { useIosPush } from '@/hooks/useIosPush';
 import { IdCard } from './IdCard';
+import { DetailsList } from './DetailsList';
 import { idShare } from './idApi';
-import { cardTitle, fieldLabel, fieldValue, formatCountdown, type IdCardData, type ReceivedIdCard } from './data';
+import { cardTitle, formatCountdown, type IdCardData, type ReceivedIdCard } from './data';
 
 function useCountdown(expiresAt: number | undefined): string | null {
     const [left, setLeft] = useState(() => (expiresAt ? expiresAt - Date.now() : 0));
@@ -48,13 +48,7 @@ export function CardDetail({ card, received, sharePortrait = null, onBack }: {
                 <IdCard card={card} />
 
                 <div className="mt-6">
-                    <ListGroup header={t('id.details', 'Details')}>
-                        <ListRow label={t('id.fieldName', 'Name')} value={card.name} divider />
-                        {card.fields.map((f, i) => (
-                            <ListRow key={f.key} label={fieldLabel(f.key)} value={fieldValue(f.key, f.value)} divider={i < card.fields.length - 1} />
-                        ))}
-                    </ListGroup>
-                    <div className="mt-2 px-4 text-[13px] text-ios-gray">{t('id.issuedBy', 'Issued by {issuer}', { issuer: card.issuer })}</div>
+                    <DetailsList card={card} />
                 </div>
 
                 {!received && (

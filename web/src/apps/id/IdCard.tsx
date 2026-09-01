@@ -64,11 +64,11 @@ export function IdCard({ card, className = '' }: { card: IdCardData; className?:
                 <div className="flex min-w-0 flex-1 flex-col">
                     <div className="line-clamp-2 text-[19px] font-bold uppercase leading-[1.12] tracking-[0.03em]" style={SHADOW}>{card.name}</div>
                     {card.subtitle && <div className="mt-0.5 truncate text-[13px] font-semibold text-white/85">{card.subtitle}</div>}
-                    <div className="mt-auto grid grid-cols-2 gap-x-3 gap-y-[7px]">
+                    <div className="mt-auto grid grid-cols-2 gap-x-3 gap-y-[8px]">
                         {fields.map(f => (
                             <div key={f.key} className="min-w-0">
-                                <div className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-white/60">{fieldLabel(f.key)}</div>
-                                <div className="truncate text-[15px] font-semibold tabular-nums leading-tight text-white" style={SHADOW}>{fieldValue(f.key, f.value)}</div>
+                                <div className="text-[12px] font-bold uppercase tracking-[0.1em] text-white/65">{fieldLabel(f.key)}</div>
+                                <div className="truncate text-[17px] font-semibold tabular-nums leading-tight text-white" style={SHADOW}>{fieldValue(f.key, f.value)}</div>
                             </div>
                         ))}
                     </div>

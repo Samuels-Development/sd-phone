@@ -1498,11 +1498,11 @@ function IdIcon() {
     return (
         <svg viewBox={`0 0 ${S} ${S}`} width={S} height={S}>
             <defs>
-                <LinearGrad id={u('idbg')} top="#FFFFFF" bot="#EDEDF0" angle={170} />
+                <LinearGrad id={u('idbg')} top="#2C2C2E" bot="#0A0A0C" angle={160} />
                 <LinearGrad id={u('idfront')} top="#F7F8FA" bot="#DFE3EA" angle={170} />
-                <LinearGrad id={u('idpocket')} top="#3A3A3E" bot="#151517" angle={175} />
+                <LinearGrad id={u('idpocket')} top="#3A3A3E" bot="#1C1C1E" angle={175} />
                 <filter id={u('idsh')} x="-20%" y="-30%" width="140%" height="170%">
-                    <feDropShadow dx="0" dy="1.2" stdDeviation="1" floodColor="#000" floodOpacity="0.28" />
+                    <feDropShadow dx="0" dy="1.2" stdDeviation="1.1" floodColor="#000" floodOpacity="0.5" />
                 </filter>
             </defs>
             <rect width={S} height={S} fill={`url(#${u('idbg')})`} />
@@ -1519,7 +1519,7 @@ function IdIcon() {
             <rect x="28" y="36.5" width="11" height="2.8" rx="1.4" fill="#AEAEB2" />
             <rect x="28" y="41.5" width="14" height="2.8" rx="1.4" fill="#AEAEB2" />
             <rect x="6" y="41" width="48" height="14" rx="5" fill={`url(#${u('idpocket')})`} />
-            <rect x="6" y="41" width="48" height="1.2" fill="rgba(255,255,255,0.18)" />
+            <rect x="6" y="41" width="48" height="1.2" fill="rgba(255,255,255,0.22)" />
         </svg>
     );
 }

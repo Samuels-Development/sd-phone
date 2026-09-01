@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 
 import { t } from '@/i18n';
-import { ListGroup, ListRow } from '@/ui/ListGroup';
 import { IdCard } from '@/apps/id/IdCard';
-import { cardTitle, fieldLabel, fieldValue, formatCountdown, type ReceivedIdCard } from '@/apps/id/data';
+import { DetailsList } from '@/apps/id/DetailsList';
+import { cardTitle, formatCountdown, type ReceivedIdCard } from '@/apps/id/data';
 
 export function ReceivedIdLayer({ shown, onDone }: {
     shown:  ReceivedIdCard;
@@ -48,13 +48,7 @@ export function ReceivedIdLayer({ shown, onDone }: {
             <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar px-5">
                 <IdCard card={card} />
                 <div className="mt-6">
-                    <ListGroup header={t('id.details', 'Details')}>
-                        <ListRow label={t('id.fieldName', 'Name')} value={card.name} divider />
-                        {card.fields.map((f, i) => (
-                            <ListRow key={f.key} label={fieldLabel(f.key)} value={fieldValue(f.key, f.value)} divider={i < card.fields.length - 1} />
-                        ))}
-                    </ListGroup>
-                    <div className="mt-2 px-4 text-[13px] text-ios-gray">{t('id.issuedBy', 'Issued by {issuer}', { issuer: card.issuer })}</div>
+                    <DetailsList card={card} />
                 </div>
             </div>
 

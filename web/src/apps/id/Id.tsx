@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Ellipsis, IdCard as IdCardGlyph } from 'lucide-react';
 
+import { device } from '@device';
 import { isFiveM } from '@/core/nui';
 import { t } from '@/i18n';
 import { useAsyncData } from '@/hooks/useAsyncData';
@@ -17,7 +18,9 @@ import { CardDetail } from './CardDetail';
 import { devCapturePortrait, idHeadshot, idList, idSetPortrait } from './idApi';
 import { CARD_RATIO, cardTitle, formatCountdown, type ReceivedIdCard } from './data';
 
-const PEEK = 74;
+const PEEK   = 74;
+const CARD_W = device.screen.w - 40;
+const CARD_H = CARD_W / CARD_RATIO;
 
 function useNow(active: boolean): number {
     const [now, setNow] = useState(() => Date.now());
@@ -36,6 +39,7 @@ export function Id({ onClose: _onClose }: { onClose: () => void }) {
     const [capturing, setCapturing]       = useState(false);
     const [saving, setSaving]             = useState(false);
     const [headshot, setHeadshot]         = useState<string | null>(null);
+    const [headshotSettled, setSettled]   = useState(false);
     const capturingRef = useRef(false);
     capturingRef.current = capturing;
 
@@ -45,12 +49,15 @@ export function Id({ onClose: _onClose }: { onClose: () => void }) {
     useEffect(() => {
         if (!wantsHeadshot) return;
         let alive = true;
-        void idHeadshot().then(url => { if (alive && url) setHeadshot(url); });
+        void idHeadshot()
+            .then(url => { if (alive && url) setHeadshot(url); })
+            .finally(() => { if (alive) setSettled(true); });
         return () => { alive = false; };
-    }, [wantsHeadshot, data]);
+    }, [wantsHeadshot]);
 
     const portrait = data?.portrait ?? headshot;
     const cards    = (data?.cards ?? []).map(c => ({ ...c, portrait }));
+    const pending  = loading || (wantsHeadshot && !headshotSettled);
 
     const deckActive = useDeckActive();
     const wasActive  = useRef(deckActive);
@@ -90,18 +97,6 @@ export function Id({ onClose: _onClose }: { onClose: () => void }) {
     const now      = useNow(received.length > 0);
     useEffect(() => { prune(now); }, [now, prune]);
 
-    const wrapRef = useRef<HTMLDivElement>(null);
-    const [cardH, setCardH] = useState(0);
-    useLayoutEffect(() => {
-        const el = wrapRef.current;
-        if (!el) return;
-        const measure = () => setCardH(el.offsetWidth / CARD_RATIO);
-        measure();
-        const ro = new ResizeObserver(measure);
-        ro.observe(el);
-        return () => ro.disconnect();
-    }, [loading]);
-
     const openCard  = cards.find(c => c.key === openKey) ?? null;
     const openShown = received.find(r => r.id === openReceived) ?? null;
 
@@ -123,14 +118,14 @@ export function Id({ onClose: _onClose }: { onClose: () => void }) {
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar px-5 pb-8">
-                {loading ? (
+                {pending ? (
                     <div className="flex h-full items-center justify-center">
                         <span className="h-7 w-7 animate-spin rounded-full border-[3px] border-black/15 border-t-black/50 dark:border-white/15 dark:border-t-white/60" />
                     </div>
                 ) : cards.length === 0 ? (
                     <EmptyState center icon={IdCardGlyph} title={t('id.noCards', 'No Cards')} subtitle={t('id.noCardsSub', 'Your identity documents will appear here.')} />
                 ) : (
-                    <div ref={wrapRef} className="relative" style={{ height: cardH ? cardH + PEEK * (cards.length - 1) : undefined }}>
+                    <div className="relative" style={{ height: CARD_H + PEEK * (cards.length - 1) }}>
                         {cards.map((card, i) => (
                             <button
                                 key={card.key}
