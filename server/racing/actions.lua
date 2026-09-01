@@ -792,7 +792,7 @@ end
 ---@param cid string|nil owning citizenid, nil for a server-side import with no owner
 ---@param authorName string credited author
 ---@return table result { imported = integer, failed = { index, name, reason }[] }
-function actions.importTracks(data, cid, authorName)
+function actions.importTracks(data, cid, authorName, publishStatus)
     local list = importList(data)
     local result = { imported = 0, failed = {} }
     if #list == 0 then
@@ -810,7 +810,7 @@ function actions.importTracks(data, cid, authorName)
                 reason = filled(refusal) or 'That track is not readable',
             }
         else
-            local id = store.createTrack(name, entry.mode == 'sprint', gates, cid, authorName)
+            local id = store.createTrack(name, entry.mode == 'sprint', gates, cid, authorName, publishStatus)
             if id then
                 result.imported = result.imported + 1
             else
@@ -852,7 +852,7 @@ function actions.importTracksFor(src, payload)
     local okJson, decoded = pcall(json.decode, text)
     if not okJson or type(decoded) ~= 'table' then return fail('racing.notValidJson', 'That is not valid JSON') end
 
-    local result = actions.importTracks(decoded, cid, player.getName(src) or '')
+    local result = actions.importTracks(decoded, cid, player.getName(src) or '', needsApproval(src) and 'pending' or 'published')
     if result.imported == 0 then
         local firstFailure = result.failed[1]
         if firstFailure then return fail(firstFailure.reason) end

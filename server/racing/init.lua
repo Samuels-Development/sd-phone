@@ -99,7 +99,7 @@ RegisterCommand('importtracks', function(src, args)
         return
     end
 
-    local result = actions.importTracks(decoded, nil, 'Imported')
+    local result = actions.importTracks(decoded, nil, 'Imported', 'published')
     print(('^2[sd-phone:racing]^0 imported %d track(s) from %s'):format(result.imported, path))
     for _, entry in ipairs(result.failed) do
         print(('^3[sd-phone:racing]^0 skipped #%d %s: %s'):format(entry.index, entry.name, entry.reason))

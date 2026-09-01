@@ -1045,8 +1045,6 @@ end
 function store.listMessagesFor(handle)
     local rows = MySQL.query.await([[
         SELECT * FROM (
-            SELECT id, from_handle, to_handle, body, kind, meta, reactions, read_flag,
-                   created_at, UNIX_TIMESTAMP(created_at) AS created_s
             (SELECT id, from_handle, to_handle, body, kind, meta, reactions, read_flag,
                     created_at, UNIX_TIMESTAMP(created_at) AS created_s
              FROM phone_birdy_dms WHERE from_handle = ? ORDER BY created_at DESC LIMIT 2500)
