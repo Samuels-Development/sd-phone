@@ -23,6 +23,12 @@ export function ControlCenter({ open, onClose, onOpenApp, onWifi }: {
     const music = useMusic();
 
     const [flash, setFlash]       = useState(false);
+    const [frosted, setFrosted]   = useState(open);
+    useEffect(() => {
+        if (open) { setFrosted(true); return; }
+        const id = window.setTimeout(() => setFrosted(false), 420);
+        return () => window.clearTimeout(id);
+    }, [open]);
     const [rotation, setRotation] = useState(false);
     const [focus, setFocus]       = useState(false);
     const [lowPower, setLowPower] = useState(false);
@@ -55,14 +61,12 @@ export function ControlCenter({ open, onClose, onOpenApp, onWifi }: {
     const EASE = 'cubic-bezier(0.32,0.72,0,1)';
     return (
         <div className={'absolute inset-0 z-[700] ' + (open ? '' : 'pointer-events-none')}>
-            <div
-                className="absolute inset-0"
-                style={{
-                    backdropFilter: open ? 'blur(30px)' : 'blur(0px)',
-                    WebkitBackdropFilter: open ? 'blur(30px)' : 'blur(0px)',
-                    transition: `backdrop-filter 420ms ${EASE}, -webkit-backdrop-filter 420ms ${EASE}`,
-                }}
-            />
+            {frosted && (
+                <div
+                    className="absolute inset-0"
+                    style={{ backdropFilter: 'blur(30px)', WebkitBackdropFilter: 'blur(30px)' }}
+                />
+            )}
             <div
                 className="absolute inset-0 bg-black/45"
                 style={{ opacity: open ? 1 : 0, transition: `opacity 420ms ${EASE}` }}

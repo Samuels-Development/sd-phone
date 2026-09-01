@@ -5,7 +5,7 @@ import { device } from '@device';
 import { t } from '@/i18n';
 import { EmptyState } from '@/ui/EmptyState';
 import { MenuRootProvider } from '@/ui/menuRoot';
-import { NavContext } from '@/hooks/useIosPush';
+import { NavContext, NOOP_NAV } from '@/hooks/useIosPush';
 import type { DepartmentType, MdtSection } from './data';
 import { AffairsPane } from './AffairsPane';
 import { CamerasPane } from './CamerasPane';
@@ -141,7 +141,7 @@ function Terminal({ devDomain }: { devDomain?: DepartmentType }) {
     const session = useMdtSessionState(devDomain);
     return (
         <MdtSessionProvider value={session}>
-            <NavContext.Provider value={{ onWillBack: () => {} }}>
+            <NavContext.Provider value={NOOP_NAV}>
                 {device.id === 'phone' ? <MdtPhone renderPane={pane} /> : <MdtTerminal />}
             </NavContext.Provider>
         </MdtSessionProvider>

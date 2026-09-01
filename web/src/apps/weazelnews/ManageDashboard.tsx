@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ChevronLeft, Newspaper, Pencil, Plus, Radio, Trash2 } from 'lucide-react';
 
 import { t } from '@/i18n';
-import { NavContext, useIosPush } from '@/hooks/useIosPush';
+import { NavContext, NOOP_NAV, useIosPush } from '@/hooks/useIosPush';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { EmptyState } from '@/ui/EmptyState';
 import { EditArticle } from './EditArticle';
@@ -151,7 +151,7 @@ export function ManageDashboard({ articles, ticker, dark, animateIn = true, onRe
             </div>
 
             {editing && (
-                <NavContext.Provider value={{ onWillBack: () => {} }}>
+                <NavContext.Provider value={NOOP_NAV}>
                     <EditArticle
                         initial={editing === 'new' ? null : editing}
                         dark={dark}
@@ -162,7 +162,7 @@ export function ManageDashboard({ articles, ticker, dark, animateIn = true, onRe
             )}
 
             {breaking && (
-                <NavContext.Provider value={{ onWillBack: () => {} }}>
+                <NavContext.Provider value={NOOP_NAV}>
                     <EditBreaking
                         initial={ticker}
                         dark={dark}

@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Lock } from 'lucide-react';
 
 import { useSessionState } from '@/hooks/useSessionState';
-import { useDownloads } from '@/stores/downloadStore';
+import { useShallow } from 'zustand/react/shallow';
+import { useDownloadProgress, useDownloadStore } from '@/stores/downloadStore';
 import { useHasData } from '@/stores/serviceStore';
 import { useWifiConnected, useWifiNetworks } from '@/stores/wifiStore';
 import { AlertDialog } from '@/ui/AlertDialog';
@@ -70,6 +71,11 @@ function getDescriptions(): Record<string, string> {
     };
 }
 
+function DownloadRing({ id, queued }: { id: string; queued: boolean }) {
+    const progress = useDownloadProgress(id);
+    return <CircularProgress progress={queued ? 0 : (progress ?? 0)} size={32} stroke={2.5} />;
+}
+
 export function AppStore({ onClose: _onClose, apps, installed, onInstall, onOpenApp }: {
     onClose:   () => void;
     apps:      AppDef[];
@@ -77,7 +83,11 @@ export function AppStore({ onClose: _onClose, apps, installed, onInstall, onOpen
     onInstall: (id: string) => void;
     onOpenApp: (id: string) => void;
 }) {
-    const downloading = useDownloads();
+    const downloadStatus = useDownloadStore(useShallow(s => {
+        const out: Record<string, 'queued' | 'active'> = {};
+        for (const [id, p] of Object.entries(s.downloads)) out[id] = p < 0 ? 'queued' : 'active';
+        return out;
+    }));
     const hasData = useHasData();
     const wifiConnected = useWifiConnected();
     const wifiNetworks = useWifiNetworks();
@@ -103,6 +113,7 @@ export function AppStore({ onClose: _onClose, apps, installed, onInstall, onOpen
     const [q, setQ] = useSessionState('appstore:search', '');
     const [filter, setFilter] = useSessionState<'all' | 'notInstalled'>('appstore:filter', 'all');
     const [selectedId, setSelectedId] = useSessionState<string | null>('appstore:selected', null);
+    const selectedProgress = useDownloadProgress(selectedId ?? '');
     const selected = apps.find(a => a.id === selectedId) ?? null;
     const query = q.trim().toLowerCase();
     const descriptions = getDescriptions();
@@ -142,9 +153,9 @@ export function AppStore({ onClose: _onClose, apps, installed, onInstall, onOpen
                     <div className="overflow-hidden rounded-[10px] bg-surface">
                         {list.map((a, i) => {
                             const isInstalled = !!a.base || installed.has(a.id);
-                            const dl = downloading[a.id];
-                            const isDownloading = dl !== undefined;
-                            const isQueued = isDownloading && dl < 0;
+                            const status = downloadStatus[a.id];
+                            const isDownloading = status !== undefined;
+                            const isQueued = status === 'queued';
                             const locked = !isInstalled && lockedNetwork(a) !== null;
                             return (
                                 <div key={a.id} className={`flex items-center gap-3.5 py-2.5 pl-3.5 ${i < list.length - 1 ? 'border-b border-black/10 dark:border-white/10' : ''}`}>
@@ -161,7 +172,7 @@ export function AppStore({ onClose: _onClose, apps, installed, onInstall, onOpen
                                         </button>
                                         {isDownloading ? (
                                             <div className={`relative flex shrink-0 items-center justify-center text-ios-blue ${isQueued ? 'animate-pulse' : ''}`} style={{ width: 40, height: 40 }} aria-label={isQueued ? t('appstore.waitingToDownload', 'Waiting to download') : t('appstore.downloading', 'Downloading')}>
-                                                <CircularProgress progress={isQueued ? 0 : dl} size={32} stroke={2.5} />
+                                                <DownloadRing id={a.id} queued={isQueued} />
                                                 <div className="absolute h-[8px] w-[8px] rounded-[1.5px] bg-ios-blue" />
                                             </div>
                                         ) : (
@@ -188,7 +199,7 @@ export function AppStore({ onClose: _onClose, apps, installed, onInstall, onOpen
                     app={selected}
                     desc={descOf(selected.id)}
                     installed={!!selected.base || installed.has(selected.id)}
-                    downloadProgress={downloading[selected.id]}
+                    downloadProgress={selectedProgress}
                     onBack={() => setSelectedId(null)}
                     onInstall={installGuarded}
                     canDownload={hasData && lockedNetwork(selected) === null}

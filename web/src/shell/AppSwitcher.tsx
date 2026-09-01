@@ -236,13 +236,12 @@ export function AppSwitcher({
                                 transform:       `translateX(${tx}px) translateY(${ty}px) scale(${cScale})`,
                                 transformOrigin: '50% 0%',
                                 opacity:         cardOpacity,
-                                filter:          `brightness(${cBright})`,
                                 transition: isEjecting
                                     ? 'transform 0.26s ease-in, opacity 0.26s ease-in'
                                     : snapping
-                                        ? 'transform 0.42s cubic-bezier(0.22,1,0.36,1), filter 0.4s ease'
+                                        ? 'transform 0.42s cubic-bezier(0.22,1,0.36,1)'
                                         : 'none',
-                                willChange: 'transform, opacity, filter',
+                                willChange: 'transform, opacity',
                             }}
                         >
                             <div
@@ -315,6 +314,11 @@ export function AppSwitcher({
                                 </div>
 
                                 <CardStage appId={appId} />
+
+                                <div
+                                    className="pointer-events-none absolute inset-0 z-[1] bg-black"
+                                    style={{ opacity: 1 - cBright, transition: snapping ? 'opacity 0.4s ease' : 'none' }}
+                                />
 
                                 {/* Transparent tap target sits ABOVE the live view (which is
                                     inert / pointer-events:none while parented into the card). */}

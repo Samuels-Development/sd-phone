@@ -5,6 +5,8 @@ export const NavContext = createContext<{ onWillBack: () => void }>({
     onWillBack: () => {},
 });
 
+export const NOOP_NAV = { onWillBack: () => {} };
+
 export function useIosPush(onBack: () => void, animateIn = true) {
     const { onWillBack } = useContext(NavContext);
     const [leaving, setLeaving] = useState(false);

@@ -23,7 +23,3 @@ export function useDownloadProgress(id: string): number | undefined {
 export function useDownloadingIds(): string[] {
     return useDownloadStore(useShallow(s => Object.keys(s.downloads)));
 }
-
-export function useDownloads(): Record<string, number> {
-    return useDownloadStore(s => s.downloads);
-}

@@ -1257,7 +1257,8 @@ function AppContent() {
     useEffect(() => {
         if (!view || preloadArmed.current) return;
         preloadArmed.current = true;
-        const t = window.setTimeout(preloadAllApps, 1500);
+        const ids = view.apps.filter(a => a.base || installedApps.has(a.id)).map(a => a.id);
+        const t = window.setTimeout(() => preloadAllApps(ids), 1500);
         return () => window.clearTimeout(t);
     }, [view]);
 

@@ -402,8 +402,7 @@ html, body, #root {
 .animate-pin-shake { animation: pin-shake 0.5s ease; }
 @keyframes faceid-dim-in  { from { opacity: 0; } to { opacity: 1; } }
 .animate-faceid-dim-in    { animation: faceid-dim-in 0.24s ease forwards; }
-@keyframes faceid-blur-in { from { -webkit-backdrop-filter: blur(0px); backdrop-filter: blur(0px); } to { -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); } }
-.animate-faceid-blur-in   { animation: faceid-blur-in 0.34s ease forwards; }
+.faceid-frost             { -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); }
 @keyframes faceid-in      { 0% { opacity: 0; transform: scale(0.82); } 60% { opacity: 1; } 100% { opacity: 1; transform: scale(1); } }
 .animate-faceid-in        { animation: faceid-in 0.42s cubic-bezier(0.22,1,0.36,1) forwards; }
 @keyframes faceid-scanline { 0% { transform: translateY(2px); } 50% { transform: translateY(72px); } 100% { transform: translateY(2px); } }

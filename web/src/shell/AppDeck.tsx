@@ -129,7 +129,7 @@ const AppHost = memo(function AppHost({ id, ctx, active, openKey, origin, expand
         <div
             data-app-screen="1"
             className={phase === 'rest' ? 'absolute inset-0' : 'absolute inset-0 app-anim-flatten'}
-            style={{ transformOrigin: `${ox} ${oy}`, animation, willChange: 'transform' }}
+            style={{ transformOrigin: `${ox} ${oy}`, animation, willChange: phase === 'rest' ? undefined : 'transform' }}
             onAnimationEnd={e => {
                 if (e.target !== e.currentTarget) return;
                 if (phase === 'close') onCloseDone();

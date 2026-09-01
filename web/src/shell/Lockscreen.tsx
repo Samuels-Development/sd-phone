@@ -234,7 +234,7 @@ function FaceScan({ exiting, onSuccess }: { exiting: boolean; onSuccess: () => v
     return (
         <div className="absolute inset-0 z-[80] flex flex-col items-center justify-center">
             <div className="absolute inset-0 bg-black/40 animate-faceid-dim-in" />
-            {!exiting && <div className="absolute inset-0 animate-faceid-blur-in" />}
+            {!exiting && <div className="absolute inset-0 faceid-frost" />}
 
             <div className="relative z-10 flex flex-col items-center animate-faceid-in">
                 <div className="relative flex h-[150px] w-[150px] items-center justify-center">
@@ -448,6 +448,7 @@ export function LockNotifCard({ item, onOpen, onDismiss }: { item: NotificationI
     const [dx, setDx] = useState(0);
     const [exiting, setExiting] = useState(false);
     const hidePreview = useStreamerHidden('previews');
+    const { blurLock: frostedWallpaper } = useTheme('blurLock');
     const start    = useRef({ x: 0, y: 0 });
     const zoom     = useRef(1);
     const dragging = useRef(false);
@@ -498,7 +499,8 @@ export function LockNotifCard({ item, onOpen, onDismiss }: { item: NotificationI
             onPointerCancel={onUp}
             style={{ touchAction: 'pan-y', ...dragStyle }}
             className={[
-                'flex w-full animate-notif-drop touch-pan-y select-none items-start gap-3 rounded-[27px] bg-white/55 px-[18px] py-4 text-left shadow-[0_6px_24px_rgba(0,0,0,0.16)] backdrop-blur-2xl backdrop-saturate-150',
+                'flex w-full animate-notif-drop touch-pan-y select-none items-start gap-3 rounded-[27px] px-[18px] py-4 text-left shadow-[0_6px_24px_rgba(0,0,0,0.16)]',
+                frostedWallpaper ? 'bg-white/70' : 'bg-white/55 backdrop-blur-2xl backdrop-saturate-150',
                 item.emergency ? 'ring-[1.5px] ring-inset ring-[#FF3B30]/75' : 'ring-1 ring-black/[0.04]',
             ].join(' ')}
         >

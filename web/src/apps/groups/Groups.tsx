@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useDidEnter } from '@/hooks/useDidEnter';
 import { NavContext } from '@/hooks/useIosPush';
@@ -77,7 +77,7 @@ export function Groups({ onClose }: { onClose: () => void }) {
     }, []));
 
 
-    function handleWillBack() { setReturning(true); }
+    const navValue = useMemo(() => ({ onWillBack: () => setReturning(true) }), []);
     function handleBack()     { setDetail(null); setReturning(false); }
 
     // No-arg: the ref flips true right after mount, so the first navigation
@@ -174,7 +174,7 @@ export function Groups({ onClose }: { onClose: () => void }) {
             </div>
 
             {detail && (
-                <NavContext.Provider value={{ onWillBack: handleWillBack }}>
+                <NavContext.Provider value={navValue}>
                     <GroupDetail
                         group={detail}
                         isActive={state.activeGroupId === detail.id}

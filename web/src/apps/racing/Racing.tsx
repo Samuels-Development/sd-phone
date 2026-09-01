@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { Flag } from 'lucide-react';
 
 import { device } from '@device';
-import { NavContext } from '@/hooks/useIosPush';
+import { NavContext, NOOP_NAV } from '@/hooks/useIosPush';
 import { MenuRootProvider } from '@/ui/menuRoot';
 import { surfaceBackdrop } from '@/ui/surfaces';
 import type { RacingSection } from './data';
@@ -93,7 +93,7 @@ export function Racing({ onClose: _onClose }: { onClose: () => void }) {
     const session = useRacingSessionState();
     return (
         <RacingSessionProvider value={session}>
-            <NavContext.Provider value={{ onWillBack: () => {} }}>
+            <NavContext.Provider value={NOOP_NAV}>
                 {device.id === 'phone' ? <RacingPhone pane={pane} /> : <RacingTerminal />}
             </NavContext.Provider>
         </RacingSessionProvider>

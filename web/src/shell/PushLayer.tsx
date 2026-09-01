@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 
 import { NavContext } from '@/hooks/useIosPush';
@@ -21,6 +21,7 @@ export function PushLayer({
     children,
 }: PushLayerProps) {
     const [returning, setReturning] = useState(false);
+    const navValue = useMemo(() => ({ onWillBack: () => setReturning(true) }), []);
     const hasSub = sub !== null && sub !== undefined && sub !== false;
 
     useEffect(() => {
@@ -43,7 +44,7 @@ export function PushLayer({
                 {children}
                 <div className="pointer-events-none absolute inset-0 bg-black" style={dimStyle} />
             </div>
-            <NavContext.Provider value={{ onWillBack: () => setReturning(true) }}>
+            <NavContext.Provider value={navValue}>
                 {sub}
             </NavContext.Provider>
         </div>

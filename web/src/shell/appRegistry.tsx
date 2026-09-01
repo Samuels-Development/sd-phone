@@ -183,8 +183,9 @@ export function setPreloadPaused(paused: boolean): void {
     if (!paused) preloadResume?.();
 }
 
-export function preloadAllApps(): void {
-    const queue = APP_IDS.slice();
+export function preloadAllApps(ids?: readonly string[]): void {
+    const wanted = ids ? new Set(ids) : null;
+    const queue = wanted ? APP_IDS.filter(id => wanted.has(id)) : APP_IDS.slice();
     const schedule = () => {
         if (preloadPaused || preloadBusy) return;
         if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(() => pump(), { timeout: 200 });
