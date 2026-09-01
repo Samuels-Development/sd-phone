@@ -7,6 +7,13 @@
     "rules": {
         "react-hooks/rules-of-hooks": "error",
         "react-hooks/exhaustive-deps": "warn",
+        "react/refs": "off",
+        "react/set-state-in-effect": "off",
+        "react/purity": "off",
+        "react/use-memo": "off",
+        "react/immutability": "off",
+        "react/static-components": "off",
+        "react/preserve-manual-memoization": "off",
         "typescript/no-unused-vars": "off",
         "typescript/no-explicit-any": "off",
         "typescript/no-non-null-assertion": "off",
