@@ -591,7 +591,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 function Divider() {
-    return <div className="pointer-events-none absolute bottom-0 left-[6%] right-[6%] h-[0.5px] bg-black/15 dark:bg-white/15" />;
+    return <div className="pointer-events-none absolute bottom-0 left-[6%] right-[6%] h-[0.5px] bg-hairline/15" />;
 }
 
 function CategoryRow({ icon: Icon, label, onPress, divider }: { icon: LucideIcon; label: string; onPress: () => void; divider?: boolean }) {

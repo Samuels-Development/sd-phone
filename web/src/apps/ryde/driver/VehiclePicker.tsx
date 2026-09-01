@@ -35,7 +35,7 @@ export function VehiclePicker({ onPick, onClose }: {
                                     </span>
                                 </button>
                                 {i < vehicles.length - 1 && (
-                                    <div className="absolute bottom-0 left-1 right-0 h-px bg-black/[0.07] dark:bg-white/[0.08]" />
+                                    <div className="absolute bottom-0 left-1 right-0 h-px bg-hairline/[0.08]" />
                                 )}
                             </div>
                         ))}

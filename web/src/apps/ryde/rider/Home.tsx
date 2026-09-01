@@ -123,7 +123,7 @@ export function Home() {
                         style={{ maxHeight: sheetOpen ? 360 : 0, transitionTimingFunction: 'cubic-bezier(0.22,0.61,0.36,1)' }}
                     >
                         <div ref={bodyRef} className="px-4 pb-4 pt-1">
-                            <button onClick={() => setPicking(true)} className="mb-3 flex w-full items-center gap-3 rounded-full bg-black/[0.07] px-5 py-[15px] active:bg-black/10 dark:bg-white/10 dark:active:bg-white/15">
+                            <button onClick={() => setPicking(true)} className="mb-3 flex w-full items-center gap-3 rounded-full bg-black/[0.07] px-5 py-[15px] active:bg-hairline/10 dark:active:bg-white/15">
                                 <Search className="h-[24px] w-[24px] shrink-0 text-black dark:text-white" strokeWidth={2.6} />
                                 <span className="flex-1 text-left text-[21px] font-bold tracking-tight text-black/85 dark:text-white/90">{t('ryde.whereTo', 'Where to?')}</span>
                             </button>
@@ -204,7 +204,7 @@ function PickRow({ onClick, icon, iconClass, name, sub, divider }: {
                     <span className="block truncate text-[15px] text-ios-gray">{sub}</span>
                 </span>
             </button>
-            {divider && <div className="absolute bottom-0 left-1 right-0 h-px bg-black/[0.07] dark:bg-white/[0.08]" />}
+            {divider && <div className="absolute bottom-0 left-1 right-0 h-px bg-hairline/[0.08]" />}
         </div>
     );
 }

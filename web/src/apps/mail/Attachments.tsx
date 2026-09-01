@@ -65,7 +65,7 @@ export function AttachmentStrip({ attachments, max, onRemove }: {
                 {others.map(({ a, i }, idx) => (
                     <div key={i}>
                         {(idx > 0 || photos.length > 0) && (
-                            <div className="bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />
+                            <div className="bg-hairline/10" style={{ height: '0.5px' }} />
                         )}
                         <div className="flex items-center gap-3 px-4 py-3">
                             {a.kind === 'audio' ? (
@@ -220,7 +220,7 @@ export function MemoPickerSheet({ excludeUrls, max, onPickMany, onClose }: {
                                 <span className="shrink-0 text-[15px] text-ios-gray">{fmtDuration(m.duration)}</span>
                                 <SelectCircle selected={selected.has(m.id)} />
                             </button>
-                            {i < candidates.length - 1 && <div className="bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />}
+                            {i < candidates.length - 1 && <div className="bg-hairline/10" style={{ height: '0.5px' }} />}
                         </div>
                     ))}
                 </div>
@@ -285,7 +285,7 @@ export function NotePickerSheet({ max, onPickMany, onClose }: {
                                 </div>
                                 <SelectCircle selected={selected.has(n.id)} />
                             </button>
-                            {i < notes.length - 1 && <div className="bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />}
+                            {i < notes.length - 1 && <div className="bg-hairline/10" style={{ height: '0.5px' }} />}
                         </div>
                     ))}
                 </div>
@@ -349,7 +349,7 @@ export function DocPickerSheet({ excludeIds, max, onPickMany, onClose }: {
                                 </div>
                                 <SelectCircle selected={selected.has(d.id)} />
                             </button>
-                            {i < candidates.length - 1 && <div className="bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />}
+                            {i < candidates.length - 1 && <div className="bg-hairline/10" style={{ height: '0.5px' }} />}
                         </div>
                     ))}
                 </div>

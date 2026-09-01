@@ -72,7 +72,7 @@ export function Passwords({ onClose }: { onClose: () => void }) {
                                     key={e.id}
                                     type="button"
                                     onClick={() => setOpenId(e.id)}
-                                    className={`flex w-full items-center gap-4 px-4 py-[18px] text-left active:bg-black/5 dark:active:bg-white/5 ${i === shown.length - 1 ? '' : 'border-b-[0.5px] border-black/10 dark:border-white/10'}`}
+                                    className={`flex w-full items-center gap-4 px-4 py-[18px] text-left active:bg-black/5 dark:active:bg-white/5 ${i === shown.length - 1 ? '' : 'border-b-[0.5px] border-hairline/10'}`}
                                 >
                                     <span className="h-[56px] w-[56px] shrink-0 overflow-hidden rounded-[13px] [&>svg]:block [&>svg]:h-full [&>svg]:w-full" style={{ boxShadow: '0 2px 6px rgba(0,0,0,0.14)' }}>
                                         <AppIconSVG icon={e.app} />
@@ -192,7 +192,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
 
 function Row({ label, value, last, copyable = true }: { label: string; value: string; last?: boolean; copyable?: boolean }) {
     return (
-        <div className={`flex items-center px-4 py-3.5 ${last ? '' : 'border-b-[0.5px] border-black/10 dark:border-white/10'}`}>
+        <div className={`flex items-center px-4 py-3.5 ${last ? '' : 'border-b-[0.5px] border-hairline/10'}`}>
             <div className="min-w-0 flex-1">
                 <div className="text-[14px] text-black/80 dark:text-white/80">{label}</div>
                 <div className="truncate pt-0.5 text-[18px]">{value}</div>

@@ -633,7 +633,7 @@ export function CustomAppFrame({ appId, onClose }: { appId: string; onClose: () 
                                         key={i}
                                         type="button"
                                         onClick={() => { const r = ctxResolve.current; ctxResolve.current = null; if (r) r(b.callbackId ?? i); close(); }}
-                                        className={`flex w-full items-center px-4 py-3.5 text-left text-[18px] font-medium active:bg-black/[0.06] dark:active:bg-white/[0.06] ${i < arr.length - 1 ? 'border-b border-black/10 dark:border-white/10' : ''}`}
+                                        className={`flex w-full items-center px-4 py-3.5 text-left text-[18px] font-medium active:bg-black/[0.06] dark:active:bg-white/[0.06] ${i < arr.length - 1 ? 'border-b border-hairline/10' : ''}`}
                                         style={{ color: b.color ?? undefined }}
                                     >
                                         {b.title ?? b.text ?? b.label ?? ''}

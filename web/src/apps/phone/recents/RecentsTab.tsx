@@ -70,7 +70,7 @@ export function RecentsTab({ recents, onAddContact, onRequestCall, onUpdateConta
                                     <div key={entry.id}>
                                         <CallRow entry={entry} onBody={requestCall} onInfo={openProfile} />
                                         {i < list.length - 1 && (
-                                            <div className="pointer-events-none bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />
+                                            <div className="pointer-events-none bg-hairline/10" style={{ height: '0.5px' }} />
                                         )}
                                     </div>
                                 ))}

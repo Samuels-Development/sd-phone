@@ -265,7 +265,7 @@ function Capacity({ count, max }: { count: number; max: number }) {
                 <span className="text-[15px] font-semibold uppercase tracking-wider text-ios-gray">{t('services.myJobs', 'My Jobs')}</span>
                 <span className={`text-[15px] font-semibold ${full ? 'text-ios-red' : 'text-ios-gray'}`}>{count} / {max}</span>
             </div>
-            <div className="mt-1.5 h-[5px] w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+            <div className="mt-1.5 h-[5px] w-full overflow-hidden rounded-full bg-hairline/10">
                 <div
                     className={`h-full rounded-full transition-[width] duration-300 ${full ? 'bg-ios-red' : 'bg-ios-blue'}`}
                     style={{ width: `${pct}%` }}

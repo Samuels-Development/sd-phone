@@ -47,7 +47,7 @@ export function FavoritesTab({ favorites, onRemoveFavorite, onRequestCall, onUpd
                                         onCall={() => onRequestCall({ number: c.phone, name: c.name })}
                                     />
                                     {i < favorites.length - 1 && (
-                                        <div className="pointer-events-none bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />
+                                        <div className="pointer-events-none bg-hairline/10" style={{ height: '0.5px' }} />
                                     )}
                                 </div>
                             ))}

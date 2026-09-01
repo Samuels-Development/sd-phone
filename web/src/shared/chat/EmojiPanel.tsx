@@ -126,7 +126,7 @@ export function EmojiPanel({ isDark, onSelect }: Props) {
                 })}
             </div>
 
-            <div className="mx-3 h-[0.5px] bg-black/[0.07] dark:bg-white/[0.08]" />
+            <div className="mx-3 h-[0.5px] bg-hairline/[0.08]" />
 
             <div ref={scrollRef} onScroll={onScroll} className="relative min-h-0 flex-1 overflow-y-auto no-scrollbar px-3 pt-2.5">
                 {searching ? (

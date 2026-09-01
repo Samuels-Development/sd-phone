@@ -105,7 +105,7 @@ export function ShareSheet({ onClose, onShare, children, top = '55%' }: {
 
                 {children && (
                     <>
-                        <div className="mx-4 mt-5 h-px bg-black/10 dark:bg-white/10" />
+                        <div className="mx-4 mt-5 h-px bg-hairline/10" />
                         <div className="flex flex-col gap-2.5 px-4 pt-5">{children}</div>
                     </>
                 )}

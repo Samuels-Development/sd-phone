@@ -491,7 +491,7 @@ export function Maps({ onClose }: { onClose: () => void }) {
                                             <Navigation className="h-[18px] w-[18px]" strokeWidth={2.2} />
                                         </button>
                                         {i < companyMatches.length - 1 && (
-                                            <div className="absolute bottom-0 left-0 right-0 h-px bg-black/[0.07] dark:bg-white/[0.08]" />
+                                            <div className="absolute bottom-0 left-0 right-0 h-px bg-hairline/[0.08]" />
                                         )}
                                     </div>
                                 ))}
@@ -543,7 +543,7 @@ export function Maps({ onClose }: { onClose: () => void }) {
                                             <Trash2 className="h-[18px] w-[18px]" strokeWidth={2.2} />
                                         </button>
                                         {i < shown.length - 1 && (
-                                            <div className="absolute bottom-0 left-0 right-0 h-px bg-black/[0.07] dark:bg-white/[0.08]" />
+                                            <div className="absolute bottom-0 left-0 right-0 h-px bg-hairline/[0.08]" />
                                         )}
                                     </div>
                                 );

@@ -225,7 +225,7 @@ export function SketchCanvas({ initial, onSave, onCancel }: Props) {
                         <Eraser className="h-[16px] w-[16px]" strokeWidth={2} />
                     </ToolBtn>
 
-                    <div className="mx-1 h-5 w-[1px] bg-black/15 dark:bg-white/15" />
+                    <div className="mx-1 h-5 w-[1px] bg-hairline/15" />
 
                     {WIDTHS.map(w => (
                         <button

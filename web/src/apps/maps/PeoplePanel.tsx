@@ -265,7 +265,7 @@ export function PeoplePanel({ friends, selectedId, showAvatars, onFocus, onToggl
                                         <Trash2 className="h-[18px] w-[18px]" strokeWidth={2.2} />
                                     </button>
                                     {i < friends.length - 1 && (
-                                        <div className="absolute bottom-0 left-0 right-0 h-px bg-black/[0.07] dark:bg-white/[0.08]" />
+                                        <div className="absolute bottom-0 left-0 right-0 h-px bg-hairline/[0.08]" />
                                     )}
                                 </div>
                             );
@@ -364,7 +364,7 @@ export function ContactsPanel({ existing, onPick, onCancel }: {
                                         ? <Check className="h-[20px] w-[20px] shrink-0 text-ios-green" strokeWidth={2.6} />
                                         : <UserPlus className="h-[20px] w-[20px] shrink-0 text-ios-blue" strokeWidth={2.3} />}
                                     {i < shown.length - 1 && (
-                                        <div className="absolute bottom-0 left-0 right-0 h-px bg-black/[0.07] dark:bg-white/[0.08]" />
+                                        <div className="absolute bottom-0 left-0 right-0 h-px bg-hairline/[0.08]" />
                                     )}
                                 </button>
                             );

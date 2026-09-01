@@ -117,7 +117,7 @@ export function AppDetail({ app, desc, installed, downloadProgress, onBack, onIn
 
 function InfoRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
     return (
-        <div className={`flex items-center justify-between gap-4 py-3.5 ${last ? '' : 'border-b border-black/10 dark:border-white/10'}`}>
+        <div className={`flex items-center justify-between gap-4 py-3.5 ${last ? '' : 'border-b border-hairline/10'}`}>
             <span className="shrink-0 text-[18px] text-black/55 dark:text-white/55">{label}</span>
             <span className="truncate text-right text-[18px] font-medium text-black dark:text-white">{value}</span>
         </div>

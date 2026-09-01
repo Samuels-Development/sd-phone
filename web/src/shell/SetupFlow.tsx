@@ -788,7 +788,7 @@ function WallpaperStage({
                                 />
                                 <div
                                     className={`pointer-events-none absolute inset-0 rounded-[16px] ${
-                                        isSelected ? 'border-[3px] border-ios-blue' : 'border border-black/10 dark:border-white/10'
+                                        isSelected ? 'border-[3px] border-ios-blue' : 'border border-hairline/10'
                                     }`}
                                 />
                                 {isSelected && (

@@ -19,7 +19,7 @@ function StatRow({ label, value, valueColor, divider }: { label: string; value: 
                 <span className="text-[16px] font-medium text-black/80 dark:text-white/80">{label}</span>
                 <span className="text-[18px] font-semibold tabular-nums" style={valueColor ? { color: valueColor } : undefined}>{value}</span>
             </div>
-            {divider && <div className="pointer-events-none bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />}
+            {divider && <div className="pointer-events-none bg-hairline/10" style={{ height: '0.5px' }} />}
         </>
     );
 }
@@ -150,14 +150,14 @@ export function AssetDetail({ asset, onBack, onBuy, onSell, onRefresh, animateIn
                                                 <span className="text-[16px] font-semibold" style={h.isYou ? { color: 'rgb(var(--ios-blue))' } : undefined}>{label}</span>
                                                 <span className="text-[16px] font-semibold tabular-nums">{pctText}</span>
                                             </div>
-                                            <div className="mt-2 h-[7px] w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+                                            <div className="mt-2 h-[7px] w-full overflow-hidden rounded-full bg-hairline/10">
                                                 <div className="h-full rounded-full" style={{ width: `${Math.max(2, h.pct * 100)}%`, background: barColor }} />
                                             </div>
                                             <div className="mt-1 text-[13px] tabular-nums text-ios-gray">
                                                 {formatUnits(h.units)} {h.isMarket ? t('stocks.unowned', 'unowned') : t('stocks.units', 'units')}
                                             </div>
                                         </div>
-                                        {i < holders.holders.length - 1 && <div className="bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />}
+                                        {i < holders.holders.length - 1 && <div className="bg-hairline/10" style={{ height: '0.5px' }} />}
                                     </div>
                                 );
                             })}

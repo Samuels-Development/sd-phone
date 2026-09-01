@@ -32,7 +32,7 @@ export function SheetRow({ rowRef, asButton = false, selected = false, disabled 
         </span>
     );
     const hairline = divider && (
-        <div className="absolute bottom-0 left-0 right-0 h-px bg-black/[0.07] dark:bg-white/[0.08]" />
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-hairline/[0.08]" />
     );
     if (asButton) {
         return (

@@ -70,7 +70,7 @@ export function NotesList({ notes, onOpen, onCompose }: Props) {
                                     </div>
                                 </button>
                                 {i < sorted.length - 1 && (
-                                    <div className="pointer-events-none mx-[6%] h-[0.4px] bg-black/15 dark:bg-white/15" />
+                                    <div className="pointer-events-none mx-[6%] h-[0.4px] bg-hairline/15" />
                                 )}
                             </div>
                         ))}

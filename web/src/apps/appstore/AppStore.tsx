@@ -159,7 +159,7 @@ export function AppStore({ onClose: _onClose, apps, installed, onInstall, onOpen
                             const isQueued = status === 'queued';
                             const locked = !isInstalled && lockedNetwork(a) !== null;
                             return (
-                                <div key={a.id} className={`flex items-center gap-3.5 py-2.5 pl-3.5 ${i < list.length - 1 ? 'border-b border-black/10 dark:border-white/10' : ''}`}>
+                                <div key={a.id} className={`flex items-center gap-3.5 py-2.5 pl-3.5 ${i < list.length - 1 ? 'border-b border-hairline/10' : ''}`}>
                                     <button type="button" onClick={() => setSelectedId(a.id)} aria-label={t('appstore.appDetails', '{label} details', { label: appLabel(a) })} className="shrink-0 active:opacity-60">
                                         <StoreIcon icon={a.icon} />
                                     </button>

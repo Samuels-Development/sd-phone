@@ -60,7 +60,7 @@ export function ReceivedInvoices({ invoices, loading, onRefetch, onPaid, contact
             <div className="overflow-hidden rounded-[16px] bg-surface">
                 {invoices.map((inv, i) => (
                     <div key={inv.id}>
-                        {i > 0 && <div className="pointer-events-none bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />}
+                        {i > 0 && <div className="pointer-events-none bg-hairline/10" style={{ height: '0.5px' }} />}
                         <div className="flex items-center gap-3.5 px-4 py-4">
                             {inv.personal ? (
                                 cardOf(inv)

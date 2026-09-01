@@ -85,7 +85,7 @@ export function ServiceMessagesTab({ inbox, loaded, onInboxChange, onMarkRead }:
                                 <div key={t.key}>
                                     <ThreadRow thread={t} scope={scope} onOpen={() => setOpenKey(t.key)} />
                                     {i < threads.length - 1 && (
-                                        <div className="pointer-events-none bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />
+                                        <div className="pointer-events-none bg-hairline/10" style={{ height: '0.5px' }} />
                                     )}
                                 </div>
                             ))}

@@ -55,7 +55,7 @@ export function AlbumPickerSheet({ albums, count, onPick, onNewAlbum, onClose }:
 
                                 {albums.map(a => (
                                     <button key={a.id} type="button" onClick={() => runThenClose(() => onPick(a.id))} className="text-left active:opacity-70">
-                                        <span className="block aspect-square w-full overflow-hidden rounded-[12px] bg-black/10 dark:bg-white/10">
+                                        <span className="block aspect-square w-full overflow-hidden rounded-[12px] bg-hairline/10">
                                             {a.cover
                                                 ? <img src={a.cover} alt="" className="h-full w-full object-cover" draggable={false} />
                                                 : <span className="flex h-full w-full items-center justify-center">

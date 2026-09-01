@@ -93,7 +93,7 @@ export function NewMessage({ contacts, myNumber, onCancel, onSend }: NewMessageP
             <div className="shrink-0 px-4 pb-2 pt-1 text-center">
                 <span className="text-[19px] font-semibold">{t('messages.newMessage', 'New Message')}</span>
             </div>
-            <div className="h-[0.5px] bg-black/10 dark:bg-white/10" />
+            <div className="h-[0.5px] bg-hairline/10" />
 
             <div className="shrink-0 px-4 py-2.5">
                 <div className="flex flex-wrap items-center gap-1.5">
@@ -120,7 +120,7 @@ export function NewMessage({ contacts, myNumber, onCancel, onSend }: NewMessageP
                     />
                 </div>
             </div>
-            <div className="h-[0.5px] bg-black/10 dark:bg-white/10" />
+            <div className="h-[0.5px] bg-hairline/10" />
 
             <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar px-2 pt-2">
                 {showSuggestions && (

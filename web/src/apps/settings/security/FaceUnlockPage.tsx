@@ -217,7 +217,7 @@ function PinFlow({
                             className={`h-[14px] w-[14px] rounded-full border-2 transition-colors duration-150 ${
                                 i < pin.length
                                     ? 'bg-black dark:bg-white border-black dark:border-white'
-                                    : 'bg-transparent border-black/35 dark:border-white/35'
+                                    : 'bg-transparent border-hairline/35'
                             }`}
                         />
                     ))}

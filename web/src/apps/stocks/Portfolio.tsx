@@ -30,7 +30,7 @@ function PortfolioRow({ asset, divider, onOpen }: { asset: Asset; divider: boole
                     <div className="text-[15px] font-semibold tabular-nums" style={{ color: trendColor(pl) }}>{formatPct(plPct)}</div>
                 </div>
             </button>
-            {divider && <div className="pointer-events-none bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />}
+            {divider && <div className="pointer-events-none bg-hairline/10" style={{ height: '0.5px' }} />}
         </>
     );
 }

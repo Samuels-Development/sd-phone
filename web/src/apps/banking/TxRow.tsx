@@ -66,7 +66,7 @@ export function TxRows({ items, onSelect }: { items: BankTx[]; onSelect?: (tx: B
                     <div style={ROW_BOX}>
                         <TxRow tx={tx} onSelect={onSelect} hideAmount={hideAmount} />
                     </div>
-                    {i < items.length - 1 && <div className="pointer-events-none h-[0.5px] bg-black/15 dark:bg-white/15" />}
+                    {i < items.length - 1 && <div className="pointer-events-none h-[0.5px] bg-hairline/15" />}
                 </Fragment>
             ))}
         </div>

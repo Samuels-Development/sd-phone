@@ -70,5 +70,5 @@ function Tile({ color, children }: { color: string; children: ReactNode }) {
 }
 
 function Divider() {
-    return <div className="pointer-events-none bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />;
+    return <div className="pointer-events-none bg-hairline/10" style={{ height: '0.5px' }} />;
 }

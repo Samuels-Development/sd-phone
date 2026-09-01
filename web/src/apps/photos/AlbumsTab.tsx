@@ -165,7 +165,7 @@ function AlbumCardTile({ card, editMode, onOpen, onDelete }: {
                 onClick={editMode ? undefined : onOpen}
                 className="block w-full text-left active:opacity-90"
             >
-                <div className="relative aspect-square overflow-hidden rounded-[14px] bg-black/10 dark:bg-white/10">
+                <div className="relative aspect-square overflow-hidden rounded-[14px] bg-hairline/10">
                     {card.cover ? (
                         <img src={card.cover} alt="" draggable={false} className="h-full w-full object-cover" />
                     ) : (

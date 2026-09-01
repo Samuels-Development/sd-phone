@@ -38,7 +38,7 @@ export function StockRow({ asset, divider, onOpen }: {
             </button>
 
             {divider && (
-                <div className="pointer-events-none bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />
+                <div className="pointer-events-none bg-hairline/10" style={{ height: '0.5px' }} />
             )}
         </>
     );

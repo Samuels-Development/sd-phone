@@ -88,7 +88,7 @@ export function InvoicesPage({ onClose }: { onClose: () => void }) {
                             const card = contactByNumber.get(digits(inv.toNumber));
                             return (
                             <div key={inv.id}>
-                                {i > 0 && <div className="pointer-events-none bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />}
+                                {i > 0 && <div className="pointer-events-none bg-hairline/10" style={{ height: '0.5px' }} />}
                                 <div className="flex items-center gap-3.5 px-4 py-4">
                                     {card ? <ContactAvatar contact={card} size={46} /> : <PlaceholderAvatar size={46} />}
                                     <div className="min-w-0 flex-1">

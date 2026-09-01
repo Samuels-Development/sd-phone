@@ -515,7 +515,7 @@ export function Photos({ onClose }: { onClose: () => void }) {
 function EmptyState() {
     return (
         <div className="flex h-full flex-col items-center justify-center px-10 pb-16 text-center">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-black/8 dark:bg-white/8">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-hairline/8">
                 <CameraIcon className="h-8 w-8 text-black/55 dark:text-white/60" strokeWidth={1.6} />
             </div>
             <div className="text-[17px] font-semibold">{t('photos.noPhotosYet','No Photos Yet')}</div>

@@ -454,7 +454,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
             >
                 <div className="flex flex-col overflow-hidden rounded-[10px] bg-elevated/90 shadow-md ring-1 ring-black/5 dark:bg-elevated/90 dark:ring-white/10">
                     <CtrlBtn onClick={() => buttonZoom(1)} label={t('maps.zoomIn', 'Zoom in')}><Plus className="h-[18px] w-[18px]" /></CtrlBtn>
-                    <div className="h-px w-full bg-black/10 dark:bg-white/10" />
+                    <div className="h-px w-full bg-hairline/10" />
                     <CtrlBtn onClick={() => buttonZoom(-1)} label={t('maps.zoomOut', 'Zoom out')}><Minus className="h-[18px] w-[18px]" /></CtrlBtn>
                 </div>
                 <button

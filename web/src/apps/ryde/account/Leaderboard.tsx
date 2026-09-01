@@ -79,7 +79,7 @@ export function Leaderboard() {
                                     <Star className="h-[18px] w-[18px]" style={{ color: '#FF9600', fill: '#FF9600' }} /> {r.rating.toFixed(2)}
                                 </span>
                                 {i < rows.length - 1 && (
-                                    <div className="pointer-events-none absolute bottom-0 left-4 right-0 h-px bg-black/[0.07] dark:bg-white/[0.08]" />
+                                    <div className="pointer-events-none absolute bottom-0 left-4 right-0 h-px bg-hairline/[0.08]" />
                                 )}
                             </div>
                         );

@@ -100,7 +100,7 @@ function Row({ contact, divider, onChoose }: { contact: Contact; divider: boolea
                     <div className="mt-0.5 truncate text-[18px] font-medium text-black/55 dark:text-white/55">{phone(contact.phone)}</div>
                 </div>
             </button>
-            {divider && <div className="pointer-events-none bg-black/10 dark:bg-white/10" style={{ height: '0.5px' }} />}
+            {divider && <div className="pointer-events-none bg-hairline/10" style={{ height: '0.5px' }} />}
         </>
     );
 }
