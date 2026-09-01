@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState  } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 
 import { device } from '@device';
@@ -6,11 +6,8 @@ import { gridFor, gridForDock } from '@/device/grid';
 import { refitLayout } from '@/shell/widgets/geometry';
 import { isCustomPaletteId, rampFor, rampVars } from '@/apps/settings/appearance/paletteRamp';
 import { accentVars } from '@/apps/settings/appearance/accentRamp';
-import { AdminPanel } from '@/admin/AdminPanel';
 import { demoAdminOnly } from '@/core/demo';
 import { registerRuntimeLocales, setAppLabelSource, t } from '@/i18n';
-import { PayphoneUI } from '@/payphone/PayphoneUI';
-import { RaceOverlay } from '@/apps/racing/hud/RaceOverlay';
 import { CallLayer } from '@/apps/phone/CallLayer';
 import { CallPeekBanner } from '@/apps/phone/CallPeekBanner';
 import { useCallRing } from '@/apps/phone/calls/useCallRing';
@@ -99,6 +96,10 @@ const SETUP_KEY_BASE = 'sd-phone:setup:v1';
 // so a new SIM shows the new-phone setup while switching back to a known phone doesn't. Legacy
 // mode (no SIM feature) keeps the bare key.
 let setupProfile = '';
+const AdminPanel  = lazy(() => import('@/admin/AdminPanel').then(m => ({ default: m.AdminPanel })));
+const PayphoneUI  = lazy(() => import('@/payphone/PayphoneUI').then(m => ({ default: m.PayphoneUI })));
+const RaceOverlay = lazy(() => import('@/apps/racing/hud/RaceOverlay').then(m => ({ default: m.RaceOverlay })));
+
 function setSetupProfile(number: string | null | undefined): void {
     setupProfile = number ?? '';
 }
@@ -200,9 +201,11 @@ export function App() {
                 <MusicProvider>
                     <BootReplayButton />
                     {!demoAdminOnly && <AppContent />}
-                    {device.admin && <AdminPanel />}
-                    {!demoAdminOnly && device.payphone && <PayphoneUI />}
-                    {!demoAdminOnly && device.id === 'phone' && <RaceOverlay />}
+                    <Suspense fallback={null}>
+                        {device.admin && <AdminPanel />}
+                        {!demoAdminOnly && device.payphone && <PayphoneUI />}
+                        {!demoAdminOnly && device.id === 'phone' && <RaceOverlay />}
+                    </Suspense>
                 </MusicProvider>
             </LockscreenWidgetsProvider>
         </ThemeProvider>
