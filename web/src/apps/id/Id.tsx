@@ -57,7 +57,7 @@ export function Id({ onClose: _onClose }: { onClose: () => void }) {
 
     const portrait = data?.portrait ?? headshot;
     const cards    = (data?.cards ?? []).map(c => ({ ...c, portrait }));
-    const pending  = loading || (wantsHeadshot && !headshotSettled);
+    const pending  = (loading && data === null) || (wantsHeadshot && !headshotSettled);
 
     const deckActive = useDeckActive();
     const wasActive  = useRef(deckActive);
