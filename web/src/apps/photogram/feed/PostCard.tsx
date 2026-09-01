@@ -34,6 +34,7 @@ export function PostCard({ post, onLike, onDoubleLike, onSave, onComment, onOpen
     const viewportRef = useRef<HTMLDivElement>(null);
     const vids = useRef<Record<number, HTMLVideoElement | null>>({});
     const [inView, setInView] = useState(false);
+    const [near,   setNear]   = useState(false);
     const [muted,  setMuted]  = useState(true);
     const hasVideo      = post.images.some(isVideoUrl);
     const activeIsVideo = isVideoUrl(post.images[idx] ?? '');
@@ -47,6 +48,17 @@ export function PostCard({ post, onLike, onDoubleLike, onSave, onComment, onOpen
         const obs = new IntersectionObserver(
             entries => { const e = entries[0]; if (e) setInView(e.isIntersecting && e.intersectionRatio >= 0.55); },
             { root: scrollRoot?.current ?? null, threshold: [0, 0.55, 1] },
+        );
+        obs.observe(el);
+        return () => obs.disconnect();
+    }, [hasVideo, scrollRoot]);
+
+    useEffect(() => {
+        const el = viewportRef.current;
+        if (!el || !hasVideo) return;
+        const obs = new IntersectionObserver(
+            entries => { const e = entries[0]; if (e) setNear(e.isIntersecting); },
+            { root: scrollRoot?.current ?? null, rootMargin: '150% 0px', threshold: 0 },
         );
         obs.observe(el);
         return () => obs.disconnect();
@@ -138,7 +150,9 @@ export function PostCard({ post, onLike, onDoubleLike, onSave, onComment, onOpen
                     }}
                 >
                     {post.images.map((src, i) => (
-                        isVideoUrl(src) ? (
+                        isVideoUrl(src) ? (!near ? (
+                            <div key={i} className="h-full w-full shrink-0 bg-black" />
+                        ) : (
                             <video
                                 key={i}
                                 ref={el => { vids.current[i] = el; }}
@@ -149,7 +163,7 @@ export function PostCard({ post, onLike, onDoubleLike, onSave, onComment, onOpen
                                 preload="metadata"
                                 className="h-full w-full shrink-0 object-cover"
                             />
-                        ) : (
+                        )) : (
                             <img key={i} src={src} alt={post.caption} draggable={false} loading="lazy" decoding="async" className="h-full w-full shrink-0 object-cover" />
                         )
                     ))}
