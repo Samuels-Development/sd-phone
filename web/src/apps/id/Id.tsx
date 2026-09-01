@@ -10,6 +10,7 @@ import { useSessionState } from '@/hooks/useSessionState';
 import { useDeckActive } from '@/shell/deckActive';
 import { ActionSheet } from '@/ui/ActionSheet';
 import { EmptyState } from '@/ui/EmptyState';
+import { PromptDialog } from '@/ui/PromptDialog';
 import { ListGroup, ListRow } from '@/ui/ListGroup';
 import { Camera } from '@/apps/camera/Camera';
 import { useIdStore } from '@/stores/idStore';
@@ -36,6 +37,7 @@ export function Id({ onClose: _onClose }: { onClose: () => void }) {
     const [openKey, setOpenKey]           = useSessionState<string | null>('id:openCard', null);
     const [openReceived, setOpenReceived] = useState<string | null>(null);
     const [menuOpen, setMenuOpen]         = useState(false);
+    const [linkOpen, setLinkOpen]         = useState(false);
     const [capturing, setCapturing]       = useState(false);
     const [saving, setSaving]             = useState(false);
     const [headshot, setHeadshot]         = useState<string | null>(null);
@@ -174,8 +176,26 @@ export function Id({ onClose: _onClose }: { onClose: () => void }) {
                     onClose={() => setMenuOpen(false)}
                     actions={[
                         { label: data?.portrait ? t('id.retakePhoto', 'Retake Photo') : t('id.takePhoto', 'Take Photo'), onClick: () => void takePhoto() },
+                        { label: t('id.useImageLink', 'Use Image Link'), onClick: () => setLinkOpen(true) },
                         { label: t('id.useGamePhoto', 'Use Game Photo'), disabled: !data?.portrait, onClick: () => void savePortrait(null) },
                     ]}
+                />
+            )}
+
+            {linkOpen && (
+                <PromptDialog
+                    title={t('id.imageLinkTitle', 'Image Link')}
+                    message={t('id.imageLinkMessage', 'Paste a direct link to a photo. It shows on every card until you change it.')}
+                    placeholder="https://"
+                    inputMode="url"
+                    maxLength={512}
+                    validate={v => (/^https?:\/\/\S+$/i.test(v.trim()) ? null : t('id.imageLinkInvalid', 'Enter a full link starting with http'))}
+                    confirmLabel={t('id.useLink', 'Use')}
+                    onCancel={() => setLinkOpen(false)}
+                    onConfirm={async v => {
+                        setLinkOpen(false);
+                        await savePortrait(v.trim());
+                    }}
                 />
             )}
 

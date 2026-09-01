@@ -2053,6 +2053,9 @@
     "fieldRank": "Rank",
     "fieldSex": "Sex",
     "id": "ID",
+    "imageLinkInvalid": "Enter a full link starting with http",
+    "imageLinkMessage": "Paste a direct link to a photo. It shows on every card until you change it.",
+    "imageLinkTitle": "Image Link",
     "invalidPhoto": "Invalid photo",
     "issuedBy": "Issued by {issuer}",
     "kindJob": "Badge",
@@ -2073,7 +2076,9 @@
     "stateId": "State ID",
     "takePhoto": "Take Photo",
     "tapToCopy": "Tap a row to copy it.",
-    "useGamePhoto": "Use Game Photo"
+    "useGamePhoto": "Use Game Photo",
+    "useImageLink": "Use Image Link",
+    "useLink": "Use"
   },
   "live": {
     "noPicture": "No picture from this live",
