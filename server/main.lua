@@ -9,6 +9,23 @@ end
 local config    = require 'configs.config'
 ---@type table Inventory bridge (bridge.server.inventory): backend-agnostic item ops.
 local inv       = require 'bridge.server.inventory'
+---@type table Shared server helpers (server.util): the failure envelope a crashed handler answers with.
+local util      = require 'server.util'
+
+-- Every callback handler the app modules register below runs under pcall. A handler that throws
+-- (a schema mismatch, a nil field) would otherwise never resolve, and the phone would spin on
+-- the promise until ox_lib's timeout instead of showing an error.
+do
+    local register = lib.callback.register
+    lib.callback.register = function(name, handler)
+        return register(name, function(...)
+            local results = table.pack(pcall(handler, ...))
+            if results[1] then return table.unpack(results, 2, results.n) end
+            print(('^1[sd-phone] callback %s failed: %s^0'):format(tostring(name), tostring(results[2])))
+            return util.fail('common.serverError', 'Something went wrong')
+        end)
+    end
+end
 
 -- Loaded for side effects: each module self-registers its callbacks, events, commands and exports on require.
 -- SIM first: when unique phones are enabled it wraps player.getIdentifier before any app module

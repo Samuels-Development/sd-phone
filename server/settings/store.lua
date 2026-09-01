@@ -119,6 +119,10 @@ function store.ensureSchema()
     -- shape, which every fresh install gets from the CREATE TABLE directly.
     migrations.apply('phone_settings')
 
+    -- Number-to-citizen is the hottest lookup in the resource (every dial, text and contact add)
+    -- and the primary key cannot serve it.
+    util.ensureIndex('phone_settings', 'idx_phone_settings_number', '(phone_number)')
+
     -- Settings became per-device, so the key widened. Existing rows already carry device='phone'
     -- from the column default, which is what makes this safe: every row a player had stays their
     -- phone's, and a tablet mints its own row on first use. Keyed off the second PK column rather

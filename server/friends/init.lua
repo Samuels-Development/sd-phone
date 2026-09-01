@@ -60,9 +60,14 @@ lib.callback.register('sd-phone:server:friends:watch', function(src, payload)
     return { success = true }
 end)
 
+---@type table<number, string> The last roster each watcher was sent, encoded, so an unchanged
+---tick (nobody moved, nothing toggled) costs no push at all.
+local lastSent = {}
+
 ---Drops a departing watcher's entry.
 AddEventHandler('playerDropped', function()
     watchers[source] = nil
+    lastSent[source] = nil
 end)
 
 ---@type table Player bridge (bridge.server.player): the once-per-tick online cid->src map.
@@ -77,9 +82,15 @@ CreateThread(function()
             local onlineCids = player.onlineCidMap()
             for src in pairs(watchers) do
                 if GetPlayerName(src) then
-                    TriggerClientEvent('sd-phone:client:friends:update', src, { friends = actions.snapshot(src, onlineCids) })
+                    local payload = { friends = actions.snapshot(src, onlineCids) }
+                    local encoded = json.encode(payload)
+                    if lastSent[src] ~= encoded then
+                        lastSent[src] = encoded
+                        TriggerClientEvent('sd-phone:client:friends:update', src, payload)
+                    end
                 else
                     watchers[src] = nil
+                    lastSent[src] = nil
                 end
             end
         end

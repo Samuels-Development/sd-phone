@@ -285,6 +285,11 @@ function store.ensureSchema()
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
 
+    -- The inbox reads each side of the mailbox newest-first, so the handle indexes carry the
+    -- timestamp: a range scan off the index instead of an index merge plus a filesort.
+    util.ensureIndex('phone_birdy_dms', 'idx_birdy_dms_from_created', '(from_handle, created_at)')
+    util.ensureIndex('phone_birdy_dms', 'idx_birdy_dms_to_created',   '(to_handle, created_at)')
+
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_birdy_notifications (
             id         VARCHAR(16) NOT NULL,
@@ -758,7 +763,7 @@ end
 ---@return table[] replies oldest-first
 function store.listReplies(parentId, viewerHandle)
     local rows = MySQL.query.await(
-        POST_SELECT .. ' WHERE p.parent_id = ? ORDER BY p.created_at ASC',
+        POST_SELECT .. ' WHERE p.parent_id = ? ORDER BY p.created_at ASC LIMIT 500',
         { viewerHandle, viewerHandle, parentId }
     ) or {}
     for i = 1, #rows do rows[i] = hydratePost(rows[i]) end
@@ -1042,7 +1047,13 @@ function store.listMessagesFor(handle)
         SELECT * FROM (
             SELECT id, from_handle, to_handle, body, kind, meta, reactions, read_flag,
                    created_at, UNIX_TIMESTAMP(created_at) AS created_s
-            FROM phone_birdy_dms WHERE from_handle = ? OR to_handle = ? ORDER BY created_at DESC LIMIT 5000
+            (SELECT id, from_handle, to_handle, body, kind, meta, reactions, read_flag,
+                    created_at, UNIX_TIMESTAMP(created_at) AS created_s
+             FROM phone_birdy_dms WHERE from_handle = ? ORDER BY created_at DESC LIMIT 2500)
+            UNION ALL
+            (SELECT id, from_handle, to_handle, body, kind, meta, reactions, read_flag,
+                    created_at, UNIX_TIMESTAMP(created_at) AS created_s
+             FROM phone_birdy_dms WHERE to_handle = ? ORDER BY created_at DESC LIMIT 2500)
         ) recent ORDER BY created_at ASC
     ]], { handle, handle }) or {}
     for i = 1, #rows do rows[i].created_ms = (tonumber(rows[i].created_s) or 0) * 1000 end

@@ -263,6 +263,45 @@ function store.insertMessage(id, mid, citizenid, conversation, sender, direction
     return affected ~= nil
 end
 
+---Inserts one mailbox copy per row in a single statement: a group text to N members is one
+---round trip instead of N. Each row carries the same fields insertMessage takes, by name.
+---@param rows { id: string, mid: string, citizenid: string, conversation: string, sender: string, direction: string, kind: string, body: string|nil, meta: table|nil, isRead: boolean, createdAt: number, withheld: boolean|nil }[]
+function store.insertMessages(rows)
+    if #rows == 0 then return end
+    local marks, params = {}, {}
+    for i = 1, #rows do
+        local r = rows[i]
+        marks[i] = '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        local n = #params
+        params[n + 1]  = r.id
+        params[n + 2]  = r.mid
+        params[n + 3]  = r.citizenid
+        params[n + 4]  = r.conversation
+        params[n + 5]  = r.sender
+        params[n + 6]  = r.direction
+        params[n + 7]  = r.kind
+        params[n + 8]  = r.body
+        params[n + 9]  = encodeJson(r.meta)
+        params[n + 10] = r.isRead and 1 or 0
+        params[n + 11] = r.withheld and 1 or 0
+        params[n + 12] = r.createdAt
+    end
+    MySQL.insert.await(
+        'INSERT INTO phone_messages (id, mid, citizenid, conversation, sender, direction, kind, body, meta, is_read, withheld, created_at) VALUES '
+        .. table.concat(marks, ', '),
+        params)
+end
+
+---Rows in a thread, off the thread index. What decides whether a prune is due at all.
+---@param citizenid string
+---@param conversation string
+---@return integer
+function store.threadCount(citizenid, conversation)
+    return tonumber(MySQL.scalar.await(
+        'SELECT COUNT(*) FROM phone_messages WHERE citizenid = ? AND conversation = ?',
+        { citizenid, conversation })) or 0
+end
+
 ---Prunes a thread down to its newest `keep` rows. The LIMIT is a validated integer
 ---interpolated into the query. Scoped to the owner's mailbox.
 ---@param citizenid string
@@ -363,6 +402,7 @@ function store.takePending(number)
         FROM phone_pending_messages
         WHERE number = ?
         ORDER BY created_at ASC
+        LIMIT 500
     ]], { number }) or {}
     if #rows > 0 then
         local ids = {}

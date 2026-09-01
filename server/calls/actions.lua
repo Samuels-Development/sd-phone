@@ -246,26 +246,29 @@ end
 ---newcomers and drops leavers. Bystanders in their own call or pending ring are never pulled in.
 local function sweepSpeakers()
     local want = {}
+    ---@type table<number, vector3> One coords read per player per sweep, shared by every speaker circle.
+    local coords = {}
+    for _, pidStr in ipairs(GetPlayers()) do
+        local psrc = tonumber(pidStr)
+        local pped = psrc and GetPlayerPed(psrc)
+        if pped and pped ~= 0 then coords[psrc] = GetEntityCoords(pped) end
+    end
     for hsrc, channel in pairs(speakerOn) do
         local s = sessions[channel]
         if not s or s.state ~= 'active' then
             speakerOn[hsrc] = nil
         else
-            local ped = GetPlayerPed(hsrc)
-            if ped and ped ~= 0 then
-                local at = GetEntityCoords(ped)
+            local at = coords[hsrc]
+            if at then
                 want[channel] = want[channel] or {}
-                for _, pidStr in ipairs(GetPlayers()) do
-                    local psrc = tonumber(pidStr)
+                for psrc, pat in pairs(coords) do
                     -- isMember rather than the two legs by hand: a merged third party is already
                     -- on the channel, and re-adding them as a speaker guest would drop them out
                     -- of voice the moment they stepped away from the speaker holder.
-                    if psrc and not isMember(s, psrc)
-                        and not sessionForSource(psrc) and not ringForSource(psrc) then
-                        local pped = GetPlayerPed(psrc)
-                        if pped and pped ~= 0 and #(GetEntityCoords(pped) - at) <= SPEAKER_RANGE then
-                            want[channel][psrc] = true
-                        end
+                    if psrc ~= hsrc and not isMember(s, psrc)
+                        and not sessionForSource(psrc) and not ringForSource(psrc)
+                        and #(pat - at) <= SPEAKER_RANGE then
+                        want[channel][psrc] = true
                     end
                 end
             end

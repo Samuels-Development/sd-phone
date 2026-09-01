@@ -34,6 +34,16 @@ local notifications = require 'server.notifications.init'
 local util = require 'server.util'
 local ok, fail, digits, trim, initialsFor, formatNumber = util.ok, util.fail, util.digits, util.trim, util.initialsFor, util.formatNumber
 
+---Prunes a thread only once it has actually outgrown the cap. The anti-join DELETE is far dearer
+---than the indexed COUNT, and on most sends there is nothing to remove.
+---@param cid string mailbox owner
+---@param conversation string thread key
+local function trimThread(cid, conversation)
+    if store.threadCount(cid, conversation) > cfg.MessagesPerThread then
+        trimThread(cid, conversation)
+    end
+end
+
 
 local colorFor = util.colorFor
 
@@ -447,7 +457,7 @@ local function sendDirect(source, cid, myNumber, target, kind, body, meta, ts, m
 
     local outId = store.newId()
     store.insertMessage(outId, mid, cid, target, myNumber, 'outgoing', kind, body, meta, true, ts)
-    store.pruneThread(cid, target, cfg.MessagesPerThread)
+    trimThread(cid, target)
 
     local targetCid = settings.getCitizenByNumber(target)
     local inId, withheld, targetSrc
@@ -458,7 +468,7 @@ local function sendDirect(source, cid, myNumber, target, kind, body, meta, ts, m
         withheld = settings.isAirplane(targetCid) or not service.allows(targetSrc, 'text')
         inId = store.newId()
         store.insertMessage(inId, mid, targetCid, myNumber, myNumber, 'incoming', kind, body, meta, false, ts, withheld)
-        store.pruneThread(targetCid, myNumber, cfg.MessagesPerThread)
+        trimThread(targetCid, myNumber)
 
         if targetSrc and not withheld then
             -- No character-name fallback: an unsaved sender shows as their number, matching
@@ -608,7 +618,7 @@ function actions.systemText(senderNumber, senderName, targetNumber, body, opts)
     local targetSrc = player.getSourceByIdentifier(targetCid)
     local withheld = settings.isAirplane(targetCid) or not service.allows(targetSrc, 'text')
     store.insertMessage(inId, mid, targetCid, senderNumber, senderNumber, 'incoming', kind, body, meta, false, ts, withheld)
-    store.pruneThread(targetCid, senderNumber, cfg.MessagesPerThread)
+    trimThread(targetCid, senderNumber)
 
     if targetSrc and not withheld then
         local participant = resolveParticipant(senderNumber, nil, senderName)
@@ -675,12 +685,17 @@ local function sendGroup(source, cid, myNumber, groupId, kind, body, meta, ts, m
 
     -- One pass over the connected players for the whole fan-out.
     local activeSrcs = player.activeCidMap()
+    ---@type table[] One mailbox copy per member, written in a single INSERT after the fan-out.
+    local batch = {}
     for _, m in ipairs(members) do
         local isMe = m.citizenid == cid
         local withheld = (not isMe) and settings.isAirplane(m.citizenid)
         local id   = store.newId()
-        store.insertMessage(id, mid, m.citizenid, key, myNumber, isMe and 'outgoing' or 'incoming', kind, body, meta, isMe, ts, withheld)
-        store.pruneThread(m.citizenid, key, cfg.MessagesPerThread)
+        batch[#batch + 1] = {
+            id = id, mid = mid, citizenid = m.citizenid, conversation = key, sender = myNumber,
+            direction = isMe and 'outgoing' or 'incoming', kind = kind, body = body, meta = meta,
+            isRead = isMe, createdAt = ts, withheld = withheld,
+        }
 
         if isMe then
             outId = id
@@ -708,6 +723,9 @@ local function sendGroup(source, cid, myNumber, groupId, kind, body, meta, ts, m
             end
         end
     end
+
+    store.insertMessages(batch)
+    for _, m in ipairs(members) do trimThread(m.citizenid, key) end
 
     -- First-party send announcement (group shape), fired once per send.
     TriggerEvent('sd-phone:server:messages:sent', {
@@ -1169,7 +1187,7 @@ function actions.deliverPending(source, cid, number)
     if #convs == 0 then return end
 
     for _, conversation in ipairs(convs) do
-        store.pruneThread(cid, conversation, cfg.MessagesPerThread)
+        trimThread(cid, conversation)
     end
 
     if airplane or not GetPlayerName(source) then

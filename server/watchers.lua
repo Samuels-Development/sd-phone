@@ -1,3 +1,6 @@
+---@type table Shared server helpers (server.util): the batched client push a fan-out packs once.
+local util = require 'server.util'
+
 ---@type table<string, table> Live registries by app id; `of` memoises so every module asking for
 ---the same name shares one set.
 local registries = {}
@@ -32,13 +35,16 @@ local function newRegistry()
     ---@param payload table event payload
     ---@param exceptSrc number|nil source to skip
     function r.push(event, payload, exceptSrc)
+        local targets, n = {}, 0
         for src in pairs(watchers) do
             if not GetPlayerName(src) then
                 watchers[src] = nil
             elseif src ~= exceptSrc then
-                TriggerClientEvent(event, src, payload)
+                n = n + 1
+                targets[n] = src
             end
         end
+        util.pushMany(event, targets, payload)
     end
 
     ---The live watcher list as an array, pruned of players who have gone. Built once per push so a

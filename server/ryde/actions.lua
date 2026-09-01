@@ -784,11 +784,16 @@ CreateThread(function()
                     if osrc then
                         local ped = GetPlayerPed(osrc)
                         if ped and ped ~= 0 then
-                            local c = GetEntityCoords(ped)
-                            TriggerClientEvent(EV .. 'peerLocation', vsrc, {
-                                tripId = w.tripId, role = otherRole,
-                                x = c.x, y = c.y, h = GetEntityHeading(ped),
-                            })
+                            local c, h = GetEntityCoords(ped), GetEntityHeading(ped)
+                            local last = w.last
+                            local moved = not last or #(c - last.c) > 1.0 or math.abs(h - last.h) > 5.0
+                            if moved then
+                                w.last = { c = c, h = h }
+                                TriggerClientEvent(EV .. 'peerLocation', vsrc, {
+                                    tripId = w.tripId, role = otherRole,
+                                    x = c.x, y = c.y, h = h,
+                                })
+                            end
                         end
                     end
                 end
