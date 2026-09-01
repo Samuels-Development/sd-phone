@@ -1108,6 +1108,7 @@
     "sendCode": "Send code",
     "sending": "Sending…",
     "sent": "Sent",
+    "serverError": "Something went wrong",
     "showPassword": "Show password",
     "showingRange": "Showing {first}-{last} of {total}",
     "somethingWentWrong": "Something went wrong. Please try again.",
