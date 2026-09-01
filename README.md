@@ -111,7 +111,7 @@ Already on a [Qbox Dashboard](https://dashboard.qbox.re) plan? You can point upl
 | **World** | Maps (CDN-streamed tiles, routing, pins), Garages, Homes, Bank, Services (company directory, dispatch messaging, phone multijob), Ryde (player-to-player ride hailing), Racing (race board with an in-game track creator, unlocked by a `racing_usb` item), Weazel News, Pages, Marketplace, Weather, Stocks |
 | **Games** | Casino (Slots, Roulette, Blackjack, Baccarat, Crash and Texas Hold'em on a shared chip balance), Chess, Connect Four, Battleship and Wordle with online lobbies, plus Cookie, Flappy, Blocks and Climber with server-side leaderboards |
 | **Job terminals** | MDT, EMS and DOJ, job-gated, with records, warrants, reports, a firearms registry, live CCTV, and bodycam and dashcam review. Off by default: set `Enabled = true` in `configs/mdt.lua`. Best on the bigger screen of [sd-tablet](https://github.com/Samuels-Development/sd-tablet) |
-| **Utilities** | Clock (alarms), Calendar, Notes (with sketches), Files (documents with multi-signer signing, sendable as mail attachments), Calculator, Compass, Health (daily stats and a server-wide steps leaderboard), Passwords, App Store, Settings |
+| **Utilities** | Clock (alarms), Calendar, Notes (with sketches), Files (documents with multi-signer signing, sendable as mail attachments), Calculator, Compass, Health (daily stats and a server-wide steps leaderboard), Passwords, ID (identity cards from your character record and licences, showable to a nearby phone), App Store, Settings |
 
 ## Home screen widgets
 

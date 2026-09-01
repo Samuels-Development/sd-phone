@@ -157,6 +157,30 @@ local function qbCitizen(row)
     }
 end
 
+---Licence keys an ESX character holds, read from esx_license's `user_licenses` table and folded
+---onto the qb vocabulary: `drive`, `drive_bike` and `drive_truck` all become `driver`, anything
+---else keeps its type name. Empty when the table is not installed. One query, so only the single
+---citizen read calls it; the paged search never does.
+---@param identifier string ESX identifier
+---@return string[] licences
+local function esxLicences(identifier)
+    if not next(columnsOf('user_licenses')) then return {} end
+    local ok, rows = pcall(function()
+        return MySQL.query.await('SELECT `type` FROM user_licenses WHERE owner = ?', { identifier })
+    end)
+    if not ok or type(rows) ~= 'table' then return {} end
+    local seen, out = {}, {}
+    for i = 1, #rows do
+        local key = str(rows[i].type)
+        if key:sub(1, 5) == 'drive' then key = 'driver' end
+        if key ~= '' and not seen[key] then
+            seen[key] = true
+            out[#out + 1] = key
+        end
+    end
+    return out
+end
+
 ---Builds the normalised citizen shape from an ESX `users` row.
 ---@param row table
 ---@return table citizen
@@ -252,7 +276,10 @@ function records.getCitizen(cid)
     local cols = have.metadata and (ESX_CITIZEN_COLS .. ', metadata') or ESX_CITIZEN_COLS
     local row  = MySQL.single.await(
         ('SELECT %s FROM users WHERE identifier = ? LIMIT 1'):format(cols), { cid })
-    return row and esxCitizen(row) or nil
+    if not row then return nil end
+    local citizen = esxCitizen(row)
+    citizen.licences = esxLicences(cid)
+    return citizen
 end
 
 ---Citizen names for a set of identifiers as `{ [citizenid] = name }`. One query, offline

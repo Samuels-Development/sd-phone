@@ -39,6 +39,7 @@ local config = {
     Share       = require 'configs.share',          -- nearby share sheet
     Notes       = require 'configs.notes',         -- per-character notes
     Documents   = require 'configs.documents',     -- Files: per-character documents + folders
+    Id          = require 'configs.id',            -- ID: identity cards from framework records + nearby show
     Housing     = require 'configs.housing',       -- property list (multi-system)
     Cookie      = require 'configs.cookie',        -- clicker mini-game + leaderboard
     Casino      = require 'configs.casino',        -- Casino app: blackjack/roulette/slots table limits + spin cadence

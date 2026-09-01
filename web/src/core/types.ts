@@ -89,6 +89,29 @@ export interface WifiState {
     providesData?: boolean;
 }
 
+export type IdCardKind = 'state' | 'licence' | 'job';
+
+export interface IdCardField { key: string; value: string }
+
+export interface IdCardData {
+    key:       string;
+    kind:      IdCardKind;
+    title:     string;
+    subtitle?: string;
+    color:     string;
+    name:      string;
+    portrait:  string | null;
+    issuer:    string;
+    fields:    IdCardField[];
+}
+
+export interface ReceivedIdCard {
+    id:        string;
+    card:      IdCardData;
+    fromName:  string;
+    expiresAt: number;
+}
+
 export interface AppDef {
     id: string;
     label: string;
@@ -337,6 +360,7 @@ export type NuiMessage =
     | { action: 'sd-phone:camera:lock';           data: { on: boolean } }
     | { action: 'sd-phone:camera:faceCam';        data: { on: boolean } }
     | { action: 'sd-phone:photos:added';          data: { id: string; url: string; createdAt: string } }
+    | { action: 'sd-phone:id:received';           data: ReceivedIdCard }
     | { action: 'sd-phone:photos:uploadFailed';   data: { code?: string } }
     | { action: 'sd-phone:groups:inviteReceived'; data: GroupInvitePush }
     | { action: 'sd-phone:groups:memberJoined';   data: GroupRosterPush }

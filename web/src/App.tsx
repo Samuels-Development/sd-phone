@@ -17,6 +17,8 @@ import { useCallRing } from '@/apps/phone/calls/useCallRing';
 import { NotificationHost, type NotificationItem } from '@/shell/Notifications';
 import { AirShareCard, type AirShareRequest } from '@/shared/AirShare';
 import { SignRequestLayer, type SignRequestData } from '@/apps/documents/SignRequestLayer';
+import { ReceivedIdLayer } from '@/shell/ReceivedIdLayer';
+import { useIdStore } from '@/stores/idStore';
 import { ControlCenter, ControlCenterHotzone } from '@/shell/ControlCenter';
 import { NotificationCenter, NotificationCenterHotzone } from '@/shell/NotificationCenter';
 import { MusicProvider, useMusic } from '@/apps/music/MusicContext';
@@ -1186,6 +1188,15 @@ function AppContent() {
         setSignReqs(prev => (prev.some(r => r.requestId === data.requestId) ? prev : [...prev, data]));
     }, []));
 
+    const addShownId  = useIdStore(s => s.add);
+    const markIdSeen  = useIdStore(s => s.markSeen);
+    const shownIdKey  = useIdStore(s => s.unseen);
+    const shownIds    = useIdStore(s => s.received);
+    const shownIdCard = shownIdKey ? shownIds.find(r => r.id === shownIdKey) ?? null : null;
+    useNuiEvent('sd-phone:id:received', useCallback((data) => {
+        if (data && data.card) addShownId(data);
+    }, [addShownId]));
+
     const warmedImages = useRef<Map<string, HTMLImageElement>>(new Map());
     const warmImage = useCallback((src: string) => {
         if (!src || warmedImages.current.has(src)) return;
@@ -1710,6 +1721,10 @@ function AppContent() {
                         request={signReqs[0]}
                         onDone={() => setSignReqs(prev => prev.slice(1))}
                     />
+                )}
+
+                {shownIdCard && (
+                    <ReceivedIdLayer key={shownIdCard.id} shown={shownIdCard} onDone={markIdSeen} />
                 )}
 
                 {!showSetup && (

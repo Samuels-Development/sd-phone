@@ -57,6 +57,7 @@ export function AirShareCard({ request, onRespond }: {
         : request.kind === 'music-playlist' ? t('common.aPlaylist', 'a playlist')
         : request.kind === 'document' ? t('common.aDocument', 'a document')
         : request.kind === 'photo' ? t('common.aPhoto', 'a photo')
+        : request.kind === 'id-card' ? t('common.anIdCard', 'an ID card')
         : t('common.aContact', 'a contact');
     const message = request.kind === 'signature-request'
         ? t('common.asksYouToSign', '{name} asks you to sign a document', { name: request.fromName })

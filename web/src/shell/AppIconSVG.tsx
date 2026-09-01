@@ -1493,8 +1493,36 @@ function RacingIcon() {
     );
 }
 
+function IdIcon() {
+    const u = useIconIds();
+    return (
+        <svg viewBox={`0 0 ${S} ${S}`} width={S} height={S}>
+            <defs>
+                <LinearGrad id={u('idbg')} top="#4A5566" mid="#2C3440" bot="#171C24" angle={155} />
+                <LinearGrad id={u('idcard')} top="#FFFFFF" bot="#E6E9EF" angle={170} />
+                <LinearGrad id={u('idband')} top="#4AA3FF" bot="#0A6CDE" angle={160} />
+                <filter id={u('idsh')} x="-20%" y="-20%" width="140%" height="150%">
+                    <feDropShadow dx="0" dy="1.6" stdDeviation="1.4" floodColor="#000" floodOpacity="0.45" />
+                </filter>
+            </defs>
+            <rect width={S} height={S} fill={`url(#${u('idbg')})`} />
+            <g filter={`url(#${u('idsh')})`}>
+                <rect x="8" y="15.5" width="44" height="29" rx="5.5" fill={`url(#${u('idcard')})`} />
+            </g>
+            <path d="M8 21 a5.5 5.5 0 0 1 5.5 -5.5 h33 a5.5 5.5 0 0 1 5.5 5.5 v2.2 h-44 z" fill={`url(#${u('idband')})`} />
+            <circle cx="20.5" cy="32.5" r="4.6" fill="#8A93A3" />
+            <path d="M12.8 43 a7.7 7.7 0 0 1 15.4 0 z" fill="#8A93A3" />
+            <rect x="31.5" y="29" width="16" height="2.6" rx="1.3" fill="#B4BBC7" />
+            <rect x="31.5" y="34" width="12" height="2.6" rx="1.3" fill="#C9CED8" />
+            <rect x="31.5" y="39" width="14" height="2.6" rx="1.3" fill="#C9CED8" />
+            <path d={`M0 0 H${S} V17 Q${S / 2} 24 0 17 Z`} fill="rgba(255,255,255,0.08)" />
+        </svg>
+    );
+}
+
 const ICON_MAP: Record<string, IconComponent> = {
     phone:    PhoneIcon,
+    id:       IdIcon,
     messages: MessagesIcon,
     services: ServicesIcon,
     pages:    PagesIcon,

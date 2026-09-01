@@ -59,6 +59,7 @@ local function kindLabel(kind)
     if kind == 'document' then return 'document' end
     if kind == 'photo'    then return 'photo' end
     if kind == 'signature-request' then return 'signature request' end
+    if kind == 'id-card' then return 'ID card' end
     return 'contact'
 end
 
