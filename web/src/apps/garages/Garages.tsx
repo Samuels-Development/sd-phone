@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { Car, ChevronRight, ConciergeBell, Fuel, Gauge, Image, ImageOff, Lock, MapPin, Navigation, SearchX, Shield, Unlock } from 'lucide-react';
+import { Camera, Car, ChevronRight, ConciergeBell, Fuel, Gauge, Image, ImageOff, Lock, MapPin, Navigation, SearchX, Shield, Trash2, Unlock } from 'lucide-react';
 
 import { SearchBar } from '@/ui/SearchBar';
+import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
+import { resolveImage, setVehicleImage } from './garagesApi';
 import { EmptyState } from '@/ui/EmptyState';
 import { NavBar } from '@/ui/NavBar';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { fetchNui, isFiveM } from '@/core/nui';
-import type { Envelope } from '@/core/api';
+import { failText, type Envelope } from '@/core/api';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { useDeckActive } from '@/shell/deckActive';
 import { useIosPush } from '@/hooks/useIosPush';
@@ -29,13 +31,13 @@ function readImagePref(): boolean | null {
 export function Garages({ onClose: _onClose }: { onClose: () => void }) {
     const [openId, setOpenId] = useSessionState<string | null>('garages:openVehicle', null);
 
-    const [imgCfg, setImgCfg] = useState<{ allowToggle: boolean; default: boolean }>(() => ({ allowToggle: !isFiveM, default: true }));
+    const [imgCfg, setImgCfg] = useState<{ allowToggle: boolean; default: boolean; custom: boolean }>(() => ({ allowToggle: !isFiveM, default: true, custom: !isFiveM }));
     const [imgPref, setImgPref] = useState<boolean | null>(readImagePref);
     const [valet, setValet] = useState<ValetInfo>(() => ({ enabled: !isFiveM, price: 100 }));
 
-    const { data: list, loading, refetch } = useAsyncData<{ vehicles: Vehicle[]; images?: { allowToggle: boolean; default: boolean }; valet?: ValetInfo }>(
+    const { data: list, loading, refetch } = useAsyncData<{ vehicles: Vehicle[]; images?: { allowToggle: boolean; default: boolean; custom?: boolean }; valet?: ValetInfo }>(
         async () => {
-            const res = await fetchNui<Envelope<Vehicle[]> & { images?: { allowToggle: boolean; default: boolean }; valet?: ValetInfo }>('sd-phone:garages:list');
+            const res = await fetchNui<Envelope<Vehicle[]> & { images?: { allowToggle: boolean; default: boolean; custom?: boolean }; valet?: ValetInfo }>('sd-phone:garages:list');
             if (!res?.success || !Array.isArray(res.data)) return null;
             return {
                 vehicles: res.data.map((v, i) => ({ ...v, accent: v.accent || ACCENTS[i % ACCENTS.length] })),
@@ -47,7 +49,7 @@ export function Garages({ onClose: _onClose }: { onClose: () => void }) {
         {
             enabled: isFiveM,
             onData: d => {
-                if (d.images) setImgCfg({ allowToggle: !!d.images.allowToggle, default: d.images.default !== false });
+                if (d.images) setImgCfg({ allowToggle: !!d.images.allowToggle, default: d.images.default !== false, custom: d.images.custom === true });
                 if (d.valet) setValet({ enabled: d.valet.enabled === true, price: Number(d.valet.price) || 0 });
             },
         },
@@ -126,10 +128,12 @@ export function Garages({ onClose: _onClose }: { onClose: () => void }) {
                 <VehicleDetail
                     v={open}
                     showImages={showImages}
+                    customImages={imgCfg.custom}
                     valet={valet}
                     animateIn={didEnter.current}
                     onBack={() => setOpenId(null)}
                     onDelivered={refetch}
+                    onImageChanged={refetch}
                 />
             )}
         </div>
@@ -139,8 +143,10 @@ export function Garages({ onClose: _onClose }: { onClose: () => void }) {
 function VehicleThumb({ v, show, size, radius, iconSize, iconStroke = 2 }: {
     v: Vehicle; show: boolean; size: number; radius: number; iconSize: number; iconStroke?: number;
 }) {
-    const [failed, setFailed] = useState(false);
-    const showImg = show && !!v.image && !failed;
+    const [failedSrc, setFailedSrc] = useState<string | null>(null);
+    const src = resolveImage(v, show);
+    const custom = !!src && src === v.customImage;
+    const showImg = !!src && src !== failedSrc;
     return (
         <div
             className={`flex shrink-0 items-center justify-center overflow-hidden ${showImg ? 'bg-elevated' : ''}`}
@@ -148,12 +154,12 @@ function VehicleThumb({ v, show, size, radius, iconSize, iconStroke = 2 }: {
         >
             {showImg ? (
                 <img
-                    src={v.image}
+                    src={src}
                     alt=""
                     draggable={false}
-                    onError={() => setFailed(true)}
-                    className="h-full w-full object-contain"
-                    style={{ padding: Math.round(size * 0.06) }}
+                    onError={() => setFailedSrc(src)}
+                    className={`h-full w-full ${custom ? 'object-cover' : 'object-contain'}`}
+                    style={{ padding: custom ? 0 : Math.round(size * 0.06) }}
                 />
             ) : (
                 <Car size={iconSize} strokeWidth={iconStroke} className="text-white" />
@@ -215,11 +221,24 @@ function VehicleCard({ v, showImages, onOpen }: { v: Vehicle; showImages: boolea
     );
 }
 
-function VehicleDetail({ v, showImages, valet, onBack, onDelivered, animateIn = true }: {
-    v: Vehicle; showImages: boolean; valet: ValetInfo; onBack: () => void; onDelivered: () => void; animateIn?: boolean;
+function VehicleDetail({ v, showImages, customImages, valet, onBack, onDelivered, onImageChanged, animateIn = true }: {
+    v: Vehicle; showImages: boolean; customImages: boolean; valet: ValetInfo; onBack: () => void; onDelivered: () => void; onImageChanged: () => void; animateIn?: boolean;
 }) {
     const { goBack, pageStyle } = useIosPush(onBack, animateIn);
     const setWaypoint = () => { if (v.waypoint) void fetchNui('sd-phone:garages:waypoint', v.waypoint); };
+
+    const [picking, setPicking] = useState(false);
+    const [imageBusy, setImageBusy] = useState(false);
+    const [imageError, setImageError] = useState<string | null>(null);
+
+    async function applyImage(url: string | null) {
+        if (imageBusy) return;
+        setImageBusy(true);
+        const r = await setVehicleImage(v.plate, url);
+        setImageBusy(false);
+        if (r.success) onImageChanged();
+        else setImageError(failText(r, t('garages.photoFailed', 'Could not update the photo')));
+    }
 
     const [locked, setLocked] = useState<boolean>(v.locked);
 
@@ -298,7 +317,22 @@ function VehicleDetail({ v, showImages, valet, onBack, onDelivered, animateIn = 
 
             <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar px-4 pb-8 pt-4">
                 <div className="flex flex-col items-center">
-                    <VehicleThumb v={v} show={showImages} size={132} radius={26} iconSize={62} iconStroke={1.6} />
+                    {customImages ? (
+                        <button
+                            type="button"
+                            onClick={() => setPicking(true)}
+                            disabled={imageBusy}
+                            aria-label={t('garages.choosePhoto', 'Choose a photo for this vehicle')}
+                            className="relative transition-opacity active:opacity-70 disabled:opacity-50"
+                        >
+                            <VehicleThumb v={v} show={showImages} size={132} radius={26} iconSize={62} iconStroke={1.6} />
+                            <span className="absolute -bottom-1 -right-1 flex h-[34px] w-[34px] items-center justify-center rounded-full bg-ios-blue text-white ring-[3px] ring-base">
+                                <Camera className="h-[17px] w-[17px]" strokeWidth={2.3} />
+                            </span>
+                        </button>
+                    ) : (
+                        <VehicleThumb v={v} show={showImages} size={132} radius={26} iconSize={62} iconStroke={1.6} />
+                    )}
                     <h2 className="mt-3 text-[24px] font-bold tracking-tight text-black dark:text-white">{v.model}</h2>
                     <p className="text-[15px] text-ios-gray">{v.class}</p>
 
@@ -358,7 +392,57 @@ function VehicleDetail({ v, showImages, valet, onBack, onDelivered, animateIn = 
                         <Row label={t('garages.mileage', 'Mileage')} value={`${mileage.value.toLocaleString()} ${mileage.unit}`} divider />
                     )}
                 </div>
+
+                {customImages && (
+                    <>
+                        <SectionLabel>{t('garages.photo', 'Photo')}</SectionLabel>
+                        <div className="overflow-hidden rounded-[14px] bg-surface ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
+                            <button
+                                type="button"
+                                onClick={() => setPicking(true)}
+                                disabled={imageBusy}
+                                className="flex w-full items-center gap-2.5 px-4 py-3.5 text-left active:bg-black/[0.04] disabled:opacity-50 dark:active:bg-white/[0.06]"
+                            >
+                                <Camera className="h-[18px] w-[18px] text-ios-blue" strokeWidth={2.2} />
+                                <span className="text-[17px] text-ios-blue">
+                                    {v.customImage ? t('garages.changePhoto', 'Change photo') : t('garages.chooseFromPhotos', 'Choose from Photos')}
+                                </span>
+                                <ChevronRight className="ml-auto h-[16px] w-[16px] text-black/25 dark:text-white/25" strokeWidth={2.5} />
+                            </button>
+                            {v.customImage && (
+                                <button
+                                    type="button"
+                                    onClick={() => void applyImage(null)}
+                                    disabled={imageBusy}
+                                    className="flex w-full items-center gap-2.5 border-t border-black/[0.06] px-4 py-3.5 text-left active:bg-black/[0.04] disabled:opacity-50 dark:border-white/[0.08] dark:active:bg-white/[0.06]"
+                                >
+                                    <Trash2 className="h-[18px] w-[18px] text-ios-red" strokeWidth={2.2} />
+                                    <span className="text-[17px] text-ios-red">{t('garages.removePhoto', 'Remove photo')}</span>
+                                </button>
+                            )}
+                        </div>
+                    </>
+                )}
             </div>
+
+            {picking && (
+                <MediaPickerSheet
+                    filter={p => !p.video}
+                    initialSelectedUrls={v.customImage ? [v.customImage] : undefined}
+                    onSelect={p => { setPicking(false); void applyImage(p.url); }}
+                    onClose={() => setPicking(false)}
+                />
+            )}
+
+            {imageError && (
+                <AlertDialog
+                    title={t('garages.photoFailedTitle', 'Photo not changed')}
+                    message={imageError}
+                    hideCancel
+                    onCancel={() => setImageError(null)}
+                    onConfirm={() => setImageError(null)}
+                />
+            )}
 
             {confirming && (
                 <AlertDialog

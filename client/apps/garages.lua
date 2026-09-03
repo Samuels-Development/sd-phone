@@ -26,6 +26,10 @@ local SHOW_IMAGES_DEF = GARAGES_CFG.ShowVehicleImages ~= false
 local IMAGES_POSSIBLE = ALLOW_TOGGLE or SHOW_IMAGES_DEF
 ---@type string Image URL template with a `{model}` placeholder ('' disables images).
 local IMAGE_TEMPLATE  = type(GARAGES_CFG.VehicleImageUrl) == 'string' and GARAGES_CFG.VehicleImageUrl or ''
+---@type boolean Whether players may pick one of their own Photos as a vehicle's picture.
+local CUSTOM_IMAGES   = GARAGES_CFG.CustomImages ~= false
+---@type fun(nuiAction: string, serverEvent: string) NUI -> server callback passthrough (client.nui).
+local proxy           = require 'client.nui'
 
 ---Enriches one server vehicle row in place: resolves the raw model into a display name + class
 ---label, attaches the photo URL when images can show, and strips internal fields.
@@ -76,10 +80,13 @@ RegisterNUICallback('sd-phone:garages:list', function(_payload, cb)
             pcall(enrich, result.data[i])
         end
     end
-    result.images = { allowToggle = ALLOW_TOGGLE, default = SHOW_IMAGES_DEF }
+    result.images = { allowToggle = ALLOW_TOGGLE, default = SHOW_IMAGES_DEF, custom = CUSTOM_IMAGES }
     result.valet  = getValetInfo()
     cb(result)
 end)
+
+-- React -> Lua -> server: sets or clears the player's own picture for one of their vehicles.
+proxy('sd-phone:garages:setImage', 'sd-phone:server:garages:setImage')
 
 ---React -> Lua: drops a map waypoint at server-resolved coords; non-numeric input is rejected.
 RegisterNUICallback('sd-phone:garages:waypoint', function(payload, cb)

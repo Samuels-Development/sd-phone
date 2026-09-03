@@ -43,6 +43,13 @@ return {
     -- without a matching image (e.g. a custom add-on) falls back to the icon.
     VehicleImageUrl = 'https://docs.fivem.net/vehicles/{model}.webp',
 
+    -- Let players pick one of their own Photos as a vehicle's picture, from the
+    -- vehicle's detail page. The choice is saved per character and plate and
+    -- shows in place of the stock photo, even for players who switched the app
+    -- to icons. Only a photo already in that player's own Photos library is
+    -- accepted, so no outside URL can be stored. Set false to hide the option.
+    CustomImages = true,
+
     -- Garage waypoint coordinates - used as a FALLBACK. The app first auto-reads
     -- a garage's coords from the running system's own export, so these systems
     -- need NO setup: qs-advancedgarages, qbx_garages, qb-garages,
