@@ -12,7 +12,8 @@ local RACE    = type(RACING.Race) == 'table' and RACING.Race or {}
 ---@type boolean Whether the racing app runs at all. Nothing here touches the world when it is off.
 local ENABLED = RACING.Enabled ~= false
 
----@type number Metres from a start point at which its blip and world marker appear.
+---@type number Metres from a start point at which its map blip appears. The blip is created on
+---the way in and removed on the way out, so a lobby across the map never shows on the pause map.
 local MARKER_DIST = 60.0
 
 ---@type number Metres from a start point at which the sign-up board opens on screen.
@@ -67,13 +68,15 @@ local function clearBlips()
     end
 end
 
----Paints one short-range blip per board and drops any whose lobby has gone.
-local function syncBlips()
+---Paints a short-range blip for each board within MARKER_DIST of the player and drops the rest,
+---whether they fell out of range or their lobby has gone.
+---@param coords vector3 player position
+local function syncBlips(coords)
     local seen = {}
     for i = 1, #Boards do
         local entry = Boards[i]
         local start = entry.start
-        if start then
+        if start and #(coords - vec3(start.x + 0.0, start.y + 0.0, (start.z or 0.0) + 0.0)) <= MARKER_DIST then
             seen[entry.id] = true
             if not Blips[entry.id] then
                 local handle = AddBlipForCoord(start.x + 0.0, start.y + 0.0, (start.z or 0.0) + 0.0)
@@ -112,7 +115,7 @@ function board.refresh()
     if type(res) ~= 'table' or res.success ~= true or type(res.data) ~= 'table' then return end
 
     Boards = type(res.data.boards) == 'table' and res.data.boards or {}
-    syncBlips()
+    syncBlips(GetEntityCoords(cache.ped))
 
     if Shown then
         local still = nil
@@ -255,13 +258,15 @@ local function drawLoop()
         while ENABLED do
             local wait = 500
 
+            local here = GetEntityCoords(cache.ped)
+            syncBlips(here)
+
             if race.active() or #Boards == 0 then
                 if Shown then
                     Shown, ShownSig = nil, nil
                     SendNUIMessage({ action = 'sd-phone:racing:board:hide' })
                 end
             else
-                local here = GetEntityCoords(cache.ped)
                 local entry, distance = nearest(here)
 
                 if entry and distance <= SHOW_DIST then
