@@ -88,6 +88,19 @@ return {
     BlockWhileDead     = true,
     BlockWhileSwimming = true,
 
+    -- Take the phone away while the player is restrained or incapacitated. These read the
+    -- FRAMEWORK's state rather than the ped's: someone bleeding out or in last stand is still a
+    -- live ped, so BlockWhileDead above (an engine-level IsEntityDead check) misses the window
+    -- they actually spend on the floor waiting for EMS.
+    --
+    -- Cuffs have no agreed source, so the check reads the common state bags, the framework
+    -- metadata and the native, which covers cuff scripts that only write one of them.
+    --
+    -- Both close a phone that is ALREADY open too, since gating only the open would be sidestepped
+    -- by opening the phone first and being cuffed after.
+    BlockWhileCuffed   = true,
+    BlockWhileDowned   = true,
+
     -- Whether an incoming call throws the whole phone onto the screen. Off, a
     -- ringing phone shows the same closed-shell banner an alarm does, naming
     -- the caller, and the player opens their phone when they want to answer.

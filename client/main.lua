@@ -8,6 +8,8 @@ local config = require 'configs.config'
 local locale = require 'bridge.shared.locale'
 ---@type table Notify bridge (bridge.client.notify): backend-agnostic on-screen toasts.
 local notify = require 'bridge.client.notify'
+---@type table Player-state bridge (bridge.client.playerstate): restrained / incapacitated reads.
+local playerstate = require 'bridge.client.playerstate'
 
 -- Apps disabled in configs/apps.lua never reach the NUI, so neither the home screen nor the
 -- App Store can show them. Built once - the catalog is static per boot.
@@ -458,8 +460,40 @@ AddEventHandler('sd-phone:client:cameraCursor', function(on)
 end)
 
 
+---The message explaining why the phone cannot be opened right now, or nil when it can. Each
+---locale.t call is spelled out in full because the i18n generator scans this file for literal
+---keys; handing it a key through a variable would drop these strings from every catalogue.
+---@return string|nil message nil when the phone is allowed
+local function blockedReason()
+    local ped = cache.ped
+    if config.Phone.BlockWhileDead and IsEntityDead(ped) then
+        return locale.t('phone.blocked_dead', 'You can\'t use your phone right now.')
+    end
+    if config.Phone.BlockWhileDowned and playerstate.isDowned() then
+        return locale.t('phone.blocked_downed', 'You can\'t use your phone while you are down.')
+    end
+    if config.Phone.BlockWhileCuffed and playerstate.isCuffed() then
+        return locale.t('phone.blocked_cuffed', 'You can\'t use your phone while restrained.')
+    end
+    if config.Phone.BlockWhileSwimming and IsPedSwimming(ped) then
+        return locale.t('phone.blocked_swim', 'You can\'t use your phone while swimming.')
+    end
+    return nil
+end
+
+---Whether the player is restrained or incapacitated. Only these two states take an ALREADY-OPEN
+---phone away; being dead or swimming keeps its long-standing behaviour of refusing the open and
+---otherwise leaving an open phone alone.
+---@return boolean
+local function seizesOpenPhone()
+    if config.Phone.BlockWhileCuffed and playerstate.isCuffed() then return true end
+    if config.Phone.BlockWhileDowned and playerstate.isDowned() then return true end
+    return false
+end
+
 ---Opens the phone NUI onto the lockscreen, loads installed apps, focuses the NUI, and pushes a
----weather snapshot plus the session-start timestamp. Refuses while dead, swimming, or disabled.
+---weather snapshot plus the session-start timestamp. Refuses while dead, downed, restrained,
+---swimming, or disabled.
 local function OpenPhone()
     if phoneState.open then return end
 
@@ -473,14 +507,9 @@ local function OpenPhone()
     -- third-party ones re-ask about their own gates on the same open.
     customApps.refreshGates()
 
-    local ped = cache.ped
-
-    if config.Phone.BlockWhileDead and IsEntityDead(ped) then
-        notify.show({ description = locale.t('phone.blocked_dead', 'You can\'t use your phone right now.'), type = 'error' })
-        return
-    end
-    if config.Phone.BlockWhileSwimming and IsPedSwimming(ped) then
-        notify.show({ description = locale.t('phone.blocked_swim', 'You can\'t use your phone while swimming.'), type = 'error' })
+    local blocked = blockedReason()
+    if blocked then
+        notify.show({ description = blocked, type = 'error' })
         return
     end
 
@@ -875,6 +904,19 @@ CreateThread(function()
             SendNUIMessage({ action = 'sd-phone:battery', data = phoneState.battery })
             ---First-party client event: the cosmetic battery percentage moved.
             TriggerEvent('sd-phone:client:battery', phoneState.battery)
+        end
+    end
+end)
+
+-- Cuffs go on and players go down mid-session, so gating the open is not enough on its own: an
+-- already-open phone is taken away here. Without it the block is sidestepped by opening the phone
+-- first and being cuffed after.
+CreateThread(function()
+    while true do
+        Wait(500)
+        if (phoneState.open or companion.companionOpen) and seizesOpenPhone() then
+            if companion.companionOpen then TriggerEvent('sd-phone:client:companion:close') end
+            if phoneState.open then ClosePhone() end
         end
     end
 end)
