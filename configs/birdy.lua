@@ -42,6 +42,13 @@ return {
     -- Notifications returned per alerts-tab load.
     NotificationLimit = 50,
 
+    -- Notify a player whenever someone they follow posts. On, every new post alerts each of the
+    -- author's followers and badges their Squawk icon, the way a real feed app does. Off, posts
+    -- land silently in the feed and only likes, replies, reposts and follows still notify.
+    -- Worth turning off on a busy server, where a prolific poster can fill their followers'
+    -- notification list on their own.
+    PostNotifications = true,
+
     -- Account field bounds, mirrored by the React register/login forms.
     MaxNameLength     = 32,
     MinHandleLength   = 2,

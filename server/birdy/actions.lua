@@ -22,7 +22,7 @@ local moderation = require 'server.admin.moderation'
 local watchers = require('server.watchers').of('birdy')
 
 ---@type table Birdy config (config.Birdy): field bounds + feed/notification limits.
-local birdyCfg = config.Birdy
+local birdyCfg = config.Birdy or require 'configs.birdy'
 
 ---@type table Actions module; the table returned at end of file.
 local actions = {}
@@ -675,6 +675,10 @@ function actions.create(source, payload)
     -- The TriggerEvent above is server-local; this is what reaches players. Scoped to the phones
     -- with Birdy in the foreground: every other player only refetched to discard the result.
     watchers.push('sd-phone:client:birdy:feedChanged', {})
+
+    if birdyCfg.PostNotifications == false then
+        return ok({ post = serializePost(store.getPost(id, prof.handle)) })
+    end
 
     local preview   = body ~= '' and body:sub(1, 80) or 'shared a photo'
     local followers = store.followerHandles(prof.handle)
