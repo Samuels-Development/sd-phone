@@ -17,7 +17,7 @@ local util      = require 'server.util'
 local ok, fail  = util.ok, util.fail
 
 ---@type table ID app config (config.Id): licence catalogue, job colours, issuer, show duration.
-local CFG = config.Id
+local CFG = config.Id or require 'configs.id'
 
 ---@type string Card face for the State ID; every licence and badge picks its own from config.
 local STATE_COLOR <const> = '#2C3440'

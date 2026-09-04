@@ -17,7 +17,7 @@ local settings = require 'server.settings.store'
 local money    = require 'bridge.server.money'
 
 ---@type table Payphone config (configs/payphone.lua).
-local cfg = config.Payphone
+local cfg = config.Payphone or require 'configs.payphone'
 
 local util = require 'server.util'
 local ok, fail, digits = util.ok, util.fail, util.digits

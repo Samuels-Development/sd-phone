@@ -12,7 +12,7 @@ local share    = require 'server.share.core'
 local badges   = require 'server.badges.init'
 
 ---@type table Contacts config (config.Contacts): caps for contacts, recents, and field lengths.
-local cfg = config.Contacts
+local cfg = config.Contacts or require 'configs.contacts'
 
 ---@type table Actions module; the table returned at end of file.
 local actions = {}

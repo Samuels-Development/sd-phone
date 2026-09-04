@@ -8,8 +8,10 @@ local store   = require 'server.findmy.store'
 ---@type table Authoritative Find My handlers (server.findmy.actions): sightings + Lost Mode.
 local actions = require 'server.findmy.actions'
 
----@type table Find My app config (config.FindMy): master switch + sighting cadence.
-local CFG = config.FindMy
+---@type table Find My app config (config.FindMy): master switch + sighting cadence. Falls back to
+---the group's own file, so a configs/config.lua predating this app still reads the owner's real
+---settings rather than erroring on the first sighting tick.
+local CFG = config.FindMy or require 'configs.findmy'
 
 -- Boot thread: creates the device-sightings table.
 CreateThread(function()

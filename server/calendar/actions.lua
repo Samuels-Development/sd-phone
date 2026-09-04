@@ -15,7 +15,7 @@ local util          = require 'server.util'
 local ok, fail = util.ok, util.fail
 
 ---@type table Calendar app config (config.Calendar): per-character event cap, guest cap, field caps.
-local CFG = config.Calendar
+local CFG = config.Calendar or require 'configs.calendar'
 
 ---@type table Actions module; the table returned at end of file. The organizer's row is the only
 ---copy of an event: an invitee reads it through their attendee row rather than owning a clone.

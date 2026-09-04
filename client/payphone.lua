@@ -8,7 +8,7 @@ local companion = require 'client.companion'
 local locale = require 'bridge.shared.locale'
 
 ---@type table Payphone config (configs/payphone.lua).
-local cfg = config.Payphone
+local cfg = config.Payphone or require 'configs.payphone'
 
 ---@type string|nil Location key ('x,y,z') of the booth currently in use, nil when the UI is closed.
 local activeLocation = nil

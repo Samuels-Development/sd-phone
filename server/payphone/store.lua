@@ -5,7 +5,7 @@ local config   = require 'configs.config'
 local settings = require 'server.settings.store'
 
 ---@type table Payphone config (configs/payphone.lua).
-local cfg = config.Payphone
+local cfg = config.Payphone or require 'configs.payphone'
 
 ---Creates the payphone-number table idempotently. One row per physical booth, keyed by its
 ---rounded world position.

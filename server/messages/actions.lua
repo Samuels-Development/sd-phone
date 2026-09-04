@@ -24,7 +24,7 @@ local moderation    = require 'server.admin.moderation'
 local service       = require 'server.service'
 
 ---@type table Messages knobs (configs/messages.lua): body / thread / group caps.
-local cfg = config.Messages
+local cfg = config.Messages or require 'configs.messages'
 
 ---@type table Actions module; the table returned at end of file.
 local actions = {}

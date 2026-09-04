@@ -12,7 +12,7 @@ local live    = require 'server.streaks.live'
 local banking = require 'server.banking.actions'
 
 ---@type table Streaks app config (config.Streaks): milestone ladder, reward account, size caps.
-local CFG = config.Streaks
+local CFG = config.Streaks or require 'configs.streaks'
 
 ---@type table Actions module; the table returned at end of file.
 local actions = {}

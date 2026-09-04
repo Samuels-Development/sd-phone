@@ -13,7 +13,7 @@ local settings = require 'server.settings.store'
 local util     = require 'server.util'
 
 ---@type table Find My config (config.FindMy): tick cadence, sound length, message cap.
-local CFG = config.FindMy
+local CFG = config.FindMy or require 'configs.findmy'
 
 ---@type table Actions module; the table returned at end of file.
 local actions = {}
