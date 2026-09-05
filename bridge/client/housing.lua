@@ -62,6 +62,18 @@ lib.callback.register('sd-phone:client:housing:exec', function(system, action, i
             TriggerServerEvent('vms_housing:sv:removeKey', id, arg)
             return true
         end
+
+    elseif system == 'qs-housing' then
+        -- Reached only as the server bridge's fallback, when GiveMetaKey left the target without
+        -- a key. `id` is the qs house NAME, not the phone's property id. The handler on the other
+        -- end reads the owner from `source`, which is why this leaves from the owner's client
+        -- rather than the server; the server has already gated the call on ownership.
+        if action == 'give' then
+            local target = tonumber(arg)
+            if not target then return false end
+            TriggerServerEvent('housing:giveMetaKeyToPlayer', target, tostring(id))
+            return true
+        end
     end
 
     return nil
