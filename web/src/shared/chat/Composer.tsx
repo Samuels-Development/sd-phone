@@ -10,6 +10,7 @@ export interface ComposerHandle {
 }
 
 const TYPING_IDLE_MS = 3000;
+const TYPING_HEARTBEAT_MS = 2500;
 
 export const Composer = forwardRef<ComposerHandle, {
     convId:         string;
@@ -42,7 +43,7 @@ export const Composer = forwardRef<ComposerHandle, {
         const notify = notifyRef.current;
         if (!notify) return;
         const now = Date.now();
-        if (!activeRef.current && now - lastOnRef.current >= TYPING_IDLE_MS) {
+        if (!activeRef.current || now - lastOnRef.current >= TYPING_HEARTBEAT_MS) {
             activeRef.current = notify;
             lastOnRef.current = now;
             notify(true);
