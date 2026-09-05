@@ -41,7 +41,7 @@ const NUMBER_INK = ['', '#5AA9FF', '#5BD68A', '#FF7A70', '#B98BFF', '#FFB347', '
 
 const wrapStyle = { background: `radial-gradient(120% 90% at 50% 0%, ${pal.bg2} 0%, ${pal.bg} 62%)`, color: pal.text };
 
-const BOARD_MAX_W = 344;
+const BOARD_MAX_W = 392;
 const BOARD_MAX_H = 470;
 
 export function Minesweeper({ onClose: _onClose }: Props) {
@@ -109,7 +109,6 @@ export function Minesweeper({ onClose: _onClose }: Props) {
 
     const flag = useCallback((index: number) => {
         const current = boardRef.current;
-        if (!current.seeded) return;
         if (current.state[index] === REVEALED) return;
         setBoard(toggleFlag(current, index));
     }, []);
@@ -184,7 +183,7 @@ export function Minesweeper({ onClose: _onClose }: Props) {
     const boardW = def.cols * cell + (def.cols + 1) * gap;
     const boardH = def.rows * cell + (def.rows + 1) * gap;
     const numberSize = Math.max(11, Math.round(cell * 0.52));
-    const glyphSize = Math.max(11, Math.round(cell * 0.5));
+    const glyphSize = Math.max(13, Math.round(cell * 0.62));
 
     const cleared = safeCells(board) > 0 ? Math.round((board.revealed / safeCells(board)) * 100) : 0;
     const over = phase === 'won' || phase === 'lost';
@@ -355,7 +354,7 @@ export function Minesweeper({ onClose: _onClose }: Props) {
                             </div>
                         </div>
 
-                        <div className="flex shrink-0 items-stretch justify-center gap-2.5 px-5" style={{ paddingBottom: 24, paddingTop: 8 }}>
+                        <div className="flex shrink-0 items-stretch justify-center gap-2.5 px-5" style={{ paddingBottom: 58, paddingTop: 10 }}>
                             <ModeBtn
                                 on={!flagMode}
                                 onPress={() => setFlagMode(false)}
@@ -407,7 +406,9 @@ function Cell({ index, state, mine, adj, hit, size, numberSize, glyphSize, onDow
 
     const background = revealed
         ? (hit ? 'linear-gradient(160deg, #FF6A5E, #C7302A)' : 'rgba(255,255,255,0.045)')
-        : 'linear-gradient(160deg, #39404F 0%, #2C323E 55%, #262B36 100%)';
+        : flagged
+            ? 'linear-gradient(160deg, #5A3942 0%, #462C33 55%, #3C262C 100%)'
+            : 'linear-gradient(160deg, #39404F 0%, #2C323E 55%, #262B36 100%)';
 
     return (
         <div
@@ -429,11 +430,18 @@ function Cell({ index, state, mine, adj, hit, size, numberSize, glyphSize, onDow
                 touchAction: 'manipulation',
             }}
         >
-            {flagged && <Flag style={{ width: glyphSize, height: glyphSize, color: '#FF6B5F' }} strokeWidth={2.6} />}
+            {flagged && (
+                <Flag
+                    style={{ width: glyphSize, height: glyphSize, color: '#FF7063' }}
+                    fill="#FF3B2F"
+                    strokeWidth={2.2}
+                />
+            )}
             {revealed && mine && (
                 <Bomb
-                    style={{ width: glyphSize, height: glyphSize, color: hit ? '#FFFFFF' : '#FF8A7E', animation: hit ? 'ms-boom 0.3s ease-out' : undefined }}
-                    strokeWidth={2.4}
+                    style={{ width: glyphSize, height: glyphSize, color: hit ? '#FFFFFF' : '#FF9A8E', animation: hit ? 'ms-boom 0.3s ease-out' : undefined }}
+                    fill={hit ? '#FFFFFF' : '#FF6B5F'}
+                    strokeWidth={2.2}
                 />
             )}
             {revealed && !mine && adj > 0 && (
