@@ -7,7 +7,7 @@ local util = require 'server.util'
 local STAT_GAMES = {
     baccarat = true, battleship = true, blackjack = true, blocks = true,
     chess = true, climber = true, connectfour = true, crash = true,
-    flappy = true, holdem = true, roulette = true, slots = true,
+    flappy = true, holdem = true, minesweeper = true, roulette = true, slots = true,
     wordle = true,
 }
 

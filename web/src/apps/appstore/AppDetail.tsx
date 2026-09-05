@@ -8,7 +8,7 @@ import { t, appLabel } from '@/i18n';
 import type { AppDef } from '@/core/types';
 import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
-const HEAVY = new Set(['cookie', 'wordle', 'flappy', 'blocks', 'casino', 'climber', 'connectfour', 'photogram', 'vibez', 'cherry', 'birdy', 'camera', 'maps', 'music', 'weazelnews', 'streaks']);
+const HEAVY = new Set(['cookie', 'wordle', 'flappy', 'blocks', 'minesweeper', 'casino', 'climber', 'connectfour', 'photogram', 'vibez', 'cherry', 'birdy', 'camera', 'maps', 'music', 'weazelnews', 'streaks']);
 const LIGHT = new Set(['calculator', 'notes', 'clock', 'weather', 'voicememos', 'settings', 'calendar']);
 
 function appSize(id: string): string {

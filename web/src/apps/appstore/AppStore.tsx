@@ -58,6 +58,7 @@ function getDescriptions(): Record<string, string> {
         wordle:      t('appstore.descWordle', 'Daily word puzzle'),
         flappy:      t('appstore.descFlappy', 'Tap to fly and dodge'),
         blocks:      t('appstore.descBlocks', 'Stack and clear the lines'),
+        minesweeper: t('appstore.descMinesweeper', 'Sweep the grid, dodge the mines'),
         casino:      t('appstore.descCasino', 'Blackjack, roulette and slots'),
         climber:     t('appstore.descClimber', 'Climb as high as you can'),
         connectfour: t('appstore.descConnectfour', 'Line up four to win'),

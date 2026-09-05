@@ -980,6 +980,43 @@ export function BlocksIcon() {
     );
 }
 
+export function MinesweeperIcon() {
+    const u = useIconIds();
+    const c = 13, g = 1.5, o = 9;
+    const at = (n: number) => o + n * (c + g);
+    const tile = (cx: number, cy: number) => (
+        <rect x={at(cx)} y={at(cy)} width={c} height={c} rx="3" fill="#3E4553" />
+    );
+    const dug = (cx: number, cy: number) => (
+        <rect x={at(cx)} y={at(cy)} width={c} height={c} rx="3" fill="rgba(0,0,0,0.30)" />
+    );
+    return (
+        <svg viewBox={`0 0 ${S} ${S}`} width={S} height={S}>
+            <defs><LinearGrad id={u('msw')} top="#4A5162" mid="#2C323E" bot="#181B22" angle={150} /></defs>
+            <rect width={S} height={S} fill={`url(#${u('msw')})`} />
+            {tile(0, 0)}{tile(1, 0)}{dug(2, 0)}
+            {dug(0, 1)}
+            <rect x={at(1)} y={at(1)} width={c} height={c} rx="3" fill="#D9382F" />
+            {tile(2, 1)}
+            {dug(0, 2)}{dug(1, 2)}{tile(2, 2)}
+
+            <text x={at(2) + c / 2} y={at(0) + c / 2 + 3.6} textAnchor="middle" fontSize="10" fontWeight="800" fill="#5AA9FF" fontFamily="-apple-system,sans-serif">1</text>
+
+            <g stroke="#17191F" strokeWidth="1.6" strokeLinecap="round">
+                <line x1={at(1) + c / 2 - 5} y1={at(1) + c / 2} x2={at(1) + c / 2 + 5} y2={at(1) + c / 2} />
+                <line x1={at(1) + c / 2} y1={at(1) + c / 2 - 5} x2={at(1) + c / 2} y2={at(1) + c / 2 + 5} />
+            </g>
+            <circle cx={at(1) + c / 2} cy={at(1) + c / 2} r="3.9" fill="#17191F" />
+            <circle cx={at(1) + c / 2 - 1.3} cy={at(1) + c / 2 - 1.3} r="1.1" fill="rgba(255,255,255,0.55)" />
+
+            <g>
+                <line x1={at(0) + 4.4} y1={at(2) + 2.6} x2={at(0) + 4.4} y2={at(2) + 10.4} stroke="#C9CEDA" strokeWidth="1.5" strokeLinecap="round" />
+                <path d={`M ${at(0) + 5.2} ${at(2) + 3.1} L ${at(0) + 10.6} ${at(2) + 5.3} L ${at(0) + 5.2} ${at(2) + 7.5} Z`} fill="#FF5A4E" />
+            </g>
+        </svg>
+    );
+}
+
 export function BlackjackIcon() {
     const u = useIconIds();
     return (
@@ -1567,6 +1604,7 @@ const ICON_MAP: Record<string, IconComponent> = {
     wordle:      WordleIcon,
     flappy:      FlappyIcon,
     blocks:      BlocksIcon,
+    minesweeper: MinesweeperIcon,
     blackjack:   BlackjackIcon,
     casino:      CasinoIcon,
     climber:     ClimberIcon,

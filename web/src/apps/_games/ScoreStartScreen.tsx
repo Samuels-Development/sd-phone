@@ -1,5 +1,6 @@
 import { ChevronRight, Clock, Gamepad2, Trophy } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
 
 import { t } from '@/i18n';
 
@@ -16,6 +17,7 @@ interface ScoreStartScreenProps {
     onPlay:        () => void;
     onLeaderboard: () => void;
     playLabel?:    string;
+    children?:     ReactNode;
 }
 
 /**
@@ -24,7 +26,7 @@ interface ScoreStartScreenProps {
  * a Leaderboard row, and a Record card (plays / high score / most recent) in the same place and
  * style as the vs-game Record card - just with score stats instead of W/L/D.
  */
-export function ScoreStartScreen({ config, stats, onPlay, onLeaderboard, playLabel }: ScoreStartScreenProps) {
+export function ScoreStartScreen({ config, stats, onPlay, onLeaderboard, playLabel, children }: ScoreStartScreenProps) {
     const { icon: Icon, title, accent, flavor } = config;
     return (
         <div className="flex flex-1 flex-col px-5 pt-2">
@@ -35,6 +37,7 @@ export function ScoreStartScreen({ config, stats, onPlay, onLeaderboard, playLab
 
             <div className="mt-5 rounded-[18px] p-5" style={{ background: 'rgba(255,255,255,0.07)' }}>
                 <p className="text-[14px] leading-snug text-white/70">{flavor}</p>
+                {children}
                 <button
                     type="button"
                     onClick={onPlay}
