@@ -4,7 +4,7 @@ lua54 'yes'
 
 name 'sd-phone'
 author 'Samuel#0008'
-version '0.9.12'
+version '0.9.11'
 description 'Full-featured in-game smartphone: 46 apps covering calls, messages, mail, social feeds, banking, stocks, marketplace, garages, housing, jobs, maps, camera, music and games, plus home screen widgets, icon themes you can design, cell tower and Wi-Fi coverage, payphones, unique phones and SIM cards, an API for third-party apps and widgets, and lb-phone compatibility'
 
 shared_scripts {
