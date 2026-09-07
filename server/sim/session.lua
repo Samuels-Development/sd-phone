@@ -48,9 +48,33 @@ local TTL = 5000
 ---@type table<number, { at: number, s: SimSession|nil }> Per-source cache; `s = nil` caches "no phone".
 local cache = {}
 
+---@type table<number, table> Per-source compute in flight, so a burst of callbacks landing while
+---the first scan awaits its DB writes shares that scan instead of each minting its own identity.
+local inflight = {}
+
 ---@type table<number, { slot?: number, number?: string, color?: string }> Which phone each
 ---player last opened; matched slot > number > colour against the carried SIMs.
 local prefs = {}
+
+---@type table<number, table<string, true>> Numbers each source has asserted sole ownership of
+---this session, so rows a past double-mint left behind are released once, not on every resolve.
+local claimed = {}
+
+---Mirrors `number` onto `identity`'s settings row, announcing the attach when it changes, and
+---once per session releases the number from any other row still holding it.
+---@param source number player server id
+---@param identity string data identity the number belongs to
+---@param number string bare-digit number
+local function mirrorNumber(source, identity, number)
+    if settingsStore.getPhoneNumber(identity) ~= number then
+        settingsStore.setPhoneNumber(identity, number)
+        TriggerEvent('sd-phone:server:sim:numberAttached', source, identity, number)
+    elseif not (claimed[source] and claimed[source][number]) then
+        settingsStore.releasePhoneNumber(identity, number)
+    end
+    claimed[source] = claimed[source] or {}
+    claimed[source][number] = true
+end
 
 ---Drops one player's cached session (or everyone's with nil) so the next resolve re-scans.
 ---@param source number|nil player server id, nil to flush all
@@ -115,11 +139,7 @@ local function computeLegacy(source, phones)
         if number then
             local identity = simStore.ensureRegistered(number, realIdentifier(source))
             if identity then
-                if settingsStore.getPhoneNumber(identity) ~= number then
-                    settingsStore.setPhoneNumber(identity, number)
-                    -- Back in service: store-and-forward listeners deliver anything queued.
-                    TriggerEvent('sd-phone:server:sim:numberAttached', source, identity, number)
-                end
+                mirrorNumber(source, identity, number)
                 sims[#sims + 1] = {
                     slot     = phone.slot,
                     name     = phone.name,
@@ -216,11 +236,7 @@ local function computeDevice(source, phones)
         local identity, owner = resolveDevice(source, phone, number)
         if number then
             simStore.ensureRegistered(number, realCid)
-            if settingsStore.getPhoneNumber(identity) ~= number then
-                settingsStore.setPhoneNumber(identity, number)
-                -- Back in service: store-and-forward listeners deliver anything queued.
-                TriggerEvent('sd-phone:server:sim:numberAttached', source, identity, number)
-            end
+            mirrorNumber(source, identity, number)
         else
             local existing = settingsStore.getPhoneNumber(identity)
             if existing and existing ~= '' then settingsStore.clearPhoneNumber(identity) end
@@ -287,10 +303,7 @@ local function computeCharacter(source, phones)
     -- cleared first so ensurePhoneNumber mints a fresh innate one).
     local liveNumber = active and active.number or nil
     if liveNumber then
-        if settingsStore.getPhoneNumber(realCid) ~= liveNumber then
-            settingsStore.setPhoneNumber(realCid, liveNumber)
-            TriggerEvent('sd-phone:server:sim:numberAttached', source, realCid, liveNumber)
-        end
+        mirrorNumber(source, realCid, liveNumber)
     else
         local mirror = settingsStore.getPhoneNumber(realCid)
         if mirror and mirror ~= '' and simStore.get(mirror) then
@@ -332,8 +345,18 @@ function session.resolve(source)
     local now = GetGameTimer()
     local hit = cache[source]
     if hit and (now - hit.at) < TTL then return hit.s end
-    local s = compute(source)
+    local pending = inflight[source]
+    if pending then return Citizen.Await(pending) end
+    local p = promise.new()
+    inflight[source] = p
+    local ok, s = pcall(compute, source)
+    inflight[source] = nil
+    if not ok then
+        p:reject(s)
+        error(s, 0)
+    end
     cache[source] = { at = now, s = s }
+    p:resolve(s)
     return s
 end
 
@@ -415,6 +438,7 @@ end
 AddEventHandler('playerDropped', function()
     cache[source] = nil
     prefs[source] = nil
+    claimed[source] = nil
 end)
 
 return session

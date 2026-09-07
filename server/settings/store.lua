@@ -543,7 +543,8 @@ function store.numberExists(number)
     return row ~= nil
 end
 
----Persists a player's phone number as bare digits, leaving any other settings intact.
+---Persists a player's phone number as bare digits, leaving any other settings intact, and
+---releases that number from every other identity so a number lookup resolves to one owner.
 ---@param citizenid string framework per-character id
 ---@param number string phone number in any formatting (separators stripped)
 function store.setPhoneNumber(citizenid, number)
@@ -553,6 +554,20 @@ function store.setPhoneNumber(citizenid, number)
         INSERT INTO phone_settings (citizenid, device, phone_number) VALUES (?, ?, ?)
         ON DUPLICATE KEY UPDATE phone_number = VALUES(phone_number)
     ]], { citizenid, 'phone', clean })
+    store.releasePhoneNumber(citizenid, clean)
+end
+
+---Clears `number` from every settings row other than `citizenid`'s, so a number lookup resolves
+---to its one live owner. A no-op when no other row holds it.
+---@param citizenid string identity that keeps the number
+---@param number string phone number in any formatting
+function store.releasePhoneNumber(citizenid, number)
+    if not citizenid or citizenid == '' then return end
+    local clean = (tostring(number or ''):gsub('%D', ''))
+    if clean == '' then return end
+    MySQL.update.await(
+        'UPDATE phone_settings SET phone_number = NULL WHERE phone_number = ? AND citizenid <> ?',
+        { clean, citizenid })
 end
 
 ---Clears a phone identity's number mirror (device mode: a phone whose SIM was pulled has no
