@@ -83,6 +83,7 @@ local PROFILES = {
     ['aty_garage_v2']      = { garage = { 'garage', 'parking' },  state = { 'state', 'stored' }, parkedTable = 'aty_garage_parked' },
     ['mt_garages']         = { garage = { 'garage' },             state = { 'state' } },
     ['ND_Core']            = { garage = {},                       state = { 'stored' }, impoundCol = 'impounded' },
+    ['kartik-garages']     = { garage = { 'garage' },             state = { 'state', 'stored' }, impoundCol = 'impound' },
 }
 
 ---@type table<string, boolean> Systems whose garages are discovered from their own config/table
@@ -639,6 +640,7 @@ local function loadGarageCollection()
         if ACTIVE == 'jg-advancedgarages' then return exports['jg-advancedgarages']:getAllGarages() end
         if ACTIVE == 'cd_garage'          then return exports['cd_garage']:GetConfig() end
         if ACTIVE == 'qs-advancedgarages' then return qsGarages() end
+        if ACTIVE == 'kartik-garages'     then return exports['kartik-garages']:GetGarages() end
         if DISCOVERS_GARAGES[ACTIVE] then return discoveredGarages() end
         return nil
     end)
@@ -694,6 +696,13 @@ local function systemCoords(gcol, row, garageId)
         elseif ACTIVE == 'cd_garage' then
             for _, g in pairs(gcol.Locations or {}) do
                 if g.Garage_ID == garageId then return vec3(g.x_1 + 0.0, g.y_1 + 0.0, g.z_1 + 0.0) end
+            end
+        elseif ACTIVE == 'kartik-garages' then
+            for _, g in pairs(gcol or {}) do
+                if g.name == garageId or g.label == garageId or g.id == garageId then
+                    local c = g.coords or (g.blip and g.blip.coords) or (g.parkingSpots and g.parkingSpots[1])
+                    if c then return c end
+                end
             end
         end
         return nil
@@ -779,6 +788,16 @@ local function impoundCoords(gcol, row, garageId)
                 if (g.type == 'depot' or g.type == 'impound') and g.takeVehicle then
                     if isCarDepot(g.vehicle or g.vehicleType) then return g.takeVehicle end
                     fallback = fallback or g.takeVehicle
+                end
+            end
+            return fallback
+        elseif ACTIVE == 'kartik-garages' then
+            local fallback
+            for _, g in pairs(gcol or {}) do
+                if g.type == 'impound' then
+                    local c = g.coords or (g.blip and g.blip.coords) or (g.parkingSpots and g.parkingSpots[1])
+                    if c then return c end
+                    fallback = fallback or c
                 end
             end
             return fallback

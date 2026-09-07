@@ -22,7 +22,7 @@ return {
         'qs-advancedgarages', 'jg-advancedgarages', 'qbx_garages', 'qb-garages',
         'mt_garages', 'cd_garage', 'okokGarage', 'codem-garage', 'lunar_garage',
         'nc_garage', 'op_garages', 'aty_garage_v2', 'aty_garage', 'esx_garage',
-        'ND_Core',
+        'ND_Core', 'kartik-garages'
     },
 
     -- Default for whether a real photo of each vehicle (matched by spawn name)
