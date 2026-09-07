@@ -165,7 +165,7 @@ after: [github.com/Samuels-Development/sd-tablet](https://github.com/Samuels-Dev
 - **Real accounts engine.** Social apps use actual registration and login, with verification codes and password resets delivered by in-game mail or SMS. Accounts are global, not per-character-slot.
 - **Live game-view camera.** The Camera app renders the world into the phone screen in real time; video clips record your microphone and nearby players' voices.
 - **Photogram Live.** Stream real encoded video to other players' phones, with clean late-joins.
-- **Deep world integration.** Garages and Homes bridge across 13 garage systems and 12 housing systems; Wallet reads your framework bank; Services maps jobs to callable, messageable companies; Weather mirrors the in-game sky.
+- **Deep world integration.** Garages and Homes bridge across 14 garage systems and 12 housing systems; Wallet reads your framework bank; Services maps jobs to callable, messageable companies; Weather mirrors the in-game sky.
 - **Custom apps.** Other resources can put their own apps on the phone: one export call turns any webpage into an installable app with icons, badges, notifications, popups and an App Store listing. Custom apps built for lb-phone run unmodified. Start from the [app templates](https://github.com/Samuels-Development/sd-phone-app-templates) (plain JS, React JS/TS, Vue 3, Svelte 5) and the [custom app guide](https://docs.samueldev.shop/resources/phone/custom-apps).
 - **Drop-in compatibility.** Scripts written for lb-phone, qs-smartphone (including PRO and Lite), gksphone, roadphone or YSeries keep working unmodified: every documented export is answered and their events are mirrored. Anything sd-phone has no equivalent for warns once with the reason instead of failing silently. Player data from lb-phone and YSeries imports from `/phoneadmin` → Migration. See the [compatibility docs](https://docs.samueldev.shop/resources/phone/lb-phone-compatibility).
 
@@ -197,7 +197,7 @@ end)
 | Inventories | ox_inventory, one_inventory, tgiann-inventory, qb-inventory, qs-inventory(-pro), origen_inventory, codem-inventory, jaksam_inventory, lj-inventory, ps-inventory |
 | Voice | pma-voice |
 | Housing | 12 housing systems for the Homes app |
-| Garages | 13 garage systems for the Garages app, plus ND_Core as the fallback on ND |
+| Garages | 14 garage systems for the Garages app, plus ND_Core as the fallback on ND |
 | Notify | ox_lib (default), lation_ui (opt-in), framework-native fallback |
 
 ## Installation

@@ -792,15 +792,12 @@ local function impoundCoords(gcol, row, garageId)
             end
             return fallback
         elseif ACTIVE == 'kartik-garages' then
-            local fallback
             for _, g in pairs(gcol or {}) do
                 if g.type == 'impound' then
                     local c = g.coords or (g.blip and g.blip.coords) or (g.parkingSpots and g.parkingSpots[1])
                     if c then return c end
-                    fallback = fallback or c
                 end
             end
-            return fallback
         end
         return nil
     end)
