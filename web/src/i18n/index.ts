@@ -1,4 +1,5 @@
 import { hostResource, isFiveM } from '@/core/nui';
+import { device } from '@device';
 // The catalogs are the resource-root locales/<lang>.json files (shared with the
 // Lua side), stored as nested tables. Flatten each once into dot-path keys so
 // t('ns.key') resolves — mirrors the flatten in bridge/shared/locale.lua.
@@ -109,9 +110,14 @@ export function setLocale(lang: string): Promise<void> {
         return Promise.resolve();
     }
 
-    const load = isFiveM
-        ? fetchCatalog(code).then(data => data ?? bundledCatalog(code))
-        : bundledCatalog(code).then(data => data ?? fetchCatalog(code));
+    // Companion devices also expose locales/<code>.json, but their files only
+    // translate device-side Lua messages. The full React catalog is bundled
+    // from sd-phone/locales and must win for a tablet.
+    const load = device.rpcAction
+        ? bundledCatalog(code).then(data => data ?? fetchCatalog(code))
+        : isFiveM
+            ? fetchCatalog(code).then(data => data ?? bundledCatalog(code))
+            : bundledCatalog(code).then(data => data ?? fetchCatalog(code));
 
     return load
         .then(data => {
