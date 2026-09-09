@@ -780,7 +780,8 @@ RegisterNetEvent('sd-phone:client:simState', function(state)
         -- so a skipped forward leaves closed-shell peeks wearing the wrong frame.
         SendNUIMessage({ action = 'sd-phone:frameColor', data = { color = state.color } })
     end
-    if phoneState.open then
+    -- Integration so that the tablet works when “single SIM” mode is enabled and all information is stored on the SIM card
+    if phoneState.open or companion.companionOpen then
         SendNUIMessage({
             action = 'sd-phone:simState',
             data   = {
