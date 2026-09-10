@@ -276,7 +276,7 @@
     "amountTooLarge": "Iznos je prevelik",
     "anonymousTransfersDisabled": "Anonimni prijenosi su onemoguceni",
     "available": "Dostupno",
-    "availableAmount": "Dostupno: ",
+    "availableAmount": "Dostupno: ${amount}",
     "back": "Nazad",
     "balance": "Stanje na racunu",
     "bank": "Banka",
