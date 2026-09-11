@@ -55,6 +55,21 @@ function store.ensureSchema()
         MySQL.update.await('UPDATE phone_photos SET trusted = 1 WHERE trusted = 0')
     end
 
+    -- Repair: the importer wrote its rows without the trust flag, which left a migrated photo
+    -- visible in the gallery but refused by server.media.guard - attaching one to a post, message
+    -- or profile picture dropped it silently. Those URLs came from the other phone's own database
+    -- on an operator-run import, so they are trusted here too. Matched on the importer's own id
+    -- shape (`p<id>` from lb-phone, `yp<id>` from YSeries) so no other row can be caught by it,
+    -- and run once: the predicate is unindexed and would otherwise scan the table every boot.
+    util.runOnce('photos_trust_imported_rows', function()
+        -- The pattern stays a parameter, as it does in listForCitizen: a regex quantifier in the
+        -- SQL text would be read by oxmysql as a placeholder.
+        local n = MySQL.update.await(
+            'UPDATE phone_photos SET trusted = 1 WHERE trusted = 0 AND id REGEXP ?',
+            { '^(p|yp)[0-9]+$' })
+        return { repaired = tonumber(n) or 0 }
+    end)
+
     -- store.urlExistsAnywhere looks up by url alone, which idx_phone_photos_owner cannot serve:
     -- its leading column is citizenid, so without this the presigned-upload claim full-scans the
     -- table on every capture, and that table only grows. A prefix index rather than the full 512

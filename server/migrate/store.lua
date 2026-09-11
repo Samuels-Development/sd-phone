@@ -613,9 +613,20 @@ function store.insertMessages(rows)
 end
 
 ---Insert a batch of photos. rows: { id, citizenid, url, favorite, created_at }.
+---
+---Written trusted. The URLs come out of the other phone's own database on an import an operator
+---asked for, never off a client, which is the same provenance the uploader establishes. Left
+---untrusted they still show in the gallery but server.media.guard refuses them, so a migrated
+---photo silently drops out of every post, message and profile picture it is attached to.
 ---@param rows any[][]
 function store.insertPhotos(rows)
-    insertMulti('INSERT IGNORE INTO phone_photos (id, citizenid, url, favorite, created_at) VALUES', 5, rows)
+    if type(rows) ~= 'table' then return end
+    local trusted = {}
+    for i = 1, #rows do
+        local r = rows[i]
+        trusted[i] = { r[1], r[2], r[3], r[4], r[5], 1 }
+    end
+    insertMulti('INSERT IGNORE INTO phone_photos (id, citizenid, url, favorite, created_at, trusted) VALUES', 6, trusted)
 end
 
 ---Insert a batch of albums. rows: { id, citizenid, name }.
