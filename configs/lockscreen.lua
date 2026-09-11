@@ -14,4 +14,10 @@ return {
     -- 24-hour or 12-hour clock. iOS default is the device locale;
     -- here we let the server author pick once.
     Use24Hour = false,
+
+    -- Fail Face Unlock while a mask, bandana or hood covers the
+    -- player's face, the way a real phone refuses a face it cannot
+    -- read. The lockscreen falls back to the passcode. Turn this off
+    -- to let a covered face unlock the phone anyway.
+    MaskBlocksFaceUnlock = true,
 }

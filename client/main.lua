@@ -850,8 +850,10 @@ end)
 local MASK_COMPONENT <const> = 1
 
 ---Whether something is covering the local player's face, which Face Unlock cannot scan through.
+---Always false when Lockscreen.MaskBlocksFaceUnlock is off, so a covered face scans as normal.
 ---@return boolean covered
 local function faceCovered()
+    if not config.Lockscreen.MaskBlocksFaceUnlock then return false end
     local ped = cache.ped
     if not ped or ped == 0 or not DoesEntityExist(ped) then return false end
     return GetPedDrawableVariation(ped, MASK_COMPONENT) > 0
