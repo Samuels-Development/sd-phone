@@ -210,7 +210,13 @@ export function Lockscreen({ use24h, showDate, wallpaper, unlockTrigger, onUnloc
 
             {authMode && (
                 <div className={`absolute inset-0 z-[80] ${exiting ? 'animate-faceid-veil-out' : ''}`}>
-                    {authMode === 'face' && <FaceScan exiting={exiting} onSuccess={() => latest.current.runPending()} />}
+                    {authMode === 'face' && (
+                        <FaceScan
+                            exiting={exiting}
+                            onSuccess={() => latest.current.runPending()}
+                            onFail={() => setAuthMode('passcode')}
+                        />
+                    )}
                     {authMode === 'passcode' && passcode && (
                         <PasscodeEntry
                             wallpaper={wallpaper}
@@ -232,15 +238,33 @@ export function Lockscreen({ use24h, showDate, wallpaper, unlockTrigger, onUnloc
 }
 
 
-function FaceScan({ exiting, onSuccess }: { exiting: boolean; onSuccess: () => void }) {
+function FaceScan({ exiting, onSuccess, onFail }: { exiting: boolean; onSuccess: () => void; onFail: () => void }) {
     const [done, setDone] = useState(false);
+    const [covered, setCovered] = useState(false);
     const cb = useRef(onSuccess);
     cb.current = onSuccess;
+    const failCb = useRef(onFail);
+    failCb.current = onFail;
 
     useEffect(() => {
-        const toDone   = window.setTimeout(() => setDone(true), 740);
-        const toUnlock = window.setTimeout(() => cb.current(), 1240);
-        return () => { window.clearTimeout(toDone); window.clearTimeout(toUnlock); };
+        let alive = true;
+        const timers: number[] = [];
+        // The face is read in the game, not here: a mask over it fails the scan, and the unlock
+        // falls back to the passcode the same as the real thing.
+        void fetchNui<{ covered?: boolean }>('sd-phone:face:check')
+            .then(res => res?.covered === true)
+            .catch(() => false)
+            .then(isCovered => {
+                if (!alive) return;
+                if (isCovered) {
+                    timers.push(window.setTimeout(() => setCovered(true), 740));
+                    timers.push(window.setTimeout(() => failCb.current(), 1500));
+                    return;
+                }
+                timers.push(window.setTimeout(() => setDone(true), 740));
+                timers.push(window.setTimeout(() => cb.current(), 1240));
+            });
+        return () => { alive = false; timers.forEach(t => window.clearTimeout(t)); };
     }, []);
 
     return (
@@ -264,13 +288,15 @@ function FaceScan({ exiting, onSuccess }: { exiting: boolean; onSuccess: () => v
 
                     <div className="relative h-[108px] w-[108px]">
                         <div className={`absolute inset-0 transition-opacity duration-150 ${done ? 'opacity-0' : 'opacity-100'}`}>
-                            <ScanFace className="h-[108px] w-[108px] text-white" strokeWidth={1.4} />
-                            <div className="absolute inset-[16px] overflow-hidden">
-                                <div
-                                    className="absolute inset-x-0 top-0 h-[2px] animate-faceid-scanline"
-                                    style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.95) 50%, transparent)', boxShadow: '0 0 12px 1px rgba(255,255,255,0.7)' }}
-                                />
-                            </div>
+                            <ScanFace className={`h-[108px] w-[108px] ${covered ? 'text-ios-red' : 'text-white'}`} strokeWidth={1.4} />
+                            {!covered && (
+                                <div className="absolute inset-[16px] overflow-hidden">
+                                    <div
+                                        className="absolute inset-x-0 top-0 h-[2px] animate-faceid-scanline"
+                                        style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.95) 50%, transparent)', boxShadow: '0 0 12px 1px rgba(255,255,255,0.7)' }}
+                                    />
+                                </div>
+                            )}
                         </div>
                         {done && (
                             <div className="absolute inset-0 flex items-center justify-center">
@@ -280,8 +306,8 @@ function FaceScan({ exiting, onSuccess }: { exiting: boolean; onSuccess: () => v
                     </div>
                 </div>
 
-                <p className={`mt-2 text-[15px] font-medium text-white/90 transition-opacity duration-200 ${done ? 'opacity-0' : 'opacity-100'}`}>
-                    {t('shell.faceScan','Face Scan')}
+                <p className={`mt-2 text-[15px] font-medium transition-opacity duration-200 ${done ? 'opacity-0' : 'opacity-100'} ${covered ? 'text-ios-red' : 'text-white/90'}`}>
+                    {covered ? t('shell.faceScanCovered', 'Face Not Recognised') : t('shell.faceScan','Face Scan')}
                 </p>
             </div>
         </div>
