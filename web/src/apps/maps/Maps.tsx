@@ -323,7 +323,7 @@ export function Maps({ onClose }: { onClose: () => void }) {
                     <div className="absolute left-1/2 top-3 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/85 px-3 py-1.5 text-[12px] font-semibold text-white shadow-lg">
                         <span>{me ? 'CALIBRATE · tap your real spot' : 'CALIBRATE · waiting for GPS…'} · {calib.length} pts</span>
                         <button
-                            onClick={() => { const s = JSON.stringify(calib); navigator.clipboard?.writeText(s).catch(() => {}); console.log('[mapcal]', s); }}
+                            onClick={() => { const s = JSON.stringify(calib); copyToClipboard(s); console.log('[mapcal]', s); }}
                             className="rounded-full bg-ios-blue px-2 py-0.5"
                         >Copy</button>
                         <button
