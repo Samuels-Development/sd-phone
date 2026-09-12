@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Copy, Plus, Trash2 } from 'lucide-react';
 
 import { t } from '@/i18n';
+import { copyToClipboard } from '@/lib/clipboard';
 import { digits } from '@/lib/format';
 import { formatPhone } from '@/lib/phone';
 import { useContacts } from '@/stores/contactsStore';
@@ -26,7 +27,7 @@ export function PhoneSettingsPage({ onBack }: { onBack: () => void }) {
     const [showBlocked,  setShowBlocked]  = useState(false);
 
     function copyNumber() {
-        navigator.clipboard?.writeText(number).catch(() => {});
+        copyToClipboard(number);
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
     }
