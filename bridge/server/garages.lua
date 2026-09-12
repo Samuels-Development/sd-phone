@@ -134,13 +134,43 @@ local function detectSystem()
     return nil
 end
 
----@type string|nil Active garage system's resource name, resolved once at load (nil = none). This
----is the name exports are called on.
-local ACTIVE  = detectSystem()
+---@type table<string, boolean> Every resource name whose start or stop can change what
+---detectSystem answers: each listed system under each of its spellings, plus an explicit override.
+local CANDIDATES = {}
+do
+    local function add(name)
+        if type(name) ~= 'string' or name == 'auto' then return end
+        for _, s in ipairs(spellingsOf(name)) do CANDIDATES[s] = true end
+    end
+    add(G.System)
+    for _, name in ipairs(G.Resources or {}) do add(name) end
+end
+
+---@type string|nil Active garage system's resource name (nil = none). This is the name exports are
+---called on.
+local ACTIVE
 ---@type string|nil The active system under the name its profile and branches are keyed by.
-local SYSTEM  = ACTIVE and (CANONICAL[ACTIVE] or ACTIVE) or nil
+local SYSTEM
 ---@type table Column profile for the active system; missing keys inherit DEFAULT_PROFILE.
-local PROFILE = setmetatable(PROFILES[SYSTEM or ''] or {}, { __index = DEFAULT_PROFILE })
+local PROFILE
+
+---(Re)resolve the active system and the profile its rows are read with. Deliberately not a
+---load-time constant: a garage system ensured after sd-phone still reports `stopped` while this
+---file loads, and reading its rows with the fallback profile means every parked vehicle looks like
+---it is out - which the app then shows as impounded, and valet refuses as impounded. op-garages is
+---the clearest case, since it parks at state 0, the value the fallback profile reads as "out".
+local function resolveSystem()
+    ACTIVE  = detectSystem()
+    SYSTEM  = ACTIVE and (CANONICAL[ACTIVE] or ACTIVE) or nil
+    PROFILE = setmetatable(PROFILES[SYSTEM or ''] or {}, { __index = DEFAULT_PROFILE })
+end
+resolveSystem()
+
+---Re-run detection while it is still coming up empty, so a system that started after this file
+---loaded is picked up even if its onResourceStart fired before the handler below existed.
+local function ensureSystem()
+    if not ACTIVE then resolveSystem() end
+end
 
 ---First non-nil value among the named columns of a row, in preference order.
 ---@param row table DB row
@@ -341,6 +371,7 @@ end
 ---@return boolean impound explicitly impound-flagged
 function garages.locationOf(row)
     if type(row) ~= 'table' then return '', false, false end
+    ensureSystem()
 
     local status, impound = statusOf(row)
 
@@ -689,18 +720,20 @@ local function loadGarageCollection()
 end
 
 -- A cached collection holds tables owned by the garage resource, so a restart must drop it rather
--- than hand out references into the old instance.
-if ACTIVE then
-    local function dropCollection(name)
-        if name == ACTIVE then
-            gcolCache, gcolAt   = nil, 0
-            qsCache, qsParsed   = nil, false
-            discoveredCache, discoveredResolved = nil, false
-            columnCache = {}
-        end
+-- than hand out references into the old instance. Registered whether or not a system was found at
+-- load, and detection re-runs with it: a system that starts later has to become the active one, and
+-- a swap between two supported systems has to be followed.
+do
+    local function garageResourceChanged(name)
+        if name ~= ACTIVE and not CANDIDATES[name] then return end
+        gcolCache, gcolAt   = nil, 0
+        qsCache, qsParsed   = nil, false
+        discoveredCache, discoveredResolved = nil, false
+        columnCache = {}
+        resolveSystem()
     end
-    AddEventHandler('onResourceStart', dropCollection)
-    AddEventHandler('onResourceStop', dropCollection)
+    AddEventHandler('onResourceStart', garageResourceChanged)
+    AddEventHandler('onResourceStop', garageResourceChanged)
 end
 
 ---op-garages' record for a garage index: its collection first, then the per-garage export for
@@ -885,7 +918,10 @@ end
 
 ---Resource name of the detected garage system, or nil. Read-only.
 ---@return string|nil
-function garages.activeSystem() return ACTIVE end
+function garages.activeSystem()
+    ensureSystem()
+    return ACTIVE
+end
 
 ---Normalised list of the caller's owned vehicles: stored/out/impound status, condition fields,
 ---waypoints on stored/impounded rows, and mileage while jg-vehiclemileage runs. Read-only. Keyed on
@@ -896,6 +932,7 @@ function garages.activeSystem() return ACTIVE end
 ---@return table[] vehicles (empty when disabled / no character / table missing)
 function garages.list(source)
     if not G.Enabled then return {} end
+    ensureSystem()
 
     local id = player.getRealIdentifier(source)
     if not id then return {} end
@@ -992,6 +1029,7 @@ end
 ---@return table|nil vehicle { row, status, model, props, plate }
 function garages.vehicleFor(source, plate)
     if not G.Enabled then return nil end
+    ensureSystem()
 
     local id   = player.getRealIdentifier(source)
     local want = normPlate(plate)
@@ -1071,6 +1109,8 @@ end
 ---@param source number caller server id
 ---@return table report
 function garages.diagnose(source)
+    ensureSystem()
+
     local id   = player.getRealIdentifier(source)
     local rows = {}
     if id then
