@@ -26,6 +26,7 @@ import {
     Wrench, Zap,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { Bike as ScootGlyph } from 'lucide-react';
 
 const APP_GLYPHS: Record<string, LucideIcon> = {
     phone:       Phone,
@@ -42,6 +43,7 @@ const APP_GLYPHS: Record<string, LucideIcon> = {
     findfriends: Radar,
     stocks:      TrendingUp,
     ryde:        Car,
+    scoot:       ScootGlyph,
     camera:      Camera,
     photos:      ImageIcon,
     music:       Music,

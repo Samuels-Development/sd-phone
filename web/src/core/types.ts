@@ -342,6 +342,7 @@ export type NuiMessage =
     | { action: 'sd-phone:ryde:tripUpdate';     data: RydeTripPush }
     | { action: 'sd-phone:ryde:ratingReceived'; data: { id: string; stars: number; tip?: number } }
     | { action: 'sd-phone:ryde:peerLocation';   data: { tripId: string; role: 'rider' | 'driver'; x: number; y: number; h: number } }
+    | { action: 'sd-phone:scoot:rideUpdated';   data: { kind: 'started' | 'ended'; payload: unknown } }
     | { action: 'sd-phone:close' }
     | { action: 'sd-phone:profileReset' }
     | { action: 'sd-phone:client:characterLoaded' }

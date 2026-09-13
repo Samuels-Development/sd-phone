@@ -73,6 +73,9 @@ return {
         { id = 'garages', label = 'Garages', icon = 'garages', route = '/garages', accent = '#6E5CF2', base = false, enabled = true },
         { id = 'homes', label = 'Homes', icon = 'homes', route = '/homes', accent = '#12B866', base = false, enabled = true },
         { id = 'ryde', label = 'Ryde', icon = 'ryde', route = '/ryde', accent = '#1c1c1e', base = false, enabled = true },
+        -- SCOOT e-scooter rentals: the app talks to the sd_scoot resource, so the gate hides it from
+        -- the App Store whenever that resource is not started (sd-phone refuses an unreachable check).
+        { id = 'scoot', label = 'Scoot', icon = 'scoot', route = '/scoot', accent = '#14b8a6', base = false, enabled = true, requires = { check = 'sd_scoot.phoneGate' } },
         { id = 'radio', label = 'Radio', icon = 'radio', route = '/radio', accent = '#30B0C7', base = false, enabled = true },
         { id = 'stocks', label = 'Stocks', icon = 'stocks', route = '/stocks', accent = '#16C784', base = false, enabled = false },
         { id = 'settings', label = 'Settings', icon = 'settings', route = '/settings', accent = '#8e8e93', base = true, enabled = true },

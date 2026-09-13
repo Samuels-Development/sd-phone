@@ -58,6 +58,7 @@ export function devInjectMockData(): () => void {
             { id: 'homes',       label: 'Homes',       icon: 'homes',       route: '/homes',       accent: '#12B866' },
             { id: 'stocks',      label: 'Stocks',      icon: 'stocks',      route: '/stocks',      accent: '#16C784' },
             { id: 'ryde',        label: 'Ryde',        icon: 'ryde',        route: '/ryde',        accent: '#1c1c1e' },
+            { id: 'scoot',       label: 'Scoot',       icon: 'scoot',       route: '/scoot',       accent: '#14b8a6' },
             { id: 'radio',       label: 'Radio',       icon: 'radio',       route: '/radio',       accent: '#30B0C7' },
             { id: 'settings',   label: 'Settings',    icon: 'settings',   route: '/settings',   accent: '#8e8e93', base: true },
             { id: 'appstore',   label: 'App Store',   icon: 'appstore',   route: '/appstore',   accent: '#0a84ff', base: true },

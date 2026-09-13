@@ -50,6 +50,7 @@ function getDescriptions(): Record<string, string> {
         garages:     t('appstore.descGarages', 'Manage your vehicles'),
         homes:       t('appstore.descHomes', 'Browse properties'),
         ryde:        t('appstore.descRyde', 'Request rides across town'),
+        scoot:       t('appstore.descScoot', 'Rent an e-scooter near you'),
         radio:       t('appstore.descRadio', 'Talk on shared frequencies'),
         stocks:      t('appstore.descStocks', 'Trade stocks & crypto'),
         vibez:       t('appstore.descVibez', 'Short videos and trends'),

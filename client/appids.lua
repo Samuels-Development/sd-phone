@@ -6,7 +6,7 @@ local BUILTIN = {
     'services', 'pages', 'marketplace', 'radio', 'darkchat', 'cherry', 'photogram',
     'garages', 'homes', 'calculator', 'passwords', 'id', 'cookie', 'wordle', 'flappy', 'blocks',
     'blackjack', 'casino', 'climber', 'connectfour', 'chess', 'battleship', 'vibez',
-    'weazelnews', 'streaks', 'birdy', 'mdt', 'racing', 'appstore', 'camera',
+    'weazelnews', 'streaks', 'birdy', 'mdt', 'racing', 'appstore', 'camera', 'scoot',
 }
 
 ---@type table<string, true> Set form of BUILTIN for O(1) membership tests.

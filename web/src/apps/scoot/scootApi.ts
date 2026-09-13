@@ -1,0 +1,132 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+import { apiCall, apiData } from '@/core/api';
+import { isFiveM } from '@/core/nui';
+import { useNuiEvent } from '@/hooks/useNuiEvent';
+
+
+export interface ScootScooter {
+    id:        number;
+    plate:     string;
+    colour:    number;
+    x:         number;
+    y:         number;
+    z:         number;
+    distance:  number;
+    available: boolean;
+    bunkerId:  number | null;
+}
+
+export interface ScootStation {
+    id:       number;
+    name:     string;
+    x:        number;
+    y:        number;
+    z:        number;
+    distance: number;
+    stock:    number;
+    busy:     boolean;
+}
+
+export interface ScootRide {
+    id:        number;
+    scooterId: number;
+    plate:     string;
+    colour:    number;
+    startedAt: number;
+    minutes:   number;
+    cost:      number;
+}
+
+export interface ScootPricing {
+    unlock:       number;
+    perMinute:    number;
+    currency:     string;
+    rentDistance:    number;
+    stationDistance: number;
+    refreshMs:       number;
+}
+
+export interface ScootSnapshot {
+    player:   { x: number; y: number; z: number; heading: number };
+    scooters: ScootScooter[];
+    bunkers:  ScootStation[];
+    ride:     ScootRide | null;
+    pricing:  ScootPricing;
+}
+
+export interface ScootReceipt {
+    plate:   string;
+    minutes: number;
+    cost:    number;
+    paid:    boolean;
+    docked?: string | null;
+}
+
+export interface ScootPastRide {
+    id:        number;
+    scooterId: number;
+    plate:     string | null;
+    startedAt: number;
+    endedAt:   number;
+    minutes:   number;
+    cost:      number;
+    paid:      number;
+}
+
+export const SCOOT_COLOURS: Record<number, string> = {
+    1: '#0d1116', 2: '#f4f4f4', 3: '#c00e1a', 4: '#0d5fb1', 5: '#f7d117',
+    6: '#f78616', 7: '#4cc81f', 8: '#7f2fdb', 9: '#f21f99', 10: '#1a6b78',
+};
+
+export const scoot = {
+    snapshot: () => apiData<ScootSnapshot>('sd-phone:scoot:snapshot'),
+    history:  () => apiData<{ rides: ScootPastRide[] }>('sd-phone:scoot:history'),
+    rent:     (id: number) => apiCall<{ ride: ScootRide; nearby: ScootSnapshot }>('sd-phone:scoot:rent', { id }),
+    rentHere: (bunkerId: number) => apiCall<{ dispense: { bunkerId: number; colour: number; spawnAt: number }; nearby: ScootSnapshot }>('sd-phone:scoot:rentHere', { bunkerId }),
+    finish:   () => apiCall<{ receipt: ScootReceipt; nearby: ScootSnapshot }>('sd-phone:scoot:finish'),
+    waypoint: (x: number, y: number) => apiData('sd-phone:scoot:waypoint', { x, y }),
+};
+
+const DEV_SNAPSHOT: ScootSnapshot = {
+    player: { x: 201, y: -940, z: 30.7, heading: 20 },
+    scooters: [
+        { id: 1, plate: 'SCOOT001', colour: 10, x: 195.2, y: -935.4, z: 31, distance: 7.4, available: true, bunkerId: 1 },
+        { id: 2, plate: 'SCOOT002', colour: 3, x: 210.9, y: -921.1, z: 30.7, distance: 21.3, available: true, bunkerId: 1 },
+        { id: 3, plate: 'SCOOT003', colour: 5, x: 240, y: -900, z: 30.7, distance: 56, available: false, bunkerId: null },
+    ],
+    bunkers: [{ id: 1, name: 'Legion Square', x: 195.2, y: -933.8, z: 30.69, distance: 8.7, stock: 4, busy: false }],
+    ride: null,
+    pricing: { unlock: 5, perMinute: 1, currency: '$', rentDistance: 12, stationDistance: 12, refreshMs: 2500 },
+};
+
+export function useScootFeed() {
+    const [snapshot, setSnapshot] = useState<ScootSnapshot | null>(isFiveM ? null : DEV_SNAPSHOT);
+    const timer = useRef<number | null>(null);
+
+    const refresh = useCallback(async () => {
+        if (!isFiveM) return;
+        const next = await scoot.snapshot();
+        if (next) setSnapshot(next);
+    }, []);
+
+    useEffect(() => {
+        if (!isFiveM) return;
+        let alive = true;
+        const loop = async () => {
+            await refresh();
+            if (!alive) return;
+            timer.current = window.setTimeout(loop, snapshot?.pricing.refreshMs ?? 2500);
+        };
+        void loop();
+        return () => {
+            alive = false;
+            if (timer.current) window.clearTimeout(timer.current);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [refresh]);
+
+    useNuiEvent('sd-phone:scoot:rideUpdated', useCallback(() => { void refresh(); }, [refresh]));
+
+    return { snapshot, setSnapshot, refresh };
+}

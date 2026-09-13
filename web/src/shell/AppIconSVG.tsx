@@ -275,6 +275,41 @@ function FindFriendsIcon() {
     );
 }
 
+function ScootIcon() {
+    const u = useIconIds();
+    return (
+        <svg viewBox={`0 0 ${S} ${S}`} width={S} height={S}>
+            <defs>
+                <linearGradient id={u('scbg')} x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stopColor="#1fd1c9" />
+                    <stop offset="0.55" stopColor="#0ea5b7" />
+                    <stop offset="1" stopColor="#075985" />
+                </linearGradient>
+                <linearGradient id={u('scbolt')} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stopColor="#ffe259" />
+                    <stop offset="1" stopColor="#ffa751" />
+                </linearGradient>
+            </defs>
+            <rect width={S} height={S} fill={`url(#${u('scbg')})`} />
+            <g stroke="#fff" strokeOpacity="0.55" strokeWidth="2.2" strokeLinecap="round">
+                <line x1="7" y1="28" x2="15" y2="28" />
+                <line x1="5" y1="33.5" x2="13.5" y2="33.5" />
+                <line x1="8" y1="39" x2="14" y2="39" />
+            </g>
+            <g fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M39.5 14.5 L35 41" />
+                <path d="M34.5 14.5 L44.5 14.5" />
+                <path d="M35 41 L23.5 41" />
+            </g>
+            <circle cx="21" cy="45" r="4.3" fill="#fff" />
+            <circle cx="42" cy="45" r="4.3" fill="#fff" />
+            <circle cx="21" cy="45" r="1.7" fill="#0b3b4a" />
+            <circle cx="42" cy="45" r="1.7" fill="#0b3b4a" />
+            <path d="M48.5 18 L43 27.5 L47.2 27.5 L44 35.5 L52.5 24.3 L48.3 24.3 Z" fill={`url(#${u('scbolt')})`} />
+        </svg>
+    );
+}
+
 function RydeIcon() {
     return (
         <svg viewBox={`0 0 ${S} ${S}`} width={S} height={S}>
@@ -1577,6 +1612,7 @@ const ICON_MAP: Record<string, IconComponent> = {
     findfriends: FindFriendsIcon,
     stocks:   StocksIcon,
     ryde:     RydeIcon,
+    scoot:    ScootIcon,
     camera:   CameraIcon,
     photos:   PhotosIcon,
     music:    MusicIcon,
