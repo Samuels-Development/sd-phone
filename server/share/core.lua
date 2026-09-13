@@ -65,14 +65,19 @@ local function kindLabel(kind)
     return 'contact'
 end
 
----How `subjectSrc` reads on `viewerSrc`'s phone. Same rule as the share picker: the viewer's
----own saved contact for that number, else the name the subject set on their My Card, else the
----number itself. The character name is the last resort, only for a phone with no number at
----all - a share must never reveal who is behind a number the sender chose to hide.
+---How `subjectSrc` reads on `viewerSrc`'s phone, per config.Share.DisplayName. 'character' is
+---the bare character name. The other modes follow the share picker: the viewer's own saved
+---contact for that number first, then ('card' only) the name the subject set on their My Card,
+---then the number itself, and the character name only for a phone with no number at all - a
+---share must never reveal who is behind a number the sender chose to hide. A configs/share.lua
+---from before the key existed reads as 'card'.
 ---@param viewerSrc number player whose screen shows the name
 ---@param subjectSrc number player being named
 ---@return string label
 local function nameFor(viewerSrc, subjectSrc)
+    local mode = config.Share.DisplayName or 'card'
+    if mode == 'character' then return player.getName(subjectSrc) end
+
     local subjectCid = player.getIdentifier(subjectSrc)
     local number = subjectCid and settings.getPhoneNumber(subjectCid)
     local numberDigits = number and util.digits(number) or ''
@@ -84,8 +89,10 @@ local function nameFor(viewerSrc, subjectSrc)
         end
     end
 
-    local cardName = subjectCid and util.trim(settings.getCard(subjectCid).name or '') or ''
-    if cardName ~= '' then return cardName end
+    if mode ~= 'number' then
+        local cardName = subjectCid and util.trim(settings.getCard(subjectCid).name or '') or ''
+        if cardName ~= '' then return cardName end
+    end
     if numberDigits ~= '' then return util.formatNumber(number) end
     return player.getName(subjectSrc)
 end
