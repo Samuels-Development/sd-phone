@@ -17,7 +17,8 @@ return {
 
     -- Fail Face Unlock while a mask, bandana or hood covers the
     -- player's face, the way a real phone refuses a face it cannot
-    -- read. The lockscreen falls back to the passcode. Turn this off
-    -- to let a covered face unlock the phone anyway.
-    MaskBlocksFaceUnlock = true,
+    -- read. The lockscreen falls back to the passcode. Off by default
+    -- so a masked player unlocks as normal; turn it on for the
+    -- realistic behaviour.
+    MaskBlocksFaceUnlock = false,
 }
