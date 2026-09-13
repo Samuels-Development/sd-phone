@@ -2,8 +2,10 @@
 local config = require 'configs.config'
 ---@type table Player bridge (bridge.server.player): citizenid/name/phone-number lookups.
 local player = require 'bridge.server.player'
----@type table Settings persistence (server.settings.store): citizenid -> phone-number lookups.
+---@type table Settings persistence (server.settings.store): citizenid -> phone-number + My Card lookups.
 local settings = require 'server.settings.store'
+---@type table Contacts persistence (server.contacts.store): the viewer's saved names for a number.
+local contacts = require 'server.contacts.store'
 ---@type table Shared server helpers (server.util): per-citizenid cooldown + payload size guard.
 local util = require 'server.util'
 
@@ -61,6 +63,31 @@ local function kindLabel(kind)
     if kind == 'signature-request' then return 'signature request' end
     if kind == 'id-card' then return 'ID card' end
     return 'contact'
+end
+
+---How `subjectSrc` reads on `viewerSrc`'s phone. Same rule as the share picker: the viewer's
+---own saved contact for that number, else the name the subject set on their My Card, else the
+---number itself. The character name is the last resort, only for a phone with no number at
+---all - a share must never reveal who is behind a number the sender chose to hide.
+---@param viewerSrc number player whose screen shows the name
+---@param subjectSrc number player being named
+---@return string label
+local function nameFor(viewerSrc, subjectSrc)
+    local subjectCid = player.getIdentifier(subjectSrc)
+    local number = subjectCid and settings.getPhoneNumber(subjectCid)
+    local numberDigits = number and util.digits(number) or ''
+
+    if numberDigits ~= '' then
+        local viewerCid = player.getIdentifier(viewerSrc)
+        for _, row in ipairs(viewerCid and contacts.listContacts(viewerCid) or {}) do
+            if util.digits(row.phone) == numberDigits then return row.name end
+        end
+    end
+
+    local cardName = subjectCid and util.trim(settings.getCard(subjectCid).name or '') or ''
+    if cardName ~= '' then return cardName end
+    if numberDigits ~= '' then return util.formatNumber(number) end
+    return player.getName(subjectSrc)
 end
 
 ---Drops every expired pending request, tallying what survives for the pair about to be checked
@@ -121,7 +148,7 @@ function core.request(src, target, kind, payload)
     requests[id] = { kind = kind, fromSrc = src, target = target, payload = payload, expires = os.time() + 60 }
 
     TriggerClientEvent('sd-phone:client:airshare:request', target, {
-        id = id, kind = kind, fromName = player.getName(src),
+        id = id, kind = kind, fromName = nameFor(target, src),
     })
     return true
 end
@@ -138,7 +165,7 @@ function core.respond(src, id, accept)
     requests[id] = nil
     if os.time() > req.expires then return { success = false, messageKey = 'share.requestExpired', message = 'Request expired' } end
 
-    local who, what = player.getName(src), kindLabel(req.kind)
+    local who, what = nameFor(req.fromSrc, src), kindLabel(req.kind)
 
     if not accept then
         TriggerClientEvent('sd-phone:client:notify', req.fromSrc, {
