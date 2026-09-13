@@ -6070,6 +6070,7 @@
     "emergencyAlert": "Экстренное оповещение",
     "enterPasscode": "Введите пароль",
     "faceScan": "Сканирование лица",
+    "faceScanCovered": "Лицо закрыто",
     "flashlight": "Фонарик",
     "focus": "Фокус",
     "folderDefaultName": "Папка",

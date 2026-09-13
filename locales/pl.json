@@ -6070,6 +6070,7 @@
     "emergencyAlert": "Alert alarmowy",
     "enterPasscode": "Wprowadź kod dostępu",
     "faceScan": "Skan twarzy",
+    "faceScanCovered": "Twarz zasłonięta",
     "flashlight": "Latarka",
     "focus": "Skupienie",
     "folderDefaultName": "Folder",

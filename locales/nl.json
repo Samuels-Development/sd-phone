@@ -6070,6 +6070,7 @@
     "emergencyAlert": "Noodmelding",
     "enterPasscode": "Voer toegangscode in",
     "faceScan": "Gezichtsscan",
+    "faceScanCovered": "Gezicht bedekt",
     "flashlight": "Zaklamp",
     "focus": "Focus",
     "folderDefaultName": "Map",

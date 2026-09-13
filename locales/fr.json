@@ -6070,6 +6070,7 @@
     "emergencyAlert": "Alerte d'urgence",
     "enterPasscode": "Saisir le code",
     "faceScan": "Face Scan",
+    "faceScanCovered": "Visage masqué",
     "flashlight": "Lampe torche",
     "focus": "Concentration",
     "folderDefaultName": "Dossier",

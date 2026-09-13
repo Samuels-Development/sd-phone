@@ -6070,6 +6070,7 @@
     "emergencyAlert": "Nødalarm",
     "enterPasscode": "Indtast adgangskode",
     "faceScan": "Ansigtsscanning",
+    "faceScanCovered": "Ansigt skjult",
     "flashlight": "Lommelygte",
     "focus": "Fokus",
     "folderDefaultName": "Mappe",

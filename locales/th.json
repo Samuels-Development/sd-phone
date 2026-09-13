@@ -6070,6 +6070,7 @@
     "emergencyAlert": "การแจ้งเตือนฉุกเฉิน",
     "enterPasscode": "กรอกรหัสผ่าน",
     "faceScan": "สแกนใบหน้า",
+    "faceScanCovered": "ใบหน้าถูกบดบัง",
     "flashlight": "ไฟฉาย",
     "focus": "โฟกัส",
     "folderDefaultName": "โฟลเดอร์",

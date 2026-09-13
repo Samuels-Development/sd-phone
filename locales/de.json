@@ -6070,6 +6070,7 @@
     "emergencyAlert": "Notfallwarnung",
     "enterPasscode": "Passcode eingeben",
     "faceScan": "Face Scan",
+    "faceScanCovered": "Gesicht verdeckt",
     "flashlight": "Taschenlampe",
     "focus": "Fokus",
     "folderDefaultName": "Ordner",
