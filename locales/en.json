@@ -6355,7 +6355,7 @@
     "emergencyAlert": "Emergency Alert",
     "enterPasscode": "Enter Passcode",
     "faceScan": "Face Scan",
-    "faceScanCovered": "Face Not Recognised",
+    "faceScanCovered": "Face Obscured",
     "flashlight": "Flashlight",
     "focus": "Focus",
     "fold": "Fold",

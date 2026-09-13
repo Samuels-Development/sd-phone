@@ -308,7 +308,7 @@ function FaceScan({ exiting, onSuccess, onFail }: { exiting: boolean; onSuccess:
                 </div>
 
                 <p className={`mt-2 text-[15px] font-medium transition-opacity duration-200 ${done ? 'opacity-0' : 'opacity-100'} ${covered ? 'text-ios-red' : 'text-white/90'}`}>
-                    {covered ? t('shell.faceScanCovered', 'Face Not Recognised') : t('shell.faceScan','Face Scan')}
+                    {covered ? t('shell.faceScanCovered', 'Face Obscured') : t('shell.faceScan','Face Scan')}
                 </p>
             </div>
         </div>
