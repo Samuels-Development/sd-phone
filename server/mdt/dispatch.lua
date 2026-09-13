@@ -541,6 +541,36 @@ function dispatch.setCallsign(citizenid, callsign)
     end
 end
 
+---Reads a copy of one call back off the board by id. Read-only.
+---@param id any call id
+---@return { id: string, code: string, type: string, priority: integer, domain: string, location: string, suspect?: string, weapon?: string, coords?: { x: number, y: number, z: number }, at: integer, expiresAt: integer }|nil call nil once it has expired or been evicted
+function dispatch.getCall(id)
+    local c = type(id) == 'string' and calls[id] or nil
+    if not c then return nil end
+    return {
+        id        = c.id,
+        code      = c.code,
+        type      = c.type,
+        priority  = c.priority,
+        domain    = c.domain,
+        location  = c.location,
+        suspect   = c.suspect,
+        weapon    = c.weapon,
+        coords    = c.coords and { x = c.coords.x, y = c.coords.y, z = c.coords.z } or nil,
+        at        = c.at,
+        expiresAt = c.expiresAt,
+    }
+end
+
+---Takes a call off the board early; units attached to it return to 10-8 as on expiry.
+---@param id any call id
+---@return boolean removed false when no such call was on the board
+function dispatch.removeCall(id)
+    if type(id) ~= 'string' or not calls[id] then return false end
+    expire(id)
+    return true
+end
+
 ---Takes a departing player off the board and off any call they were attached to.
 ---@param src integer player server id
 function dispatch.drop(src)

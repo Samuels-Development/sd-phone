@@ -764,8 +764,9 @@ end
 ---@param src integer server id of the player whose client fired it, 0 for a server-side trigger
 ---@param payload any first event argument
 ---@return integer created board calls the alert produced
+---@return string[] ids their board call ids, empty when none was filed
 local function accept(adapter, src, payload)
-    if SYSTEMS[adapter.key] == false then return 0 end
+    if SYSTEMS[adapter.key] == false then return 0, {} end
 
     -- Charged before the payload is inspected, so a malformed flood costs the sender the same as a
     -- real alert instead of being free. ONE budget per source, covering every system at once: the
@@ -777,22 +778,22 @@ local function accept(adapter, src, payload)
     -- that fired it.
     if not util.rateLimit(bucketFor(src), 'mdt:ingest', RATE_WINDOW, RATE_MAX) then
         dropped('rate', adapter.key)
-        return 0
+        return 0, {}
     end
-    if type(payload) ~= 'table' then return 0 end
+    if type(payload) ~= 'table' then return 0, {} end
 
     local ok, call = pcall(adapter.normalise, payload)
-    if not ok or type(call) ~= 'table' then return 0 end
+    if not ok or type(call) ~= 'table' then return 0, {} end
     -- An alert with neither is a payload shape this adapter does not understand rather than a call
     -- for service, and createCall would refuse it anyway.
-    if not call.code and not call.type then return 0 end
+    if not call.code and not call.type then return 0, {} end
 
     -- The source class is half the key, so the two paths never share a stamp. Sharing one let a
     -- client replay a byte-identical copy of a predictable alert first and have the genuine
     -- server-raised one swallowed as its own repeat - a suppression channel that costs one alert
     -- per dedupe window and sits well inside RateMax.
     local key = dedupeKey(adapter.key, (src > 0) and 'client' or 'server', call)
-    if not isFresh(key) then return 0 end
+    if not isFresh(key) then return 0, {} end
 
     -- The quarantine mark. server.mdt.dispatch holds every marked call to its own share of the
     -- board, evicts marked calls ahead of genuine ones and floors their priority below the top
@@ -812,10 +813,14 @@ local function accept(adapter, src, payload)
     -- server at all, so what arrives is a shape a client reconstructed field by field rather than
     -- an alert a dispatch resource wrote.
     local domains = adapter.relay and { DEFAULT_DOMAIN } or domainsFor(call.jobs)
-    local created = 0
+    local created, ids = 0, {}
     for i = 1, #domains do
         call.domain = domains[i]
-        if mdt.createCall(call) then created = created + 1 end
+        local id = mdt.createCall(call)
+        if id then
+            created = created + 1
+            ids[created] = id
+        end
         -- With one shared board every terminal already sees the call, so an alert addressed to both
         -- services must not be filed twice.
         if SHARED then break end
@@ -824,7 +829,7 @@ local function accept(adapter, src, payload)
     -- Stamped only once a call exists: a stamp burned by an alert the guards refused would suppress
     -- the real one for the whole dedupe window.
     if created > 0 then stamp(key) end
-    return created
+    return created, ids
 end
 
 ---Mirrors one alert from a dispatch resource that publishes through an export instead of an event
@@ -836,11 +841,33 @@ end
 ---genuine ones.
 ---@param payload any mirror payload, in the same field shape as mdtCreateCall
 ---@return boolean mirrored true when the alert reached at least one board
+---@return string[] ids board call ids the alert produced, one per board it landed on
 function ingest.mirrorCall(payload)
-    if not ENABLED then return false end
+    if not ENABLED then return false, {} end
     -- Source 0: no player fired this, so it is charged to the calling RESOURCE like any other
     -- server-side trigger and is routed by the jobs (or the domain) it names.
-    return accept(EXPORT_ADAPTER, 0, payload) > 0
+    local created, ids = accept(EXPORT_ADAPTER, 0, payload)
+    return created > 0, ids
+end
+
+---Mirrors one alert a PLAYER's client raised, in the same shape as mirrorCall, with the relay's
+---per-character cooldown and proximity check ahead of the usual rate limit and dedupe.
+---@param src any server id of the player whose client raised the alert
+---@param payload any mirror payload, in the same field shape as mdtCreateCall
+---@return boolean mirrored true when the alert reached at least one board
+---@return string[] ids board call ids the alert produced
+function ingest.mirrorFrom(src, payload)
+    if not ENABLED then return false, {} end
+    src = tonumber(src) or 0
+    if src <= 0 then return false, {} end
+    if not util.cooldown(bucketFor(src), 'mdt:relay', RELAY_COOLDOWN_MS) then return false, {} end
+    if type(payload) ~= 'table' then return false, {} end
+    if not nearSender(src, payload) then
+        dropped('far', EXPORT_ADAPTER.key)
+        return false, {}
+    end
+    local created, ids = accept(EXPORT_ADAPTER, src, payload)
+    return created > 0, ids
 end
 
 ---Dispatch resources this build mirrors, for a console or a config check to read.
