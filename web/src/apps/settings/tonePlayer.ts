@@ -38,6 +38,7 @@ function createYtChannel(): YtChannel {
     let playerPromise: Promise<void> | null = null;
     let loop = false;
     let onEnded: (() => void) | null = null;
+    let gen = 0;
 
     function ensure(): Promise<void> {
         if (player) return Promise.resolve();
@@ -70,9 +71,11 @@ function createYtChannel(): YtChannel {
     return {
         warm() { void ensure().catch(() => {}); },
         play(vid, vol, lp, ended) {
+            const mine = ++gen;
             loop = lp;
             onEnded = ended ?? null;
             void ensure().then(() => {
+                if (mine !== gen) return;
                 try {
                     player.setVolume(Math.round(clampVol(vol) * 100));
                     player.loadVideoById(vid);
@@ -81,6 +84,7 @@ function createYtChannel(): YtChannel {
             });
         },
         stop() {
+            gen++;
             loop = false;
             onEnded = null;
             try { player?.stopVideo?.(); } catch { /* no-op */ }

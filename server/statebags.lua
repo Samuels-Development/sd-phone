@@ -87,30 +87,75 @@ local function putCall(source, call)
     put(source, 'callStatus', call and { callId = call.channel, status = call.status } or nil)
 end
 
----Publishes the call state of every party to a lifecycle payload.
+---@type table<number, table<number, boolean>> Every party the started event put call keys on, by
+---channel. A group ring's answered payload names only the target who picked up, and its final
+---decline ends it with nobody left in targets, so the parties those later payloads no longer list
+---have to be released from what was recorded here rather than from the payload itself.
+local rung = {}
+
+---Collects every party's source in a lifecycle payload, caller included and deduplicated.
+---@param call table eventCall/eventRing payload from server.calls.actions
+---@return number[] sources in payload order
+---@return table<number, boolean> seen the same sources keyed for lookup
+local function partySources(call)
+    local out, seen = {}, {}
+
+    local function add(party)
+        local src = party and tonumber(party.source or party.src)
+        if not src or seen[src] then return end
+        seen[src] = true
+        out[#out + 1] = src
+    end
+
+    ---Adds every party in one of the payload's party lists, which may be absent. Added one list
+    ---at a time: a group ring carries targets but no merged parties, and gathering them with
+    ---ipairs over a table holding a nil would stop at the hole and drop the targets entirely.
+    ---@param list table|nil
+    local function addAll(list)
+        if type(list) ~= 'table' then return end
+        for _, party in ipairs(list) do add(party) end
+    end
+
+    add(call.caller)
+    add(call.callee)
+    addAll(call.merged)
+    addAll(call.targets)
+    return out, seen
+end
+
+---Publishes the call state of every party to a lifecycle payload, remembering who was rung on
+---the channel so a later payload that drops them can still release them.
 ---@param call table eventCall/eventRing payload from server.calls.actions
 ---@param status string|nil 'ringing' | 'active'; nil clears the three call keys
 local function applyCall(call, status)
     if type(call) ~= 'table' then return end
 
-    local parties = { call.caller, call.callee }
-
-    ---Appends every party in one of the payload's party lists, which may be absent. Appended one
-    ---list at a time: a group ring carries targets but no merged parties, and gathering them with
-    ---ipairs over a table holding a nil would stop at the hole and drop the targets entirely.
-    ---@param list table|nil
-    local function addAll(list)
-        if type(list) ~= 'table' then return end
-        for _, party in ipairs(list) do parties[#parties + 1] = party end
+    local sources, seen = partySources(call)
+    for _, src in ipairs(sources) do
+        putCall(src, status and { channel = call.channel, status = status } or nil)
     end
 
-    addAll(call.merged)
-    addAll(call.targets)
+    if status ~= 'ringing' or call.channel == nil then return end
+    local set = rung[call.channel] or {}
+    for src in pairs(seen) do set[src] = true end
+    rung[call.channel] = set
+end
 
-    for _, party in ipairs(parties) do
-        local src = party and tonumber(party.source or party.src)
-        if src then
-            putCall(src, status and { channel = call.channel, status = status } or nil)
+---Releases every party the channel rang that this payload no longer lists: the targets a group
+---ring cancelled when someone else picked up, or everyone once the last of them declined. Their
+---call keys and audible ring are cleared exactly as if their own leg had ended.
+---@param call table answered/ended payload from server.calls.actions
+local function releaseUnlisted(call)
+    if type(call) ~= 'table' or call.channel == nil then return end
+    local set = rung[call.channel]
+    rung[call.channel] = nil
+    if not set then return end
+
+    local _, seen = partySources(call)
+    for src in pairs(set) do
+        if not seen[src] then
+            putCall(src, nil)
+            put(src, 'phoneRinging', nil)
         end
     end
 end
@@ -137,6 +182,18 @@ local function applyAudibleRing(call, ringing)
     end
 end
 
+---Drops one party from a ring that carries on without them. A group-ring target declining fires
+---no lifecycle event, because the ring is still up for everyone else, so the calls module
+---releases them here directly.
+---@param channel number ring channel
+---@param source number declining player server id
+function statebags.dropRinger(channel, source)
+    local set = rung[channel]
+    if set then set[source] = nil end
+    putCall(source, nil)
+    put(source, 'phoneRinging', nil)
+end
+
 AddEventHandler('sd-phone:server:call:started', function(call)
     applyCall(call, 'ringing')
     applyAudibleRing(call, true)
@@ -144,10 +201,12 @@ end)
 AddEventHandler('sd-phone:server:call:answered', function(call)
     applyCall(call, 'active')
     applyAudibleRing(call, false)
+    releaseUnlisted(call)
 end)
 AddEventHandler('sd-phone:server:call:ended', function(call)
     applyCall(call, nil)
     applyAudibleRing(call, false)
+    releaseUnlisted(call)
 end)
 
 ---Clears every key for a dropping player so a recycled source never inherits the last one's state.

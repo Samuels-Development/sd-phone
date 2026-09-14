@@ -14,6 +14,9 @@ local moderation = require 'server.admin.moderation'
 local payphones = require 'server.payphone.store'
 ---@type table Cell service (server.service): authoritative signal level per player.
 local service  = require 'server.service'
+---@type table State bag publisher (server.statebags): releases a group-ring target who declines, since
+---no lifecycle event covers a ring that carries on without them.
+local statebags = require 'server.statebags'
 ---@type table Voice backend (bridge.server.voice): call-channel membership and speakerphone over
 ---whichever voice script is running.
 local voice    = require 'bridge.server.voice'
@@ -1126,6 +1129,7 @@ function actions.decline(source, payload)
     if ring then
         if ring.targets[source] then
             ring.targets[source] = nil
+            statebags.dropRinger(channel, source)
             TriggerClientEvent('sd-phone:client:call:ended', source, { channel = channel, reason = 'declined' })
             if next(ring.targets) == nil then
                 groupRings[channel] = nil
