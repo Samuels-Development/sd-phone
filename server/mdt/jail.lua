@@ -298,7 +298,7 @@ jail.book = access.audited('jail.book', function(_, payload, me)
 
     local sentenced = false
     if wantJail then
-        sentenced = prison.sendToJail(target, sentence)
+        sentenced = prison.sendToJail(target, sentence, me.source)
         if not sentenced then
             release(reportRef, citizenid, 'jailed')
             if not wantFine then return util.fail('mdt.sentenceCouldNotServed', 'The sentence could not be served') end

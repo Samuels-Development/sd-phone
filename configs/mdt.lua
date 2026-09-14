@@ -212,8 +212,8 @@ return {
         MaxFineReduction   = 2500,  -- most an officer may cut from a citation
         MaxMonths          = 240,   -- hard ceiling on a single sentence
         -- Prison system. 'auto' probes, in order: qbx_prison, qb-prison, xt-prison,
-        -- pickle_prisons, tk_jail, esx_tk_jail, qb-policejob, ps-policejob, esx_jail,
-        -- esx-qalle-jail, rcore_prison.
+        -- p_policejob (pScripts Police Job v3), pickle_prisons, tk_jail, esx_tk_jail,
+        -- qb-policejob, ps-policejob, esx_jail, esx-qalle-jail, rcore_prison.
         Resource           = 'auto',
         -- What the prison counts a sentence in. 'auto' trusts the adapter, which is right for
         -- every script above. Override only if yours was reconfigured: getting this wrong is the

@@ -31,6 +31,8 @@ end
 
 ---@type table[] Prison adapters probed in order. `unit` is what that script's own API counts in,
 ---which is NOT the same across them: qb-prison takes months, esx_jail and qb-policejob take seconds.
+---`apply` receives the target, the sentence in that unit, and the booking officer's server id, which
+---most scripts have no use for.
 local ADAPTERS = {
     {
         resource = 'qbx_prison',
@@ -52,6 +54,16 @@ local ADAPTERS = {
         unit     = 'months',
         apply    = function(source, time)
             return pcall(function() return exports['xt-prison']:JailPlayer(source, time) end)
+        end,
+    },
+    {
+        resource = 'p_policejob',
+        unit     = 'minutes',
+        ---pScripts Police Job v3 wants the booking officer as well as the target, so a sentence with
+        ---no officer behind it is refused here rather than credited to nobody.
+        apply    = function(source, time, officer)
+            if not officer then return false end
+            return pcall(function() return exports['p_policejob']:sendToJail(officer, source, time, 'MDT booking', false) end)
         end,
     },
     {
@@ -164,14 +176,15 @@ end
 ---so the caller can fall back to a fine instead of failing the whole booking.
 ---@param source integer target player server id
 ---@param months integer sentence length in months
+---@param officer integer|nil booking officer's server id, for prisons that record who sentenced
 ---@return boolean sentenced
-function jail.sendToJail(source, months)
+function jail.sendToJail(source, months, officer)
     local time = math.floor(tonumber(months) or 0)
     if time < 1 then return false end
     if not source or not GetPlayerName(source) then return false end
 
     if ACTIVE then
-        local ok = ACTIVE.apply(source, inUnit(time, ACTIVE.unit))
+        local ok = ACTIVE.apply(source, inUnit(time, ACTIVE.unit), officer)
         if ok ~= false then
             writeMetadata(source, time)
             return true
