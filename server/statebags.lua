@@ -170,15 +170,29 @@ local function applyAudibleRing(call, ringing)
     local cfg = config.Phone.AudibleRing
     if type(cfg) ~= 'table' or cfg.Enabled == false then return end
 
+    -- The settings reads below can yield. Keep this exact ring's recipient set:
+    -- answering/ending removes it, and declining removes the individual source.
+    -- A late query must never turn the audible ring back on after either event.
+    local pending = rung[call.channel]
+    local function stillRinging(src)
+        return pending and rung[call.channel] == pending and pending[src] == true
+    end
+
     for _, src in ipairs(callring.ringRecipients(call)) do
         local tone
         if ringing then
-            local cid = player.getIdentifier(src)
-            if cid and not (cfg.RespectDnd ~= false and settings.isDnd(cid)) then
-                tone = callring.playableTone(settings.getTones(cid).ringtone)
+            if stillRinging(src) then
+                local cid = player.getIdentifier(src)
+                if cid and not (cfg.RespectDnd ~= false and settings.isDnd(cid)) then
+                    if stillRinging(src) then
+                        tone = callring.playableTone(settings.getTones(cid).ringtone)
+                    end
+                end
+                if stillRinging(src) then put(src, 'phoneRinging', tone) end
             end
+        else
+            put(src, 'phoneRinging', nil)
         end
-        put(src, 'phoneRinging', tone)
     end
 end
 
@@ -213,6 +227,7 @@ end)
 AddEventHandler('playerDropped', function()
     local src = source
     disabled[src] = nil
+    for _, set in pairs(rung) do set[src] = nil end
     putCall(src, nil)
     put(src, 'phoneOpen', false)
     put(src, 'softOpen', false)
