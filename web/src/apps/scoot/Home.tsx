@@ -1,271 +1,403 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Navigation, Zap } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowUpRight, Check, Map as MapIcon, Navigation, Zap } from 'lucide-react';
+import type { ReactNode } from 'react';
 
 import { t } from '@/i18n';
+import { useSessionState } from '@/hooks/useSessionState';
 import { AlertDialog } from '@/ui/AlertDialog';
-import { LiveDot, useSelfLocation } from '@/apps/maps/LiveDot';
+import { GroupCard, ListRow } from '@/ui/ListGroup';
+import { SegmentedControl } from '@/ui/SegmentedControl';
+import { Sheet } from '@/ui/Sheet';
+import { Spinner } from '@/ui/Spinner';
+import { LiveDot } from '@/apps/maps/LiveDot';
 import { MapView, usePinStyle } from '@/apps/maps/MapView';
-import type { ReactNode } from 'react';
-import { SCOOT_COLOURS, scoot, useScootFeed } from './scootApi';
-import type { ScootReceipt, ScootScooter, ScootStation } from './scootApi';
+import { SCOOT_PALETTE, SCOOT_COLOURS, scoot, useScootFeed } from './scootApi';
+import type { ScootReceipt } from './scootApi';
+import { ScooterPreview } from './ScooterPreview';
+import { Customizer } from './Customizer';
+import { EXTRAS, extraFee } from './customization';
+import type { Customization } from './customization';
 
 const ACCENT = '#14b8a6';
+const ENTER = 'swipe-in-soft 0.3s cubic-bezier(0.32,0.72,0,1)';
+const LIGHT_PAINT = new Set(['White', 'Cream', 'Ice Blue', 'Yellow', 'Silver']);
+const CARD = 'ring-1 ring-black/[0.04] dark:ring-white/[0.06]';
 
-function Pin({ x, y, z = 10, children }: { x: number; y: number; z?: number; children: ReactNode }) {
-    const style = usePinStyle(x, y);
-    return <div style={{ ...style, zIndex: z }} className="flex flex-col items-center">{children}</div>;
+function Pin({ x, y, children }: { x: number; y: number; children: ReactNode }) {
+    return <div style={{ ...usePinStyle(x, y), zIndex: 10, pointerEvents: 'auto' }}>{children}</div>;
 }
 
-function fmtElapsed(startedAt: number): string {
-    const s = Math.max(0, Math.floor(Date.now() / 1000) - startedAt);
+function SectionLabel({ children, right }: { children: ReactNode; right?: ReactNode }) {
+    return (
+        <div className="flex items-baseline justify-between px-3 pb-1.5 pt-4">
+            <span className="text-[15px] font-semibold uppercase tracking-wide text-ios-gray">{children}</span>
+            {right && <span className="text-[14px] font-medium text-ios-gray">{right}</span>}
+        </div>
+    );
+}
+
+function Plate({ children }: { children: string }) {
+    return (
+        <span dir="ltr" className="shrink-0 rounded-[7px] border border-black/15 bg-black/[0.03] px-2.5 py-1 font-mono text-[14px] font-semibold tracking-[0.12em] text-black/80 dark:border-white/20 dark:bg-white/[0.06] dark:text-white/80">
+            {children}
+        </span>
+    );
+}
+
+function ColourDot({ hex, size = 14 }: { hex: string; size?: number }) {
+    return <span className="inline-block shrink-0 rounded-full ring-1 ring-black/10 dark:ring-white/20" style={{ width: size, height: size, background: hex }} />;
+}
+
+function elapsed(start: number): string {
+    const s = Math.max(0, Math.floor(Date.now() / 1000) - start);
     return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
 
 export function Home() {
-    const { snapshot, setSnapshot, refresh } = useScootFeed();
-    const me = useSelfLocation({ x: 201, y: -940, h: 0 });
-    const [centerOn, setCenterOn] = useState<{ x: number; y: number } | null>(null);
-    useEffect(() => { if (me && !centerOn) setCenterOn({ x: me.x, y: me.y }); }, [me, centerOn]);
-
-    const [selected, setSelected] = useState<number | null>(null);
+    const { snapshot, setSnapshot, refresh, connected } = useScootFeed();
+    const [mode, setMode] = useSessionState<'station' | 'parked'>('scoot:mode', 'station');
+    const [customization, setCustomization] = useSessionState<Customization>('scoot:extras', EXTRAS.defaults);
+    const [colourId, setColourId] = useSessionState('scoot:colour', 10);
+    const [stationId, setStationId] = useState<number | null>(null);
+    const [scooterId, setScooterId] = useState<number | null>(null);
+    const [map, setMap] = useState(false);
+    const [expanded, setExpanded] = useState(false);
     const [busy, setBusy] = useState(false);
-    const [dispensing, setDispensing] = useState(false);
+    const submitting = useRef(false);
     const [error, setError] = useState<string | null>(null);
     const [receipt, setReceipt] = useState<ScootReceipt | null>(null);
     const [confirmEnd, setConfirmEnd] = useState(false);
     const [, tick] = useState(0);
 
-    const cardRef = useRef<HTMLDivElement>(null);
-    const [cardH, setCardH] = useState(0);
-    useLayoutEffect(() => {
-        const measure = () => { if (cardRef.current) setCardH(cardRef.current.offsetHeight); };
-        measure();
-        const ro = new ResizeObserver(measure);
-        if (cardRef.current) ro.observe(cardRef.current);
-        return () => ro.disconnect();
-    }, [snapshot?.ride, selected]);
-
-    const ride = snapshot?.ride ?? null;
+    const ride = snapshot?.ride;
+    const pending = snapshot?.dispense;
+    const palette = useMemo(() => (snapshot?.colours ?? SCOOT_PALETTE).map(c => ({ ...c, previewHex: c.previewHex ?? SCOOT_PALETTE.find(p => p.id === c.id)?.previewHex ?? c.hex })), [snapshot?.colours]);
+    const stations = snapshot?.bunkers ?? [];
+    const scooters = snapshot?.scooters ?? [];
+    const station = stations.find(b => b.id === stationId) ?? stations[0];
+    const current = scooters.find(s => s.id === scooterId) ?? scooters.find(s => s.available) ?? scooters[0];
+    const chosen = palette.find(c => c.id === colourId) ?? palette[0];
+    const displayed = palette.find(c => c.id === (ride?.colour ?? pending?.colour ?? (mode === 'parked' ? current?.colour : chosen?.id))) ?? chosen;
     const pricing = snapshot?.pricing;
-    const nearest = useMemo(() => (snapshot?.scooters ?? []).slice(0, 6), [snapshot]);
-    const current: ScootScooter | null = selected != null
-        ? (snapshot?.scooters.find(s => s.id === selected) ?? nearest[0] ?? null)
-        : (nearest[0] ?? null);
-    const station: ScootStation | null = useMemo(() => (snapshot?.bunkers ?? [])[0] ?? null, [snapshot]);
-    const atStation = !!(station && pricing && station.distance <= pricing.stationDistance);
+    const currency = pricing?.currency ?? '$';
+    const selectedExtras = ride?.customization ?? pending?.customization ?? (mode === 'parked' ? current?.customization ?? EXTRAS.defaults : customization);
+    const catalog = snapshot?.extrasCatalog ?? EXTRAS;
+    const fee = extraFee(selectedExtras, catalog);
+    const extrasValid = selectedExtras.number.length === 2 && (selectedExtras.decal !== 'name' || selectedExtras.name.trim().length > 0);
+    const price = pricing ? `${currency}${pricing.unlock + fee}` : '—';
+    const cost = ride && pricing ? Math.max(1, Math.ceil((Date.now() / 1000 - ride.startedAt) / 60)) * pricing.perMinute : 0;
+    const nearStation = !!(station && pricing && station.distance <= pricing.stationDistance);
+    const nearScooter = !!(current && pricing && current.distance <= pricing.rentDistance);
+    const phase = ride ? 'ride' : pending ? 'pending' : mode;
+
+    const navigate = (x: number, y: number) => {
+        void scoot.waypoint(x, y)
+            .then(() => setError(t('scoot.routeSet', 'Route set. Follow your GPS to the pickup point.')))
+            .catch(() => setError(t('scoot.noResponse', 'No response from Scoot')));
+    };
 
     useEffect(() => {
-        if (!ride) return;
-        const id = window.setInterval(() => tick(n => n + 1), 1000);
-        return () => window.clearInterval(id);
-    }, [ride]);
+        if (!ride && !pending) return;
+        const timer = window.setInterval(() => tick(n => n + 1), 1000);
+        return () => clearInterval(timer);
+    }, [ride, pending]);
 
-    async function unlock() {
-        if (!current || busy) return;
-        setBusy(true);
-        const res = await scoot.rent(current.id);
-        setBusy(false);
-        if (res.success && res.data) setSnapshot(res.data.nearby);
-        else if (!res.success) setError(res.message ?? t('scoot.failed', 'That did not work'));
+    async function order() {
+        if (submitting.current || pending || !snapshot || !connected) return;
+        if (mode === 'station' && (!station || !chosen || !snapshot.canChooseColour)) return;
+        if (mode === 'parked' && !current) return;
+        if (mode === 'station' && !nearStation) { navigate(station.x, station.y); return; }
+        if (mode === 'parked' && !nearScooter) { navigate(current.x, current.y); return; }
+        submitting.current = true; setBusy(true);
+        try {
+            const reply = mode === 'station' ? await scoot.rentHere(station.id, chosen.id, customization) : await scoot.rent(current.id);
+            if (reply.success && reply.data) setSnapshot(reply.data.nearby);
+            else setError(reply.message ?? t('scoot.failed', 'That did not work'));
+        } catch { setError(t('scoot.noResponse', 'No response from Scoot')); }
+        finally { submitting.current = false; setBusy(false); }
     }
 
-    async function rentHere() {
-        if (!station || busy) return;
-        setBusy(true);
-        const res = await scoot.rentHere(station.id);
-        setBusy(false);
-        if (res.success && res.data) {
-            setSnapshot(res.data.nearby);
-            setDispensing(true);
-            window.setTimeout(() => setDispensing(false), (res.data.dispense.spawnAt ?? 8200) + 500);
-        } else if (!res.success) {
-            setError(res.message ?? t('scoot.failed', 'That did not work'));
-        }
-    }
-
-    async function endRide() {
+    async function finish() {
         setConfirmEnd(false);
-        if (busy) return;
-        setBusy(true);
-        const res = await scoot.finish();
-        setBusy(false);
-        if (res.success && res.data) {
-            setSnapshot(res.data.nearby);
-            setReceipt(res.data.receipt);
-        } else {
-            setError(res.message ?? t('scoot.failed', 'That did not work'));
-            void refresh();
-        }
+        if (submitting.current) return;
+        submitting.current = true; setBusy(true);
+        try {
+            const reply = await scoot.finish();
+            if (reply.success && reply.data) { setSnapshot(reply.data.nearby); setReceipt(reply.data.receipt); }
+            else setError(reply.message ?? t('scoot.failed', 'That did not work'));
+        } catch { setError(t('scoot.noResponse', 'No response from Scoot')); }
+        finally { submitting.current = false; setBusy(false); void refresh(); }
     }
 
-    const tooFar = !!(current && pricing && current.distance > pricing.rentDistance);
-    const runningCost = ride && pricing ? Math.max(1, Math.ceil((Date.now() / 1000 - ride.startedAt) / 60)) * pricing.perMinute : 0;
-    const currency = pricing?.currency ?? '$';
-    const unlockPrice = `${currency}${pricing?.unlock ?? 0}`;
-    const stationName = (id: number | null) => (id == null ? null : (snapshot?.bunkers.find(b => b.id === id)?.name ?? null));
+    const unavailable = !extrasValid || !snapshot || !connected || busy || !!pending || (mode === 'station'
+        ? !station || !chosen || !snapshot.canChooseColour || station.busy || station.stock < 1
+        : !current || !current.available);
+    const action = busy ? t('scoot.working', 'One moment…')
+        : pending ? t('scoot.dispensing', 'Your scooter is rolling out…')
+        : mode === 'station'
+            ? !station ? t('scoot.noStations', 'No stations nearby')
+            : station.busy ? t('scoot.stationBusy', 'Station is busy')
+            : station.stock < 1 ? t('scoot.stationEmpty', 'No scooters left here')
+            : !nearStation ? t('scoot.getDirections', 'Directions to pickup')
+            : t('scoot.orderColour', 'Rent {colour} · {price}', { colour: chosen?.name ?? '', price })
+            : !current ? t('scoot.noParked', 'No parked scooters nearby')
+            : !current.available ? t('scoot.inUse', 'In use')
+            : !nearScooter ? t('scoot.getDirections', 'Directions to pickup')
+            : t('scoot.unlock', 'Unlock · {price}', { price });
+
+    const previewColour = displayed?.previewHex ?? '#0b4145';
+    const previewName = displayed?.name ?? 'Teal';
 
     return (
         <div className="absolute inset-0 flex flex-col bg-base font-sf">
-            <div className="flex shrink-0 items-end justify-between px-5 pb-2" style={{ paddingTop: 'calc(var(--safe-top) + 10px)' }}>
+            <div className="flex shrink-0 items-end justify-between px-5 pb-3" style={{ paddingTop: 'calc(var(--safe-top) + 10px)' }}>
                 <div>
                     <h1 className="text-[28px] font-extrabold tracking-tight text-black dark:text-white">Scoot</h1>
-                    <p className="text-[14px] font-medium text-ios-gray">
-                        {pricing
-                            ? t('scoot.pricingLine', '{currency}{unlock} unlock · {currency}{perMinute}/min', { currency: pricing.currency, unlock: pricing.unlock, perMinute: pricing.perMinute })
-                            : t('scoot.tagline', 'Ride the city')}
-                    </p>
+                    <p className="text-[15px] font-medium text-ios-gray">{t('scoot.tagline', 'Ride the city')}</p>
                 </div>
-                <span className="mb-1 flex h-9 w-9 items-center justify-center rounded-full" style={{ background: `${ACCENT}26`, color: ACCENT }}>
-                    <Zap className="h-5 w-5" strokeWidth={2.4} />
-                </span>
+                <button
+                    type="button"
+                    aria-label={t('scoot.openMap', 'Open pickup map')}
+                    onClick={() => setMap(true)}
+                    className={`flex h-[42px] w-[42px] items-center justify-center rounded-full bg-surface text-black shadow-sm transition-transform active:scale-95 dark:text-white ${CARD}`}
+                >
+                    <MapIcon className="h-[22px] w-[22px]" strokeWidth={2.1} />
+                </button>
             </div>
 
-            <div className="relative min-h-0 flex-1 overflow-hidden">
-                <div dir="ltr" className="h-full w-full">
-                    <MapView chromeTop="12px" chromeBottom={`${cardH + 8}px`} insetBottom={cardH} centerTo={centerOn ?? undefined}>
-                        {snapshot?.bunkers.map(b => (
-                            <Pin key={`b${b.id}`} x={b.x} y={b.y} z={8}>
-                                <span className="flex h-7 w-7 items-center justify-center rounded-[8px] border-2 border-white shadow" style={{ background: '#0ea5b7' }} title={b.name}>
-                                    <Zap className="h-3.5 w-3.5 text-white" strokeWidth={2.6} />
-                                </span>
-                            </Pin>
-                        ))}
-                        {snapshot?.scooters.map(s => {
-                            const active = current?.id === s.id;
-                            return (
-                                <Pin key={`s${s.id}`} x={s.x} y={s.y} z={active ? 12 : 9}>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSelected(s.id)}
-                                        aria-label={s.plate}
-                                        className="rounded-full border-[2.5px] border-white"
-                                        style={{
-                                            width: active ? 22 : 16, height: active ? 22 : 16, background: SCOOT_COLOURS[s.colour] ?? '#fff',
-                                            opacity: s.available ? 1 : 0.45, pointerEvents: 'auto',
-                                            boxShadow: active ? `0 0 0 4px ${ACCENT}59, 0 2px 6px rgba(0,0,0,0.45)` : '0 2px 6px rgba(0,0,0,0.45)',
-                                        }}
-                                    />
-                                </Pin>
-                            );
-                        })}
-                        {me && <LiveDot x={me.x} y={me.y} heading={me.h} />}
-                    </MapView>
-                </div>
-            </div>
+            <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+                {!ride && !pending && (
+                    <SegmentedControl
+                        slide
+                        value={mode}
+                        onChange={setMode}
+                        className="mb-3"
+                        options={[
+                            { value: 'station', label: t('scoot.chooseRide', 'Choose your ride') },
+                            { value: 'parked',  label: t('scoot.parkedNearby', 'Parked nearby') },
+                        ]}
+                    />
+                )}
 
-            <div ref={cardRef} className="absolute inset-x-0 bottom-0 z-30 rounded-t-[18px] bg-surface px-5 pb-4 pt-3 shadow-[0_-6px_24px_rgba(0,0,0,0.12)]">
-                <div className="mx-auto mb-3 h-[5px] w-9 rounded-full bg-black/20 dark:bg-white/25" />
+                <ScooterPreview customization={selectedExtras} colour={previewColour} name={previewName} onExpand={() => setExpanded(true)} />
 
-                {ride ? (
-                    <>
-                        <div className="flex items-center gap-3">
-                            <span className="inline-block h-4 w-4 rounded-full ring-2 ring-black/15 dark:ring-white/20" style={{ background: SCOOT_COLOURS[ride.colour] ?? '#fff' }} />
-                            <p className="text-[22px] font-extrabold tracking-tight text-black dark:text-white">{t('scoot.yourRide', 'Your ride')} · {ride.plate}</p>
-                        </div>
-                        <div className="mt-3 grid grid-cols-2 gap-3">
-                            <div className="rounded-[12px] bg-black/[0.05] p-3 dark:bg-white/[0.07]">
-                                <p className="text-[12px] font-semibold uppercase tracking-wider text-ios-gray">{t('scoot.elapsed', 'Elapsed')}</p>
-                                <p className="mt-0.5 text-[24px] font-bold tabular-nums text-black dark:text-white">{fmtElapsed(ride.startedAt)}</p>
-                            </div>
-                            <div className="rounded-[12px] bg-black/[0.05] p-3 dark:bg-white/[0.07]">
-                                <p className="text-[12px] font-semibold uppercase tracking-wider text-ios-gray">{t('scoot.runningCost', 'Running cost')}</p>
-                                <p className="mt-0.5 text-[24px] font-bold tabular-nums text-black dark:text-white">{currency}{runningCost}</p>
-                            </div>
-                        </div>
-                        <button type="button" disabled={busy} onClick={() => setConfirmEnd(true)} className="mt-3 w-full rounded-[14px] bg-black/[0.06] py-3.5 text-[16px] font-bold text-ios-red disabled:opacity-40 dark:bg-white/10">
-                            {t('scoot.endRide', 'End ride')}
-                        </button>
-                    </>
-                ) : atStation && station ? (
-                    <>
-                        <div className="flex items-center gap-3">
-                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px]" style={{ background: `${ACCENT}26`, color: ACCENT }}>
-                                <Zap className="h-5 w-5" strokeWidth={2.4} />
+                <SectionLabel right={fee ? `+${currency}${fee}` : undefined}>{t('scoot.extras', 'EXTRAS')}</SectionLabel>
+                <Customizer value={selectedExtras} onChange={setCustomization} currency={currency} catalog={catalog} readonly={phase !== 'station'} />
+
+                <div key={phase} style={{ animation: ENTER }}>
+                    {phase === 'ride' && ride && (
+                        <>
+                            <SectionLabel>{t('scoot.rideActive', 'YOU’RE ON YOUR WAY')}</SectionLabel>
+                            <GroupCard radius={16} className={`p-4 ${CARD}`}>
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className="flex min-w-0 items-center gap-2.5 text-[22px] font-bold tracking-tight text-black dark:text-white">
+                                        <span className="truncate">{displayed?.name}</span>
+                                        <ColourDot hex={displayed?.hex ?? previewColour} />
+                                    </span>
+                                    <Plate>{ride.plate}</Plate>
+                                </div>
+                                <div className="mt-4 grid grid-cols-2 gap-3">
+                                    <div className="rounded-[14px] bg-black/[0.04] p-4 dark:bg-white/[0.06]">
+                                        <p className="text-[13px] font-semibold uppercase tracking-wider text-ios-gray">{t('scoot.elapsed', 'Elapsed')}</p>
+                                        <p className="mt-1 text-[30px] font-bold tabular-nums leading-none text-black dark:text-white">{elapsed(ride.startedAt)}</p>
+                                    </div>
+                                    <div className="rounded-[14px] bg-black/[0.04] p-4 dark:bg-white/[0.06]">
+                                        <p className="text-[13px] font-semibold uppercase tracking-wider text-ios-gray">{t('scoot.runningCost', 'Running cost')}</p>
+                                        <p className="mt-1 text-[30px] font-bold tabular-nums leading-none text-black dark:text-white">{currency}{cost}</p>
+                                    </div>
+                                </div>
+                                <p className="mt-4 text-[15px] leading-snug text-ios-gray">{t('scoot.returnHint', 'Park safely. End your ride near a station to return your scooter.')}</p>
+                            </GroupCard>
+                        </>
+                    )}
+
+                    {phase === 'pending' && (
+                        <GroupCard radius={16} className={`mt-4 flex flex-col items-center px-6 py-8 text-center ${CARD}`}>
+                            <span className="flex h-[64px] w-[64px] items-center justify-center rounded-full" style={{ background: `${ACCENT}22`, color: ACCENT }}>
+                                <Zap className="h-[30px] w-[30px]" strokeWidth={2.2} />
                             </span>
-                            <div className="min-w-0 flex-1">
-                                <p className="truncate text-[21px] font-semibold text-black dark:text-white">{station.name}</p>
-                                <p className="text-[15px] font-medium text-ios-gray">
-                                    {dispensing
-                                        ? t('scoot.dispensing', 'Your scooter is rolling out…')
-                                        : station.busy
-                                            ? t('scoot.stationBusy', 'Station is busy')
-                                            : t('scoot.stock', '{n} scooters ready', { n: station.stock })}
-                                </p>
-                            </div>
-                        </div>
-                        <button type="button" disabled={busy || dispensing || station.busy || station.stock < 1} onClick={() => void rentHere()} className="mt-3 w-full rounded-[14px] py-3.5 text-[16px] font-bold text-white disabled:opacity-40" style={{ background: ACCENT }}>
-                            {station.stock < 1 ? t('scoot.stationEmpty', 'No scooters left here') : t('scoot.rentHere', 'Rent here · {price}', { price: unlockPrice })}
-                        </button>
-                        {current && current.available && !tooFar && (
-                            <button type="button" disabled={busy} onClick={() => void unlock()} className="mt-2 w-full rounded-[14px] bg-black/[0.06] py-3 text-[15px] font-semibold text-black dark:bg-white/10 dark:text-white">
-                                {t('scoot.unlockParked', 'Unlock parked {plate} instead', { plate: current.plate })}
-                            </button>
-                        )}
-                    </>
-                ) : current ? (
-                    <>
-                        <div className="flex items-center gap-3">
-                            <span className="inline-block h-4 w-4 shrink-0 rounded-full ring-2 ring-black/15 dark:ring-white/20" style={{ background: SCOOT_COLOURS[current.colour] ?? '#fff' }} />
-                            <div className="min-w-0 flex-1">
-                                <p className="truncate text-[21px] font-semibold text-black dark:text-white">{current.plate}</p>
-                                <p className="text-[15px] font-medium text-ios-gray">
-                                    {current.available ? t('scoot.away', '{m} m away', { m: current.distance.toFixed(0) }) : t('scoot.inUse', 'In use')}
-                                    {stationName(current.bunkerId) ? ` · ${stationName(current.bunkerId)}` : ''}
-                                </p>
-                            </div>
-                            <button type="button" onClick={() => void scoot.waypoint(current.x, current.y)} aria-label={t('scoot.locate', 'Locate')} className="flex h-10 w-10 items-center justify-center rounded-full bg-black/[0.06] text-ios-blue active:opacity-70 dark:bg-white/10">
-                                <Navigation className="h-[18px] w-[18px]" />
-                            </button>
-                        </div>
-                        <div className="no-scrollbar mt-3 flex gap-2 overflow-x-auto">
-                            {nearest.map(s => {
-                                const on = current.id === s.id;
-                                return (
-                                    <button key={s.id} type="button" onClick={() => setSelected(s.id)} className={`flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-[13px] font-semibold ${on ? 'text-white' : 'bg-black/[0.06] text-black dark:bg-white/10 dark:text-white'}`} style={{ background: on ? ACCENT : undefined, opacity: s.available ? 1 : 0.5 }}>
-                                        <span className="inline-block h-2.5 w-2.5 rounded-full border border-white/60" style={{ background: SCOOT_COLOURS[s.colour] ?? '#fff' }} />
-                                        {s.distance.toFixed(0)} m
-                                    </button>
-                                );
-                            })}
-                        </div>
-                        <button type="button" disabled={busy || !current.available || tooFar} onClick={() => void unlock()} className="mt-3 w-full rounded-[14px] py-3.5 text-[16px] font-bold text-white disabled:opacity-40" style={{ background: ACCENT }}>
-                            {!current.available ? t('scoot.inUse', 'In use') : tooFar ? t('scoot.walkCloser', 'Walk closer to unlock') : t('scoot.unlock', 'Unlock · {price}', { price: unlockPrice })}
-                        </button>
-                        {station && (
-                            <p className="mt-2 text-center text-[13px] text-ios-gray">
-                                {t('scoot.stationHint', '{name} is {m} m away and can dispense one', { name: station.name, m: station.distance.toFixed(0) })}
-                            </p>
-                        )}
-                    </>
-                ) : (
-                    <p className="py-3 text-center text-[15px] text-ios-gray">
-                        {snapshot ? t('scoot.noneNearby', 'No scooters near you. Check a station on the map.') : t('scoot.finding', 'Finding scooters…')}
-                    </p>
+                            <h2 className="mt-4 text-[22px] font-bold tracking-tight text-black dark:text-white">{t('scoot.preparingColour', 'Preparing your {colour} scooter', { colour: displayed?.name ?? '' })}</h2>
+                            <p className="mt-2 max-w-[290px] text-[16px] leading-snug text-ios-gray">{t('scoot.pickupSoon', 'Stay by the station. Your ride starts when the scooter is ready.')}</p>
+                            <Spinner size={30} className="mt-6" />
+                        </GroupCard>
+                    )}
+
+                    {phase === 'station' && (
+                        <>
+                            <SectionLabel right={t('scoot.finishCount', '{count} finishes', { count: palette.length })}>{t('scoot.makeItYours', 'MAKE IT YOURS')}</SectionLabel>
+                            <GroupCard radius={16} className={`p-4 ${CARD}`}>
+                                <h2 className="text-[22px] font-bold tracking-tight text-black dark:text-white">{chosen?.name}</h2>
+                                <div role="group" aria-label={t('scoot.chooseColour', 'Choose a color')} className="mt-3 grid grid-cols-5 gap-y-3">
+                                    {palette.map(c => {
+                                        const active = chosen?.id === c.id;
+                                        return (
+                                            <button
+                                                key={c.id}
+                                                type="button"
+                                                title={c.name}
+                                                aria-label={c.name}
+                                                aria-pressed={active}
+                                                disabled={busy}
+                                                onClick={() => setColourId(c.id)}
+                                                className="flex h-[44px] w-full items-center justify-center transition-transform active:scale-90 disabled:opacity-40"
+                                            >
+                                                <span
+                                                    className={`flex h-[36px] w-[36px] items-center justify-center rounded-full ring-1 ring-black/10 transition-[transform,box-shadow] duration-200 dark:ring-white/15 ${active ? 'scale-105 ring-2 ring-offset-2 ring-offset-surface' : ''}`}
+                                                    style={{ background: c.hex, ...(active ? { '--tw-ring-color': ACCENT } as React.CSSProperties : {}) }}
+                                                >
+                                                    {active && <Check className="h-[18px] w-[18px]" strokeWidth={3} style={{ color: LIGHT_PAINT.has(c.name) ? '#102a2a' : '#fff' }} />}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </GroupCard>
+
+                            <SectionLabel>{t('scoot.pickup', 'PICKUP STATION')}</SectionLabel>
+                            <GroupCard radius={16} className={CARD}>
+                                {station ? (
+                                    <div className="flex items-center gap-3 p-4">
+                                        <span className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-[12px]" style={{ background: `${ACCENT}22`, color: ACCENT }}>
+                                            <Zap className="h-[24px] w-[24px]" strokeWidth={2.2} />
+                                        </span>
+                                        <span className="min-w-0 flex-1">
+                                            <span dir="auto" className="block truncate text-[18px] font-semibold leading-tight text-black dark:text-white">{station.name}</span>
+                                            <span className="mt-0.5 block truncate text-[15px] text-ios-gray">
+                                                {Math.round(station.distance)} m · {station.busy ? t('scoot.stationBusy', 'Station is busy') : t('scoot.stock', '{n} scooters ready', { n: station.stock })}
+                                            </span>
+                                        </span>
+                                        <button
+                                            type="button"
+                                            aria-label={t('scoot.locate', 'Locate')}
+                                            onClick={() => navigate(station.x, station.y)}
+                                            className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full bg-black/[0.05] transition-opacity active:opacity-60 dark:bg-white/10"
+                                            style={{ color: ACCENT }}
+                                        >
+                                            <Navigation className="h-[22px] w-[22px]" strokeWidth={2.2} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <p className="p-4 text-[16px] leading-snug text-ios-gray">
+                                        {snapshot ? t('scoot.noneNearby', 'No scooters near you. Check a station on the map.') : t('scoot.finding', 'Finding scooters…')}
+                                    </p>
+                                )}
+                                {stations.length > 1 && (
+                                    <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-4">
+                                        {stations.map(b => {
+                                            const active = b.id === station?.id;
+                                            return (
+                                                <button
+                                                    key={b.id}
+                                                    type="button"
+                                                    aria-pressed={active}
+                                                    onClick={() => setStationId(b.id)}
+                                                    className={`shrink-0 rounded-full px-4 py-2 text-[15px] font-semibold transition-colors ${active ? 'text-white' : 'bg-black/[0.05] text-black/80 dark:bg-white/10 dark:text-white/80'}`}
+                                                    style={active ? { background: ACCENT } : undefined}
+                                                >
+                                                    {b.name}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </GroupCard>
+                        </>
+                    )}
+
+                    {phase === 'parked' && (
+                        <>
+                            <SectionLabel>{t('scoot.readyToRide', 'READY TO RIDE')}</SectionLabel>
+                            <GroupCard radius={16} className={CARD} footer={t('scoot.parkedColourHint', 'Pick a parked scooter below, or choose your own color at a station.')}>
+                                {scooters.length === 0 ? (
+                                    <p className="p-4 text-[16px] leading-snug text-ios-gray">{t('scoot.noParked', 'No parked scooters nearby')}</p>
+                                ) : scooters.map((s, i) => (
+                                    <ListRow
+                                        key={s.id}
+                                        large
+                                        label={palette.find(c => c.id === s.colour)?.name ?? s.plate}
+                                        sub={s.plate}
+                                        value={s.available ? `${Math.round(s.distance)} m` : t('scoot.inUse', 'In use')}
+                                        left={<ColourDot hex={SCOOT_COLOURS[s.colour]} size={24} />}
+                                        right={s.id === current?.id ? <Check className="h-[20px] w-[20px]" strokeWidth={2.5} style={{ color: ACCENT }} /> : undefined}
+                                        divider={i < scooters.length - 1}
+                                        onPress={() => setScooterId(s.id)}
+                                    />
+                                ))}
+                            </GroupCard>
+                        </>
+                    )}
+                </div>
+            </div>
+
+            <div className="shrink-0 border-t border-hairline/10 bg-surface px-4 pt-3" style={{ paddingBottom: 'calc(var(--safe-bottom) + 12px)' }}>
+                {!ride && (
+                    <div className="mb-3 flex items-baseline justify-between text-[15px] text-ios-gray">
+                        <span><span className="text-[22px] font-bold text-black dark:text-white">{price}</span> {fee ? t('scoot.unlockWithExtras', 'unlock incl. extras') : t('scoot.unlockFee', 'unlock')}</span>
+                        <span>{pricing ? `${currency}${pricing.perMinute}` : '—'}{t('scoot.perMinShort', ' / min')} · {t('scoot.payAsYouGo', 'Pay as you go')}</span>
+                    </div>
+                )}
+                <button
+                    type="button"
+                    disabled={ride ? busy : unavailable}
+                    onClick={() => ride ? setConfirmEnd(true) : void order()}
+                    className={`flex h-[52px] w-full items-center justify-center gap-2 rounded-[16px] text-[17px] font-bold transition-[transform,opacity] active:scale-[0.98] active:opacity-90 disabled:opacity-50 ${ride ? 'bg-ios-red/15 text-ios-red' : 'text-white'}`}
+                    style={ride ? undefined : { background: ACCENT }}
+                >
+                    {ride ? t('scoot.endRide', 'End ride') : action}
+                    {!ride && !pending && <ArrowUpRight className="h-[20px] w-[20px]" strokeWidth={2.4} />}
+                </button>
+                {!connected && (
+                    <button type="button" onClick={() => void refresh()} className="mt-2 w-full py-2 text-center text-[15px] font-semibold active:opacity-60" style={{ color: ACCENT }}>
+                        {t('scoot.retryFeed', 'Refresh availability')}
+                    </button>
                 )}
             </div>
 
-            {confirmEnd && (
-                <AlertDialog
-                    title={t('scoot.endRideTitle', 'End your ride?')}
-                    message={t('scoot.endRideBody', 'You will be charged {currency}{cost} for this ride.', { currency, cost: runningCost })}
-                    confirmLabel={t('scoot.endRide', 'End ride')}
-                    destructive
-                    onCancel={() => setConfirmEnd(false)}
-                    onConfirm={() => void endRide()}
-                />
+            {map && (
+                <Sheet fit="full" top={40} title={t('scoot.pickupMap', 'Pickup map')} onClose={() => setMap(false)} className="bg-base">
+                    {({ close }) => (
+                        <div dir="ltr" className="relative min-h-0 flex-1">
+                            <MapView centerTo={station ?? snapshot?.player}>
+                                {stations.map(b => (
+                                    <Pin key={`b${b.id}`} x={b.x} y={b.y}>
+                                        <button
+                                            type="button"
+                                            aria-label={b.name}
+                                            onClick={() => { setStationId(b.id); setMode('station'); close(); }}
+                                            className="flex h-[38px] w-[38px] items-center justify-center rounded-[12px] border-2 border-white text-white shadow-md transition-transform active:scale-90"
+                                            style={{ background: ACCENT }}
+                                        >
+                                            <Zap className="h-[19px] w-[19px]" strokeWidth={2.4} />
+                                        </button>
+                                    </Pin>
+                                ))}
+                                {scooters.map(s => (
+                                    <Pin key={`s${s.id}`} x={s.x} y={s.y}>
+                                        <button
+                                            type="button"
+                                            aria-label={s.plate}
+                                            onClick={() => { setScooterId(s.id); setMode('parked'); close(); }}
+                                            className="h-[24px] w-[24px] rounded-full border-2 border-white shadow-md transition-transform active:scale-90"
+                                            style={{ background: SCOOT_COLOURS[s.colour] }}
+                                        />
+                                    </Pin>
+                                ))}
+                                {snapshot && <LiveDot x={snapshot.player.x} y={snapshot.player.y} heading={snapshot.player.heading} />}
+                            </MapView>
+                        </div>
+                    )}
+                </Sheet>
             )}
-            {error && (
-                <AlertDialog title={t('scoot.oops', 'Scoot')} message={error} hideCancel onCancel={() => setError(null)} onConfirm={() => setError(null)} />
+
+            {expanded && (
+                <Sheet fit="full" top={40} onClose={() => setExpanded(false)} className="bg-base">
+                    {({ close }) => <ScooterPreview full customization={selectedExtras} colour={previewColour} name={previewName} onCollapse={close} />}
+                </Sheet>
             )}
-            {receipt && (
-                <AlertDialog
-                    title={t('scoot.rideEnded', 'Ride ended')}
-                    message={t('scoot.receipt', '{plate} · {minutes} min · {currency}{cost}{unpaid}', { plate: receipt.plate, minutes: receipt.minutes, currency, cost: receipt.cost, unpaid: receipt.paid ? '' : ` (${t('scoot.unpaid', 'unpaid')})` }) + (receipt.docked ? ` · ${t('scoot.dockedAt', 'docked at {name}', { name: receipt.docked })}` : '')}
-                    hideCancel
-                    onCancel={() => setReceipt(null)}
-                    onConfirm={() => setReceipt(null)}
-                />
-            )}
+
+            {confirmEnd && <AlertDialog title={t('scoot.endRideTitle', 'End your ride?')} message={t('scoot.endRideBody', 'You will be charged {currency}{cost} for this ride.', { currency, cost })} confirmLabel={t('scoot.endRide', 'End ride')} destructive onCancel={() => setConfirmEnd(false)} onConfirm={() => void finish()} />}
+            {error && <AlertDialog title={t('scoot.oops', 'Scoot')} message={error} hideCancel onCancel={() => setError(null)} onConfirm={() => setError(null)} />}
+            {receipt && <AlertDialog title={t('scoot.rideEnded', 'Ride ended')} message={t('scoot.receipt', '{plate} · {minutes} min · {currency}{cost}{unpaid}', { plate: receipt.plate, minutes: receipt.minutes, currency, cost: receipt.cost, unpaid: receipt.paid ? '' : ` (${t('scoot.unpaid', 'unpaid')})` }) + (receipt.docked ? ` · ${t('scoot.dockedAt', 'docked at {name}', { name: receipt.docked })}` : '')} hideCancel onCancel={() => setReceipt(null)} onConfirm={() => setReceipt(null)} />}
         </div>
     );
 }

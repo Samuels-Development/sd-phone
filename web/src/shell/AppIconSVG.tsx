@@ -279,33 +279,14 @@ function ScootIcon() {
     const u = useIconIds();
     return (
         <svg viewBox={`0 0 ${S} ${S}`} width={S} height={S}>
-            <defs>
-                <linearGradient id={u('scbg')} x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0" stopColor="#1fd1c9" />
-                    <stop offset="0.55" stopColor="#0ea5b7" />
-                    <stop offset="1" stopColor="#075985" />
-                </linearGradient>
-                <linearGradient id={u('scbolt')} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stopColor="#ffe259" />
-                    <stop offset="1" stopColor="#ffa751" />
-                </linearGradient>
-            </defs>
-            <rect width={S} height={S} fill={`url(#${u('scbg')})`} />
-            <g stroke="#fff" strokeOpacity="0.55" strokeWidth="2.2" strokeLinecap="round">
-                <line x1="7" y1="28" x2="15" y2="28" />
-                <line x1="5" y1="33.5" x2="13.5" y2="33.5" />
-                <line x1="8" y1="39" x2="14" y2="39" />
-            </g>
-            <g fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M39.5 14.5 L35 41" />
-                <path d="M34.5 14.5 L44.5 14.5" />
-                <path d="M35 41 L23.5 41" />
-            </g>
-            <circle cx="21" cy="45" r="4.3" fill="#fff" />
-            <circle cx="42" cy="45" r="4.3" fill="#fff" />
-            <circle cx="21" cy="45" r="1.7" fill="#0b3b4a" />
-            <circle cx="42" cy="45" r="1.7" fill="#0b3b4a" />
-            <path d="M48.5 18 L43 27.5 L47.2 27.5 L44 35.5 L52.5 24.3 L48.3 24.3 Z" fill={`url(#${u('scbolt')})`} />
+            <defs><LinearGrad id={u('sc')} top="#3EE0C8" mid="#14B8A6" bot="#0B8F80" angle={0} /></defs>
+            <rect width={S} height={S} fill={`url(#${u('sc')})`} />
+            <svg x="8.5" y="8" width="43" height="43" viewBox="0 -960 960 960">
+                <path
+                    d="M200-240q-50 0-85-35t-35-85q0-50 35-85t85-35q39 0 69.5 22.5T312-400h212q11-68 56.5-119T692-590l-56-250H520q-17 0-28.5-11.5T480-880q0-17 11.5-28.5T520-920h116q28 0 50 17t28 45l69 309q2 11-5 20t-18 9q-63 0-108.5 42.5T601-373q-2 23-18 38t-39 15H312q-12 35-42.5 57.5T200-240Zm560 0q-50 0-85-35t-35-85q0-50 35-85t85-35q50 0 85 35t35 85q0 50-35 85t-85 35ZM520-120v48q0 11-9.5 17T491-54l-173-87q-7-4-5.5-11.5t9.5-7.5h118v-48q0-11 9.5-17t19.5-1l173 87q7 4 5.5 11.5T638-120H520Z"
+                    fill="#fff"
+                />
+            </svg>
         </svg>
     );
 }

@@ -1,9 +1,25 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
+// 3D models ride inside their importing chunk as data URLs. FiveM's NUI file server answers
+// 404 for a .glb even when fxmanifest lists it, so a separate asset file never reaches the
+// page, and Vite 8's own `?inline` route cannot load the file on Windows.
+function inlineModels(): Plugin {
+    return {
+        name: 'sd-inline-models',
+        enforce: 'pre',
+        load(id) {
+            if (!id.endsWith('.glb')) return null;
+            const base64 = readFileSync(id).toString('base64');
+            return `export default ${JSON.stringify(`data:model/gltf-binary;base64,${base64}`)};`;
+        },
+    };
+}
+
 export default defineConfig(({ mode }) => ({
-    plugins: [react()],
+    plugins: [inlineModels(), react()],
     base: './',
     resolve: {
         alias: {

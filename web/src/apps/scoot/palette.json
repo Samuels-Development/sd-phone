@@ -1,0 +1,92 @@
+[
+  {
+    "id": 1,
+    "name": "Black",
+    "hex": "#0d1116",
+    "previewHex": "#080808"
+  },
+  {
+    "id": 2,
+    "name": "White",
+    "hex": "#f4f4f4",
+    "previewHex": "#ffffff"
+  },
+  {
+    "id": 3,
+    "name": "Red",
+    "hex": "#c00e1a",
+    "previewHex": "#690000"
+  },
+  {
+    "id": 4,
+    "name": "Blue",
+    "hex": "#0d5fb1",
+    "previewHex": "#00aeef"
+  },
+  {
+    "id": 5,
+    "name": "Yellow",
+    "hex": "#f7d117",
+    "previewHex": "#d9a600"
+  },
+  {
+    "id": 6,
+    "name": "Orange",
+    "hex": "#f78616",
+    "previewHex": "#c26610"
+  },
+  {
+    "id": 7,
+    "name": "Green",
+    "hex": "#4cc81f",
+    "previewHex": "#69bd45"
+  },
+  {
+    "id": 8,
+    "name": "Purple",
+    "hex": "#7f2fdb",
+    "previewHex": "#320642"
+  },
+  {
+    "id": 9,
+    "name": "Pink",
+    "hex": "#f21f99",
+    "previewHex": "#b01259"
+  },
+  {
+    "id": 10,
+    "name": "Teal",
+    "hex": "#1a6b78",
+    "previewHex": "#0b4145"
+  },
+  {
+    "id": 11,
+    "name": "Silver",
+    "hex": "#777c87",
+    "previewHex": "#777c87"
+  },
+  {
+    "id": 12,
+    "name": "Forest Green",
+    "hex": "#003805",
+    "previewHex": "#003805"
+  },
+  {
+    "id": 13,
+    "name": "Ice Blue",
+    "hex": "#95b2db",
+    "previewHex": "#95b2db"
+  },
+  {
+    "id": 14,
+    "name": "Cream",
+    "hex": "#cfc0a5",
+    "previewHex": "#cfc0a5"
+  },
+  {
+    "id": 15,
+    "name": "Burgundy",
+    "hex": "#4a0a0a",
+    "previewHex": "#4a0a0a"
+  }
+]

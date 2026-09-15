@@ -1,0 +1,195 @@
+{
+  "accessories": [
+    {
+      "id": "basket",
+      "label": "Front basket",
+      "fee": 3,
+      "description": "Wire basket with a bolted stem mount"
+    },
+    {
+      "id": "stemBag",
+      "label": "Stem bag",
+      "fee": 2,
+      "description": "Compact zipped pouch with two straps"
+    },
+    {
+      "id": "phoneMount",
+      "label": "Phone mount",
+      "fee": 2,
+      "description": "Handlebar clamp with a navigation-style display"
+    }
+  ],
+  "rear": [
+    {
+      "id": "none",
+      "label": "None",
+      "fee": 0
+    },
+    {
+      "id": "rack",
+      "label": "Rear carrier",
+      "fee": 2
+    },
+    {
+      "id": "delivery",
+      "label": "Delivery bag + rack",
+      "fee": 5
+    }
+  ],
+  "trim": [
+    {
+      "id": "stock",
+      "label": "Original teal",
+      "fee": 0
+    },
+    {
+      "id": "black",
+      "label": "Stealth black",
+      "fee": 1,
+      "hex": "#22292e"
+    },
+    {
+      "id": "silver",
+      "label": "Brushed silver",
+      "fee": 1,
+      "hex": "#b5bfc7"
+    },
+    {
+      "id": "orange",
+      "label": "Burnt orange",
+      "fee": 1,
+      "hex": "#eb802c"
+    },
+    {
+      "id": "lime",
+      "label": "Lime",
+      "fee": 1,
+      "hex": "#a6d947"
+    },
+    {
+      "id": "violet",
+      "label": "Violet",
+      "fee": 1,
+      "hex": "#956ee8"
+    }
+  ],
+  "lighting": [
+    {
+      "id": "off",
+      "label": "Off",
+      "fee": 0
+    },
+    {
+      "id": "ice",
+      "label": "Ice blue",
+      "fee": 2,
+      "hex": "#60dcff"
+    },
+    {
+      "id": "amber",
+      "label": "Warm amber",
+      "fee": 2,
+      "hex": "#ffb14a"
+    },
+    {
+      "id": "violet",
+      "label": "Violet",
+      "fee": 2,
+      "hex": "#ae68ff"
+    },
+    {
+      "id": "red",
+      "label": "Red",
+      "fee": 2,
+      "hex": "#ff4656"
+    }
+  ],
+  "bell": [
+    {
+      "id": "classic",
+      "label": "Chrome double-ring",
+      "fee": 0
+    },
+    {
+      "id": "black",
+      "label": "Matte black chime",
+      "fee": 1
+    },
+    {
+      "id": "electronic",
+      "label": "Electronic beep",
+      "fee": 1
+    }
+  ],
+  "decal": [
+    {
+      "id": "none",
+      "label": "None",
+      "fee": 0
+    },
+    {
+      "id": "stripes",
+      "label": "Racing stripes",
+      "fee": 1
+    },
+    {
+      "id": "number",
+      "label": "Race number",
+      "fee": 1
+    },
+    {
+      "id": "name",
+      "label": "Custom name",
+      "fee": 1
+    }
+  ],
+  "defaults": {
+    "basket": false,
+    "stemBag": false,
+    "phoneMount": false,
+    "rear": "none",
+    "trim": "stock",
+    "lighting": "off",
+    "bell": "classic",
+    "decal": "none",
+    "name": "",
+    "number": "07"
+  },
+  "presets": [
+    {
+      "id": "commuter",
+      "label": "Commuter",
+      "description": "Everyday essentials",
+      "options": {
+        "basket": true,
+        "phoneMount": true,
+        "trim": "black",
+        "bell": "black"
+      }
+    },
+    {
+      "id": "night",
+      "label": "Night Rider",
+      "description": "A little after-dark character",
+      "options": {
+        "stemBag": true,
+        "trim": "violet",
+        "lighting": "violet",
+        "decal": "stripes",
+        "bell": "electronic"
+      }
+    },
+    {
+      "id": "courier",
+      "label": "Courier",
+      "description": "Carry the look",
+      "options": {
+        "stemBag": true,
+        "phoneMount": true,
+        "rear": "delivery",
+        "trim": "orange",
+        "decal": "number"
+      }
+    }
+  ]
+}

@@ -2,10 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { apiCall, apiData } from '@/core/api';
 import { isFiveM } from '@/core/nui';
+import palette from './palette.json';
+import type { Customization, ExtrasCatalog } from './customization';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 
 
 export interface ScootScooter {
+    customization?: Customization;
+    extraFee?: number;
     id:        number;
     plate:     string;
     colour:    number;
@@ -29,6 +33,8 @@ export interface ScootStation {
 }
 
 export interface ScootRide {
+    customization?: Customization;
+    extraFee?: number;
     id:        number;
     scooterId: number;
     plate:     string;
@@ -47,7 +53,14 @@ export interface ScootPricing {
     refreshMs:       number;
 }
 
+export interface ScootColour { id: number; name: string; hex: string; previewHex?: string }
+export interface ScootDispense { customization?: Customization; extraFee?: number; bunkerId: number; colour: number; readyAt: number }
+
 export interface ScootSnapshot {
+    extrasCatalog?: ExtrasCatalog;
+    colours?: ScootColour[];
+    canChooseColour?: boolean;
+    dispense?: ScootDispense | null;
     player:   { x: number; y: number; z: number; heading: number };
     scooters: ScootScooter[];
     bunkers:  ScootStation[];
@@ -74,21 +87,20 @@ export interface ScootPastRide {
     paid:      number;
 }
 
-export const SCOOT_COLOURS: Record<number, string> = {
-    1: '#0d1116', 2: '#f4f4f4', 3: '#c00e1a', 4: '#0d5fb1', 5: '#f7d117',
-    6: '#f78616', 7: '#4cc81f', 8: '#7f2fdb', 9: '#f21f99', 10: '#1a6b78',
-};
+export const SCOOT_PALETTE: ScootColour[] = palette;
+export const SCOOT_COLOURS: Record<number, string> = Object.fromEntries(palette.map(c => [c.id, c.hex]));
 
 export const scoot = {
     snapshot: () => apiData<ScootSnapshot>('sd-phone:scoot:snapshot'),
     history:  () => apiData<{ rides: ScootPastRide[] }>('sd-phone:scoot:history'),
     rent:     (id: number) => apiCall<{ ride: ScootRide; nearby: ScootSnapshot }>('sd-phone:scoot:rent', { id }),
-    rentHere: (bunkerId: number) => apiCall<{ dispense: { bunkerId: number; colour: number; spawnAt: number }; nearby: ScootSnapshot }>('sd-phone:scoot:rentHere', { bunkerId }),
+    rentHere: (bunkerId: number, colour: number, customization: Customization) => apiCall<{ dispense: { bunkerId: number; colour: number; spawnAt: number }; nearby: ScootSnapshot }>('sd-phone:scoot:rentHere', { bunkerId, colour, customization }),
     finish:   () => apiCall<{ receipt: ScootReceipt; nearby: ScootSnapshot }>('sd-phone:scoot:finish'),
     waypoint: (x: number, y: number) => apiData('sd-phone:scoot:waypoint', { x, y }),
 };
 
-const DEV_SNAPSHOT: ScootSnapshot = {
+export const DEV_SNAPSHOT: ScootSnapshot = {
+    colours: SCOOT_PALETTE, canChooseColour: true, dispense: null,
     player: { x: 201, y: -940, z: 30.7, heading: 20 },
     scooters: [
         { id: 1, plate: 'SCOOT001', colour: 10, x: 195.2, y: -935.4, z: 31, distance: 7.4, available: true, bunkerId: 1 },
@@ -102,12 +114,16 @@ const DEV_SNAPSHOT: ScootSnapshot = {
 
 export function useScootFeed() {
     const [snapshot, setSnapshot] = useState<ScootSnapshot | null>(isFiveM ? null : DEV_SNAPSHOT);
+    const [connected, setConnected] = useState(!isFiveM);
     const timer = useRef<number | null>(null);
 
     const refresh = useCallback(async () => {
         if (!isFiveM) return;
-        const next = await scoot.snapshot();
-        if (next) setSnapshot(next);
+        try {
+            const next = await scoot.snapshot();
+            setConnected(!!next);
+            if (next) setSnapshot(next);
+        } catch { setConnected(false); }
     }, []);
 
     useEffect(() => {
@@ -128,5 +144,5 @@ export function useScootFeed() {
 
     useNuiEvent('sd-phone:scoot:rideUpdated', useCallback(() => { void refresh(); }, [refresh]));
 
-    return { snapshot, setSnapshot, refresh };
+    return { snapshot, setSnapshot, refresh, connected };
 }

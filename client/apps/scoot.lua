@@ -17,7 +17,7 @@ RegisterNUICallback('sd-phone:scoot:snapshot', function(_, cb) cb(ask('nearby'))
 RegisterNUICallback('sd-phone:scoot:history',  function(_, cb) cb(ask('history')) end)
 RegisterNUICallback('sd-phone:scoot:rent',     function(payload, cb) cb(ask('rent', { id = payload and payload.id })) end)
 RegisterNUICallback('sd-phone:scoot:finish',   function(_, cb) cb(ask('finish')) end)
-RegisterNUICallback('sd-phone:scoot:rentHere', function(payload, cb) cb(ask('rentHere', { bunkerId = payload and payload.bunkerId })) end)
+RegisterNUICallback('sd-phone:scoot:rentHere', function(payload, cb) cb(ask('rentHere', { bunkerId = payload and payload.bunkerId, colour = payload and payload.colour, customization = payload and payload.customization })) end)
 
 ---Drops a GPS waypoint on a scooter or station; a client native, so it stays on this side.
 ---@param payload table { x: number, y: number }

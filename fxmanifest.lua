@@ -40,6 +40,7 @@ files {
     'web/build/assets/*.js',
     'web/build/assets/*.css',
     'web/build/assets/*.png',
+    'web/build/assets/*.glb',
     'web/build/assets/*.jpg',
     'web/build/assets/*.webp',
     'web/build/assets/*.svg',
