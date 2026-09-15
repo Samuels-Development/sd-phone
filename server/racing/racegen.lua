@@ -71,6 +71,10 @@ local function int(v, fallback)
     return math.floor(n)
 end
 
+---@type integer Minimum real starters for a generated race. Seeded registration counts never
+---contribute, and the floor of two cannot be configured away into reopening solo prize farming.
+local MIN_RANKED_RACERS = math.max(2, int(RANKED.MinRacers, 2))
+
 ---A whole number from a client value, clamped into a range.
 ---@param v any
 ---@param low integer
@@ -553,7 +557,8 @@ end
 
 ---Marks and returns every lobby whose start time has just arrived, fired once each. Each entry
 ---carries the members to open a run for and the members who were out of position, whose buy-ins
----the caller refunds.
+---the caller refunds. A generated event without enough real starters is cancelled; all of its
+---members move to the refund list and no live run is opened.
 ---@return table[] starting
 function racegen.collectStarting()
     local now, out = os.time(), {}
@@ -576,7 +581,22 @@ function racegen.collectStarting()
                 end
             end
 
-            Live[race.id] = race
+            local cancelled = not race.isCustom and #members < MIN_RANKED_RACERS
+            if cancelled then
+                for i = 1, #members do
+                    local cid     = members[i]
+                    local account = race.members[cid]
+                    skipped[#skipped + 1] = {
+                        citizenid = cid,
+                        account   = type(account) == 'string' and account or nil,
+                        amount    = math.max(0, int(race.entryFee, 0)),
+                    }
+                end
+                members = {}
+            else
+                Live[race.id] = race
+            end
+
             out[#out + 1] = {
                 id             = race.id,
                 name           = race.name,
@@ -593,6 +613,8 @@ function racegen.collectStarting()
                 phasingSeconds = race.phasingSeconds,
                 camera         = race.camera,
                 isCustom       = race.isCustom == true,
+                cancelled      = cancelled,
+                minimumRacers  = MIN_RANKED_RACERS,
                 members        = members,
                 skipped        = skipped,
             }

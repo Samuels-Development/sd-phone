@@ -50,6 +50,9 @@ local BASE_MMR = math.floor(tonumber((config.MMR or {}).Base) or 1000)
 local DNF = config.DNF or {}
 ---@type table<integer, number> Ranked payout share by finishing place (Ranked.PrizeSplit).
 local PRIZE_SPLIT = (config.Ranked or {}).PrizeSplit or {}
+---@type integer Minimum real starters for a generated race to pay its server-funded pool. This
+---duplicates the lobby gate as a final safety check if another caller ever opens a run directly.
+local MIN_RANKED_RACERS = math.max(2, math.floor(tonumber((config.Ranked or {}).MinRacers) or 2))
 ---@type string Account buy-ins and prizes move through by default.
 local CURRENCY = config.Currency or 'bank'
 ---@type string The other side of the cash/bank pair, tried when the default cannot cover a buy-in.
@@ -287,8 +290,8 @@ local function debit(src, account, amount)
     return money.remove(src, account, amount, 'Race buy-in') == true
 end
 
----Racers who were not lined up when the clock hit zero: the race leaves without them, so the
----buy-in goes straight back with a heads-up.
+---Refunds racers who did not start. They were either out of position when the field left or every
+---entrant in a generated race cancelled because its real starting grid was below the minimum.
 ---@param race table a racegen.collectStarting entry
 local function refundSkipped(race)
     local fee = util.wholeAmount(race.entryFee)
@@ -296,11 +299,20 @@ local function refundSkipped(race)
         local src = srcOf(miss.citizenid or miss.identifier)
         if src then
             if fee > 0 then races.refundBuyIn(src, miss.account, fee) end
-            TriggerClientEvent('ox_lib:notify', src, {
-                title = 'Racing',
+            local description
+            if race.cancelled then
+                local minimum = math.max(2, util.wholeAmount(race.minimumRacers))
+                description = fee > 0
+                    and ('Race cancelled: at least %d racers are required. Your $%d buy-in has been refunded.'):format(minimum, fee)
+                    or ('Race cancelled: at least %d racers are required.'):format(minimum)
+            else
                 description = fee > 0
                     and ('The race started without you. Your $%d buy-in has been refunded.'):format(fee)
-                    or 'The race started without you: you were not lined up at the start.',
+                    or 'The race started without you: you were not lined up at the start.'
+            end
+            TriggerClientEvent('ox_lib:notify', src, {
+                title = 'Racing',
+                description = description,
                 type = 'error',
             })
         end
@@ -577,7 +589,8 @@ function races.finish(src, raceId, modelHash, clientMs)
 
     local payout = 0
     local share  = races.prizeShare(run.isCustom, place)
-    if share > 0 and run.prizePool > 0 then
+    local prizeEligible = run.isCustom or run.racerCount >= MIN_RANKED_RACERS
+    if prizeEligible and share > 0 and run.prizePool > 0 then
         payout = lib.math.round(run.prizePool * share)
         if payout > 0 then money.add(src, CURRENCY, payout, 'Race prize') end
     end
@@ -786,7 +799,7 @@ function races.start()
             for i = 1, #starting do
                 local race = starting[i]
                 refundSkipped(race)
-                races.beginRun(race, race.members or {}, now)
+                if not race.cancelled then races.beginRun(race, race.members or {}, now) end
             end
         end
     end)

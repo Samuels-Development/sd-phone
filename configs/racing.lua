@@ -142,6 +142,12 @@ return {
 
     -- Generated events: how they are driven, and how the pot is divided.
     Ranked = {
+        -- Real racers required on the starting grid. Generated races below this
+        -- threshold are cancelled and every buy-in is refunded, preventing a
+        -- lone player from farming the server-funded prize pool. Values below 2
+        -- are clamped to 2 by the server.
+        MinRacers = 2,
+
         -- Phasing (ghosting): racers in the same event fade out and cannot collide
         -- with each other.
         --   mode 'off'   - never phased, contact racing
