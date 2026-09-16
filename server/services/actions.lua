@@ -127,7 +127,8 @@ local function requireBoss(src)
 end
 
 ---Builds the `myCompany` block for the caller, or nil when they hold no real job; balance and
----the merged framework + saved-job roster (sorted, capped at EMP_LIMIT) ship only for bosses.
+---the merged framework + saved-job roster (online members first, then capped at EMP_LIMIT) ship
+---only for bosses.
 ---@param src number caller server id
 ---@return table|nil
 local function buildMyCompany(src)
@@ -209,15 +210,18 @@ local function buildMyCompany(src)
                 online = esrc ~= nil,
                 self   = ecid == cid or nil,
             }
-            if #roster >= EMP_LIMIT then break end
             ::continue::
         end
         local statusRank = { duty = 0, offduty = 1, away = 2 }
         table.sort(roster, function(a, b)
+            -- Keep every connected employee above disconnected ones. This must happen before
+            -- applying the limit, otherwise a large offline roster could hide online staff.
+            if a.online ~= b.online then return a.online end
             if a.status ~= b.status then return (statusRank[a.status] or 9) < (statusRank[b.status] or 9) end
             if a.grade  ~= b.grade  then return a.grade > b.grade end
             return a.name < b.name
         end)
+        for i = EMP_LIMIT + 1, #roster do roster[i] = nil end
         mc.employees = roster
     end
 
@@ -275,10 +279,10 @@ end
 ---Returns public directory rows for every configured company, built fresh per call.
 ---@return table[] companies
 function actions.companyList()
-    local companies = {}
+    local online, offline = {}, {}
     local duty = onDutyJobs()
     for _, c in ipairs(COMPANIES) do
-        companies[#companies + 1] = {
+        local company = {
             id         = c.job,
             name       = c.label,
             location   = c.location,
@@ -289,7 +293,13 @@ function actions.companyList()
             coords     = c.coords and { x = c.coords.x, y = c.coords.y, z = c.coords.z } or nil,
             onDuty     = duty[c.job] == true
         }
+        local list = company.onDuty and online or offline
+        list[#list + 1] = company
     end
+    -- Preserve configured order within each group while surfacing businesses that currently have
+    -- staff on duty before those with nobody available.
+    for _, company in ipairs(offline) do online[#online + 1] = company end
+    local companies = online
     return companies
 end
 
