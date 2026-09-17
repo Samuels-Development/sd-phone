@@ -279,10 +279,10 @@ end
 ---Returns public directory rows for every configured company, built fresh per call.
 ---@return table[] companies
 function actions.companyList()
-    local online, offline = {}, {}
+    local companies = {}
     local duty = onDutyJobs()
     for _, c in ipairs(COMPANIES) do
-        local company = {
+        companies[#companies + 1] = {
             id         = c.job,
             name       = c.label,
             location   = c.location,
@@ -293,14 +293,21 @@ function actions.companyList()
             coords     = c.coords and { x = c.coords.x, y = c.coords.y, z = c.coords.z } or nil,
             onDuty     = duty[c.job] == true
         }
+    end
+    return companies
+end
+
+---The directory as the Services app lists it: companies with staff on duty first, config order
+---kept within each group. Kept apart from companyList, whose config order the export promises.
+---@return table[] companies
+local function companiesByAvailability()
+    local online, offline = {}, {}
+    for _, company in ipairs(actions.companyList()) do
         local list = company.onDuty and online or offline
         list[#list + 1] = company
     end
-    -- Preserve configured order within each group while surfacing businesses that currently have
-    -- staff on duty before those with nobody available.
     for _, company in ipairs(offline) do online[#online + 1] = company end
-    local companies = online
-    return companies
+    return online
 end
 
 ---Returns the public company directory plus the caller's own company block, `multijob`, and
@@ -309,7 +316,7 @@ end
 function actions.directory(src)
     local cid = player.getIdentifier(src)
     return ok({
-        companies       = actions.companyList(),
+        companies       = companiesByAvailability(),
         myCompany       = buildMyCompany(src),
         multijob        = job.supportsMultijob(),
         invoicesEnabled = SV.InvoicesEnabled ~= false,
