@@ -1104,9 +1104,10 @@ local function AnnounceFold()
 end
 
 -- The NUI outlives the shell (the keep-alive deck), so this handler is registered whether the
--- phone is up or not and the announcement never races the mount.
+-- phone is up or not and the announcement never races the mount. sd-tablet raises this event for
+-- its own open too, so the phone's state is checked rather than trusted from the event.
 AddEventHandler('sd-phone:client:openState', function(open)
-    if open then AnnounceFold() end
+    if open and phoneState.open then AnnounceFold() end
 end)
 
 -- The hinge lives on the chassis rail, so a fold nearly always starts in the UI. Without this the

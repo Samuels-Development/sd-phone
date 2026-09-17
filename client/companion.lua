@@ -37,6 +37,10 @@ local DENY_PREFIX = { 'sd-phone:call:', 'sd-phone:video:', 'sd-phone:payphone:' 
 local DENY = {
     ['sd-phone:calls:seen']           = true,
     ['sd-phone:services:callCompany'] = true,
+    -- The hinge is the phone's body, not shared data. Mirrored, the phone's unfolded width lands
+    -- on the tablet and stretches its screen off the edge.
+    ['sd-phone:fold']                 = true,
+    ['sd-phone:fold:set']             = true,
 }
 
 ---Whether an action is closed to companion devices.
