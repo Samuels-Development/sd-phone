@@ -314,9 +314,10 @@ export async function apiLiveFrame(liveId: string, frame: string): Promise<void>
     await fetchNui('sd-phone:photogram:liveFrame', { liveId, frame });
 }
 
-export async function apiLiveChunk(liveId: string, chunk: string, init: boolean, mime?: string): Promise<void> {
-    if (!isFiveM) return;
-    await fetchNui('sd-phone:photogram:liveChunk', { liveId, chunk, init, mime });
+export async function apiLiveChunk(liveId: string, chunk: string, init: boolean, mime?: string): Promise<boolean> {
+    if (!isFiveM) return true;
+    const res = await fetchNui<{ ok?: boolean } | null>('sd-phone:photogram:liveChunk', { liveId, chunk, init, mime });
+    return res?.ok !== false;
 }
 
 export async function apiLiveTransport(liveId: string, relay: boolean): Promise<void> {

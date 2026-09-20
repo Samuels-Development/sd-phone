@@ -26,7 +26,7 @@ export interface LiveBroadcastOptions {
     streamId:    string | null;
     liveId:      () => string | null;
     stopped:     () => boolean;
-    sendChunk:   (liveId: string, chunk: string, init: boolean, mime: string | undefined) => void;
+    sendChunk:   (liveId: string, chunk: string, init: boolean, mime: string | undefined) => Promise<boolean | void> | void;
     onTransport?: (transport: LiveTransport) => void;
 }
 
@@ -39,8 +39,12 @@ const ANCHOR_MIN_MS = 1000;
 const ANCHOR_DEFAULT_MS = 20000;
 const DEFAULT_WIDTH = 540;
 const FALLBACK_ASPECT = 16 / 9;
+const BITRATE_FLOOR = 250000;
+const SHED_FACTOR = 0.7;
+const RECOVER_FACTOR = 1.2;
+const RECOVER_RUNS = 5;
 
-type Segment = (blob: Blob, init: boolean, key: boolean) => Promise<void>;
+type Segment = (blob: Blob, init: boolean, key: boolean) => Promise<boolean | void>;
 
 interface Encoding {
     stop(): void;
@@ -78,15 +82,27 @@ function encode(
     let stopped = false;
     let sink = first;
     let chain: Promise<void> = Promise.resolve();
+    let bitrate = enc.bitrate;
+    let cleanRuns = 0;
+    let run: { shed: boolean } | null = null;
 
     const spin = () => {
         if (stopped) return;
+        if (run?.shed) {
+            bitrate = Math.max(Math.min(BITRATE_FLOOR, enc.bitrate), Math.round(bitrate * SHED_FACTOR));
+            cleanRuns = 0;
+        } else if (run && bitrate < enc.bitrate && ++cleanRuns >= RECOVER_RUNS) {
+            bitrate = Math.min(enc.bitrate, Math.round(bitrate * RECOVER_FACTOR));
+            cleanRuns = 0;
+        }
+        const mine = { shed: false };
+        run = mine;
         let seq = 0;
         let rec: MediaRecorder;
         try {
             rec = new MediaRecorder(stream, {
                 ...(mime ? { mimeType: mime } : {}),
-                videoBitsPerSecond: enc.bitrate,
+                videoBitsPerSecond: bitrate,
             });
         } catch {
             try {
@@ -103,7 +119,10 @@ function encode(
             const key = seq === 1;
             seq += 1;
             chain = chain
-                .then(() => (stopped || sink !== at ? undefined : at(blob, init, key)))
+                .then(async () => {
+                    if (stopped || sink !== at || mine.shed) return;
+                    if ((await at(blob, init, key)) === false) mine.shed = true;
+                })
                 .catch(() => {});
         };
         rec.start(enc.timesliceMs);
@@ -159,7 +178,7 @@ export function startLiveBroadcast(o: LiveBroadcastOptions): LiveBroadcast {
         const bytes = await blobToBase64(blob);
         const id = o.liveId();
         if (!id || o.stopped()) return;
-        o.sendChunk(id, bytes, init, init ? mime : undefined);
+        return o.sendChunk(id, bytes, init, init ? mime : undefined);
     };
 
     const relaySink = (handle: RelayStreamHandle, onLost: () => void): Segment => async (blob, init, key) => {

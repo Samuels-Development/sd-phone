@@ -73,7 +73,7 @@ export function LiveStream({ onClose }: { onClose: () => void }) {
                     streamId:  started.streamId,
                     liveId:    () => liveIdRef.current,
                     stopped:   () => stopped,
-                    sendChunk: (id, chunk, init, chunkMime) => { void apiLiveChunk(id, chunk, init, chunkMime); },
+                    sendChunk: (id, chunk, init, chunkMime) => apiLiveChunk(id, chunk, init, chunkMime),
                     onTransport: (next) => {
                         const id = liveIdRef.current;
                         if (id) void apiLiveTransport(id, next === 'relay');

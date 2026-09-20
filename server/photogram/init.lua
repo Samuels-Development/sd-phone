@@ -90,9 +90,15 @@ RegisterNetEvent('sd-phone:server:photogram:liveFrame', function(payload)
     live.frame(source, payload)
 end)
 
----Host encoded-video chunk push: drops non-table payloads and forwards to live.chunk.
+---Host encoded-video chunk push: drops non-table payloads and forwards to live.chunk. Every chunk
+---that arrives is acked before anything can refuse it, because the ack is how the host's client
+---(client/livepace.lua) measures its own uplink: it reports receipt, not acceptance.
 ---@param payload table { liveId: string, chunk: string, init?: boolean, mime?: string }
 RegisterNetEvent('sd-phone:server:photogram:liveChunk', function(payload)
     if type(payload) ~= 'table' then return end
-    live.chunk(source, payload)
+    local src = source
+    if type(payload.chunk) == 'string' then
+        TriggerClientEvent('sd-phone:client:photogram:liveAck', src, #payload.chunk)
+    end
+    live.chunk(src, payload)
 end)

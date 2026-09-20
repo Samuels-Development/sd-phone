@@ -1,5 +1,7 @@
 ---@type fun(nuiAction: string, serverEvent: string) NUI->server pass-through registrar (client.nui).
 local proxyCallback = require 'client.nui'
+---@type fun(app: string, bitrate: number|nil) Host video chunk registrar (client.livepace).
+local livePace = require 'client.livepace'
 
 ---@type table Photogram config (configs.photogram): the Live block.
 local PHOTOGRAM_CFG = require 'configs.photogram'
@@ -93,21 +95,8 @@ RegisterNUICallback('sd-phone:photogram:liveFrame', function(payload, cb)
     cb({ ok = true })
 end)
 
----Host video chunk push: relays a MediaRecorder segment to the server over a latent event;
----`init` marks the stream-header chunk.
----@param payload table { liveId: any, chunk: string, init?: boolean, mime?: string }
-RegisterNUICallback('sd-phone:photogram:liveChunk', function(payload, cb)
-    local chunk = payload and payload.chunk
-    if type(chunk) == 'string' and chunk ~= '' then
-        TriggerLatentServerEvent('sd-phone:server:photogram:liveChunk', 512 * 1024, {
-            liveId = payload.liveId,
-            chunk  = chunk,
-            init   = payload.init == true,
-            mime   = payload.mime,
-        })
-    end
-    cb({ ok = true })
-end)
+-- Host video chunk push, refused rather than queued when the host's uplink falls behind.
+livePace('photogram', type(PHOTOGRAM_CFG.Live) == 'table' and PHOTOGRAM_CFG.Live.Bitrate or nil)
 
 ---@type string[] Server live-stream pushes (server/photogram/live.lua) relayed 1:1 into the
 ---React app under the matching 'sd-phone:photogram:<name>' NUI action.
