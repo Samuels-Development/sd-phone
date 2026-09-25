@@ -316,6 +316,11 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
         renderRef.current?.setOrientation(landscape ? 'landscape' : 'portrait');
     }, [landscape, feedReady]);
 
+    useEffect(() => {
+        if (!feedReady || !vp.w || !vp.h) return;
+        renderRef.current?.setAspect(landscape ? vp.h / vp.w : vp.w / vp.h);
+    }, [vp.w, vp.h, landscape, feedReady]);
+
     // Only the NATIVE front camera frames the ped off-centre, so only it needs the re-centring
     // crop bias. The scripted cam points itself at the head, and biasing that pushes the player
     // off to the right by the same amount it was meant to correct.

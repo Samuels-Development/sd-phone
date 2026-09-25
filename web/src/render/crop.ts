@@ -23,14 +23,26 @@ export interface CropRegion {
     height:  number;
 }
 
+function fitToAspect(
+    base: { width: number; height: number },
+    screenW: number,
+    screenH: number,
+    aspect: number | undefined,
+): { width: number; height: number } {
+    if (!aspect || !(aspect > 0) || !Number.isFinite(aspect)) return base;
+    const width = (base.height * screenH * aspect) / screenW;
+    return width <= 1 ? { width, height: base.height } : { width: 1, height: screenW / (aspect * screenH) };
+}
+
 export function computeCropRegion(
     screenW: number,
     screenH: number,
     zoom: number,
     orientation: Orientation,
     biasX = 0,
+    aspect?: number,
 ): CropRegion {
-    const base   = orientation === 'landscape' ? LANDSCAPE_CROP : PORTRAIT_CROP;
+    const base   = fitToAspect(orientation === 'landscape' ? LANDSCAPE_CROP : PORTRAIT_CROP, screenW, screenH, aspect);
     const wf     = Math.min(1, base.width  / zoom);
     const hf     = Math.min(1, base.height / zoom);
     const width  = Math.floor(screenW * wf);

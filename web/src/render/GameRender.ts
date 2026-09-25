@@ -70,6 +70,7 @@ export class GameRender {
     private zoom = 1;
     private orientation: Orientation = 'portrait';
     private selfie = false;
+    private aspect: number | undefined;
     private readonly mode: GameViewMode;
     private blackProbes = 0;
     private overlay: HTMLDivElement | null = null;
@@ -145,6 +146,13 @@ export class GameRender {
         if (this.animated) this.rebuild(false);
     }
 
+    setAspect(aspect: number | undefined) {
+        const next = aspect && aspect > 0 && Number.isFinite(aspect) ? aspect : undefined;
+        if (next === this.aspect) return;
+        this.aspect = next;
+        if (this.animated) this.rebuild(false);
+    }
+
     // Front (selfie) camera re-centres the ped; rear camera is already centred.
     setSelfie(on: boolean) {
         this.selfie = on;
@@ -153,6 +161,7 @@ export class GameRender {
 
     stop() {
         this.animated = false;
+        this.aspect = undefined;
         this.canvas = null;
         if (this.pump !== null) { clearInterval(this.pump); this.pump = null; }
         this.hideOverlay();
@@ -168,7 +177,7 @@ export class GameRender {
             camera.setViewOffset(w, h, 0, 0, w, h);
         } else {
             const biasX = this.selfie ? SELFIE_CROP_BIAS_X : 0;
-            const crop  = computeCropRegion(w, h, this.zoom, this.orientation, biasX);
+            const crop  = computeCropRegion(w, h, this.zoom, this.orientation, biasX, this.aspect);
             camera.setViewOffset(w, h, crop.offsetX, crop.offsetY, crop.width, crop.height);
         }
         return camera;
@@ -281,7 +290,7 @@ export class GameRender {
         const w = window.innerWidth;
         const h = window.innerHeight;
         const biasX = this.selfie ? SELFIE_CROP_BIAS_X : 0;
-        const crop = computeCropRegion(w, h, this.zoom, this.orientation, biasX);
+        const crop = computeCropRegion(w, h, this.zoom, this.orientation, biasX, this.aspect);
         if (crop.width <= 0 || crop.height <= 0) return;
 
         const key = [canvas.className, canvas.style.cssText, crop.offsetX, crop.offsetY, crop.width, crop.height].join('|');
