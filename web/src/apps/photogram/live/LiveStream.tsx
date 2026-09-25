@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Eye, Heart, RotateCw, X } from 'lucide-react';
+import { Eye, Heart, RotateCw, X, Zap, ZapOff } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { formatDuration } from '@/lib/time';
@@ -7,6 +7,9 @@ import { fetchNui, isFiveM } from '@/core/nui';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useStatusBarLight } from '@/shell/useStatusBarLight';
 import { AlertDialog } from '@/ui/AlertDialog';
+import { KeyHints } from '@/ui/KeyHints';
+import { zoomLabel } from '@/shared/lens';
+import { useLiveCameraControls, type CameraOpenResult } from '@/shared/live/useLiveCameraControls';
 import { POSTS, type User } from '../data';
 import { apiLiveStart, apiLiveEnd, apiLiveFrame, apiLiveChunk, apiLiveHeart, apiLiveTransport, type LiveComment } from '../photogramApi';
 import { videoStreamingSupported } from '@/shared/liveMedia';
@@ -22,7 +25,6 @@ interface FloatHeart { id: number; drift: number; left: number; }
 export function LiveStream({ onClose }: { onClose: () => void }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [feedReady, setFeedReady] = useState(false);
-    const [selfie,    setSelfie]    = useState(false);
     const [elapsed,   setElapsed]   = useState(0);
     const [viewers,   setViewers]   = useState(0);
     const [comments,  setComments]  = useState<LiveComment[]>([]);
@@ -31,6 +33,9 @@ export function LiveStream({ onClose }: { onClose: () => void }) {
     const seq = useRef(0);
     const liveIdRef = useRef<string | null>(null);
     const renderRef = useRef<GameRender | null>(null);
+
+    const cam = useLiveCameraControls(canvasRef, renderRef, feedReady);
+    const { applyOpen } = cam;
 
     useStatusBarLight(true);
 
@@ -59,7 +64,9 @@ export function LiveStream({ onClose }: { onClose: () => void }) {
             liveIdRef.current = started.liveId;
             const enc = started.enc;
 
-            await fetchNui('sd-phone:camera:open');
+            const opened = await fetchNui<CameraOpenResult>('sd-phone:camera:open');
+            if (stopped) return;
+            applyOpen(opened);
             const render = await getGameRender();
             if (stopped || !render || !canvasRef.current) return;
             renderRef.current = render;
@@ -98,7 +105,7 @@ export function LiveStream({ onClose }: { onClose: () => void }) {
             void fetchNui('sd-phone:camera:close');
             if (liveIdRef.current) void apiLiveEnd(liveIdRef.current);
         };
-    }, []);
+    }, [applyOpen]);
 
     useEffect(() => {
         const timer = window.setInterval(() => setElapsed(s => s + 1), 1000);
@@ -132,18 +139,6 @@ export function LiveStream({ onClose }: { onClose: () => void }) {
          
     }, []);
 
-    useNuiEvent('sd-phone:camera:key', (data) => {
-        if (data?.key === 'flip') toggleSelfie();
-    });
-
-    function toggleSelfie() {
-        setSelfie(prev => {
-            const next = !prev;
-            void fetchNui('sd-phone:camera:selfie', { on: next });
-            return next;
-        });
-    }
-
     function spawnHearts(n: number) {
         setHearts(prev => {
             const add: FloatHeart[] = [];
@@ -162,7 +157,8 @@ export function LiveStream({ onClose }: { onClose: () => void }) {
     }
 
     return (
-        <div className="absolute inset-0 z-[60] flex flex-col overflow-hidden bg-black font-sf text-white">
+        <div className="absolute inset-0 z-[60] flex flex-col overflow-hidden bg-black font-sf text-white" onWheel={cam.onWheel}>
+            <KeyHints hints={cam.hints} config={cam.hintCfg} />
             <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" style={{ display: 'block' }} />
 
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/55" />
@@ -225,12 +221,37 @@ export function LiveStream({ onClose }: { onClose: () => void }) {
 
                     <button
                         type="button"
+                        aria-label={t('camera.flash', 'Flash')}
+                        aria-pressed={cam.flash}
+                        onClick={cam.toggleFlash}
+                        className={[
+                            'flex h-[46px] w-[46px] items-center justify-center rounded-full bg-black/45 backdrop-blur-md transition-transform active:scale-95',
+                            cam.flash ? 'text-[#FFD60A]' : 'text-white',
+                        ].join(' ')}
+                    >
+                        {cam.flash
+                            ? <Zap className="h-[21px] w-[21px] fill-[#FFD60A]" strokeWidth={2.1} />
+                            : <ZapOff className="h-[21px] w-[21px]" strokeWidth={2.1} />}
+                    </button>
+                    <button
+                        type="button"
+                        aria-label={t('phone.hintZoom', 'Zoom')}
+                        onClick={cam.cycleZoom}
+                        className={[
+                            'flex h-[46px] w-[46px] items-center justify-center rounded-full bg-black/45 text-[13px] font-semibold tabular-nums backdrop-blur-md transition-transform active:scale-95',
+                            cam.zoom > 1 ? 'text-[#FFD60A]' : 'text-white',
+                        ].join(' ')}
+                    >
+                        {zoomLabel(cam.zoom)}
+                    </button>
+                    <button
+                        type="button"
                         aria-label={t('photogram.flipCamera', 'Flip camera')}
-                        aria-pressed={selfie}
-                        onClick={toggleSelfie}
+                        aria-pressed={cam.selfie}
+                        onClick={cam.toggleSelfie}
                         className={[
                             'flex h-[46px] w-[46px] items-center justify-center rounded-full backdrop-blur-md transition-transform active:scale-95',
-                            selfie ? 'bg-white text-black' : 'bg-black/45 text-white',
+                            cam.selfie ? 'bg-white text-black' : 'bg-black/45 text-white',
                         ].join(' ')}
                     >
                         <RotateCw className="h-[22px] w-[22px]" strokeWidth={2.2} />
