@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Copy, FastForward, Mic, Pause, Pencil, Play, Rewind, SearchX, Trash2 } from 'lucide-react';
+import { Bell, Copy, FastForward, Mic, Pause, Pencil, Phone, Play, Rewind, SearchX, Trash2 } from 'lucide-react';
 
 import { EmptyState } from '@/ui/EmptyState';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
@@ -18,6 +18,8 @@ import {
 import { t } from '@/i18n';
 import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 import { useDeeplinkTarget } from '@/shell/deeplink';
+import { ensureCustomTone, MAX_CUSTOM_TONES, useThemeStore } from '@/stores/themeStore';
+import type { ToneKind } from '@/apps/settings/tones';
 
 function recorderMessage(code: RecorderError): string {
     if (code === 'unavailable') return t('voicememos.micUnavailable', 'Microphone unavailable on this server.');
@@ -32,6 +34,7 @@ export function VoiceMemos({ onClose: _onClose }: { onClose: () => void }) {
     const [confirmDel, setConfirmDel] = useState<VoiceMemo | null>(null);
     const [sharing,  setSharing]  = useState<VoiceMemo | null>(null);
     const [copied,   setCopied]   = useState(false);
+    const [toneSet,  setToneSet]  = useState<ToneKind | null>(null);
     const [error,    setError]    = useState<string | null>(null);
     const [query,    setQuery]    = useSessionState('voicememos:query', '');
 
@@ -83,6 +86,21 @@ export function VoiceMemos({ onClose: _onClose }: { onClose: () => void }) {
         copyToClipboard(url);
         setCopied(true);
         window.setTimeout(() => setCopied(false), 1600);
+    }
+
+    function applyAsTone(kind: ToneKind, memo: VoiceMemo) {
+        const id = ensureCustomTone(kind, memo.name, memo.url);
+        if (!id) {
+            setSharing(null);
+            setError(t('voicememos.toneLimit', 'You can save up to {n} custom tones. Remove one in Settings first.', { n: MAX_CUSTOM_TONES }));
+            return;
+        }
+        const store = useThemeStore.getState();
+        if (kind === 'ringtone') store.setRingtone(id);
+        else                     store.setNotificationTone(id);
+        setError(null);
+        setToneSet(kind);
+        window.setTimeout(() => setToneSet(null), 1600);
     }
 
     const q    = query.trim().toLowerCase();
@@ -172,13 +190,23 @@ export function VoiceMemos({ onClose: _onClose }: { onClose: () => void }) {
 
             {sharing && (
                 <ShareSheet
-                    onClose={() => { setSharing(null); setCopied(false); }}
+                    onClose={() => { setSharing(null); setCopied(false); setToneSet(null); }}
                     onShare={(t) => shareMemo(sharing.id, t.id)}
                 >
                     <ShareAction
                         icon={<Copy className="h-[23px] w-[23px]" strokeWidth={2} />}
                         label={copied ? t('voicememos.copied', 'Copied!') : t('voicememos.copyLink', 'Copy Link')}
                         onClick={() => copyLink(sharing.url)}
+                    />
+                    <ShareAction
+                        icon={<Phone className="h-[23px] w-[23px]" strokeWidth={2} />}
+                        label={toneSet === 'ringtone' ? t('voicememos.ringtoneSet', 'Ringtone Set') : t('voicememos.useAsRingtone', 'Use as Ringtone')}
+                        onClick={() => applyAsTone('ringtone', sharing)}
+                    />
+                    <ShareAction
+                        icon={<Bell className="h-[23px] w-[23px]" strokeWidth={2} />}
+                        label={toneSet === 'notification' ? t('voicememos.notificationSet', 'Notification Sound Set') : t('voicememos.useAsNotification', 'Use as Notification Sound')}
+                        onClick={() => applyAsTone('notification', sharing)}
                     />
                 </ShareSheet>
             )}

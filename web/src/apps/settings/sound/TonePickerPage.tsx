@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, Play, Plus, Square, Trash2 } from 'lucide-react';
+import { Check, Mic, Play, Plus, Square, Trash2 } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { useIosPush } from '@/hooks/useIosPush';
@@ -7,6 +7,8 @@ import { NavBar } from '@/ui/NavBar';
 import type { CustomTone, Tone } from '../tones';
 import { startPreview, stopPreview } from '../tonePlayer';
 import { AddToneDialog } from './AddToneDialog';
+import { fetchMemos, type VoiceMemo } from '@/apps/voicememos/voiceApi';
+import { MAX_CUSTOM_TONES } from '@/stores/themeStore';
 
 export function TonePickerPage({
     title, backLabel, tones, selected, previewVol, onSelect, onBack, custom,
@@ -33,8 +35,26 @@ export function TonePickerPage({
 
     const [previewing, setPreviewing] = useState<string | null>(null);
     const [adding, setAdding]         = useState(false);
+    const [memos, setMemos]           = useState<VoiceMemo[]>([]);
+    const [full, setFull]             = useState(false);
 
     useEffect(() => stopPreview, []);
+
+    const hasCustom = !!custom;
+    useEffect(() => {
+        if (!hasCustom) return;
+        let live = true;
+        void fetchMemos().then(list => { if (live) setMemos(list); });
+        return () => { live = false; };
+    }, [hasCustom]);
+
+    const pickMemo = (memo: VoiceMemo) => {
+        if (!custom) return;
+        if (custom.items.length >= MAX_CUSTOM_TONES) { setFull(true); return; }
+        setFull(false);
+        custom.onAdd(memo.name.slice(0, 64), memo.url);
+    };
+    const unsaved = custom ? memos.filter(m => !custom.items.some(c => c.url === m.url)) : [];
 
     const togglePreview = (tone: { id: string; url: string }) => {
         if (previewing === tone.id) {
@@ -49,14 +69,14 @@ export function TonePickerPage({
     const renderTone = (
         tone: { id: string; name: string; url: string },
         divider: boolean,
-        onDelete?: () => void,
+        { onDelete, onPick }: { onDelete?: () => void; onPick?: () => void } = {},
     ) => {
         const isPreviewing = previewing === tone.id;
         return (
             <div key={tone.id} className="relative flex w-full items-center ps-4 pe-2">
                 <button
                     type="button"
-                    onClick={() => onSelect(tone.id)}
+                    onClick={onPick ?? (() => onSelect(tone.id))}
                     className="flex min-w-0 flex-1 items-center gap-2 py-3 text-start active:opacity-50"
                 >
                     <span dir="auto" className="min-w-0 flex-1 truncate text-[17px] font-normal text-black dark:text-white">{tone.name}</span>
@@ -117,10 +137,10 @@ export function TonePickerPage({
                                 {custom.myTones}
                             </div>
                             <div className="overflow-hidden rounded-[10px] bg-surface">
-                                {custom.items.map(c => renderTone(c, true, () => {
+                                {custom.items.map(c => renderTone(c, true, { onDelete: () => {
                                     if (previewing === c.id) { stopPreview(); setPreviewing(null); }
                                     custom.onRemove(c.id);
-                                }))}
+                                } }))}
                                 <button
                                     type="button"
                                     onClick={() => setAdding(true)}
@@ -133,6 +153,27 @@ export function TonePickerPage({
                             <div className="mt-2 px-4 text-[13px] leading-snug text-ios-gray">
                                 {custom.pasteHint}
                             </div>
+
+                            {unsaved.length > 0 && (
+                                <>
+                                    <div className="mb-2 mt-7 flex items-center gap-1.5 px-4 text-[13px] font-normal uppercase tracking-wide text-ios-gray">
+                                        <Mic className="h-[13px] w-[13px]" strokeWidth={2.4} />
+                                        {t('settings.fromVoiceMemos', 'From Voice Memos')}
+                                    </div>
+                                    <div className="overflow-hidden rounded-[10px] bg-surface">
+                                        {unsaved.map((m, i) => renderTone(
+                                            { id: `memo-${m.id}`, name: m.name, url: m.url },
+                                            i < unsaved.length - 1,
+                                            { onPick: () => pickMemo(m) },
+                                        ))}
+                                    </div>
+                                    <div className={`mt-2 px-4 text-[13px] leading-snug ${full ? 'text-ios-red' : 'text-ios-gray'}`}>
+                                        {full
+                                            ? t('settings.toneLimit', 'You can save up to {n} custom tones. Delete one above first.', { n: MAX_CUSTOM_TONES })
+                                            : t('settings.voiceMemoToneHint', 'Picking a recording moves it to your tones above.')}
+                                    </div>
+                                </>
+                            )}
                         </>
                     )}
                 </div>

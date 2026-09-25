@@ -197,6 +197,7 @@ function saveBlurLocal(key: string, v: boolean) {
 
 const CUSTOM_WALLPAPERS_KEY = 'sd-phone:customWallpapers';
 export const MAX_CUSTOM_WALLPAPERS = 24;
+export const MAX_CUSTOM_TONES = 30;
 function loadCustomWallpapersLocal(): string[] {
     try {
         const parsed: unknown = JSON.parse(window.localStorage.getItem(CUSTOM_WALLPAPERS_KEY) ?? '[]');
@@ -1079,6 +1080,15 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
             .catch(retry);
     },
 }));
+
+export function ensureCustomTone(kind: ToneKind, name: string, url: string): string | null {
+    const s = useThemeStore.getState();
+    const saved = kind === 'ringtone' ? s.customRingtones : s.customNotificationTones;
+    const existing = saved.find(c => c.url === url);
+    if (existing) return existing.id;
+    if (saved.length >= MAX_CUSTOM_TONES) return null;
+    return s.addCustomTone(kind, name.slice(0, 64), url);
+}
 
 export function useTheme(): ThemeState;
 export function useTheme<K extends keyof ThemeState>(...keys: K[]): Pick<ThemeState, K>;
