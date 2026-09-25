@@ -67,6 +67,17 @@ local function family(b)
     return nil
 end
 
+---@type table<string, true> Media types a data URL may declare.
+local ALLOWED <const> = {
+    ['image/jpeg'] = true, ['image/jpg'] = true, ['image/png'] = true, ['image/gif'] = true,
+    ['image/webp'] = true,
+    ['video/webm'] = true, ['video/mp4'] = true, ['video/quicktime'] = true, ['video/ogg'] = true,
+    ['video/x-matroska'] = true,
+    ['audio/webm'] = true, ['audio/ogg'] = true, ['audio/mp4'] = true, ['audio/x-m4a'] = true,
+    ['audio/mpeg'] = true, ['audio/mp3'] = true, ['audio/aac'] = true, ['audio/wav'] = true,
+    ['audio/wave'] = true, ['audio/x-wav'] = true, ['audio/flac'] = true, ['audio/x-flac'] = true,
+}
+
 ---Whether a base64 data URL's bytes are the kind of media its type names. A still must be an
 ---image, a clip must be a video container, and audio may be plain audio or a container, because
 ---MediaRecorder writes a voice note into WebM or Ogg.
@@ -75,12 +86,14 @@ end
 ---@return string|nil declared the type family the URL claims ('image'|'video'|'audio')
 function sniff.matches(dataUrl)
     if type(dataUrl) ~= 'string' then return false end
-    local declared = dataUrl:match('^data:(%a+)/')
-    declared = declared and declared:lower() or nil
+    local mime = dataUrl:match('^data:([^;,]+)')
+    mime = mime and mime:lower() or nil
+    local declared = mime and mime:match('^(%a+)/') or nil
     local comma = dataUrl:find(',', 1, true)
     if not declared or not comma or not dataUrl:sub(1, comma):find(';base64,', 1, true) then
         return false, declared
     end
+    if not ALLOWED[mime] then return false, declared end
 
     local bytes = head(dataUrl:sub(comma + 1, comma + 32))
     local kind = bytes and family(bytes) or nil
