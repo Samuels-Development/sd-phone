@@ -6397,7 +6397,10 @@
       "streamer": "直播, 隱私, 隱藏, Twitch",
       "wallpaper": "背景, 鎖定畫面, 主畫面",
       "wifi": "無線網路, 網際網路, 網路, WLAN"
-    }
+    },
+    "fromVoiceMemos": "來自語音備忘錄",
+    "toneLimit": "最多可儲存 {n} 個自訂鈴聲，請先在上方刪除一個。",
+    "voiceMemoToneHint": "選擇錄音會將其移至上方的自訂鈴聲中。"
   },
   "setup": {
     "allSet": "一切就緒",
@@ -7124,7 +7127,12 @@
     "title": "語音備忘錄",
     "today": "今天{time}",
     "uploadFailed": "上傳失敗",
-    "yesterday": "昨天{time}"
+    "yesterday": "昨天{time}",
+    "notificationSet": "已設為通知提示音",
+    "ringtoneSet": "已設為來電鈴聲",
+    "toneLimit": "最多可儲存 {n} 個自訂鈴聲，請先在設定中刪除一個。",
+    "useAsNotification": "設為通知提示音",
+    "useAsRingtone": "設為來電鈴聲"
   },
   "weather": {
     "closeWeather": "關閉天氣",

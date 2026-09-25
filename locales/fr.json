@@ -6280,7 +6280,10 @@
       "streamer": "stream, confidentialité, masquer, twitch",
       "wallpaper": "fond d'écran, écran de verrouillage, écran d'accueil",
       "wifi": "sans fil, internet, réseau, wlan"
-    }
+    },
+    "fromVoiceMemos": "Depuis Mémos vocaux",
+    "toneLimit": "Tu peux enregistrer jusqu'à {n} sons personnalisés. Supprime-en un ci-dessus d'abord.",
+    "voiceMemoToneHint": "Choisir un enregistrement le déplace vers tes sons ci-dessus."
   },
   "setup": {
     "allSet": "Tout est prêt",
@@ -6959,7 +6962,12 @@
     "title": "Mémos vocaux",
     "today": "Aujourd'hui {time}",
     "uploadFailed": "Échec du téléversement",
-    "yesterday": "Hier {time}"
+    "yesterday": "Hier {time}",
+    "notificationSet": "Son de notification défini",
+    "ringtoneSet": "Sonnerie définie",
+    "toneLimit": "Tu peux enregistrer jusqu'à {n} sons personnalisés. Supprime-en un dans Réglages d'abord.",
+    "useAsNotification": "Utiliser comme son de notification",
+    "useAsRingtone": "Utiliser comme sonnerie"
   },
   "weather": {
     "closeWeather": "Fermer Météo",

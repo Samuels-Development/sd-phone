@@ -6280,7 +6280,10 @@
       "streamer": "stream, privacidade, ocultar, twitch",
       "wallpaper": "fundo, ecrã de bloqueio, ecrã inicial",
       "wifi": "sem fios, internet, rede, wlan"
-    }
+    },
+    "fromVoiceMemos": "De Memorandos de voz",
+    "toneLimit": "Você pode salvar até {n} tons personalizados. Exclua um acima primeiro.",
+    "voiceMemoToneHint": "Escolher uma gravação a move para seus tons acima."
   },
   "setup": {
     "allSet": "Tudo pronto",
@@ -6959,7 +6962,12 @@
     "title": "Memorandos de voz",
     "today": "Hoje {time}",
     "uploadFailed": "Falha no envio",
-    "yesterday": "Ontem {time}"
+    "yesterday": "Ontem {time}",
+    "notificationSet": "Som de notificação definido",
+    "ringtoneSet": "Toque definido",
+    "toneLimit": "Você pode salvar até {n} tons personalizados. Remova um nas Configurações primeiro.",
+    "useAsNotification": "Usar como som de notificação",
+    "useAsRingtone": "Usar como toque"
   },
   "weather": {
     "closeWeather": "Fechar Clima",

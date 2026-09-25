@@ -6280,7 +6280,10 @@
       "streamer": "stream, privacy, nascondi, twitch",
       "wallpaper": "sfondo, schermata di blocco, schermata home",
       "wifi": "wireless, internet, rete, wlan"
-    }
+    },
+    "fromVoiceMemos": "Da Memo vocali",
+    "toneLimit": "Puoi salvare fino a {n} suoni personalizzati. Elimina prima uno sopra.",
+    "voiceMemoToneHint": "Selezionando una registrazione, la sposti tra i tuoi suoni sopra."
   },
   "setup": {
     "allSet": "È tutto pronto",
@@ -6959,7 +6962,12 @@
     "title": "Memo vocali",
     "today": "Oggi {time}",
     "uploadFailed": "Caricamento fallito",
-    "yesterday": "Ieri {time}"
+    "yesterday": "Ieri {time}",
+    "notificationSet": "Suono di notifica impostato",
+    "ringtoneSet": "Suoneria impostata",
+    "toneLimit": "Puoi salvare fino a {n} suoni personalizzati. Rimuovi prima uno nelle Impostazioni.",
+    "useAsNotification": "Usa come suono di notifica",
+    "useAsRingtone": "Usa come suoneria"
   },
   "weather": {
     "closeWeather": "Chiudi Meteo",

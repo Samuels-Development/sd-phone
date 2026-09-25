@@ -6402,7 +6402,10 @@
     "wifiPasswordMsg": "Dit netwerk is beveiligd. Voer het wachtwoord in om te verbinden.",
     "wifiSearching": "Zoeken naar netwerken",
     "wifiSub": "Verbinden met netwerken in de buurt",
-    "youtubeLink": "YouTube-link"
+    "youtubeLink": "YouTube-link",
+    "fromVoiceMemos": "Van Spraakmemo's",
+    "toneLimit": "Je kunt tot {n} aangepaste tonen opslaan. Verwijder er eerst een hierboven.",
+    "voiceMemoToneHint": "Een opname kiezen verplaatst deze naar je tonen hierboven."
   },
   "setup": {
     "allSet": "Je bent helemaal klaar",
@@ -7129,7 +7132,12 @@
     "title": "Spraakmemo's",
     "today": "Vandaag {time}",
     "uploadFailed": "Uploaden mislukt",
-    "yesterday": "Gisteren {time}"
+    "yesterday": "Gisteren {time}",
+    "notificationSet": "Meldingstoon ingesteld",
+    "ringtoneSet": "Beltoon ingesteld",
+    "toneLimit": "Je kunt tot {n} aangepaste tonen opslaan. Verwijder er eerst een in Instellingen.",
+    "useAsNotification": "Gebruiken als meldingstoon",
+    "useAsRingtone": "Gebruiken als beltoon"
   },
   "weather": {
     "closeWeather": "Weer sluiten",

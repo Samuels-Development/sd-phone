@@ -6397,7 +6397,10 @@
       "streamer": "直播, 隐私, 隐藏, Twitch",
       "wallpaper": "背景, 锁定屏幕, 主屏幕",
       "wifi": "无线网络, 互联网, 网络, WLAN"
-    }
+    },
+    "fromVoiceMemos": "来自语音备忘录",
+    "toneLimit": "最多可保存 {n} 个自定义铃声，请先在上方删除一个。",
+    "voiceMemoToneHint": "选择录音会将其移至上方的自定义铃声中。"
   },
   "setup": {
     "allSet": "一切就绪",
@@ -7124,7 +7127,12 @@
     "title": "语音备忘录",
     "today": "今天{time}",
     "uploadFailed": "上传失败",
-    "yesterday": "昨天{time}"
+    "yesterday": "昨天{time}",
+    "notificationSet": "已设为通知提示音",
+    "ringtoneSet": "已设为来电铃声",
+    "toneLimit": "最多可保存 {n} 个自定义铃声，请先在设置中删除一个。",
+    "useAsNotification": "设为通知提示音",
+    "useAsRingtone": "设为来电铃声"
   },
   "weather": {
     "closeWeather": "关闭天气",

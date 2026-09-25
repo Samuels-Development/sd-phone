@@ -6280,7 +6280,10 @@
       "streamer": "stream, privacidad, ocultar, twitch",
       "wallpaper": "fondo, pantalla de bloqueo, pantalla de inicio",
       "wifi": "inalámbrico, internet, red, wlan"
-    }
+    },
+    "fromVoiceMemos": "Desde Notas de voz",
+    "toneLimit": "Puedes guardar hasta {n} tonos personalizados. Elimina uno arriba primero.",
+    "voiceMemoToneHint": "Al elegir una grabación, se mueve a tus tonos de arriba."
   },
   "setup": {
     "allSet": "Todo listo",
@@ -6959,7 +6962,12 @@
     "title": "Notas de voz",
     "today": "Hoy {time}",
     "uploadFailed": "Error al subir",
-    "yesterday": "Ayer {time}"
+    "yesterday": "Ayer {time}",
+    "notificationSet": "Tono de notificación establecido",
+    "ringtoneSet": "Tono de llamada establecido",
+    "toneLimit": "Puedes guardar hasta {n} tonos personalizados. Elimina uno en Ajustes primero.",
+    "useAsNotification": "Usar como tono de notificación",
+    "useAsRingtone": "Usar como tono de llamada"
   },
   "weather": {
     "closeWeather": "Cerrar Clima",

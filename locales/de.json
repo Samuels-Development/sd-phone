@@ -6280,7 +6280,10 @@
       "streamer": "stream, privatsphäre, verbergen, twitch",
       "wallpaper": "hintergrund, sperrbildschirm, homebildschirm",
       "wifi": "funk, internet, netzwerk, wlan"
-    }
+    },
+    "fromVoiceMemos": "Von Sprachnotizen",
+    "toneLimit": "Du kannst bis zu {n} eigene Töne speichern. Lösche zuerst einen oben.",
+    "voiceMemoToneHint": "Wählst du eine Aufnahme aus, wird sie oben zu deinen Tönen verschoben."
   },
   "setup": {
     "allSet": "Alles bereit",
@@ -6959,7 +6962,12 @@
     "title": "Sprachnotizen",
     "today": "Heute {time}",
     "uploadFailed": "Upload fehlgeschlagen",
-    "yesterday": "Gestern {time}"
+    "yesterday": "Gestern {time}",
+    "notificationSet": "Mitteilungston festgelegt",
+    "ringtoneSet": "Klingelton festgelegt",
+    "toneLimit": "Du kannst bis zu {n} eigene Töne speichern. Entferne zuerst einen in den Einstellungen.",
+    "useAsNotification": "Als Mitteilungston verwenden",
+    "useAsRingtone": "Als Klingelton verwenden"
   },
   "weather": {
     "closeWeather": "Wetter schließen",
