@@ -40,6 +40,22 @@ local PRESIGN_URL <const> = 'https://api.fivemanage.com/api/v3/file/presigned-ur
 ---@type string Host every claimed URL must sit under, trailing slash included.
 local CDN_HOST <const> = 'https://r2.fivemanage.com/'
 
+---@type string Folder prefix for a folder-scoped Fivemanage token, trailing slash included, or ''.
+---Uploads made with such a token come back as <CDN>/<team>/<folder>/<name>, so the claim has to
+---know the folder or refuses every one of them as foreign. From configs/photos.lua MediaPath, else
+---the sd_phone_media_path convar. Segments of [%w%-_] only, so `..` can't walk out of the bucket.
+local MEDIA_PATH <const> = (function()
+    local p = (PHOTOS.MediaPath ~= nil and PHOTOS.MediaPath ~= '' and PHOTOS.MediaPath)
+        or GetConvar('sd_phone_media_path', '')
+    p = tostring(p):gsub('^/+', ''):gsub('/+$', '')
+    if p == '' then return '' end
+    if (('/' .. p):gsub('/[%w%-_]+', '')) ~= '' then
+        print(('^1[sd-phone:photos]^0 MediaPath %q is not a plain folder path - ignored'):format(p))
+        return ''
+    end
+    return p .. '/'
+end)()
+
 ---@type integer Longest URL a claim may carry. phone_photos.url is VARCHAR(512).
 local MAX_URL_CHARS <const> = 512
 
@@ -381,7 +397,7 @@ function presign.claim(src, url, opts, cb)
         return
     end
 
-    local prefix = CDN_HOST .. slot.teamId .. '/'
+    local prefix = CDN_HOST .. slot.teamId .. '/' .. MEDIA_PATH
     if url:sub(1, #prefix) ~= prefix then
         refuse('foreign-url')
         return
