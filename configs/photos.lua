@@ -19,6 +19,12 @@ return {
     -- Anything other than 'qbox' stays on Fivemanage, so a typo never quietly moves your media.
     Provider = 'fivemanage',
 
+    -- Folder your Fivemanage Media token is scoped to, if any (e.g. 'myserver/prod'). Uploads made
+    -- with a folder-scoped token come back as <CDN>/<team>/<folder>/<name>, and the direct-upload
+    -- claim has to know the folder or it refuses them as foreign. Blank uses the sd_phone_media_path
+    -- server convar instead (so one config can serve several servers); blank in both = no folder.
+    MediaPath = '',
+
     -- JPEG quality (0.0 - 1.0). 0.85 matches NPWD's default and balances
     -- file size against visible compression artefacts.
     Quality = 0.85,
