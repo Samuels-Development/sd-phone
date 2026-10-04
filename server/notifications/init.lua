@@ -85,6 +85,12 @@ function notifications.notifyCid(cid, data)
     })
 end
 
+---Asked by the client before it shows a banner: a player with no phone item has nothing to buzz,
+---so the pop-up is dropped. Answered from the live inventory, never cached.
+lib.callback.register('sd-phone:server:carriesPhone', function(src)
+    return require('server.util').carriesPhone(src)
+end)
+
 ---Sends the same notification addressed by phone number instead of server id. The number is
 ---digit-normalised before lookup; an unassigned number or offline owner returns false. A
 ---number on a pocketed (non-active) phone arrives as a colour-tagged transient buzz.
