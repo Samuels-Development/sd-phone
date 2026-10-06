@@ -6,9 +6,14 @@ local function push(data)
     SendNUIMessage({ action = 'sd-phone:notification', data = data })
 end
 
----Landing point for the server notify export; shape-checked by push.
+---Landing point for the server notify export; shape-checked by push. Dropped when the player is
+---not carrying a phone (the server owns that answer); emergency alerts always get through.
 ---@param data table notification payload
 RegisterNetEvent('sd-phone:client:notify', function(data)
+    if type(data) == 'table' and not data.emergency
+        and not lib.callback.await('sd-phone:server:carriesPhone', false) then
+        return
+    end
     push(data)
 end)
 
