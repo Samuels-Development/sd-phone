@@ -38,6 +38,16 @@ Scripts and custom apps written for lb-phone, qs-smartphone, gksphone, roadphone
 
 ---
 
+## Support Me
+
+<p align="center">
+  <a href="https://fivem.samueldev.shop">
+    <img src="docs/previews/support-me-banner.svg" alt="Use code SDPhone for 20% off your purchase at fivem.samueldev.shop" width="960" />
+  </a>
+</p>
+
+Use code **`SDPhone`** for **20% off your purchase** at [fivem.samueldev.shop](https://fivem.samueldev.shop).
+
 ## Screenshots
 
 Captured from the browser demo using sample data. Click an image for the full 1920×1080 version.
