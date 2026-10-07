@@ -42,11 +42,11 @@ Scripts and custom apps written for lb-phone, qs-smartphone, gksphone, roadphone
 
 <p align="center">
   <a href="https://fivem.samueldev.shop">
-    <img src="docs/previews/support-me-banner.svg" alt="Use code SDPhone for 20% off your purchase at fivem.samueldev.shop" width="960" />
+    <img src="docs/previews/support-me-banner.svg" alt="Use code SDPhone for 20% off your purchase at fivem.samueldev.shop. One-time use." width="960" />
   </a>
 </p>
 
-Use code **`SDPhone`** for **20% off your purchase** at [fivem.samueldev.shop](https://fivem.samueldev.shop).
+Use code **`SDPhone`** for **20% off your purchase** at [fivem.samueldev.shop](https://fivem.samueldev.shop). **One-time use.**
 
 ## Screenshots
 
