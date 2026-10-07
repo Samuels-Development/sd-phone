@@ -40,13 +40,15 @@ Scripts and custom apps written for lb-phone, qs-smartphone, gksphone, roadphone
 
 ## Support Me
 
+If you're enjoying sd-phone and want to support my work, consider picking up a script from [Samuel's Development](https://fivem.samueldev.shop). Every purchase helps me keep building and improving resources like sd-phone. Browse Petty Crimes, Advanced Crafting, Horde, Smash Down, and more to find something for your server.
+
 <p align="center">
   <a href="https://fivem.samueldev.shop">
-    <img src="docs/previews/support-me-banner.svg" alt="Use code SDPhone for 20% off your purchase at fivem.samueldev.shop" width="960" />
+    <img src="docs/previews/support-me-banner.png" alt="Shop Petty Crimes, Advanced Crafting, Horde, Smash Down, and 16 more products. Use code SDPhone for 20% off your purchase at fivem.samueldev.shop. One-time use." width="960" />
   </a>
 </p>
 
-Use code **`SDPhone`** for **20% off your purchase** at [fivem.samueldev.shop](https://fivem.samueldev.shop).
+Use code **`SDPhone`** for **20% off your purchase** at [fivem.samueldev.shop](https://fivem.samueldev.shop). **One-time use.**
 
 ## Screenshots
 
