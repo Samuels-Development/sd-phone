@@ -44,6 +44,16 @@ local CID_SINGLE = {
     { 'phone_bluetooth',             'citizenid' },
     { 'phone_wifi',                  'citizenid' },
     { 'phone_health_daily',          'citizenid' },
+    { 'phone_id',                    'citizenid' },
+    { 'phone_medical_id',            'citizenid' },
+    { 'phone_signatures',            'citizenid' },
+    { 'phone_garage_images',         'citizenid' },
+    { 'phone_mail_saved_emails',     'citizenid' },
+    { 'phone_racing_notifications',  'citizenid' },
+    { 'phone_service_msg_reads',     'viewer' },
+    { 'phone_streak_likes',          'citizenid' },
+    { 'phone_streak_posts',          'citizenid' },
+    { 'phone_streaks',               'citizenid' },
     { 'marketplace_listings',        'citizenid' },
     { 'pages_posts',                 'citizenid' },
     { 'phone_passwords',             'citizenid' },
@@ -81,7 +91,7 @@ local CID_PAIR = {
 local function wipeCid(cid)
     if not cid or cid == '' then return nil end
 
-    local userFor, accountIds = {}, {}
+    local usersFor, accountIds = {}, {}
     local owned = MySQL.query.await([[
         SELECT app, username, id AS account_id FROM phone_app_accounts WHERE created_by = ?
         UNION
@@ -91,7 +101,9 @@ local function wipeCid(cid)
         WHERE s.citizenid = ?
     ]], { cid, cid }) or {}
     for _, r in ipairs(owned) do
-        userFor[r.app] = r.username
+        local names = usersFor[r.app] or {}
+        names[#names + 1] = r.username
+        usersFor[r.app] = names
         accountIds[#accountIds + 1] = r.account_id
     end
 
@@ -103,6 +115,11 @@ local function wipeCid(cid)
     -- Every racer's results on a track this character built, since the track row itself goes below
     -- and a leaderboard pointing at a track that no longer exists is unreadable.
     rows = rows + del('DELETE FROM phone_racing_results WHERE track_id IN (SELECT id FROM phone_racing_tracks WHERE citizenid = ?)', { cid })
+    -- like_count is a stored column, so posts this character liked are counted down before the
+    -- like rows go below; likes left on their own posts go with the posts.
+    del('UPDATE phone_streak_posts SET like_count = GREATEST(like_count - 1, 0) WHERE id IN (SELECT post_id FROM phone_streak_likes WHERE citizenid = ?)', { cid })
+    rows = rows + del('DELETE FROM phone_streak_likes WHERE post_id IN (SELECT id FROM phone_streak_posts WHERE citizenid = ?)', { cid })
+    rows = rows + del('DELETE FROM phone_group_invites WHERE target_cid = ? OR group_id IN (SELECT id FROM phone_groups WHERE leader_cid = ?)', { cid, cid })
 
     for _, t in ipairs(CID_SINGLE) do
         rows = rows + del(('DELETE FROM %s WHERE %s = ?'):format(t[1], t[2]), { cid })
@@ -113,12 +130,12 @@ local function wipeCid(cid)
 
     if number then
         rows = rows + del('DELETE FROM phone_service_messages WHERE citizen_number = ? OR staff_cid = ?', { number, cid })
+        rows = rows + del('DELETE FROM phone_pending_messages WHERE number = ?', { number })
     else
         rows = rows + del('DELETE FROM phone_service_messages WHERE staff_cid = ?', { cid })
     end
 
-    local pg = userFor['photogram']
-    if pg then
+    for _, pg in ipairs(usersFor['photogram'] or {}) do
         del('DELETE FROM phone_photogram_comment_likes WHERE comment_id IN (SELECT id FROM phone_photogram_comments WHERE post_id IN (SELECT id FROM phone_photogram_posts WHERE author = ?))', { pg })
         del('DELETE FROM phone_photogram_likes    WHERE post_id  IN (SELECT id FROM phone_photogram_posts   WHERE author = ?)', { pg })
         del('DELETE FROM phone_photogram_saves    WHERE post_id  IN (SELECT id FROM phone_photogram_posts   WHERE author = ?)', { pg })
@@ -137,14 +154,29 @@ local function wipeCid(cid)
         rows = rows + del('DELETE FROM phone_photogram_profiles WHERE username = ?', { pg })
     end
 
-    local ch = userFor['cherry']
-    if ch then
+    for _, ch in ipairs(usersFor['cherry'] or {}) do
         del('DELETE FROM phone_cherry_messages WHERE match_id IN (SELECT id FROM phone_cherry_matches WHERE a = ? OR b = ?)', { ch, ch })
         rows = rows + del('DELETE FROM phone_cherry_messages WHERE sender = ?', { ch })
         rows = rows + del('DELETE FROM phone_cherry_matches WHERE a = ? OR b = ?', { ch, ch })
         rows = rows + del('DELETE FROM phone_cherry_swipes WHERE swiper = ? OR target = ?', { ch, ch })
         rows = rows + del('DELETE FROM phone_cherry_blocks WHERE blocker = ? OR blocked = ?', { ch, ch })
         rows = rows + del('DELETE FROM phone_cherry_profiles WHERE username = ?', { ch })
+    end
+
+    for _, vz in ipairs(usersFor['vibez'] or {}) do
+        del('DELETE FROM phone_vibez_comment_likes WHERE comment_id IN (SELECT id FROM phone_vibez_comments WHERE author = ? OR post_id IN (SELECT id FROM phone_vibez_posts WHERE author = ?))', { vz, vz })
+        del('DELETE FROM phone_vibez_likes         WHERE post_id IN (SELECT id FROM phone_vibez_posts WHERE author = ?)', { vz })
+        del('DELETE FROM phone_vibez_saves         WHERE post_id IN (SELECT id FROM phone_vibez_posts WHERE author = ?)', { vz })
+        del('DELETE FROM phone_vibez_comments      WHERE post_id IN (SELECT id FROM phone_vibez_posts WHERE author = ?)', { vz })
+        del('DELETE FROM phone_vibez_notifications WHERE post_id IN (SELECT id FROM phone_vibez_posts WHERE author = ?)', { vz })
+        rows = rows + del('DELETE FROM phone_vibez_comment_likes WHERE username = ?', { vz })
+        rows = rows + del('DELETE FROM phone_vibez_likes         WHERE username = ?', { vz })
+        rows = rows + del('DELETE FROM phone_vibez_saves         WHERE username = ?', { vz })
+        rows = rows + del('DELETE FROM phone_vibez_comments      WHERE author = ?', { vz })
+        rows = rows + del('DELETE FROM phone_vibez_follows       WHERE follower = ? OR target = ?', { vz, vz })
+        rows = rows + del('DELETE FROM phone_vibez_notifications WHERE recipient = ? OR actor = ?', { vz, vz })
+        rows = rows + del('DELETE FROM phone_vibez_posts         WHERE author = ?', { vz })
+        rows = rows + del('DELETE FROM phone_vibez_profiles      WHERE username = ?', { vz })
     end
 
     -- Squawk keys its content by handle, and one character can hold several accounts, so the wipe
@@ -161,6 +193,10 @@ local function wipeCid(cid)
         del('DELETE FROM phone_birdy_likes         WHERE post_id IN (SELECT id FROM phone_birdy_posts WHERE author = ?)', { h })
         del('DELETE FROM phone_birdy_reposts       WHERE post_id IN (SELECT id FROM phone_birdy_posts WHERE author = ?)', { h })
         del('DELETE FROM phone_birdy_notifications WHERE post_id IN (SELECT id FROM phone_birdy_posts WHERE author = ?)', { h })
+        del('DELETE FROM phone_birdy_poll_votes    WHERE post_id IN (SELECT id FROM phone_birdy_posts WHERE author = ?)', { h })
+        del('DELETE FROM phone_birdy_poll_options  WHERE post_id IN (SELECT id FROM phone_birdy_posts WHERE author = ?)', { h })
+        del('DELETE FROM phone_birdy_polls         WHERE post_id IN (SELECT id FROM phone_birdy_posts WHERE author = ?)', { h })
+        rows = rows + del('DELETE FROM phone_birdy_poll_votes    WHERE handle = ?', { h })
         rows = rows + del('DELETE FROM phone_birdy_likes         WHERE handle = ?', { h })
         rows = rows + del('DELETE FROM phone_birdy_reposts       WHERE handle = ?', { h })
         rows = rows + del('DELETE FROM phone_birdy_posts         WHERE author = ?', { h })
@@ -173,8 +209,7 @@ local function wipeCid(cid)
         rows = rows + del("DELETE FROM phone_app_accounts WHERE app = 'birdy' AND username = ?", { h })
     end
 
-    local ry = userFor['ryde']
-    if ry then
+    for _, ry in ipairs(usersFor['ryde'] or {}) do
         rows = rows + del('DELETE FROM phone_ryde_rides WHERE rider_username = ? OR driver_username = ?', { ry, ry })
         rows = rows + del('DELETE FROM phone_ryde_drivers WHERE username = ?', { ry })
     end
