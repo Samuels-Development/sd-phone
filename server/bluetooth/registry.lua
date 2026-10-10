@@ -141,10 +141,10 @@ end
 
 ---Runs an owning script's callback without letting it take the caller down with it. A third-party
 ---handler that errors must never stall the reconnect tick or abort a pairing.
----@param fn function|nil
+---@param fn function|table|nil
 ---@param ... any
 local function safely(fn, ...)
-    if type(fn) ~= 'function' then return end
+    if not bt.isCallable(fn) then return end
     local ok, err = pcall(fn, ...)
     if not ok then
         print(('^1[sd-phone:bluetooth]^0 device callback errored: %s'):format(tostring(err)))
