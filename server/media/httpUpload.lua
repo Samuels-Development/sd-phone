@@ -28,6 +28,10 @@ local MAX_SLOTS_PER_PLAYER <const> = 3
 ---@type integer Milliseconds between two slots for one player.
 local MINT_GAP_MS <const> = 1000
 
+---@type string Path a phone posts to before it asks for a slot, to learn whether it reaches this
+---handler at all. Answered for anyone and touches no slot.
+local PROBE_PATH <const> = '/upload/probe'
+
 ---@type table<string, HttpUploadSlot> Live slots by token.
 local slots = {}
 
@@ -141,10 +145,11 @@ local function deliver(res, slot, body)
 end
 
 ---Serves POST /upload/<token>/<part>/<total>: parts arrive in order, one at a time, and the last
----one hands the assembled body to the slot's owner.
+---one hands the assembled body to the slot's owner. POST /upload/probe is the reachability check.
 SetHttpHandler(function(req, res)
     if req.method == 'OPTIONS' then return reply(res, 204, {}) end
     if req.method ~= 'POST' then return reply(res, 405, { ok = false, code = 'method' }) end
+    if req.path == PROBE_PATH then return reply(res, 200, { ok = true }) end
 
     local token, part, total
     if type(req.path) == 'string' then

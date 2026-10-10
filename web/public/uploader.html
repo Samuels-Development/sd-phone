@@ -5,9 +5,11 @@
 (function () {
     var trustedOrigin = 'https://cfx-nui-' + location.host;
     var uploadUrlShape = /^http:\/\/[^\/]+\/[^\/]+\/upload\/[0-9a-f]{32}$/;
+    var probeUrlShape = /^http:\/\/[^\/]+\/[^\/]+\/upload\/probe$/;
     var mimeShape = /^[a-z]+\/[a-z0-9.+-]+$/i;
     var smallestPartBytes = 64 * 1024;
     var prefixRoom = 256;
+    var inFlight = new Map();
 
     function encodeBlob(blob) {
         return new Promise(function (resolve, reject) {
@@ -44,7 +46,7 @@
         };
     }
 
-    async function sendAll(url, body, partBytes) {
+    async function sendAll(url, body, partBytes, signal, onPart) {
         var plan = planParts(body, partBytes);
         if (!plan) return { ok: false };
         var answer = null;
@@ -54,30 +56,57 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain' },
                 body: part,
+                signal: signal,
             });
             if (!res.ok) return { ok: false };
+            onPart();
             answer = await res.json().catch(function () { return null; });
         }
         return { ok: true, result: answer && answer.result };
     }
 
+    async function probe(url, signal) {
+        await fetch(url, { method: 'POST', signal: signal });
+        return { ok: true };
+    }
+
+    function start(msg, signal, onPart) {
+        if (typeof msg.url !== 'string') return null;
+        if (msg.kind === 'sd-phone:upload:probe') {
+            return probeUrlShape.test(msg.url) ? probe(msg.url, signal) : null;
+        }
+        if (msg.kind !== 'sd-phone:upload') return null;
+        if (typeof msg.body !== 'string' && !(msg.body instanceof Blob)) return null;
+        if (!uploadUrlShape.test(msg.url)) return null;
+        if (typeof msg.partBytes !== 'number' || !(msg.partBytes >= smallestPartBytes)) return null;
+        return sendAll(msg.url, msg.body, Math.floor(msg.partBytes), signal, onPart);
+    }
+
     window.addEventListener('message', function (event) {
         var msg = event.data;
-        if (event.source !== window.parent || event.origin !== trustedOrigin) return;
-        if (!msg || msg.kind !== 'sd-phone:upload' || typeof msg.url !== 'string') return;
-        if (typeof msg.body !== 'string' && !(msg.body instanceof Blob)) return;
-        if (!uploadUrlShape.test(msg.url)) return;
-        if (typeof msg.partBytes !== 'number' || !(msg.partBytes >= smallestPartBytes)) return;
+        if (event.source !== window.parent || event.origin !== trustedOrigin || !msg) return;
+
+        if (msg.kind === 'sd-phone:upload:cancel') {
+            var running = inFlight.get(msg.id);
+            if (running) running.abort();
+            return;
+        }
+
+        var controller = new AbortController();
+        var job = start(msg, controller.signal, function () {
+            window.parent.postMessage({ kind: 'sd-phone:upload:progress', id: msg.id }, trustedOrigin);
+        });
+        if (!job) return;
 
         var answer = function (outcome) {
+            inFlight.delete(msg.id);
             window.parent.postMessage({ kind: 'sd-phone:upload:result', id: msg.id, ok: outcome.ok, result: outcome.result }, trustedOrigin);
         };
 
-        sendAll(msg.url, msg.body, Math.floor(msg.partBytes))
-            .then(answer)
-            .catch(function () { answer({ ok: false }); });
+        inFlight.set(msg.id, controller);
+        job.then(answer).catch(function () { answer({ ok: false }); });
     });
 
-    window.parent.postMessage({ kind: 'sd-phone:upload:ready' }, trustedOrigin);
+    window.parent.postMessage({ kind: 'sd-phone:upload:ready', probe: true }, trustedOrigin);
 })();
 </script>
