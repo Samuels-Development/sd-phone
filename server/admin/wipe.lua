@@ -1,6 +1,9 @@
 ---@type table Player bridge (bridge.server.player): citizenid/name/phone-number lookups.
 local player = require 'bridge.server.player'
 
+---@type table Framework bridge (bridge.shared.framework): active framework name for the character-deleted hook.
+local framework = require 'bridge.shared.framework'
+
 ---Runs one DELETE/UPDATE, swallowing errors.
 ---@param sql string parameterized statement
 ---@param params table statement parameters
@@ -243,6 +246,16 @@ lib.addCommand('wipemyphone', {
         type = 'success',
     })
 end)
+
+---QBox fires this once a character's core rows are gone, from every deletion path.
+if framework.name == 'qbx' then
+    AddEventHandler('qbx_core:server:characterDeleted', function(citizenid)
+        local cid, rows = wipeCid(citizenid)
+        if cid then
+            print(('^3[sd-phone:wipe]^0 wiped phone data for deleted character %s (%d rows)'):format(cid, rows))
+        end
+    end)
+end
 
 ---Deletes only the login identities one character owns, leaving the rest of their phone intact.
 ---
