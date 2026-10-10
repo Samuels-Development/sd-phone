@@ -24,6 +24,8 @@ local mediaLimit = require 'server.photos.mediaLimit'
 local util     = require 'server.util'
 ---@type table AirShare core (server.share.core): per-kind delivery handler registry.
 local share    = require 'server.share.core'
+---@type table Callable check (shared.callable): uploadMedia's callback is a function reference.
+local callable = require 'shared.callable'
 
 ---@type string GlobalState key carrying the game view mode every client renders with.
 local GAME_VIEW_MODE_KEY <const> = 'sd-phone:gameViewMode'
@@ -529,7 +531,7 @@ end)
 ---@param cb fun(url: string|nil, err: string|nil)
 ---@return boolean accepted false when the callback or payload shape is unusable
 exports('uploadMedia', function(dataUrl, filename, cb)
-    if type(cb) ~= 'function' then return false end
+    if not callable.is(cb) then return false end
     if type(dataUrl) ~= 'string' or not lib.string.startsWith(dataUrl, 'data:') then
         cb(nil, 'Expected a base64 data: URL')
         return false

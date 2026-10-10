@@ -6,6 +6,8 @@ local config = require 'configs.config'
 local actions = require 'server.messages.actions'
 ---@type table Shared server helpers (server.util): digit/trim sanitizers for the shim boundary.
 local util = require 'server.util'
+---@type table Callable check (shared.callable): SendMessage's callback is a function reference.
+local callable = require 'shared.callable'
 
 local registerLbExport, warnOnce = shim.registerLbExport, shim.warnOnce
 
@@ -71,7 +73,7 @@ registerLbExport('SendMessage', function(from, to, message, attachments, cb, cha
         warnOnce('SendMessage.return', ('SendMessage returns a synthetic channelId of 0 (called by %s); sd-phone has no channel ids'):format(GetInvokingResource() or 'unknown'))
         result = { channelId = 0, messageId = messageId or 0 }
     end
-    if type(cb) == 'function' then pcall(cb, result) end
+    if callable.is(cb) then pcall(cb, result) end
     return result
 end)
 

@@ -7,6 +7,9 @@ local appIds = require 'client.appids'
 ---@type table Client job bridge (bridge.client.job): live job name/grade plus a change hook.
 local job = require 'bridge.client.job'
 
+---@type table Callable check (shared.callable): app hooks arrive as function references.
+local callable = require 'shared.callable'
+
 ---@type table<string, {def: table, resource: string, jobs: table?, requires: table?, onOpen: function?, onClose: function?, onDelete: function?}>
 ---Registered third-party apps keyed by identifier. onOpen also covers lb-phone's onUse alias, and
 ---`jobs`/`requires` are the two gates that never reach the def - see the note in add().
@@ -386,7 +389,7 @@ function M.add(data, resource)
     if devices then def.devices = devices end
 
     local onOpen = data.onOpen
-    if type(onOpen) ~= 'function' then onOpen = data.onUse end
+    if not callable.is(onOpen) then onOpen = data.onUse end
     local entry = {
         def      = def,
         resource = resource,
@@ -394,9 +397,9 @@ function M.add(data, resource)
         -- Kept raw: server.gates is the only thing that reads a spec, and it sanitises what it is
         -- given. Two readers would be two chances to disagree about what a gate means.
         requires = type(data.requires) == 'table' and data.requires or nil,
-        onOpen   = type(onOpen) == 'function' and onOpen or nil,
-        onClose  = type(data.onClose) == 'function' and data.onClose or nil,
-        onDelete = type(data.onDelete) == 'function' and data.onDelete or nil,
+        onOpen   = callable.is(onOpen) and onOpen or nil,
+        onClose  = callable.is(data.onClose) and data.onClose or nil,
+        onDelete = callable.is(data.onDelete) and data.onDelete or nil,
     }
     registry[identifier] = entry
     addOrder(identifier)

@@ -1,3 +1,6 @@
+---@type table Callable check (shared.callable): keeps a callback that arrived through an export.
+local callable = require 'shared.callable'
+
 ---@type table Pure Bluetooth maths; no natives, no state, so both sides and the test harness can
 ---load it unchanged.
 local bluetooth = {}
@@ -75,17 +78,6 @@ function bluetooth.merge(device, patch)
     return def
 end
 
----Whether a value can be called. A function handed over through an export arrives as a function
----reference: a table with a __call metamethod, not a Lua function.
----@param value any
----@return boolean
-function bluetooth.isCallable(value)
-    if type(value) == 'function' then return true end
-    if type(value) ~= 'table' then return false end
-    local meta = getmetatable(value)
-    return type(meta) == 'table' and meta.__call ~= nil
-end
-
 ---Validates a registration, returning the fields worth keeping. Rejects rather than repairs, so a
 ---script learns its device is wrong instead of finding it silently unreachable.
 ---@param def table registration passed to registerBluetoothDevice
@@ -117,8 +109,8 @@ function bluetooth.validate(def)
         entity         = entity,
         range          = range,
         maxConnections = max,
-        onConnect      = bluetooth.isCallable(def.onConnect) and def.onConnect or nil,
-        onDisconnect   = bluetooth.isCallable(def.onDisconnect) and def.onDisconnect or nil,
+        onConnect      = callable.is(def.onConnect) and def.onConnect or nil,
+        onDisconnect   = callable.is(def.onDisconnect) and def.onDisconnect or nil,
     }
 end
 

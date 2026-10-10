@@ -1,5 +1,7 @@
 ---@type table Custom app registry (client.customapps), read here to confirm a widget was declared.
 local customApps = require 'client.customapps'
+---@type table Callable check (shared.callable): an action handler arrives as a function reference.
+local callable = require 'shared.callable'
 
 ---@type table<string, string> "appId:widgetId" -> the resource showing it, so only the owner hides it.
 local active = {}
@@ -39,7 +41,7 @@ exports('showLockscreenWidget', function(appId, widgetId, data, onAction)
         or not registered(appId, widgetId, resource) then return false end
     local id = key(appId, widgetId)
     active[id] = resource
-    callbacks[id] = type(onAction) == 'function' and onAction or nil
+    callbacks[id] = callable.is(onAction) and onAction or nil
     SendNUIMessage({ action = 'sd-phone:lockscreenWidget:show', data = {
         key = id, appId = appId, widgetId = widgetId, payload = type(data) == 'table' and data or {},
     } })
