@@ -1,5 +1,7 @@
 ---@type table Shared shim helpers (server.compat.qssmartphone.shared): export registration + warn-once.
 local shim = require 'server.compat.qssmartphone.shared'
+---@type table Callable check (shared.callable): an interceptor arrives as a function reference.
+local callable = require 'shared.callable'
 
 ---@type table<string, function[]> Registered call interceptors by digit-normalised phone number.
 ---Bookkeeping only: sd-phone rings a call straight through, so nothing ever consults these.
@@ -17,7 +19,7 @@ local sd = exports['sd-phone']
 ---hasCallInterceptor and getRegisteredCallInterceptors report the truth about what was asked for.
 registerExport('registerCallInterceptor', function(phoneNumber, callback)
     local number = shim.digits(phoneNumber)
-    if not number or type(callback) ~= 'function' then return false end
+    if not number or not callable.is(callback) then return false end
 
     warnOnce('registerCallInterceptor', ('call interception is not supported (registered by %s); sd-phone rings a call straight through to the recipient with no pre-ring hook, so the interceptor was recorded but will never be called and every call to that number rings normally'):format(GetInvokingResource() or 'unknown'))
 

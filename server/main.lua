@@ -125,7 +125,7 @@ require 'server.compat.yseries.init'
 require 'server.compat.qssmartphone.init'
 -- gksphone export compatibility shim (sd_phone_gkscompat kill switch).
 require 'server.compat.gksphone.init'
--- roadphone export compatibility shim (sd_phone_roadcompat kill switch).
+-- roadphone export compatibility shim (sd_phone_roadphonecompat kill switch).
 require 'server.compat.roadphone.init'
 
 ---@type table SIM feature flags (server.sim.state): active + mode.

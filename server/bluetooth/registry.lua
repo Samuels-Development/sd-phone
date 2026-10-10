@@ -1,5 +1,7 @@
 ---@type table Pure Bluetooth maths (shared.bluetooth): validation, range, capacity.
 local bt = require 'shared.bluetooth'
+---@type table Callable check (shared.callable): an owning script's callback is a function reference.
+local callable = require 'shared.callable'
 
 ---@type table Registry module; the table returned at end of file.
 local registry = {}
@@ -144,7 +146,7 @@ end
 ---@param fn function|table|nil
 ---@param ... any
 local function safely(fn, ...)
-    if not bt.isCallable(fn) then return end
+    if not callable.is(fn) then return end
     local ok, err = pcall(fn, ...)
     if not ok then
         print(('^1[sd-phone:bluetooth]^0 device callback errored: %s'):format(tostring(err)))
