@@ -107,7 +107,7 @@ local function wipeCid(cid)
         accountIds[#accountIds + 1] = r.account_id
     end
 
-    local number = MySQL.scalar.await('SELECT phone_number FROM phone_settings WHERE citizenid = ?', { cid })
+    local number = MySQL.scalar.await("SELECT phone_number FROM phone_settings WHERE citizenid = ? AND device = 'phone'", { cid })
 
     local rows = 0
 

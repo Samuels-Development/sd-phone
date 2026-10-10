@@ -1,5 +1,6 @@
 import { apiCall, type Envelope } from '@/core/api';
 import { isFiveM } from '@/core/nui';
+import type { DeviceId } from '@/device/types';
 import type {
     AdminAuditEntry, AdminBirdyPost, AdminCall, AdminContentItem,
     AdminLivePlayer, AdminMediaItem,
@@ -63,8 +64,8 @@ export const adminNumbers = (q: string, cursor?: number | null) =>
 export const adminGiveSim = (cid: string, bind: boolean) =>
     isFiveM ? call<{ number: string }>('sd-phone:admin:giveSim', { cid, bind }) : seed({ number: '5551204' });
 
-export const adminResetPasscode = (cid: string) =>
-    isFiveM ? call<void>('sd-phone:admin:resetPasscode', { cid }) : ok();
+export const adminResetPasscode = (cid: string, device: DeviceId) =>
+    isFiveM ? call<void>('sd-phone:admin:resetPasscode', { cid, device }) : ok();
 
 export const adminSetApp = (cid: string, id: string, install: boolean) =>
     isFiveM

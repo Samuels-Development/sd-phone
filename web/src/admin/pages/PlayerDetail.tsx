@@ -10,6 +10,7 @@ import {
     adminMessages, adminBirdyDeletePost, adminOverview, adminResetAccountPassword,
     adminResetPasscode, adminSetApp, adminSetNumber, adminUnmute, adminWipePhone,
 } from '../adminApi';
+import type { DeviceId } from '@/device/types';
 import { acceptedNumberLengths, numberLengthsText } from '@/lib/phone';
 import {
     fmtPhone, fmtTime, scopeLabel,
@@ -78,9 +79,9 @@ export function PlayerDetail({ cid, onBack, toast, onOpenGallery }: {
 
     const s = ov.settings;
 
-    const resetPasscode = async () => {
-        const res = await adminResetPasscode(cid);
-        if (res.success) { toast('Passcode cleared'); reload(); }
+    const resetPasscode = async (device: DeviceId) => {
+        const res = await adminResetPasscode(cid, device);
+        if (res.success) { toast(device === 'tablet' ? 'Tablet passcode cleared' : 'Phone passcode cleared'); reload(); }
         else toast(res.message ?? 'Failed', true);
     };
 
@@ -105,8 +106,8 @@ export function PlayerDetail({ cid, onBack, toast, onOpenGallery }: {
                     </div>
                 </div>
                 <div className="flex gap-1.5">
-                    <Btn variant="ghost" onClick={() => void resetPasscode()} title="Clear passcode + Face ID">
-                        <LockOpen size={14} /> Reset passcode
+                    <Btn variant="ghost" onClick={() => void resetPasscode('phone')} title="Clear the phone passcode + Face ID">
+                        <LockOpen size={14} /> {ov.tablet ? 'Reset phone passcode' : 'Reset passcode'}
                     </Btn>
                     <Btn variant="ghost" onClick={() => setModal('number')}>
                         <Phone size={14} /> Change number
@@ -139,7 +140,16 @@ export function PlayerDetail({ cid, onBack, toast, onOpenGallery }: {
                 ))}
             </div>
 
-            {tab === 'overview' && <OverviewTab ov={ov} toast={toast} reload={reload} onOpenTab={setTab} onOpenGallery={onOpenGallery} />}
+            {tab === 'overview' && (
+                <OverviewTab
+                    ov={ov}
+                    toast={toast}
+                    reload={reload}
+                    onOpenTab={setTab}
+                    onOpenGallery={onOpenGallery}
+                    onResetPasscode={device => void resetPasscode(device)}
+                />
+            )}
             {tab === 'apps' && <AppsTab ov={ov} onChanged={reload} toast={toast} />}
             {tab === 'accounts' && (
                 <AccountsTab
@@ -228,14 +238,16 @@ function CountRow({ label, count, onOpen }: { label: string; count: number; onOp
     );
 }
 
-function OverviewTab({ ov, toast, reload, onOpenTab, onOpenGallery }: {
+function OverviewTab({ ov, toast, reload, onOpenTab, onOpenGallery, onResetPasscode }: {
     ov: AdminOverview;
     toast: (text: string, error?: boolean) => void;
     reload: () => void;
     onOpenTab: (tab: Tab) => void;
     onOpenGallery?: (cid: string) => void;
+    onResetPasscode: (device: DeviceId) => void;
 }) {
     const s = ov.settings;
+    const tablet = ov.tablet;
     const c = ov.counts;
     return (
         <div className="grid grid-cols-2 gap-4">
@@ -252,6 +264,20 @@ function OverviewTab({ ov, toast, reload, onOpenTab, onOpenGallery }: {
                 <InfoRow label="Last activity">{fmtTime(s?.updatedAt)}</InfoRow>
             </Card>
             <div className="space-y-4">
+                {tablet && (
+                    <Card
+                        title="Tablet settings"
+                        actions={(
+                            <Btn variant="ghost" onClick={() => onResetPasscode('tablet')} title="Clear the tablet passcode + Face ID">
+                                <LockOpen size={13} /> Reset tablet passcode
+                            </Btn>
+                        )}
+                    >
+                        <InfoRow label="Passcode">{tablet.hasPasscode ? <Badge tone="amber">Set</Badge> : <Badge tone="green">None</Badge>}</InfoRow>
+                        <InfoRow label="Face ID">{tablet.faceId ? 'Enabled' : 'Off'}</InfoRow>
+                        <InfoRow label="Last activity">{fmtTime(tablet.updatedAt)}</InfoRow>
+                    </Card>
+                )}
                 <Card title="Content">
                     <CountRow label="Birdy posts"   count={c?.birdyPosts ?? 0} onOpen={() => onOpenTab('birdy')} />
                     <CountRow label="Text messages" count={c?.messages ?? 0}   onOpen={() => onOpenTab('messages')} />

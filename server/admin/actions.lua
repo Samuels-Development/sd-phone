@@ -387,16 +387,22 @@ function actions.giveSim(source, payload)
     return ok({ number = number })
 end
 
----Clears a player's passcode + Face ID so they can unlock their phone again.
+---@type table<string, boolean> Devices that keep a lock of their own in phone_settings.
+local LOCK_DEVICES = { phone = true, tablet = true }
+
+---Clears the passcode + Face ID on ONE of a player's devices so they can unlock it again. An
+---absent or unknown device is the phone, which is what a panel bundle older than this sends.
 ---@param source number admin player server id
----@param payload { cid?: string }|nil
+---@param payload { cid?: string, device?: string }|nil
 ---@return table envelope
 function actions.resetPasscode(source, payload)
     local cid = cleanCid(payload and payload.cid)
     if not cid then return fail('admin.missingPlayer', 'Missing player') end
-    if store.resetPasscode(cid) == 0 then return fail('admin.playerHasNoPhoneSettings', 'That player has no phone settings yet') end
+    local device = payload and payload.device
+    if type(device) ~= 'string' or not LOCK_DEVICES[device] then device = 'phone' end
+    if store.resetPasscode(cid, device) == 0 then return fail('admin.playerHasNoPhoneSettings', 'That player has no phone settings yet') end
     local aCid, aName = adminIdent(source)
-    store.audit(aCid, aName, 'reset-passcode', cid, '')
+    store.audit(aCid, aName, 'reset-passcode', cid, device)
     return ok()
 end
 

@@ -49,6 +49,11 @@ export interface AdminOverview {
         installedApps: string[];
         updatedAt?:    number;
     } | null;
+    tablet?: {
+        hasPasscode: boolean;
+        faceId:      boolean;
+        updatedAt?:  number;
+    } | null;
     accounts: AdminAccount[];
     birdy: AdminBirdyProfile[];
     counts?: {

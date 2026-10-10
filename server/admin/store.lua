@@ -175,12 +175,14 @@ function store.searchPlayers(query, limit, offset)
         order[#order + 1] = cid
     end
 
+    -- Grouped per character: a citizenid match hits every device row, and a repeat eats `depth`.
     local settingsRows = MySQL.query.await([[
-        SELECT citizenid, phone_number, card_name FROM phone_settings
+        SELECT citizenid, MAX(card_name) AS card_name FROM phone_settings
         WHERE citizenid LIKE ?
            OR (? <> '' AND REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone_number,'-',''),' ',''),'(',''),')',''),'+',''),'.','') LIKE ?)
            OR card_name LIKE ?
-        ORDER BY updated_at DESC
+        GROUP BY citizenid
+        ORDER BY MAX(updated_at) DESC, citizenid DESC
         LIMIT ?
     ]], { escapeLike(query) .. '%', digits, '%' .. digits .. '%', like, depth }) or {}
     for _, r in ipairs(settingsRows) do
@@ -213,8 +215,8 @@ function store.searchPlayers(query, limit, offset)
     return out, nextOffset
 end
 
----Most recently active phones, newest first, keyset-paginated on (updated_at, citizenid) - the
----Players page's default listing before any search. Read-only.
+---Most recently active characters, newest first, one row each whatever devices they own - the
+---Players page's default listing. Keyset-paginated on (newest device row, citizenid). Read-only.
 ---@param cursor string|nil opaque "ts:cid" cursor from the previous page
 ---@param limit integer page size (already clamped)
 ---@return table[] hits { citizenid, matchedOn }, string|nil nextCursor
@@ -226,11 +228,11 @@ function store.listRecentPlayers(cursor, limit)
     end
 
     local rows = MySQL.query.await([[
-        SELECT citizenid, UNIX_TIMESTAMP(updated_at) AS ts
+        SELECT citizenid, MAX(UNIX_TIMESTAMP(updated_at)) AS ts
         FROM phone_settings
-        WHERE (? IS NULL OR updated_at < FROM_UNIXTIME(?)
-               OR (updated_at = FROM_UNIXTIME(?) AND citizenid < ?))
-        ORDER BY updated_at DESC, citizenid DESC
+        GROUP BY citizenid
+        HAVING (? IS NULL OR ts < ? OR (ts = ? AND citizenid < ?))
+        ORDER BY ts DESC, citizenid DESC
         LIMIT ?
     ]], { ts, ts, ts, cid, limit + 1 }) or {}
 
@@ -287,16 +289,22 @@ function store.simsFor(cid)
     return rows or {}
 end
 
----One player's full phone overview: settings, per-app content counts, accounts + sessions, and
----the Birdy profile. Read-only.
+---One player's full phone overview: settings, the tablet's own lock when they have one, per-app
+---content counts, accounts + sessions, and the Birdy profile. Read-only.
 ---@param cid string target citizenid
 ---@return table|nil overview nil when the player has no phone footprint at all
 function store.playerOverview(cid)
-    local settings = MySQL.single.await([[
-        SELECT phone_number, passcode, face_id, installed_apps, locale, theme, dark_theme,
+    -- One row per device. The phone's carries what both devices share (number, contact card,
+    -- installed apps); the tablet's carries that device's own lock and look.
+    local settings, tablet
+    local deviceRows = MySQL.query.await([[
+        SELECT device, phone_number, passcode, face_id, installed_apps, locale, theme, dark_theme,
                card_name, card_email, airplane_mode, UNIX_TIMESTAMP(updated_at) AS updated_at
         FROM phone_settings WHERE citizenid = ?
-    ]], { cid })
+    ]], { cid }) or {}
+    for _, row in ipairs(deviceRows) do
+        if row.device == 'phone' then settings = row elseif row.device == 'tablet' then tablet = row end
+    end
 
     local accounts = MySQL.query.await([[
         SELECT a.id, a.app, a.username, a.display_name, a.email, a.phone,
@@ -320,7 +328,7 @@ function store.playerOverview(cid)
         FROM phone_birdy_profiles p WHERE p.handle IN (%s) ORDER BY p.created_at
     ]]):format(BIRDY_HANDLES_FOR_CID), { cid, cid }) or {}
 
-    if not settings and #accounts == 0 and #birdy == 0 then return nil end
+    if not settings and not tablet and #accounts == 0 and #birdy == 0 then return nil end
 
     local function count(sql)
         return tonumber(MySQL.scalar.await(sql, { cid })) or 0
@@ -385,6 +393,11 @@ function store.playerOverview(cid)
             cardEmail    = settings.card_email,
             installedApps = json.decode(settings.installed_apps or '[]') or {},
             updatedAt    = tonumber(settings.updated_at),
+        } or nil,
+        tablet = tablet and {
+            hasPasscode = tablet.passcode ~= nil and tablet.passcode ~= '',
+            faceId      = util.truthy(tablet.face_id),
+            updatedAt   = tonumber(tablet.updated_at),
         } or nil,
         accounts = accountList,
         birdy = birdyList,
@@ -514,12 +527,15 @@ function store.clearBirdyLoggedIn(cid)
     ]], { cid })
 end
 
----Clears a player's passcode and Face ID so they can get back into a locked phone.
+---Clears the passcode and Face ID on one of a player's devices so they can get back into it. Each
+---device keeps its own lock, so the other one's is left exactly as it was.
 ---@param cid string target citizenid
+---@param device string 'phone' | 'tablet'
 ---@return integer affected
-function store.resetPasscode(cid)
+function store.resetPasscode(cid, device)
     return tonumber(MySQL.update.await(
-        'UPDATE phone_settings SET passcode = NULL, face_id = 0 WHERE citizenid = ?', { cid })) or 0
+        'UPDATE phone_settings SET passcode = NULL, face_id = 0 WHERE citizenid = ? AND device = ?',
+        { cid, device })) or 0
 end
 
 -- ---------------------------------------------------------------------------
@@ -1453,7 +1469,7 @@ function store.stats()
         return tonumber(MySQL.scalar.await(sql)) or 0
     end
     return {
-        phones      = count('SELECT COUNT(*) FROM phone_settings'),
+        phones      = count("SELECT COUNT(*) FROM phone_settings WHERE device = 'phone'"),
         appAccounts = count('SELECT COUNT(*) FROM phone_app_accounts'),
         birdyPosts  = count('SELECT COUNT(*) FROM phone_birdy_posts'),
         messages    = count('SELECT COUNT(*) FROM phone_messages'),

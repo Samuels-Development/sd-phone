@@ -134,6 +134,7 @@ export function devOverview(cid: string): AdminOverview {
             installedApps: APPS,
             updatedAt:     ago(3 * HOUR),
         },
+        tablet: p === DEV_PLAYERS[0] ? { hasPasscode: true, faceId: false, updatedAt: ago(2 * DAY) } : null,
         accounts: [
             { id: 101, app: 'birdy',      username: p.handle,          displayName: p.display, email: `${p.handle}@lifeinvader.com`, phone: p.number, createdAt: ago(90 * DAY) },
             { id: 102, app: 'photogram',  username: `${p.handle}_pics`, displayName: p.display, email: `${p.handle}@lifeinvader.com`, phone: p.number, createdAt: ago(61 * DAY) },
