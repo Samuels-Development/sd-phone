@@ -6,7 +6,7 @@ import { styleMaxZoom, tileUrl } from '@/apps/maps/data';
 import type { Viewport } from './useMapViewport';
 
 const BACKDROP_Z = 2;
-const TARGET_PX = 160;
+const TARGET_PX = 1024;
 const MIN_DETAIL_Z = 3;
 const MAX_RETRIES = 1;
 
@@ -14,7 +14,7 @@ const missing = new Set<string>();
 
 export function tileZoomFor(style: MapStyle, width: number, zoom: number): number {
     if (!width) return BACKDROP_Z;
-    const ideal = Math.round(Math.log2((width * zoom) / TARGET_PX));
+    const ideal = Math.ceil(Math.log2((width * zoom) / TARGET_PX));
     return Math.max(MIN_DETAIL_Z, Math.min(styleMaxZoom(style.tiles), ideal));
 }
 
@@ -97,7 +97,7 @@ export const TileCanvas = memo(function TileCanvas({ style, view, width }: {
 
     return (
         <div
-            className="absolute start-0 top-0 will-change-transform"
+            className="absolute start-0 top-0"
             style={{
                 width,
                 height: width,

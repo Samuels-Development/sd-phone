@@ -38,21 +38,30 @@ function badgeLabel(type: string): string {
 }
 
 export function VerifiedBadge({ size = 16, type = 'blue' }: { size?: number; type?: string }) {
-    const fill = BADGE_FILL[type] ?? BADGE_FILL.blue;
+    const fill  = BADGE_FILL[type] ?? BADGE_FILL.blue;
+    const label = badgeLabel(type);
     return (
-        <svg viewBox="0 0 24 24" width={size} height={size} aria-label={badgeLabel(type)} className="shrink-0">
-            {type === 'gold'
-                ? <rect x="1" y="1" width="22" height="22" rx="7" fill={fill} />
-                : <circle cx="12" cy="12" r="11" fill={fill} />}
-            <path
-                d="M6.8 12.4 L10.2 15.7 L17.2 8.4"
-                fill="none"
-                stroke="#fff"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-            />
-        </svg>
+        <span className="group/vb relative inline-flex shrink-0">
+            <svg viewBox="0 0 24 24" width={size} height={size} aria-label={label} className="shrink-0">
+                {type === 'gold'
+                    ? <rect x="1" y="1" width="22" height="22" rx="7" fill={fill} />
+                    : <circle cx="12" cy="12" r="11" fill={fill} />}
+                <path
+                    d="M6.8 12.4 L10.2 15.7 L17.2 8.4"
+                    fill="none"
+                    stroke="#fff"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                />
+            </svg>
+            <span
+                role="tooltip"
+                className="pointer-events-none absolute left-1/2 bottom-full z-50 mb-1w-max -translate-x-1/2 whitespace-nowrap rounded-md bg-black/85 px-2 py-1 text-[11px] font-semibold leading-none text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover/vb:opacity-100"
+            >
+                {label}
+            </span>
+        </span>
     );
 }
 
