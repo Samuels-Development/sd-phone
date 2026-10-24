@@ -60,7 +60,16 @@ export function PlayerDetail({ cid, onBack, toast, onOpenGallery }: {
 
     const reload = useCallback(() => {
         void adminOverview(cid).then(res => {
-            setOv(res.success ? res.data ?? null : null);
+            // Characters without a phone profile come back with some lists missing.
+            const d = res.success ? res.data : null;
+            setOv(d ? {
+                ...d,
+                accounts:     d.accounts ?? [],
+                birdy:        d.birdy ?? [],
+                mutes:        d.mutes ?? [],
+                downloadable: d.downloadable ?? [],
+                sim:          d.sim ? { ...d.sim, sims: d.sim.sims ?? [] } : d.sim,
+            } : null);
             setLoading(false);
         });
     }, [cid]);
