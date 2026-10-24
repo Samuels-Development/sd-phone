@@ -11,6 +11,7 @@ import { TileCanvas } from './map/TileCanvas';
 import { MAX_ZOOM, MIN_ZOOM, useMapViewport } from './map/useMapViewport';
 
 const POLL_MS = 5000;
+const STYLE_LABELS: Record<MapStyleId, string> = { satellite: 'Satellite', atlas: 'Atlas' };
 
 export function MapPage({ onOpenPlayer }: { onOpenPlayer: (cid: string) => void }) {
     const [players, setPlayers] = useState<AdminLivePlayer[]>([]);
@@ -65,7 +66,7 @@ export function MapPage({ onOpenPlayer }: { onOpenPlayer: (cid: string) => void 
                                 onClick={() => pickStyle(s.id)}
                                 className={`px-2.5 py-1.5 text-[12px] font-medium transition-colors ${s.id === styleId ? 'bg-adm-surface-3 text-adm-1' : 'bg-transparent text-adm-3 hover:bg-adm-surface-2 hover:text-adm-2'}`}
                             >
-                                {s.label}
+                                {STYLE_LABELS[s.id]}
                             </button>
                         ))}
                     </div>

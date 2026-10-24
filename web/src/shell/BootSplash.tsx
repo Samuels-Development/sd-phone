@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { SyntheticEvent } from 'react';
-import { createPortal } from 'react-dom';
 
 import logoUrl from '@/assets/logo.png';
 import { t } from '@/i18n';
@@ -37,21 +36,15 @@ export function replayBootSplash(): void {
 }
 
 export function BootReplayButton() {
-    if (isFiveM || !import.meta.env.DEV || typeof document === 'undefined') return null;
-    return createPortal(
+    if (isFiveM || !import.meta.env.DEV) return null;
+    return (
         <button
             type="button"
             onClick={replayBootSplash}
-            style={{
-                position: 'fixed', left: 12, top: 12, zIndex: 2147483647,
-                padding: '9px 16px', borderRadius: 999, background: '#0a84ff', color: '#fff',
-                fontSize: 13, fontWeight: 700, border: '1px solid rgba(255,255,255,0.35)',
-                boxShadow: '0 6px 22px rgba(0,0,0,0.55)', cursor: 'pointer',
-            }}
+            className="rounded-md bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/20 hover:bg-black/90"
         >
             Replay boot
-        </button>,
-        document.body,
+        </button>
     );
 }
 

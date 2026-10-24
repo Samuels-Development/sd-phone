@@ -208,7 +208,6 @@ export function App() {
         <ThemeProvider>
             <LockscreenWidgetsProvider>
                 <MusicProvider>
-                    <BootReplayButton />
                     {!demoAdminOnly && <AppContent />}
                     <Suspense fallback={null}>
                         {device.admin && <AdminPanel />}
@@ -1601,53 +1600,59 @@ function AppContent() {
         <>
         {deckLayer}
         <div key={showSetup ? 'setup' : locale} className={theme === 'dark' ? 'dark' : undefined} data-dark-theme={darkTheme} data-light-theme={lightTheme} style={themeVars}>
-            {import.meta.env.DEV && device.setup && (
-                <button
-                    type="button"
-                    onClick={() => setSetup(prev => { const next = { ...prev, completed: !prev.completed }; saveSetup(next); return next; })}
-                    className="fixed start-3 top-3 z-[99999] rounded-md bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/20 hover:bg-black/90"
-                >
-                    {showSetup ? 'Exit Setup' : 'Show Setup'}
-                </button>
-            )}
             {import.meta.env.DEV && (
-                <button
-                    type="button"
-                    onClick={() => { ryDevToggleData(); window.location.reload(); }}
-                    className="fixed start-3 top-12 z-[99999] rounded-md bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/20 hover:bg-black/90"
-                >
-                    {ryDevDataHidden() ? 'Ryde data: off' : 'Ryde data: on'}
-                </button>
-            )}
-            {import.meta.env.DEV && (
-                <button
-                    type="button"
-                    onClick={() => window.postMessage({
-                        action: 'sd-phone:payphone:open',
-                        data: {
-                            number:    '2085550142',
-                            anonymous: false,
-                            myNumber:  '2085559873',
-                            favorites: [
-                                { name: 'Tommy V',      phone: '2085552398' },
-                                { name: 'Mechanic Joe', phone: '2085556641' },
-                                { name: 'Rosa',         phone: '2085551177' },
-                            ],
-                        },
-                    }, '*')}
-                    className="fixed start-3 top-[84px] z-[99999] rounded-md bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/20 hover:bg-black/90"
-                >
-                    Payphone
-                </button>
-            )}
-            {import.meta.env.DEV && (
-                <button
-                    type="button"
-                    onClick={() => setHour24(!hour24)}
-                    className="fixed start-3 top-[84px] z-[99999] rounded-md bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/20 hover:bg-black/90"
-                >
-                    {hour24 ? '24h: on' : '24h: off'}
-                </button>
+                <div className="fixed start-3 top-3 z-[99999] flex max-w-[calc(100vw-24px)] flex-wrap items-start gap-1.5">
+                    {device.setup && (
+                        <button
+                            type="button"
+                            onClick={() => setSetup(prev => { const next = { ...prev, completed: !prev.completed }; saveSetup(next); return next; })}
+                            className="rounded-md bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/20 hover:bg-black/90"
+                        >
+                            {showSetup ? 'Exit Setup' : 'Show Setup'}
+                        </button>
+                    )}
+                    <BootReplayButton />
+                    <button
+                        type="button"
+                        onClick={() => window.postMessage({ action: 'sd-phone:admin:open', data: { adminName: 'Dev Admin' } }, '*')}
+                        className="rounded-md bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/20 hover:bg-black/90"
+                    >
+                        Admin
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => { ryDevToggleData(); window.location.reload(); }}
+                        className="rounded-md bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/20 hover:bg-black/90"
+                    >
+                        {ryDevDataHidden() ? 'Ryde data: off' : 'Ryde data: on'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => window.postMessage({
+                            action: 'sd-phone:payphone:open',
+                            data: {
+                                number:    '2085550142',
+                                anonymous: false,
+                                myNumber:  '2085559873',
+                                favorites: [
+                                    { name: 'Tommy V',      phone: '2085552398' },
+                                    { name: 'Mechanic Joe', phone: '2085556641' },
+                                    { name: 'Rosa',         phone: '2085551177' },
+                                ],
+                            },
+                        }, '*')}
+                        className="rounded-md bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/20 hover:bg-black/90"
+                    >
+                        Payphone
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setHour24(!hour24)}
+                        className="rounded-md bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/20 hover:bg-black/90"
+                    >
+                        {hour24 ? '24h: on' : '24h: off'}
+                    </button>
+                </div>
             )}
             <PhoneShell hidden={onCamera} cameraActive={cameraMode} landscape={cameraMode && landscape} entering={entering} leaving={leaving} onClose={closePhone} frameColor={frameColor} radioIsland={radioIsland} alarmIsland={{ ringing: !!ringingAlarm, since: ringingSince }}>
                 {!(showSetup && setupHello && !noSim) && (
