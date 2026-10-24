@@ -138,7 +138,7 @@ With both running, a computer becomes another screen for the character's phone: 
 | Frameworks | QBCore, QBox, ESX, ox_core, ND (auto-detected) |
 | Inventories | ox_inventory, one_inventory, tgiann-inventory, qb-inventory, qs-inventory(-pro), origen_inventory, codem-inventory, jaksam_inventory, lj-inventory, ps-inventory |
 | Voice | pma-voice |
-| Housing | 12 housing systems for the Homes app |
+| Housing | 13 housing systems for the Homes app |
 | Garages | 14 garage systems for the Garages app, plus ND_Core as the fallback on ND |
 | Notify | ox_lib (default), lation_ui (opt-in), framework-native fallback |
 
