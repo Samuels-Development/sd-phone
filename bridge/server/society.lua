@@ -98,7 +98,10 @@ end
 ---@return number
 function society.getBalance(jobName, override)
     if framework.aicore then
-        return tonumber(exports['ai-core']:GetSharedMoney('job', aiAccount(jobName, override), 'bank')) or 0
+        -- A job without an account answers null, which arrives as no value at all and tonumber()
+        -- rejects, so it goes through a local.
+        local balance = exports['ai-core']:GetSharedMoney('job', aiAccount(jobName, override), 'bank')
+        return tonumber(balance) or 0
     end
     if framework.name == 'ox' then
         local acc = oxc.groupAccount(override or jobName)

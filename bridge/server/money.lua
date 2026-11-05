@@ -127,13 +127,24 @@ end
 ---@type table<string, true> Inventories that hold black money as a black_money item.
 local BLACK_MONEY_ITEM = { ['ox_inventory'] = true, ['one_inventory'] = true }
 
----True when the AI Core server defines a black_money account. Its account types come from the
----admin panel, so it is asked on every call; without the account, black money is the black_money
----item, as on ox.
+---@type integer Milliseconds the AI Core black_money account check is reused before it is asked again.
+local ACCOUNT_TYPES_TTL_MS = 30000
+
+---@type { has: boolean, at: integer }|nil The last AI Core black_money account check.
+local blackAccount
+
+---True when the AI Core server defines a black_money account; without it, black money is the
+---black_money item, as on ox. The account types come from the admin panel and only change when the
+---owner edits it, while GetAccountTypes copies the whole list across, so the answer is reused for
+---ACCOUNT_TYPES_TTL_MS.
 ---@return boolean
 local function aiBlackAccount()
+    local now = GetGameTimer()
+    if blackAccount and now - blackAccount.at < ACCOUNT_TYPES_TTL_MS then return blackAccount.has end
+
     local ok, types = pcall(function() return exports['ai-core']:GetAccountTypes() end)
-    return ok and type(types) == 'table' and types.black_money ~= nil
+    blackAccount = { has = ok and type(types) == 'table' and types.black_money ~= nil, at = now }
+    return blackAccount.has
 end
 
 ---Pick the "read black-money balance" implementation once at module load: AI Core and ESX read the
@@ -145,7 +156,9 @@ local function chooseGetBlack()
         local invMod = require 'bridge.server.inventory'
         return function(src)
             if not aiBlackAccount() then return invMod.count(src, 'black_money') end
-            return tonumber(exports['ai-core']:GetMoney(src, 'black_money')) or 0
+            -- A null answer arrives as no value at all, which tonumber() rejects, so it goes through a local.
+            local balance = exports['ai-core']:GetMoney(src, 'black_money')
+            return tonumber(balance) or 0
         end
     end
     if BLACK_MONEY_ITEM[inventoryId.name or ''] then

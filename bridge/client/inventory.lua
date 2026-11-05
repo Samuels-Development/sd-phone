@@ -189,7 +189,11 @@ end
 ---@return fun(item: string): number
 local function chooseCountResolver()
     if ON_LAYER then
-        return function(item) return tonumber(exports['ai-core']:GetItemCount(item)) or 0 end
+        return function(item)
+            -- A null answer arrives as no value at all, which tonumber() rejects, so it goes through a local.
+            local count = exports['ai-core']:GetItemCount(item)
+            return tonumber(count) or 0
+        end
     end
 
     local active = inventoryId.name

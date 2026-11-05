@@ -10,6 +10,10 @@ local MEMBERS_PAGE = 500
 ---@type integer GetJobMembers / SearchCharacters pages walked at most for one answer.
 local MAX_PAGES = 20
 
+---@type integer Callback exports kept in flight at once by a batch read. A stored character is one
+---database read inside ai-core, so a long name list is read a slice at a time.
+local MAX_IN_FLIGHT = 16
+
 ---@type table AI Core module; the table returned at end of file. Helpers for the bridges that call
 ---AI Core's own exports: character ids, names, searches and its callback-style (offline) exports.
 ---Nothing here reads AI Core's tables: they trail its memory and their columns are internal.
@@ -59,6 +63,26 @@ local function start(resource, name, args)
     return p
 end
 
+---Runs one ai-core callback export per key, MAX_IN_FLIGHT at a time, and collects the answers.
+---@param keys any[]
+---@param name string ai-core export name
+---@param argOf fun(key: any): any the export's argument for a key
+---@return table answers by key; nil answers are left out
+local function inBatches(keys, name, argOf)
+    local out = {}
+    for first = 1, #keys, MAX_IN_FLIGHT do
+        local batch = {}
+        for i = first, math.min(#keys, first + MAX_IN_FLIGHT - 1) do
+            batch[#batch + 1] = { key = keys[i], p = start('ai-core', name, table.pack(argOf(keys[i]))) }
+        end
+        for _, b in ipairs(batch) do
+            local answer = Citizen.Await(b.p)
+            if answer ~= nil then out[b.key] = answer end
+        end
+    end
+    return out
+end
+
 ---Calls an AI Core resource's export that answers through a callback and waits for the answer.
 ---The callback goes where aicore.ANSWER sits in the arguments, else last. Nil when the call errors
 ---or no answer arrives within CALLBACK_TIMEOUT.
@@ -92,14 +116,32 @@ local charIds = {}
 ---@type table<integer, string> AI Core character id -> citizenid, the reverse of charIds.
 local citizenIds = {}
 
----Records a citizenid / character id pair in both directions.
+---@type table<string, { name: string, at: integer }> citizenid -> its character's name.
+local names = {}
+
+---"First Last" from any table carrying firstname / lastname, nil when both are blank.
+---@param info any
+---@return string|nil
+local function nameOf(info)
+    if type(info) ~= 'table' then return nil end
+    local name = ('%s %s'):format(info.firstname or '', info.lastname or ''):gsub('^%s+', ''):gsub('%s+$', '')
+    return name ~= '' and name or nil
+end
+
+---Records what a character row tells: its citizenid / character id pair in both directions and,
+---when the row carries one, its name. Search, member and character answers all come through here,
+---so a roster that was just listed resolves its names without another read.
 ---@param citizenid any
 ---@param charId any
-local function remember(citizenid, charId)
+---@param info? table row carrying firstname / lastname
+local function learn(citizenid, charId, info)
     local id = math.tointeger(tonumber(charId))
     if type(citizenid) ~= 'string' or citizenid == '' or not id then return end
     charIds[citizenid] = id
     citizenIds[id] = citizenid
+
+    local name = nameOf(info)
+    if name then names[citizenid] = { name = name, at = GetGameTimer() } end
 end
 
 ---A citizenid as the string AI Core keys it by, nil when unusable.
@@ -123,7 +165,7 @@ function aicore.charId(citizenid)
     if known then return known end
 
     local id = math.tointeger(tonumber(aicore.await('GetCharIdByCitizenId', cid)))
-    if id then remember(cid, id) end
+    if id then learn(cid, id) end
     return id
 end
 
@@ -138,7 +180,7 @@ local function characterById(charId)
 
     local character = aicore.await('GetOfflineCharacter', id)
     if type(character) ~= 'table' or type(character.info) ~= 'table' then return nil end
-    remember(character.info.citizenid, id)
+    learn(character.info.citizenid, id, character.info)
     return character
 end
 
@@ -156,7 +198,7 @@ function aicore.citizenId(charId)
         return src and exports['ai-core']:GetCharacter(src) or nil
     end)
     if ok and type(info) == 'table' and type(info.citizenid) == 'string' then
-        remember(info.citizenid, id)
+        learn(info.citizenid, id, info)
         return info.citizenid
     end
 
@@ -172,36 +214,39 @@ function aicore.character(citizenid)
     return id and characterById(id) or nil
 end
 
----The stored or loaded character behind each citizenid (see characterById), all asked at once.
+---The stored or loaded character behind each citizenid (see characterById). Unknown character ids
+---are resolved first, then the characters read, MAX_IN_FLIGHT at a time.
 ---@param cids any[]
 ---@return table<string, table> characters by citizenid; unknown ones are left out
 function aicore.characters(cids)
-    local asks = {}
+    local wanted, unknown, seen = {}, {}, {}
     for i = 1, #cids do
         local cid = asCitizenId(cids[i])
-        local id = cid and not asks[cid] and aicore.charId(cid)
-        if id then asks[cid] = start('ai-core', 'GetOfflineCharacter', table.pack(id)) end
+        if cid and not seen[cid] then
+            seen[cid] = true
+            wanted[#wanted + 1] = cid
+            if not charIds[cid] then unknown[#unknown + 1] = cid end
+        end
+    end
+
+    for cid, id in pairs(inBatches(unknown, 'GetCharIdByCitizenId', function(cid) return cid end)) do
+        learn(cid, id)
+    end
+
+    local known = {}
+    for i = 1, #wanted do
+        if charIds[wanted[i]] then known[#known + 1] = wanted[i] end
     end
 
     local out = {}
-    for cid, p in pairs(asks) do
-        local character = Citizen.Await(p)
-        if type(character) == 'table' and type(character.info) == 'table' then out[cid] = character end
+    for cid, character in pairs(inBatches(known, 'GetOfflineCharacter', function(cid) return charIds[cid] end)) do
+        if type(character) == 'table' and type(character.info) == 'table' then
+            learn(cid, charIds[cid], character.info)
+            out[cid] = character
+        end
     end
     return out
 end
-
----"First Last" from a character info table, nil when both are blank.
----@param info any
----@return string|nil
-local function nameOf(info)
-    if type(info) ~= 'table' then return nil end
-    local name = ('%s %s'):format(info.firstname or '', info.lastname or ''):gsub('^%s+', ''):gsub('%s+$', '')
-    return name ~= '' and name or nil
-end
-
----@type table<string, { name: string, at: integer }> citizenid -> its character's name.
-local names = {}
 
 ---A loaded character's name, answered from ai-core's memory without waiting. Nil when the
 ---citizenid is not loaded.
@@ -215,8 +260,9 @@ local function loadedName(cid)
     return ok and nameOf(info) or nil
 end
 
----The character's "First Last" behind each citizenid, read from ai-core: loaded characters from
----memory, the rest through GetOfflineCharacter, all asked at once. Missing ones are left out.
+---The character's "First Last" behind each citizenid: names already learned from a search, a
+---roster or a character read, loaded characters from ai-core's memory, and the rest through
+---aicore.characters. Missing ones are left out.
 ---@param cids any[]
 ---@return table<string, string> names
 function aicore.names(cids)
@@ -238,11 +284,7 @@ function aicore.names(cids)
     end
 
     for cid, character in pairs(aicore.characters(pending)) do
-        local name = nameOf(character.info)
-        if name then
-            out[cid] = name
-            names[cid] = { name = name, at = now }
-        end
+        out[cid] = nameOf(character.info)
     end
     return out
 end
@@ -270,7 +312,7 @@ function aicore.search(text, want)
 
         for _, c in ipairs(page.characters) do
             if #out >= want then return out, true end
-            remember(c.citizenid, c.charId)
+            learn(c.citizenid, c.charId, c)
             out[#out + 1] = c
         end
 
@@ -291,7 +333,7 @@ function aicore.jobMembers(job)
         if type(page) ~= 'table' or type(page.members) ~= 'table' then break end
 
         for _, m in ipairs(page.members) do
-            remember(m.citizenid, m.charId)
+            learn(m.citizenid, m.charId, m)
             out[#out + 1] = m
         end
 

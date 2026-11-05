@@ -611,10 +611,90 @@ local function aiVehicle(v, ownerCid)
     }
 end
 
+---A plate as the mirror keys it: upper-cased, spaces dropped.
+---@param plate any
+---@return string
+local function plateKey(plate)
+    return (str(plate):upper():gsub('%s', ''))
+end
+
+---@class AiFleetEntry
+---@field plate string the plate as ai-vehicles holds it
+---@field key string plateKey(plate)
+---@field model string upper-cased model name, '' when ai-vehicles had none
+
+---@type table<string, AiFleetEntry> Mirror of the vehicles ai-vehicles holds in memory, by plate key.
+---Seeded once from GetPlateOwners and kept current from its `ai-vehicles:owners` event, the way its
+---key systems mirror it, so a search never copies the whole list across or asks per vehicle.
+local fleet = {}
+
+---@type AiFleetEntry[]|nil The mirror sorted by plate, rebuilt on the first search after a change.
+local fleetSorted
+
+---Adds a plate to the mirror. Its model is read once, when the plate enters; an owner change keeps it.
+---@param plate any
+local function fleetPut(plate)
+    local key = plateKey(plate)
+    if key == '' or fleet[key] then return end
+
+    local v = aiVehicles('GetVehicle', plate)
+    fleet[key] = { plate = plate, key = key, model = type(v) == 'table' and str(v.model):upper() or '' }
+    fleetSorted = nil
+end
+
+---Fills the mirror from ai-vehicles' snapshot, yielding now and then so a large fleet does not
+---stall the server tick.
+local function fleetSeed()
+    local rows = aiVehicles('GetPlateOwners') or {}
+    for i, row in ipairs(rows) do
+        if type(row) == 'table' then fleetPut(row[1]) end
+        if i % 200 == 0 then Wait(0) end
+    end
+end
+
+if aicore then
+    CreateThread(function()
+        if GetResourceState('ai-vehicles') == 'started' then fleetSeed() end
+    end)
+
+    ---ai-vehicles' mirror feed: `puts` are `[plate, ownerType, ownerId]` rows that entered memory or
+    ---changed owner, `removes` the plates that left memory. One batch per tick.
+    AddEventHandler('ai-vehicles:owners', function(puts, removes)
+        for _, row in ipairs(type(puts) == 'table' and puts or {}) do
+            if type(row) == 'table' then fleetPut(row[1]) end
+        end
+        for _, plate in ipairs(type(removes) == 'table' and removes or {}) do
+            fleet[plateKey(plate)] = nil
+        end
+        fleetSorted = nil
+    end)
+
+    AddEventHandler('onResourceStart', function(resource)
+        if resource ~= 'ai-vehicles' then return end
+        fleet, fleetSorted = {}, nil
+        CreateThread(fleetSeed)
+    end)
+
+    AddEventHandler('onResourceStop', function(resource)
+        if resource == 'ai-vehicles' then fleet, fleetSorted = {}, nil end
+    end)
+end
+
+---The mirror sorted by plate.
+---@return AiFleetEntry[]
+local function sortedFleet()
+    if fleetSorted then return fleetSorted end
+
+    fleetSorted = {}
+    for _, entry in pairs(fleet) do fleetSorted[#fleetSorted + 1] = entry end
+    table.sort(fleetSorted, function(a, b) return a.key < b.key end)
+    return fleetSorted
+end
+
 ---A page of AI Core vehicles. ai-vehicles holds the vehicles of the characters it has loaded and
 ---answers one stored vehicle by its exact plate, with no search over everything stored, so a search
----matches loaded vehicles by plate or model and adds an exact plate match from storage; a browse
----pages the loaded ones.
+---matches the mirrored loaded vehicles by plate or model and adds an exact plate match from
+---storage; a browse pages the loaded ones. Only the rows shown are read from ai-vehicles.
 ---@param term string
 ---@param browse boolean
 ---@param limit integer
@@ -622,31 +702,20 @@ end
 ---@return table[] vehicles
 ---@return integer total
 local function aiSearchVehicles(term, browse, limit, offset)
-    local needle = term:upper():gsub('%s', '')
-    local loaded = aiVehicles('GetPlateOwners') or {}
+    local needle = plateKey(term)
+    local model  = str(term):upper()
 
-    local plates = {}
-    for _, entry in ipairs(loaded) do
-        if type(entry) == 'table' and type(entry[1]) == 'string' then plates[#plates + 1] = entry[1] end
-    end
-    table.sort(plates)
-
-    local hits, seen = {}, {}
-    for _, plate in ipairs(plates) do
-        local key = plate:upper():gsub('%s', '')
-        local v
-        local hit = browse or key:find(needle, 1, true) ~= nil
-        if not hit then
-            v = aiVehicles('GetVehicle', plate, 'framework')
-            hit = type(v) == 'table' and str(v.model):upper():find(term:upper(), 1, true) ~= nil
-        end
-        if hit then
-            seen[key] = true
-            hits[#hits + 1] = { plate = plate, v = v }
+    local hits, exact = {}, false
+    for _, entry in ipairs(sortedFleet()) do
+        local byPlate = entry.key:find(needle, 1, true) ~= nil
+        local byModel = entry.model ~= '' and entry.model:find(model, 1, true) ~= nil
+        if browse or byPlate or byModel then
+            hits[#hits + 1] = { plate = entry.plate }
+            if entry.key == needle then exact = true end
         end
     end
 
-    if not browse and not seen[needle] then
+    if not browse and not exact then
         local v = aicore.awaitOn('ai-vehicles', 'FindVehicle', term, aicore.ANSWER, 'framework')
         if type(v) == 'table' then hits[#hits + 1] = { plate = str(v.plate), v = v } end
     end
