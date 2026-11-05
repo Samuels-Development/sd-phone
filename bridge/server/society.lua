@@ -360,24 +360,15 @@ function society.listEmployees(jobName)
         return out
     end
 
-    if framework.aicore then
-        local ok, rows = pcall(function()
-            return MySQL.query.await([[
-                SELECT c.citizenid, c.firstname, c.lastname, j.grade
-                FROM ai_core_character_jobs j
-                JOIN ai_core_characters c ON c.id = j.char_id
-                WHERE j.job = ? AND c.deleted_at IS NULL
-            ]], { jobName })
-        end)
-        if ok and type(rows) == 'table' then
-            for _, r in ipairs(rows) do
-                local name = ('%s %s'):format(r.firstname or '', r.lastname or ''):gsub('^%s+', ''):gsub('%s+$', '')
-                out[#out + 1] = {
-                    citizenid = r.citizenid,
-                    name      = name ~= '' and name or r.citizenid,
-                    grade     = tonumber(r.grade) or 0,
-                }
-            end
+    if aicore then
+        -- GetJobMembers answers loaded members' grades from memory, which the tables trail.
+        for _, m in ipairs(aicore.jobMembers(jobName)) do
+            local name = ('%s %s'):format(m.firstname or '', m.lastname or ''):gsub('^%s+', ''):gsub('%s+$', '')
+            out[#out + 1] = {
+                citizenid = m.citizenid,
+                name      = name ~= '' and name or m.citizenid,
+                grade     = tonumber(m.grade) or 0,
+            }
         end
         return out
     end
@@ -430,22 +421,13 @@ end
 function society.namesByCids(cids)
     local out = {}
     if not cids or #cids == 0 then return out end
+    if aicore then return aicore.names(cids) end
 
     local placeholders = {}
     for i = 1, #cids do placeholders[i] = '?' end
     local inClause = table.concat(placeholders, ',')
 
-    if framework.aicore then
-        local ok, rows = pcall(function()
-            return MySQL.query.await(('SELECT citizenid, firstname, lastname FROM ai_core_characters WHERE citizenid IN (%s)'):format(inClause), cids)
-        end)
-        if ok and type(rows) == 'table' then
-            for _, r in ipairs(rows) do
-                local n = ('%s %s'):format(r.firstname or '', r.lastname or ''):gsub('^%s+', ''):gsub('%s+$', '')
-                out[r.citizenid] = n ~= '' and n or r.citizenid
-            end
-        end
-    elseif framework.qb then
+    if framework.qb then
         local ok, rows = pcall(function()
             return MySQL.query.await(('SELECT citizenid, charinfo FROM players WHERE citizenid IN (%s)'):format(inClause), cids)
         end)

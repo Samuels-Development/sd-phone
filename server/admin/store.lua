@@ -2,6 +2,8 @@
 local framework = require 'bridge.shared.framework'
 ---@type table Shared server helpers (server.util): digits + index bootstrap.
 local util = require 'server.util'
+---@type table|nil AI Core helpers (bridge.server.aicore): names and search; nil on every other framework.
+local aicore = framework.aicore and require 'bridge.server.aicore' or nil
 
 ---@type table Store module; the table returned at end of file.
 local store = {}
@@ -75,17 +77,12 @@ function store.namesFor(cids)
         if c and c ~= '' and not seen[c] then seen[c] = true; list[#list + 1] = c end
     end
     if #list == 0 then return {} end
+    if aicore then return aicore.names(list) end
     local placeholders = ('?,'):rep(#list):sub(1, -2)
 
     local out = {}
     pcall(function()
-        if framework.aicore then
-            local rows = MySQL.query.await(
-                ('SELECT citizenid, firstname, lastname FROM ai_core_characters WHERE citizenid IN (%s)'):format(placeholders), list) or {}
-            for _, r in ipairs(rows) do
-                out[r.citizenid] = ('%s %s'):format(r.firstname or '', r.lastname or '')
-            end
-        elseif framework.name == 'qb' then
+        if framework.name == 'qb' then
             local rows = MySQL.query.await(
                 ('SELECT citizenid, charinfo FROM players WHERE citizenid IN (%s)'):format(placeholders), list) or {}
             for _, r in ipairs(rows) do
@@ -113,21 +110,21 @@ function store.namesFor(cids)
     return out
 end
 
----Finds citizenids whose character name matches a LIKE pattern in the framework's own table.
+---Finds citizenids whose character name matches a LIKE pattern in the framework's own table. AI
+---Core is asked through SearchCharacters with the raw text instead, which matches first and last
+---name prefixes.
 ---@param like string SQL LIKE pattern (already escaped/wrapped by the caller)
 ---@param limit integer maximum rows
+---@param text string the raw search text
 ---@return string[] cids
-function store.searchByName(like, limit)
+function store.searchByName(like, limit, text)
     local out = {}
+    if aicore then
+        for _, c in ipairs((aicore.search(text, limit))) do out[#out + 1] = c.citizenid end
+        return out
+    end
     pcall(function()
-        if framework.aicore then
-            local rows = MySQL.query.await([[
-                SELECT citizenid FROM ai_core_characters
-                WHERE deleted_at IS NULL AND CONCAT(firstname, ' ', lastname) LIKE ?
-                LIMIT ?
-            ]], { like, limit }) or {}
-            for _, r in ipairs(rows) do out[#out + 1] = r.citizenid end
-        elseif framework.name == 'qb' then
+        if framework.name == 'qb' then
             local rows = MySQL.query.await([[
                 SELECT citizenid FROM players
                 WHERE CONCAT(
@@ -218,7 +215,7 @@ function store.searchPlayers(query, limit, offset)
     ]], { like, depth }) or {}
     for _, r in ipairs(accountRows) do add(r.citizenid, ('%s:%s'):format(r.app, r.username)) end
 
-    for _, cid in ipairs(store.searchByName(like, depth)) do add(cid, 'name') end
+    for _, cid in ipairs(store.searchByName(like, depth, query)) do add(cid, 'name') end
 
     local out = {}
     for i = offset + 1, math.min(#order, offset + limit) do

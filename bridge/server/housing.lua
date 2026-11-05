@@ -8,6 +8,8 @@ local framework = require 'bridge.shared.framework'
 ---(configs/uniqueandsim.lua) that one is rewrapped to return the acting SIM identity, and the
 ---resources called below key their records by citizenid.
 local player = require 'bridge.server.player'
+---@type table|nil AI Core helpers (bridge.server.aicore): character ids and names; nil on every other framework.
+local aicore = framework.aicore and require 'bridge.server.aicore' or nil
 
 ---@type table Housing bridge module; the table returned at end of file. Abstracts the supported
 ---housing systems behind one normalised property list plus capability-gated actions (lock / key
@@ -131,18 +133,8 @@ local function offlineName(cid)
             local last  = s(r.lastname)
             if first or last then return (first or '') .. ' ' .. (last or '') end
         end
-    elseif framework.aicore then
-        local ok, rows = pcall(function()
-            return MySQL.query.await(
-                'SELECT firstname, lastname FROM ai_core_characters WHERE citizenid = ? LIMIT 1', { cid }
-            )
-        end)
-        if ok and rows and rows[1] then
-            local r = rows[1]
-            local first = s(r.firstname)
-            local last  = s(r.lastname)
-            if first or last then return (first or '') .. ' ' .. (last or '') end
-        end
+    elseif aicore then
+        return aicore.name(cid)
     else
         local ok, rows = pcall(function()
             return MySQL.query.await(
@@ -758,14 +750,17 @@ local function aiPropertyDefs()
     return data
 end
 
----ai-properties (AI Core): it has no exports, so ownership comes from `ai_properties_owned`, keyed
----by AI Core's character id (the citizenid as a number), and the address, door and price from its
----property definitions.
+---ai-properties (AI Core): it has no exports, and its tables are its documented interface, so
+---ownership comes from `ai_properties_owned`, keyed by AI Core's character id (resolved from the
+---citizenid through ai-core), and the address, door and price from its property definitions.
 ---@param source number caller server id
 ---@param id string caller citizenid
 ---@return table[] homes
 ADAPTERS['ai-properties'] = function(source, id)
-    local rows = dbQuery('SELECT `property`, `price` FROM `ai_properties_owned` WHERE `char_id` = ?', { tonumber(id) })
+    local charId = aicore and aicore.charId(id)
+    if not charId then return {} end
+
+    local rows = dbQuery('SELECT `property`, `price` FROM `ai_properties_owned` WHERE `char_id` = ?', { charId })
     if not rows then return {} end
 
     local defs = aiPropertyDefs()
@@ -1042,7 +1037,8 @@ function housing.keyHolders(src, id)
         if not ownsProperty(src, id) then return {} end
         local holders = {}
         for _, r in ipairs(dbQuery('SELECT `char_id`, `name` FROM `ai_properties_keys` WHERE `property` = ?', { tostring(id) }) or {}) do
-            holders[#holders + 1] = { citizenid = tostring(r.char_id), name = r.name }
+            local cid = aicore and aicore.citizenId(r.char_id)
+            if cid then holders[#holders + 1] = { citizenid = cid, name = r.name } end
         end
         return resolveCids(holders)
     end

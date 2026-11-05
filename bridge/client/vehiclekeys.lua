@@ -1,3 +1,6 @@
+---@type table Framework detection (bridge.shared.framework): the AI Core flag.
+local framework = require 'bridge.shared.framework'
+
 ---@type string[] Supported vehicle-key resources, in detection-priority order. ai-vehiclekeys comes
 ---first because it provides the qbx_vehiclekeys name, which then reads as started.
 local RESOURCES = {
@@ -121,12 +124,14 @@ function M.setLocked(plate, locked)
 end
 
 ---Grant the player keys to a vehicle on whichever key resource is running. No-op when none is, and
----on ai-vehiclekeys, whose ai-vehicles hands the key over when it spawns the car.
+---on AI Core, where the server already handed them out through ai-core's key layer.
 ---@param plate string
 ---@param veh number vehicle entity
 function M.giveKeys(plate, veh)
+    if framework.aicore then return end
+
     local sys = M.active()
-    if not sys or sys == 'ai-vehiclekeys' or type(plate) ~= 'string' or plate == '' or not DoesEntityExist(veh) then return end
+    if not sys or type(plate) ~= 'string' or plate == '' or not DoesEntityExist(veh) then return end
 
     pcall(function()
         if sys == 'qbx_vehiclekeys' or sys == 'qb-vehiclekeys' then

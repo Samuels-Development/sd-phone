@@ -19,7 +19,8 @@ local G = config.Garages or { Enabled = false }
 ---@type { table: string, idCol: string, owner?: string } Framework ownership table: QBCore/Qbox
 ---key owned vehicles by citizenid in `player_vehicles`, ESX by owner identifier in
 ---`owned_vehicles`, ox_core by charId in its own `vehicles`, and AI Core (ai-vehicles) by character
----id in `ai_vehicles_owned`, where `owner` narrows the rows to character owners. An if-chain, not a
+---id in `ai_vehicles_owned`, where `owner` narrows the rows to character owners. AI Core's rows are
+---never read from that table (see ownedRows); it is named for the diagnostics. An if-chain, not a
 ---ternary: an unrecognised framework must not silently inherit the QBCore table.
 local BASE
 if framework.aicore then
@@ -98,6 +99,25 @@ local PROFILES = {
 
 ---@type string WHERE clause selecting one owner's rows in the ownership table.
 local OWNER_WHERE = BASE.owner and ('%s AND `%s` = ?'):format(BASE.owner, BASE.idCol) or ('`%s` = ?'):format(BASE.idCol)
+
+---A character's owned-vehicle rows. On AI Core they come from ai-vehicles, which answers from
+---memory (or its database for an owner it has not loaded) in its table's row shape; its table
+---trails that memory, so it is never read here. Nil when the read fails.
+---@param id string framework identifier (citizenid)
+---@return table[]|nil rows
+local function ownedRows(id)
+    if aicore then
+        local owner = aicore.vehicleOwner(id)
+        if not owner then return {} end
+        local list = aicore.awaitOn('ai-vehicles', 'GetVehiclesOf', owner, aicore.ANSWER, 'framework')
+        return type(list) == 'table' and list or nil
+    end
+
+    local ok, rows = pcall(function()
+        return MySQL.query.await(('SELECT * FROM `%s` WHERE %s'):format(BASE.table, OWNER_WHERE), { id })
+    end)
+    return (ok and type(rows) == 'table') and rows or nil
+end
 
 ---@type table<string, boolean> Systems whose garages are discovered from their own config/table
 ---rather than read from a runtime export, because they publish no schema for them.
@@ -677,15 +697,32 @@ local function parkedIsAuthoritative(rows)
 end
 
 ---ai-garages' garages, read from its admin-panel content file: `{ [garageId] = { label, type,
----coords, impound, ... } }`. Nil when the file is missing or unreadable.
+---coords, impound, ... } }`. ai-garages publishes no garage-list export, and that file's shape is
+---not a promise, so only entries carrying a usable label or `coords` survive. Nil when the file is
+---missing or unreadable.
 ---@return table|nil
 local function aiGarages()
     local raw = LoadResourceFile(ACTIVE, 'data/garages.json')
     if not raw then return nil end
     local ok, data = pcall(json.decode, raw)
     if not ok or type(data) ~= 'table' then return nil end
-    data['$schema'] = nil
-    return data
+
+    local out = {}
+    for id, g in pairs(data) do
+        if type(id) == 'string' and type(g) == 'table' then
+            local c = g.coords
+            local placed = type(c) == 'table' and tonumber(c.x) and tonumber(c.y)
+            if placed or type(g.label) == 'string' then
+                out[id] = {
+                    label   = type(g.label) == 'string' and g.label or nil,
+                    type    = g.type,
+                    impound = g.impound == true,
+                    coords  = placed and { x = tonumber(c.x), y = tonumber(c.y), z = tonumber(c.z) or 0.0 } or nil,
+                }
+            end
+        end
+    end
+    return out
 end
 
 ---Pull the active system's full garage collection. Nil for unsupported systems. Memoised on the
@@ -931,10 +968,8 @@ function garages.list(source)
     local id = player.getRealIdentifier(source)
     if not id then return {} end
 
-    local ok, rows = pcall(function()
-        return MySQL.query.await(('SELECT * FROM `%s` WHERE %s'):format(BASE.table, OWNER_WHERE), { id })
-    end)
-    if not ok or type(rows) ~= 'table' then
+    local rows = ownedRows(id)
+    if not rows then
         print(('^1[sd-phone:garages]^0 query failed on `%s` — check your garage system / table'):format(BASE.table))
         return {}
     end
@@ -1031,10 +1066,8 @@ function garages.vehicleFor(source, plate)
     local want = normPlate(plate)
     if not id or not want or want == '' then return nil end
 
-    local ok, rows = pcall(function()
-        return MySQL.query.await(('SELECT * FROM `%s` WHERE %s'):format(BASE.table, OWNER_WHERE), { id })
-    end)
-    if not ok or type(rows) ~= 'table' then return nil end
+    local rows = ownedRows(id)
+    if not rows then return nil end
 
     local spawned = spawnedPlates()
     for i = 1, #rows do
@@ -1060,6 +1093,9 @@ end
 ---@param netId number|nil network id of the spawned entity, for systems that track it
 ---@return boolean committed
 function garages.takeOut(source, plate, netId)
+    -- On AI Core only ai-vehicles writes its vehicles (garages.spawnOwned); its table trails it.
+    if aicore then return false end
+
     local veh = garages.vehicleFor(source, plate)
     if not veh or veh.status ~= 'stored' then return false end
 
@@ -1100,11 +1136,12 @@ function garages.takeOut(source, plate, netId)
     return true
 end
 
----True when the garage system spawns its owned vehicles itself (ai-vehicles under ai-garages): a
----delivery then goes through garages.spawnOwned, never a plain spawn plus takeOut.
+---True when owned vehicles are spawned by the script that owns them (ai-vehicles on AI Core,
+---whatever garage script runs): a delivery then goes through garages.spawnOwned, never a plain
+---spawn plus takeOut.
 ---@return boolean
 function garages.spawnsOwnVehicles()
-    return ACTIVE == 'ai-garages' and GetResourceState('ai-vehicles') == 'started'
+    return aicore ~= nil and GetResourceState('ai-vehicles') == 'started'
 end
 
 ---Spawns one of the caller's stored vehicles through ai-vehicles, which marks it out, applies its
@@ -1128,13 +1165,7 @@ end
 ---@return table report
 function garages.diagnose(source)
     local id   = player.getRealIdentifier(source)
-    local rows = {}
-    if id then
-        local ok, r = pcall(function()
-            return MySQL.query.await(('SELECT * FROM `%s` WHERE %s'):format(BASE.table, OWNER_WHERE), { id })
-        end)
-        rows = (ok and type(r) == 'table') and r or {}
-    end
+    local rows = id and ownedRows(id) or {}
 
     local sample = rows[1]
     local present = {}

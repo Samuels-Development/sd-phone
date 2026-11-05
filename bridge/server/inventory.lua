@@ -15,8 +15,6 @@ local inventory = { system = inventoryId.name }
 local OX = 'ox_inventory'
 ---@type string one_inventory (One Studios) resource name.
 local ONE = 'one_inventory'
----@type string ai-inventory (AI Core) resource name.
-local AI = 'ai-inventory'
 ---@type string tgiann-inventory resource name.
 local TG = 'tgiann-inventory'
 ---@type string jaksam_inventory resource name.
@@ -35,15 +33,21 @@ local CD = 'codem-inventory'
 ---@type string|nil Detected inventory resource; nil routes every chooser to the framework paths.
 local active = inventoryId.name
 
+---@type string ai-core, whose inventory layer forwards to whichever inventory an AI Core server runs.
+local LAYER = 'ai-core'
+---@type boolean True on AI Core: every item call goes through ai-core's layer, never an inventory
+---directly, so it keeps working when the owner swaps ai-inventory for another one.
+local ON_LAYER = framework.aicore == true
+
 ---Pick the inventory backend's AddItem implementation once at module load. Dedicated backends
 ---return their own success signal; framework paths cover the rest; with no backend, always false.
 ---@return fun(source: number, item: string, count: number, metadata?: table): boolean
 local function chooseAdd()
+    if ON_LAYER then
+        return function(src, item, count, metadata) return exports[LAYER]:AddItem(src, item, count, metadata) == true end
+    end
     if active == OX then
         return function(src, item, count, metadata) return exports[OX]:AddItem(src, item, count, metadata) end
-    end
-    if active == AI then
-        return function(src, item, count, metadata) return exports[AI]:AddItem(src, item, count, metadata) == true end
     end
     if active == ONE then
         return function(src, item, count, metadata)
@@ -101,6 +105,7 @@ inventory.add = chooseAdd()
 ---Every path answers 0, never nil, when the player or item can't be resolved.
 ---@return fun(source: number, item: string): number
 local function chooseCount()
+    if ON_LAYER then return function(src, item) return exports[LAYER]:GetItemCount(src, item) or 0 end end
     if active == OX then
         return function(src, item)
             local items = exports[OX]:Search(src, 'slots', item)
@@ -110,7 +115,6 @@ local function chooseCount()
             return total
         end
     end
-    if active == AI then return function(src, item) return exports[AI]:GetItemCount(src, item) or 0 end end
     if active == ONE then return function(src, item) return exports[ONE]:GetItemCount(src, item) or 0 end end
     if active == TG then return function(src, item) return exports[TG]:GetItemCount(src, item) or 0 end end
     if active == JK then return function(src, item) return exports[JK]:getTotalItemAmount(src, item) or 0 end end
@@ -157,11 +161,11 @@ end
 ---report their own result; the ESX path verifies the held count first; with no backend, always false.
 ---@return fun(source: number, item: string, count: number, metadata?: table): boolean
 local function chooseRemove()
+    if ON_LAYER then
+        return function(src, item, count, metadata) return exports[LAYER]:RemoveItem(src, item, count, metadata) == true end
+    end
     if active == OX then
         return function(src, item, count, metadata) return exports[OX]:RemoveItem(src, item, count, metadata) end
-    end
-    if active == AI then
-        return function(src, item, count, metadata) return exports[AI]:RemoveItem(src, item, count, metadata) == true end
     end
     if active == ONE then
         return function(src, item, count, metadata)
@@ -218,14 +222,14 @@ inventory.remove = chooseRemove()
 ---weight maths, and with no backend the answer is always false.
 ---@return fun(source: number, item: string, count: number, slot?: any): boolean
 local function chooseCanCarry()
+    if ON_LAYER then
+        return function(src, item, count) return exports[LAYER]:CanCarryItem(src, item, count) == true end
+    end
     if active == CD then
         return function() return true end
     end
     if active == OX then
         return function(src, item, count, metadata) return exports[OX]:CanCarryItem(src, item, count, metadata) end
-    end
-    if active == AI then
-        return function(src, item, count) return exports[AI]:CanCarryItem(src, item, count) == true end
     end
     if active == ONE then
         return function(src, item, count) return exports[ONE]:CanCarryItem(src, item, count) end
@@ -275,6 +279,11 @@ inventory.canCarry = chooseCanCarry()
 ---per-item export ('phone' -> 'usePhone'); with no path at all, registration errors at boot.
 ---@return fun(item: string, cb: fun(source: number, item?: any, inv?: table, slot?: any, data?: any)): nil
 local function chooseRegisterUsable()
+    -- ai-core keeps the registration itself and hands it to whichever inventory is active, so it
+    -- survives an inventory restart. The handler gets (source, { name, slot, count, metadata }).
+    if ON_LAYER then
+        return function(item, cb) return exports[LAYER]:RegisterUsableItem(item, cb) end
+    end
     if active == OX then
         return function(item, cb)
             local exportName = 'use' .. item:gsub('^%l', string.upper)
@@ -292,10 +301,10 @@ local function chooseRegisterUsable()
         return function(item, cb) return exports[OG]:CreateUseableItem(item, cb) end
     end
 
-    -- one_inventory and ai-inventory are deliberately absent here. one_inventory's own export form
-    -- has to be pointed at a resource from its admin panel, which nothing in this resource can do
-    -- at boot, and ai-inventory has no export form at all; both read the framework's usable-item
-    -- registry, so the framework paths below are the ones that actually fire.
+    -- one_inventory is deliberately absent here. Its own export form has to be pointed at a
+    -- resource from its admin panel, which nothing in this resource can do at boot, but it also
+    -- reads the framework's usable-item registry - so the framework paths below are the ones that
+    -- actually fire. Adding a branch for it would replace a working path with a dead one.
     if framework.name == 'esx' then
         return function(item, cb) return framework.core.RegisterUsableItem(item, cb) end
     end
@@ -318,7 +327,13 @@ inventory.registerUsable = chooseRegisterUsable()
 ---table, then to the raw key.
 ---@return fun(itemName: string): string|nil
 local function chooseLabel()
-    if active == OX or active == TG or active == AI then
+    if ON_LAYER then
+        return function(itemName)
+            local ok, def = pcall(exports[LAYER].GetItemDefinition, exports[LAYER], itemName)
+            return (ok and type(def) == 'table') and def.label or itemName
+        end
+    end
+    if active == OX or active == TG then
         return function(itemName)
             local ok, item = pcall(exports[active].Items, exports[active], itemName)
             return (ok and item) and item.label or itemName
@@ -386,12 +401,11 @@ end
 ---@field metadata table per-slot metadata (never nil)
 
 ---@type string[] Slot backends latched at call time once seen running, in priority order.
----ai-inventory and one_inventory come first because they provide the ox_inventory name, which
----then reads as started.
-local LATCHING = { AI, ONE, OX }
+---one_inventory comes first because it provides the ox_inventory name, which then reads as started.
+local LATCHING = { ONE, OX }
 
 ---@type string|nil The latched backend, set the first time one of LATCHING is seen running.
-local slotLatched = (active == AI or active == ONE or active == OX) and active or nil
+local slotLatched = (active == ONE or active == OX) and active or nil
 
 ---@type string Sentinel backend: no inventory resource, framework-native QBCore items table.
 local QBCORE = 'qb-core'
@@ -400,6 +414,7 @@ local QBCORE = 'qb-core'
 ---slot-metadata path exists (plain ESX inventory).
 ---@return string|nil
 local function slotBackend()
+    if ON_LAYER then return LAYER end
     if slotLatched then return slotLatched end
     for _, name in ipairs(LATCHING) do
         if GetResourceState(name) == 'started' then
@@ -758,14 +773,14 @@ SLOT_BACKENDS[ONE] = {
     end,
 }
 
----Every slot a player holds of `item` on ai-inventory, read from its GetItems list (it has no
----per-item search or single-slot getter of its own).
+---Every slot a player holds that `match` accepts, read from ai-core's GetItems list (the layer has
+---no per-item search or single-slot getter).
 ---@param src number player server id
 ---@param match fun(row: table): boolean
 ---@return SlotEntry[]
-local function aiSlots(src, match)
+local function layerSlots(src, match)
     local out = {}
-    local rows = exports[AI]:GetItems(src)
+    local rows = exports[LAYER]:GetItems(src)
     if type(rows) ~= 'table' then return out end
     for _, row in ipairs(rows) do
         if type(row) == 'table' and match(row) then
@@ -775,20 +790,20 @@ local function aiSlots(src, match)
     return out
 end
 
--- ai-inventory (AI Core): its own exports, a bare server id addresses the player's inventory. It
--- has no containers, and SetMetadata replaces the slot's table outright.
-SLOT_BACKENDS[AI] = {
+-- ai-core's inventory layer (AI Core): a bare server id addresses the player's inventory, whatever
+-- inventory the server runs. No containers, and SetItemMetadata replaces the slot's table outright.
+SLOT_BACKENDS[LAYER] = {
     search = function(src, item)
-        return aiSlots(src, function(row) return row.name == item end)
+        return layerSlots(src, function(row) return row.name == item end)
     end,
     get = function(src, slot)
-        return aiSlots(src, function(row) return row.slot == slot end)[1]
+        return layerSlots(src, function(row) return row.slot == slot end)[1]
     end,
     setMetadata = function(src, slot, metadata)
-        return exports[AI]:SetMetadata(src, slot, metadata) == true
+        return exports[LAYER]:SetItemMetadata(src, slot, metadata) == true
     end,
     removeFromSlot = function(src, item, slot, count)
-        return exports[AI]:RemoveItem(src, item, count or 1, nil, slot) == true
+        return exports[LAYER]:RemoveItem(src, item, count or 1, nil, slot) == true
     end,
 }
 

@@ -1,11 +1,13 @@
+---@type table Framework detection (bridge.shared.framework): the AI Core flag.
+local framework = require 'bridge.shared.framework'
 ---@type table Garages bridge (bridge.server.garages): vehicle lookup + the take-out write.
-local garages = require 'bridge.server.garages'
+local garages   = require 'bridge.server.garages'
 ---@type table Money bridge (bridge.server.money): fee debit and refund.
-local money   = require 'bridge.server.money'
+local money     = require 'bridge.server.money'
 ---@type table Shared server helpers (server.util): onCleanup.
-local util    = require 'server.util'
+local util      = require 'server.util'
 ---@type table Garages app config (configs.garages): the Valet block.
-local G       = require 'configs.garages'
+local G         = require 'configs.garages'
 
 ---@type table Valet settings, defaulted so a config without a Valet block simply stays off.
 local V = type(G.Valet) == 'table' and G.Valet or {}
@@ -177,6 +179,11 @@ lib.callback.register('sd-phone:server:garages:valet', function(src, payload)
         if not garages.takeOut(src, veh.plate, netId) then
             pcall(DeleteEntity, entity)
             return refund('takeOutFailed')
+        end
+
+        -- AI Core hands keys out on the server through its key layer, whichever key script runs.
+        if framework.aicore then
+            pcall(function() exports['ai-core']:GiveVehicleKeys(src, veh.plate, 'garage') end)
         end
     end
 

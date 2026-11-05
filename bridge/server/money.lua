@@ -127,13 +127,26 @@ end
 ---@type table<string, true> Inventories that hold black money as a black_money item.
 local BLACK_MONEY_ITEM = { ['ox_inventory'] = true, ['one_inventory'] = true }
 
+---True when the AI Core server defines a black_money account. Its account types come from the
+---admin panel, so it is asked on every call; without the account, black money is the black_money
+---item, as on ox.
+---@return boolean
+local function aiBlackAccount()
+    local ok, types = pcall(function() return exports['ai-core']:GetAccountTypes() end)
+    return ok and type(types) == 'table' and types.black_money ~= nil
+end
+
 ---Pick the "read black-money balance" implementation once at module load: AI Core and ESX read the
----account, ox and one_inventory count black_money, qb-inventory sums markedbills `info.worth`. 0
----with no supported path.
+---account (AI Core counts the item when it has none), ox and one_inventory count black_money,
+---qb-inventory sums markedbills `info.worth`. 0 with no supported path.
 ---@return fun(source: number): number
 local function chooseGetBlack()
     if framework.aicore then
-        return function(src) return exports['ai-core']:GetMoney(src, 'black_money') or 0 end
+        local invMod = require 'bridge.server.inventory'
+        return function(src)
+            if not aiBlackAccount() then return invMod.count(src, 'black_money') end
+            return tonumber(exports['ai-core']:GetMoney(src, 'black_money')) or 0
+        end
     end
     if BLACK_MONEY_ITEM[inventoryId.name or ''] then
         local invMod = require 'bridge.server.inventory'
@@ -171,12 +184,14 @@ local getBlack = chooseGetBlack()
 function money.getBlack(source) return getBlack(source) end
 
 ---Pick the "credit black money" implementation once at module load: AI Core and ESX credit the
----account, ox and one_inventory add black_money, qb mints one markedbills with the amount in
----`info.worth`. False with no path.
+---account (AI Core adds the item when it has none), ox and one_inventory add black_money, qb mints
+---one markedbills with the amount in `info.worth`. False with no path.
 ---@return fun(source: number, amount: number): boolean
 local function chooseAddBlack()
     if framework.aicore then
+        local invMod = require 'bridge.server.inventory'
         return function(src, amount)
+            if not aiBlackAccount() then return invMod.add(src, 'black_money', amount) end
             return exports['ai-core']:AddMoney(src, 'black_money', math.floor(amount), 'sd-phone') == true
         end
     end
@@ -214,7 +229,9 @@ function money.addBlack(source, amount) return addBlack(source, amount) end
 ---@return fun(source: number, amount: number): boolean
 local function chooseRemoveBlack()
     if framework.aicore then
+        local invMod = require 'bridge.server.inventory'
         return function(src, amount)
+            if not aiBlackAccount() then return invMod.remove(src, 'black_money', amount) end
             return exports['ai-core']:RemoveMoney(src, 'black_money', math.floor(amount), 'sd-phone') == true
         end
     end

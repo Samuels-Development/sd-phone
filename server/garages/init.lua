@@ -101,8 +101,8 @@ end)
 -- No boot print: the detected garage system is available via garages.activeSystem() when needed.
 
 ---Locks or unlocks a vehicle for its key holder through ai-vehiclekeys, which sets door locks on
----the server. The applied state, or nil when it is not running, the vehicle is gone, or the caller
----holds no key to it.
+---the server. The key check goes through ai-core's key layer. The applied state, or nil when
+---ai-vehiclekeys is not running, the vehicle is gone, or the caller holds no key to it.
 ---@param src number caller server id
 ---@param netId any network id of the vehicle
 ---@param locked any true to lock
@@ -113,8 +113,7 @@ lib.callback.register('sd-phone:server:garages:setLock', function(src, netId, lo
     local veh = NetworkGetEntityFromNetworkId(tonumber(netId) or 0)
     if not veh or veh == 0 or GetEntityType(veh) ~= 2 then return nil end
 
-    local plate = GetVehicleNumberPlateText(veh)
-    if not exports['ai-vehiclekeys']:HasKeys(src, plate) then return nil end
+    if exports['ai-core']:HasVehicleKeys(src, veh) ~= true then return nil end
 
     exports['ai-vehiclekeys']:SetLockState(veh, locked == true and 'lock' or 'unlock')
     return locked == true
