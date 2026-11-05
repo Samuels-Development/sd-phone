@@ -7,6 +7,7 @@ local V = type(config.Voice) == 'table' and config.Voice or {}
 ---@type { name: string, provider: string }[] Detection order used when the config omits one, so a
 ---server whose configs predate this file still resolves a backend.
 local DEFAULT_RESOURCES <const> = {
+    { name = 'ai-voice',  provider = 'pma-voice' },
     { name = 'pma-voice', provider = 'pma-voice' },
     { name = 'saltychat', provider = 'saltychat' },
 }

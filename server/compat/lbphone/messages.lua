@@ -24,20 +24,34 @@ local function str(v)
     return util.trim(v)
 end
 
+---A stable digit short code for a sender given as a name ("Dispatch"), so every text it sends
+---files under one thread; the 9-prefix keeps it clear of a generated player number.
+---@param label string
+---@return string
+local function codeFor(label)
+    local hash = 0
+    for i = 1, #label do
+        hash = (hash * 31 + label:byte(i)) % 1000000
+    end
+    return ('9%05d'):format(hash)
+end
+
 ---Delivers a one-way system text with digit-normalised numbers, a capped body, and a display
----name derived from the sending number.
----@param from string|number sending number
+---name derived from the sending number. A sender given as a name keeps it as the display name.
+---@param from string|number sending number, or a sender name
 ---@param to string|number recipient number
 ---@param body string|number message body
 ---@param opts table|nil presentation-safe kind + meta (see actions.systemText)
 ---@return boolean delivered
 ---@return string|nil messageId id of the recipient's message row when delivered
 local function deliver(from, to, body, opts)
-    local sender = util.digits(str(from)):sub(1, 32)
+    local raw    = str(from)
+    local named  = raw:find('%a') ~= nil
+    local sender = named and codeFor(raw:lower()) or util.digits(raw):sub(1, 32)
     local target = util.digits(str(to))
     if sender == '' or target == '' then return false end
 
-    local name = util.formatNumber(sender):sub(1, 64)
+    local name = (named and raw or util.formatNumber(sender)):sub(1, 64)
     local text = str(body)
     local maxBody = config.Messages.MaxBodyLength
     if #text > maxBody then text = text:sub(1, maxBody) end
@@ -47,7 +61,8 @@ end
 
 ---SendMessage(from, to, message, attachments?, cb?, channelId?): recipient-side system text; the
 ---first attachment rides as an image bubble, further URLs append to the body, channelId is ignored.
----Returns { channelId = 0 (synthetic), messageId } on delivery, nil on failure; `cb` receives the same.
+---Returns { channelId = 0 (synthetic), messageId } on delivery, false on failure; `cb` receives
+---the result, nil on failure.
 registerLbExport('SendMessage', function(from, to, message, attachments, cb, channelId)
     if channelId ~= nil then
         warnOnce('SendMessage.channelId', ('SendMessage channelId is not supported (called by %s); the message was sent as a plain number-to-number text'):format(GetInvokingResource() or 'unknown'))
@@ -74,7 +89,7 @@ registerLbExport('SendMessage', function(from, to, message, attachments, cb, cha
         result = { channelId = 0, messageId = messageId or 0 }
     end
     if callable.is(cb) then pcall(cb, result) end
-    return result
+    return result or false
 end)
 
 ---SendCoords(from, to, coords): delivers a tappable location card, the same kind the composer's

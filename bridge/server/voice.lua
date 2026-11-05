@@ -22,10 +22,11 @@ local inCall = {}
 ---@return string|nil
 function voice.provider() return PROVIDER end
 
----Whether the backend has a real speakerphone of its own. When false the caller has to build one,
----which is what the proximity sweep in server/calls/actions.lua is for.
+---Whether the backend has a real speakerphone of its own (SaltyChat, and AI Core's ai-voice, which
+---speaks the pma-voice dialect). When false the caller has to build one, which is what the
+---proximity sweep in server/calls/actions.lua is for.
 ---@return boolean
-function voice.nativeSpeaker() return PROVIDER == 'saltychat' end
+function voice.nativeSpeaker() return PROVIDER == 'saltychat' or RESOURCE == 'ai-voice' end
 
 ---Moves a player in or out of a call channel. Channel 0 leaves.
 ---
@@ -63,6 +64,9 @@ end
 ---@param on boolean
 ---@return boolean handled false when the caller must fall back to its own proximity circle
 function voice.setPhoneSpeaker(src, on)
+    if RESOURCE == 'ai-voice' then
+        return pcall(function() exports[RESOURCE]:setPlayerCallSpeaker(src, on == true) end)
+    end
     if PROVIDER ~= 'saltychat' or not RESOURCE then return false end
     return pcall(function() exports[RESOURCE]:SetPhoneSpeaker(src, on == true) end)
 end

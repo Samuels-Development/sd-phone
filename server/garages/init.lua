@@ -100,6 +100,26 @@ end)
 
 -- No boot print: the detected garage system is available via garages.activeSystem() when needed.
 
+---Locks or unlocks a vehicle for its key holder through ai-vehiclekeys, which sets door locks on
+---the server. The applied state, or nil when it is not running, the vehicle is gone, or the caller
+---holds no key to it.
+---@param src number caller server id
+---@param netId any network id of the vehicle
+---@param locked any true to lock
+---@return boolean|nil locked
+lib.callback.register('sd-phone:server:garages:setLock', function(src, netId, locked)
+    if GetResourceState('ai-vehiclekeys') ~= 'started' then return nil end
+
+    local veh = NetworkGetEntityFromNetworkId(tonumber(netId) or 0)
+    if not veh or veh == 0 or GetEntityType(veh) ~= 2 then return nil end
+
+    local plate = GetVehicleNumberPlateText(veh)
+    if not exports['ai-vehiclekeys']:HasKeys(src, plate) then return nil end
+
+    exports['ai-vehiclekeys']:SetLockState(veh, locked == true and 'lock' or 'unlock')
+    return locked == true
+end)
+
 ---The bridge's resolution report as printable lines.
 ---@param src number caller server id
 ---@return string[] lines

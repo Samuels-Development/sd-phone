@@ -14,6 +14,6 @@ return {
     Resources = {
         'qs-housing', 'ps-housing', 'vms_housing', 'rtx_housing',
         'origen_housing', 'bcs_housing', 'loaf_housing', 'tk_housing', 'RxHousing', 'LNS_Housing',
-        'nolag_properties', 'kartik-properties', 'qbx_properties',
+        'nolag_properties', 'kartik-properties', 'qbx_properties', 'ai-properties',
     },
 }

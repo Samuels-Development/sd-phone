@@ -79,7 +79,13 @@ function store.namesFor(cids)
 
     local out = {}
     pcall(function()
-        if framework.name == 'qb' then
+        if framework.aicore then
+            local rows = MySQL.query.await(
+                ('SELECT citizenid, firstname, lastname FROM ai_core_characters WHERE citizenid IN (%s)'):format(placeholders), list) or {}
+            for _, r in ipairs(rows) do
+                out[r.citizenid] = ('%s %s'):format(r.firstname or '', r.lastname or '')
+            end
+        elseif framework.name == 'qb' then
             local rows = MySQL.query.await(
                 ('SELECT citizenid, charinfo FROM players WHERE citizenid IN (%s)'):format(placeholders), list) or {}
             for _, r in ipairs(rows) do
@@ -114,7 +120,14 @@ end
 function store.searchByName(like, limit)
     local out = {}
     pcall(function()
-        if framework.name == 'qb' then
+        if framework.aicore then
+            local rows = MySQL.query.await([[
+                SELECT citizenid FROM ai_core_characters
+                WHERE deleted_at IS NULL AND CONCAT(firstname, ' ', lastname) LIKE ?
+                LIMIT ?
+            ]], { like, limit }) or {}
+            for _, r in ipairs(rows) do out[#out + 1] = r.citizenid end
+        elseif framework.name == 'qb' then
             local rows = MySQL.query.await([[
                 SELECT citizenid FROM players
                 WHERE CONCAT(

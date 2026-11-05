@@ -20,9 +20,24 @@ registerLbExport('GetEmailAddress', function(number)
     return accounts[1] and accounts[1].email or nil
 end)
 
+---A SendMail recipient as a mail address: an address passes through, a phone number becomes its
+---owner's first account address. Anything unresolvable passes through for systemSend to refuse.
+---@param to any
+---@return any
+local function addressFor(to)
+    if type(to) == 'table' then return to end
+    local raw = util.trim(type(to) == 'number' and ('%.0f'):format(to) or to)
+    if raw == '' or raw:find('@', 1, true) then return raw end
+
+    local cid = settings.getCitizenByNumber(raw)
+    if not cid then return raw end
+    local accounts = store.listAccountsForCitizen(cid)
+    return accounts[1] and accounts[1].email or raw
+end
+
 ---SendMail(data { to, sender?, subject?, message?, attachments?, actions? }): system mail through
----actions.systemSend; attachment URLs become real photo attachments, action buttons warn once
----and drop. Returns a boolean.
+---actions.systemSend; `to` is an address or a phone number. Attachment URLs become real photo
+---attachments, action buttons warn once and drop. Returns a boolean.
 registerLbExport('SendMail', function(data)
     if type(data) ~= 'table' then return false end
     if data.actions ~= nil then
@@ -30,7 +45,7 @@ registerLbExport('SendMail', function(data)
     end
 
     local result = actions.systemSend({
-        to          = data.to,
+        to          = addressFor(data.to),
         subject     = data.subject,
         body        = util.trim(type(data.message) == 'number' and tostring(data.message) or data.message),
         from        = { name = data.sender },

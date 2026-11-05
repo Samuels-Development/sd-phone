@@ -171,7 +171,12 @@ shim.registerLbExport('AddDispatch', function(options)
         return false
     end
     local ok, ids = ingest.mirrorCall(call)
-    if not ok then return false end
+    if not ok then
+        if not ingest.enabled() then
+            shim.warnOnce('AddDispatch.off', ('AddDispatch dropped a dispatch (called by %s): the MDT or its dispatch ingest is off in configs/mdt.lua. On AI Core, set the admin panel dispatch choice to ai-policealert to keep its own alerts'):format(GetInvokingResource() or 'unknown'))
+        end
+        return false
+    end
     return track(ids)
 end)
 

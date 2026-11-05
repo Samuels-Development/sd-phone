@@ -32,8 +32,17 @@ end
 ---@type table[] Prison adapters probed in order. `unit` is what that script's own API counts in,
 ---which is NOT the same across them: qb-prison takes months, esx_jail and qb-policejob take seconds.
 ---`apply` receives the target, the sentence in that unit, and the booking officer's server id, which
----most scripts have no use for.
+---most scripts have no use for. `native` marks a framework that books through its own prison layer:
+---no QBCore metadata is written beside it and nothing is faked when it refuses.
 local ADAPTERS = {
+    {
+        resource = 'ai-core',
+        unit     = 'minutes',
+        native   = true,
+        apply    = function(source, time, officer)
+            return exports['ai-core']:JailPlayer(source, time, tonumber(officer)) == true
+        end,
+    },
     {
         resource = 'qbx_prison',
         unit     = 'months',
@@ -185,6 +194,7 @@ function jail.sendToJail(source, months, officer)
 
     if ACTIVE then
         local ok = ACTIVE.apply(source, inUnit(time, ACTIVE.unit), officer)
+        if ACTIVE.native then return ok == true end
         if ok ~= false then
             writeMetadata(source, time)
             return true

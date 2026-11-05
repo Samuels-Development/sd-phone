@@ -15,6 +15,8 @@ local inventory = { system = inventoryId.name }
 local OX = 'ox_inventory'
 ---@type string one_inventory (One Studios) resource name.
 local ONE = 'one_inventory'
+---@type string ai-inventory (AI Core) resource name.
+local AI = 'ai-inventory'
 ---@type string tgiann-inventory resource name.
 local TG = 'tgiann-inventory'
 ---@type string jaksam_inventory resource name.
@@ -39,6 +41,9 @@ local active = inventoryId.name
 local function chooseAdd()
     if active == OX then
         return function(src, item, count, metadata) return exports[OX]:AddItem(src, item, count, metadata) end
+    end
+    if active == AI then
+        return function(src, item, count, metadata) return exports[AI]:AddItem(src, item, count, metadata) == true end
     end
     if active == ONE then
         return function(src, item, count, metadata)
@@ -105,6 +110,7 @@ local function chooseCount()
             return total
         end
     end
+    if active == AI then return function(src, item) return exports[AI]:GetItemCount(src, item) or 0 end end
     if active == ONE then return function(src, item) return exports[ONE]:GetItemCount(src, item) or 0 end end
     if active == TG then return function(src, item) return exports[TG]:GetItemCount(src, item) or 0 end end
     if active == JK then return function(src, item) return exports[JK]:getTotalItemAmount(src, item) or 0 end end
@@ -153,6 +159,9 @@ end
 local function chooseRemove()
     if active == OX then
         return function(src, item, count, metadata) return exports[OX]:RemoveItem(src, item, count, metadata) end
+    end
+    if active == AI then
+        return function(src, item, count, metadata) return exports[AI]:RemoveItem(src, item, count, metadata) == true end
     end
     if active == ONE then
         return function(src, item, count, metadata)
@@ -214,6 +223,9 @@ local function chooseCanCarry()
     end
     if active == OX then
         return function(src, item, count, metadata) return exports[OX]:CanCarryItem(src, item, count, metadata) end
+    end
+    if active == AI then
+        return function(src, item, count) return exports[AI]:CanCarryItem(src, item, count) == true end
     end
     if active == ONE then
         return function(src, item, count) return exports[ONE]:CanCarryItem(src, item, count) end
@@ -280,10 +292,10 @@ local function chooseRegisterUsable()
         return function(item, cb) return exports[OG]:CreateUseableItem(item, cb) end
     end
 
-    -- one_inventory is deliberately absent here. Its own export form has to be pointed at a
-    -- resource from its admin panel, which nothing in this resource can do at boot, but it also
-    -- reads the framework's usable-item registry - so the framework paths below are the ones that
-    -- actually fire. Adding a branch for it would replace a working path with a dead one.
+    -- one_inventory and ai-inventory are deliberately absent here. one_inventory's own export form
+    -- has to be pointed at a resource from its admin panel, which nothing in this resource can do
+    -- at boot, and ai-inventory has no export form at all; both read the framework's usable-item
+    -- registry, so the framework paths below are the ones that actually fire.
     if framework.name == 'esx' then
         return function(item, cb) return framework.core.RegisterUsableItem(item, cb) end
     end
@@ -306,7 +318,7 @@ inventory.registerUsable = chooseRegisterUsable()
 ---table, then to the raw key.
 ---@return fun(itemName: string): string|nil
 local function chooseLabel()
-    if active == OX or active == TG then
+    if active == OX or active == TG or active == AI then
         return function(itemName)
             local ok, item = pcall(exports[active].Items, exports[active], itemName)
             return (ok and item) and item.label or itemName
@@ -374,11 +386,12 @@ end
 ---@field metadata table per-slot metadata (never nil)
 
 ---@type string[] Slot backends latched at call time once seen running, in priority order.
----one_inventory comes first because it provides the ox_inventory name, which then reads as started.
-local LATCHING = { ONE, OX }
+---ai-inventory and one_inventory come first because they provide the ox_inventory name, which
+---then reads as started.
+local LATCHING = { AI, ONE, OX }
 
 ---@type string|nil The latched backend, set the first time one of LATCHING is seen running.
-local slotLatched = (active == ONE or active == OX) and active or nil
+local slotLatched = (active == AI or active == ONE or active == OX) and active or nil
 
 ---@type string Sentinel backend: no inventory resource, framework-native QBCore items table.
 local QBCORE = 'qb-core'
@@ -742,6 +755,40 @@ SLOT_BACKENDS[ONE] = {
     removeFromSlot = function(src, item, slot, count)
         local ok = exports[ONE]:RemoveItem(src, item, count or 1, nil, slot)
         return ok == true
+    end,
+}
+
+---Every slot a player holds of `item` on ai-inventory, read from its GetItems list (it has no
+---per-item search or single-slot getter of its own).
+---@param src number player server id
+---@param match fun(row: table): boolean
+---@return SlotEntry[]
+local function aiSlots(src, match)
+    local out = {}
+    local rows = exports[AI]:GetItems(src)
+    if type(rows) ~= 'table' then return out end
+    for _, row in ipairs(rows) do
+        if type(row) == 'table' and match(row) then
+            out[#out + 1] = slotEntry(row.slot, row.name, row.count, row.metadata)
+        end
+    end
+    return out
+end
+
+-- ai-inventory (AI Core): its own exports, a bare server id addresses the player's inventory. It
+-- has no containers, and SetMetadata replaces the slot's table outright.
+SLOT_BACKENDS[AI] = {
+    search = function(src, item)
+        return aiSlots(src, function(row) return row.name == item end)
+    end,
+    get = function(src, slot)
+        return aiSlots(src, function(row) return row.slot == slot end)[1]
+    end,
+    setMetadata = function(src, slot, metadata)
+        return exports[AI]:SetMetadata(src, slot, metadata) == true
+    end,
+    removeFromSlot = function(src, item, slot, count)
+        return exports[AI]:RemoveItem(src, item, count or 1, nil, slot) == true
     end,
 }
 

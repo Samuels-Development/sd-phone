@@ -4,6 +4,8 @@
 ---ox_core and ND, which share nothing with them - never use it as a stand-in for "not ESX".
 ---@field core any Live core object (QBCore's, or the ESX shared object). Nil on QBox, ox_core and
 ---ND, none of which has one: everything they need is a discrete export.
+---@field aicore boolean True when AI Core (ai-core) answers as qbx_core. Its Qbox bridge carries
+---the qbx path; bridges branch on this only where AI Core's own API is needed.
 
 ---Detects the running player framework and returns a populated FrameworkInfo, or nil when no
 ---supported framework is started. ND is checked first: it ships esx and qb compatibility shims,
@@ -12,13 +14,14 @@
 ---correct if that ever changes. QBox is checked before qb-core so it is driven through its own
 ---exports rather than through the qb-core compatibility layer it provides. ox_core is checked
 ---before qb-core for the same reason, though it ships no compatibility layer to be caught by.
+---AI Core provides qbx_core, qb-core and es_extended, so it is detected inside the QBox branch.
 ---@return FrameworkInfo|nil
 local function detect()
     if GetResourceState('ND_Core') == 'started' then
         return { name = 'nd', qb = false }
     end
     if GetResourceState('qbx_core') == 'started' then
-        return { name = 'qbx', qb = true }
+        return { name = 'qbx', qb = true, aicore = GetResourceState('ai-core') == 'started' }
     end
     if GetResourceState('ox_core') == 'started' then
         return { name = 'ox', qb = false }
@@ -49,7 +52,16 @@ if not info then
     ]])
 end
 
-print(('^2[SD-PHONE]^0 Framework detected: ^3%s^0'):format(info.name))
+print(('^2[SD-PHONE]^0 Framework detected: ^3%s^0'):format(info.aicore and 'ai-core (qbx bridge)' or info.name))
+
+if info.aicore and IsDuplicityVersion() then
+    print([[
+^3[SD-PHONE] Running on AI Core.^0
+^3Create the phone items and sim_card in the AI Core admin panel (Items): stack size 1, Can be used on.^0
+^3AI Core routes its police alerts to the phone MDT. To keep ai-policealert's cards, set the panel's^0
+^3dispatch choice to ai-policealert.^0
+    ]])
+end
 
 if info.name == 'ox' then
     print([[

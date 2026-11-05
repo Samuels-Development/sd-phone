@@ -67,6 +67,25 @@ end
 ---@type fun(p: any): string|nil Identifier extractor, bound once at load.
 local resolveIdentifier = chooseIdentifier()
 
+---Pick how a source's identifier is read. AI Core answers from its character record: its Qbox
+---GetPlayer asks the phone for a number while it builds the player, which would ask back here.
+---@return fun(source: number): string|nil
+local function chooseCidResolver()
+    if framework.aicore then
+        return function(src)
+            local character = exports['ai-core']:GetCharacter(src)
+            return character and character.citizenid or nil
+        end
+    end
+    return function(src)
+        local p = resolveGet(src)
+        return p and resolveIdentifier(p) or nil
+    end
+end
+
+---@type fun(source: number): string|nil Identifier resolver, bound once at load.
+local resolveCid = chooseCidResolver()
+
 ---@type integer Milliseconds a resolved identifier is served before it is re-resolved. The
 ---lifecycle handlers below keep the cache exact; this is only the backstop that stops a missed
 ---event from being permanent. Long on purpose: every resolve copies the whole framework player
@@ -104,8 +123,7 @@ local generation = 0
 local function cachedIdentifier(source)
     local hit = identityCache[source]
     if hit and (GetGameTimer() - hit.at) < (hit.cid and IDENTITY_TTL or NEGATIVE_TTL) then return hit.cid end
-    local p = resolveGet(source)
-    local cid = p and resolveIdentifier(p) or nil
+    local cid = resolveCid(source)
     identityCache[source] = { cid = cid, at = GetGameTimer() }
     if cid then sourceIndex[cid] = source end
     return cid
@@ -172,6 +190,12 @@ end
 ---@param source number player server id
 ---@return string
 local function resolveName(source)
+    if framework.aicore then
+        local character = exports['ai-core']:GetCharacter(source)
+        if not character then return 'Unknown' end
+        return ('%s %s'):format(character.firstname or '', character.lastname or '')
+    end
+
     local p = resolveGet(source)
     if not p then return 'Unknown' end
 

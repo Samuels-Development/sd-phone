@@ -16,8 +16,9 @@ return {
 
     -- Detection order for 'auto', and the map from a resource name to the dialect it speaks.
     -- Add an entry for a renamed fork rather than editing the bridge: a fork of SaltyChat
-    -- called something else still speaks 'saltychat'.
+    -- called something else still speaks 'saltychat'. AI Core's ai-voice speaks pma-voice's.
     Resources = {
+        { name = 'ai-voice',  provider = 'pma-voice' },
         { name = 'pma-voice', provider = 'pma-voice' },
         { name = 'saltychat', provider = 'saltychat' },
     },

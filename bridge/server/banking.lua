@@ -8,6 +8,8 @@ local money     = require 'bridge.server.money'
 ---(configs/uniqueandsim.lua) that one is rewrapped to return the acting SIM identity, and the
 ---resources called below key their records by citizenid.
 local player    = require 'bridge.server.player'
+---@type table|nil AI Core helpers (bridge.server.aicore); nil on every other framework.
+local aicore    = framework.aicore and require 'bridge.server.aicore' or nil
 
 ---@type table Banking module; the table returned at end of file. Multi-banking adapter: reads and
 ---moves a player's personal bank balance through a dedicated provider path where one exists, else
@@ -210,11 +212,18 @@ function banking.removeMoney(src, amount, reason)
 end
 
 ---Best-effort credit to an offline character's framework bank account via a parameterized DB
----write against each framework's default schema. True only when a row was actually updated.
+---write against each framework's default schema (AI Core: its AddOfflineMoney export). True only
+---when the credit landed.
 ---@param citizenid string
 ---@param amount number
 ---@return boolean ok
 function banking.addOffline(citizenid, amount)
+    if aicore then
+        local charId = aicore.charId(citizenid)
+        if not charId then return false end
+        local result = aicore.await('AddOfflineMoney', charId, 'bank', math.floor(amount), 'Phone transfer')
+        return aicore.succeeded(result)
+    end
     if framework.qb then
         local ok, affected = pcall(function()
             return MySQL.update.await(

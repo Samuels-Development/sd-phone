@@ -128,6 +128,31 @@ function job.isBoss(source, jobName, esxBossGrade)
     return false
 end
 
+---AI Core's SetJob only adds or updates a membership: "the" job is the on-duty one, else the last
+---one on duty. Making `jobName` the job takes a duty pass that ends in the player's previous duty
+---state. The unemployed job is never stored there, so setting it drops the current job instead.
+---@param source number player server id
+---@param jobName string
+---@param grade integer
+---@return boolean
+local function aiSetJob(source, jobName, grade)
+    local core = exports['ai-core']
+    if jobName == core:GetUnemployedJob() then
+        local current = core:GetCurrentJob(source)
+        if not current or current.job == jobName then return true end
+        return core:RemoveJob(source, current.job) == true
+    end
+
+    if not core:SetJob(source, jobName, grade) then return false end
+    local current = core:GetCurrentJob(source)
+    if current and current.job == jobName then return true end
+
+    local wasOnDuty = core:GetDutyJob(source) ~= nil
+    if not core:SetDuty(source, jobName) then return false end
+    if not wasOnDuty then core:SetDuty(source, nil) end
+    return true
+end
+
 ---Set the player's job through the framework's job system. Mutating; callers own the permission
 ---check. Returns the framework's own verdict on QBCore, always true on ESX.
 ---@param source number player server id
@@ -139,6 +164,7 @@ function job.set(source, jobName, grade)
     if not p then return false end
     grade = grade or 0
 
+    if framework.aicore then return aiSetJob(source, jobName, grade) end
     if framework.qb then return p.Functions.SetJob(jobName, grade) end
     if framework.name == 'esx' then p.setJob(jobName, grade); return true end
     if framework.name == 'ox' then
@@ -313,6 +339,7 @@ end
 ---@param jobName string
 ---@return boolean
 function job.leave(source, jobName)
+    if framework.aicore then return exports['ai-core']:RemoveJob(source, jobName) == true end
     if framework.name == 'ox' then
         -- Grade 0 is ox_core's own remove-from-group signal.
         return ox.call(source, 'setGroup', jobName, 0) ~= false

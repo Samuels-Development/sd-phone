@@ -500,7 +500,8 @@ local function memberInfo(myJob, targetCid)
 end
 
 ---Takes a member out of `jobName`: framework fire when they are working it now, else a pending
----fire for their next load; the saved entry goes either way and the roster refreshes.
+---fire for their next load (removed at once where the framework can); the saved entry goes either
+---way and the roster refreshes.
 ---@param jobName string
 ---@param targetCid string
 ---@param info table memberInfo(jobName, targetCid)
@@ -511,7 +512,9 @@ local function dismiss(jobName, targetCid, info)
         if info.saved then jobstore.removeSaved(targetCid, jobName) end
     else
         if info.saved then jobstore.removeSaved(targetCid, jobName) end
-        if info.fw then jobstore.addPendingFire(targetCid, jobName) end
+        if info.fw and not society.dropMembership(targetCid, jobName) then
+            jobstore.addPendingFire(targetCid, jobName)
+        end
         if info.src then TriggerClientEvent('sd-phone:client:services:jobsChanged', info.src, {}) end
     end
     actions.notifyRoster(jobName)

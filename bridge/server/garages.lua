@@ -4,6 +4,8 @@ local config = require 'configs.config'
 local framework = require 'bridge.shared.framework'
 ---@type table Player bridge (bridge.server.player): identifier lookups from a trusted source.
 local player = require 'bridge.server.player'
+---@type table|nil AI Core helpers (bridge.server.aicore); nil on every other framework.
+local aicore = framework.aicore and require 'bridge.server.aicore' or nil
 
 ---@type table Garage bridge module; the table returned at end of file. Abstracts the supported
 ---third-party garage systems behind one normalised vehicle list for the Garages app. Read-only -
@@ -14,12 +16,15 @@ local garages = {}
 ---detection list + manual waypoint Locations.
 local G = config.Garages or { Enabled = false }
 
----@type { table: string, idCol: string } Framework ownership table: QBCore/Qbox key owned
----vehicles by citizenid in `player_vehicles`, ESX by owner identifier in `owned_vehicles`, and
----ox_core by charId in its own `vehicles`. An if-chain, not a ternary: an unrecognised framework
----must not silently inherit the QBCore table.
+---@type { table: string, idCol: string, owner?: string } Framework ownership table: QBCore/Qbox
+---key owned vehicles by citizenid in `player_vehicles`, ESX by owner identifier in
+---`owned_vehicles`, ox_core by charId in its own `vehicles`, and AI Core (ai-vehicles) by character
+---id in `ai_vehicles_owned`, where `owner` narrows the rows to character owners. An if-chain, not a
+---ternary: an unrecognised framework must not silently inherit the QBCore table.
 local BASE
-if framework.name == 'esx' then
+if framework.aicore then
+    BASE = { table = 'ai_vehicles_owned', idCol = 'owner_id', owner = "owner_type = 'character'" }
+elseif framework.name == 'esx' then
     BASE = { table = 'owned_vehicles',  idCol = 'owner' }
 elseif framework.name == 'ox' then
     BASE = { table = 'vehicles',        idCol = 'owner' }
@@ -88,7 +93,11 @@ local PROFILES = {
     ['mt_garages']         = { garage = { 'garage' },             state = { 'state' } },
     ['ND_Core']            = { garage = {},                       state = { 'stored' }, impoundCol = 'impounded' },
     ['kartik-garages']     = { garage = { 'garage' },             state = { 'state', 'stored' }, impoundCol = 'impound' },
+    ['ai-garages']         = { garage = { 'garage' },             state = { 'state' }, stored = { garage = true }, impound = { impound = true }, storedFallback = false, outState = 'out' },
 }
+
+---@type string WHERE clause selecting one owner's rows in the ownership table.
+local OWNER_WHERE = BASE.owner and ('%s AND `%s` = ?'):format(BASE.owner, BASE.idCol) or ('`%s` = ?'):format(BASE.idCol)
 
 ---@type table<string, boolean> Systems whose garages are discovered from their own config/table
 ---rather than read from a runtime export, because they publish no schema for them.
@@ -191,11 +200,12 @@ local function firstColumn(tbl, names)
 end
 
 ---Decode the saved vehicle-properties blob (qb `mods`, esx `vehicle`, ND `properties`, some forks
----`modifications`): tables pass through, JSON-looking strings are decoded, failures yield nil.
+---`modifications`, ai-vehicles `props`): tables pass through, JSON-looking strings are decoded,
+---failures yield nil.
 ---@param row table vehicle DB row
 ---@return table|nil props decoded properties, nil when absent/undecodable
 local function decodeProps(row)
-    for _, col in ipairs({ 'mods', 'vehicle', 'properties', 'modifications' }) do
+    for _, col in ipairs({ 'mods', 'vehicle', 'properties', 'modifications', 'props' }) do
         local raw = row[col]
         if type(raw) == 'string' and (lib.string.startsWith(raw, '{') or lib.string.startsWith(raw, '[')) then
             local ok, decoded = pcall(json.decode, raw)
@@ -207,14 +217,15 @@ local function decodeProps(row)
     return nil
 end
 
----The vehicle's model: the `vehicle` column when it holds a plain name, else the saved-properties
----model key, else the row's stored hash.
+---The vehicle's model: the `vehicle` column when it holds a plain name, else a plain `model`
+---column (ai-vehicles), else the saved-properties model key, else the row's stored hash.
 ---@param row table vehicle DB row
 ---@param props table|nil decoded vehicle-properties JSON
 ---@return string|number|nil model spawn name or hash
 local function modelOf(row, props)
     local raw = row.vehicle
     if type(raw) == 'string' and not lib.string.startsWith(raw, '{') then return raw end
+    if type(row.model) == 'string' and row.model ~= '' then return row.model end
     return (props and (props.model or props.modelName)) or row.hash or nil
 end
 
@@ -665,6 +676,18 @@ local function parkedIsAuthoritative(rows)
     return PROFILE.parkedTable ~= nil and rows[1] ~= nil and pick(rows[1], PROFILE.state) == nil
 end
 
+---ai-garages' garages, read from its admin-panel content file: `{ [garageId] = { label, type,
+---coords, impound, ... } }`. Nil when the file is missing or unreadable.
+---@return table|nil
+local function aiGarages()
+    local raw = LoadResourceFile(ACTIVE, 'data/garages.json')
+    if not raw then return nil end
+    local ok, data = pcall(json.decode, raw)
+    if not ok or type(data) ~= 'table' then return nil end
+    data['$schema'] = nil
+    return data
+end
+
 ---Pull the active system's full garage collection. Nil for unsupported systems. Memoised on the
 ---same short TTL as the plate set: it crosses a resource boundary and every caller gets the same
 ---answer.
@@ -681,6 +704,7 @@ local function loadGarageCollection()
         if ACTIVE == 'cd_garage'          then return exports['cd_garage']:GetConfig() end
         if ACTIVE == 'qs-advancedgarages' then return qsGarages() end
         if ACTIVE == 'kartik-garages'     then return exports['kartik-garages']:GetGarages() end
+        if ACTIVE == 'ai-garages'         then return aiGarages() end
         if DISCOVERS_GARAGES[ACTIVE] then return discoveredGarages() end
         return nil
     end)
@@ -757,6 +781,9 @@ local function systemCoords(gcol, row, garageId)
             for _, g in pairs(gcol.Locations or {}) do
                 if g.Garage_ID == garageId then return vec3(g.x_1 + 0.0, g.y_1 + 0.0, g.z_1 + 0.0) end
             end
+        elseif ACTIVE == 'ai-garages' then
+            local g = gcol[row.garage]
+            return g and g.coords
         elseif ACTIVE == 'kartik-garages' then
             for _, g in pairs(gcol or {}) do
                 if g.name == garageId or g.label == garageId or g.id == garageId then
@@ -851,6 +878,10 @@ local function impoundCoords(gcol, row, garageId)
                 end
             end
             return fallback
+        elseif ACTIVE == 'ai-garages' then
+            for _, g in pairs(gcol) do
+                if type(g) == 'table' and g.impound and g.coords and isCarDepot(g.type) then return g.coords end
+            end
         elseif ACTIVE == 'kartik-garages' then
             for _, g in pairs(gcol or {}) do
                 if g.type == 'impound' then
@@ -901,7 +932,7 @@ function garages.list(source)
     if not id then return {} end
 
     local ok, rows = pcall(function()
-        return MySQL.query.await(('SELECT * FROM `%s` WHERE `%s` = ?'):format(BASE.table, BASE.idCol), { id })
+        return MySQL.query.await(('SELECT * FROM `%s` WHERE %s'):format(BASE.table, OWNER_WHERE), { id })
     end)
     if not ok or type(rows) ~= 'table' then
         print(('^1[sd-phone:garages]^0 query failed on `%s` — check your garage system / table'):format(BASE.table))
@@ -931,8 +962,11 @@ function garages.list(source)
 
         local garageName = pick(row, PROFILE.garage)
         local opg = opGarage(gcol, row.vehicleGarage)
+        local aig = ACTIVE == 'ai-garages' and type(gcol) == 'table' and gcol[row.garage] or nil
         if opg and type(opg.Label) == 'string' and opg.Label ~= '' then
             garageName = opg.Label
+        elseif aig and type(aig.label) == 'string' and aig.label ~= '' then
+            garageName = aig.label
         elseif type(garageName) ~= 'string' or garageName == '' or garageName:upper() == 'OUT' then
             garageName = nil
         end
@@ -998,7 +1032,7 @@ function garages.vehicleFor(source, plate)
     if not id or not want or want == '' then return nil end
 
     local ok, rows = pcall(function()
-        return MySQL.query.await(('SELECT * FROM `%s` WHERE `%s` = ?'):format(BASE.table, BASE.idCol), { id })
+        return MySQL.query.await(('SELECT * FROM `%s` WHERE %s'):format(BASE.table, OWNER_WHERE), { id })
     end)
     if not ok or type(rows) ~= 'table' then return nil end
 
@@ -1066,6 +1100,28 @@ function garages.takeOut(source, plate, netId)
     return true
 end
 
+---True when the garage system spawns its owned vehicles itself (ai-vehicles under ai-garages): a
+---delivery then goes through garages.spawnOwned, never a plain spawn plus takeOut.
+---@return boolean
+function garages.spawnsOwnVehicles()
+    return ACTIVE == 'ai-garages' and GetResourceState('ai-vehicles') == 'started'
+end
+
+---Spawns one of the caller's stored vehicles through ai-vehicles, which marks it out, applies its
+---look and gives the caller the keys. The network id, or nil when it refused.
+---@param source number caller server id
+---@param veh table vehicleFor result
+---@param at { x: number, y: number, z: number, h: number }
+---@return number|nil netId
+function garages.spawnOwned(source, veh, at)
+    local id = math.tointeger(tonumber(veh and veh.row and veh.row.id))
+    if not aicore or not id then return nil end
+    local netId = aicore.awaitOn('ai-vehicles', 'SpawnVehicle', id,
+        { x = at.x + 0.0, y = at.y + 0.0, z = at.z + 0.0, heading = at.h + 0.0 }, source)
+    netId = tonumber(netId)
+    return netId and netId ~= 0 and netId or nil
+end
+
 ---What the bridge resolved for the caller: detected resource, ownership table, which profile
 ---columns their rows really carry, and how many garages have usable coordinates. Read-only.
 ---@param source number caller server id
@@ -1075,7 +1131,7 @@ function garages.diagnose(source)
     local rows = {}
     if id then
         local ok, r = pcall(function()
-            return MySQL.query.await(('SELECT * FROM `%s` WHERE `%s` = ?'):format(BASE.table, BASE.idCol), { id })
+            return MySQL.query.await(('SELECT * FROM `%s` WHERE %s'):format(BASE.table, OWNER_WHERE), { id })
         end)
         rows = (ok and type(r) == 'table') and r or {}
     end

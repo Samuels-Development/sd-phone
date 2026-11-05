@@ -1,6 +1,8 @@
----@type string[] Supported inventory resources, in detection-priority order. one_inventory comes
----before ox_inventory because it provides the ox_inventory name, which then reads as started.
+---@type string[] Supported inventory resources, in detection-priority order. ai-inventory and
+---one_inventory come before ox_inventory because they provide the ox_inventory name, which then
+---reads as started.
 local CANDIDATES = {
+    'ai-inventory',
     'one_inventory',
     'ox_inventory',
     'tgiann-inventory',

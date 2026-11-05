@@ -5,6 +5,10 @@ local target = {}
 ---@type string[] Supported target resources, in detection-priority order.
 local SUPPORTED = { 'ox_target', 'qb-target', 'qtarget' }
 
+---@type table<string, string> Resources that provide a supported target's name: their start event
+---carries their own name, so a late start is matched through this map.
+local STAND_INS = { ['ai-target'] = 'ox_target' }
+
 ---Returns the first supported target resource that's currently started, or nil when none is.
 ---@return string|nil resource name, or nil if none are started.
 local function detect()
@@ -57,10 +61,11 @@ if not active then
 
     AddEventHandler('onClientResourceStart', function(resource)
         if active then return end
+        local name = STAND_INS[resource] or resource
         for i = 1, #SUPPORTED do
-            if resource == SUPPORTED[i] then
-                active = resource
-                target.system = resource
+            if name == SUPPORTED[i] then
+                active = name
+                target.system = name
                 print(('^2[sd-phone]^0 target resource %s started; registering interactions now.'):format(resource))
                 for j = 1, #pending do pending[j]() end
                 pending = {}

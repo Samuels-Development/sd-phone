@@ -109,14 +109,14 @@ local function targetSource(target)
 end
 
 ---SendNotification(target, data): pushes an iOS-style banner through the sd client notify
----funnel. Always returns nil.
+---funnel. Returns true when it was pushed, nil otherwise.
 registerLbExport('SendNotification', function(target, data)
     local payload = bannerFor(data)
     if not payload then return nil end
     local src = targetSource(target)
     if not src then return nil end
     pushBanner(src, payload)
-    return nil
+    return true
 end)
 
 ---NotifyEveryone(notify, data): the same banner at every ONLINE player. The payload is whichever

@@ -870,6 +870,12 @@ function ingest.mirrorFrom(src, payload)
     return created > 0, ids
 end
 
+---True when the MDT and its dispatch ingest are on, so mirrored calls can reach a board.
+---@return boolean
+function ingest.enabled()
+    return ENABLED
+end
+
 ---Dispatch resources this build mirrors, for a console or a config check to read.
 ---@return string[] systems adapter keys
 function ingest.systems()

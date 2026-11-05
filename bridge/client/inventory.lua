@@ -22,6 +22,13 @@ local function chooseImageResolver()
         end
     end
 
+    if active == 'ai-inventory' then
+        return function(item)
+            local ok, def = pcall(exports['ai-core'].GetItemDefinition, exports['ai-core'], item)
+            return (ok and type(def) == 'table') and def.image or nil
+        end
+    end
+
     if active == 'one_inventory' then
         -- Same web/images layout as ox_inventory. An item may also name a remote host in its
         -- definition, but only the local folder is addressable as a nui:// path from here.
@@ -117,6 +124,12 @@ local function chooseLabelResolver()
             return (ok and type(def) == 'table') and def.label or nil
         end
     end
+    if active == 'ai-inventory' then
+        return function(itemName)
+            local ok, def = pcall(exports['ai-core'].GetItemDefinition, exports['ai-core'], itemName)
+            return (ok and type(def) == 'table') and def.label or nil
+        end
+    end
     if active == 'jaksam_inventory' then
         return function(itemName)
             local ok, label = pcall(exports[active].getItemLabel, exports[active], itemName)
@@ -169,6 +182,9 @@ local function chooseCountResolver()
     end
     if active == 'one_inventory' then
         return function(item) return exports.one_inventory:GetItemCount(item) or 0 end
+    end
+    if active == 'ai-inventory' then
+        return function(item) return exports['ai-inventory']:GetItemCount(item) or 0 end
     end
     if active == 'tgiann-inventory' then
         return function(item) return exports['tgiann-inventory']:GetItemCount(item) or 0 end

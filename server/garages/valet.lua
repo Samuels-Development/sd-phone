@@ -160,18 +160,24 @@ lib.callback.register('sd-phone:server:garages:valet', function(src, payload)
         return { success = false, reason = why }
     end
 
-    local entity = spawnVehicle(veh.model, spawn)
-    if not entity then return refund('spawnFailed') end
+    local netId
+    if garages.spawnsOwnVehicles() then
+        netId = garages.spawnOwned(src, veh, spawn)
+        if not netId then return refund('spawnFailed') end
+    else
+        local entity = spawnVehicle(veh.model, spawn)
+        if not entity then return refund('spawnFailed') end
 
-    local netId = NetworkGetNetworkIdFromEntity(entity)
-    if not netId or netId == 0 then
-        pcall(DeleteEntity, entity)
-        return refund('spawnFailed')
-    end
+        netId = NetworkGetNetworkIdFromEntity(entity)
+        if not netId or netId == 0 then
+            pcall(DeleteEntity, entity)
+            return refund('spawnFailed')
+        end
 
-    if not garages.takeOut(src, veh.plate, netId) then
-        pcall(DeleteEntity, entity)
-        return refund('takeOutFailed')
+        if not garages.takeOut(src, veh.plate, netId) then
+            pcall(DeleteEntity, entity)
+            return refund('takeOutFailed')
+        end
     end
 
     if cid then lastValet[cid] = os.time() end

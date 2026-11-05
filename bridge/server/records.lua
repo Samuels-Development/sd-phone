@@ -16,7 +16,9 @@ local records = {}
 ---ox_core and ND both also HAVE an account table (`users` and `nd_users`), one row per player
 ---rather than per character - reaching ESX's branch here would read the wrong rows entirely.
 local PEOPLE
-if framework.name == 'esx' then
+if framework.aicore then
+    PEOPLE = { table = 'ai_core_characters', idCol = 'citizenid' }
+elseif framework.name == 'esx' then
     PEOPLE = { table = 'users',         idCol = 'identifier' }
 elseif framework.name == 'ox' then
     PEOPLE = { table = 'characters',    idCol = 'charId' }
@@ -29,7 +31,9 @@ end
 ---@type { table: string, idCol: string } Framework ownership table, picked the same way
 ---bridge/server/garages.lua picks it.
 local VEHICLES
-if framework.name == 'esx' then
+if framework.aicore then
+    VEHICLES = { table = 'ai_vehicles_owned', idCol = 'owner_id' }
+elseif framework.name == 'esx' then
     VEHICLES = { table = 'owned_vehicles',  idCol = 'owner' }
 elseif framework.name == 'ox' then
     VEHICLES = { table = 'vehicles',        idCol = 'owner' }
@@ -115,6 +119,24 @@ local function decode(raw)
     return (ok and type(out) == 'table') and out or {}
 end
 
+---Licence keys held in a qb-shaped metadata table, under either spelling.
+---@param meta table decoded metadata
+---@return string[] licences
+local function licencesOf(meta)
+    local licences = {}
+    if type(meta.licences) == 'table' then
+        for key, held in pairs(meta.licences) do
+            if held == true and type(key) == 'string' then licences[#licences + 1] = key end
+        end
+    end
+    if type(meta.licenses) == 'table' then
+        for key, held in pairs(meta.licenses) do
+            if held == true and type(key) == 'string' then licences[#licences + 1] = key end
+        end
+    end
+    return licences
+end
+
 ---Builds the normalised citizen shape from a QBCore/QBox `players` row.
 ---@param row table
 ---@return table citizen
@@ -127,17 +149,7 @@ local function qbCitizen(row)
     local last  = str(info.lastname)
     local name  = str((first .. ' ' .. last))
 
-    local licences = {}
-    if type(meta.licences) == 'table' then
-        for key, held in pairs(meta.licences) do
-            if held == true and type(key) == 'string' then licences[#licences + 1] = key end
-        end
-    end
-    if type(meta.licenses) == 'table' then
-        for key, held in pairs(meta.licenses) do
-            if held == true and type(key) == 'string' then licences[#licences + 1] = key end
-        end
-    end
+    local licences = licencesOf(meta)
 
     return {
         citizenid   = row.citizenid,
@@ -245,6 +257,46 @@ local function ndCitizen(row)
     }
 end
 
+---Builds the normalised citizen shape from an AI Core character row (AI_CITIZEN_SQL). AI Core keeps
+---no phone number, so it comes from the phone's own settings; the job is the highest-graded one held.
+---@param row table
+---@return table citizen
+local function aiCitizen(row)
+    local meta  = decode(row.metadata)
+    local first = str(row.firstname)
+    local last  = str(row.lastname)
+    local name  = str(first .. ' ' .. last)
+
+    return {
+        citizenid   = row.citizenid,
+        name        = name ~= '' and name or row.citizenid,
+        firstname   = first,
+        lastname    = last,
+        dob         = str(row.birthdate),
+        sex         = str(row.sex),
+        phone       = str(row.phone),
+        nationality = str(row.nationality),
+        job         = str(row.job),
+        jobGrade    = tonumber(row.job_grade) or 0,
+        licences    = licencesOf(meta),
+        fingerprint = str(meta.fingerprint),
+        bloodtype   = str(meta.bloodtype),
+        callsign    = str(meta.callsign),
+    }
+end
+
+---@type string AI Core citizen projection over `ai_core_characters c`, joined to the phone's own
+---number. Callers append the WHERE clause; it already filters out deleted characters.
+local AI_CITIZEN_SQL = [[
+    SELECT c.citizenid, c.firstname, c.lastname, DATE_FORMAT(c.birthdate, '%Y-%m-%d') AS birthdate,
+           c.sex, c.nationality, c.metadata, ps.phone_number AS phone,
+           (SELECT j.job FROM ai_core_character_jobs j WHERE j.char_id = c.id ORDER BY j.grade DESC LIMIT 1) AS job,
+           (SELECT j.grade FROM ai_core_character_jobs j WHERE j.char_id = c.id ORDER BY j.grade DESC LIMIT 1) AS job_grade
+    FROM ai_core_characters c
+    LEFT JOIN phone_settings ps ON ps.citizenid = c.citizenid COLLATE utf8mb4_unicode_ci AND ps.device = 'phone'
+    WHERE c.deleted_at IS NULL
+]]
+
 ---@type string QBCore/QBox citizen projection.
 local QB_CITIZEN_COLS = 'citizenid, charinfo, metadata, job'
 ---@type string ESX citizen projection.
@@ -258,6 +310,11 @@ local ND_CITIZEN_COLS = 'charid, firstname, lastname, dob, gender, phonenumber, 
 ---@return table|nil citizen
 function records.getCitizen(cid)
     if type(cid) ~= 'string' or cid == '' then return nil end
+
+    if framework.aicore then
+        local row = MySQL.single.await(AI_CITIZEN_SQL .. ' AND c.citizenid = ? LIMIT 1', { cid })
+        return row and aiCitizen(row) or nil
+    end
 
     if framework.qb then
         local row = MySQL.single.await(
@@ -293,6 +350,16 @@ function records.namesFor(cids)
     local marks = {}
     for i = 1, #cids do marks[i] = '?' end
     local inClause = table.concat(marks, ',')
+
+    if framework.aicore then
+        local rows = MySQL.query.await(
+            ('SELECT citizenid, firstname, lastname FROM ai_core_characters WHERE citizenid IN (%s)'):format(inClause), cids) or {}
+        for i = 1, #rows do
+            local name = str(str(rows[i].firstname) .. ' ' .. str(rows[i].lastname))
+            out[rows[i].citizenid] = name ~= '' and name or rows[i].citizenid
+        end
+        return out
+    end
 
     if framework.qb then
         local rows = MySQL.query.await(
@@ -342,6 +409,28 @@ function records.searchCitizens(term, page, pageSize)
     local offset = math.max(0, (math.max(1, math.floor(tonumber(page) or 1)) - 1) * limit)
     local like   = '%' .. term:gsub('([%%_\\])', '\\%1') .. '%'
     local browse = #term < MIN_TERM
+
+    if framework.aicore then
+        local where, args = '', {}
+        if not browse then
+            where = [[
+                AND (c.citizenid LIKE ? OR c.firstname LIKE ? OR c.lastname LIKE ?
+                     OR CONCAT(c.firstname, ' ', c.lastname) LIKE ? OR ps.phone_number LIKE ?)
+            ]]
+            args = { like, like, like, like, like }
+        end
+        local total = MySQL.scalar.await([[
+            SELECT COUNT(*) FROM ai_core_characters c
+            LEFT JOIN phone_settings ps ON ps.citizenid = c.citizenid COLLATE utf8mb4_unicode_ci AND ps.device = 'phone'
+            WHERE c.deleted_at IS NULL
+        ]] .. where, args)
+        local rows = MySQL.query.await(
+            AI_CITIZEN_SQL .. where .. (' ORDER BY c.last_played DESC LIMIT %d OFFSET %d'):format(limit, offset), args) or {}
+
+        local out = {}
+        for i = 1, #rows do out[i] = aiCitizen(rows[i]) end
+        return out, tonumber(total) or 0
+    end
 
     if framework.qb then
         local where, args = '', {}
