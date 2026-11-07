@@ -74,7 +74,7 @@ lib.callback.register('sd-phone:server:voice:uploadSlot', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
 
     local p = promise.new()
-    presign.mint(src, { maxBytes = MAX_DIRECT_BYTES },
+    presign.mint(src, { maxBytes = MAX_DIRECT_BYTES, kinds = { audio = true }, purpose = 'voice-memo' },
         function(url, code) p:resolve({ url = url, code = code }) end)
     local res = Citizen.Await(p)
     if not res.url then return { success = false, code = res.code or 'provider' } end
@@ -93,7 +93,7 @@ lib.callback.register('sd-phone:server:voice:uploadDone', function(src, payload)
     payload = type(payload) == 'table' and payload or {}
 
     local p = promise.new()
-    presign.claim(src, payload.url, { maxBytes = MAX_DIRECT_BYTES, kinds = { audio = true } },
+    presign.claim(src, payload.url, { maxBytes = MAX_DIRECT_BYTES, kinds = { audio = true }, purpose = 'voice-memo' },
         function(url, code, bytes) p:resolve({ url = url, code = code, bytes = bytes }) end)
     local res = Citizen.Await(p)
     if not res.url then

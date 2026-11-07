@@ -529,6 +529,14 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
             if (!image) { setPending(false); return; }
             setUploadError(null);
 
+            try {
+                const blob = await (await fetch(image)).blob();
+                if (await uploadDirect(blob, `sdphone-${Date.now()}.jpg`, DIRECT_UPLOAD, { kind: 'photo' })) {
+                    setPending(false);
+                    return;
+                }
+            } catch { /* Keep the original capture route available if local Blob conversion fails. */ }
+
             if (!(await uploadViaServer(image, 'sd-phone:camera:httpSlot', { kind: 'photo' }))) {
                 const res = await apiCall<void>('sd-phone:camera:capture', { image });
                 if (!res.success) { setPending(false); return; }

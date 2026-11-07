@@ -55,11 +55,15 @@ end
 -- swallow that: the shutter span, the spinner ran out, no photo, no reason. Say it once at boot
 -- so the gap is the server owner's to fix, not something players rediscover one capture at a time.
 if not uploader.configured() then
+    local providers = {
+        fivemanage = { name = 'Fivemanage media', setup = 'set FivemanageMedia in configs/server/apikeys.lua (free at fivemanage.com, token type "Media").' },
+        qbox = { name = 'Qbox CDN', setup = 'set QboxCdn in configs/server/apikeys.lua (token from dashboard.qbox.re -> CDN -> API).' },
+        fivemesh = { name = 'FiveMesh CDN', setup = 'set FiveMeshCdn in configs/server/apikeys.lua or the sd_fivemesh_cdn_key server convar (key with cdn:write from app.fivemesh.io).' },
+    }
+    local provider = providers[uploader.provider()]
     boot.warn(('^3[sd-phone]^0 no %s key set: Camera, Photos and Voice Memos will accept a capture but never save it.')
-        :format(uploader.provider() == 'qbox' and 'Qbox CDN' or 'Fivemanage media'))
-    boot.warn(uploader.provider() == 'qbox'
-        and '^3[sd-phone]^0 set QboxCdn in configs/server/apikeys.lua (token from dashboard.qbox.re -> CDN -> API).'
-        or '^3[sd-phone]^0 set FivemanageMedia in configs/server/apikeys.lua (free at fivemanage.com, token type "Media").')
+        :format(provider.name))
+    boot.warn('^3[sd-phone]^0 ' .. provider.setup)
 end
 
 ---Bootstraps the schema in a thread, pcall-guarded. The URL ledger goes up with it: presign
@@ -370,12 +374,17 @@ local MAX_DIRECT_BYTES <const> = math.floor(MAX_VIDEO_BYTES * 0.75)
 ---React -> server: mint an upload slot. Only the URL to POST to crosses back; the bucket and the
 ---expiry it is later measured against stay on the server, because handing a client the thing its
 ---own claim is checked against would leave nothing to check.
-lib.callback.register('sd-phone:server:photos:uploadSlot', function(src)
+lib.callback.register('sd-phone:server:photos:uploadSlot', function(src, payload)
     if not presign.available() then return { success = false, code = 'unavailable' } end
     if uploading[src] or assembling[src] then return { success = false, code = 'busy' } end
 
+    -- FiveMesh also bounds direct stills to the photo allowance. Fivemanage keeps its clip flow.
+    local isPhoto = type(payload) == 'table' and payload.kind == 'photo'
+    if isPhoto and uploader.provider() ~= 'fivemesh' then return { success = false, code = 'unavailable' } end
+
     local p = promise.new()
-    presign.mint(src, { maxBytes = MAX_DIRECT_BYTES },
+    presign.mint(src, { maxBytes = isPhoto and math.floor(MAX_PHOTO_BYTES * 0.75) or MAX_DIRECT_BYTES,
+        kinds = isPhoto and { image = true } or { video = true }, purpose = 'photos' },
         function(url, code) p:resolve({ url = url, code = code }) end)
     local res = Citizen.Await(p)
 
@@ -392,7 +401,7 @@ lib.callback.register('sd-phone:server:photos:uploadDone', function(src, payload
 
     local p = promise.new()
     presign.claim(src, payload.url,
-        { maxBytes = MAX_DIRECT_BYTES, kinds = { image = true, video = true } },
+        { maxBytes = MAX_DIRECT_BYTES, kinds = { image = true, video = true }, purpose = 'photos' },
         function(url, code, bytes)
         p:resolve({ url = url, code = code, bytes = bytes })
     end)
@@ -408,8 +417,8 @@ lib.callback.register('sd-phone:server:photos:uploadDone', function(src, payload
     -- direct path exists for - that no slices crossed the wire at all - is visible rather than
     -- inferred from an absence.
     if LOG_UPLOADS then
-        print(('^5[sd-phone:photos]^0 [UPLOAD] src=%s clip %.2f MB direct, 0 slice(s) over the wire')
-            :format(tostring(src), (res.bytes or 0) / 1048576))
+        print(('^5[sd-phone:photos]^0 [UPLOAD] src=%s %s %.2f MB direct, 0 slice(s) over the wire')
+            :format(tostring(src), store.isVideoUrl(res.url) and 'clip' or 'photo', (res.bytes or 0) / 1048576))
     end
 
     if not saveHosted(src, res.url, logFailure) then return { success = false, code = 'save-failed' } end

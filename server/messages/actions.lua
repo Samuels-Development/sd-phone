@@ -1328,7 +1328,7 @@ function actions.voiceSlot(source)
     if not presign.available() then return fail('messages.uploadFailed', 'Upload failed') end
     local maxBytes = (config.VoiceMemos and config.VoiceMemos.MaxAudioBytes) or (8 * 1024 * 1024)
     local p = promise.new()
-    presign.mint(source, { maxBytes = math.floor(maxBytes * 0.75) }, function(url) p:resolve(url) end)
+    presign.mint(source, { maxBytes = math.floor(maxBytes * 0.75), kinds = { audio = true }, purpose = 'voice-message' }, function(url) p:resolve(url) end)
     local url = Citizen.Await(p)
     if not url then return fail('messages.uploadFailed', 'Upload failed') end
     return ok({ url = url })
@@ -1345,7 +1345,7 @@ function actions.voiceDone(source, payload)
     local maxBytes = (config.VoiceMemos and config.VoiceMemos.MaxAudioBytes) or (8 * 1024 * 1024)
     local p = promise.new()
     presign.claim(source, payload.url,
-        { maxBytes = math.floor(maxBytes * 0.75), kinds = { audio = true } },
+        { maxBytes = math.floor(maxBytes * 0.75), kinds = { audio = true }, purpose = 'voice-message' },
         function(url, code, bytes) p:resolve({ url = url, code = code, bytes = bytes }) end)
     local res = Citizen.Await(p)
     if not res.url then

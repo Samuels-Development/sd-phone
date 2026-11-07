@@ -4,6 +4,9 @@ local config = require 'configs.config'
 ---@type table Qbox CDN provider (server.photos.qbox): the multipart route through the Node helper.
 local qbox = require 'server.photos.qbox'
 
+---@type table FiveMesh CDN provider (server.photos.fivemesh): the server-side base64 JSON route.
+local fivemesh = require 'server.photos.fivemesh'
+
 ---@type table Media URL ledger (server.media.ledger): records every URL this server hosts, so a
 ---presigned-upload claim can tell a fresh object from one that already belongs to another app.
 local ledger = require 'server.media.ledger'
@@ -42,11 +45,13 @@ function uploader.mediaKey()
     return mediaKey()
 end
 
----Which CDN this server uploads to. Anything other than 'qbox' stays on Fivemanage, so a typo
+---Which CDN this server uploads to. Unknown values stay on Fivemanage, so a typo
 ---never silently sends media somewhere the owner did not choose.
----@return 'fivemanage'|'qbox'
+---@return 'fivemanage'|'qbox'|'fivemesh'
 function uploader.provider()
-    return tostring(PHOTOS.Provider or 'fivemanage'):lower() == 'qbox' and 'qbox' or 'fivemanage'
+    local provider = tostring(PHOTOS.Provider or 'fivemanage'):lower()
+    if provider == 'qbox' or provider == 'fivemesh' then return provider end
+    return 'fivemanage'
 end
 
 ---True when the active provider has a token set. Read at boot so a server missing its key is
@@ -54,6 +59,7 @@ end
 ---@return boolean
 function uploader.configured()
     if uploader.provider() == 'qbox' then return qbox.configured() end
+    if uploader.provider() == 'fivemesh' then return fivemesh.configured() end
     return mediaKey() ~= ''
 end
 
@@ -153,6 +159,10 @@ function uploader.uploadMedia(base64Image, filename, cb)
 
     if uploader.provider() == 'qbox' then
         qbox.uploadMedia(base64Image, filename, recorded)
+        return
+    end
+    if uploader.provider() == 'fivemesh' then
+        fivemesh.uploadMedia(base64Image, filename, recorded)
         return
     end
     uploadFivemanage(base64Image, filename, recorded)

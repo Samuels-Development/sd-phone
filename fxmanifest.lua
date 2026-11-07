@@ -22,6 +22,7 @@ server_scripts {
     'server/crypto.js',
     'server/relay.js',
     'server/upload.js',
+    'server/media/probe.js',
     'bridge/server/init.lua',
     'server/main.lua',
     'server/compat/computers.lua', -- sd-computers link (optional; inert unless sd-computers calls it)
