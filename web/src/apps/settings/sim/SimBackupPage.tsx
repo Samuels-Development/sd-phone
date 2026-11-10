@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { t } from '@/i18n';
+import { phoneColorLabel } from '@/i18n/dynamicLabels';
 import { fetchNui, isFiveM } from '@/core/nui';
 import { formatPhone } from '@/lib/phone';
 import { useMaskedPhone, useStreamerHidden } from '@/stores/themeStore';
@@ -64,13 +65,9 @@ const DEV_INFO: SimInfo = {
     maxProfiles: 3, canRestore: true,
 };
 
-function colorLabel(color: string): string {
-    return color.charAt(0).toUpperCase() + color.slice(1);
-}
-
 function profileLabel(p: BackupProfile, phone: (n?: string | null) => string): string {
     const name = p.color
-        ? t('settings.simColorPhone', '{color} Phone', { color: colorLabel(p.color) })
+        ? t('settings.simColorPhone', '{color} Phone', { color: phoneColorLabel(p.color) })
         : t('settings.simPhoneGeneric', 'Phone');
     return p.number ? `${name} · ${phone(p.number)}` : name;
 }
@@ -220,7 +217,7 @@ export function SimBackupPage({ onBack }: { onBack: () => void }) {
                         {extraSims.map((s, i) => (
                             <ListRow
                                 key={s.number}
-                                label={colorLabel(s.color)}
+                                label={phoneColorLabel(s.color)}
                                 value={phoneFmt(s.number)}
                                 chevron={false}
                                 divider={i < extraSims.length - 1}
