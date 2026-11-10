@@ -4,6 +4,7 @@ import { AlertTriangle, Bell } from 'lucide-react';
 
 import { AppIconSVG } from './AppIconSVG';
 import { t } from '@/i18n';
+import { localizeShareVars } from '@/i18n/dynamicLabels';
 import { useStreamerHidden } from '@/stores/themeStore';
 
 
@@ -41,7 +42,7 @@ export interface NotifText {
 export function resolveNotifText(data: NotifText): { title: string; body?: string } {
     const title = data.titleKey ? t(data.titleKey, data.title, data.titleVars) : fill(data.title, data.titleVars);
     if (data.body === undefined) return { title };
-    const body = data.bodyKey ? t(data.bodyKey, data.body, data.bodyVars) : fill(data.body, data.bodyVars);
+    const body = data.bodyKey ? t(data.bodyKey, data.body, localizeShareVars(data.bodyKey, data.bodyVars)) : fill(data.body, data.bodyVars);
     return { title, body };
 }
 

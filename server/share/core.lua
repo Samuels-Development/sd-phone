@@ -204,10 +204,16 @@ function core.respond(src, id, accept)
     -- just watch the prompt disappear: the recipient's client fires the respond callback and
     -- drops the card without reading the result, and the sender was only ever told on success.
     -- The recipient gets the handler's specific reason; the sender only needs to know it missed.
-    TriggerClientEvent('sd-phone:client:notify', src, {
+    local recipientNotice = {
         app = 'phone', title = 'AirShare',
-        body = reason or ('That %s could not be saved.'):format(what),
-    })
+        bodyKey = 'share.couldNotSaveSharedItem', body = ('That %s could not be saved.'):format(what),
+        bodyVars = { kind = what },
+    }
+    -- Handler-provided reasons are custom content, not the generic kind template.
+    if reason then
+        recipientNotice.body, recipientNotice.bodyKey, recipientNotice.bodyVars = reason, nil, nil
+    end
+    TriggerClientEvent('sd-phone:client:notify', src, recipientNotice)
     TriggerClientEvent('sd-phone:client:notify', req.fromSrc, {
         app = 'phone', title = 'AirShare',
         bodyKey = 'share.couldNotSaveYourShare', body = ('%s could not save your %s.'):format(who, what),
