@@ -27,8 +27,8 @@ end)
 ---Server push: our upload was rejected (bad payload, too long, or the upstream upload
 ---failed); relays the reason to the app.
 ---@param message string human-readable failure reason from server/voicememos/init.lua
-RegisterNetEvent('sd-phone:client:voice:uploadFailed', function(message)
-    SendNUIMessage({ action = 'sd-phone:voice:uploadFailed', data = { message = message } })
+RegisterNetEvent('sd-phone:client:voice:uploadFailed', function(message, messageKey)
+    SendNUIMessage({ action = 'sd-phone:voice:uploadFailed', data = { message = message, messageKey = messageKey } })
 end)
 
 -- Direct upload. The event path above hands the whole recording to the server in one ordinary
