@@ -1,6 +1,6 @@
 import { fetchNui, isFiveM } from '@/core/nui';
 import { uploadDirect, uploadViaServer } from '@/shared/mediaUpload';
-import { t } from '@/i18n';
+import { getLocaleTag, t } from '@/i18n';
 import { apiCall, apiData } from '@/core/api';
 import { formatClockTime } from '@/lib/time';
 
@@ -85,5 +85,5 @@ export function fmtMemoDate(iso: string): string {
     const today = new Date();
     if (dayK(d) === dayK(today)) return t('voicememos.today', 'Today {time}', { time });
     if (dayK(d) === dayK(new Date(today.getTime() - 86_400_000))) return t('voicememos.yesterday', 'Yesterday {time}', { time });
-    return `${d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })} ${time}`;
+    return `${d.toLocaleDateString(getLocaleTag(), { day: 'numeric', month: 'short', year: 'numeric' })} ${time}`;
 }

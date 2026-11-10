@@ -1,5 +1,5 @@
 import { fetchNui, isFiveM } from '@/core/nui';
-import { t } from '@/i18n';
+import { getLocaleTag, t } from '@/i18n';
 import { ACCOUNTS, TRANSACTIONS } from './data';
 import { apiData, type Envelope } from '@/core/api';
 import { formatClockTime } from '@/lib/time';
@@ -243,7 +243,7 @@ export function groupTx(txs: BankTx[]): BankDay[] {
             let label: string;
             if (key === todayK)      label = t('banking.today', 'Today');
             else if (key === yestK)  label = t('banking.yesterday', 'Yesterday');
-            else                     label = new Date(key + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            else                     label = new Date(key + 'T00:00:00').toLocaleDateString(getLocaleTag(), { weekday: 'short', month: 'short', day: 'numeric' });
             return { key, label, items: items.sort((a, b) => b.date.localeCompare(a.date)) };
         });
 }
@@ -254,5 +254,5 @@ export function txTimeLabel(dateStr: string): string {
     if (dateStr.slice(0, 10) === todayK) {
         return formatClockTime(d, true);
     }
-    return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+    return d.toLocaleDateString(getLocaleTag(), { day: 'numeric', month: 'short' });
 }
