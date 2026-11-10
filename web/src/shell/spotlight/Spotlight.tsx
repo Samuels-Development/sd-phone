@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { device } from '@device';
 
-import { t, appLabel } from '@/i18n';
+import { t, appLabel, pluralSuffix } from '@/i18n';
 import type { AppDef } from '@/core/types';
 import { SearchBar } from '@/ui/SearchBar';
 import { filterSettingsGroups, getSettingsGroups, pageForRow } from '@/apps/settings/data';
@@ -116,7 +116,7 @@ export function Spotlight({ apps, installableApps, open, pull, onLaunchApp, onCl
     const musicHits = useMemo<GenericHit[]>(() => {
         if (!trimmed || !apps.some(a => a.id === 'music')) return [];
         const playlists = rankBy(musicFolders, trimmed, f => [f.name], 3)
-            .map(f => ({ id: f.id, title: f.name, subtitle: t('music.playlistSongCount', 'Playlist · {count} song{plural}', { count: f.trackIds.length, plural: f.trackIds.length === 1 ? '' : 's' }), extra: 'playlist' }));
+            .map(f => ({ id: f.id, title: f.name, subtitle: t('music.playlistSongCount', 'Playlist · {count} song{plural}', { count: f.trackIds.length, plural: pluralSuffix(f.trackIds.length) }), extra: 'playlist' }));
         const songs = rankBy(musicTracks, trimmed, tr => [tr.title, tr.artist], 3)
             .map(tr => ({ id: tr.id, title: tr.title, subtitle: tr.artist, extra: 'song' }));
         return [...playlists, ...songs];
