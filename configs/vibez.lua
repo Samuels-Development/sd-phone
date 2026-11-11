@@ -35,8 +35,8 @@ return {
 
     -- Text to speech on a Clout upload. The composer offers a text box and a voice; the
     -- server turns them into an audio clip and plays it over the video, the way TikTok does.
-    -- Needs the same media upload key the app already uses to store videos (Fivemanage or
-    -- Qbox). The endpoint is a free public relay, so it can rate limit or go down; a failure
+    -- Needs the same media upload key the app already uses to store videos (Fivemanage,
+    -- Qbox or FiveMesh). The endpoint is a free public relay, so it can rate limit or go down; a failure
     -- is soft, the post still uploads, just without the voiceover.
     TTS = {
         -- Whether the composer offers text to speech at all. With this off the field is hidden

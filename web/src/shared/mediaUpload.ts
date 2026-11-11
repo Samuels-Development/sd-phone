@@ -12,25 +12,37 @@ export async function uploadDirect(
     actions: DirectUploadActions,
     slotPayload?: unknown,
 ): Promise<string | null> {
-    const slot = await apiData<{ url: string }>(actions.slot, slotPayload);
-    if (!slot || typeof slot.url !== 'string' || slot.url === '') return null;
-
-    let hosted: string;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
+        const slot = await apiData<{ url: string }>(actions.slot, slotPayload);
+        if (!slot || typeof slot.url !== 'string' || !slot.url.startsWith('https://')) return null;
+
+        const controller = new AbortController();
+        const timeoutMs = Math.max(60000, Math.min(600000, Math.ceil(blob.size / 262144) * 1000 + 30000));
+        timer = setTimeout(() => controller.abort(), timeoutMs);
         const form = new FormData();
         form.append('file', blob, filename);
-        const res = await fetch(slot.url, { method: 'POST', body: form });
+        const res = await fetch(slot.url, {
+            method: 'POST', body: form, signal: controller.signal,
+            credentials: 'omit', referrerPolicy: 'no-referrer',
+        });
         if (!res.ok) return null;
-        const body = await res.json() as { data?: { url?: unknown } } | null;
-        const url = body?.data?.url;
-        if (typeof url !== 'string' || url === '') return null;
-        hosted = url;
+        const body = await res.json() as {
+            success?: boolean; data?: { url?: unknown }; object?: { publicUrl?: unknown };
+        } | null;
+        if (body?.success === false) return null;
+        // Fivemanage returns data.url; FiveMesh returns a successful object.publicUrl.
+        const hosted = body?.data?.url ?? (body?.success === true ? body.object?.publicUrl : null);
+        if (typeof hosted !== 'string' || !hosted.startsWith('https://')) return null;
+        clearTimeout(timer);
+        timer = undefined;
+        const done = await apiCall(actions.done, { url: hosted });
+        return done.success ? hosted : null;
     } catch {
         return null;
+    } finally {
+        clearTimeout(timer);
     }
-
-    const done = await apiCall(actions.done, { url: hosted });
-    return done.success ? hosted : null;
 }
 
 const NUI_HOST_PREFIX = 'cfx-nui-';

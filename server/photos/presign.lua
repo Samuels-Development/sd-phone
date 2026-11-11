@@ -12,6 +12,8 @@ local ledger   = require 'server.media.ledger'
 local mediaLimit = require 'server.photos.mediaLimit'
 ---@type table Player bridge (bridge.server.player): the character a slot is minted for.
 local player   = require 'bridge.server.player'
+---@type table FiveMesh scoped uploads; Fivemanage's existing flow below is kept separate.
+local fivemesh = require 'server.photos.fivemeshPresign'
 
 ---@type table Presign module; the table returned at end of file. Mints one-shot upload slots so a
 ---client can put media straight into Fivemanage over ordinary HTTPS, and decides whether the URL
@@ -225,6 +227,7 @@ end
 ---path, which is why nothing in this change deletes it.
 ---@return boolean
 function presign.available()
+    if uploader.provider() == 'fivemesh' then return fivemesh.available() end
     -- Opt-in, under a name older configs never set. Until 2026-09-16 the switch was `DirectUpload`
     -- and shipped true, so honouring it would leave every existing install exposed.
     if PHOTOS.AllowDirectUpload ~= true then return false end
@@ -246,6 +249,7 @@ end
 ---@param opts { maxBytes: integer } the largest object the caller's claim will accept
 ---@param cb fun(url: string|nil, code: 'unavailable'|'busy'|'cooldown'|'rate-limit'|'provider'|nil)
 function presign.mint(src, opts, cb)
+    if uploader.provider() == 'fivemesh' then return fivemesh.mint(src, opts, cb) end
     local maxBytes = math.floor(tonumber(type(opts) == 'table' and opts.maxBytes or nil) or 0)
     if not presign.available() or maxBytes <= 0 then
         cb(nil, 'unavailable')
@@ -364,6 +368,7 @@ end
 ---into somebody's photo gallery.
 ---@param cb fun(url: string|nil, code: 'no-slot'|'expired'|'foreign-url'|'duplicate'|'probe-failed'|'bad-type'|'too-large'|nil, bytes: integer|nil)
 function presign.claim(src, url, opts, cb)
+    if uploader.provider() == 'fivemesh' then return fivemesh.claim(src, url, opts, cb) end
     opts = type(opts) == 'table' and opts or {}
     local maxBytes = math.floor(tonumber(opts.maxBytes) or 0)
     local kinds    = type(opts.kinds) == 'table' and opts.kinds or {}
@@ -507,6 +512,7 @@ end
 ---by whoever the server hands that source id to next.
 ---@param src number
 function presign.forget(src)
+    fivemesh.forget(src)
     local slot = slots[src]
     slots[src] = nil
     if slot and not slot.pending then strike(slot.cid, 'abandoned on disconnect') end

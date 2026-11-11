@@ -67,7 +67,7 @@ lib.callback.register('sd-phone:server:voicemail:uploadSlot', function(src)
     if uploading[src] then return util.fail('voicemail.uploadInProgress', 'Upload already in progress') end
 
     local p = promise.new()
-    presign.mint(src, { maxBytes = math.floor(MAX_AUDIO_BYTES * 0.75) }, function(url) p:resolve(url) end)
+    presign.mint(src, { maxBytes = math.floor(MAX_AUDIO_BYTES * 0.75), kinds = { audio = true }, purpose = 'voicemail' }, function(url) p:resolve(url) end)
     local url = Citizen.Await(p)
     if not url then return util.fail('voicemail.uploadFailed', 'Upload failed') end
     return util.ok({ url = url })
@@ -79,7 +79,7 @@ lib.callback.register('sd-phone:server:voicemail:uploadDone', function(src, payl
 
     local p = promise.new()
     presign.claim(src, payload.url,
-        { maxBytes = math.floor(MAX_AUDIO_BYTES * 0.75), kinds = { audio = true } },
+        { maxBytes = math.floor(MAX_AUDIO_BYTES * 0.75), kinds = { audio = true }, purpose = 'voicemail' },
         function(url, code, bytes) p:resolve({ url = url, code = code, bytes = bytes }) end)
     local res = Citizen.Await(p)
     if not res.url then

@@ -9,15 +9,24 @@
 -- value still falls back to the legacy `sd_fivemanage_key` server convar. Create a "Media" token
 -- at https://app.fivemanage.com.
 return {
-    -- Which CDN uploads go to: 'fivemanage' or 'qbox'.
+    -- Which CDN uploads go to: 'fivemanage', 'qbox' or 'fivemesh'.
     --
     -- 'fivemanage' uses the Fivemanage Media token (FivemanageMedia in configs/server/apikeys.lua,
     -- or the legacy sd_fivemanage_key convar).
     --
     -- 'qbox' uses the Qbox Dashboard CDN (QboxCdn in configs/server/apikeys.lua, or the
     -- sd_qbox_cdn_key convar). Generate the token at https://dashboard.qbox.re -> CDN -> API.
-    -- Anything other than 'qbox' stays on Fivemanage, so a typo never quietly moves your media.
+    --
+    -- 'fivemesh' uses FiveMesh CDN (FiveMeshCdn in configs/server/apikeys.lua, or the
+    -- sd_fivemesh_cdn_key server convar). Use a Server API Key or a Developer API Key with
+    -- cdn:write at https://app.fivemesh.io. Restricted paths must include FiveMeshPath below.
+    -- Unknown values stay on Fivemanage, so a typo never quietly moves your media.
     Provider = 'fivemanage',
+
+    -- FiveMesh destination folder, independent of Fivemanage's MediaPath. Nested folders are
+    -- supported (e.g. 'phone/production'); use letters, numbers, hyphens and underscores in each
+    -- segment. An empty string uploads to the CDN root. Filenames receive a unique suffix.
+    FiveMeshPath = 'phone',
 
     -- Folder your Fivemanage Media token is scoped to, if any (e.g. 'myserver/prod'). Uploads made
     -- with a folder-scoped token come back as <CDN>/<team>/<folder>/<name>, and the direct-upload
@@ -81,10 +90,13 @@ return {
     -- With this off, every upload goes through your server first, where UploadLimits applies to
     -- every byte before anything reaches Fivemanage. Nothing else changes.
     --
-    -- This replaces the old DirectUpload setting, which is no longer read.
+    -- FiveMesh also supports this opt-in: one file per link, bounded size and MIME types, a
+    -- short expiry and a unique upload folder. The server verifies ownership and media bytes
+    -- before saving. The warning above describes Fivemanage's less restrictive links.
+    -- Qbox keeps the server upload routes. This replaces the old DirectUpload setting.
     AllowDirectUpload = false,
 
-    -- Ceilings on how much players can upload to your media provider (Fivemanage or Qbox). Every
+    -- Ceilings on how much players can upload to your media provider (Fivemanage, Qbox, FiveMesh). Every
     -- camera photo and clip, voice memo, voicemail, call recording, voice message, bodycam
     -- recording and Clout voiceover counts. The defaults are far above what a normal player uses.
     --

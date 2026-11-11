@@ -499,7 +499,7 @@ if ENABLED then
         if not meta then return { success = false, code = 'refused', message = reason } end
 
         local p = promise.new()
-        presign.mint(src, { maxBytes = MAX_DIRECT_BYTES },
+        presign.mint(src, { maxBytes = MAX_DIRECT_BYTES, kinds = { video = true }, purpose = 'bodycam' },
             function(url, code) p:resolve({ url = url, code = code }) end)
         local res = Citizen.Await(p)
         if not res.url then return { success = false, code = res.code or 'provider' } end
@@ -520,7 +520,7 @@ if ENABLED then
 
         local p = promise.new()
         presign.claim(src, payload.url,
-            { maxBytes = MAX_DIRECT_BYTES, kinds = { video = true } },
+            { maxBytes = MAX_DIRECT_BYTES, kinds = { video = true }, purpose = 'bodycam' },
             function(url, code, bytes)
             p:resolve({ url = url, code = code, bytes = bytes })
         end)

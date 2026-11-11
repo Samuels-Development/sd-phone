@@ -25,8 +25,15 @@
 --   2. Open CDN -> API -> generate an API token
 --   3. Paste it below (it looks like qbox_live_...)
 -- Left blank here, the uploader falls back to the `sd_qbox_cdn_key` server convar.
+--
+-- FiveMesh CDN. Only read when Provider = 'fivemesh' in configs/photos.lua.
+-- At https://app.fivemesh.io, enable CDN and generate a Server API Key (fm_server_...) or a
+-- Developer API Key (fm_live_...) with cdn:write. If restricting CDN paths, allow the folder in
+-- Photos.FiveMeshPath (default: phone). Left blank, falls back to sd_fivemesh_cdn_key in server.cfg.
+-- Use `set` for that convar, never `setr` or `sets`: the key must stay server-side.
 return {
     Giphy           = '',
     FivemanageMedia = '',
     QboxCdn         = '',
+    FiveMeshCdn     = '',
 }
