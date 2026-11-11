@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronLeft, Newspaper, Pencil, Plus, Radio, Trash2 } from 'lucide-react';
 
-import { t } from '@/i18n';
+import { pluralSuffix, t } from '@/i18n';
 import { NavContext, NOOP_NAV, useIosPush } from '@/hooks/useIosPush';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { EmptyState } from '@/ui/EmptyState';
@@ -116,7 +116,7 @@ export function ManageDashboard({ articles, scheduled, ticker, dark, animateIn =
                     <span className="min-w-0 flex-1">
                         <span className="block text-[18.5px] font-bold">{t('weazelnews.editHeadlines', 'Edit headlines')}</span>
                         <span className="mt-1 block truncate text-[15px] font-medium text-ios-gray">
-                            {ticker.length > 0 ? t('weazelnews.tickerSummary', '{count} headline{plural} · {first}', { count: ticker.length, plural: ticker.length === 1 ? '' : 's', first: ticker[0] }) : t('weazelnews.noHeadlinesYet', 'No headlines yet, tap to add')}
+                            {ticker.length > 0 ? t('weazelnews.tickerSummary', '{count} headline{plural} · {first}', { count: ticker.length, plural: pluralSuffix(ticker.length), first: ticker[0] }) : t('weazelnews.noHeadlinesYet', 'No headlines yet, tap to add')}
                         </span>
                     </span>
                     <Pencil className={`h-[21px] w-[21px] shrink-0 ${subtle}`} strokeWidth={2.2} />

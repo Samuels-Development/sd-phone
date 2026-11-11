@@ -369,7 +369,11 @@ export function NoteEditor({
           message={t(
             "notes.removeAttachmentBody",
             "This {kind} will be removed from the note.",
-            { kind: pendingRemove.kind },
+            {
+              kind: pendingRemove.kind === "photo"
+                ? t("notes.attachmentPhoto", "photo")
+                : t("notes.attachmentDrawing", "drawing"),
+            },
           )}
           confirmLabel={t("notes.remove", "Remove")}
           cancelLabel={t("notes.cancel", "Cancel")}

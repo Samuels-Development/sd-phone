@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-import { t } from '@/i18n';
+import { pluralSuffix, t } from '@/i18n';
 import { useSessionState, clearSessionState } from '@/hooks/useSessionState';
 import { useTheme } from '@/stores/themeStore';
 import { useDidEnter } from '@/hooks/useDidEnter';
@@ -233,7 +233,7 @@ export function Music({ onClose: _onClose }: { onClose: () => void }) {
                             key={f.id}
                             art={<FolderArt folder={f} size={56} />}
                             title={f.name}
-                            subtitle={t('music.playlistSongCount', 'Playlist · {count} song{plural}', { count: f.trackIds.length, plural: f.trackIds.length === 1 ? '' : 's' })}
+                            subtitle={t('music.playlistSongCount', 'Playlist · {count} song{plural}', { count: f.trackIds.length, plural: pluralSuffix(f.trackIds.length) })}
                             onPress={() => push({ kind: 'playlist', id: f.id })}
                             divider={i < folders.length - 1}
                             action={f.trackIds.length > 0 ? <ShareBtn onShare={() => setSharing({ kind: 'playlist', folder: f })} label={t('music.shareName', 'Share {name}', { name: f.name })} /> : undefined}
@@ -285,7 +285,7 @@ export function Music({ onClose: _onClose }: { onClose: () => void }) {
                             {artistHits.map((a, i) => (
                                 <ListRow key={a.name} onPress={() => push({ kind: 'artist', name: a.name })} divider={i < artistHits.length - 1}
                                     art={<Cover track={a.tracks[0]} size={48} rounded={24} />}
-                                    title={a.name} subtitle={t('music.songCount', '{count} song{plural}', { count: a.tracks.length, plural: a.tracks.length === 1 ? '' : 's' })} />
+                                    title={a.name} subtitle={t('music.songCount', '{count} song{plural}', { count: a.tracks.length, plural: pluralSuffix(a.tracks.length) })} />
                             ))}
 
                             {albumHits.length > 0 && <SectionLabel>{t('music.albums', 'Albums')}</SectionLabel>}
@@ -320,7 +320,7 @@ export function Music({ onClose: _onClose }: { onClose: () => void }) {
                         ) : artists.map((a, i) => (
                             <ListRow key={a.name} onPress={() => push({ kind: 'artist', name: a.name })} divider={i < artists.length - 1}
                                 art={<Cover track={a.tracks[0]} size={52} rounded={26} />}
-                                title={a.name} subtitle={t('music.songCount', '{count} song{plural}', { count: a.tracks.length, plural: a.tracks.length === 1 ? '' : 's' })} />
+                                title={a.name} subtitle={t('music.songCount', '{count} song{plural}', { count: a.tracks.length, plural: pluralSuffix(a.tracks.length) })} />
                         ))}
                     </div>
                 </>
@@ -338,7 +338,7 @@ export function Music({ onClose: _onClose }: { onClose: () => void }) {
                             <ListRow key={f.id}
                                 art={<FolderArt folder={f} size={52} rounded={10} />}
                                 title={f.name}
-                                subtitle={t('music.playlistSongCount', 'Playlist · {count} song{plural}', { count: f.trackIds.length, plural: f.trackIds.length === 1 ? '' : 's' })}
+                                subtitle={t('music.playlistSongCount', 'Playlist · {count} song{plural}', { count: f.trackIds.length, plural: pluralSuffix(f.trackIds.length) })}
                                 onPress={() => push({ kind: 'playlist', id: f.id })}
                                 divider={i < folders.length - 1}
                                 action={f.trackIds.length > 0 ? <ShareBtn onShare={() => setSharing({ kind: 'playlist', folder: f })} label={t('music.shareName', 'Share {name}', { name: f.name })} /> : undefined}
@@ -448,7 +448,7 @@ export function Music({ onClose: _onClose }: { onClose: () => void }) {
                             ) : (
                                 <h1 dir="auto" className="truncate text-[30px] font-bold leading-tight tracking-ios-display">{folder.name}</h1>
                             )}
-                            <p className="text-[16px] text-ios-gray">{t('music.songCount', '{count} song{plural}', { count: folderTracks.length, plural: folderTracks.length === 1 ? '' : 's' })}</p>
+                            <p className="text-[16px] text-ios-gray">{t('music.songCount', '{count} song{plural}', { count: folderTracks.length, plural: pluralSuffix(folderTracks.length) })}</p>
                         </div>
                     </div>
                     <div className="flex gap-2 px-4 pb-2">

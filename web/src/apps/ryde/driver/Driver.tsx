@@ -4,7 +4,7 @@ import { Car, ChevronRight, Download, Inbox, Navigation, Power, Star, TrendingUp
 import { useSessionState } from '@/hooks/useSessionState';
 import { SegmentedControl } from '@/ui/SegmentedControl';
 import { AlertDialog } from '@/ui/AlertDialog';
-import { t } from '@/i18n';
+import { pluralSuffix, t } from '@/i18n';
 import { driverStats, useRyde } from '../store';
 import { CAR_COLORS, money } from '../data';
 import { BigButton } from '../ui';
@@ -140,7 +140,7 @@ function Dashboard() {
                                 <Wallet className="h-[16px] w-[16px]" strokeWidth={2.2} /> {t('ryde.todaysEarnings', 'Today’s earnings')}
                             </div>
                             <p className="mt-1.5 text-[42px] font-extrabold leading-none tracking-tight">{money(s.earnToday)}</p>
-                            <p className="mt-2 text-[14px] opacity-65">{t('ryde.tripsTodayCount', '{n} trip{plural} today', { n: s.tripsToday, plural: s.tripsToday === 1 ? '' : 's' })}</p>
+                            <p className="mt-2 text-[14px] opacity-65">{t('ryde.tripsTodayCount', '{n} trip{plural} today', { n: s.tripsToday, plural: pluralSuffix(s.tripsToday) })}</p>
                         </div>
 
                         <button onClick={() => g.setOnline(!d.online)}
@@ -167,7 +167,7 @@ function Dashboard() {
                         <div className="grid grid-cols-2 gap-3">
                             <Stat icon={<TrendingUp className="h-[19px] w-[19px] text-white" strokeWidth={2.2} />} iconBg="#34C759" label={t('ryde.lifetimeEarnings', 'Lifetime earnings')} value={money(s.earnTotal)} />
                             <Stat icon={<Navigation className="h-[19px] w-[19px] text-white" strokeWidth={2.2} />} iconBg="#0A84FF" label={t('ryde.totalTrips', 'Total trips')} value={String(s.tripsTotal)} />
-                            <Stat icon={<Star className="h-[19px] w-[19px] text-white" strokeWidth={2.2} />} iconBg="#FF9600" label={t('ryde.rating', 'Rating')} value={s.avgRating != null ? s.avgRating.toFixed(2) : '5.00'} sub={s.ratedCount > 0 ? t('ryde.ratingsCount', '{n} rating{plural}', { n: s.ratedCount, plural: s.ratedCount === 1 ? '' : 's' }) : undefined} />
+                            <Stat icon={<Star className="h-[19px] w-[19px] text-white" strokeWidth={2.2} />} iconBg="#FF9600" label={t('ryde.rating', 'Rating')} value={s.avgRating != null ? s.avgRating.toFixed(2) : '5.00'} sub={s.ratedCount > 0 ? t('ryde.ratingsCount', '{n} rating{plural}', { n: s.ratedCount, plural: pluralSuffix(s.ratedCount) }) : undefined} />
                             <Stat icon={<Car className="h-[19px] w-[19px] text-white" strokeWidth={2.2} />} iconBg="#5856D6" label={t('ryde.vehicle', 'Vehicle')} value={d.car || '—'} sub={d.plate || undefined} small />
                         </div>
 
@@ -182,7 +182,7 @@ function Dashboard() {
                     <>
                         {trips.length > 0 && (
                             <p className="mb-3 px-1 text-[15px] text-ios-gray">
-                                {t('ryde.tripsEarned', '{n} trip{plural} · {amount} earned', { n: s.tripsTotal, plural: s.tripsTotal === 1 ? '' : 's', amount: money(s.earnTotal) })}
+                                {t('ryde.tripsEarned', '{n} trip{plural} · {amount} earned', { n: s.tripsTotal, plural: pluralSuffix(s.tripsTotal), amount: money(s.earnTotal) })}
                             </p>
                         )}
                         {trips.length === 0 ? (

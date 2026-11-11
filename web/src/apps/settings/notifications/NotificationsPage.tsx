@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ChevronRight, SearchX } from 'lucide-react';
 
-import { t } from '@/i18n';
+import { appLabel, getCatalogVersion, t } from '@/i18n';
 import { useIosPush } from '@/hooks/useIosPush';
 import { useSessionState } from '@/hooks/useSessionState';
 import { AppIconSVG } from '@/shell/AppIconSVG';
@@ -11,6 +11,7 @@ import { NavBar } from '@/ui/NavBar';
 import { SearchBar } from '@/ui/SearchBar';
 import { useInstalledApps } from '@/stores/installedAppsStore';
 import { useNotifPrefsStore } from '@/stores/notifPrefsStore';
+import { useTheme } from '@/stores/themeStore';
 import { AppNotificationsPage, type AppEntry } from './AppNotificationsPage';
 import { PushLayer } from '../SettingsSubPage';
 
@@ -18,15 +19,17 @@ export function NotificationsPage({ onBack }: { onBack: () => void }) {
     const { goBack, pageStyle } = useIosPush(onBack);
 
     const installed = useInstalledApps();
+    const { appLabels } = useTheme('appLabels');
+    const catalogVersion = getCatalogVersion();
     const prefs     = useNotifPrefsStore(s => s.prefs);
     const [openApp, setOpenApp] = useState<AppEntry | null>(null);
     const [query, setQuery] = useSessionState('settings:notifSearch', '');
 
     const all = useMemo(
         () => installed
-            .map(a => ({ id: a.id, label: a.label }))
+            .map(a => ({ id: a.id, get label() { return appLabel(a); } }))
             .sort((a, b) => a.label.localeCompare(b.label)),
-        [installed],
+        [installed, appLabels, catalogVersion],
     );
 
     const q = query.trim().toLowerCase();

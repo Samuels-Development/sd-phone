@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { t } from '@/i18n';
+import { appLabel, t } from '@/i18n';
 import { useTheme, APP_LABEL_MAX } from '@/stores/themeStore';
 import { useInstalledAppsStore } from '@/stores/installedAppsStore';
 import { ListGroup, ListRow } from '@/ui/ListGroup';
@@ -14,7 +14,8 @@ export function AppNamesPage({ onBack }: { onBack: () => void }) {
 
     const target = renaming === null ? null : apps.find(a => a.id === renaming) ?? null;
     const renamedCount = Object.keys(appLabels).length;
-    const sorted = [...apps].sort((a, b) => a.label.localeCompare(b.label));
+    const sorted = [...apps].sort((a, b) => appLabel(a).localeCompare(appLabel(b)));
+    const originalLabel = target ? t('apps.' + target.id, target.label) : '';
 
     return (
         <SubPage
@@ -26,7 +27,7 @@ export function AppNamesPage({ onBack }: { onBack: () => void }) {
                 {sorted.map((app, i) => (
                     <ListRow
                         key={app.id}
-                        label={app.label}
+                        label={appLabel(app)}
                         sub={appLabels[app.id] ? t('settings.renameAppsRenamed', 'Renamed') : undefined}
                         onPress={() => setRenaming(app.id)}
                         divider={i < sorted.length - 1}
@@ -49,11 +50,14 @@ export function AppNamesPage({ onBack }: { onBack: () => void }) {
                 <PromptDialog
                     title={t('settings.renameAppTitle', 'Rename App')}
                     message={t('settings.renameAppBody', 'Type the original name to put it back.')}
-                    placeholder={target.label}
-                    initialValue={appLabels[target.id] ?? target.label}
+                    placeholder={originalLabel}
+                    initialValue={appLabels[target.id] ?? originalLabel}
                     maxLength={APP_LABEL_MAX}
                     confirmLabel={t('settings.save', 'Save')}
-                    onConfirm={value => { setAppLabel(target.id, value); setRenaming(null); }}
+                    onConfirm={value => {
+                        setAppLabel(target.id, value.trim() === originalLabel ? '' : value);
+                        setRenaming(null);
+                    }}
                     onCancel={() => setRenaming(null)}
                 />
             )}

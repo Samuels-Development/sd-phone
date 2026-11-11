@@ -1,5 +1,5 @@
 import { fetchNui } from './nui';
-import { t } from '@/i18n';
+import { pluralSuffix, t } from '@/i18n';
 
 export interface Envelope<T = void> {
     success:      boolean;
@@ -16,7 +16,12 @@ export function failText<T extends string | null | undefined>(
     res: Pick<Envelope, 'message' | 'messageKey' | 'messageVars'>,
     fallback: T,
 ): string | T {
-    if (res.messageKey && res.message !== undefined) return t(res.messageKey, res.message, res.messageVars);
+    if (res.messageKey && res.message !== undefined) {
+        const vars = res.messageKey === 'mail.nameMustLeastCharacters' && res.messageVars
+            ? { ...res.messageVars, s: pluralSuffix(Number(res.messageVars.n)) }
+            : res.messageVars;
+        return t(res.messageKey, res.message, vars);
+    }
     return res.message ?? fallback;
 }
 

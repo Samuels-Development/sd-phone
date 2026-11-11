@@ -174,6 +174,12 @@ export function t(key: string, fallback: string, vars?: Record<string, string | 
     return s;
 }
 
+/** Suffix for legacy English-style counters. A locale can use an empty suffix
+ *  with a count-neutral label instead of leaking the English "s" into its UI. */
+export function pluralSuffix(count: number): string {
+    return count === 1 ? '' : t('common.pluralSuffix', 's');
+}
+
 let appLabelSource: () => Record<string, string> = () => ({});
 
 export function setAppLabelSource(source: () => Record<string, string>): void {

@@ -442,7 +442,7 @@ export type NuiMessage =
     | { action: 'sd-phone:documents:added';    data: { doc: DocFile } }
     | { action: 'sd-phone:documents:receive';  data: { doc: DocFile; fromName?: string } }
     | { action: 'sd-phone:documents:signRequest'; data: { requestId: string; fromName: string; doc: DocFile } }
-    | { action: 'sd-phone:voice:uploadFailed'; data: { message?: string } }
+    | { action: 'sd-phone:voice:uploadFailed'; data: { message?: string; messageKey?: string } }
     | { action: 'sd-phone:contacts:shared';    data: { id: string; name: string; phone: string; color: string; initials: string; avatar?: string } }
     | { action: 'sd-phone:contacts:removed';   data: { phone: string } }
     | { action: 'sd-phone:messages:incoming';  data: MessagesIncomingPush }

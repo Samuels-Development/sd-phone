@@ -67,8 +67,17 @@ export function VoiceMemos({ onClose: _onClose }: { onClose: () => void }) {
     useNuiEvent('sd-phone:voice:added', useCallback((memo: VoiceMemo) => {
         setMemos(prev => (prev.some(m => m.id === memo.id) ? prev : [memo, ...prev]));
     }, []));
-    useNuiEvent('sd-phone:voice:uploadFailed', useCallback((d: { message?: string }) => {
-        setError(d?.message ?? t('voicememos.uploadFailed', 'Upload failed'));
+    useNuiEvent('sd-phone:voice:uploadFailed', useCallback((d: { message?: string; messageKey?: string }) => {
+        const messages: Record<string, () => string> = {
+            'voicememos.uploadFailed': () => t('voicememos.uploadFailed', 'Upload failed'),
+            'voicememos.badAudioPayload': () => t('voicememos.badAudioPayload', 'Bad audio payload'),
+            'voicememos.recordingTooLong': () => t('voicememos.recordingTooLong', 'Recording is too long'),
+            'voicememos.uploadBusy': () => t('voicememos.uploadBusy', 'Upload already in progress'),
+            'voicememos.uploadSlowDown': () => t('voicememos.uploadSlowDown', 'Slow down a moment'),
+            'voicememos.uploadLimitReached': () => t('voicememos.uploadLimitReached', 'Upload limit reached, try again later'),
+            'voicememos.couldNotSaveMemo': () => t('voicememos.couldNotSaveMemo', 'Could not save memo'),
+        };
+        setError(messages[d?.messageKey ?? '']?.() ?? d?.message ?? t('voicememos.uploadFailed', 'Upload failed'));
     }, []));
 
     function onDelete(id: string) {
