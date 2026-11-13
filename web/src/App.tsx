@@ -13,7 +13,7 @@ import { CallLayer } from '@/apps/phone/CallLayer';
 import { CallPeekBanner } from '@/apps/phone/CallPeekBanner';
 import { useCallRing } from '@/apps/phone/calls/useCallRing';
 import { applyNearbyRings } from '@/apps/phone/calls/nearbyRing';
-import { NotificationHost, resolveNotifText, type NotificationItem } from '@/shell/Notifications';
+import { BannerHost, NotificationHost, resolveNotifText, type NotificationItem } from '@/shell/Notifications';
 import { AirShareCard, type AirShareRequest } from '@/shared/AirShare';
 import { SignRequestLayer, type SignRequestData } from '@/apps/documents/SignRequestLayer';
 import { ReceivedIdLayer } from '@/shell/ReceivedIdLayer';
@@ -33,6 +33,7 @@ import { AppDeck, FullscreenStage, type DeckAppCtx } from '@/shell/AppDeck';
 import { Homescreen }  from '@/shell/Homescreen';
 import { useBadgeStore } from '@/stores/badgeStore';
 import { DEFAULT_PREF, prefFor, useNotifPrefsStore } from '@/stores/notifPrefsStore';
+import { setLockNotifs, setNotifs, useNotificationStore } from '@/stores/notificationStore';
 import { useInstalledAppsStore } from '@/stores/installedAppsStore';
 import { useBatteryStore } from '@/stores/batteryStore';
 import { useWidgetData } from '@/stores/widgetDataStore';
@@ -441,7 +442,7 @@ function AppContent() {
             // Each phone keeps its OWN lockscreen stack: bank the outgoing phone's before the
             // reset wipes it, and bring back whatever the incoming phone held when we last
             // switched away from it (move semantics - the bank entry is consumed on return).
-            if (prevKey) lockNotifBankRef.current[prevKey] = lockNotifsRef.current;
+            if (prevKey) lockNotifBankRef.current[prevKey] = useNotificationStore.getState().lock;
             const banked = key ? lockNotifBankRef.current[key] : undefined;
             if (key) delete lockNotifBankRef.current[key];
             resetProfileUi();
@@ -972,8 +973,6 @@ function AppContent() {
         if (data && typeof data.startMs === 'number') useSessionStore.getState().setStartMs(data.startMs);
     }, []));
 
-    const [notifs, setNotifs] = useState<NotificationItem[]>([]);
-    const [lockNotifs, setLockNotifs] = useState<NotificationItem[]>([]);
     const [ncOpen, setNcOpen] = useState(false);
     // The panel fades for 320ms after ncOpen flips false, and is pointer-events-none the whole
     // time. Without this grace the hotzones remount underneath it and a tap lands straight back
@@ -986,8 +985,6 @@ function AppContent() {
         window.clearTimeout(ncCloseTimer.current);
         ncCloseTimer.current = window.setTimeout(() => setNcClosing(false), 360);
     }, []);
-    const lockNotifsRef = useRef(lockNotifs);
-    lockNotifsRef.current = lockNotifs;
     // Per-profile lockscreen stacks parked while another phone is active (in-memory, like the
     // stacks themselves): written on switch-away, consumed on switch-back.
     const lockNotifBankRef = useRef<Record<string, NotificationItem[]>>({});
@@ -1686,7 +1683,6 @@ function AppContent() {
                         onUnlock={() => setLocked(false)}
                         launchTrigger={launchTrigger}
                         onLaunch={launchPendingApp}
-                        notifications={lockNotifs}
                         onOpenNotif={openLockNotif}
                         onDismissNotif={dismissLockNotif}
                         flashlightOn={flashlightOn}
@@ -1789,8 +1785,7 @@ function AppContent() {
                 )}
 
                 {!locked && (
-                    <NotificationHost
-                        items={notifs}
+                    <BannerHost
                         placement="phone"
                         onDismiss={removeNotif}
                         onOpen={(it) => {
@@ -1826,7 +1821,6 @@ function AppContent() {
                         {!ccOpen && !ncOpen && !ncClosing && !homeEditing && !locked && <NotificationCenterHotzone onOpen={() => setNcOpen(true)} />}
                         <NotificationCenter
                             open={ncOpen}
-                            items={lockNotifs}
                             onClose={closeNc}
                             onOpen={openLockNotif}
                             onDismiss={dismissLockNotif}

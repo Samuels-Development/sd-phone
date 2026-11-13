@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import type { PointerEvent as ReactPointerEvent } from 'react';
+import type { ComponentProps, PointerEvent as ReactPointerEvent } from 'react';
 import { AlertTriangle, Bell } from 'lucide-react';
 
 import { AppIconSVG } from './AppIconSVG';
 import { t } from '@/i18n';
 import { localizeShareVars } from '@/i18n/dynamicLabels';
 import { useStreamerHidden } from '@/stores/themeStore';
+import { useNotificationStore } from '@/stores/notificationStore';
 
 
 export interface NotificationItem {
@@ -194,4 +195,9 @@ export function NotificationHost({ items, placement = 'phone', onDismiss, onOpen
             ))}
         </div>
     );
+}
+
+export function BannerHost(props: Omit<ComponentProps<typeof NotificationHost>, 'items'>) {
+    const items = useNotificationStore(s => s.banners);
+    return <NotificationHost {...props} items={items} />;
 }

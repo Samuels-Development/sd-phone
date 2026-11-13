@@ -4,19 +4,20 @@ import { X } from 'lucide-react';
 import { t } from '@/i18n';
 import { formatClockTime, formatLongDate, useDisplayClock } from '@/hooks/useClock';
 import { useTheme } from '@/stores/themeStore';
+import { useNotificationStore } from '@/stores/notificationStore';
 import { LockNotifCard } from './Lockscreen';
 import type { NotificationItem } from './Notifications';
 
 const EASE = 'cubic-bezier(0.32, 0.72, 0, 1)';
 
-export function NotificationCenter({ open, items, onClose, onOpen, onDismiss, onClearAll }: {
+export function NotificationCenter({ open, onClose, onOpen, onDismiss, onClearAll }: {
     open:        boolean;
-    items:       NotificationItem[];
     onClose:     () => void;
     onOpen:      (item: NotificationItem) => void;
     onDismiss:   (id: string) => void;
     onClearAll:  () => void;
 }) {
+    const items = useNotificationStore(s => s.lock);
     const { hour24 } = useTheme('hour24');
     const now = useDisplayClock();
     const start = useRef<number | null>(null);

@@ -9,6 +9,7 @@ import { fetchNui, isFiveM } from '@/core/nui';
 import { resolveWallpaper } from './wallpapers';
 import { PARALLAX_SCALE, PARALLAX_SHIFT } from './shellLook';
 import { useStreamerHidden, useTheme } from '@/stores/themeStore';
+import { useNotificationStore } from '@/stores/notificationStore';
 import { Clockface } from './lockClock';
 import { LockClockEditor } from './LockClockEditor';
 import { NotifIcon, type NotificationItem } from './Notifications';
@@ -31,7 +32,6 @@ export interface LockscreenProps {
     onUnlock:      () => void;
     launchTrigger: number;
     onLaunch:      () => void;
-    notifications: NotificationItem[];
     onOpenNotif:   (item: NotificationItem) => void;
     onDismissNotif: (id: string) => void;
     flashlightOn:   boolean;
@@ -39,7 +39,8 @@ export interface LockscreenProps {
     onOpenCamera:   () => void;
 }
 
-export function Lockscreen({ use24h, showDate, wallpaper, unlockTrigger, onUnlock, launchTrigger, onLaunch, notifications, onOpenNotif, onDismissNotif, flashlightOn, onToggleFlashlight, onOpenCamera }: LockscreenProps) {
+export function Lockscreen({ use24h, showDate, wallpaper, unlockTrigger, onUnlock, launchTrigger, onLaunch, onOpenNotif, onDismissNotif, flashlightOn, onToggleFlashlight, onOpenCamera }: LockscreenProps) {
+    const notifications = useNotificationStore(s => s.lock);
     const now  = useDisplayClock();
     const time = formatClockTime(now, use24h);
     const date = formatLongDate(now);
