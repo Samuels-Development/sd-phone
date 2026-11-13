@@ -18,7 +18,7 @@ import { logOutOrSwitch, switchTargetLabel } from '@/shared/logOutOrSwitch';
 import { IG, type Comment as IGComment, type Post, type ProfileData, type User } from './data';
 import {
     apiActivity, apiAddComment, apiAddStory, apiComments, apiCounts, apiCreate, apiDeleteAccount, apiDeletePost, apiDeleteStory, apiDismissNotification, apiShareProfile, apiExplore, apiFeed,
-    apiFollowRequests, apiPost, apiProfile, apiProfilePosts, apiStories, apiToggleCommentLike,
+    apiFollowRequests, apiPost, apiProfile, apiProfilePosts, apiRespondFollow, apiStories, apiToggleCommentLike,
     apiToggleLike, apiToggleSave, apiUpdateProfile, apiWatch, mapComment,
     type ActivityItem, type FollowUser, type LiveEntry, type NewStory, type ProfileView, type SrvComment, type StoryGroup,
 } from './photogramApi';
@@ -373,7 +373,7 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
                 <TabPane key={tab} animate={animateNav}>
                     {tab === 'home'     && <Feed posts={posts} me={myUser} stories={stories} lives={lives} hasOwnStory={hasOwnStory} onLike={toggleLike} onDoubleLike={likeOn} onSave={toggleSave} onComment={openComments} onOpenStory={setStoryIdx} onOpenLive={setViewLive} onAddStory={() => setStoryMenu(true)} onOpenDMs={() => setDmOpen(true)} onOpenProfile={setViewHandle} onShare={setSharePost} onDelete={setPendingDelete} onRefresh={refreshHome} dmCount={counts.dms} />}
                     {tab === 'search'   && <Explore posts={explore} onOpen={p => setDetail(p)} onOpenProfile={setViewHandle} />}
-                    {tab === 'activity' && <Activity items={activity} requests={requests} onRespond={async (h, a) => { await import('./photogramApi').then(m => m.apiRespondFollow(h, a)); refreshActivity(); }} onOpenProfile={setViewHandle} onOpenPost={openDetailById} onDismiss={(id) => { setActivity(prev => prev.filter(n => n.id !== id)); void apiDismissNotification(id); }} />}
+                    {tab === 'activity' && <Activity items={activity} requests={requests} onRespond={async (h, a) => { await apiRespondFollow(h, a); refreshActivity(); }} onOpenProfile={setViewHandle} onOpenPost={openDetailById} onDismiss={(id) => { setActivity(prev => prev.filter(n => n.id !== id)); void apiDismissNotification(id); }} />}
                     {tab === 'profile'  && me && <Profile profile={me} posts={myGrid} story={stories.find(g => g.isMe) ?? null} onEdit={() => setEditing(true)} onShare={() => setSharingMe(true)} onOpenPost={p => setDetail(p)} onOpenFollows={(handle, kind) => setFollows({ handle, kind })} onOpenStory={setProfileStory} />}
                 </TabPane>
             </div>

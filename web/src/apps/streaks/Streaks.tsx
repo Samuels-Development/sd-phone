@@ -5,7 +5,7 @@ import { t } from '@/i18n';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useSessionState } from '@/hooks/useSessionState';
 import { useTheme } from '@/stores/themeStore';
-import { Camera } from '@/apps/camera/Camera';
+import { LazyCamera } from '@/apps/camera/LazyCamera';
 import type { StreakConfig, StreakPost, StreakState, StreakTab } from './data';
 import { captureStreakPhoto, streaksGallery, streaksLike, streaksPost, streaksSync, streaksWatch } from './streaksApi';
 import { GalleryTab } from './GalleryTab';
@@ -208,7 +208,7 @@ export function Streaks({ onClose: _onClose }: { onClose: () => void }) {
 
             {capturing && (
                 <div className="absolute inset-0 z-50 animate-slide-up-fade">
-                    <Camera onClose={cancelCapture} photoOnly />
+                    <LazyCamera onClose={cancelCapture} photoOnly />
                 </div>
             )}
         </div>

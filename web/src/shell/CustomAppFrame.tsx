@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { device } from '@device';
 import { fetchNui, hostResource } from '@/core/nui';
@@ -17,18 +17,20 @@ import { ActionSheet } from '@/ui/ActionSheet';
 import { AlertDialog } from '@/ui/AlertDialog';
 import { PromptDialog } from '@/ui/PromptDialog';
 import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
-import { EmojiPanel } from '@/shared/chat/EmojiPanel';
 import { uploadVoiceMessage } from '@/shared/chat/messagesApi';
 import { GifPickerSheet } from '@/shared/chat/GifPickerSheet';
 import { ContactPickerSheet } from '@/shared/ContactPickerSheet';
 import { formatPhone } from '@/apps/phone/data';
 import { accentVars } from '@/apps/settings/appearance/accentRamp';
 import { isCustomPaletteId, rampFor, rampVars } from '@/apps/settings/appearance/paletteRamp';
-import { Camera, type CameraUse } from '@/apps/camera/Camera';
+import type { CameraUse } from '@/apps/camera/Camera';
+import { LazyCamera } from '@/apps/camera/LazyCamera';
 import { AppIconSVG } from './AppIconSVG';
 import { useDeckActive } from './deckActive';
 import { resolveCustomUi } from './widgets/customUrl';
 import type { Contact } from '@/apps/phone/data';
+
+const EmojiPanel = lazy(() => import('@/shared/chat/EmojiPanel').then(m => ({ default: m.EmojiPanel })));
 
 // The SDK ships with whichever resource serves this page - a companion device may not reach
 // sd-phone's own files.
@@ -750,7 +752,9 @@ export function CustomAppFrame({ appId, onClose }: { appId: string; onClose: () 
                 <Sheet fit="content" onClose={() => settleEmoji(null)} title={t('common.emoji', 'Emoji')} forceDark={theme === 'dark'} className="bg-surface">
                     {({ close }) => (
                         <div className="px-1 pb-1">
-                            <EmojiPanel isDark={theme === 'dark'} onSelect={e => { const r = emojiResolve.current; emojiResolve.current = null; if (r) r(e); close(); }} />
+                            <Suspense fallback={<div className="bg-surface" style={{ height: 380 }} />}>
+                                <EmojiPanel isDark={theme === 'dark'} onSelect={e => { const r = emojiResolve.current; emojiResolve.current = null; if (r) r(e); close(); }} />
+                            </Suspense>
                         </div>
                     )}
                 </Sheet>
@@ -773,7 +777,7 @@ export function CustomAppFrame({ appId, onClose }: { appId: string; onClose: () 
 
             {cameraOpen && (
                 <div className="absolute inset-0 z-[80] bg-black">
-                    <Camera
+                    <LazyCamera
                         photoOnly
                         onCapture={url => settleCamera(url)}
                         onClose={() => settleCamera(null)}
@@ -784,7 +788,7 @@ export function CustomAppFrame({ appId, onClose }: { appId: string; onClose: () 
             {/* The same camera, called by the app's resource: its shutter is the resource's. */}
             {cameraUse && !cameraOpen && (
                 <div className="absolute inset-0 z-[80] bg-black">
-                    <Camera
+                    <LazyCamera
                         key={cameraUse.id}
                         photoOnly
                         use={cameraUse}

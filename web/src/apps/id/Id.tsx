@@ -12,7 +12,7 @@ import { ActionSheet } from '@/ui/ActionSheet';
 import { EmptyState } from '@/ui/EmptyState';
 import { PromptDialog } from '@/ui/PromptDialog';
 import { ListGroup, ListRow } from '@/ui/ListGroup';
-import { Camera } from '@/apps/camera/Camera';
+import { LazyCamera } from '@/apps/camera/LazyCamera';
 import { useIdStore } from '@/stores/idStore';
 import { IdCard } from './IdCard';
 import { CardDetail } from './CardDetail';
@@ -203,7 +203,7 @@ export function Id({ onClose: _onClose }: { onClose: () => void }) {
 
             {capturing && (
                 <div className="absolute inset-0 z-50 animate-slide-up-fade">
-                    <Camera onClose={() => setCapturing(false)} photoOnly />
+                    <LazyCamera onClose={() => setCapturing(false)} photoOnly />
                 </div>
             )}
         </div>
