@@ -14,6 +14,8 @@ local live      = require 'server.mdt.live'
 local shares    = require 'server.mdt.shares'
 ---@type table Revision history (server.mdt.revisions): the field-by-field trail of amendments.
 local revisions = require 'server.mdt.revisions'
+---@type fun(v: any): integer MDT page coercion (server.mdt.paging): a client page clamped to 1..MaxPage.
+local pageOf = require('server.mdt.paging').pageOf
 
 ---@type table Paperwork module; the table returned at end of file. Reports and cases, including
 ---the per-record restriction rows that decide who may even list a report.
@@ -70,23 +72,11 @@ local LIMITS = MDT.Limits or {}
 ---@type integer Rows returned per page by every paginated list here.
 local PAGE_SIZE = math.floor(tonumber((MDT.Paging or {}).PageSize) or 25)
 
----@type integer Highest page a client may ask for.
-local MAX_PAGE = math.floor(tonumber((MDT.Paging or {}).MaxPage) or 400)
-
 ---@type integer People who may be attached to one report.
 local MAX_INVOLVED = math.floor(tonumber(LIMITS.Involved) or 24)
 
 ---@type integer Charge lines one report may carry.
 local MAX_CHARGES = math.floor(tonumber(LIMITS.Charges) or 40)
-
----Coerces a client page number to a whole page inside the served range.
----@param v any
----@return integer page 1..MAX_PAGE
-local function pageOf(v)
-    local n = tonumber(v)
-    if not util.finite(n) or n ~= math.floor(n) or n < 1 then return 1 end
-    return n > MAX_PAGE and MAX_PAGE or n
-end
 
 ---Escapes the LIKE wildcards in a search term so a lone % cannot match every row.
 ---@param term string

@@ -1,23 +1,15 @@
 ---@type table sd-phone config root (configs/config.lua); read for the number format + length.
 local config = require 'configs.config'
+---@type table App switch (shared.appenabled): whether configs/apps.lua switched an app off.
+local appenabled = require 'shared.appenabled'
 
 ---@type table Shared server helpers; the table returned at end of file.
 local util = {}
 
----@type table<string, boolean> Apps switched off in configs/apps.lua. Keyed on the disabled ones
----rather than the enabled ones, so an id this file has never heard of still counts as on.
-local DISABLED_APPS = {}
-for _, app in ipairs((config.Apps or {}).Apps or {}) do
-    if app.id and app.enabled == false then DISABLED_APPS[app.id] = true end
-end
-
 ---Whether an app is switched on in configs/apps.lua. Background work belonging to a single app is
 ---gated on this, so a disabled app costs no threads, no ticks and no writes.
----@param id string app id as configs/apps.lua names it
----@return boolean enabled
-function util.appEnabled(id)
-    return not DISABLED_APPS[id]
-end
+---@type fun(id: string): boolean
+util.appEnabled = appenabled.enabled
 
 ---Whether a player is carrying a phone right now. A server that gates the phone behind an item
 ---answers from the inventory; one with no phone items configured has no item to lose, so everyone

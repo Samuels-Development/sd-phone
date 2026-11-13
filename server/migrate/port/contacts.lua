@@ -8,15 +8,9 @@ local util  = require 'server.util'
 
 local function digits(s) return (tostring(s or ''):gsub('%D', '')) end
 
----Trim and clamp to `n` chars, or nil when empty (stores as SQL NULL).
----@param s any
----@param n integer
----@return string|nil
-local function clamp(s, n)
-    local v = util.trim(s)
-    if v == '' then return nil end
-    return v:sub(1, n)
-end
+---@type fun(v: any, maxLen: integer): string|nil Trimmed text capped to maxLen bytes on a whole
+---UTF-8 character, nil when empty (server.util limitedString).
+local clamp = util.limitedString
 
 ---@param ctx table migration context (numberToCid, dryRun)
 ---@return { migrated: number, skipped: number }

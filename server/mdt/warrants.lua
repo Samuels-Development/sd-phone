@@ -16,6 +16,8 @@ local live      = require 'server.mdt.live'
 local shares    = require 'server.mdt.shares'
 ---@type table Revision history (server.mdt.revisions): the field-by-field trail of amendments.
 local revisions = require 'server.mdt.revisions'
+---@type fun(v: any): integer MDT page coercion (server.mdt.paging): a client page clamped to 1..MaxPage.
+local pageOf = require('server.mdt.paging').pageOf
 
 ---@type table Warrants module; the table returned at end of file. A warrant is active while its
 ---expiry is in the future, and closing one expires it rather than deleting it.
@@ -39,9 +41,6 @@ local MAX_BOND = math.floor(tonumber(W.MaxBond) or 500000)
 ---@type integer Rows returned per page.
 local PAGE_SIZE = math.floor(tonumber((MDT.Paging or {}).PageSize) or 25)
 
----@type integer Highest page a client may ask for.
-local MAX_PAGE = math.floor(tonumber((MDT.Paging or {}).MaxPage) or 400)
-
 ---@type integer Charge lines one warrant may carry.
 local MAX_CHARGES = math.floor(tonumber((MDT.Limits or {}).Charges) or 40)
 
@@ -56,15 +55,6 @@ local WARRANT_FIELDS <const> = { charges = true, bond = true, expiry = true, not
 
 ---@type string Client event every open terminal repaints its wanted flags from.
 local WANTED_EVENT = 'sd-phone:client:mdt:warrant'
-
----Coerces a client page number to a whole page inside the served range.
----@param v any
----@return integer page 1..MAX_PAGE
-local function pageOf(v)
-    local n = tonumber(v)
-    if not util.finite(n) or n ~= math.floor(n) or n < 1 then return 1 end
-    return n > MAX_PAGE and MAX_PAGE or n
-end
 
 ---Escapes the LIKE wildcards in a search term.
 ---@param term string

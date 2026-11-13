@@ -13,22 +13,7 @@ local BUILTIN = {
 local set = {}
 for i = 1, #BUILTIN do set[BUILTIN[i]] = true end
 
----@type table sd-phone config root (configs/config.lua).
-local config = require 'configs.config'
+---@type table App switch (shared.appenabled): whether configs/apps.lua switched an app off.
+local appenabled = require 'shared.appenabled'
 
----@type table<string, boolean> Apps switched off in configs/apps.lua. Keyed on the disabled ones
----rather than the enabled ones, so an id this file has never heard of still counts as on.
-local disabled = {}
-for _, app in ipairs((config.Apps or {}).Apps or {}) do
-    if app.id and app.enabled == false then disabled[app.id] = true end
-end
-
----Whether an app is switched on in configs/apps.lua. Background work belonging to a single app is
----gated on this, so a disabled app costs nothing on anyone's game thread.
----@param id string app id as configs/apps.lua names it
----@return boolean enabled
-local function enabled(id)
-    return not disabled[id]
-end
-
-return { list = BUILTIN, set = set, enabled = enabled }
+return { list = BUILTIN, set = set, enabled = appenabled.enabled }

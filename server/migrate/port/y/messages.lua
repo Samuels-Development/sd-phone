@@ -14,15 +14,9 @@ local util = require 'server.util'
 ---channels rather than whole-table, so a live server's 90k messages never land in Lua at once.
 local CHANNEL_PAGE <const> = 400
 
----Trim and clamp to `n` chars, or nil when empty.
----@param s any
----@param n integer
----@return string|nil
-local function clamp(s, n)
-    local v = util.trim(s)
-    if v == '' then return nil end
-    return v:sub(1, n)
-end
+---@type fun(v: any, maxLen: integer): string|nil Trimmed text capped to maxLen bytes on a whole
+---UTF-8 character, nil when empty (server.util limitedString).
+local clamp = util.limitedString
 
 ---The message kind and body for one YSeries row. Attachments arrive as a JSON blob that may hold a
 ---url or a full base64 data URI; only a url is carried across, because sd-phone's meta column holds

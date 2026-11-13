@@ -15,15 +15,9 @@ local media = require 'server.migrate.media'
 ---@type integer Rows read per page.
 local PAGE <const> = 2000
 
----Trim and clamp to `n` chars, or nil when empty.
----@param s any
----@param n integer
----@return string|nil
-local function clamp(s, n)
-    local v = util.trim(s)
-    if v == '' then return nil end
-    return v:sub(1, n)
-end
+---@type fun(v: any, maxLen: integer): string|nil Trimmed text capped to maxLen bytes on a whole
+---UTF-8 character, nil when empty (server.util limitedString).
+local clamp = util.limitedString
 
 ---Copies one YSeries classifieds table into one sd-phone table. Both source tables key on
 ---phone_imei and carry their own contact number, which is preferred over the device's when present.

@@ -10,6 +10,8 @@ local access    = require 'server.mdt.access'
 local offences  = require 'server.mdt.offences'
 ---@type table Reports and cases (server.mdt.paperwork): the suspect-charge lookup a docket reads.
 local paperwork = require 'server.mdt.paperwork'
+---@type fun(v: any): integer MDT page coercion (server.mdt.paging): a client page clamped to 1..MaxPage.
+local pageOf = require('server.mdt.paging').pageOf
 
 ---@type table Court module; the table returned at end of file. The docket a court runs and the
 ---expungement petitions it rules on. A court records what it decided; it does not police. The one
@@ -22,9 +24,6 @@ local MDT = config.Mdt
 
 ---@type integer Rows returned per page.
 local PAGE_SIZE = math.floor(tonumber((MDT.Paging or {}).PageSize) or 25)
-
----@type integer Highest page a client may ask for.
-local MAX_PAGE = math.floor(tonumber((MDT.Paging or {}).MaxPage) or 400)
 
 ---@type integer Byte cap on a case title.
 local MAX_TITLE = 160
@@ -72,15 +71,6 @@ local NOTE_KINDS = { note = true, motion = true, filing = true, ruling = true }
 
 ---@type table<string, boolean> Where an expungement petition sits.
 local PETITION_STATUSES = { pending = true, granted = true, denied = true }
-
----Coerces a client page number to a whole page inside the served range.
----@param v any
----@return integer page
-local function pageOf(v)
-    local n = tonumber(v)
-    if not util.finite(n) or n ~= math.floor(n) or n < 1 then return 1 end
-    return n > MAX_PAGE and MAX_PAGE or n
-end
 
 ---Escapes the LIKE wildcards in a search term.
 ---@param term string

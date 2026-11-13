@@ -6,6 +6,8 @@ local util   = require 'server.util'
 local store  = require 'server.mdt.store'
 ---@type table MDT permissions (server.mdt.access): the read gate, write wrapper and rank guard.
 local access = require 'server.mdt.access'
+---@type fun(v: any): integer MDT page coercion (server.mdt.paging): a client page clamped to 1..MaxPage.
+local pageOf = require('server.mdt.paging').pageOf
 
 ---@type table Internal Affairs module; the table returned at end of file. A complaint against an
 ---officer, the investigation it opens and the finding that closes it. Every row is scoped to the
@@ -17,9 +19,6 @@ local MDT = config.Mdt
 
 ---@type integer Rows returned per page.
 local PAGE_SIZE = math.floor(tonumber((MDT.Paging or {}).PageSize) or 25)
-
----@type integer Highest page a client may ask for.
-local MAX_PAGE = math.floor(tonumber((MDT.Paging or {}).MaxPage) or 400)
 
 ---@type integer Byte cap on the complaint title.
 local MAX_TITLE = 160
@@ -73,15 +72,6 @@ local DISCIPLINE = {
     demotion    = true,
     termination = true,
 }
-
----Coerces a client page number to a whole page inside the served range.
----@param v any
----@return integer page
-local function pageOf(v)
-    local n = tonumber(v)
-    if not util.finite(n) or n ~= math.floor(n) or n < 1 then return 1 end
-    return n > MAX_PAGE and MAX_PAGE or n
-end
 
 ---Escapes the LIKE wildcards in a search term.
 ---@param term string

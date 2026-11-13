@@ -23,15 +23,9 @@ local stamp = ystore.stamp
 ---@type integer Rows read per page.
 local PAGE <const> = 5000
 
----Trim and clamp to `n` chars, or nil when empty.
----@param s any
----@param n integer
----@return string|nil
-local function clamp(s, n)
-    local v = util.trim(s)
-    if v == '' then return nil end
-    return v:sub(1, n)
-end
+---@type fun(v: any, maxLen: integer): string|nil Trimmed text capped to maxLen bytes on a whole
+---UTF-8 character, nil when empty (server.util limitedString).
+local clamp = util.limitedString
 
 ---@param ctx table migration context (imeiToCid, dryRun)
 ---@return { profiles: number, posts: number, likes: number, reposts: number, follows: number, skipped: number }
