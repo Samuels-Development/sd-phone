@@ -67,7 +67,6 @@ export function ListGroup({ children, header, footer }: {
 
 export function ListRow({ label, sub, value, chevron, divider, destructive, disabled, selected, large, left, right, onPress }: {
     label:        string;
-    /** Optional second line under the label (ios-gray) - file rows, previews, etc. */
     sub?:         string;
     value?:       string;
     chevron?:     boolean;
@@ -75,7 +74,6 @@ export function ListRow({ label, sub, value, chevron, divider, destructive, disa
     destructive?: boolean;
     disabled?:    boolean;
     selected?:    boolean;
-    /** Roomier variant: taller row, 18px label, 14px sub - list-browsing apps (Files). */
     large?:       boolean;
     left?:        ReactNode;
     right?:       ReactNode;
@@ -148,8 +146,6 @@ export function ToggleRow({ label, defaultOn = false, divider, on: controlledOn,
             className="relative flex w-full items-center px-4 py-3 text-start active:bg-black/5 dark:active:bg-white/5"
         >
             <span className="flex-1 text-[17px] font-normal text-black dark:text-white">{label}</span>
-            {/* The 31px switch exceeds the text line; the negative margin keeps it from
-                stretching the row, so toggle rows match plain ListRow height. */}
             <div className="pointer-events-none -my-1">
                 <Toggle on={on} />
             </div>

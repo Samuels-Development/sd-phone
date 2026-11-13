@@ -118,9 +118,6 @@ export function ConversationList({ conversations, typingPeers, onOpen, onCompose
                 ) : (
                     <div className="overflow-hidden rounded-[10px] bg-surface">
                         {filtered.map((c, i) => (
-                            // Same containment as the contact rows: a ConvRow is ~20 nodes and a
-                            // migrated mailbox has 550 of them, all restyled on every deck
-                            // re-parent and .app-anim-flatten toggle. Off-screen rows now skip it.
                             <Fragment key={c.id}>
                                 <div style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 100px' }}>
                                     <ConvRow

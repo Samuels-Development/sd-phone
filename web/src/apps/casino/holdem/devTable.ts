@@ -466,8 +466,6 @@ export function createDevEngine(tableId: string, sb: number, bb: number, rng: ()
         return false;
     }
 
-    // Mirrors rankFor in server/games/casino/holdem/table.lua: preflop reads the pocket pair off
-    // the two cards directly, since best7 refuses to score fewer than five.
     function heroRank(s: DevSeat | null): string | null {
         if (!s || (s.state !== 'in' && s.state !== 'allin') || s.hole.length < 2) return null;
         if (board.length === 0) return s.hole[0].rank === s.hole[1].rank ? 'pair' : 'highCard';

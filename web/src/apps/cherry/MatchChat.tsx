@@ -391,7 +391,7 @@ export function MatchChat({ match, onBack, onSend, onReact, onPayRequest, onUnma
                                     draft.wpCode = encodeWaypoint({ label: t('cherry.sharedLocation', 'Shared Location'), x: r.x, y: r.y, icon: 'MapPin', color: '#eb4b3c' });
                                     draft.wpSub  = `${Math.round(r.x)}, ${Math.round(r.y)}`;
                                 }
-                            } catch { /* fall back to a coordless share */ }
+                            } catch {}
                         }
                         send(draft);
                     }}

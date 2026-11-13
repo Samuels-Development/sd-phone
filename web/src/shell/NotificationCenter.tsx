@@ -24,17 +24,6 @@ export function NotificationCenter({ open, onClose, onOpen, onDismiss, onClearAl
 
     return (
         <div className={'absolute inset-0 z-[710] ' + (open ? '' : 'pointer-events-none')}>
-            {/* Same two layers as ControlCenter, in the same order, because that combination is
-                known to frost correctly in the client's CEF. What broke this before was purely
-                stacking: ControlCenter is always mounted and keeps its own backdrop-filter layer
-                alive at blur(0px), so while it sat above this one at z-700 it re-composited the
-                area and left the edges patchy. This panel now sits above it. */}
-            {/* Overscanned by 72px on every side, NOT inset-0. Chromium samples a backdrop only
-                from within the element's own bounds, so the outer ring of a blur(30px) has less
-                and less to sample and comes out under-blurred: a visible band down each edge where
-                the home screen icons still read through. Pushing the layer past the screen puts
-                that weak ring outside the phone, and the screen's own overflow-hidden clips it, so
-                only the fully blurred interior is ever on show. */}
             <div
                 className="absolute"
                 style={{
@@ -131,8 +120,6 @@ export function NotificationCenterHotzone({ onOpen }: { onOpen: () => void }) {
                 if (!start.current) return;
                 if (e.clientY - start.current.y > 14) { start.current = null; onOpen(); }
             }}
-            // A tap opens it too. Control Centre has always done this; without it a quick tap on
-            // the left of the status bar did nothing at all, which reads as the gesture failing.
             onPointerUp={e => {
                 if (!start.current) return;
                 const moved = Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y);

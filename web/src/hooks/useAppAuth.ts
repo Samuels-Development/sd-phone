@@ -11,7 +11,6 @@ export interface AppAuthState {
     myNumber:      string | null;
     myEmails:      string[];
     savedLogin:    { username: string; password: string } | null;
-    /** Saved logins for this app, minus whichever one is in use. */
     savedAccounts: SwitchableAccount[];
     refreshAccounts: () => void;
 }
@@ -34,8 +33,6 @@ export function useAppAuth(appId: string, checkSession: () => Promise<boolean>):
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // The sign-in picker offers accounts this player could sign into: saved logins they do not
-    // already hold a session for. The switcher is the complement and lists the sessions instead.
     useEffect(() => {
         void accountsSignInOptions(appId).then(setSavedAccounts);
         // eslint-disable-next-line react-hooks/exhaustive-deps

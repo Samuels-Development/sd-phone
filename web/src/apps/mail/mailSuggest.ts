@@ -4,7 +4,6 @@ export function isEmailish(s: string): boolean {
     return EMAIL_RE.test(s);
 }
 
-// Recipients are separated by commas/semicolons/whitespace (mirrors Compose's split).
 function fragmentStart(to: string): number {
     for (let i = to.length - 1; i >= 0; i--) {
         if (/[,;\s]/.test(to[i])) return i + 1;

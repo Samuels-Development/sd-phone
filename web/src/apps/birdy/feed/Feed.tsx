@@ -29,9 +29,6 @@ export function Feed({ posts, me, feed, onFeedChange, onRefresh, onToggleLike, o
     const scrollRef = useRef<HTMLDivElement>(null);
     const { pull, refreshing, armed } = usePullToRefresh(scrollRef, onRefresh);
 
-    // While the reader is deep in the feed, a background refetch would yank the column out from
-    // under them - hold the fresh list back and offer it through the "New posts" pill instead.
-    // In-place changes (likes, reposts) keep the same head post and flow straight through.
     const [shown,  setShown]  = useState<BirdyPost[] | null>(posts);
     const [hasNew, setHasNew] = useState(false);
     useEffect(() => {
@@ -103,8 +100,6 @@ export function Feed({ posts, me, feed, onFeedChange, onRefresh, onToggleLike, o
                 <div
                     ref={scrollRef}
                     key={feed}
-                    // pb-20 so the last post can scroll clear of the compose button, which is 56px
-                    // tall at bottom-[9px] and otherwise sits over that post's like button.
                     className="h-full animate-swipe-in-left overflow-y-auto no-scrollbar pb-20"
                     style={{
                         transform: pull > 0 ? `translateY(${pull}px)` : undefined,

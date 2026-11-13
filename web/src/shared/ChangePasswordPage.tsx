@@ -19,7 +19,6 @@ export function ChangePasswordPage({ app, appName, icon, theme, identity: identi
     const [identity, setIdentity] = useState<string | null>(identityProp ?? null);
     const [savedPassword, setSavedPassword] = useState<string | null>(null);
     const hasVaultEntry = useRef(false);
-    // Set after a successful change when no vault row exists; triggers the save offer on close.
     const pendingOffer = useRef<string | null>(null);
     const [offer, setOffer] = useState<string | null>(null);
 
@@ -68,7 +67,6 @@ export function ChangePasswordPage({ app, appName, icon, theme, identity: identi
                 onSubmit={async (current, next) => {
                     const r = await accountsChangePassword(app, identity ?? '', current, next);
                     if (!r.ok) return failText(r, t('common.couldNotChangePassword', 'Could not change password'));
-                    // The server only UPDATEs an existing vault row; offer to create one otherwise.
                     if (!hasVaultEntry.current) pendingOffer.current = next;
                     return null;
                 }}

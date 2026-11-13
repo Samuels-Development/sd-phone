@@ -99,8 +99,6 @@ function useLiveMult(clock: MutableRefObject<CrashClock>, active: boolean): numb
     return value;
 }
 
-// Lua drops a nil field rather than encoding null, so an absent bet arrives as undefined and a
-// `!== null` guard would wave it straight through into the placed-bet panel.
 function normalizeMine(m: CrashMine | null | undefined): CrashMine | null {
     if (!m) return null;
     return { ...m, auto: m.auto ?? null, mx: m.mx ?? null, payout: m.payout ?? 0 };

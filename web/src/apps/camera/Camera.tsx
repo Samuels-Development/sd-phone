@@ -62,10 +62,9 @@ function playShutter() {
         const a = new Audio(shutterSfx);
         a.volume = 0.55;
         void a.play().catch(() => {});
-    } catch { /* audio unavailable — silent */ }
+    } catch {}
 }
 
-// `selfieOnly` hints stay mounted and collapse instead of unmounting, so they can animate out.
 const CONTROL_HINTS: { keys: string[]; label: string; selfieOnly?: boolean }[] = [
     { keys: ['Enter'],     label: 'Take Photo' },
     { keys: ['↑'],         label: 'Flip Camera' },
@@ -83,8 +82,6 @@ function hintLabel(label: string, angleLocked: boolean, facingCam: boolean): str
         case 'Flash':         return t('camera.hintFlash', 'Flash');
         case 'Change Mode':   return t('camera.hintChangeMode', 'Change Mode');
         case 'Toggle Cursor': return t('camera.hintToggleCursor', 'Toggle Cursor');
-        // Labels what the mouse will control after the press, not the state it is in: "Lock Angle"
-        // read equally well as "the angle is locked", which is what made it feel inverted.
         case 'Angle':         return angleLocked
             ? t('camera.hintMoveYourself', 'Move Yourself')
             : t('camera.hintMoveCamera', 'Move Camera');
@@ -103,17 +100,9 @@ interface Photo {
 
 const MODE_OPTIONS = ['VIDEO', 'PHOTO', 'LANDSCAPE'] as const;
 
-/**
- * The camera called up by a custom app's resource for something other than a photograph
- * (exports['sd-phone']:useCamera, client/camerause.lua). The shutter is the resource's: pressing it
- * tells Lua and takes no picture. The lens is the rear one.
- */
 export interface CameraUse {
-    /** Which call this is. Said back to Lua with everything, so a late answer is not taken for the next call's. */
     id:       number;
-    /** What the shutter does, for the keybind hints. */
     hint?:    string;
-    /** A page of the resource's own, drawn over the viewfinder and click-through. */
     overlay?: string;
 }
 
@@ -161,7 +150,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
     onOpenApp?: (id: string) => void;
     photoOnly?: boolean;
     onCapture?: (url: string) => void;
-    /** Set when a custom app's resource has called the camera: see CameraUse. Goes with photoOnly. */
     use?: CameraUse;
 }) {
     const [photos,  setPhotos]  = useState<Photo[]>([]);
@@ -182,26 +170,15 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
     const filterRef = useRef(filterStyle);
     filterRef.current = filterStyle;
     const [selfie,    setSelfie]    = useState(false);
-    // Mirror the selfie state held in Lua so the hints can describe what pressing each key does now.
     const [angleLocked, setAngleLocked] = useState(false);
     const [facingCam,   setFacingCam]   = useState(false);
-    // True only when the native cell cam took the view, i.e. the server froze the player while
-    // framing. Decides whether the selfie crop bias applies.
     const [nativeCam, setNativeCam] = useState(false);
     const [hintCfg,   setHintCfg]   = useState<HintConfig>(HINT_DEFAULTS);
 
     const { setHideHomeIndicator } = useTheme('setHideHomeIndicator');
 
-    // Camera cannot be a live re-parented card (GTA-native cell-cam + a singleton
-    // three.js GameRender bound to one canvas), so its switcher card stays the app
-    // icon. But we still release the native cam + WebGL readback the instant it is
-    // backgrounded (switcher open / pool) so nothing burns behind the blur, and
-    // re-acquire on foreground.
     const deckActive = useDeckActive();
 
-    // The viewfinder is a live canvas, so nothing in the DOM tells auto-contrast how dark it is and
-    // the home pill renders dark against the game view. The other canvas apps declare this the same
-    // way; the hook scopes itself to the active deck entry, so it cannot leak under keep-alive.
     useStatusBarLight(true);
 
     const landscape = mode === 'LANDSCAPE';
@@ -211,7 +188,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
     useRefd.current = use;
     const overlayRef = useRef<HTMLIFrameElement>(null);
 
-    // What the calling resource sends is for its own page, over the viewfinder.
     useNuiEvent('sd-phone:camera:useMessage', (data) => {
         const called = useRefd.current;
         if (called && data?.id === called.id) overlayRef.current?.contentWindow?.postMessage(data.payload, '*');
@@ -223,9 +199,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
         return () => setHideHomeIndicator(false);
     }, [photoOnly, setHideHomeIndicator]);
 
-    // Control Center has separate Photo and Record buttons that both open this app, so
-    // the mode has to come from the launch itself. photoOnly callers stay pinned to
-    // PHOTO. Switching out of VIDEO already stops any in-flight recording below.
     useLaunchIntent<{ mode?: string }>('camera', ({ mode: wanted }) => {
         if (photoOnly || !wanted) return;
         if ((MODE_OPTIONS as readonly string[]).includes(wanted)) {
@@ -264,8 +237,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
         return () => { cancelled = true; };
     }, []);
 
-    // Mount lifecycle: guarantee a full teardown of recording resources when the app
-    // is genuinely closed (not merely backgrounded).
     useEffect(() => {
         mountedRef.current = true;
         return () => {
@@ -287,18 +258,13 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
         };
     }, []);
 
-    // Hold the native cam + GameRender only while this is the interactive foreground
-    // instance; release both on background and re-acquire on foreground.
     useEffect(() => {
         if (!deckActive) return;
         let stopped = false;
         void fetchNui<{ walkable?: boolean; hints?: Partial<HintConfig> }>('sd-phone:camera:open').then((res) => {
             if (stopped) return;
             setNativeCam(res?.walkable === false);
-            // Dev has no Lua behind it, so an absent payload keeps the defaults rather than blanking
-            // the list.
             setHintCfg({ ...HINT_DEFAULTS, ...(res?.hints ?? {}) });
-            // Called up by a resource: it is waiting to hear that the camera has the view.
             const called = useRefd.current;
             if (called) void fetchNui('sd-phone:camera:useOpened', { id: called.id });
         });
@@ -312,7 +278,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
 
         return () => {
             stopped = true;
-            // Backgrounding mid-record: stop cleanly (finalize saves what was captured).
             if (recActiveRef.current) stopRecording();
             renderRef.current?.stop();
             renderRef.current = null;
@@ -329,9 +294,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
 
     useEffect(() => {
         if (!feedReady) return;
-        // The scripted cam zooms optically, so the game renders the tighter view at full resolution
-        // and the crop stays at its base framing. The native cell cam has no FOV we can set, so
-        // that path still magnifies the rendered frame and softens as it goes.
         renderRef.current?.setZoom(nativeCam ? zoom : 1);
         void fetchNui('sd-phone:camera:zoom', { zoom });
     }, [zoom, nativeCam, feedReady]);
@@ -351,9 +313,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
         renderRef.current?.setAspect(landscape ? vp.h / vp.w : vp.w / vp.h);
     }, [vp.w, vp.h, landscape, feedReady]);
 
-    // Only the NATIVE front camera frames the ped off-centre, so only it needs the re-centring
-    // crop bias. The scripted cam points itself at the head, and biasing that pushes the player
-    // off to the right by the same amount it was meant to correct.
     useEffect(() => {
         if (!feedReady) return;
         renderRef.current?.setSelfie(selfie && nativeCam);
@@ -391,8 +350,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
         setFacingCam(!!data?.on);
     });
 
-    // Lua clears both on every lens flip, so drop them here on the same event rather than waiting to
-    // be told; otherwise a hint would describe behaviour the lens is no longer doing.
     useEffect(() => {
         setAngleLocked(false);
         setFacingCam(false);
@@ -402,7 +359,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
         switch (key) {
             case 'shutter':  handleShutter(); break;
             case 'flip': {
-                // A called camera frames with the rear lens.
                 if (useRefd.current) break;
                 const next = !selfie;
                 setSelfie(next);
@@ -410,8 +366,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
                 break;
             }
             case 'flash':    setFlash(f => !f); break;
-            // Relayed from Lua only while the viewfinder has handed the mouse to the game, where
-            // the page sees no wheel events of its own.
             case 'zoomIn':   setZoom(z => clampZoom(z * ZOOM_KEY_STEP)); break;
             case 'zoomOut':  setZoom(z => clampZoom(z / ZOOM_KEY_STEP)); break;
             case 'modePrev': if (!photoOnly) setMode(m => MODE_OPTIONS[(MODE_OPTIONS.indexOf(m) + MODE_OPTIONS.length - 1) % MODE_OPTIONS.length]); break;
@@ -535,7 +489,7 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
                     setPending(false);
                     return;
                 }
-            } catch { /* Keep the original capture route available if local Blob conversion fails. */ }
+            } catch {}
 
             if (!(await uploadViaServer(image, 'sd-phone:camera:httpSlot', { kind: 'photo' }))) {
                 const res = await apiCall<void>('sd-phone:camera:capture', { image });
@@ -688,7 +642,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
 
     function handleShutter() {
         if (use) {
-            // Not a photograph: what the shutter means here is the calling resource's to say.
             void fetchNui('sd-phone:camera:useShutter', { id: use.id });
             return;
         }
@@ -705,7 +658,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
     const hints = (photoOnly ? CONTROL_HINTS.filter(h => h.label !== 'Change Mode') : CONTROL_HINTS)
         .map(h => ({
             keys:  h.keys,
-            // In a called camera the shutter does what the caller says, and there is no flip.
             label: use?.hint && h.label === 'Take Photo' ? use.hint : hintLabel(h.label, angleLocked, facingCam),
             shown: (!h.selfieOnly || selfie) && !(use && h.label === 'Flip Camera'),
         }));
@@ -762,8 +714,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
                 dir="ltr"
                 className="relative flex-1 min-h-0 overflow-hidden bg-black"
                 onWheel={(e) => {
-                    // deltaY is negative scrolling up, which reads as zooming in. Exponential so a
-                    // notch is the same proportional change at 0.5× as at 5×.
                     setZoom(z => clampZoom(z * Math.exp(-e.deltaY * ZOOM_WHEEL_RATE)));
                 }}
             >
@@ -787,9 +737,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
                     }
                 />
 
-                {/* The caller's own page, over the picture and under everything of the camera's.
-                    Click-through: the viewfinder keeps its wheel zoom, and the page is told things,
-                    not asked. */}
                 {use?.overlay && (
                     <iframe
                         ref={overlayRef}
@@ -821,9 +768,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
                     </div>
                 )}
 
-                {/* Stays mounted so it fades both ways. The scrim ramps its blur radius and its own
-                    background alpha rather than the element's opacity: a backdrop-filter under an
-                    opacity transition flickers in CEF. */}
                 <div
                     className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3.5 transition-all duration-200 ease-out"
                     style={{
@@ -839,8 +783,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
                         className="flex flex-col items-center gap-3.5 transition-opacity duration-200 ease-out"
                         style={{ opacity: pending ? 1 : 0 }}
                     >
-                        {/* Upload progress is not reported back, so the ring spins rather than
-                            claiming a percentage it cannot know. */}
                         <svg className="h-11 w-11 animate-spin" viewBox="0 0 44 44" fill="none">
                             <circle cx="22" cy="22" r="19" stroke="rgba(255,255,255,0.18)" strokeWidth="3" />
                             <circle
@@ -908,8 +850,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
 
                 <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/60 px-2 py-1.5 backdrop-blur">
                     {ZOOM_PRESETS.map(z => {
-                        // Scrolling lands between presets, so the nearest one carries the highlight
-                        // and shows the live figure; that pill is the readout as well as the button.
                         const isActive = ZOOM_PRESETS.reduce(
                             (best, p) => (Math.abs(p - zoom) < Math.abs(best - zoom) ? p : best),
                         ) === z;
@@ -955,8 +895,6 @@ export function Camera({ onClose, onLandscapeChange, onOpenApp, photoOnly = fals
                     </div>
                 )}
 
-                {/* pb clears the home indicator: its pill sits 5-10px off the bottom inside a 21px
-                    hit area, so pb-7 left the shutter ring almost against it. */}
                 <div dir="ltr" className={`flex items-center justify-center gap-10 px-6 pb-11 ${photoOnly ? 'pt-4' : 'pt-1'}`}>
                     {photoOnly ? (
                         <button

@@ -5,21 +5,6 @@ import { t } from '@/i18n';
 import { formatDuration } from '@/lib/time';
 import { Scrubber } from '@/ui/Scrubber';
 
-// iOS Photos-style video player: first frame with a big play button, a slim
-// bottom scrubber with elapsed / remaining times, and a mute toggle. Native
-// <video controls> is deliberately avoided - it renders CEF's default control
-// bar, which looks nothing like iOS.
-//
-// The chrome stays up while the clip is paused or while the cursor is over the
-// video, and slides away once you move the cursor off a playing clip. The viewer
-// swipes between photos via pointer events on an ancestor, so the interactive
-// controls stop pointerdown from bubbling (otherwise a scrub or a button press
-// would also start a photo swipe); the full-bleed tap layer instead lets pointers
-// through, so a drag there still swipes and only its click plays / pauses.
-//
-// Progress is driven off the video's own timeupdate event (not rAF, which CEF
-// starves), and the centre button is a solid translucent circle rather than a
-// backdrop-filter, which flickers under CEF when opacity-faded.
 
 export function VideoView({ src, active }: { src: string; active: boolean }) {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -31,11 +16,8 @@ export function VideoView({ src, active }: { src: string; active: boolean }) {
     const [muted,    setMuted]    = useState(false);
     const [hovering, setHovering] = useState(false);
 
-    // Controls stay up while paused or while the cursor is over the video.
     const chrome = !playing || hovering;
 
-    // Pause whenever this slide isn't the visible one, so a video never keeps
-    // playing after you swipe past it.
     useEffect(() => {
         if (active) return;
         const v = videoRef.current;
@@ -75,10 +57,8 @@ export function VideoView({ src, active }: { src: string; active: boolean }) {
                 onLoadedMetadata={e => {
                     const v = e.currentTarget;
                     if (Number.isFinite(v.duration) && v.duration > 0) { setDuration(v.duration); return; }
-                    // MediaRecorder webm clips report duration = Infinity until
-                    // scanned; seeking to the end forces the browser to compute it.
                     forcing.current = true;
-                    try { v.currentTime = 1e101; } catch { /* not seekable yet */ }
+                    try { v.currentTime = 1e101; } catch {}
                 }}
                 onDurationChange={e => {
                     const v = e.currentTarget;
@@ -88,8 +68,6 @@ export function VideoView({ src, active }: { src: string; active: boolean }) {
                 }}
             />
 
-            {/* Tap layer: pointers pass through so a drag still swipes photos; a
-                plain click plays / pauses. */}
             <button
                 type="button"
                 aria-label={playing ? t('photos.pause', 'Pause') : t('photos.play', 'Play')}
@@ -97,7 +75,6 @@ export function VideoView({ src, active }: { src: string; active: boolean }) {
                 className="absolute inset-0 cursor-default"
             />
 
-            {/* Centre play / pause. */}
             <button
                 type="button"
                 aria-label={playing ? t('photos.pause', 'Pause') : t('photos.play', 'Play')}
@@ -112,7 +89,6 @@ export function VideoView({ src, active }: { src: string; active: boolean }) {
                     : <Play className="h-11 w-11 translate-x-[3px] fill-white" strokeWidth={0} />}
             </button>
 
-            {/* Bottom scrubber: elapsed | track | remaining | mute. */}
             <div
                 dir="ltr"
                 onPointerDown={e => e.stopPropagation()}

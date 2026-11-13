@@ -15,27 +15,6 @@ import type { AppDef } from '@/core/types';
 import { ArrowLeftRight } from 'lucide-react';
 import { t } from '@/i18n';
 
-// The retained keep-alive deck. It is the ONE and ONLY place any app component is
-// instantiated, and it is mounted at the very top of the tree so it OUTLIVES the phone
-// shell - holstering / locking tears the shell down (setView(null)) but the deck (and
-// every app's live React state) survives, which is what makes the switcher previews
-// come back exactly where you left them after the phone is put away and taken out.
-// Each live id gets a stable host <div> (created imperatively so React never fights our
-// re-parenting); the app is portaled into that host. A layout effect moves each host
-// between four slots by plain DOM appendChild:
-//   - the fullscreen stage (active app, phone open) -> visible, interactive. This node
-//     lives INSIDE the phone screen and is registered via the bridge, so the deck can
-//     re-parent into it without living inside the shell that unmounts on holster.
-//   - the split stage (second app while unfolded and split) -> visible, interactive
-//   - a switcher card stage (retained preview app, switcher open) -> visible, inert
-//   - the hidden pool (backgrounded/retained/holstered but not shown) -> mounted,
-//     effects live but suspended to ~0 CPU via deckActive
-// Because it is the same DOM node re-parented, all React state / scroll / already-
-// fetched data survive with zero remount and zero rasterization (no html2canvas).
-//
-// Birth/death (ios-app-open / ios-app-close) is a SEPARATE motion channel that lives
-// on an inner node inside each host and only ever runs while fullscreen, so it never
-// contends with the card scale (which is supplied by the stage's own transform).
 
 export interface DeckAppCtx {
     onClose:           () => void;
@@ -101,21 +80,9 @@ const AppHost = memo(function AppHost({ id, ctx, active, openKey, origin, expand
     const node = useMemo(() => buildAppNode(id, ctx), [id, ctx]);
     const locale    = useLocaleStore(s => s.locale);
     const changedAt = useLocaleStore(s => s.changedAt);
-    // Starts 'open' on mount (an app only ever mounts while it is being foregrounded
-    // fullscreen), replays 'open' on each subsequent foreground (openKey bump), and
-    // plays 'close' when the active app is collapsing to home.
     const [phase, setPhase] = useState<'open' | 'close' | 'rest'>('open');
     const firstRef = useRef(true);
 
-    // LAYOUT effects, not passive ones. A retained app re-renders at phase 'rest' (no animation)
-    // and is re-parented into the fullscreen slot by the layout effect below. If the phase flip
-    // is passive it lands AFTER that paint, so the app appears instantly at full size and only
-    // then does the animation start, snapping back to its `from` keyframe and replaying. That is
-    // the "instant open, then it flicks and animates" report, and it is a race: the heavier the
-    // app's commit, the wider the gap between paint and effect, which is why it showed up most on
-    // the apps with big lists and only occasionally on light ones. A layout effect is flushed
-    // before paint, so the animation is in place on the first painted frame - which is why the
-    // FIRST open was always correct: useState('open') has it there from the initial commit.
     useLayoutEffect(() => {
         if (firstRef.current) { firstRef.current = false; return; }
         setPhase('open');
@@ -161,7 +128,6 @@ export function AppDeck({
     const hostsRef = useRef<Map<AppId, HTMLDivElement>>(new Map());
     const poolRef  = useRef<HTMLDivElement>(null);
 
-    // Re-run re-parenting when the switcher (re)registers its card stages.
     const [stageVersion, setStageVersion] = useState(0);
     useEffect(() => subscribeCardStages(() => setStageVersion(v => v + 1)), []);
 
@@ -176,7 +142,6 @@ export function AppDeck({
         return el;
     }
 
-    // Drop hosts for ids that left the deck (their portal already unmounted).
     useEffect(() => {
         for (const [id, host] of hostsRef.current) {
             if (!deckIds.includes(id)) {
@@ -187,18 +152,11 @@ export function AppDeck({
     }, [deckIds]);
 
     useLayoutEffect(() => {
-        // Reveal every retained preview card at once the moment the switcher opens.
-        // The apps are already-painted live views, so re-parenting them into the card
-        // stages is cheap - no per-card stagger and no waiting for the entrance
-        // animation, which is what made the cards look like they "loaded in" one by one.
         for (const id of deckIds) {
             const host = hostsRef.current.get(id);
             if (!host) continue;
             const previewable = isPreviewApp(id);
 
-            // The fullscreen stage lives inside the open phone screen (bridge-registered).
-            // When the phone is holstered/locked it is absent, so the active-app branches
-            // fall back to the hidden pool -> the app suspends but stays mounted.
             const fullscreen = getFullscreenStage();
 
             let slot: HTMLElement | null;
@@ -207,9 +165,6 @@ export function AppDeck({
                 if (previewable) {
                     slot = getCardStage(id) ?? poolRef.current;
                 } else if (id === activeId && !previewable) {
-                    // Heavy/WebGL active app: keep it mounted fullscreen behind the
-                    // switcher blur (never re-parent a live GL canvas); its card shows
-                    // the icon fallback rendered by the switcher.
                     slot = fullscreen ?? poolRef.current;
                 } else {
                     slot = poolRef.current;
@@ -218,9 +173,6 @@ export function AppDeck({
                 slot = fullscreen;
                 interactive = true;
             } else if (splitId && id === splitId && getSplitStage()) {
-                // Split view: the right pane is an ordinary stage, so the second app is live and
-                // interactive on exactly the same terms as the first. Both stay deckActive, since
-                // an app the player can see and touch must not be frozen.
                 slot = getSplitStage();
                 interactive = true;
             } else {
@@ -259,13 +211,7 @@ export function AppDeck({
     );
 }
 
-// Rendered inside the open phone screen where the active app should appear. It only
-// registers a DOM node; the top-level AppDeck re-parents the live active app into it.
-// Because the deck lives above the shell, this node coming and going (phone open/close)
-// simply swaps the active app between "fullscreen in the phone" and "suspended in the
-// pool" without ever unmounting it.
 export function FullscreenStage({ mainAnim }: {
-    /** Reveal animation for the main half only, so it never runs over a resting split pane. */
     mainAnim?:   string;
 }) {
     const ref      = useRef<HTMLDivElement>(null);
@@ -276,8 +222,6 @@ export function FullscreenStage({ mainAnim }: {
     const closing  = useSplitClosing();
     const split    = unfolded ? splitApp : null;
 
-    // Which half each stage occupies. The split app takes the side it was opened on and the main
-    // phone takes the other, so swapping sides is a straight swap of the two boxes.
     const splitLeft = side === 'left';
     const mainBox  = splitLeft ? { left: '50%', right: 0 } : { left: 0, right: '50%' };
     const paneBox  = splitLeft ? { left: 0, right: '50%' } : { left: '50%', right: 0 };
@@ -287,16 +231,11 @@ export function FullscreenStage({ mainAnim }: {
         return () => registerFullscreenStage(null);
     }, []);
 
-    // Registered only while a pane is actually shown, so the deck's split branch cannot claim an
-    // app into a stage the player cannot see - folding shut hands the second app straight back to
-    // the pool rather than stranding it live off-screen.
     useLayoutEffect(() => {
         registerSplitStage(split ? splitRef.current : null);
         return () => registerSplitStage(null);
     }, [split]);
 
-    // The seam eases rather than jumps: the main half grows back into the space as the pane slides
-    // out of it, so closing reads as the two halves rejoining.
     const SEAM = `left ${SPLIT_EXIT_MS}ms cubic-bezier(0.32,0.72,0,1), right ${SPLIT_EXIT_MS}ms cubic-bezier(0.32,0.72,0,1)`;
     const held = split && !closing;
 
@@ -324,9 +263,6 @@ export function FullscreenStage({ mainAnim }: {
                             opacity: closing ? 0 : 1,
                             transform: closing ? `translateX(${splitLeft ? -14 : 14}px) scale(0.97)` : 'none',
                             transformOrigin: splitLeft ? 'right center' : 'left center',
-                            // The seam easing rides on this one too. Without it the main half slid
-                            // across on a swap while the pane jumped, so the two halves visibly
-                            // came apart instead of trading places.
                             transition: `${SEAM}, opacity ${SPLIT_EXIT_MS}ms ease, transform ${SPLIT_EXIT_MS}ms cubic-bezier(0.32,0.72,0,1)`,
                         }}
                     />
@@ -341,16 +277,6 @@ export function FullscreenStage({ mainAnim }: {
                         }}
                     />
 
-                    {/* A grip on the seam, because an invisible hit target is a secret rather than
-                        an affordance. It carries the swap arrows rather than a drag handle: a
-                        handle promises resizing, and the halves are always 50/50.
-
-                        The button's own states are paint-only - background and colour, never a
-                        filter. A layer-promoting hover sitting exactly on the boundary re-snaps
-                        the two app stages either side of it under the screen's CSS zoom. The one
-                        transform is on the icon alone, which is small and has no neighbour to
-                        disturb: it turns a half circle on every swap, so the arrows travel the way
-                        the panes do. */}
                     <button
                         type="button"
                         aria-label={t('shell.splitSwap', 'Swap the two sides')}

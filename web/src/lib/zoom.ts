@@ -10,12 +10,6 @@ export function ancestorZoom(el: HTMLElement | null): number {
 
 interface Box { left: number; top: number; width: number; height: number }
 
-/**
- * A pointer's place in an element's own (unzoomed) pixels, measured from its top-left corner, whichever way the
- * browser reports a box under an ancestor's CSS zoom. Chromium 128+ (FiveM's CEF today) gives getBoundingClientRect
- * in screen pixels, zoom included; older Chromium gave it in the element's own pixels while the pointer stayed in
- * screen pixels. `rect.width / width` tells the two apart, as trackFraction does.
- */
 export function toLocal(clientX: number, clientY: number, rect: Box, width: number, height: number, zoom: number) {
     const w = width || rect.width || 1;
     const h = height || rect.height || 1;
@@ -27,7 +21,6 @@ export function toLocal(clientX: number, clientY: number, rect: Box, width: numb
     };
 }
 
-/** toLocal for an element on the page. */
 export function localPoint(el: HTMLElement, clientX: number, clientY: number) {
     return toLocal(clientX, clientY, el.getBoundingClientRect(), el.offsetWidth, el.offsetHeight, ancestorZoom(el));
 }

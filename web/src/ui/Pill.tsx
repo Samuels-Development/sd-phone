@@ -2,8 +2,6 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { clsx } from 'clsx';
 import type { ReactNode } from 'react';
 
-// Tinted-background + darker-text pairs; the light-mode text colours are
-// hand-darkened so the small caps stay readable on the 20% tint.
 const pill = cva(
     'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-[3px] text-[13px] font-bold uppercase tracking-wide',
     {

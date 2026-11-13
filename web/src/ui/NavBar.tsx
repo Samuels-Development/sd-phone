@@ -20,14 +20,11 @@ export function NavBar({ backLabel, onBack, title, right, hairline = false, clas
     const genericRef = useRef<HTMLSpanElement>(null);
     const [mode, setMode] = useState<BackMode>('full');
 
-    // Like UIKit: a back title that does not fit falls back to the generic "Back",
-    // then to the chevron alone, instead of being truncated or overlapping the title.
     useLayoutEffect(() => {
         const slot = slotRef.current;
         if (!slot || !onBack || !backLabel) return;
         const pick = () => {
-            // Sub-pixel widths: rounded offsetWidth lets a label that is a fraction too wide truncate.
-            const room = slot.getBoundingClientRect().width - 24; // chevron + gap
+            const room = slot.getBoundingClientRect().width - 24;
             const full = fullRef.current?.getBoundingClientRect().width ?? 0;
             const generic = genericRef.current?.getBoundingClientRect().width ?? 0;
             setMode(full <= room ? 'full' : generic <= room ? 'generic' : 'minimal');
@@ -42,7 +39,6 @@ export function NavBar({ backLabel, onBack, title, right, hairline = false, clas
 
     return (
         <div className={`relative flex h-11 shrink-0 items-center gap-2 px-2 ${className}`}>
-            {/* Equal-basis side slots keep the title centred; the back slot yields first. */}
             <div ref={slotRef} className="relative flex min-w-0 flex-1 basis-0">
                 {onBack && (
                     <button
@@ -68,7 +64,6 @@ export function NavBar({ backLabel, onBack, title, right, hairline = false, clas
                     <span title={title} className="block truncate text-[17px] font-semibold text-black dark:text-white">{title}</span>
                 </div>
             )}
-            {/* Bar buttons are never clipped; the title gives way instead. */}
             <div className="flex flex-1 basis-0 items-center justify-end pe-2 text-ios-blue" style={{ minWidth: 'max-content' }}>
                 {right}
             </div>

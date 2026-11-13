@@ -10,8 +10,6 @@ import { fetchFeaturedGifs, fetchGifCategories, searchGifs, type GifCategory, ty
 
 type View = 'browse' | 'featured' | 'search';
 
-// Every keystroke used to be its own GIPHY search; let the typing settle first. Kept above the
-// 300 ms server-side cooldown so a settled search is never answered with the previous payload.
 const SEARCH_DEBOUNCE_MS = 350;
 
 function tileGradient(seed: string): string {
@@ -30,7 +28,6 @@ export function GifPickerSheet({ onSelect, onClose, forceDark = false }: {
     const isDark = forceDark || theme === 'dark';
 
     const [query,      setQuery]      = useState('');
-    // What the search actually runs on: `query` follows the keystrokes, `term` only settles.
     const [term,       setTerm]       = useState('');
     const [view,       setView]       = useState<View>('browse');
     const [categories, setCategories] = useState<GifCategory[] | null | undefined>(undefined);
@@ -59,8 +56,6 @@ export function GifPickerSheet({ onSelect, onClose, forceDark = false }: {
         debounce.current = setTimeout(() => { setTerm(next); setView('search'); }, SEARCH_DEBOUNCE_MS);
     }
 
-    // Both cancel a pending debounce: a tile tapped a keystroke later must not be overridden by
-    // the half-typed term still in flight.
     function openCategory(value: string) { clearTimeout(debounce.current); setQuery(value); setTerm(value); setView('search'); }
     function openFeatured() { clearTimeout(debounce.current); setQuery('Featured'); setView('featured'); }
 

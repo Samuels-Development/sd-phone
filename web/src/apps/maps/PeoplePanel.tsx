@@ -19,8 +19,6 @@ import { t } from '@/i18n';
 
 
 export function useFriendsRoster(enabled = true) {
-    // Stop streaming the friends roster to a backgrounded card; the last roster stays
-    // rendered and the push listener below re-syncs the moment we foreground again.
     const active = useDeckActive();
     const [friends, setFriends] = useState<Friend[]>(() => (isFiveM ? [] : loadFriends()));
     const [addError, setAddError] = useState<string | null>(null);

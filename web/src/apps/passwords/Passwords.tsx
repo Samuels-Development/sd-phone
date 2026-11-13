@@ -29,8 +29,6 @@ export function Passwords({ onClose }: { onClose: () => void }) {
     const [openId,  setOpenId]  = useSessionState<number | null>('passwords:openId', null);
     const [query,   setQuery]   = useSessionState('passwords:query', '');
 
-    // AppDeck retains this subtree, so reopening must refetch: vault rows change while
-    // backgrounded (e.g. a password change in another app syncs its entry server-side).
     const deckActive = useDeckActive();
     const wasActive = useRef(false);
     useEffect(() => {

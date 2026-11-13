@@ -3,8 +3,6 @@ import type { CSSProperties, ReactNode, WheelEvent as ReactWheelEvent } from 're
 
 import type { WidgetCard } from '@/apps/appstore/appsApi';
 
-// One notch per card. A trackpad emits a burst of small deltas for a single flick, so without a
-// gate a stack of three would run to the end on one gesture. Matches AppSwitcher's wheel step.
 const WHEEL_MS = 280;
 
 const SLIDE_MS = 300;

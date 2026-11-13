@@ -17,7 +17,7 @@ type Panel = 'emoji' | null;
 
 const ACTION_BTNS: { id: string; label: string; emoji?: string; Icon?: LucideIcon }[] = [
     { id: 'emoji',    label: 'Emoji',    emoji: '😊' },
-    { id: 'photos',   label: 'Photos' },   // rendered with the Photos app icon
+    { id: 'photos',   label: 'Photos' },
     { id: 'location', label: 'Location', Icon: MapPin },
 ];
 
@@ -180,7 +180,7 @@ export function ServiceComposer({ isDark, onSend }: {
                                     d.wpCode = encodeWaypoint({ label: t('services.sharedLocation', 'Shared Location'), x: r.x, y: r.y, icon: 'MapPin', color: '#eb4b3c' });
                                     d.wpSub  = `${Math.round(r.x)}, ${Math.round(r.y)}`;
                                 }
-                            } catch { /* fall back to a coordless share */ }
+                            } catch {}
                         }
                         onSend(d);
                     }}

@@ -118,37 +118,15 @@ export function getAppEntry(id: AppId): AppEntry {
     return APP_REGISTRY[id];
 }
 
-// Apps show a real frozen "where you left off" card by DEFAULT. Backgrounded apps are
-// SUSPENDED (see web/src/shell/deckActive.ts): a boolean plumbed down each app's subtree
-// flips to false when it is not the interactive foreground instance, and the shared
-// choke points (useGameLoop, useOnlineLobby, useSelfLocation, the ryde/photogram/cookie/
-// blocks effects) fold it into their gates so the loop / poll / render / media halts and
-// the last frame simply freezes at ~0 CPU. That makes maps, ryde, photogram, cookie, the
-// arcade + board games, and phone all cheap to keep mounted and previewable.
-//
-// camera is the ONLY genuine exception: it drives a GTA-native cell-cam through a
-// singleton three.js GameRender bound to a single canvas that the deck never re-parents,
-// so it can't be a live card. It suspends the native cam on background (deckActive) and
-// its switcher card falls back to the app icon.
 const PREVIEW_EXCLUDE = new Set<AppId>(['camera']);
 
-// Custom apps render inside a cross-origin iframe: it cannot be captured for a live
-// switcher card and re-parenting the node would reload it, so they opt out of the
-// preview deck exactly like camera does and fall back to their icon card.
 export function isPreviewApp(id: AppId): boolean {
     if (isCustomApp(id)) return false;
     return !PREVIEW_EXCLUDE.has(id);
 }
 
-// Apps this device does not have. The registry stays complete (AppId must keep naming every
-// app or the tree stops type-checking); the ids are refused at asAppId instead.
 const EXCLUDED_APPS = new Set<string>(device.excludedApps);
 
-// A raw id becomes an openable AppId when it is either a statically-registered app
-// or a runtime-registered custom app. Every downstream AppId-typed site keys off the
-// id string, so widening the union at this single boundary is enough to open it -
-// and refusing it here is what stops a notification tap, a deeplink, Control Center,
-// sd-phone:launchApp or the custom-app SDK from opening an app this device lacks.
 export function asAppId(id: string | null | undefined): AppId | null {
     if (id == null) return null;
     if (EXCLUDED_APPS.has(id)) return null;

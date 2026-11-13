@@ -1,10 +1,5 @@
 import { context, noiseBuffer } from '@/media/sfx';
 
-/**
- * A short metallic clack, synthesised rather than sampled: a filtered noise transient for the
- * impact, plus a couple of damped partials for the ring the hook and cradle give off. Tuning the
- * band and the partials is what separates "light click" from "heavy clunk".
- */
 function clack(peak: number, bandHz: number, partials: number[], dur: number): void {
     const ac = context();
     if (!ac) return;
@@ -44,12 +39,10 @@ function clack(peak: number, bandHz: number, partials: number[], dur: number): v
     }
 }
 
-/** Handset pulled off the hook: bright and light, the sound of it unseating. */
 export function playHandsetLift(): void {
     clack(0.24, 2700, [1880, 3160], 0.10);
 }
 
-/** Handset dropped back on the hook: lower and heavier, with more ring. */
 export function playHandsetHang(): void {
     clack(0.32, 1450, [760, 1210], 0.22);
 }

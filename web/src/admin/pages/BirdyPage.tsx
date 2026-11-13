@@ -82,7 +82,6 @@ export function BirdyPage({ initialQuery, onOpenPlayer, toast }: {
     toast: (text: string, error?: boolean) => void;
 }) {
     const [q, setQ] = useState(initialQuery ?? '');
-    // Only an Enter press hits the database; typing alone never queries.
     const [query, setQuery] = useState(initialQuery ?? '');
     const [doomed, setDoomed] = useState<string | null>(null);
     const submit = () => {

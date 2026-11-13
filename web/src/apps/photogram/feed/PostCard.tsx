@@ -39,8 +39,6 @@ export function PostCard({ post, onLike, onDoubleLike, onSave, onComment, onOpen
     const [muted,  setMuted]  = useState(true);
     const hasVideo      = post.images.some(isVideoUrl);
     const activeIsVideo = isVideoUrl(post.images[idx] ?? '');
-    // Pause every feed <video> (stops decode CPU) while the app is backgrounded; the
-    // frame simply freezes and replays the in-view clip when it foregrounds again.
     const deckActive = useDeckActive();
 
     useEffect(() => {

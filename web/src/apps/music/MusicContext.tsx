@@ -93,12 +93,6 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         return isFinite(v) && v > 0 ? Math.min(1, v) : 1;
     });
 
-    // A third-party resource's own audio engine reporting itself as Now Playing (see
-    // ExternalNowPlayingTrack). While set, it replaces the built-in player everywhere this
-    // context is read (Control Center, the dynamic island, the Now Playing widget) without any
-    // of those call sites knowing the difference. It never touches the <audio>/YouTube engine
-    // above — that stays exclusively the built-in Music app's, so a provider going away hands
-    // control back to whatever the built-in player was already doing.
     const [external, setExternal] = useState<{ appId: string; track: ExternalNowPlayingTrack } | null>(null);
 
     const extAppId   = external?.appId ?? null;
@@ -111,14 +105,9 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         setExternal({ appId: data.appId, track: data.track });
     }, []));
     useNuiEvent('sd-phone:nowPlaying:clear', useCallback((data: { appId: string }) => {
-        // A stale clear from a provider that already lost the slot to a newer one must not
-        // wipe that newer provider's card.
         setExternal(cur => (cur?.appId === data.appId ? null : cur));
     }, []));
 
-    // Two audio sources must never play at once: if the built-in player was already going when
-    // an external provider takes the Now Playing slot, pause it (its own <audio>/YT element, via
-    // the normal `playing` state below — the effects that own actual playback react to this).
     useEffect(() => {
         if (extAppId) setPlaying(false);
     }, [extAppId]);
@@ -161,8 +150,6 @@ export function MusicProvider({ children }: { children: ReactNode }) {
                         onStateChange: (e: any) => {
                             if (e.data === 0) handlers.current.ended();
                             else if (e.data === 1) setPlaying(true);
-                            // Only honour a pause the user actually asked for — ignore the
-                            // spurious "paused" the player emits mid-track-switch.
                             else if (e.data === 2 && !wantPlay.current) setPlaying(false);
                         },
                     },
@@ -188,7 +175,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         const a = audioRef.current;
-        if (!current) { a?.pause(); try { ytRef.current?.stopVideo?.(); } catch { /* */ } return; }
+        if (!current) { a?.pause(); try { ytRef.current?.stopVideo?.(); } catch {} return; }
         if (youtubeId(current.url) && !isSourceAllowed(current.url)) { a?.pause(); setPlaying(false); return; }
         const vid = youtubeId(current.url);
         if (vid) {
@@ -200,7 +187,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
             if (ytReady.current) start();
             else void ensureYtPlayer().then(start);
         } else {
-            try { ytRef.current?.stopVideo?.(); } catch { /* */ }
+            try { ytRef.current?.stopVideo?.(); } catch {}
             if (a) {
                 if (a.src !== current.url) { a.src = current.url; a.load(); }
                 a.volume = volume;
@@ -225,7 +212,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (audioRef.current) audioRef.current.volume = volume;
         if (ytRef.current && ytReady.current) ytRef.current.setVolume?.(Math.round(volume * 100));
-        try { window.localStorage.setItem('sd-phone:music:vol', String(volume)); } catch { /* */ }
+        try { window.localStorage.setItem('sd-phone:music:vol', String(volume)); } catch {}
     }, [volume]);
 
     useEffect(() => { timeRef.current = time; }, [time]);
@@ -277,9 +264,6 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         else next();
     };
 
-    // Transport exposed to the rest of the app: routes to the active external provider (its own
-    // audio engine, over NUI) when one holds the Now Playing slot, otherwise falls through to the
-    // built-in player's own toggle/next/prev/seek above unchanged.
     const externalAction = useCallback((action: 'toggle' | 'next' | 'prev' | 'seek', value?: number) => {
         if (!extAppId) return false;
         void fetchNui('sd-phone:nowPlaying:action', { appId: extAppId, action, value });

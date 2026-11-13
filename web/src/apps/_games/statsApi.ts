@@ -78,8 +78,6 @@ export async function recordResultApi(game: string, mode: StatMode, result: Stat
     return await apiData<GameStats>('sd-phone:games:record', { game, mode, result, amount });
 }
 
-// --- Single-player high scores (Blocks, Flappy, ...) -------------------------------------------
-
 export interface ScoreEntry { name: string | null; score: number }
 
 const DEV_SCOREBOARD: ScoreEntry[] = [
@@ -90,12 +88,10 @@ const DEV_SCOREBOARD: ScoreEntry[] = [
     { name: 'Niko Mares', score: 38900 },
 ];
 
-/** Coerce an arbitrary value to a whole non-negative score (mirrors the server clamp's lower half). */
 const cleanScore = (score: number) => Math.max(0, Math.floor(Number.isFinite(score) ? score : 0));
 
 export interface ScoreResult { best: number; isRecord: boolean; plays: number; last: number }
 
-/** Submit a run's score; the server keeps the best, counts the play and stores it as the most recent. */
 export async function submitScoreApi(game: string, score: number): Promise<ScoreResult> {
     if (!isFiveM) {
         const s = devRead(game);
@@ -110,7 +106,6 @@ export async function submitScoreApi(game: string, score: number): Promise<Score
         ?? { best: 0, isRecord: false, plays: 0, last: 0 };
 }
 
-/** Global top-20 high-score board for a game. */
 export async function loadScoreboard(game: string): Promise<ScoreEntry[]> {
     if (!isFiveM) {
         const s = devRead(game);

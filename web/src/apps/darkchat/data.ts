@@ -76,7 +76,6 @@ export interface RoomInfo {
     code?:         string;
     members?:      RoomMember[];
     bans?:         RoomMember[];
-    /** Creator only: seconds left before the join code may be regenerated again. */
     codeCooldown?: number;
 }
 

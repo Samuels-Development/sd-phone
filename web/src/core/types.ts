@@ -33,7 +33,6 @@ export interface OpenPayload {
     installedApps?: string[];
     homeLayout?: string;
     mailDomain?: string;
-    /** Phone-number display config (config.Phone.Number); formats are keyed by digit count. */
     number?: {
         formats?: Record<string, string>;
         length?: number;
@@ -57,35 +56,25 @@ export interface OpenPayload {
     sim?: SimStatePush;
 }
 
-/** Unique-phones SIM snapshot: enabled=false means the feature is off (stock behaviour). */
 export interface SimStatePush {
     enabled: boolean;
     hasSim?: boolean;
     number?: string;
-    /** DeviceIdentity mode: the phone owns its data and opens without a SIM (no No-SIM wall,
-     *  "No Service" in the status bar instead). Absent/false = legacy SIM-is-identity mode. */
     device?: boolean;
-    /** Device mode only: the phone's device identity, used to namespace per-phone UI state
-     *  (setup completion, auth cache) so swapping SIMs on one phone never resets it. */
     profile?: string;
 }
 
-/** One Wi-Fi network the phone can see. `strength` is 0..1 raw, `bars` the 0..3 the icon draws. */
 export interface WifiNetwork {
     id: string;
     ssid: string;
-    /** Already joined once by this character, so rejoining needs no password. */
     known?: boolean;
-    /** Password protected. The client omits it on the connected network, where it normalizes to false. */
     secured: boolean;
     strength: number;
     bars: number;
 }
 
-/** Live Wi-Fi snapshot: enabled=false means the radio is off, so there is nothing to join. */
 export interface WifiState {
     enabled: boolean;
-    /** This server runs Wi-Fi at all. Distinguishes a switched-off radio from no networks. */
     configured?: boolean;
     connected: WifiNetwork | null;
     networks: WifiNetwork[];
@@ -122,7 +111,6 @@ export interface AppDef {
     route: string;
     accent: string;
     base?: boolean;
-    /** Wi-Fi network id (configs/wifi.lua) the phone must be joined to before this app downloads. */
     wifi?: string;
 }
 
@@ -131,11 +119,6 @@ export interface CustomWidgetDef {
     name:  string;
     ui:    string;
     sizes: ('sm' | 'md' | 'lg')[];
-    /**
-     * Opt-in: lets the widget's iframe receive real pointer events (taps, buttons) instead of
-     * being purely decorative. Off by default so existing third-party widgets that never
-     * expected clicks keep behaving exactly as before.
-     */
     interactive?: boolean;
 }
 
@@ -162,9 +145,7 @@ export interface CustomAppDef {
     fixBlur?:    boolean;
     keepOpen?:   boolean;
     landscape?:  boolean;
-    /** Wi-Fi network id (configs/wifi.lua) the phone must be joined to before this app downloads. */
     wifi?:       string;
-    /** Device ids this app appears on. Absent means every device. */
     devices?:    string[];
     widgets?:    CustomWidgetDef[];
     lockscreenWidgets?: CustomLockscreenWidgetDef[];
@@ -217,8 +198,6 @@ interface CallPush {
 interface CallEndedPush {
     channel: number;
     reason:  string;
-    /** Present on the caller's teardown when the callee never answered and the number they
-     *  dialled owns a mailbox, so the call screen can offer to record a message. */
     voicemail?: { number: string; name?: string };
 }
 
@@ -292,13 +271,6 @@ interface MusicSharePush {
     tracks?: MusicSharedTrack[];
 }
 
-/**
- * Pushed by `exports('sd-phone'):setExternalNowPlaying(appId, track)` — lets a third-party
- * resource (its own audio engine, not sd-phone's built-in Music) drive the Control Center card,
- * the dynamic-island mini-player, and the native Now Playing widget, the same way the built-in
- * Music app does. Only one provider is "active" at a time: the most recent `set` wins, and a
- * `clear` from a stale appId (one that already lost the slot to a newer provider) is ignored.
- */
 export interface ExternalNowPlayingTrack {
     title:    string;
     artist?:  string;
@@ -310,7 +282,6 @@ export interface ExternalNowPlayingTrack {
     canPrev?: boolean;
 }
 
-/** One registered custom-app widget currently visible in the lock-screen notification stack. */
 export interface ActiveLockscreenWidget {
     key: string;
     appId: string;

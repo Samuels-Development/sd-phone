@@ -44,7 +44,7 @@ function load(ac: AudioContext, url: string): void {
         .then(r => r.arrayBuffer())
         .then(b => ac.decodeAudioData(b))
         .then(decoded => { buffers.set(url, decoded); })
-        .catch(() => { /* a sample that will not decode stays silent */ })
+        .catch(() => {})
         .finally(() => { pending.delete(url); });
 }
 

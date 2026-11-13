@@ -80,7 +80,6 @@ export interface VaultEntry {
     password: string;
     email?:   string | null;
     phone?:   string | null;
-    /** Unix timestamp in SECONDS. Formatted in the UI so it follows the app's language. */
     created?: number;
 }
 

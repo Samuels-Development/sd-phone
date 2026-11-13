@@ -25,8 +25,6 @@ const SB_H = 54;
 
 type Screen = 'home' | 'lobby' | 'game' | 'leaderboard';
 type Mode   = 'cpu' | 'online';
-// 'waiting' is online-only: this player has deployed and the server is holding the
-// match until the opponent does too. No shot can be fired or received in it.
 type Phase  = 'placing' | 'waiting' | 'firing';
 
 const GAME   = 'battleship';
@@ -102,7 +100,6 @@ export function Battleship({ onClose: _onClose }: Props) {
         },
         onRelay: data => handleRelay(data),
         onBegin: d => {
-            // Both fleets are placed; the server says who shoots first.
             phaseRef.current = 'firing';
             setPhase('firing');
             setOppDeployed(true);
@@ -170,27 +167,19 @@ export function Battleship({ onClose: _onClose }: Props) {
         return Object.values(next).filter(v => v === 'hit').length >= FLEET_CELLS;
     }, []);
 
-    // Echo a just-resolved shot's result back to the shooter over the turn-neutral relay, so their
-    // hit/miss shows immediately instead of riding in on our next move. Does not change turn state.
     const relayResult = () => {
         if (onlineRef.current) relayApi(onlineRef.current.gameId, { prevResult: lastResolved.current });
         lastResolved.current = null;
     };
 
-    // A move now carries only the opponent's shot (results travel over the relay). Resolve it, echo
-    // the result straight back, then take my turn - unless it sank my last ship.
     const handleIncoming = useCallback((m: BSMove) => {
         if (!m.shot) return;
-        // The server holds shots until both sides are ready, so this should no longer be reachable
-        // online - kept as a safety net so a shot can never be dropped.
         if (phaseRef.current !== 'firing') { pendingShot.current = m.shot; return; }
         const lost = resolveIncoming(m.shot);
         relayResult();
         setMyTurn(!lost);
     }, [resolveIncoming]);
 
-    // The relay carries the result of the shot I just fired: reveal my hit/miss immediately. A relay
-    // never hands me the turn (the opponent shoots next).
     const handleRelay = useCallback((data: unknown) => {
         const res = (data as { prevResult?: ShotResult | null } | null)?.prevResult;
         if (!res || myLastTarget.current == null) return;
@@ -261,10 +250,6 @@ export function Battleship({ onClose: _onClose }: Props) {
     function shuffleFleet() { if (phase === 'placing') setMyFleet(randomFleet()); }
     function confirmPlacement() {
         if (mode === 'online') {
-            // Do NOT start firing here. Tell the server the fleet is placed and wait for
-            // its 'begin' push - it arrives only once BOTH boards are deployed, and it
-            // decides who shoots first. Deciding that locally is what let whoever
-            // deployed first fire into a board that was still being shuffled.
             phaseRef.current = 'waiting';
             setPhase('waiting');
             setMyTurn(false);

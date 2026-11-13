@@ -11,10 +11,6 @@ export interface NotifPref {
 
 export const DEFAULT_PREF: NotifPref = Object.freeze({ enabled: true, sounds: true });
 
-// A notification can land before the phone has ever been opened, so these must be resolvable from
-// the moment the NUI mounts rather than on first open. The character may not be loaded yet on a
-// join, and on a resource restart the characterLoaded push has already fired before the page
-// exists, so mount-time hydration needs this bounded retry the way themeStore's does.
 const HYDRATE_RETRY_MS = 1500;
 const HYDRATE_MAX_RETRIES = 20;
 

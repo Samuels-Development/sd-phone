@@ -14,8 +14,6 @@ export async function streaksSync(): Promise<SyncData> {
     return data ?? { state: SEED_STATE, config: SEED_CONFIG, gallery: [] };
 }
 
-/** Subscribe/unsubscribe this phone to live gallery pushes (new posts, like counts). The server
- * only pushes to players watching, so the Streaks screen calls this on mount (on) / unmount (off). */
 export function streaksWatch(on: boolean): void {
     if (isFiveM) void fetchNui('sd-phone:streaks:watch', { on });
 }

@@ -10,23 +10,13 @@ import { t } from '@/i18n';
 const sharedArtist   = () => t('music.sharedArtist', 'Shared');
 const sharedPlaylist = () => t('music.sharedPlaylist', 'Shared Playlist');
 
-// The music LIBRARY (tracks + playlist folders), persisted by the zustand
-// persist middleware. Lives in a store because it mutates while the Music app
-// is closed: AirShare deliveries land via App.tsx and must show up when Music
-// next renders. The playback ENGINE stays in MusicContext (owns <audio>/
-// YouTube refs). Initial state seeds from the legacy two-key localStorage
-// format (loadTracks/loadFolders), so pre-existing libraries carry over; once
-// the middleware writes its own key, that wins on later boots.
 interface MusicLibraryState {
     tracks:  Track[];
     folders: Folder[];
     setTracks:  (next: Track[] | ((prev: Track[]) => Track[])) => void;
     setFolders: (next: Folder[] | ((prev: Folder[]) => Folder[])) => void;
-    /** Merge AirShare-received tracks; returns only the ones that were new. */
     addReceivedTracks: (incoming: IncomingTrack[]) => Track[];
-    /** Merge an AirShare-received playlist: dedupes songs, adds a folder. */
     addReceivedPlaylist: (name: string, incoming: IncomingTrack[]) => void;
-    /** Factory reset: reseed from (now cleared) storage defaults. */
     reset: () => void;
 }
 

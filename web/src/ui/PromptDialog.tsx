@@ -90,7 +90,6 @@ export function PromptDialog({
                 if (exitingRef.current) return;
                 setBusy(false);
                 if (typeof result === 'string') { setError(result); return; }
-                // Promise-returning confirms close the dialog themselves; onCancel is the unmount channel.
                 dismiss(onCancel);
             },
             () => {
@@ -110,9 +109,6 @@ export function PromptDialog({
             if (invalid) { setError(invalid); return; }
         }
         setError(null);
-        // Async handlers run at press time so the busy state is visible while pending.
-        // Plain handlers keep the legacy order (exit animation first, then onConfirm)
-        // because existing consumers unmount the dialog inside onConfirm.
         if (Object.prototype.toString.call(onConfirm) === '[object AsyncFunction]') {
             settle(Promise.resolve(onConfirm(t1, t2)));
             return;

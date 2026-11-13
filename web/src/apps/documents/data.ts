@@ -10,9 +10,7 @@ export interface DocFolder {
 
 export interface DocSignature {
     id:       string;
-    /** Signer display name, frozen at signing time server-side. */
     signer:   string;
-    /** PNG data-URL of the drawn signature; null renders the cursive-name fallback. */
     image?:   string | null;
     signedAt: number;
 }
@@ -24,15 +22,10 @@ export interface DocFile {
     folderId:  string | null;
     size:      number;
     locked:    boolean;
-    /** True when the document carries at least one signature (content + name frozen). */
     signed?:   boolean;
-    /** True when the viewing player has already signed this document (gates counter-signing). */
     signedByMe?: boolean;
-    /** False when the issuing script forbade signing this document (default signable). */
     signable?: boolean;
-    /** False when the issuing script forbade deleting this document (default deletable). */
     deletable?: boolean;
-    /** Present on full reads only, like content. */
     signatures?: DocSignature[];
     source?:   string | null;
     url?:      string | null;
@@ -97,7 +90,6 @@ export function countChildren(list: DocList, folderId: string): number {
         + list.docs.filter(d => (d.folderId ?? null) === folderId).length;
 }
 
-// Depth-first folder ordering with an indentation depth, for the move picker.
 export function orderedFolders(folders: DocFolder[]): { folder: DocFolder; depth: number }[] {
     const out: { folder: DocFolder; depth: number }[] = [];
     const walk = (parent: string | null, depth: number) => {
@@ -112,7 +104,6 @@ export function orderedFolders(folders: DocFolder[]): { folder: DocFolder; depth
 
 const SAMPLE = 'This is a sample document. In dev mode the Files app runs entirely off local mocks so every screen is navigable without the game.';
 
-// Read-only docs render URL-only lines as inline images; this mock demos the mixed layout.
 const RICH_SAMPLE = [
     'VEHICLE SALES CONTRACT',
     '',

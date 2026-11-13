@@ -100,7 +100,7 @@ export function LiveHost({ onClose }: { onClose: () => void }) {
 
         return () => {
             stopped = true;
-            teardown.forEach(fn => { try { fn(); } catch { /* best-effort */ } });
+            teardown.forEach(fn => { try { fn(); } catch {} });
             renderRef.current?.stop();
             void fetchNui('sd-phone:camera:close');
             if (liveIdRef.current) void apiLiveEnd(liveIdRef.current);

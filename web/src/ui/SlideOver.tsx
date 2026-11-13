@@ -46,7 +46,6 @@ export function SlideOver({ onClose, animateIn = true, direction = 'x', classNam
         if (finished.current || exiting) return;
         exit.current = typeof after === 'function' ? after : onClose;
         setExiting(true);
-        // animationend can be dropped in CEF under load; the timeout guarantees completion
         timer.current = window.setTimeout(finish, ANIM[direction].exitMs + 80);
     }
 

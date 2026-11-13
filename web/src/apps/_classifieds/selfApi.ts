@@ -13,7 +13,7 @@ export async function loadSelfContact(): Promise<{ number: string; email: string
             const acc = accounts.find(a => a.id === activeId) ?? accounts[0];
             email = acc?.email ?? '';
         }
-    } catch { /* no mail account / not reachable — fall through */ }
+    } catch {}
 
     if (!email) email = card?.email ?? '';
 

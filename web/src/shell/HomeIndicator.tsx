@@ -5,7 +5,6 @@ interface Props {
     onGoHome?: () => void;
     closing?: boolean;
     passive?: boolean;
-    /** Which half of an unfolded screen this bar belongs to. Full width when not split. */
     side?: 'full' | 'left' | 'right';
 }
 
@@ -22,8 +21,6 @@ export function HomeIndicator({ onGoHome, closing = false, passive = false, side
             ? 'peer-hover:[&>div]:bg-white/90 peer-hover:[&>div]:-translate-y-[2px]'
             : 'peer-hover:[&>div]:bg-black/85 peer-hover:[&>div]:-translate-y-[2px]';
 
-    // Split view gives each pane its own bar, so the gesture is unambiguous: this bar belongs to
-    // the app above it and closes that one.
     const span = side === 'left' ? 'start-0 right-1/2' : side === 'right' ? 'left-1/2 end-0' : 'inset-x-0';
 
     return (

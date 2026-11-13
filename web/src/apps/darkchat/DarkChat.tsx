@@ -65,9 +65,6 @@ export function DarkChat({ onClose: _onClose }: { onClose: () => void }) {
         ? [...privateRooms, ...publicRooms].find(r => r.id === openId) ?? null
         : null;
 
-    // No-arg so the first room open animates; gating on `!!openRoom` meant the
-    // flag only went true after the first room already rendered (no push). See
-    // the same fix in Groups.
     const animateNav = useDidEnter();
 
     function patchRoom(id: string, fn: (r: Room) => Room) {

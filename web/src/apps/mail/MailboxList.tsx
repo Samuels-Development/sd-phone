@@ -53,9 +53,6 @@ export function MailboxList({
     const rowsRef    = useRef<Map<Folder, HTMLDivElement>>(new Map());
     const prevTops   = useRef<Map<Folder, number>>(new Map());
 
-    // FLIP the rows a reorder displaces: start each moved row at its old offsetTop via an
-    // inverse translate, then let the CSS transition carry it to rest. The reflow read
-    // replaces the usual double-rAF trigger, which CEF starves in-game.
     useLayoutEffect(() => {
         const tops = new Map<Folder, number>();
         for (const [id, el] of rowsRef.current) tops.set(id, el.offsetTop);
@@ -82,9 +79,6 @@ export function MailboxList({
         dragStartY.current = e.clientY;
     }
 
-    // clientY deltas are screen px; divide by the phone's CSS zoom so the row tracks the
-    // pointer 1:1. Row targeting goes through elementFromPoint (zoom-correct hit-testing);
-    // the dragged row is pointer-events:none while lifted so the hit lands on the row under it.
     function onHandlePointerMove(e: React.PointerEvent) {
         if (!draggingId) return;
         setDragOffset((e.clientY - dragStartY.current) / dragZoom.current);
@@ -96,8 +90,6 @@ export function MailboxList({
         const to   = folderOrder.indexOf(over);
         if (from < 0 || to < 0) return;
 
-        // Commit only past the hovered row's midpoint: that is the moment the lifted row
-        // fully overlaps its new slot, so the reorder lands without a visible snap.
         const frac = trackFractionY(row, e.clientY);
         if (frac == null || (to > from ? frac < 0.5 : frac > 0.5)) return;
 
@@ -105,8 +97,6 @@ export function MailboxList({
         next.splice(from, 1);
         next.splice(to, 0, draggingId);
         onReorderFolders(next);
-        // Shift the drag origin by the slots traversed (layout px -> screen px) instead of
-        // resetting it, keeping the row glued to the finger through the swap.
         dragStartY.current += (to - from) * row.offsetHeight * dragZoom.current;
         setDragOffset((e.clientY - dragStartY.current) / dragZoom.current);
     }

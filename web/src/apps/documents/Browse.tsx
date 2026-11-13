@@ -145,9 +145,6 @@ type PromptKind = 'folder' | 'doc';
 export function Browse({ list, onOpenDoc, onMoreDoc, onMoreFolder, onCreateFolder, onCreateDoc, onImportImage, animateIn }: Props) {
     const [path, setPath] = useSessionState<string[]>('documents:path', []);
     const [addFor,  setAddFor]  = useState<{ folderId: string | null } | null>(null);
-    // Depth restored from session state on mount (tab switches remount Browse). Folders at
-    // or below this depth were already open, so they render at rest instead of replaying
-    // the drill-in push; the ref shrinks with the path so re-entering a folder animates.
     const restoredDepth = useRef(path.length);
     useEffect(() => {
         if (path.length < restoredDepth.current) restoredDepth.current = path.length;
@@ -155,7 +152,6 @@ export function Browse({ list, onOpenDoc, onMoreDoc, onMoreFolder, onCreateFolde
     const [prompt,  setPrompt]  = useState<{ kind: PromptKind; folderId: string | null } | null>(null);
     const [picking, setPicking] = useState<{ folderId: string | null } | null>(null);
 
-    // Rebuild the visible chain from live folders so a deleted/moved folder truncates it.
     const chain = useMemo(() => {
         const out: DocFolder[] = [];
         let parent: string | null = null;
@@ -221,8 +217,6 @@ export function Browse({ list, onOpenDoc, onMoreDoc, onMoreFolder, onCreateFolde
                 />
             )}
 
-            {/* Portaled like Sheet/ActionSheet: Browse lives above the tab bar, so an in-place
-                dialog would dim and blur only the content area and leave the tab bar sharp. */}
             {prompt && portalToPhoneScreen(
                 <PromptDialog
                     title={prompt.kind === 'folder' ? t('documents.newFolder', 'New Folder') : t('documents.newDocument', 'New Document')}

@@ -13,9 +13,9 @@ import bg11 from '@/assets/photos/background11.webp';
 import bg12 from '@/assets/photos/background12.webp';
 
 export const IG = {
-    blue: '#0095F6',   // verified badge / links / active tab
-    red:  '#ED4956',   // likes
-    sub:  '#737373',   // secondary text
+    blue: '#0095F6',
+    red:  '#ED4956',
+    sub:  '#737373',
     line: 'rgba(0,0,0,0.08)',
     ring: 'linear-gradient(45deg, #FEDA75, #FA7E1E 28%, #D62976 62%, #8134AF)',
 };

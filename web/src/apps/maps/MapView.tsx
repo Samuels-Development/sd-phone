@@ -155,7 +155,6 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         };
     }, [side, insetBottom, insetTop]);
 
-    // Zoom keeping the map point at (cx, cy) where it is: offsets from the viewport's centre, in its own pixels.
     const zoomAt = useCallback((cx: number, cy: number, nextScale: number) => {
         const view = viewRef.current;
         const s = Math.max(minScale, Math.min(maxScaleFor(side), nextScale));
@@ -166,7 +165,6 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         setScale(s); setTx(c.x); setTy(c.y);
     }, [clampPan, minScale, side]);
 
-    // Zoom keeping the map point under the pointer (screen coordinates) under it.
     const zoomAround = useCallback((clientX: number, clientY: number, nextScale: number) => {
         const vp = viewportRef.current;
         if (!vp) return;
@@ -572,14 +570,11 @@ function tileLayer(
                             window.setTimeout(() => { t.src = `${base}&r=${tries + 1}`; }, 900 * (tries + 1));
                         }
                     }}
-                    // Reveal with opacity, NOT visibility: a loaded tile set to visibility:visible
-                    // overrides the AppDeck hidden-pool's inherited visibility:hidden and paints the
-                    // map through the homescreen while maps is backgrounded. Opacity can't escape it.
                     onLoad={e => { (e.currentTarget as HTMLImageElement).style.opacity = '1'; }}
                     className="absolute select-none"
                     style={{
                         left: i * ts, top: j * ts,
-                        width: ts + seam, height: ts + seam,   // hairline overlap hides seams
+                        width: ts + seam, height: ts + seam,
                         filter: style.filter,
                         outline: dbg ? `1px solid ${dbg}` : undefined,
                         outlineOffset: dbg ? '-1px' : undefined,

@@ -72,8 +72,6 @@ export function MailList({ folder, accountId, accountName, messages, onBack, onO
         leaveEditing();
     }
 
-    // With rows selected the mark button covers the selection; with none it covers the
-    // whole visible list (search-filtered when a query is active).
     const markIds     = selected.size > 0 ? visible.filter(m => selected.has(m.id)) : visible;
     const markableIds = markIds.filter(m => !m.read).map(m => m.id);
 

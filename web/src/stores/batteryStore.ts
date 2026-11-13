@@ -1,7 +1,5 @@
 import { create } from 'zustand';
 
-// Battery level lives in App.tsx (fed by the 'sd-phone:battery' NUI event); mirrored here so
-// apps like Settings can read it without prop-threading through the deck.
 interface BatteryState {
     level: number;
     setLevel: (pct: number) => void;

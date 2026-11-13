@@ -6,8 +6,6 @@ import { t } from '@/i18n';
 import { InvoicesPage } from './InvoicesPage';
 import { NewInvoicePage } from './NewInvoicePage';
 
-// Entry rows only: composing and the sent list both live on their own drill-in pages,
-// matching the Wallet's invoice flow.
 export function InvoicesSection() {
     const [composing, setComposing] = useState(false);
     const [viewing,   setViewing]   = useState(false);

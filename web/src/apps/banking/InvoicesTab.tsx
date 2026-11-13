@@ -41,22 +41,16 @@ export function InvoicesTab({ received, receivedLoading, onRefetchReceived, onPa
     const { data: sent, loading: sentLoading, refetch: refetchSent } = useAsyncData(fetchPersonalSent, []);
     useNuiEvent('sd-phone:services:invoices', useCallback(() => { refetchSent(); }, [refetchSent]));
 
-    // Keep-alive: re-sync the sent list when the Wallet is foregrounded (pushes are missed
-    // while the app sits suspended in the switcher).
     const deckActive = useDeckActive();
     const wasActive  = useRef(deckActive);
     useEffect(() => {
         const rising = deckActive && !wasActive.current;
         wasActive.current = deckActive;
         if (!rising) return;
-        // Deferred past the open animation for the same reason as Banking.tsx: this is the third
-        // round trip fired on a single foreground, and each one re-renders the tree.
         const id = window.setTimeout(refetchSent, 420);
         return () => window.clearTimeout(id);
     }, [deckActive, refetchSent]);
 
-    // Live contact resolution for the sent rows: a saved card shows its avatar/initials, an
-    // unsaved number falls back to the silhouette the received list uses.
     const { contacts } = useContacts('contacts');
     const contactByNumber = useMemo(() => {
         const map = new Map<string, (typeof contacts)[number]>();

@@ -116,7 +116,7 @@ export function SketchCanvas({ initial, onSave, onCancel }: Props) {
     function onPointerDown(e: React.PointerEvent) {
         const c = ctx();
         if (!c) return;
-        try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* not all runtimes support capture */ }
+        try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch {}
         drawingRef.current = true;
         const p = pointFromEvent(e);
         const s: Stroke = { color, width, eraser, points: [p] };
@@ -162,10 +162,6 @@ export function SketchCanvas({ initial, onSave, onCancel }: Props) {
     }
 
     const pageBg  = 'rgb(var(--base))';
-    // The board stays white in BOTH themes. toDataURL() captures only the canvas bitmap -
-    // this background is CSS on the wrapper and is never baked into the saved PNG - so a
-    // dark board made strokes look one way while editing and another way once saved, since
-    // both render paths (NoteEditor thumbnail + fullscreen preview) composite over #fff.
     const canvasBg = '#ffffff';
     const tray    = isDark ? 'rgb(var(--elevated))' : '#f2f2f7';
 

@@ -28,7 +28,6 @@ export const isFiveM = detectFiveM(currentWindow);
 
 const resourceName: string = parseResourceName(currentWindow);
 
-/** The resource serving this NUI page. Custom-app iframes load their SDK from it. */
 export const hostResource = resourceName;
 
 function withDevice(event: string, payload?: unknown): unknown {
@@ -45,11 +44,6 @@ export async function fetchNui<TResp = unknown>(event: string, rawPayload?: unkn
         return { ok: true } as unknown as TResp;
     }
 
-    // Phone: post straight to the action's own callback, as it always has.
-    // Companion device (sd-tablet): wrap every action in one envelope posted to a single
-    // callback, which forwards it into sd-phone's client. A companion cannot register the
-    // ~460 action names this UI uses - many are built at runtime - and a missing callback
-    // would 404 into a JSON parse error rather than a usable response.
     const rpc  = device.rpcAction;
     const url  = rpc ? `https://${resourceName}/${rpc}` : `https://${resourceName}/${event}`;
     const body = rpc ? { action: event, payload: payload ?? {} } : (payload ?? {});

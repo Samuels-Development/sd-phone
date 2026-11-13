@@ -77,8 +77,6 @@ export function Compass({ onClose: _onClose }: { onClose: () => void }) {
     const { theme } = useTheme('theme');
     const dark = theme === 'dark';
 
-    // Compass is retained in the app switcher, so without this gate its 250ms poll kept running
-    // (4 NUI round-trips a second) while the app sat suspended in the hidden deck layer.
     const deckActive = useDeckActive();
 
     useEffect(() => {

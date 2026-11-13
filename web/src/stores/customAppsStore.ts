@@ -43,7 +43,7 @@ export const useCustomAppsStore = create<CustomAppsState>((set) => ({
     hydrate: () => {
         void fetchNui<CustomAppDef[]>('customApps/get').then(list => {
             if (Array.isArray(list)) set({ apps: forThisDevice(list) });
-        }).catch(() => { /* offline / dev: keep current */ });
+        }).catch(() => {});
     },
 }));
 

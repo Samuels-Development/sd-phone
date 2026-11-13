@@ -40,8 +40,6 @@ export function warmBanking(): void {
 
 export function Banking({ onClose: _onClose }: { onClose: () => void }) {
     const { data: overview, loading, refetch: refresh } = useAsyncData<BankOverview>(loadOverview, []);
-    // Received invoices live here, above the animated tab subtree: segment/tab switches render
-    // instantly from cached data, and the pending count feeds the Invoices tab badge.
     const { data: receivedInv, loading: receivedLoading, refetch: refetchReceived } = useAsyncData(loadReceived, []);
 
     const hideBalance = useStreamerHidden('balance');
@@ -64,18 +62,12 @@ export function Banking({ onClose: _onClose }: { onClose: () => void }) {
     useNuiEvent('sd-phone:bank:txAdded', useCallback(() => { refresh(); }, [refresh]));
     useNuiEvent('sd-phone:services:invoices', useCallback(() => { refetchReceived(); }, [refetchReceived]));
 
-    // Keep-alive: a backgrounded Wallet misses the pushes above (suspended handlers), so
-    // balance, transactions and received invoices re-sync on the foreground rising edge.
     const deckActive = useDeckActive();
     const wasActive  = useRef(deckActive);
     useEffect(() => {
         const rising = deckActive && !wasActive.current;
         wasActive.current = deckActive;
         if (!rising) return;
-        // Held until the shell's 0.38s open animation has landed. Each refetch flips loading
-        // true then false, and nothing in this app is memoised, so firing two of them on the
-        // rising edge meant several full re-renders of the Banking tree inside the animation
-        // window. Bank renders 8 rows, so its jolt was never DOM size - it was this.
         const id = window.setTimeout(() => { refresh(); refetchReceived(); }, 420);
         return () => window.clearTimeout(id);
     }, [deckActive, refresh, refetchReceived]);

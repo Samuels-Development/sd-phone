@@ -1,8 +1,3 @@
-// The Birdy bird mark (user-drawn "plump two-feather flyer"), bare glyph for headers,
-// empty states and splash spots. Sized and coloured the Lucide way: className drives
-// dimensions, currentColor the fill. The eye is a true cutout (mask), so it always shows
-// the surface behind the glyph. The viewBox hugs the artwork's bounding box, so the bird
-// renders centered and full-size in any box.
 export function BirdyBird({ className }: { className?: string }) {
     return (
         <svg viewBox="8 19 87 77" className={className} fill="currentColor" aria-hidden>

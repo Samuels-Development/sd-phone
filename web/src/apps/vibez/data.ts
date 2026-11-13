@@ -9,7 +9,6 @@ import bg10 from '@/assets/photos/background10.webp';
 import bg11 from '@/assets/photos/background11.webp';
 import bg12 from '@/assets/photos/background12.webp';
 
-// Vibez brand palette: neon violet-to-pink.
 export const ACCENT    = '#A855F7';
 export const HEART     = '#EC4899';
 export const GRAD_FROM = '#8B5CF6';
@@ -86,14 +85,12 @@ export interface VLive {
     startedAt: number;
 }
 
-/** Deterministic hue per handle for the generated fallback avatar. */
 function handleHue(handle: string): number {
     let h = 0;
     for (let i = 0; i < handle.length; i++) h = (h * 31 + handle.charCodeAt(i)) >>> 0;
     return h % 360;
 }
 
-/** The account's avatar URL, or a generated gradient-initial tile for avatarless accounts. */
 export function avatarFor(handle: string, url?: string): string {
     if (url && url.length > 0) return url;
     const hue = handleHue(handle);
@@ -119,8 +116,6 @@ export function fmt(n: number): string {
     const m = n / 1_000_000;
     return (m < 10 ? m.toFixed(1).replace(/\.0$/, '') : Math.round(m)) + 'M';
 }
-
-// --- Browser dev seeds (never served in FiveM) -------------------------------
 
 function devUser(handle: string, verified = false): VUser {
     return { id: handle, handle, avatar: avatarFor(handle), verified };

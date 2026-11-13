@@ -30,7 +30,6 @@ export function PostCard({ post, isOwn, onToggleLike, onToggleRepost, onOpen, on
         onOpenAuthor(post.repostedBy.handle);
     };
 
-    // Server truth; the parent applies the optimistic flip.
     const reposted = post.reposted === true;
     const [confirmRepost, setConfirmRepost] = useState(false);
     const repostCount = post.reposts;

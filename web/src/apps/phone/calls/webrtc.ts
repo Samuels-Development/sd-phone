@@ -85,7 +85,7 @@ export class CallPeer {
             }
             params.degradationPreference = 'maintain-resolution';
             await sender.setParameters(params);
-        } catch { /* older CEF rejects some fields; the default encoding still works */ }
+        } catch {}
     }
 
     async handle(sig: Signal) {
@@ -100,11 +100,11 @@ export class CallPeer {
             } else if (sig.kind === 'ice' && sig.candidate) {
                 await this.pc.addIceCandidate(sig.candidate as RTCIceCandidateInit);
             }
-        } catch { /* late/duplicate signaling is non-fatal */ }
+        } catch {}
     }
 
     close() {
-        try { this.pc.close(); } catch { /* already closed */ }
+        try { this.pc.close(); } catch {}
         this.remote.getTracks().forEach(t => t.stop());
     }
 }

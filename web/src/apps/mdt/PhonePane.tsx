@@ -341,7 +341,6 @@ function NoteRow({ note, citizenid, open, onToggle, onView }: {
     const { title, preview, rest } = noteLines(note.body);
     const attachments = note.hasSketch || note.hasImage;
 
-    // Sketches are megabyte data URLs, so they are fetched for the one note actually opened.
     const { data: sketches } = useAsyncData(
         () => (open && note.sketchCount > 0 ? mdtPhoneNote(citizenid, note.id) : Promise.resolve([])),
         [open, citizenid, note.id, note.sketchCount],

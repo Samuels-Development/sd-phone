@@ -26,11 +26,8 @@ interface WidgetRender {
     theme:  WidgetTheme;
     picks?: string[];
     onPicks?: (ids: string[]) => void;
-    /** Homescreen is in jiggle/rearrange mode. Only consumed by interactive custom widgets. */
     editing?: boolean;
-    /** Fired when an interactive custom widget asks to be treated like a tap on its tile. */
     onOpen?: () => void;
-    /** Fired when an interactive custom widget detects its own long-press gesture. */
     onLongPress?: () => void;
 }
 
@@ -138,7 +135,6 @@ const ALL_WIDGETS: WidgetDef[] = [
     },
 ];
 
-// Contacts is a speed-dial: every tile places a call, so it is gone on a device that cannot.
 const WIDGETS: WidgetDef[] = device.calls ? ALL_WIDGETS : ALL_WIDGETS.filter(w => w.kind !== 'contacts');
 
 function thirdPartyDef(app: CustomAppDef, widget: CustomWidgetDef): WidgetDef {

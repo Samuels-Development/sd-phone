@@ -14,11 +14,6 @@ import {
 } from './threeExports';
 import { computeCropRegion, SELFIE_CROP_BIAS_X, type Orientation } from './crop';
 
-// Live game-view renderer, ported from utk_render (citizenfx/screenshot-basic).
-// CfxTexture's isCfxTexture flag makes the patched fork's WebGLTextures emit a
-// magic texParameterf sequence that FiveM's CEF GPU layer recognises, binding
-// the live game backbuffer as the texture at draw time. Heavy (pulls the three
-// fork), so only ever load this module via dynamic import — see index.ts.
 
 const VERTEX_SHADER = `
 varying vec2 vUv;
@@ -153,7 +148,6 @@ export class GameRender {
         if (this.animated) this.rebuild(false);
     }
 
-    // Front (selfie) camera re-centres the ped; rear camera is already centred.
     setSelfie(on: boolean) {
         this.selfie = on;
         if (this.animated) this.rebuild(false);

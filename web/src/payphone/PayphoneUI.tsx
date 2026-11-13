@@ -17,8 +17,6 @@ interface Favorite { name: string; phone: string }
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
 
-// One source of truth for the coin drop: the CSS keyframes and the unmount timer have to agree,
-// or the coin blinks out before it finishes going into the slot.
 const COIN_DROP_MS = 920;
 const COIN_DROP_S  = `${COIN_DROP_MS / 1000}s`;
 
@@ -26,19 +24,11 @@ function fmtClock(secs: number): string {
     return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
 }
 
-// ---------------------------------------------------------------------------
-// The payphone renders as the real machine: a brushed stainless enclosure with
-// the handset hung on the left, a green LCD, a metal keypad, a coin slot and a
-// riveted instruction placard. Only the presentation lives here — the call
-// flow/NUI contract is unchanged from the old panel UI.
-// ---------------------------------------------------------------------------
 
 const MONO = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace';
 
-/** Fine noise texture multiplied into the steel for grain + wear. */
 const GRAIN = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/></svg>")`;
 
-/** Brushed steel: vertical micro-striations under broad studio highlights. */
 const STEEL: CSSProperties = {
     background: [
         'radial-gradient(120% 90% at 30% 10%, rgba(255,255,255,0.35), rgba(255,255,255,0) 55%)',
@@ -48,30 +38,22 @@ const STEEL: CSSProperties = {
     ].join(', '),
 };
 
-/** A stamped depression in the steel (LCD tray, keypad tray, coin recess). */
 const RECESS: CSSProperties = {
     background: 'linear-gradient(180deg, #85888d 0%, #999da2 60%, #a4a7ac 100%)',
     boxShadow: 'inset 0 3px 8px rgba(0,0,0,0.5), inset 0 -1px 0 rgba(255,255,255,0.4), inset 2px 0 4px rgba(0,0,0,0.18), inset -2px 0 4px rgba(0,0,0,0.18)',
 };
 
-/** One square chromed key with a light face and etched digit. */
 const KEY_FACE: CSSProperties = {
     background: 'linear-gradient(180deg, #f4f5f6 0%, #dcdee1 48%, #c6c8cc 100%)',
     border: '1px solid #43454a',
     boxShadow: '0 2px 3px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.95), inset 0 -2px 3px rgba(0,0,0,0.2)',
 };
 
-/**
- * Names on the notepad are set in Inter, not the Great Vibes script the numbers use. The script
- * is a formal copperplate: at list sizes the capitals are ornate enough that a name is close to
- * unreadable. Printed names against handwritten numbers also reads like a real scribbled list.
- */
 const NOTE_LABEL: CSSProperties = {
     fontFamily: 'Inter, system-ui, sans-serif',
     textShadow: '0 0.5px 0 rgba(255,252,238,0.6)',
 };
 
-/** Numbers on the notepad: ballpoint-blue but set in tabular Inter, so digits actually read. */
 const NOTE_NUMBER: CSSProperties = {
     fontFamily: 'Inter, system-ui, sans-serif',
     fontVariantNumeric: 'tabular-nums',
@@ -83,33 +65,11 @@ const ETCHED: CSSProperties = {
     textShadow: '0 1px 0 rgba(255,255,255,0.45)',
 };
 
-/**
- * The whole left-side assembly — cradle hook, handset, armored cable and the
- * wall port — drawn in ONE svg so every joint shares one coordinate space:
- *  - the hook bar runs from the enclosure (the svg overhangs it) to under the
- *    handle, so the handset visibly hangs on something;
- *  - the handset's resting tilt is an SVG rotate about a KNOWN pivot (the hook,
- *    58,110), which makes the mouth-cap position deterministic — the cable's
- *    first point is authored 16px INSIDE that cap, so it stays attached both
- *    at rest and through the lift animation;
- *  - all handset parts fill from one userSpaceOnUse gradient, so ear cap,
- *    handle and mouth cap shade as a single left-lit object instead of three
- *    mismatched blobs;
- *  - the cable ends inside a screwed wall plate + rubber grommet that sits on
- *    the enclosure's face (the same overhang), so both ends terminate somewhere.
- * The svg itself ignores pointer events; an invisible overlay above the handset
- * becomes the hang-up control while a call runs.
- */
 function HandsetAssembly({ lifted, onHangup }: { lifted: boolean; onHangup: () => void }) {
-    // Without this the hang-up animation would play on first paint, so every time the booth
-    // opened the handset would fly in from off-screen. It only re-hangs once it has been lifted.
     const everLifted = useRef(false);
     if (lifted) everLifted.current = true;
     const handsetAnim = lifted ? 'ppHandsetLift' : (everLifted.current ? 'ppHandsetHang' : null);
 
-    // Metal on metal, but only when the hook state actually CHANGES. Comparing against the
-    // previous value rather than "is this the first effect run" is deliberate: StrictMode
-    // double-invokes effects, and a first-run flag lets the second invocation clunk on mount.
     const prevLifted = useRef<boolean | null>(null);
     useEffect(() => {
         const prev = prevLifted.current;
@@ -129,10 +89,6 @@ function HandsetAssembly({ lifted, onHangup }: { lifted: boolean; onHangup: () =
                 style={{ overflow: 'visible', filter: 'drop-shadow(5px 9px 12px rgba(0,0,0,0.5))' }}
             >
                 <defs>
-                    {/* one horizontal, left-lit shading ramp shared by every
-                        handset part — userSpaceOnUse so all parts sample the
-                        SAME ramp and read as one moulded object. Classic
-                        payphone-yellow plastic, sun-faded and grubby. */}
                     <linearGradient id="ppHsG" gradientUnits="userSpaceOnUse" x1="18" y1="0" x2="100" y2="0">
                         <stop offset="0" stopColor="#f0c64a" />
                         <stop offset="0.45" stopColor="#c8951d" />
@@ -145,21 +101,14 @@ function HandsetAssembly({ lifted, onHangup }: { lifted: boolean; onHangup: () =
                     </linearGradient>
                 </defs>
 
-                {/* cradle housing: a moulded pocket the handset's upper half seats into,
-                    drawn behind the handset (the retaining clip renders on top of it) */}
                 <rect x="10" y="44" width="98" height="182" rx="22" fill="#7e8186" stroke="#5a5c61" strokeWidth="1.4" />
                 <rect x="16" y="50" width="86" height="170" rx="18" fill="#6b6e73" />
                 <rect x="16" y="50" width="86" height="170" rx="18" fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth="1.2" />
                 <rect x="16" y="50" width="86" height="26" rx="13" fill="rgba(255,255,255,0.10)" />
 
-                {/* armored cable: starts 16px inside the (tilted) mouth cap,
-                    sags, then climbs into the grommet */}
                 <g
                     style={{
                         transformBox: 'view-box',
-                        // Anchored at the wall grommet, so the cable SWINGS about the point it is
-                        // actually bolted to: the free end sweeps up and right, chasing the
-                        // handset out of frame, then fades rather than ending in mid-air.
                         transformOrigin: '104px 500px',
                         transform: lifted ? 'rotate(34deg) scale(1.06)' : 'none',
                         opacity: lifted ? 0 : 1,
@@ -170,8 +119,6 @@ function HandsetAssembly({ lifted, onHangup }: { lifted: boolean; onHangup: () =
                     <path d="M36 398 C 18 446, 20 494, 52 516 C 76 531, 96 522, 104 500" stroke="#44464c" strokeWidth="6" strokeDasharray="2.6 2.4" fill="none" strokeLinecap="round" />
                 </g>
 
-                {/* cable-entry plate wrapped over the enclosure's edge, sitting
-                    in the blank steel margin left of the keypad tray */}
                 <rect x="86" y="466" width="38" height="48" rx="7" fill="#9a9da2" stroke="#595b60" strokeWidth="1.4" />
                 <rect x="86" y="466" width="38" height="14" rx="7" fill="rgba(255,255,255,0.28)" />
                 <circle cx="93" cy="507" r="2" fill="#63666b" />
@@ -180,27 +127,20 @@ function HandsetAssembly({ lifted, onHangup }: { lifted: boolean; onHangup: () =
                 <circle cx="105" cy="490" r="5" fill="#050506" />
                 <path d="M96 483 A 10.5 10.5 0 0 1 113 482" stroke="rgba(255,255,255,0.16)" strokeWidth="2" fill="none" />
 
-                {/* the handset. Outer group animates the lift; inner group holds
-                    the resting tilt about the hook pivot (58,110). */}
                 <g
                     style={{
                         transformBox: 'view-box',
                         transformOrigin: '58px 110px',
-                        // Off the hook and up to the ear: unseat, swing clear of the clip, then
-                        // travel out of frame. Reverses on hang-up.
                         animation: handsetAnim ? `${handsetAnim} 0.62s cubic-bezier(0.34, 0.86, 0.36, 1) forwards` : undefined,
                     }}
                 >
                     <g transform="rotate(5 58 110)">
-                        {/* ear cap, handle, mouth cap — one shared gradient */}
                         <rect x="20" y="60" width="76" height="80" rx="28" fill="url(#ppHsG)" />
                         <path d="M40 124 C 33 205, 33 285, 40 366 L 76 366 C 83 285, 83 205, 76 124 Z" fill="url(#ppHsG)" />
                         <rect x="20" y="350" width="76" height="80" rx="28" fill="url(#ppHsG)" />
-                        {/* moulding seam + edge definition */}
                         <path d="M58 138 L 58 352" stroke="rgba(0,0,0,0.28)" strokeWidth="1.4" />
                         <rect x="20" y="60" width="76" height="80" rx="28" fill="none" stroke="rgba(70,50,10,0.45)" strokeWidth="1.2" />
                         <rect x="20" y="350" width="76" height="80" rx="28" fill="none" stroke="rgba(70,50,10,0.45)" strokeWidth="1.2" />
-                        {/* grunge: hand-worn grip smudge, joint dirt, chips and a scratch */}
                         <path d="M56 200 C 54 240, 54 264, 56 300" stroke="rgba(58,42,14,0.22)" strokeWidth="22" fill="none" strokeLinecap="round" />
                         <path d="M42 128 Q 58 138 74 128" stroke="rgba(58,42,14,0.3)" strokeWidth="4" fill="none" strokeLinecap="round" />
                         <path d="M42 362 Q 58 352 74 362" stroke="rgba(58,42,14,0.3)" strokeWidth="4" fill="none" strokeLinecap="round" />
@@ -208,21 +148,17 @@ function HandsetAssembly({ lifted, onHangup }: { lifted: boolean; onHangup: () =
                         <circle cx="79" cy="398" r="2.6" fill="rgba(45,32,8,0.45)" />
                         <circle cx="70" cy="70" r="1.6" fill="rgba(45,32,8,0.4)" />
                         <path d="M66 240 L 71 292" stroke="rgba(255,244,200,0.3)" strokeWidth="1.2" strokeLinecap="round" />
-                        {/* left-lit speculars: plastic gloss ridge + cap glints */}
                         <path d="M36 84 C 31 205, 31 290, 36 406" stroke="rgba(255,255,255,0.16)" strokeWidth="8" fill="none" strokeLinecap="round" />
                         <path d="M34 74 Q 58 62 82 74" stroke="rgba(255,255,255,0.28)" strokeWidth="4" fill="none" strokeLinecap="round" />
                         <path d="M34 418 Q 58 428 82 418" stroke="rgba(255,255,255,0.1)" strokeWidth="4" fill="none" strokeLinecap="round" />
                     </g>
                 </g>
 
-                {/* retaining clip across the handset's neck, bolted to the housing - the
-                    handset lifts up out of it during a call */}
                 <rect x="20" y="128" width="76" height="15" rx="7" fill="url(#ppHookG)" stroke="#5f6166" strokeWidth="1.2" />
                 <circle cx="27" cy="135.5" r="2.2" fill="#63666b" />
                 <circle cx="89" cy="135.5" r="2.2" fill="#63666b" />
             </svg>
 
-            {/* hang-up hit area over the handset silhouette (calls only) */}
             <button
                 type="button"
                 onClick={onHangup}
@@ -235,7 +171,6 @@ function HandsetAssembly({ lifted, onHangup }: { lifted: boolean; onHangup: () =
     );
 }
 
-/** A rivet on the instruction placard. */
 function Rivet({ className }: { className: string }) {
     return (
         <span
@@ -249,7 +184,6 @@ function Rivet({ className }: { className: string }) {
     );
 }
 
-/** A taped-on scrap of ruled paper (the booth number / scribbled contacts). */
 function TapedNote({ tilt, children }: { tilt: number; children: ReactNode }) {
     return (
         <div
@@ -288,11 +222,9 @@ export function PayphoneUI() {
     const [elapsed,   setElapsed]   = useState(0);
     const [booth,     setBooth]     = useState<{ number: string; anonymous: boolean }>({ number: '', anonymous: false });
     const [favorites, setFavorites] = useState<Favorite[]>([]);
-    // Coin toll (configs/payphone.lua Coin): `credit` is a paid, unspent coin.
     const [coin,      setCoin]      = useState<{ enabled: boolean; cost: number }>({ enabled: false, cost: 1 });
     const [credit,    setCredit]    = useState(false);
     const [coinAnim,  setCoinAnim]  = useState(false);
-    // Channel of a ring on THIS booth while it is already open, so it can be answered in place.
     const [incoming,  setIncoming]  = useState<number | null>(null);
     const [phoneUp,   setPhoneUp]   = useState(false);
     const coinBusy   = useRef(false);
@@ -346,36 +278,28 @@ export function PayphoneUI() {
         setLcdNote(null);
     }, []));
 
-    // Ringback down the earpiece while the far end rings out. Same tone the phone app uses, so
-    // both surfaces sound like the same network. startRing hands back its own stop.
     useEffect(() => {
         if (phase !== 'calling') return;
         return startRing('ringback');
     }, [phase]);
 
-    // The booth ringing at you, in the UI. The world prop rings too (client/payphone.lua plays it
-    // from the entity), so this is the close-up on top of the one you hear across the street.
     useEffect(() => {
         if (incoming === null || phase !== 'idle') return;
         return startRing('ringtone');
     }, [incoming, phase]);
 
-    // Call timer; the caller-name note clears once it starts counting.
     useEffect(() => {
         if (phase !== 'connected') return;
         const timer = window.setInterval(() => { setElapsed(n => n + 1); setLcdNote(null); }, 1000);
         return () => window.clearInterval(timer);
     }, [phase]);
 
-    // Ended flashes briefly, then the display resets for the next call.
     useEffect(() => {
         if (phase !== 'ended') return;
         const timer = window.setTimeout(() => { setPhase('idle'); setDigits(''); }, 2200);
         return () => window.clearTimeout(timer);
     }, [phase]);
 
-    // Exit plays a short drop-away; NUI focus is released immediately so the player gets
-    // control back while the machine fades out.
     const close = useCallback(() => {
         if (leaveTimer.current) return;
         setLeaving(true);
@@ -387,7 +311,6 @@ export function PayphoneUI() {
         }, 240);
     }, []);
 
-    // Capture-phase Escape so the phone underneath never sees it (same trick as the admin panel).
     useEffect(() => {
         if (!open) return;
         const onKey = (e: KeyboardEvent) => {
@@ -400,8 +323,6 @@ export function PayphoneUI() {
         return () => window.removeEventListener('keydown', onKey, true);
     }, [open, close]);
 
-    // Above the early return: hooks must run on every render, open or not - `enabled`
-    // already keeps the listener off while the booth is closed or a call is running.
     useKeypadInput({
         onPress: press,
         onDelete: delDigit,
@@ -412,13 +333,10 @@ export function PayphoneUI() {
 
     if (!open) return null;
 
-    /** No unspent coin yet: the keypad is dead and the slot wants feeding. */
     const needsCoin = coin.enabled && !credit;
 
     function press(k: string) {
         if (phaseRef.current !== 'idle') return;
-        // Dead keys until a coin goes in. Silent on purpose: the LCD is already blinking
-        // INSERT COIN, which is the machine telling you why nothing happened.
         if (coinRef.current.enabled && !creditRef.current) return;
         setLcdNote(null);
         setDigits(prev => (prev.length >= 15 ? prev : prev + k));
@@ -430,7 +348,6 @@ export function PayphoneUI() {
         setDigits(prev => prev.slice(0, -1));
     }
 
-    /** Feed the slot: charge server-side, then run the coin-drop and unlock. */
     async function insertCoin() {
         if (!coinRef.current.enabled || creditRef.current || coinBusy.current || phaseRef.current !== 'idle') return;
         coinBusy.current = true;
@@ -461,7 +378,6 @@ export function PayphoneUI() {
         const r = await fetchNui<{ success: boolean; data?: { channel: number }; message?: string }>('sd-phone:payphone:dial', { number });
         if (r?.success && r.data) {
             channelRef.current = r.data.channel;
-            // The coin bought this call; the next one wants a fresh one.
             if (coinRef.current.enabled) setCredit(false);
         } else {
             setPhase('idle');
@@ -505,7 +421,6 @@ export function PayphoneUI() {
         : needsCoin ? t('payphone.insertCoin', 'INSERT COIN')
         : booth.anonymous ? t('payphone.withheld', 'NO CALLER ID') : formatPhone(booth.number);
 
-    /** The classic arcade blink, only while the display is begging for a coin. */
     const lcdBlink = !lcdNote && phase === 'idle' && (incoming !== null || (!digits && needsCoin));
 
     const inCall = phase === 'calling' || phase === 'connected';
@@ -516,8 +431,6 @@ export function PayphoneUI() {
             className={`fixed inset-0 flex items-center justify-center font-sf ${phoneUp ? '-z-10 pointer-events-none' : 'z-[400]'}`}
             onMouseDown={() => { if (!inCall) close(); }}
         >
-            {/* coin-toll animations: the drop, the slot's clink flash + idle
-                beckon glow, the INSERT COIN blink and the handset lift */}
             <style>{`
                 /* Hand-fed, not dropped: the coin is brought in from the right with its FACE to
                    the viewer, lined up over the slit, then pushed straight down into it. It never
@@ -601,8 +514,6 @@ export function PayphoneUI() {
                     : 'payphone-in 0.34s cubic-bezier(0.32,0.72,0,1)' }}
             >
 
-                {/* The enclosure: one cast body like the real units, the handset seated in
-                    its moulded cradle housing on the left of the face. */}
                 <div
                     className="relative w-[496px] rounded-[18px] p-5 pt-4"
                     style={{
@@ -611,10 +522,7 @@ export function PayphoneUI() {
                         boxShadow: '0 30px 70px rgba(0,0,0,0.65), 0 6px 20px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -3px 8px rgba(0,0,0,0.3)',
                     }}
                 >
-                    {/* steel grain over the whole face */}
                     <div aria-hidden className="pointer-events-none absolute inset-0 rounded-[18px] mix-blend-multiply" style={{ backgroundImage: GRAIN, opacity: 0.3 }} />
-                    {/* street wear: corner scuffs, grime pooled where hands go (keypad, the
-                        handset grip), staining along the bottom, drips under the coin slot */}
                     <div
                         aria-hidden
                         className="pointer-events-none absolute inset-0 rounded-[18px]"
@@ -631,18 +539,13 @@ export function PayphoneUI() {
                             ].join(', '),
                         }}
                     />
-                    {/* drip staining under the coin slot */}
                     <div aria-hidden className="pointer-events-none absolute end-[38px] top-[452px] h-[58px] w-[3px] rounded-full" style={{ background: 'linear-gradient(180deg, rgba(74,60,34,0.42), rgba(74,60,34,0))' }} />
                     <div aria-hidden className="pointer-events-none absolute end-[56px] top-[446px] h-[34px] w-[2px] rounded-full" style={{ background: 'linear-gradient(180deg, rgba(74,60,34,0.3), rgba(74,60,34,0))' }} />
-                    {/* scratches: a bright fresh one, an old dark one, a short gouge by the cradle */}
                     <div aria-hidden className="pointer-events-none absolute start-[34%] top-[55%] h-[1.5px] w-[130px] -rotate-[13deg]" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.24) 30%, rgba(255,255,255,0.06) 70%, transparent)' }} />
                     <div aria-hidden className="pointer-events-none absolute end-[10%] bottom-[8%] h-[1.5px] w-[90px] rotate-[8deg]" style={{ background: 'linear-gradient(90deg, transparent, rgba(30,26,16,0.32) 40%, transparent)' }} />
                     <div aria-hidden className="pointer-events-none absolute start-[128px] top-[120px] h-[2px] w-[40px] rotate-[24deg] rounded-full" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2) 45%, rgba(20,18,12,0.25) 55%, transparent)' }} />
-                    {/* ghost of a peeled-off sticker on the lower door */}
                     <div aria-hidden className="pointer-events-none absolute bottom-[168px] end-[30px] h-[34px] w-[58px] rotate-[4deg] rounded-[3px]" style={{ background: 'rgba(232,234,237,0.26)', boxShadow: 'inset 0 0 6px rgba(60,52,30,0.35)' }} />
-                    {/* shallow dent in the skirt */}
                     <div aria-hidden className="pointer-events-none absolute bottom-[58px] end-[74px] h-[26px] w-[42px] rounded-[50%]" style={{ background: 'radial-gradient(ellipse at 40% 35%, rgba(0,0,0,0.16), transparent 70%)', boxShadow: 'inset 1px 2px 3px rgba(0,0,0,0.22), inset -1px -1px 2px rgba(255,255,255,0.16)' }} />
-                    {/* mounting screws */}
                     {([['start-2 top-2', 40], ['start-2 bottom-2', -25], ['end-2 bottom-2', 75]] as const).map(([pos, angle]) => (
                         <span
                             key={pos}
@@ -666,25 +569,20 @@ export function PayphoneUI() {
                         <X className="h-[18px] w-[18px]" strokeWidth={2.6} />
                     </button>
 
-                    {/* The handset, seated in its housing on the face. */}
                     <div className="absolute start-3 top-5 z-10 select-none">
                         <HandsetAssembly lifted={inCall} onHangup={hangup} />
                     </div>
 
                     <div className="flex gap-4">
-                        {/* keeps the controls clear of the handset zone */}
                         <div aria-hidden className="w-[116px] shrink-0" />
 
-                        {/* The controls column. */}
                         <div className="min-w-0 flex-1">
 
-                    {/* Brand band across the crown of the unit */}
                     <div className="flex items-center justify-center gap-1.5 pb-3 pt-1" style={ETCHED}>
                         <span aria-hidden className="flex h-[15px] w-[15px] items-center justify-center rounded-full border-[1.5px] border-current text-[9px] font-black leading-none">B</span>
                         <span className="text-[15px] font-bold tracking-[0.13em]" style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}>BADGER</span>
                     </div>
 
-                    {/* Slim riveted instruction placard */}
                     <div
                         className="relative rounded-[6px] px-3 py-2.5"
                         style={{
@@ -719,7 +617,6 @@ export function PayphoneUI() {
                         </div>
                     </div>
 
-                    {/* LCD tray */}
                     <div className="mt-4">
                         <div className="rounded-[14px] p-3.5" style={RECESS}>
                             <div
@@ -733,7 +630,6 @@ export function PayphoneUI() {
                                         boxShadow: 'inset 0 3px 9px rgba(0,0,0,0.4), inset 0 0 2px rgba(0,0,0,0.55)',
                                     }}
                                 >
-                                    {/* pixel grid + glass glare */}
                                     <span aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'repeating-linear-gradient(0deg, rgba(0,0,0,0.05) 0 1px, transparent 1px 3px), repeating-linear-gradient(90deg, rgba(0,0,0,0.04) 0 1px, transparent 1px 3px)' }} />
                                     <span aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'linear-gradient(115deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 32%)' }} />
                                     <span
@@ -754,7 +650,6 @@ export function PayphoneUI() {
 
                     </div>
 
-                    {/* Keypad tray with the coin hardware column on its right */}
                     <div className="mt-4 flex gap-3">
                         <div className="flex-1 rounded-[14px] p-[14px]" style={RECESS}>
                             <div className="grid grid-cols-3 gap-2.5">
@@ -771,7 +666,6 @@ export function PayphoneUI() {
                                 ))}
                             </div>
 
-                            {/* service row: clear / re-enter / the green call key / hang up */}
                             <div className="mt-3 flex items-center justify-between">
                                 <div className="flex gap-1.5">
                                     <button
@@ -831,7 +725,6 @@ export function PayphoneUI() {
                             </div>
                         </div>
 
-                        {/* Coin hardware column: the slot (INSERT COIN control), the toll, the return flap */}
                         <div className="flex w-[80px] flex-col items-center">
                             <div className="relative">
                                 <button
@@ -858,13 +751,11 @@ export function PayphoneUI() {
                                         }}
                                     />
                                 </button>
-                                {/* the dollar coin, dropped edge-first into the slot */}
                                 {coinAnim && (
                                     <div
                                         aria-hidden
                                         className="absolute left-1/2 top-[4px] z-10 h-[52px] w-[52px] overflow-hidden rounded-full"
                                         style={{
-                                            /* milled rim: alternating light/dark spokes read as reeding */
                                             background: 'repeating-conic-gradient(#c9a338 0deg 3.2deg, #8f6f1e 3.2deg 6.4deg)',
                                             boxShadow: '0 5px 12px rgba(0,0,0,0.55), 0 1px 0 rgba(255,246,205,0.35)',
                                             animation: `ppCoinDrop ${COIN_DROP_S} cubic-bezier(0.45, 0, 0.85, 0.45) forwards`,
@@ -892,8 +783,6 @@ export function PayphoneUI() {
                             </div>
                             {coin.enabled && (
                                 <>
-                                    {/* credit lamp: unlit steel bead until a coin registers, then held green
-                                        so a banked credit is readable without reading the LCD */}
                                     <div className="mt-2 flex items-center gap-1.5">
                                         <div
                                             className="h-[7px] w-[7px] rounded-full"
@@ -918,7 +807,6 @@ export function PayphoneUI() {
                                     </span>
                                 </>
                             )}
-                            {/* coin return flap at the column's foot */}
                             <div className="mt-auto w-full rounded-[10px] p-2" style={RECESS}>
                                 <div
                                     className="h-[22px] w-full rounded-[5px]"
@@ -932,7 +820,6 @@ export function PayphoneUI() {
 
                     </div>
 
-                    {/* Lower door: the taped notes, stuck where a passerby would leave them */}
                     <div className="mt-4">
                         <TapedNote tilt={-2}>
                             <span className="block text-center text-[9.5px] font-bold uppercase leading-[13px] tracking-[0.18em] text-[#8a7a55]" style={NOTE_LABEL}>
@@ -967,7 +854,6 @@ export function PayphoneUI() {
                         </div>
                     </div>
 
-                    {/* etched property line across the unit's base */}
                     <div className="mt-4 text-center text-[8.5px] font-semibold uppercase tracking-[0.24em]" style={ETCHED}>
                         {t('payphone.property', 'Property of Badger Telecom · San Andreas')}
                     </div>

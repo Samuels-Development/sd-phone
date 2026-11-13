@@ -1,6 +1,3 @@
-// The custom-app SDK: the globals an app's page uses to talk to the phone (fetchNui, SetPopUp,
-// GetSettings and the rest). Built on its own into web/build/sdphone-sdk.js, a classic script the
-// phone injects into every app page; sdphone-sdk.d.ts beside this file is its public contract.
 
 import type { HostMessage, PageMessage, PhoneEndpoint } from './protocol';
 
@@ -13,7 +10,6 @@ type ApiName =
     | 'OpenMedia' | 'GetPhoneNumber' | 'GetEmails' | 'SavePassword' | 'GetStorage' | 'SetStorage'
     | 'ShowConfirm' | 'OnAppOpen' | 'OnAppClose';
 
-// Each implementation must accept what the contract says its global takes.
 type Accepts<K extends keyof typeof globalThis> = (...args: Parameters<Extract<(typeof globalThis)[K], (...a: never[]) => unknown>>) => unknown;
 
 interface Bridge {
@@ -30,20 +26,15 @@ interface ButtonData {
     input?: { onChange?: unknown };
 }
 
-// Listeners come typed from the app (settings, { id }), so they take whatever the phone sends.
 type Listener = (value: any) => void;
 
 const VERSION = 6;
 
-// Marks the page as having the SDK. A symbol, not the public `sdphone`: a page may have a global of
-// that name of its own.
 const INSTALLED = Symbol.for('sd-phone.sdk');
 
 export function install(win: SdkWindow): void {
     const out = win as Record<string, unknown>;
 
-    // Loaded twice on one page (the page's own <script>, then the phone's injection): the second
-    // copy only tells the first that the phone is there now.
     const marks = win as unknown as Record<symbol, { attach: () => void } | undefined>;
     const installed = marks[INSTALLED];
     if (installed) {
@@ -51,7 +42,6 @@ export function install(win: SdkWindow): void {
         return;
     }
 
-    // An older SDK is already running on this page.
     if (out.componentsLoaded) return;
 
     const settingsListeners = new Set<Listener>();
@@ -62,7 +52,6 @@ export function install(win: SdkWindow): void {
 
     let popUpInput: Listener | null = null;
 
-    // Calls made before the phone has attached wait here, in order, and run once it has.
     const waiting: Array<{ endpoint: PhoneEndpoint; payload: unknown; resolve: (value: unknown) => void }> = [];
     let attached = false;
     let markReady: () => void = () => {};
@@ -133,7 +122,6 @@ export function install(win: SdkWindow): void {
         try {
             win.parent.postMessage({ type: 'sdphoneDebug', message: String(message) } satisfies PageMessage, '*');
         } catch {
-            // the parent is gone
         }
     }
 
@@ -525,8 +513,6 @@ export function install(win: SdkWindow): void {
         return !!bridge && typeof bridge.fetchPhone === 'function' && typeof out.resourceName === 'string';
     }
 
-    // The phone has put its bridge and the app's identity on the window: run what was waiting and
-    // announce the SDK, once.
     function attach(): void {
         if (attached || !hostPresent()) return;
         attached = true;
@@ -546,7 +532,6 @@ export function install(win: SdkWindow): void {
         try {
             win.parent.postMessage({ type: 'sdphoneSdkReady' } satisfies PageMessage, '*');
         } catch {
-            // the parent is gone
         }
 
         markReady();

@@ -30,12 +30,8 @@ export function Services({ onClose: _onClose }: { onClose: () => void }) {
     useNuiEvent('sd-phone:services:rosterChanged', useCallback(() => { void refresh(); }, [refresh]));
     useNuiEvent('sd-phone:services:inbox', useCallback(() => { void refreshInbox(); }, [refreshInbox]));
     useNuiEvent('sd-phone:services:jobsChanged', useCallback(() => { void refresh(); }, [refresh]));
-    // A paid business invoice credits the society account, so the invoices push also means the
-    // Actions tab's company balance moved.
     useNuiEvent('sd-phone:services:invoices', useCallback(() => { void refresh(); }, [refresh]));
 
-    // Keep-alive: pushes are missed while the app sits suspended in the switcher, so the
-    // directory (company balance included) re-syncs on the foreground rising edge.
     const deckActive = useDeckActive();
     const wasActive  = useRef(deckActive);
     useEffect(() => {

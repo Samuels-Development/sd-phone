@@ -22,7 +22,6 @@ export function AlbumsTab({
     photos, counts, albums, sharedAlbums, editMode, onToggleEdit, onCreateAlbum, onOpenAlbum, onDeleteAlbum,
 }: {
     photos:        Photo[];
-    /** Server-side totals; `photos` only holds the pages fetched so far, so it cannot count. */
     counts:        PhotoCounts;
     albums:        Album[];
     sharedAlbums:  Album[];
@@ -41,8 +40,6 @@ export function AlbumsTab({
     ];
 
     const cards = useMemo<AlbumCard[]>(() => {
-        // Covers come from the loaded pages (newest first, so the first page always has one);
-        // the counts come from the server.
         const standard: AlbumCard[] = [
             {
                 key: 'recents', title: t('photos.recents', 'Recents'), count: counts.total,

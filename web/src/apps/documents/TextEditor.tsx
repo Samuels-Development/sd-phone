@@ -24,9 +24,6 @@ interface Props {
 export function TextEditor({ doc, backLabel, onBack, onSave, onSigned, animateIn = true }: Props) {
     const { goBack, pageStyle } = useIosPush(onBack, animateIn);
 
-    // The editor works on blocks (text runs + inline images) over the same storage format the
-    // exports use: a line that is exactly one URL is an image. Serializing the blocks yields
-    // the canonical string, so signing, AirShare and script-issued documents stay compatible.
     const [blocks, setBlocks] = useState<EditBlock[]>(() => parseEditBlocks(doc.content ?? ''));
     const signed   = doc.signed === true;
     const readOnly = doc.locked || signed;
@@ -35,14 +32,11 @@ export function TextEditor({ doc, backLabel, onBack, onSave, onSigned, animateIn
 
     const body = readOnly ? (doc.content ?? '') : serializeBlocks(blocks);
 
-    // Baseline is the parsed round-trip, not the raw content, so normalization alone never
-    // triggers a save.
     const lastSaved = useRef<string | undefined>(undefined);
     lastSaved.current ??= serializeBlocks(blocks);
     const onSaveRef = useRef(onSave);
     onSaveRef.current = onSave;
 
-    // Caret bookkeeping so an inserted image lands where the player is typing.
     const caretRef    = useRef<{ index: number; pos: number } | null>(null);
     const taRefs      = useRef(new Map<number, HTMLTextAreaElement>());
     const focusAfter  = useRef<number | null>(null);
@@ -94,7 +88,6 @@ export function TextEditor({ doc, backLabel, onBack, onSave, onSigned, animateIn
         return () => window.clearTimeout(handle);
     }, [body, readOnly]);
 
-    // Flush on unmount (covers back before the debounce fires). Refs hold latest.
     const live = useRef(body);
     live.current = body;
     const roRef = useRef(readOnly);
@@ -227,10 +220,6 @@ export function TextEditor({ doc, backLabel, onBack, onSave, onSigned, animateIn
 }
 
 
-// ---- Block editing model -------------------------------------------------------------------
-// Same storage format as script-issued documents: a line that is exactly one http(s) URL is an
-// image. The editor holds an alternating list (text run, image, text run, ...) so images render
-// inline while editing; serializing joins the pieces back into the canonical string.
 
 const URL_LINE = /^https?:\/\/\S+$/;
 
@@ -254,8 +243,6 @@ function parseEditBlocks(content: string): EditBlock[] {
     return normalizeBlocks(list);
 }
 
-// Merges adjacent text runs and guarantees a text block at both ends and between images, so
-// there is always somewhere to type around every picture.
 function normalizeBlocks(list: EditBlock[]): EditBlock[] {
     const out: EditBlock[] = [];
     for (const b of list) {
@@ -348,9 +335,6 @@ function EditImage({ url, onRemove }: { url: string; onRemove: () => void }) {
 
 type RichBlock = { kind: 'text' | 'image'; value: string };
 
-// A line that is exactly one http(s) URL becomes an inline image in the read view; everything
-// else stays running text. Script-issued documents (citations, dossiers, contracts) use this
-// to mix paragraphs and pictures in a single document.
 function parseBlocks(content: string): RichBlock[] {
     const blocks: RichBlock[] = [];
     let run: string[] = [];
@@ -426,9 +410,6 @@ export function SignatureBlock({ sig }: { sig: Omit<DocSignature, 'id'> }) {
 
 type SignMode = 'saved' | 'draw' | 'type';
 
-// The sheet is bottom-anchored, so animating this wrapper's height makes mode switches grow
-// and shrink upward smoothly instead of snapping. Content height is tracked live (fonts and
-// the saved-signature image settle async), driven by CSS - no rAF (starved in CEF in-game).
 function AnimatedHeight({ children }: { children: React.ReactNode }) {
     const innerRef = useRef<HTMLDivElement>(null);
     const [height, setHeight] = useState<number | null>(null);
@@ -456,8 +437,6 @@ export function SignSheet({ docId, docName, onClose, onSigned, signAction }: {
     docName:  string;
     onClose:  () => void;
     onSigned: (doc: DocFile) => void;
-    /** Overrides the default sign call (apiSignDoc) - used by signature requests, where the
-     *  responder signs the requester's original instead of their own document. */
     signAction?: () => Promise<DocFile | null>;
 }) {
     const padRef = useRef<SignaturePadHandle>(null);
@@ -484,8 +463,6 @@ export function SignSheet({ docId, docName, onClose, onSigned, signAction }: {
         return () => { alive = false; };
     }, []);
 
-    // The typed name defaults to the character once contacts resolve; a name the player
-    // already typed is never overwritten.
     useEffect(() => {
         if (myName) setTyped(prev => (prev === '' ? myName : prev));
     }, [myName]);

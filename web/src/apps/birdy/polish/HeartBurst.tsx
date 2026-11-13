@@ -2,8 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 
 import { LIKE } from '../data';
 
-/** Wraps a like icon: when `liked` flips true the heart overshoot-pops and a ring blooms out
- *  behind it. Unliking stays quiet - taking a like back deserves no fanfare. */
 export function HeartBurst({ liked, children }: { liked: boolean; children: React.ReactNode }) {
     const prev = useRef(liked);
     const [burst, setBurst] = useState(0);

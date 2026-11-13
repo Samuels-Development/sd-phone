@@ -5,12 +5,7 @@ import inter700 from '@fontsource/inter/files/inter-latin-700-normal.woff2?url';
 import inter800 from '@fontsource/inter/files/inter-latin-800-normal.woff2?url';
 import inter900 from '@fontsource/inter/files/inter-latin-900-normal.woff2?url';
 
-// What a custom app's page gets of the phone's look: the --phone-* colours and the phone's font.
-// The colours come from the theme tokens the phone's stylesheet computes (channel triples such as
-// "28 28 30"), so they follow the theme, the accent and custom palettes exactly as the phone does.
 
-// The phone's Inter goes into app pages under a name of its own, so a page that asks for "Inter"
-// itself (an older app, with or without its own copy) renders exactly as it did.
 const INTER_FAMILY = 'sd-phone Inter';
 
 const FONT = `-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "${INTER_FAMILY}", Inter, system-ui, sans-serif`;
@@ -26,7 +21,6 @@ const FROM_TOKENS: Array<[name: string, token: string, alpha?: number]> = [
     ['--phone-accent', '--ios-blue'],
 ];
 
-/** The --phone-* variables, from a reader that returns a computed token's value ('' when unset). */
 export function phoneVars(read: (token: string) => string): Record<string, string> {
     const vars: Record<string, string> = {};
 
@@ -43,7 +37,6 @@ export function phoneVars(read: (token: string) => string): Record<string, strin
     return vars;
 }
 
-/** The variables as one rule with no specificity, so any rule of the page's own still wins. */
 export function pageVarsCss(vars: Record<string, string>): string {
     return `:where(:root){${Object.entries(vars).map(([name, value]) => `${name}:${value};`).join('')}}`;
 }
@@ -54,11 +47,6 @@ const INTER: Array<[weight: number, url: string]> = [
 
 let interData: Promise<Array<[number, ArrayBuffer]>> | null = null;
 
-/**
- * Makes Inter usable in an app's page. The page is another origin, and a font file fetched from the
- * phone's origin there would need CORS headers FiveM does not send; so the phone fetches the files
- * itself, once, and hands the bytes to the page as FontFaces built with the page's own constructor.
- */
 export function loadInter(doc: Document): Promise<void> {
     const view = doc.defaultView as (Window & typeof globalThis) | null;
     if (!view || typeof view.FontFace !== 'function') return Promise.resolve();

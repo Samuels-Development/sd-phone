@@ -2,10 +2,6 @@ import { useRef, useState } from 'react';
 
 import { trackFraction } from '@/lib/zoom';
 
-// iOS-style seek / progress bar: a rounded track with a white fill and a draggable
-// thumb. Drag state is internal so the fill follows the finger even before the
-// parent commits the seek. trackFraction resolves the pointer against the phone's
-// CSS zoom (see lib/zoom). Shared by the Music player and the Photos video viewer.
 export function Scrubber({ value, max, onSeek, thick }: { value: number; max: number; onSeek: (t: number) => void; thick?: boolean }) {
     const ref = useRef<HTMLDivElement>(null);
     const dragging = useRef(false);

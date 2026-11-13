@@ -89,7 +89,6 @@ export function Documents({ onClose: _onClose }: { onClose: () => void }) {
                     if (f.parentId && ids.has(f.parentId) && !ids.has(f.id)) { ids.add(f.id); grew = true; }
                 }
             }
-            // Undeletable docs survive a folder delete server-side by re-parenting to root - mirror that.
             return {
                 folders: prev.folders.filter(f => !ids.has(f.id)),
                 docs:    prev.docs
@@ -234,8 +233,6 @@ export function Documents({ onClose: _onClose }: { onClose: () => void }) {
                     onBack={() => setOpenText(null)}
                     onSave={content => void saveText(openText.id, content)}
                     onSigned={updated => {
-                        // Merge the full server doc (signed, signedByMe, signatures) so menu
-                        // gates like Request Signature update without a refetch.
                         patchDoc(updated.id, d => ({ ...d, ...updated }));
                         setOpenText(prev => (prev && prev.id === updated.id ? { ...prev, ...updated } : prev));
                     }}

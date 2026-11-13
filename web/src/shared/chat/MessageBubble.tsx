@@ -109,8 +109,6 @@ export const MessageBubble = memo(function MessageBubble({
                 {customBubble ? customBubble : msg.kind === 'gif' && msg.gifUrl ? (
                     <img src={msg.gifUrl} alt={t('messages.gifAlt', 'GIF')} className="max-w-[260px] active:opacity-80" style={{ borderRadius: radius }} />
                 ) : msg.kind === 'image' && msg.gifUrl && isVideoUrl(msg.gifUrl) ? (
-                    // A clip shares the image kind, so it is told apart by extension the same way
-                    // Photogram does. An <img> pointed at a .mov renders as a broken tile.
                     <video
                         src={msg.gifUrl}
                         controls

@@ -1,7 +1,5 @@
 import type { DeviceProfile } from './types';
 
-// The phone. Every value here is the constant the code carried inline before the device profile
-// existed, so this build is byte-for-byte the layout sd-phone has always shipped.
 export const device: DeviceProfile = {
     id:           'phone',
     rpcAction:    null,

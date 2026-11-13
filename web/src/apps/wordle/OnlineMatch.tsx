@@ -86,11 +86,8 @@ export function OnlineMatch({ pal, dk, gameId, opponent, pot, oppLeft, onResult,
         if (/^[A-Z]$/.test(k)) setCurrent(c => (c.length < COLS ? c + k : c));
     }, [phase, submit]);
 
-    // See SoloGame: this view types without a text field, so it claims the keyboard.
     useKeyboardCapture();
 
-    // Only listen while foreground - see SoloGame. A backgrounded but still-mounted match
-    // would keep preventDefault()-ing every key and starve text fields in other apps.
     const deckActive = useDeckActive();
     const keyRef = useRef(onKey); keyRef.current = onKey;
     useEffect(() => {

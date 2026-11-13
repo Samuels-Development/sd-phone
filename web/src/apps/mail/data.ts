@@ -18,8 +18,6 @@ export type MailAttachment =
     | { kind: 'photo'; url: string }
     | { kind: 'audio'; url: string; name: string; duration: number }
     | { kind: 'note';  title: string; body: string }
-    // Compose sends a bare { docId } reference; the server resolves it into a snapshot from the
-    // sender's own library (content + signature rows read server-side), which is what readers get.
     | {
         kind:        'document';
         docId?:      string;
@@ -106,7 +104,7 @@ export function loadActiveAccountId(): string | null {
     try {
         const raw = window.localStorage.getItem(ACTIVE_ACCOUNT_KEY);
         if (typeof raw === 'string' && raw.length > 0) return raw;
-    } catch { /* ignore */ }
+    } catch {}
     return null;
 }
 
@@ -114,7 +112,7 @@ export function saveActiveAccountId(id: string | null): void {
     try {
         if (id) window.localStorage.setItem(ACTIVE_ACCOUNT_KEY, id);
         else    window.localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
-    } catch { /* ignore */ }
+    } catch {}
 }
 
 

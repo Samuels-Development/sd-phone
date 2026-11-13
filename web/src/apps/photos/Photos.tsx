@@ -29,16 +29,12 @@ interface CreateState { addIds: string[] }
 
 export function Photos({ onClose }: { onClose: () => void }) {
     const [tab,     setTab]     = useSessionState<PhotosTab>('photos:tab', 'gallery');
-    // Seeded from the last first page so a reopen has tiles on frame one and the open animation
-    // has something to animate. A fresh fetch still runs underneath and replaces it.
     const cached = getCachedFirstPhotoPage();
     const [photos,  setPhotos]  = useState<Photo[]>(cached?.photos ?? []);
     const [albums,  setAlbums]  = useState<Album[]>([]);
     const [sharedAlbums, setSharedAlbums] = useState<Album[]>([]);
     const [loading, setLoading] = useState(!cached);
 
-    // The gallery is paged: `photos` holds what has been fetched so far, `counts` holds the
-    // server-side totals the album tiles need (a page cannot report them).
     const [nextCursor,  setNextCursor]  = useState<string | null>(cached?.nextCursor ?? null);
     const [loadingMore, setLoadingMore] = useState(false);
     const [counts,      setCounts]      = useState<PhotoCounts>(
@@ -62,8 +58,6 @@ export function Photos({ onClose }: { onClose: () => void }) {
     const [photoPicker, setPhotoPicker] = useState(false);
     const [createState, setCreateState] = useState<CreateState | null>(null);
 
-    // The gallery waits only on its own page. The two album reads used to be awaited together
-    // with it, so the default tab sat on "Loading…" for three round trips instead of one.
     useEffect(() => {
         let cancelled = false;
         void apiListPhotos(null, undefined, FIRST_PAGE_SIZE).then(page => {
@@ -79,11 +73,6 @@ export function Photos({ onClose }: { onClose: () => void }) {
         return () => { cancelled = true; };
     }, []);
 
-    // Tile media is held back for the length of the shell's open animation, on mount and on every
-    // subsequent foreground. The grid itself still renders, so the app visibly animates in; only
-    // the full-size decodes wait. Without this the deck was animating a layer holding tens of MB
-    // of decoded bitmap, which is why the FIRST open was smooth (nothing decoded yet) and every
-    // one after it was choppy.
     const deckActive = useDeckActive();
     const [settling, setSettling] = useState(true);
     useEffect(() => {
@@ -93,10 +82,6 @@ export function Photos({ onClose }: { onClose: () => void }) {
         return () => window.clearTimeout(id);
     }, [deckActive]);
 
-    // Restarts the pane's swipe animation on a tab change. The panes deliberately stay mounted
-    // (a key= remount rebuilt every tile), and a CSS animation on an already-mounted element
-    // will not replay on its own, so it is cleared and reassigned around a forced reflow. Reading
-    // offsetHeight is what flushes it; rAF is starved in CEF, so the double-rAF trick is out.
     const paneRefs = useRef<Record<PhotosTab, HTMLDivElement | null>>({ gallery: null, albums: null });
     useEffect(() => {
         const el = paneRefs.current[tab];
@@ -106,8 +91,6 @@ export function Photos({ onClose }: { onClose: () => void }) {
         el.style.animation = '';
     }, [tab]);
 
-    // Appends the next page. Guarded on a ref rather than `loadingMore` so a burst of scroll
-    // events cannot fire two requests for the same cursor before the first setState lands.
     const loadMore = useCallback(async () => {
         if (fetchingMore.current || !nextCursor) return;
         fetchingMore.current = true;
@@ -144,8 +127,6 @@ export function Photos({ onClose }: { onClose: () => void }) {
         setAlbums(await apiListAlbums());
     }, []);
 
-    // Favourites and Videos are resolved server-side now. Deriving them from `photos` would only
-    // ever see the pages fetched so far, so a favourite further down the library went missing.
     async function loadAlbumPhotos(ref: AlbumRef): Promise<Photo[]> {
         if (ref.kind === 'custom')     return apiListAlbumPhotos(ref.id);
         if (ref.kind === 'favourites') return (await apiListPhotos(null, 'favorites')).photos;
@@ -183,8 +164,6 @@ export function Photos({ onClose }: { onClose: () => void }) {
         if (ids.length === 0) return;
         const set = new Set(ids);
         const chosen = photos.filter(p => set.has(p.id));
-        // Batch toggle: if everything selected is already a favourite, unfavourite all; else
-        // favourite all. Optimistic, with the Favourites album count refreshed after.
         const next = !(chosen.length > 0 && chosen.every(p => p.favorite));
         const apply = (arr: Photo[]) => arr.map(p => (set.has(p.id) ? { ...p, favorite: next } : p));
         setPhotos(apply);
@@ -284,11 +263,6 @@ export function Photos({ onClose }: { onClose: () => void }) {
                         {t('photos.loading','Loading…')}
                     </div>
                 ) : (
-                    // NO key={tab} here. The usual house pattern remounts the pane to replay the
-                    // swipe animation, which is free for a list of rows but not for a grid of
-                    // hundreds of image tiles: every tab switch tore the whole gallery down and
-                    // rebuilt it. Both panes stay mounted and the inactive one is just hidden,
-                    // so switching is a visibility toggle rather than a full remount.
                     <div className="flex h-full min-h-0 flex-col">
                         <div
                             ref={el => { paneRefs.current.gallery = el; }}

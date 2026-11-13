@@ -9,7 +9,7 @@ function read(): Inbox {
     try {
         const raw = localStorage.getItem(KEY);
         if (raw) { const p = JSON.parse(raw); if (p && typeof p === 'object') return p as Inbox; }
-    } catch { /* ignore */ }
+    } catch {}
     return {};
 }
 export function takeSharedMessages(convId: string): Message[] {

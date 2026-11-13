@@ -132,13 +132,13 @@ class CallRecorder {
 
     private teardown() {
         if (this.capped) { clearTimeout(this.capped); this.capped = null; }
-        try { this.recorder?.stop(); } catch { /* already stopped */ }
+        try { this.recorder?.stop(); } catch {}
         this.recorder = null;
         this.peer?.close();
         this.peer = null;
         this.mixer?.destroy();
         this.mixer = null;
-        this.mic?.getTracks().forEach(t => { try { t.stop(); } catch { /* gone */ } });
+        this.mic?.getTracks().forEach(t => { try { t.stop(); } catch {} });
         this.mic = null;
         this.answering = false;
         this.pending = [];

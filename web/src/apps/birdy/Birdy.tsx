@@ -40,7 +40,6 @@ export function Birdy({ onClose }: { onClose: () => void }) {
     const [me,          setMe]          = useState<BirdyAuthor>(CURRENT_USER);
     const { authed, setAuthed, authChecked, justAuthed, setJustAuthed, myNumber, myEmails, savedLogin, savedAccounts, refreshAccounts } = useAppAuth('birdy',
         () => apiMe().then(s => { if (s.me) setMe(s.me); return s.loggedIn; }));
-    // null = not fetched yet (the feed shows skeletons instead of a false "no posts" flash).
     const [posts,       setPosts]       = useState<BirdyPost[] | null>(null);
     const [convos,      setConvos]      = useState<BirdyConversation[]>([]);
     const [tab,         setTab]         = useSessionState<Tab>('birdy:tab', 'home');
@@ -69,7 +68,6 @@ export function Birdy({ onClose }: { onClose: () => void }) {
         openProfile(String(target.handle));
     });
 
-    // AppDeck retains this subtree, so refetching needs an explicit nonce.
     const [feedNonce, setFeedNonce] = useState(0);
     const refreshFeed = useCallback(() => setFeedNonce(n => n + 1), []);
 
@@ -91,7 +89,6 @@ export function Birdy({ onClose }: { onClose: () => void }) {
         patchPoll(postId, current => ({ ...counts, myVote: current.myVote }));
     }, [patchPoll, refreshFeed]));
 
-    // Transition only; the mount fetch below already covers first open.
     const deckActive = useDeckActive();
     const wasActive = useRef(deckActive);
     useEffect(() => {
@@ -99,11 +96,8 @@ export function Birdy({ onClose }: { onClose: () => void }) {
         wasActive.current = deckActive;
     }, [deckActive, refreshFeed]);
 
-    // The same refresh for someone who never left the screen while driving back into coverage.
     useRefreshOnReconnect(refreshFeed);
 
-    // feedChanged reaches only the phones showing Birdy, so the subscription follows the
-    // foreground. The refresh above covers anything pushed while this one was not listening.
     useEffect(() => {
         if (!deckActive) return;
         apiWatch(true);
@@ -127,7 +121,6 @@ export function Birdy({ onClose }: { onClose: () => void }) {
     const [notifCount, setNotifCount] = useState(0);
     useEffect(() => {
         if (!authed) return;
-        // The Bell tab's own fetch marks everything seen server-side, so zero locally.
         if (tab === 'notifications') { setNotifCount(0); return; }
         let alive = true;
         void apiNotificationCount().then(n => { if (alive) setNotifCount(n); });
@@ -200,8 +193,6 @@ export function Birdy({ onClose }: { onClose: () => void }) {
         setOpenConvoId(r.id);
     }
 
-    // Optimistic: the row leaves at once and the post detail closes if it was the one removed.
-    // A server refusal (not yours, already gone) is repaired by the refresh.
     function deletePost(id: string) {
         setPosts(prev => (prev ? prev.filter(p => p.id !== id) : prev));
         if (openPostId === id) setOpenPostId(null);
@@ -232,7 +223,6 @@ export function Birdy({ onClose }: { onClose: () => void }) {
         setFeed('all');
     }
 
-    // Switching feeds drops back to skeletons; a same-tab tap changes nothing.
     function switchFeed(f: 'all' | 'following') {
         if (f !== feed) setPosts(null);
         setFeed(f);
@@ -520,10 +510,6 @@ export function Birdy({ onClose }: { onClose: () => void }) {
                 <EditProfile
                     profile={profile}
                     onCancel={() => setEditingProfile(false)}
-                    // Re-read the author rather than rebuilding it from the profile: a hand-built
-                    // object drops avatar and verifiedType, which blanks the header picture until
-                    // the app is killed in the switcher. refreshFeed repaints posts already loaded,
-                    // which still carry the old avatar on their author.
                     onSaved={p => {
                         setProfile(p);
                         void apiMe().then(s => { if (s.me) setMe(s.me); });

@@ -71,7 +71,7 @@ export function Garages({ onClose: _onClose }: { onClose: () => void }) {
     const toggleImages = () => {
         const next = !showImages;
         setImgPref(next);
-        try { localStorage.setItem(IMG_PREF_KEY, next ? '1' : '0'); } catch { /* private mode */ }
+        try { localStorage.setItem(IMG_PREF_KEY, next ? '1' : '0'); } catch {}
     };
 
     const [query, setQuery] = useSessionState('garages:search', '');
@@ -189,8 +189,6 @@ const STATUS_TONE: Record<VehicleStatus, PillTone> = {
     impound: 'red',
 };
 
-// Resolved at render, not module load, so the label follows the active locale after a
-// language switch or a late catalog load instead of freezing to the import-time language.
 function statusLabel(status: VehicleStatus): string {
     if (status === 'stored')  return t('garages.statusStored', 'Stored');
     if (status === 'impound') return t('garages.statusImpound', 'Impound');

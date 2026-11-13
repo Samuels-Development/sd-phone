@@ -48,7 +48,7 @@ export class LiveAudioMixer {
     removeStream(stream: MediaStream) {
         const node = this.sources.get(stream);
         if (!node) return;
-        try { node.disconnect(); } catch { /* already disconnected */ }
+        try { node.disconnect(); } catch {}
         this.sources.delete(stream);
     }
 
@@ -67,15 +67,15 @@ export class LiveAudioMixer {
 
     destroy() {
         for (const node of this.sources.values()) {
-            try { node.disconnect(); } catch { /* already gone */ }
+            try { node.disconnect(); } catch {}
         }
         this.sources.clear();
         if (this.micStream) {
-            this.micStream.getTracks().forEach(t => { try { t.stop(); } catch { /* gone */ } });
+            this.micStream.getTracks().forEach(t => { try { t.stop(); } catch {} });
             this.micStream = null;
         }
         if (this.ctx) {
-            try { void this.ctx.close(); } catch { /* already closed */ }
+            try { void this.ctx.close(); } catch {}
             this.ctx = null;
             this.dest = null;
         }

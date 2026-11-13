@@ -28,9 +28,6 @@ interface Toast { key: string; name: string; gold?: boolean; exiting?: boolean; 
 interface Drop  { id: number; x: string; size: number; dur: number; spin: number; }
 
 export function Cookie({ onClose: _onClose }: Props) {
-    // Freeze the idle income + cookie-rain ticks while backgrounded (iOS-correct: the
-    // count holds where you left it); the 2s autosave below is left running so a
-    // backgrounded tab still flushes its last state.
     const active = useDeckActive();
     const [save, setSave] = useState<SaveState>(() => (isFiveM ? { ...EMPTY_SAVE } : loadGame()));
     const loadedRef = useRef(!isFiveM);
@@ -107,7 +104,7 @@ export function Cookie({ onClose: _onClose }: Props) {
                 if (!alive) return;
                 if (r) { setSave(normalizeSave(r)); loadedRef.current = true; }
             })
-            .catch(() => { /* leave the gate closed so we never clobber a save we failed to read */ });
+            .catch(() => {});
         return () => { alive = false; };
     }, []);
 
@@ -168,7 +165,7 @@ export function Cookie({ onClose: _onClose }: Props) {
             made.push({
                 id: ++seq.current, x, y,
                 dx: Math.cos(ang) * dist,
-                dy: Math.sin(ang) * dist + 14, // bias downward so crumbs "fall"
+                dy: Math.sin(ang) * dist + 14,
             });
         }
         setCrumbs(c => [...c, ...made]);

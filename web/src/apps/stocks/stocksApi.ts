@@ -37,8 +37,6 @@ export async function fetchMarket(): Promise<Market> {
     return (await apiData<Market>('sd-phone:stocks:market')) ?? { assets: [], cash: 0 };
 }
 
-/** Subscribe/unsubscribe this phone to live per-tick price pushes. The server only pushes ticks to
- * players watching, so the Stocks screen calls this on mount (on) and unmount (off). Fire-and-forget. */
 export function watchMarket(on: boolean): void {
     if (isFiveM) void fetchNui('sd-phone:stocks:watch', { on });
 }

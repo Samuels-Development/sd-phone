@@ -310,9 +310,9 @@ function negamax(state: GameState, depth: number, alpha: number, beta: number): 
 export type Difficulty = 'easy' | 'medium' | 'hard';
 export interface AiOptions { depth: number; blunder: number; }
 export const AI: Record<Difficulty, AiOptions> = {
-    easy:   { depth: 1, blunder: 0.35 },   // shallow + frequently plays a random move
-    medium: { depth: 2, blunder: 0.08 },   // looks a move ahead, rarely slips
-    hard:   { depth: 3, blunder: 0 },      // full-strength engine
+    easy:   { depth: 1, blunder: 0.35 },
+    medium: { depth: 2, blunder: 0.08 },
+    hard:   { depth: 3, blunder: 0 },
 };
 
 export function chooseMove(state: GameState, opts: AiOptions = AI.hard): Move | null {

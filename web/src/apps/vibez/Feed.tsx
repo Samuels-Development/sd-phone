@@ -39,14 +39,12 @@ export function Feed({ posts, tab, onTab, lives, onOpenLive, myHandle, loading, 
     const [active, setActive] = useState(initialIndex ?? 0);
     const scrollRef = useRef<HTMLDivElement>(null);
 
-    // Jump to the requested post before first paint (post viewer opened mid-list).
     useEffect(() => {
         const el = scrollRef.current;
         if (el && initialIndex) el.scrollTop = initialIndex * el.clientHeight;
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // One view ping per post per mount.
     const viewed = useRef(new Set<string>());
     useEffect(() => {
         const post = posts[active];
@@ -62,10 +60,6 @@ export function Feed({ posts, tab, onTab, lives, onOpenLive, myHandle, loading, 
         setActive(prev => (prev === idx ? prev : idx));
     }
 
-    // The shell animates wheel input by nudging scrollTop a few pixels per tick, which a mandatory
-    // snap container undoes on every one of those ticks - it re-snaps to the slide already under
-    // the viewport, so the feed never advances. Claiming the event here (preventDefault marks it
-    // handled for the window listener) and jumping a whole slide is what makes the wheel work.
     const count = posts.length;
     useEffect(() => {
         const el = scrollRef.current;

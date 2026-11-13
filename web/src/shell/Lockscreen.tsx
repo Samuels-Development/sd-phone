@@ -251,8 +251,6 @@ function FaceScan({ exiting, onSuccess, onFail }: { exiting: boolean; onSuccess:
     useEffect(() => {
         let alive = true;
         const timers: number[] = [];
-        // The face is read in the game, not here: a mask over it fails the scan, and the unlock
-        // falls back to the passcode the same as the real thing.
         void fetchNui<{ covered?: boolean }>('sd-phone:face:check')
             .then(res => res?.covered === true)
             .catch(() => false)
@@ -449,12 +447,6 @@ function ancestorZoom(el: HTMLElement | null): number {
     return z || 1;
 }
 
-// The iOS-style Now Playing card lock screens show right under the clock, above notifications and
-// any lock-screen widgets. Deliberately no progress scrubber - Apple only shows one on the
-// expanded/long-pressed card, and keeping this compact matches every other lock screen element's
-// density. Backed by the same useMusic() as Control Center and the dynamic island, so this always
-// mirrors the built-in player; third-party audio providers use their own lock-screen widget via
-// showLockscreenWidget/hideLockscreenWidget instead of this card.
 function LockNowPlaying({ music }: { music: ReturnType<typeof useMusic> }) {
     const track = music.current;
     if (!track) return null;
@@ -522,7 +514,7 @@ export function LockNotifCard({ item, onOpen, onDismiss }: { item: NotificationI
         const rdy = e.clientY - start.current.y;
         if (!axis.current && (Math.abs(rdx) > 6 || Math.abs(rdy) > 6)) {
             axis.current = Math.abs(rdx) > Math.abs(rdy) ? 'h' : 'v';
-            if (axis.current === 'h') { try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ } }
+            if (axis.current === 'h') { try { e.currentTarget.setPointerCapture(e.pointerId); } catch {} }
         }
         if (axis.current !== 'h') return;
         setDx(Math.min(0, rdx) / zoom.current);

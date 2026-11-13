@@ -69,14 +69,10 @@ export function Mail({ onClose }: { onClose: () => void }) {
 
     useEffect(() => { void refresh(); }, [refresh]);
 
-    // Pull the mailbox again once coverage returns, for someone who never left the screen.
     useRefreshOnReconnect(useCallback(() => { void refresh(); }, [refresh]));
     useEffect(() => { void accountsMyNumber().then(setMyNumber); }, []);
     useEffect(() => { void listSavedEmails().then(applySavedState); }, [applySavedState]);
 
-    // Consumed on mount AND on every later request. The AppDeck keeps this component alive, so a
-    // notification tapped while Mail is already mounted never re-runs a mount-only effect: that is
-    // why opening a mail banner used to land on whatever the app was last showing.
     const applyMailTarget = useCallback(() => {
         const t = takeMailTarget();
         if (!t) return;
@@ -162,8 +158,6 @@ export function Mail({ onClose }: { onClose: () => void }) {
         const targets = messages.filter(m => ids.includes(m.id) && !m.read);
         if (targets.length === 0) return;
         setMessages(prev => prev.map(m => ids.includes(m.id) ? { ...m, read: true } : m));
-        // One bulk write per account: firing a single markRead per message races N read-modify-
-        // writes over the same JSON column, losing updates so the badge never clears.
         const byAccount = new Map<string, string[]>();
         for (const m of targets) {
             const list = byAccount.get(m.accountId);
@@ -173,8 +167,6 @@ export function Mail({ onClose }: { onClose: () => void }) {
         for (const [accountId, messageIds] of byAccount) void markManyRead(accountId, messageIds);
     }
 
-    // Batch delete from the list pages: bin messages are erased for good (the server
-    // hard-deletes an already-binned message), everything else moves to the bin.
     function handleDeleteMany(ids: string[]) {
         const targets = messages.filter(m => ids.includes(m.id));
         setMessages(prev => prev
@@ -238,7 +230,6 @@ export function Mail({ onClose }: { onClose: () => void }) {
             attachments: draft.attachments,
         }).then(result => {
             if (typeof result === 'string') return;
-            // Re-saving an edited draft replaces the stale copy.
             if (draftId) {
                 setMessages(prev => [result, ...prev.filter(m => m.id !== draftId)]);
                 void discardDraft(account.email, draftId);
@@ -302,7 +293,6 @@ export function Mail({ onClose }: { onClose: () => void }) {
 
     const currentMsg = nav.stage === 'detail' ? messages.find(m => m.id === nav.msgId) : null;
 
-    // Prev/next within the open folder, same newest-first order the list shows.
     const detailSiblings = nav.stage === 'detail'
         ? [...inFolder(messages, nav.folder, nav.accountId)].sort((a, b) => b.sentAt.localeCompare(a.sentAt))
         : [];
@@ -412,7 +402,6 @@ export function Mail({ onClose }: { onClose: () => void }) {
                     onOpen={id => {
                         const target = messages.find(m => m.id === id);
                         if (target) void handleMarkRead(target);
-                        // Drafts reopen in the composer for editing instead of the read-only viewer.
                         if (target?.folder === 'drafts') {
                             setComposeFor({ accountId: target.accountId, to: target.to.join(', '), subject: target.subject, body: target.body, draftId: target.id, attachments: target.attachments });
                             return;

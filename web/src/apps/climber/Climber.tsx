@@ -75,13 +75,10 @@ export function Climber({ onClose: _onClose }: Props) {
     const highRef = useRef(high);
     highRef.current = high;
 
-    // Load the player's server record once on open.
     useEffect(() => {
         void loadStats(GAME).then(s => { setHigh(s.high ?? 0); setPlays(s.plays ?? 0); setLast(s.last ?? 0); });
     }, []);
 
-    // Dark menu/leaderboard get the light (dark-mode) status bar; the bright-sky game screen keeps
-    // the normal dark status bar so the time/battery stay readable.
 
     function commitTop(list: Platform[]) {
         let min = Infinity;
@@ -122,7 +119,6 @@ export function Climber({ onClose: _onClose }: Props) {
     function die() {
         setPhase('dead');
         const finalScore = Math.floor(heightRef.current);
-        // Report the run to the shared high-score board.
         setIsRecord(finalScore > highRef.current);
         void submitScoreApi(GAME, finalScore).then(r => { setHigh(r.best); setIsRecord(r.isRecord); setPlays(r.plays); setLast(r.last); });
     }
@@ -211,8 +207,6 @@ export function Climber({ onClose: _onClose }: Props) {
         },
     });
 
-    // Only listen while foreground: a backgrounded but still-mounted game would keep
-    // preventDefault-ing arrows/Space and starve text fields in other apps.
     const deckActive = useDeckActive();
     useEffect(() => {
         if (!deckActive) return;

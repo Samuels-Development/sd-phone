@@ -80,11 +80,6 @@ export function Groups({ onClose }: { onClose: () => void }) {
     const navValue = useMemo(() => ({ onWillBack: () => setReturning(true) }), []);
     function handleBack()     { setDetail(null); setReturning(false); }
 
-    // No-arg: the ref flips true right after mount, so the first navigation
-    // animates. Gating on `detail !== null` broke that - the flag only went true
-    // *after* the first detail render, so the first push never animated. A
-    // synchronously-restored detail still mounts on the initial render (flag
-    // false), so reopening straight into a group correctly does not animate.
     const animateNav = useDidEnter();
 
     const behind = detail !== null && !returning;

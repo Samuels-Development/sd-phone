@@ -29,8 +29,6 @@ export function RecentsTab({ recents, onAddContact, onRequestCall, onUpdateConta
 
     const list = filter === 'missed' ? recents.filter(c => c.missed) : recents;
 
-    // The open call detail must track the LIVE entry: saving the number as a contact rebuilds
-    // `recents` with the card attached, and a snapshot would keep showing Add to Contacts.
     const liveCall = selectedCall ? (recents.find(r => r.id === selectedCall.id) ?? selectedCall) : null;
 
     function openProfile(entry: CallEntry) {

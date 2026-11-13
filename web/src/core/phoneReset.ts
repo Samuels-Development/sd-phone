@@ -1,7 +1,5 @@
 import { create } from 'zustand';
 
-// Factory-reset mailbox: Settings requests a reset, App.tsx performs it in place
-// (clears storage, resets stores, remounts the tree into the setup flow).
 
 export type PhoneResetScope = 'erase' | 'settings';
 

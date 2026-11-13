@@ -20,9 +20,6 @@ function replaySnapshot(): number {
     return replays;
 }
 
-// The website preview never boots. A visitor arrives mid-session rather than switching a phone on,
-// so a splash there reads as the page stalling. Both entry points are closed rather than just the
-// default, because a server setting push and the replay hook could each switch it back on.
 export function setBootScreenEnabled(v: boolean): void {
     if (isDemo) return;
     enabled = v;

@@ -35,13 +35,13 @@ const useAuthStore = create<AuthState>((set, get) => ({
     },
     signIn: (appKey, profile) => {
         const rec: AuthRecord = { profile, at: Date.now() };
-        try { localStorage.setItem(keyFor(appKey), JSON.stringify(rec)); } catch { /* non-fatal */ }
+        try { localStorage.setItem(keyFor(appKey), JSON.stringify(rec)); } catch {}
         set(s => ({ records: { ...s.records, [appKey]: rec } }));
     },
     signOutAll: (appKeys) => {
         const cleared: Record<string, null> = {};
         for (const appKey of appKeys) {
-            try { localStorage.removeItem(keyFor(appKey)); } catch { /* non-fatal */ }
+            try { localStorage.removeItem(keyFor(appKey)); } catch {}
             cleared[appKey] = null;
         }
         set(s => ({ records: { ...s.records, ...cleared } }));

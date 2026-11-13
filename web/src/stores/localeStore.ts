@@ -12,18 +12,15 @@ function loadLocal(): string | null {
     try { return window.localStorage.getItem(LOCALE_KEY); } catch { return null; }
 }
 function saveLocal(code: string) {
-    try { window.localStorage.setItem(LOCALE_KEY, code); } catch { /* ignore */ }
+    try { window.localStorage.setItem(LOCALE_KEY, code); } catch {}
 }
 
 interface LocaleState {
     locale: string;
     changedAt: number;
     initialized: boolean;
-    /** Player explicitly picked a language (Setup or Settings) — applies, persists, and wins from now on. */
     setLocale: (code: string) => void;
-    /** Server's config.Locale, pushed on every `sd-phone:open`. Only used before the player has a locale of their own. */
     applyServerDefault: (code: string) => void;
-    /** Loads the player's previously saved locale, if any. */
     hydrate: () => void;
 }
 

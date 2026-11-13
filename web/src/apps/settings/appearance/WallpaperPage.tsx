@@ -18,13 +18,8 @@ import { Toggle } from '@/ui/Toggle';
 import { WallpaperPickerPage } from './WallpaperPickerPage';
 import { NavBar } from '@/ui/NavBar';
 
-// The previews are full-size replicas of the real Lockscreen/Homescreen render, scale-transformed
-// to thumbnail size - the geometry below is read from the device profile, the same source
-// shell/Homescreen.tsx reads, so the previews can't drift from the real screens.
 const { w: SW, h: SH } = device.screen;
 
-// Default first homescreen page: the first 12 non-dock apps in catalog order. Both lists are
-// filtered the way the real home grid is - a preview must never show an app the device lacks.
 const PAGE_APPS = [
     { icon: 'mail',       label: 'Mail' },
     { icon: 'maps',       label: 'Maps' },
@@ -118,8 +113,6 @@ function BlurRow({ label, on, onToggle }: { label: string; on: boolean; onToggle
 }
 
 
-// Renders children on a full-size screen stage, scale-transformed to the thumb's measured
-// width - so every child uses the real screens' CSS values verbatim.
 function PreviewThumb({ caption, onPress, children }: { caption: string; onPress: () => void; children: ReactNode }) {
     const ref = useRef<HTMLButtonElement>(null);
     const [scale, setScale] = useState(0);
@@ -155,8 +148,6 @@ function PreviewThumb({ caption, onPress, children }: { caption: string; onPress
 
 
 function DynamicIsland() {
-    // A device with no cutout has none on its real screens either, so painting one here would
-    // be exactly the drift these previews exist to avoid.
     if (!device.screen.island) return null;
     return <div className="absolute left-1/2 top-[11px] -translate-x-1/2 rounded-full bg-black" style={{ width: 126, height: 37 }} />;
 }
@@ -268,7 +259,6 @@ function HomePreview({ wallpaper, blurred, animating }: { wallpaper: string; blu
 }
 
 
-// Static replica of shell/AppIcon.tsx's resting look (tile, radius, shadow, label).
 function PreviewIcon({ icon, label }: { icon: string; label?: string }) {
     const grid = useGrid();
     const TILE = grid.icon;

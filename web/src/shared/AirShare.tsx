@@ -11,15 +11,10 @@ export interface AirShareRequest {
     detail?:  string;
 }
 
-// Dynamic Island geometry (mirrors shell/PhoneShell's DI_* constants in screen space).
 const PILL_W = 126;
 const PILL_H = 37;
 const PILL_R = PILL_H / 2;
 
-// iOS-style island expansion: the request arrives as the island itself, then the solid black
-// container grows out of the pill and collapses back into it on respond. Island surfaces are
-// always opaque black (never glass) so they blend with the camera cutout - and solid paint
-// also sidesteps the CEF backdrop-filter hazards.
 export function AirShareCard({ request, onRespond }: {
     request:   AirShareRequest;
     onRespond: (accept: boolean) => void;
@@ -32,8 +27,6 @@ export function AirShareCard({ request, onRespond }: {
 
     useLayoutEffect(() => { setW(probeRef.current?.offsetWidth ?? 416); }, []);
 
-    // Content renders at its final width from the start, so its height is measurable while
-    // the box is still pill-sized (fonts settle async - keep observing).
     useLayoutEffect(() => {
         if (w === null) return;
         const el = contentRef.current;

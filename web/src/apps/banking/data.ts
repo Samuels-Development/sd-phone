@@ -44,7 +44,7 @@ export const ACCOUNTS: Account[] = [
         label:   'Fleeca · Black',
         kind:    'credit',
         last4:   '7711',
-        balance: -1_284.50,             // negative = amount owed on credit
+        balance: -1_284.50,
         holder:  'SAM NICOL',
         style:   'midnight',
     },

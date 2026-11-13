@@ -2,8 +2,6 @@ import { t } from '@/i18n';
 
 type TextVars = Record<string, string | number>;
 
-/** The server sends English kindLabel nouns. Translate only that field of known AirShare
- * templates, never player names, arbitrary notification content, or custom kind values. */
 export function localizeShareVars(key: string | undefined, vars?: TextVars): TextVars | undefined {
     if (!vars || !['share.acceptedYourShare', 'share.declinedYourShare',
         'share.couldNotSaveYourShare', 'share.couldNotSaveSharedItem'].includes(key ?? '')) return vars;
@@ -25,7 +23,6 @@ export function localizeShareVars(key: string | undefined, vars?: TextVars): Tex
     return { ...vars, kind };
 }
 
-/** Only built-in identifiers are translated; server-defined colors retain their label. */
 export function phoneColorLabel(color: string): string {
     switch (color) {
         case 'black': return t('settings.phoneColorBlack', 'Black');

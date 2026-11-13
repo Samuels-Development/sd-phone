@@ -407,7 +407,7 @@ export function ChatView({ convo, loading = false, onBack, onSend, onReact, onPa
                                     d.wpCode = encodeWaypoint({ label: 'Shared Location', x: r.x, y: r.y, icon: 'MapPin', color: '#eb4b3c' });
                                     d.wpSub  = `${Math.round(r.x)}, ${Math.round(r.y)}`;
                                 }
-                            } catch { /* fall back to a coordless share */ }
+                            } catch {}
                         }
                         send(d);
                     }}

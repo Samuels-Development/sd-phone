@@ -19,13 +19,8 @@ export interface NotificationItem {
     appId?: string;
     link?:  Record<string, unknown>;
     emergency?: boolean;
-    /** Pocket buzz from a carried-but-not-active phone: transient banner only, never this
-     *  phone's lockscreen stack or badges. */
     otherPhone?: boolean;
-    /** Pocket buzz: the buzzing phone's frame colour, tinting the closed-shell peek. */
     phoneColor?: string;
-    /** Pocket buzz: the buzzing phone's profile key - the banner parks on that profile's
-     *  banked lockscreen stack so it shows when THAT phone is next opened. */
     profileKey?: string;
 }
 
@@ -70,9 +65,6 @@ export function NotifIcon({ item, size = 38 }: { item: NotificationItem; size?: 
             </span>
         );
     }
-    // `app` is a display label ("Weazel News", or "<Color> Phone" on a pocket buzz) while `appId`
-    // is the registry id the icon set is keyed by, so the id wins wherever a sender supplies one.
-    // The lowercase fold catches senders that pass only a label matching an id.
     const icon = item.appId ?? item.app?.toLowerCase();
     if (icon) {
         return (

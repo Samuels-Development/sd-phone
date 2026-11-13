@@ -45,11 +45,8 @@ export function CustomWidgetFrame({ kind, size, width, height, editing, onOpen, 
     size:   WidgetSize;
     width:  number;
     height: number;
-    /** Homescreen is in jiggle/rearrange mode: the widget must stay inert so drag-and-drop works. */
     editing?: boolean;
-    /** Widget asked to be treated like a tap on its tile (opens the owning app). */
     onOpen?: () => void;
-    /** Widget detected its own long-press gesture and wants to enter homescreen edit mode. */
     onLongPress?: () => void;
 }) {
     const apps = useCustomApps();
@@ -85,9 +82,6 @@ export function CustomWidgetFrame({ kind, size, width, height, editing, onOpen, 
         }, '*');
     }, [ready, found, size, width, height, theme]);
 
-    // Interactive widgets get real pointer events, so tapping their non-button chrome no longer
-    // bubbles out to the homescreen tile (cross-origin iframes never bubble into the parent
-    // document). The widget opts back into that behavior explicitly via postMessage instead.
     useEffect(() => {
         if (!live) return;
         function onMessage(e: MessageEvent) {

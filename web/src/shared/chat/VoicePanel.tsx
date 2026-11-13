@@ -90,7 +90,6 @@ export function VoicePanel({ onSend, onClose, forceDark = false }: Props) {
                 samplesRef.current.push(Math.sqrt(sum / buf.length));
             }, 50);
         } catch {
-            // Web Audio unavailable — recording still works, just without bars.
         }
     }
 

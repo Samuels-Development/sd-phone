@@ -25,7 +25,6 @@ export function digits(s: string): string {
     return s.replace(/\D/g, '');
 }
 
-// True when a display name is a phone number (no letters) — i.e. an unsaved/unknown contact.
 export function isNumericName(name: string): boolean {
     return !/\p{L}/u.test(name);
 }

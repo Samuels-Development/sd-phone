@@ -8,13 +8,6 @@ export function PhotoTile({ photo, selectable, selected, showFavorite, defer, on
     selectable?: boolean;
     selected?:   boolean;
     showFavorite?: boolean;
-    /**
-     * Hold the media out of the DOM entirely. A tile shows a 130px square but the source is a
-     * full-size capture (measured: 810x1080, a 3.3MB bitmap once decoded, ~52x the pixels the
-     * tile can use). A screenful of those is tens of MB the compositor must rasterize, which is
-     * what stalls the app's open animation. The grid still lays out, so the app visibly animates
-     * in; only the decode waits for it to land.
-     */
     defer?:      boolean;
     onClick:     () => void;
 }) {
@@ -41,8 +34,6 @@ export function PhotoTile({ photo, selectable, selected, showFavorite, defer, on
                     src={photo.url}
                     alt=""
                     loading="lazy"
-                    // Off the main thread: a synchronous decode per tile is what makes a grid of
-                    // freshly fetched photos hitch as they arrive.
                     decoding="async"
                     draggable={false}
                     onLoad={() => setLoaded(true)}

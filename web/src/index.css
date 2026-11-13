@@ -455,14 +455,6 @@ html, body, #root {
     background-repeat:   no-repeat;
     filter:              saturate(1.05);
 }
-/*
- * Frosted surfaces stop sampling the wallpaper while the home screen slides between pages.
- *
- * The wallpaper is fixed BEHIND the page strip, so a translating tile forces backdrop-filter to
- * re-rasterise every frame. CEF cannot keep up and the pane flickers in and out as though it were
- * still loading. Dropping the blur for the length of the slide leaves the tile's own translucent
- * tint, which is close enough at speed, and it comes back the moment the page settles.
- */
 [data-page-motion] .sd-frosted {
     backdrop-filter:         none !important;
     -webkit-backdrop-filter: none !important;
@@ -604,21 +596,11 @@ input[type='number'] {
     to   { transform: scale(0.01); }
 }
 
-/* Opening from the app switcher: the card is already a near-fullscreen preview of the live
-   app, so grow from THAT size (about the tapped card's centre) instead of popping up from a
-   point like a home-screen launch. The start scale IS AppSwitcher's SCALE (CARD_W / SW), so it
-   moves with the screen width - AppSwitcher publishes it as --switcher-scale; the fallback is
-   the phone's 362/440. */
 @keyframes ios-app-expand {
     from { transform: scale(var(--switcher-scale, 0.82)); }
     to   { transform: scale(1);                           }
 }
 
-/* Applied to the app wrapper only while its open/close scale is running (AppDeck's
-   AppHost). Dropping backdrop-filter on the scaling subtree stops CEF from
-   re-rasterizing every frosted descendant on each frame - the scale becomes one cheap composited
-   layer instead of a per-frame blur, which is what stutters the phone. The blur returns the moment
-   the class is removed (animation settled). Panels keep their translucent background meanwhile. */
 .app-anim-flatten,
 .app-anim-flatten * {
     backdrop-filter: none !important;
@@ -701,8 +683,6 @@ input[type='number'] {
     to   { opacity: 1; transform: scale(1); }
 }
 
-/* Widget stack. --dir is 1 scrolling down the stack, -1 up. The outgoing card sinks slightly as
-   it leaves so the pair reads as depth rather than two flat slides. */
 @keyframes widget-card-in {
     from { opacity: 0; transform: translateY(calc(var(--dir) * 62%)) scale(0.94); }
     to   { opacity: 1; transform: translateY(0) scale(1); }

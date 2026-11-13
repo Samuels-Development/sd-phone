@@ -182,12 +182,6 @@ function ContactRow({ contact, divider, onOpen }: { contact: Contact; divider: b
     const phone = useMaskedPhone();
     return (
         <>
-            {/* Off-screen rows skip style, layout and avatar decode. The deck re-parents this
-                whole subtree on every app open (AppDeck.tsx:193 appendChild) and toggles
-                .app-anim-flatten, whose universal descendant selector restyles every node, so an
-                unwindowed 500-row book made both O(contacts) and stuttered the 0.38s open
-                animation. Applied per row rather than per A-Z section so the search results,
-                whose query is session-persisted, are covered by the same containment. */}
             <button
                 type="button"
                 onClick={() => onOpen(contact)}

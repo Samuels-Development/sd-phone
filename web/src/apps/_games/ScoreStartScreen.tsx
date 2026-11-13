@@ -20,12 +20,6 @@ interface ScoreStartScreenProps {
     children?:     ReactNode;
 }
 
-/**
- * The shared landing ("visual main menu") for single-player high-score games (Blocks, Flappy).
- * Mirrors the _games StartScreen card/accent language: a play card carrying the game's flavor text,
- * a Leaderboard row, and a Record card (plays / high score / most recent) in the same place and
- * style as the vs-game Record card - just with score stats instead of W/L/D.
- */
 export function ScoreStartScreen({ config, stats, onPlay, onLeaderboard, playLabel, children }: ScoreStartScreenProps) {
     const { icon: Icon, title, accent, flavor } = config;
     return (

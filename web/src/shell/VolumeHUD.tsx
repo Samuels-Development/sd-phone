@@ -109,7 +109,7 @@ export function VolumeHUD({ suppressed = false }: { suppressed?: boolean }) {
     function endDrag(e: React.PointerEvent<HTMLDivElement>) {
         if (!dragging.current) return;
         dragging.current = false;
-        try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+        try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
         scheduleDismiss();
     }
 

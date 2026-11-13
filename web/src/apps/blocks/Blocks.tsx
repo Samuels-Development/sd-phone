@@ -53,8 +53,6 @@ export function Blocks({ onClose: _onClose }: Props) {
     const [phase,   setPhase]   = useState<Phase>('paused');
     const [flashRows, setFlashRows] = useState<number[]>([]);
 
-    // Freeze the self-rescheduling gravity chain while backgrounded: a pending drop
-    // timeout that fires after the switcher opens must not slide a piece in the card.
     const active = useDeckActive();
     const activeRef = useRef(active);  activeRef.current = active;
 
@@ -71,12 +69,9 @@ export function Blocks({ onClose: _onClose }: Props) {
     const level = levelFor(lines);
     levelRef.current = level;
 
-    // Load the player's server record once on open.
     useEffect(() => {
         void loadStats(GAME).then(s => { setHigh(s.high ?? 0); setPlays(s.plays ?? 0); setLast(s.last ?? 0); });
     }, []);
-
-    // Blocks is dark on every screen — force the status bar to its light (dark-mode) content.
 
     const lockPiece = useCallback((p: Piece) => {
         const { board: merged, cleared } = lockAndClear(boardRef.current, p);
@@ -108,7 +103,7 @@ export function Blocks({ onClose: _onClose }: Props) {
 
     const tick = useCallback(() => {
         if (phaseRef.current !== 'playing') return;
-        if (!activeRef.current) return;  // frozen while backgrounded; resumed by the active effect
+        if (!activeRef.current) return;
         const p = pieceRef.current;
         if (p) {
             const moved = { ...p, y: p.y + 1 };
@@ -191,7 +186,6 @@ export function Blocks({ onClose: _onClose }: Props) {
         }
     }, [tick]);
 
-    // Submit the run's score to the shared board when a game ends.
     useEffect(() => {
         if (phase !== 'over') return;
         setIsRecord(score > high);
@@ -202,9 +196,6 @@ export function Blocks({ onClose: _onClose }: Props) {
         return () => { cancelled = true; };
     }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Gate on deckActive too, not just phase: backgrounding pauses the drop timer but
-    // leaves phase 'playing', so without this a backgrounded game keeps preventDefault-ing
-    // arrows/Space and starves text fields in other apps.
     useEffect(() => {
         if (!active) return;
         function onKey(e: KeyboardEvent) {
@@ -222,8 +213,6 @@ export function Blocks({ onClose: _onClose }: Props) {
         return () => window.removeEventListener('keydown', onKey);
     }, [active, move, softDrop, rotateCw, hardDrop]);
 
-    // Pause on background (clear the pending drop) and, on resume, re-arm the gravity
-    // chain if a game is in progress so the piece continues from exactly where it froze.
     useEffect(() => {
         if (!active) { clearTimeout(dropTimer.current); return; }
         if (phaseRef.current === 'playing') {
@@ -250,7 +239,6 @@ export function Blocks({ onClose: _onClose }: Props) {
 
     const displayBest = Math.max(high, score);
 
-    // Board view (only rendered on the game screen; cheap enough to compute each render).
     type RenderCell = { kind: PieceKind; ghost?: boolean } | null;
     const view: RenderCell[][] = board.map(row => row.map(c => (c === 0 ? null : { kind: c })));
     if (piece && phase !== 'over') {

@@ -93,11 +93,11 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
 
     const ACTION_BTNS: { id: Panel & string; label: string; emoji?: string; Icon?: LucideIcon }[] = [
         { id: 'emoji',    label: t('messages.emoji', 'Emoji'),       emoji: '😊' },
-        { id: 'photos',   label: t('messages.photos', 'Photos') },   // rendered with the Photos app icon
+        { id: 'photos',   label: t('messages.photos', 'Photos') },
         { id: 'gif',      label: t('messages.gif', 'GIF') },
         { id: 'money',    label: t('messages.money', 'Money'),       emoji: '$' },
-        { id: 'location', label: t('messages.location', 'Location'), Icon: MapPin },   // GPS map marker
-        { id: 'voice',    label: t('messages.voice', 'Voice'),       Icon: Mic },      // classic mic
+        { id: 'location', label: t('messages.location', 'Location'), Icon: MapPin },
+        { id: 'voice',    label: t('messages.voice', 'Voice'),       Icon: Mic },
     ];
 
     const messages = useMemo<Message[]>(() => {
@@ -604,7 +604,7 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
                                     draft.wpCode = encodeWaypoint({ label: t('messages.sharedLocationLabel', 'Shared Location'), x: r.x, y: r.y, icon: 'MapPin', color: '#eb4b3c' });
                                     draft.wpSub  = `${Math.round(r.x)}, ${Math.round(r.y)}`;
                                 }
-                            } catch { /* fall back to a coordless share */ }
+                            } catch {}
                         }
                         send(draft);
                     }}
@@ -712,8 +712,6 @@ export function ChatView({ conv, totalUnread, contacts, myNumber, onBack, onSend
                 />
             )}
 
-            {/* Standard sheet presentation (media-picker sizing); embedded AddContact lets the
-                sheet own the slide animation. */}
             {addingContact && onSaveContact && (
                 <Sheet onClose={() => setAddingContact(false)} grabber={false} className="font-sf bg-base">
                     {({ close }) => (

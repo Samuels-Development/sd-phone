@@ -157,7 +157,7 @@ export function normalizeSave(p: Partial<SaveState> | null | undefined): SaveSta
         earned:       typeof p.earned === 'number' ? p.earned : p.cookies,
         owned,
         achievements: Array.isArray(p.achievements) ? p.achievements : [],
-        rainOn:       p.rainOn !== false, // default on
+        rainOn:       p.rainOn !== false,
     };
 }
 

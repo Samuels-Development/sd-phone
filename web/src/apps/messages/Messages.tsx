@@ -31,8 +31,6 @@ import type { Contact as PhoneContact } from '@/apps/phone/data';
 type Draft = Omit<SendInput, 'conversation'>;
 
 export function Messages({ onClose }: { onClose: () => void }) {
-    // Seeded from the last list result so a reopen paints the thread list immediately instead of
-    // an empty pane that fills in once the round trip lands. A fresh fetch replaces it below.
     const cachedState = getCachedMessages();
     const [conversations, setConversations] = useState<Conversation[]>(cachedState?.conversations ?? []);
     const [contacts,      setContacts]      = useState<Contact[]>(cachedState?.contacts ?? []);
@@ -43,11 +41,6 @@ export function Messages({ onClose }: { onClose: () => void }) {
     const [pending]        = useState(() => peekMessagesTarget());
     const [resolved, setResolved] = useState(!pending);
 
-    // The saved-contacts book, shared with the Phone app and kept live there (optimistic
-    // add/edit/delete + push events). Names are resolved against it at render so a contact
-    // change reflects in the conversation list / thread header without a Messages refetch.
-    // myNumber rides along for the same reason: the store refetches on live SIM swaps, so the
-    // own-number guards here never hold a pre-swap number.
     const { contacts: liveCards, myNumber } = useContacts('contacts', 'myNumber');
     useEffect(() => { void useContactsStore.getState().load(); }, []);
 
@@ -162,7 +155,6 @@ export function Messages({ onClose }: { onClose: () => void }) {
         [conversations, cardByNumber],
     );
 
-    // Recipient book for compose / add-member: the live shared book in-game, the fetched mock in dev.
     const composeContacts = useMemo<Contact[]>(() => {
         if (!isFiveM) return contacts;
         return [...cardByNumber.values()].sort((a, b) => a.name.localeCompare(b.name));

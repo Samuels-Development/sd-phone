@@ -58,7 +58,7 @@ function createYtChannel(): YtChannel {
                         onReady: () => resolve(),
                         onStateChange: (e: any) => {
                             if (e.data !== 0) return;
-                            if (loop) { try { player.seekTo(0, true); player.playVideo(); } catch { /* */ } }
+                            if (loop) { try { player.seekTo(0, true); player.playVideo(); } catch {} }
                             else { const cb = onEnded; onEnded = null; cb?.(); }
                         },
                     },
@@ -80,14 +80,14 @@ function createYtChannel(): YtChannel {
                     player.setVolume(Math.round(clampVol(vol) * 100));
                     player.loadVideoById(vid);
                     player.playVideo();
-                } catch { /* no-op */ }
+                } catch {}
             });
         },
         stop() {
             gen++;
             loop = false;
             onEnded = null;
-            try { player?.stopVideo?.(); } catch { /* no-op */ }
+            try { player?.stopVideo?.(); } catch {}
         },
     };
 }
@@ -111,7 +111,7 @@ export function playOnce(url: string, vol = 1): void {
         a.volume = clampVol(vol);
         oneShot = a;
         void a.play().catch(() => {});
-    } catch { /* no-op */ }
+    } catch {}
 }
 
 export function startPreview(url: string, vol = 1, onEnded?: () => void): void {
@@ -131,13 +131,13 @@ export function startPreview(url: string, vol = 1, onEnded?: () => void): void {
             if (preview === a) { preview = null; onEnded?.(); }
         });
         void a.play().catch(() => {});
-    } catch { /* no-op */ }
+    } catch {}
 }
 
 export function stopPreview(): void {
     if (previewIsYt) { previewIsYt = false; ringChannel.stop(); return; }
     if (!preview) return;
-    try { preview.pause(); preview.currentTime = 0; } catch { /* no-op */ }
+    try { preview.pause(); preview.currentTime = 0; } catch {}
     preview = null;
 }
 
@@ -154,10 +154,10 @@ export function startRingtone(url: string, vol = 1): () => void {
         a.loop = true;
         a.volume = clampVol(vol);
         void a.play().catch(() => {});
-    } catch { /* no-op */ }
+    } catch {}
     return () => {
         if (!a) return;
-        try { a.pause(); a.currentTime = 0; } catch { /* no-op */ }
+        try { a.pause(); a.currentTime = 0; } catch {}
         a = null;
     };
 }

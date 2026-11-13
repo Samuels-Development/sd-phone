@@ -32,7 +32,7 @@ export function SwipeToDismiss({ children, onDismiss }: { children: ReactNode; o
         const rdy = e.clientY - start.current.y;
         if (!axis.current && (Math.abs(rdx) > 6 || Math.abs(rdy) > 6)) {
             axis.current = Math.abs(rdx) > Math.abs(rdy) ? 'h' : 'v';
-            if (axis.current === 'h') { try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ } }
+            if (axis.current === 'h') { try { e.currentTarget.setPointerCapture(e.pointerId); } catch {} }
         }
         if (axis.current !== 'h') return;
         setDx(Math.min(0, rdx) / zoom.current);

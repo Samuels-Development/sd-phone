@@ -1,5 +1,3 @@
-// Shapes returned by the server admin module (server/admin/actions.lua).
-
 import { formatPhone } from '@/lib/phone';
 
 export interface AdminPlayerHit {
@@ -65,12 +63,10 @@ export interface AdminOverview {
     };
     mutes:        AdminMute[];
     downloadable: { id: string; label: string }[];
-    /** Unique-phones footprint; absent while the SIM feature is off. */
     sim?: {
         mode: 'tray' | 'metadata';
         sims: AdminSimRow[];
         backup?: { profiles: number; enabled: boolean; hasPassword: boolean } | null;
-        /** Only while the player is online. */
         activeNumber?: string | null;
         carried?: { number: string; color: string; active: boolean }[];
     } | null;
@@ -278,7 +274,6 @@ export interface MuteScopeDef {
     social: boolean;
 }
 
-// Mirrors SCOPES in server/admin/moderation.lua.
 export const MUTE_SCOPES: MuteScopeDef[] = [
     { id: 'birdy',     label: 'Squawk',    social: true },
     { id: 'photogram', label: 'Photogram', social: true },
@@ -293,8 +288,6 @@ export function scopeLabel(id: string): string {
     return MUTE_SCOPES.find(s => s.id === id)?.label ?? id;
 }
 
-// Epoch seconds OR milliseconds -> short local date-time. The server mixes both
-// (TIMESTAMP columns arrive as seconds, BIGINT ms columns as milliseconds).
 export function fmtTime(epoch?: number | null): string {
     if (!epoch) return '-';
     const ms = epoch > 1e12 ? epoch : epoch * 1000;

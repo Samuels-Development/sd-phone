@@ -21,8 +21,6 @@ function formatDist(units: number): string {
 
 export function TripRider() {
     const r = useRyde().activeRider;
-    // Hooks below run unconditionally, so the null guard lives in this thin
-    // wrapper and the real component only mounts with a ride present.
     return r ? <TripRiderView r={r} /> : null;
 }
 
@@ -52,7 +50,7 @@ function TripRiderView({ r }: { r: Ride }) {
     const [awayM, setAwayM] = useState<number | null>(null);
     useEffect(() => {
         if (!enroute && !inTrip) { setAwayM(null); return; }
-        if (!active) return;  // backgrounded: keep the last distance frozen, stop sampling
+        if (!active) return;
         const sample = () => {
             const m = meRef.current;
             if (!m) return;

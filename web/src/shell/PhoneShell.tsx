@@ -470,7 +470,6 @@ export function PhoneShell({ children, hidden = false, cameraActive = false, ent
             const image = canvas.toDataURL('image/jpeg', 0.92);
             await fetchNui('sd-phone:camera:capture', { image });
         } catch {
-            /* capture failed — silently ignore */
         } finally {
             window.setTimeout(() => setFlashing(false), 460);
             capturingRef.current = false;
@@ -537,8 +536,6 @@ export function PhoneShell({ children, hidden = false, cameraActive = false, ent
     const reanchor = (H - W) / 2;
     const shiftX = align.includes('right') ? -reanchor : align.includes('left') ? reanchor : 0;
     const shiftY = align.includes('bottom') ? reanchor : align.includes('top') ? -reanchor : 0;
-    // A device that is already wider than it is tall has nothing to rotate into: turning it would
-    // stand a landscape tablet on its end. The reanchor shifts would be backwards there too.
     const nativeLandscape = SW > SH;
     const landscapeTransform = nativeLandscape
         ? undefined
@@ -604,9 +601,6 @@ export function PhoneShell({ children, hidden = false, cameraActive = false, ent
                             maskSize: '100% 100%',
                             WebkitMaskRepeat: 'no-repeat',
                             maskRepeat: 'no-repeat',
-                            // The switcher's card scale, for index.css's ios-app-expand. The deck
-                            // re-parents the opening app's host into this screen, so the value
-                            // inherits down to it - and unlike the switcher, this element stays.
                             ...({ '--switcher-scale': String(SWITCHER_SCALE) } as React.CSSProperties),
                         }}
                     >
@@ -916,11 +910,6 @@ export function PhoneShell({ children, hidden = false, cameraActive = false, ent
                             </g>
                         )}
 
-                        {/* The hinge key is painted only on a phone that actually has a hinge.
-                            chassisMetrics is pure geometry and reads the shell alone, so it hands
-                            back the fold key whether or not the server switched folding on; the
-                            press target below is already gated, but the moulding on the rail is
-                            not, and a dead button on the body is worse than no button. */}
                         {BUTTONS.filter(btn => btn.role !== 'fold' || foldable).map((btn, i) => (
                             <g key={btn.role ?? i}>
                                 <RailKey btn={btn} m={m} />

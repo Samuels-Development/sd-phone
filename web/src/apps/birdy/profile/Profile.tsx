@@ -55,7 +55,6 @@ export function Profile({ profile, me, handle, onBack, onEdit, onOpenPost, onTog
     const posts = postsData ?? [];
     const [following, setFollowing] = useState(false);
     const [followHover, setFollowHover] = useState(false);
-    // Another player's profile hasn't answered yet: bones instead of flashing OUR name/handle.
     const headerLoading = isOther && profile === null;
 
     useEffect(() => { setFollowing(!!profile?.isFollowing); }, [profile?.isFollowing]);

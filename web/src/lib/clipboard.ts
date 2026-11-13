@@ -24,7 +24,7 @@ export function copyToClipboard(text: string): boolean {
         ok = false;
     }
 
-    try { void navigator.clipboard?.writeText(text).catch(() => {}); } catch { /* ignore */ }
+    try { void navigator.clipboard?.writeText(text).catch(() => {}); } catch {}
 
     return ok;
 }

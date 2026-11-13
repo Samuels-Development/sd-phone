@@ -32,7 +32,7 @@ export function TripDriver() {
     const gx = gate?.x, gy = gate?.y;
     useEffect(() => {
         if (!isFiveM || gx == null || gy == null) { setNear(!isFiveM); setDist(-1); return; }
-        if (!active) return;  // backgrounded: freeze the last near/dist, stop polling
+        if (!active) return;
         let alive = true;
         const check = () => { void rydeNearPoint(gx, gy, gateRadius).then(res => { if (alive) { setNear(res.near); setDist(res.distance); } }); };
         check();
@@ -45,7 +45,7 @@ export function TripDriver() {
     const tripId = r?.tripId;
     useEffect(() => {
         if (!isFiveM || !arriving || !tripId) { setSameVeh(!isFiveM); return; }
-        if (!active) return;  // backgrounded: stop polling; resumes on foreground
+        if (!active) return;
         let alive = true;
         const check = () => { void rydeSameVehicle(tripId).then(s => { if (alive) setSameVeh(s); }); };
         check();

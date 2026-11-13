@@ -12,25 +12,15 @@ import { t, appLabel } from '@/i18n';
 import { dirSign } from '@/stores/directionStore';
 
 const SH         = device.screen.h;
-const SR         = 49;   // card corner, drawn scaled - deliberately rounder than the screen's own radius
+const SR         = 49;
 
-// The card is a fraction of the screen, not a fixed width: hold the phone's 362/440. Everything
-// derived from the WIDTH has to come from the live screen instead of device.screen.w, because
-// unfolding doubles it. Reading the closed width here is what left the whole carousel centred on
-// the left half while unfolded, and had each card previewing an 880-wide app in a 440-wide frame.
 const CARD_FRAC  = 362 / 440;
-// Height and scale survive as constants: both are ratios of the width, so they come out the same
-// folded or open. SWITCHER_SCALE below is the one index.css reads, so it must not start moving.
 const CARD_H     = Math.round(SH * CARD_FRAC);
 const SCALE      = CARD_FRAC;
 const HEADER_H   = 42;
 const HEADER_TOP = 46;
 const CARD_TOP   = HEADER_TOP + HEADER_H + 8;
 
-// index.css's ios-app-expand grows an opened app from exactly the card scale it was tapped at,
-// but that keyframe runs on AppDeck's host - not a descendant of this component, which unmounts
-// as the animation starts. PhoneShell publishes this on the screen instead: an ancestor of the
-// host that outlives the switcher.
 export const SWITCHER_SCALE = SCALE;
 
 const ICON_NATIVE = 60;
@@ -51,10 +41,6 @@ interface Props {
     splitExclude?: string | null;
 }
 
-// The live app view inside each card is NOT rendered here - a card renders only its
-// chrome (label, close button, rounded frame) plus an empty <CardStage/> whose DOM
-// node the AppDeck re-parents the single live app instance into. Non-preview apps
-// (and any card the deck chooses not to fill) keep showing the icon fallback beneath.
 function CardStage({ appId }: { appId: string }) {
     const ref = useRef<HTMLDivElement>(null);
     const sw  = useScreenW();
@@ -76,10 +62,9 @@ export function AppSwitcher({
     onSplit, splitExclude,
 }: Props) {
     const badges = useBadges();
-    // Live, not device.screen.w: unfolding doubles the screen under the switcher.
     const sw        = useScreenW();
     const cardW     = Math.round(sw * CARD_FRAC);
-    const cardStep  = Math.round(cardW * 0.74);   // overlap so the focused card sits forward
+    const cardStep  = Math.round(cardW * 0.74);
     const center    = (sw - cardW) / 2;
     const [focusedIdx, setFocusedIdx] = useState(0);
     const [swipeUpY,   setSwipeUpY]   = useState(0);
@@ -254,18 +239,11 @@ export function AppSwitcher({
                             ? Math.max(0.15, 1 + swipeUpY / 160)
                             : 1;
 
-                    // Focused card sits forward: larger, full brightness, on top; neighbours are
-                    // smaller and dimmed - the "highlighted centre card" look. `d` is the
-                    // signed distance from centre. Scaling from the top keeps every card's
-                    // name/icon row on the same line.
                     const d       = idx - focusedIdx;
                     const ad      = Math.abs(d);
                     const cScale  = Math.max(0.78, 1 - Math.min(ad, 1) * 0.15 - Math.max(0, ad - 1) * 0.04);
                     const cBright = Math.max(0.6, 1 - Math.min(ad, 1) * 0.34);
                     const cz      = Math.round(120 - Math.min(ad, 4) * 25);
-                    // Only the centred card shows its icon / name / close chrome. The cards
-                    // overlap heavily, so leaving the neighbours' header rows visible smudges
-                    // the focused card's top - fade them out fast as they leave centre.
                     const headerOpacity = Math.max(0, 1 - ad * 1.3);
                     const headerFocused = ad < 0.5;
 
@@ -336,10 +314,6 @@ export function AppSwitcher({
                                     </button>
                                 )}
 
-                                {/* Close: to the RIGHT of the name, a larger
-                                    circular glass button. Translucent over the switcher's own blur
-                                    (no per-button backdrop-filter - it nests under the switcher blur
-                                    and flickers in CEF). */}
                                 <button
                                     type="button"
                                     aria-label={t('shell.closeApp', 'Close {label}', { label: appDef ? appLabel(appDef) : appId })}
@@ -363,8 +337,6 @@ export function AppSwitcher({
                                     boxShadow:    '0 14px 44px rgba(0,0,0,0.7), 0 2px 10px rgba(0,0,0,0.45)',
                                 }}
                             >
-                                {/* Icon fallback: shown until (or unless) the deck parents a
-                                    live app host over it. Non-preview apps stay on this. */}
                                 <div className="absolute inset-0 flex items-center justify-center bg-[#1c1c1e]">
                                     <div className="overflow-hidden" style={{ width: 76, height: 76, borderRadius: '22%' }}>
                                         <div style={{ width: 60, height: 60, transform: 'scale(1.2667)', transformOrigin: 'top var(--dir-start, left)' }}>
@@ -380,8 +352,6 @@ export function AppSwitcher({
                                     style={{ opacity: 1 - cBright, transition: snapping ? 'opacity 0.4s ease' : 'none' }}
                                 />
 
-                                {/* Transparent tap target sits ABOVE the live view (which is
-                                    inert / pointer-events:none while parented into the card). */}
                                 <button
                                     type="button"
                                     aria-label={appDef ? appLabel(appDef) : appId}

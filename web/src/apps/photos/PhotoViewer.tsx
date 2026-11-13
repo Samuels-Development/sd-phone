@@ -141,9 +141,6 @@ export function PhotoViewer({
                 </div>
             </div>
 
-            {/* Full-bleed portrait filmstrip: no side padding, so the end thumbs
-                clip against the screen edges to hint there's more to scroll; the
-                active thumb centres itself (scrollIntoView) and stands a bit taller. */}
             <div className="shrink-0 pb-1 pt-2">
                 <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
                     {photos.map((p, i) => {

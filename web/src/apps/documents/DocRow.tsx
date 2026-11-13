@@ -4,8 +4,6 @@ import { t } from '@/i18n';
 import { ListRow } from '@/ui/ListGroup';
 import { formatDocDate, formatSize, type DocFile, type DocFolder } from './data';
 
-/** Trailing ellipsis affordance for the row action sheet. A span, not a button - the whole
- *  ListRow already is one, and nesting native buttons is invalid. */
 function MoreGlyph({ onMore }: { onMore: () => void }) {
     return (
         <span
@@ -18,7 +16,6 @@ function MoreGlyph({ onMore }: { onMore: () => void }) {
     );
 }
 
-/** Full-bleed hairline between rows (edge to edge, per the Files list style). */
 function RowDivider() {
     return <div aria-hidden className="h-[0.5px] w-full bg-ios-gray4 dark:bg-control" />;
 }

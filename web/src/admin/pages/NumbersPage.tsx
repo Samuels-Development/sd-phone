@@ -6,7 +6,6 @@ import { fmtPhone, fmtTime, type AdminNumberRow } from '../types';
 import { Badge, Btn, Card, CenterNote, Input, LoadMore, Spinner } from '../ui';
 import { usePaged } from '../usePaged';
 
-// Full SIM registry: which number opens which profile, who activated it, who carries it live.
 export function NumbersPage({ onOpenPlayer }: { onOpenPlayer: (cid: string) => void }) {
     const [q, setQ] = useState('');
     const [submitted, setSubmitted] = useState('');

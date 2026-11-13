@@ -12,8 +12,6 @@ export function AlbumPickerSheet({ albums, count, onPick, onNewAlbum, onClose }:
     onNewAlbum: () => void;
     onClose:    () => void;
 }) {
-    // Run the chosen action only after the sheet's exit animation settles, so the picker
-    // doesn't jump while a new album screen mounts underneath it.
     const pending = useRef<(() => void) | null>(null);
 
     function handleClose() {

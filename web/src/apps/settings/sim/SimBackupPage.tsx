@@ -31,8 +31,6 @@ interface SimInfo {
     mode: 'tray' | 'metadata';
     builtin: boolean;
     hasSim: boolean;
-    /** Physical card in the active phone; hasSim = has service (character mode satisfies it
-     *  with an innate number, no card needed). */
     simInstalled?: boolean;
     number?: string;
     color?: string;
@@ -81,7 +79,6 @@ function timeAgo(epochSec: number | undefined): string {
     return t('settings.simBackupDaysAgo', '{n}d ago', { n: Math.floor(s / 86400) });
 }
 
-/** Settings -> SIM & Backup (unique-phones mode): SIM status, eject, cloud backup + restore. */
 export function SimBackupPage({ onBack }: { onBack: () => void }) {
     const [info,    setInfo]    = useState<SimInfo | null>(null);
     const [busy,    setBusy]    = useState(false);
@@ -110,7 +107,6 @@ export function SimBackupPage({ onBack }: { onBack: () => void }) {
         else if (res?.message) setNotice(res.message);
     }
 
-    /** PromptDialog confirm: returns an error string to keep the dialog open, null to close. */
     async function enableBackup(password: string): Promise<string | null> {
         const res = await fetchNui<Envelope<never>>('sd-phone:sim:backup:set', { on: true, password }).catch(() => null);
         if (!res?.success) return res?.message ?? t('settings.simBackupFailed', 'Could not enable backup.');
@@ -127,7 +123,6 @@ export function SimBackupPage({ onBack }: { onBack: () => void }) {
         return null;
     }
 
-    /** Snapshot this phone into its own cloud profile. */
     async function syncNow() {
         if (!info || busy) return;
         setBusy(true);
@@ -137,8 +132,6 @@ export function SimBackupPage({ onBack }: { onBack: () => void }) {
         else if (res?.message) setNotice(res.message);
     }
 
-    /** Restore entry point: one restorable profile goes straight to the password prompt, more
-     *  than one opens the picker list. */
     function startRestore() {
         const restorables = info?.profiles.filter(p => p.restorable) ?? [];
         if (restorables.length === 0) return;

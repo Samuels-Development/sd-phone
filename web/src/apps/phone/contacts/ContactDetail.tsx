@@ -48,9 +48,6 @@ export function ContactDetail({ contact, onBack, backLabel = t('phone.contacts',
         return () => cancelAnimationFrame(id);
     }, [animateIn]);
 
-    // `current` is a local copy so edits/favorites reflect instantly, but the parent re-derives
-    // the prop from the live contacts store (My Card's number changes on a SIM swap mid-view) -
-    // sync when the prop CONTENT changes, keeping locally-toggled fields like favorite.
     const { name, initials, phone, email, address, avatar } = contact;
     useEffect(() => {
         setCurrent(c => ({ ...c, name, initials, phone, email, address, avatar }));
@@ -79,7 +76,7 @@ export function ContactDetail({ contact, onBack, backLabel = t('phone.contacts',
                     wpCode = encodeWaypoint({ label: t('phone.sharedLocation','Shared Location'), x: r.x, y: r.y, icon: 'MapPin', color: '#eb4b3c' });
                     wpSub  = `${Math.round(r.x)}, ${Math.round(r.y)}`;
                 }
-            } catch { /* fall back to a coordless share */ }
+            } catch {}
         }
         void sendMessageApi({ conversation: current.phone, kind: 'location', body: t('phone.currentLocation','Current Location'), wpCode, wpSub });
     }

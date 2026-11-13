@@ -75,8 +75,6 @@ export function SoundHapticsPage({ onBack }: { onBack: () => void }) {
                 </div>
             </ListGroup>
 
-            {/* This slider sets the in-call voice level, so it has nothing to control on a
-                device that cannot call - dropped entirely rather than shown disabled. */}
             {device.calls && (
                 <ListGroup header={t('settings.callVolume', 'Call Volume')}>
                     <div className="flex items-center gap-3 px-4 py-3">

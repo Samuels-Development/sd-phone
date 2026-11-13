@@ -5,13 +5,10 @@ import { t } from '@/i18n';
 interface Point { x: number; y: number }
 
 export interface SignaturePadHandle {
-    /** Composited PNG data-URL (white paper background), or null with no ink. */
     toImage(): string | null;
     clear(): void;
 }
 
-// Coordinate correction under the phone's fractional CSS zoom, mirroring
-// notes/SketchCanvas: clientX/Y are zoom-scaled while rect.left/top are not.
 function ancestorZoom(el: HTMLElement | null): number {
     let z = 1;
     for (let n: HTMLElement | null = el; n; n = n.parentElement) {
@@ -23,8 +20,6 @@ function ancestorZoom(el: HTMLElement | null): number {
 
 const INK = '#1d1d1f';
 const INK_WIDTH = 2.5;
-// A stray tap must not count as a signature: the pad only reports ink once the total drawn
-// path passes this length (CSS px).
 const MIN_INK_LENGTH = 24;
 
 export const SignaturePad = forwardRef<SignaturePadHandle, { onInkChange?: (hasInk: boolean) => void }>(
@@ -71,7 +66,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, { onInkChange?: (hasI
         function onDown(e: React.PointerEvent) {
             const c = canvasRef.current?.getContext('2d');
             if (!c) return;
-            try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* capture unsupported */ }
+            try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch {}
             drawingRef.current = true;
             strokesRef.current.push([point(e)]);
         }
@@ -94,7 +89,6 @@ export const SignaturePad = forwardRef<SignaturePadHandle, { onInkChange?: (hasI
 
         function onUp() {
             drawingRef.current = false;
-            // A tap without movement leaves a pointless one-point stroke - drop it.
             const last = strokesRef.current[strokesRef.current.length - 1];
             if (last && last.length < 2) strokesRef.current.pop();
         }
@@ -160,8 +154,6 @@ export interface SignatureStyle {
     fontSize:   number;
 }
 
-// Great Vibes ships in the bundle (main.tsx); the rest fall back through fonts CEF/Windows
-// carries. Each style renders the typed name onto the same PNG pipeline drawn signatures use.
 export const signatureStyles = (): SignatureStyle[] => [
     { id: 'elegant', label: t('documents.sigStyleElegant', 'Elegant'),       fontFamily: '"Great Vibes", "Snell Roundhand", cursive',                 fontWeight: 400, fontSize: 64 },
     { id: 'script',  label: t('documents.sigStyleScript', 'Script'),         fontFamily: '"Segoe Script", "Snell Roundhand", "Bradley Hand", cursive', fontWeight: 400, fontSize: 44 },
@@ -173,12 +165,10 @@ function fontOf(style: SignatureStyle): string {
     return `${style.fontStyle ? style.fontStyle + ' ' : ''}${style.fontWeight} ${style.fontSize}px ${style.fontFamily}`;
 }
 
-/** Renders a typed name in a signature style to the same white-paper PNG a drawn signature
- *  produces, shrinking long names to fit. Null for an effectively empty name. */
 export async function renderTypedSignature(text: string, style: SignatureStyle): Promise<string | null> {
     const clean = text.trim();
     if (clean.length < 2) return null;
-    try { await document.fonts.load(fontOf(style), clean); } catch { /* system-only font */ }
+    try { await document.fonts.load(fontOf(style), clean); } catch {}
 
     const measure = document.createElement('canvas').getContext('2d');
     if (!measure) return null;

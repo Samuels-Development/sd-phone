@@ -37,10 +37,6 @@ export interface SettingsGroup {
     rows:    SettingsRowDef[];
 }
 
-// Functions, not module-level constants: `t()` bakes in whatever locale is
-// active the moment it evaluates, and a plain `const` here would only ever
-// evaluate once (at first import), never picking up a later language change.
-// Call these fresh from inside a component's render body instead.
 export function getSettingsGroups(): SettingsGroup[] {
     return [
         {

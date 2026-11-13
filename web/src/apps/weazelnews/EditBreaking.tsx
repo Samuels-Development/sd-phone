@@ -55,7 +55,7 @@ export function EditBreaking({ initial, dark, onClose, onSave }: {
     }
     function onGripUp(e: React.PointerEvent) {
         if (dragFrom.current === null) return;
-        try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+        try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
         dragFrom.current = null;
         setDragging(null);
     }

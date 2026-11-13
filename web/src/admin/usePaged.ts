@@ -5,8 +5,6 @@ export interface PagedResult<T, C> {
     nextCursor: C | null | undefined;
 }
 
-// Cursor-based pagination over an admin list endpoint. `key` resets the list
-// whenever the underlying query changes (new search text, different player).
 export function usePaged<T, C>(
     fetchPage: (cursor: C | null) => Promise<PagedResult<T, C> | null>,
     key: string,
@@ -23,9 +21,6 @@ export function usePaged<T, C>(
         setLoading(true);
         if (reset) setError(null);
 
-        // `loading` gates loadMore, so it has to be cleared on every exit. A throw from fetchPage,
-        // or an early return, used to leave it stuck true: the Load more button kept rendering but
-        // every click was a no-op, which reads as pagination silently running out.
         let res: PagedResult<T, C> | null = null;
         let failed = false;
         try {

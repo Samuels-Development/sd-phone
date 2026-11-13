@@ -30,9 +30,6 @@ export function wheelDelta(e: { deltaY: number; deltaX: number; deltaMode?: numb
     return scaled(e.deltaY, e.deltaMode);
 }
 
-// Walks Elements, not HTMLElements: a wheel over an inline SVG chart reports an SVGElement as the
-// target, which is not an HTMLElement, so anchoring the walk to one skipped the chart's scrollable
-// ancestors entirely and handed the gesture back to the browser mid-animation.
 export function verticalScrollerFor(start: Element | null, root: Element | null): HTMLElement | null {
     let node: Element | null = start;
     while (node) {

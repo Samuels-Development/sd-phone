@@ -15,8 +15,6 @@ const DURATIONS: { label: string; secs: number | null }[] = [
     { label: 'Permanent', secs: null },
 ];
 
-// Scope multi-select + duration + reason. Used by the player detail page; the
-// target is always an already-resolved citizenid.
 export function MuteForm({ cid, onDone, toast }: {
     cid: string;
     onDone: (mutes: AdminMute[]) => void;

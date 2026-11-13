@@ -20,11 +20,6 @@ function call<T>(event: string, payload?: unknown): Promise<Envelope<T>> {
     return apiCall<T>(event, payload);
 }
 
-// Outside FiveM every callback would answer `{ ok: true }`, which reads as a
-// failed envelope and leaves every page empty. The browser demo is the only
-// place the panel is ever seen by someone who cannot open a real one, so it
-// serves a full dataset instead: every page populated, every action a no-op
-// that reports success.
 function seed<T>(data: T): Promise<Envelope<T>> {
     return Promise.resolve({ success: true, data });
 }
@@ -40,8 +35,6 @@ export const adminLivePositions = () =>
 export const adminStats = () =>
     isFiveM ? call<AdminStats>('sd-phone:admin:stats') : seed(DEV_STATS);
 
-// Empty q lists the most recently active phones (string keyset cursor); a real
-// query searches with a numeric offset cursor. Both return 20 per page.
 export const adminSearch = (q: string, cursor?: string | number | null) =>
     isFiveM
         ? call<{ players: AdminPlayerHit[]; nextCursor?: string | number | null }>('sd-phone:admin:search', { q, cursor })

@@ -16,8 +16,6 @@ import { cancelInvoice, fetchSentInvoices, type SentInvoice } from './servicesAp
 import { failText } from '@/core/api';
 import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
-// Business sent-invoices list, mirroring the Wallet's Sent segment: contact-resolved identity,
-// reference codes in the title, status chips and cancel on pending rows.
 export function InvoicesPage({ onClose }: { onClose: () => void }) {
     const phone = useMaskedPhone();
     const [exiting,    setExiting]    = useState(false);

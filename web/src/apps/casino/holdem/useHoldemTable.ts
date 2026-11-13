@@ -10,9 +10,6 @@ import { failText } from '@/core/api';
 
 const SHOWDOWN_MS = 5200;
 
-// Lua drops a nil field rather than encoding null, so an empty seat arrives with no `name` key at
-// all. Every `name === null` test downstream would then read it as taken, showing a nameless pod
-// with a 0 stack that cannot be sat in. Pin the nullable fields to real nulls at the boundary.
 function normalizeState(data: HoldemStatePush): HoldemStatePush {
     return {
         ...data,

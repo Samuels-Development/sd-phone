@@ -9,8 +9,6 @@ import { SheetHeader } from '@/ui/SheetHeader';
 const PALETTE = ['#0a84ff', '#30d158', '#ff375f', '#ff9f0a', '#bf5af2', '#ff453a', '#5e5ce6', '#64d2ff', '#ffd60a'];
 
 export function AddContact({ onCancel, onSave, initialPhone = '', embedded = false }: { onCancel: () => void; onSave: (c: Contact) => Promise<string | null>; initialPhone?: string; embedded?: boolean }) {
-    // Embedded mode (inside a Sheet): the host animates the presentation, so the form's own
-    // slide-up/down is skipped and cancel/save hand back to the host immediately.
     const [shown, setShown] = useState(embedded);
     const [first, setFirst] = useState('');
     const [last,  setLast]  = useState('');

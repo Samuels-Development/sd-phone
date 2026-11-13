@@ -10,7 +10,6 @@ import { Sheet } from '@/ui/Sheet';
 import { isEmailish } from './mailSuggest';
 import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
-/** Compose's quick picker: tap an address to append it to the To field. */
 export function SavedEmailsSheet({ emails, onPick, onClose }: {
     emails:  string[];
     onPick:  (email: string) => void;
@@ -36,7 +35,6 @@ export function SavedEmailsSheet({ emails, onPick, onClose }: {
                         </div>
                     ) : (
                         <div className="relative">
-                            {/* Capped at five rows; longer lists scroll inside the card. */}
                             <div
                                 ref={listRef}
                                 onScroll={updateMoreBelow}
@@ -71,7 +69,6 @@ export function SavedEmailsSheet({ emails, onPick, onClose }: {
     );
 }
 
-/** Full-page manager, pushed from the mailboxes screen like a folder list. */
 export function SavedEmailsPage({ emails, onAdd, onRemove, onBack }: {
     emails:   string[];
     onAdd:    (email: string) => void;

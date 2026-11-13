@@ -13,7 +13,6 @@ import { launchOriginFrom } from './launchOrigin';
 import { asAppId, preloadApp } from './appRegistry';
 import { CircularProgress } from '@/ui/CircularProgress';
 
-// AppIconSVG always draws on a fixed 60px design box; every caller scales that box to fit.
 export const ART = 60;
 
 export const TILE_SHADOW = '0 2px 10px rgba(0,0,0,0.38), 0 0 0 0.5px rgba(0,0,0,0.12)';
@@ -104,11 +103,6 @@ export function AppIcon({ app, label = true, onOpen, badge }: AppIconProps) {
                         />
                     )}
 
-                    {/* Hover/press dim as a background-color overlay rather than filter: brightness.
-                        A filter promotes/demotes the icon's compositing layer on hover, which forces
-                        the shared home-strip layer to re-rasterize and — under the phone's fractional
-                        CSS zoom — re-snaps neighbouring icons a subpixel (visible jitter). A
-                        background-color transition is a localized paint that never re-layers. */}
                     {!downloading && (
                         <div className="pointer-events-none absolute inset-0 transition-colors duration-150 ease-out group-hover:bg-black/[0.22] group-active:bg-black/[0.4]" />
                     )}

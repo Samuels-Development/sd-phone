@@ -60,14 +60,11 @@ export async function apiLogin(input: { username: string; password: string }): P
     return res.success ? { ok: true, me: res.data?.me } : { ok: false, message: res.message };
 }
 
-/** Subscribe/unsubscribe this phone to the feed push. The server only pushes to watchers, so a
- * phone that is closed or backgrounded no longer pays to receive and discard one. */
 export function apiWatch(on: boolean): void {
     if (isFiveM) void fetchNui('sd-phone:birdy:watch', { on });
 }
 
 export async function apiFeed(following: boolean): Promise<BirdyPost[]> {
-    // Dev seed: treat other authors as followed so the tab is not empty.
     if (!isFiveM) return following ? SEED_POSTS.filter(p => p.author.handle !== 'you') : SEED_POSTS;
     return normalizePosts((await call<{ posts: BirdyPost[] }>('sd-phone:birdy:feed', { following }))?.posts ?? []);
 }
@@ -262,7 +259,6 @@ export async function apiFollowList(kind: 'followers' | 'following', handle?: st
     return (await call<{ users: BirdyFollowUser[] }>('sd-phone:birdy:followList', { kind, handle }))?.users ?? [];
 }
 
-// `joined` is derived from created_at server-side.
 export async function apiUpdateProfile(input: { name: string; bio: string; protected: boolean; avatar?: string; banner?: string }): Promise<BirdyProfile | null> {
     if (!isFiveM) return { ...DEV_PROFILE, ...input };
     return (await call<{ profile: BirdyProfile }>('sd-phone:birdy:updateProfile', input))?.profile ?? null;

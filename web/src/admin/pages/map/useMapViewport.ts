@@ -113,7 +113,7 @@ export function useMapViewport(): MapViewport {
             el.removeEventListener('pointermove', move);
             el.removeEventListener('pointerup', up);
             el.removeEventListener('pointercancel', up);
-            try { el.releasePointerCapture(ev.pointerId); } catch { /* released already */ }
+            try { el.releasePointerCapture(ev.pointerId); } catch {}
             setPanning(false);
             if (dragged) {
                 const swallow = (c: MouseEvent) => { c.stopPropagation(); c.preventDefault(); };

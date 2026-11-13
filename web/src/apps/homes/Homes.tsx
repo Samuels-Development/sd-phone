@@ -45,14 +45,11 @@ export function Homes({ onClose: _onClose }: { onClose: () => void }) {
     const homes = list?.homes ?? (isFiveM ? [] : HOMES);
     const pluralProperties = t('homes.properties', 'properties');
     const fewProperties = t('homes.propertiesFew', 'properties');
-    // Only catalogs with a dedicated few form opt into locale plural rules.
-    // Existing catalogs retain their original count === 1 singular behavior.
     const propertyForm = fewProperties !== 'properties'
         ? new Intl.PluralRules(getLocaleTag()).select(homes.length)
         : homes.length === 1 ? 'one' : 'other';
     const propertyLabel = propertyForm === 'one'
         ? t('homes.property', 'property')
-        // Catalogs without a separate few form retain their existing localized plural.
         : propertyForm === 'few' && fewProperties !== 'properties'
             ? fewProperties
             : pluralProperties;
@@ -154,7 +151,7 @@ function HomeDetail({ h, caps, onBack, animateIn = true }: { h: Home; caps: Home
         if (!caps.keyList || !isFiveM) return;
         fetchNui<Envelope<void> & { holders?: KeyHolder[] }>('sd-phone:homes:keyHolders', { id: h.id })
             .then(r => { if (r?.success && Array.isArray(r.holders)) setHolders(r.holders); })
-            .catch(() => { /* keep current */ });
+            .catch(() => {});
     };
 
     const setWaypoint = () => { if (h.coords) void fetchNui('sd-phone:homes:waypoint', h.coords); };
@@ -172,7 +169,7 @@ function HomeDetail({ h, caps, onBack, animateIn = true }: { h: Home; caps: Home
         if (!isFiveM) { setHolders(prev => [...prev, { id: target, name: `Player ${target}` }]); return; }
         apiCall<void>('sd-phone:homes:giveKey', { id: h.id, target })
             .then(r => { if (r.success) refreshHolders(); })
-            .catch(() => { /* no-op */ });
+            .catch(() => {});
     };
 
     const removeHolder = (holder: KeyHolder) => {
@@ -183,7 +180,7 @@ function HomeDetail({ h, caps, onBack, animateIn = true }: { h: Home; caps: Home
                 if (caps.keyList) refreshHolders();
                 else setHolders(prev => prev.filter(k => k.id !== holder.id));
             })
-            .catch(() => { /* no-op */ });
+            .catch(() => {});
     };
 
     return (

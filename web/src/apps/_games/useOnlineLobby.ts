@@ -14,27 +14,16 @@ interface OnlineGameInfo { gameId: string; opponent: string; pot: number }
 interface OnlineStartData { gameId: string; color: string; opponent: string; pot: number }
 
 export interface UseOnlineLobbyOptions {
-    /** A match began: reset local game state, read d.color, and show the game screen. */
     onStart: (d: OnlineStartData) => void;
-    /** An opponent move arrived (the `move` payload of the `<game>:move` event). */
     onMove?: (move: unknown) => void;
-    /** A turn-neutral relay arrived (the `data` payload of the `<game>:relay` event). */
     onRelay?: (data: unknown) => void;
-    /** Both sides finished setup: the match is live and `turn` says who moves first. */
     onBegin?: (d: { turn: string; you: string }) => void;
-    /** The opponent finished their setup; we may still be placing. */
     onOppReady?: () => void;
-    /** The opponent resigned or left mid-match. */
     onEnded: (reason: string) => void;
-    /** Return-to-lobby succeeded: clear match state and show the lobby screen. */
     onReset?: () => void;
-    /** Navigate back to the game's home screen (hook state is already cleared). */
     onHome: () => void;
-    /** Fresh stats after the hook records a forfeit loss. */
     onStats?: (stats: GameStats) => void;
-    /** True while the Play Online screen (hub or room) is visible; gates the poll and kick timer. */
     inLobbyScreen: boolean;
-    /** True once the current match has finished; suppresses forfeit on leave/unmount. */
     matchOver: boolean;
 }
 
@@ -61,8 +50,6 @@ export interface OnlineLobby {
     goHome: () => void;
 }
 
-// useNuiEvent types its action against the NuiMessage union; lobby event names are
-// built from the game id at runtime, so subscribe with an equivalent raw listener.
 function useGameEvent<T>(action: string, handler: (data: T) => void): void {
     const handlerRef = useRef(handler);
     handlerRef.current = handler;
@@ -78,10 +65,6 @@ function useGameEvent<T>(action: string, handler: (data: T) => void): void {
 }
 
 export function useOnlineLobby(game: string, options: UseOnlineLobbyOptions): OnlineLobby {
-    // While this game is backgrounded, quiet the hub list poll and the kick timer.
-    // A LIVE match stays mounted and keeps its :move/:ended listeners, so the frozen
-    // card always shows the true current board; only the browsing-the-hub refresh and
-    // the missing-member countdown pause, and both re-arm instantly on foreground.
     const active = useDeckActive();
     const [lobby,       setLobby]       = useState<LobbyState | null>(null);
     const [lobbies,     setLobbies]     = useState<LobbyListItem[]>([]);

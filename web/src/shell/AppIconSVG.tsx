@@ -507,11 +507,6 @@ function NotesIcon() {
 
 function DocumentsIcon() {
     const u = useIconIds();
-    // Passwords-icon technique: one folder glyph repeated in yellow/green/blue, cascading
-    // diagonally, each with a tile-coloured stroke pass behind it so the layers cut cleanly
-    // out of each other.
-    // Flat, not the family's graphite gradient: the folder layers cut out of each other with
-    // TILE-coloured strokes, and only a flat tile keeps those cut lines invisible.
     const TILE = '#1C1C1E';
     const FOLDER = 'M -16 -9 h 9 a 2 2 0 0 1 1.6 0.9 l 1.8 2.3 h 16.2 a 3 3 0 0 1 3 3 v 11.8 a 3 3 0 0 1 -3 3 h -25.6 a 3 3 0 0 1 -3 -3 v -15 a 3 3 0 0 1 3 -3 z';
     const fold = (grad: string, tx: number, ty: number) => (
@@ -722,8 +717,6 @@ function CalculatorIcon() {
 
 function BirdyIcon() {
     const u = useIconIds();
-    // The user-drawn "plump two-feather flyer" final mark (Downloads/BirdyIconNEWEST2.jsx)
-    // with its authored periwinkle palette; the bare glyph twin lives in apps/birdy/BirdyBird.
     return (
         <svg viewBox={`0 0 ${S} ${S}`} width={S} height={S}>
             <defs>
@@ -735,7 +728,6 @@ function BirdyIcon() {
             </defs>
             <rect width={S} height={S} fill={`url(#${u('bdy')})`} />
             <svg x="0" y="0" width={S} height={S} viewBox="0 0 512 512">
-                {/* Centered on the artwork's bounding box (x 8-95, y 19-96 in its 100-frame). */}
                 <g transform="translate(37,11.5) scale(4.25)">
                     <path
                         fill="#fff"

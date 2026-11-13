@@ -106,7 +106,6 @@ export function NoteEditor({
         images: cur.images,
         updatedAt: new Date().toISOString(),
       });
-      // Mount-only: refs hold the latest values, so the closure staleness is intentional.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     },
     [],

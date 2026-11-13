@@ -5,9 +5,7 @@ export function SegmentedControl<T extends string>({ value, onChange, options, c
     onChange:   (value: T) => void;
     options:    readonly { value: T; label: string; dot?: boolean; badge?: number }[];
     className?: string;
-    /** Size segments to their label + side padding instead of an equal split of a fixed width. */
     fit?:       boolean;
-    /** Shown but inert: the choice exists, it just does nothing in the current context. */
     disabled?:  boolean;
     slide?:     boolean;
 }) {

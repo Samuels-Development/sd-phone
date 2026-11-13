@@ -46,8 +46,6 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
     const [tab,     setTab]     = useSessionState<Tab>('vibez:tab', 'home');
     const [feedTab, setFeedTab] = useSessionState<FeedTab>('vibez:feedTab', 'foryou');
     const [upload,  setUpload]  = useSessionState('vibez:upload', false);
-    // Timestamp of a "Record with Camera" hand-off; the next video that lands in the
-    // gallery within the window pulls the player back here with the clip preloaded.
     const [pendingRecord, setPendingRecord] = useSessionState<number>('vibez:pendingRecord', 0);
     const [composeUrl,    setComposeUrl]    = useSessionState<string | null>('vibez:composeUrl', null);
 
@@ -102,8 +100,6 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
 
     const bumpRefresh = useCallback(() => setRefreshKey(k => k + 1), []);
 
-    // bumpRefresh alone reloads the feeds but leaves the inbox count, the open viewer and the
-    // profile you had drilled into, all of which belong to the account being left.
     const afterAccountChange = useCallback(() => {
         clearSessionState('vibez:');
         setTab('home');
@@ -121,8 +117,6 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [refreshAccounts, bumpRefresh]);
 
-    // Content pushes reach only the phones showing Vibez, so the subscription follows the
-    // foreground. AppDeck keeps this subtree alive, so returning to it is not a remount.
     const deckActive = useDeckActive();
     const wasActive  = useRef(deckActive);
     useEffect(() => {
@@ -131,22 +125,17 @@ export function Vibez({ onClose: _onClose }: { onClose: () => void }) {
         return () => { apiWatch(false); };
     }, [deckActive]);
 
-    // Re-sync on the way back in: anything pushed while this phone was not listening is missed.
     useEffect(() => {
         const returning = deckActive && !wasActive.current;
         wasActive.current = deckActive;
         if (returning) bumpRefresh();
     }, [deckActive, bumpRefresh]);
 
-    // The same refresh for someone who never left the screen while driving back into coverage.
     useRefreshOnReconnect(bumpRefresh);
 
     useNuiEvent('sd-phone:vibez:notification', useCallback(() => {
         void apiCounts().then(setUnread);
     }, []));
-    // A clip recorded via the camera hand-off just hit the gallery: jump back into
-    // Vibez with the compose step preloaded. The 10-minute window keeps unrelated
-    // recordings from yanking the player into the app later.
     useNuiEvent('sd-phone:photos:added', useCallback((data) => {
         if (!pendingRecord || Date.now() - pendingRecord > 10 * 60 * 1000) return;
         if (!data?.url || !isVideoUrl(data.url)) return;

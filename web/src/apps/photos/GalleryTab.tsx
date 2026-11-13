@@ -19,9 +19,7 @@ export function GalleryTab({
     hasMore:        boolean;
     loadingMore:    boolean;
     onLoadMore:     () => void;
-    /** True while the Albums tab is showing. The pane stays mounted, so paging must stop. */
     paused?:        boolean;
-    /** Keep tile media out of the DOM while the app is animating in. See PhotoTile. */
     deferMedia?:    boolean;
 }) {
     const groups = useMemo(() => groupByDay(photos), [photos]);
@@ -31,9 +29,6 @@ export function GalleryTab({
     const loadMoreRef = useRef(onLoadMore);
     loadMoreRef.current = onLoadMore;
 
-    // Infinite scroll. The observer root MUST be the scroll container, not the viewport: the
-    // phone renders under a CSS zoom, and a viewport-rooted observer computes the wrong
-    // intersection and either never fires or fires constantly.
     useEffect(() => {
         const sentinel = sentinelRef.current;
         const root     = scrollRef.current;
@@ -69,12 +64,6 @@ export function GalleryTab({
 
             <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar pb-2">
                 {groups.map(group => (
-                    // Off-screen day sections skip layout, paint and image decode entirely, so
-                    // the cost of the grid stops tracking how far the player has scrolled. Without
-                    // it every mounted tile is restyled on each tab switch, deck re-parent and
-                    // app reopen, which is what made a paged gallery still feel heavy.
-                    // `auto` in contain-intrinsic-size makes the browser remember each section's
-                    // real height once measured, so the scrollbar does not jump.
                     <section
                         key={group.key}
                         className="mb-3"

@@ -8,8 +8,6 @@ export interface AvatarSubject {
     avatar?:  string;
 }
 
-// Full-bleed head-and-shoulders silhouette (the same shape Birdy uses for missing profile
-// pictures); the viewBox keeps the proportions at every avatar size.
 function PersonBust({ size }: { size: number }) {
     return (
         <svg viewBox="0 0 40 40" width={size} height={size} aria-hidden fill="currentColor">
@@ -19,8 +17,6 @@ function PersonBust({ size }: { size: number }) {
     );
 }
 
-// Unknown numbers (no saved contact) get an iOS-style silhouette instead of number-derived
-// initials; shared by the recents No Caller ID rows and the call detail header.
 export function PlaceholderAvatar({ size }: { size: number }) {
     return (
         <span

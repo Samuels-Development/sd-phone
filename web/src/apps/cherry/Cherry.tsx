@@ -62,7 +62,6 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
         return () => cherryWatch(false);
     }, [authed]);
 
-    // AppDeck retains this subtree, so a reopen needs an explicit refetch nonce.
     const [stateNonce, setStateNonce] = useState(0);
     const deckActive = useDeckActive();
     const wasActive = useRef(deckActive);
@@ -203,9 +202,6 @@ export function Cherry({ onClose: _onClose }: { onClose: () => void }) {
         if (s) { setDeck(s.deck); setCanReset(s.canReset); }
     }, []);
 
-    // A new account changes who you are, not just what the deck holds, so this reloads the whole
-    // cherryState (me, profile, deck, matches) and drops the screen you were on: an open chat or
-    // a half-scrolled deck belongs to the account you just left.
     const afterAccountChange = useCallback(() => {
         clearSessionState('cherry:');
         setView('deck');

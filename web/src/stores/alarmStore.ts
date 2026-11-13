@@ -60,8 +60,6 @@ export function useAlarms(): { alarms: AlarmDef[]; loaded: boolean } {
     return { alarms, loaded };
 }
 
-// Dev-only 'Test' button in the Clock app rings the alarm UI without waiting
-// for a real alarm time; App.tsx subscribes and fires the ringing overlay.
 export function requestTestAlarm(): void {
     useAlarmStore.setState(s => ({ testNonce: s.testNonce + 1 }));
 }

@@ -80,8 +80,6 @@ export function RichText({ text }: { text: string }) {
     return <>{nodes}</>;
 }
 
-/** Post media that keeps its box while loading (no layout shift) and fades the pixels in when
- *  they arrive, over the same placeholder grey the skeletons use. */
 function FadeImg({ src, height }: { src: string; height: number }) {
     const [loaded, setLoaded] = useState(false);
     return (
@@ -98,8 +96,6 @@ function FadeImg({ src, height }: { src: string; height: number }) {
 }
 
 export function PostImages({ images }: { images?: string[] }) {
-    // The lightbox lives here rather than in the card, so tapping an image works identically in
-    // the feed and in an opened post without either of them knowing about it.
     const [full, setFull] = useState<string | null>(null);
 
     if (!images || images.length === 0) return null;
@@ -115,7 +111,6 @@ export function PostImages({ images }: { images?: string[] }) {
                     <button
                         key={`${src}-${i}`}
                         type="button"
-                        // Without this the tap also reaches the card and opens the post instead.
                         onClick={e => { e.stopPropagation(); setFull(src); }}
                         className="block min-w-0 active:opacity-90"
                         aria-label={t('squawk.viewImage', 'View image')}

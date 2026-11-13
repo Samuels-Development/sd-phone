@@ -1,6 +1,3 @@
-/** Shimmering placeholder shapes shown while Birdy fetches. CSS-keyframe shimmer only - rAF is
- *  starved in CEF in-game, so all motion here is compositor-driven. */
-
 function Bone({ className }: { className?: string }) {
     return (
         <div
@@ -29,8 +26,6 @@ function PostSkeleton({ wide = false }: { wide?: boolean }) {
     );
 }
 
-/** A screenful of post placeholders, alternating line widths so the column doesn't read as a
- *  repeated tile. */
 export function FeedSkeleton() {
     return (
         <div className="animate-fade-in">

@@ -43,16 +43,12 @@ export function Compose({ accounts, defaultAccountId, initialTo = '', initialSub
 
     const suggestions = suggestEmails(to, savedEmails);
     const suggestionsOpen = suggestions.length > 0;
-    // The last non-empty list keeps rendering while the panel collapses, so rows fade out
-    // in place instead of vanishing a frame before the animation.
     const lastSuggestions = useRef<string[]>([]);
     if (suggestionsOpen) lastSuggestions.current = suggestions;
     const displayedSuggestions = suggestionsOpen ? suggestions : lastSuggestions.current;
 
     const account = accounts.find(a => a.id === accountId) ?? accounts[0];
     const canSend = to.trim().length > 0 && subject.trim().length > 0 && !!account;
-    // Prefilled content (a resumed draft, a reply quote) doesn't count, and neither does the
-    // To field alone: only written work (subject, body, attachments) is worth guarding.
     const dirty = subject !== initialSubject || body !== initialBody
         || JSON.stringify(attachments) !== JSON.stringify(initialAttachments ?? []);
 
@@ -311,8 +307,6 @@ export function Compose({ accounts, defaultAccountId, initialTo = '', initialSub
                     max={MAX_ATTACHMENTS - attachments.length}
                     excludeIds={new Set(attachments.flatMap(a => (a.kind === 'document' && a.docId ? [a.docId] : [])))}
                     onPickMany={docs => {
-                        // Only the docId reference matters to the server (it snapshots the
-                        // document itself); the rest is for the compose strip display.
                         addAttachments(docs.map(d => ({
                             kind: 'document' as const, docId: d.id, name: d.name, docKind: d.kind, size: d.size,
                         })));

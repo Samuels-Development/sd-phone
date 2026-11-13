@@ -13,9 +13,6 @@ export interface SignRequestData {
     doc:       DocFile;
 }
 
-// Full-screen prompt for an accepted AirShare signature request: the responder reads the
-// requester's document (with every existing signature) and signs the requester's ORIGINAL via
-// the shared SignSheet, or declines. Mounted phone-wide - a request can arrive with any app open.
 export function SignRequestLayer({ request, onDone }: {
     request: SignRequestData;
     onDone:  () => void;

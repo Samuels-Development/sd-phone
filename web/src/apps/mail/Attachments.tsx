@@ -26,7 +26,6 @@ export function AttachmentStrip({ attachments, max, onRemove }: {
     const [viewer,   setViewer]   = useState<string | null>(null);
     const [openNote, setOpenNote] = useState<Extract<MailAttachment, { kind: 'note' }> | null>(null);
     if (attachments.length === 0) return null;
-    // Original indices survive the photo/other split so removal stays addressable.
     const indexed = attachments.map((a, i) => ({ a, i }));
     const photos  = indexed.filter(({ a }) => a.kind === 'photo');
     const others  = indexed.filter(({ a }) => a.kind !== 'photo');
@@ -234,8 +233,6 @@ export function NotePickerSheet({ max, onPickMany, onClose }: {
     onPickMany: (notes: Note[]) => void;
     onClose:    () => void;
 }) {
-    // In-game notes are per-character server data (localStorage only backs the dev browser),
-    // so this mirrors Notes.tsx: seed from localStorage in dev, query the server in FiveM.
     const [allNotes, setAllNotes] = useState<Note[]>(() => (isFiveM ? [] : loadNotes().notes));
     const [loaded,   setLoaded]   = useState(!isFiveM);
     const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -304,7 +301,6 @@ export function DocPickerSheet({ excludeIds, max, onPickMany, onClose }: {
     const [selected, setSelected] = useState<Set<string>>(new Set());
     useEffect(() => { void apiList().then(l => setDocs(l?.docs ?? [])); }, []);
 
-    // Locked documents cannot be shared on (mirrors AirShare); the server enforces it too.
     const candidates = (docs ?? []).filter(d => !d.locked && !excludeIds.has(d.id));
 
     function toggle(id: string) {
@@ -545,8 +541,6 @@ export function AttachmentsView({ attachments, accountEmail, messageId, canSave 
     const [openDoc,  setOpenDoc]  = useState<DocAttachment | null>(null);
     const [savedIdx, setSavedIdx] = useState<Set<number>>(new Set());
     const [saveErr,  setSaveErr]  = useState<string | null>(null);
-    // Save buttons stay hidden until the server reports which attachments are already saved,
-    // so an already-saved item never flashes an actionable download button.
     const [statesReady, setStatesReady] = useState(!canSave || !isFiveM);
 
     useEffect(() => {
@@ -562,7 +556,6 @@ export function AttachmentsView({ attachments, accountEmail, messageId, canSave 
 
     const showSave = canSave && statesReady;
 
-    // Original indices survive the photo/other split; the server resolves saves by index.
     const indexed = attachments.map((a, i) => ({ a, i }));
     const photos  = indexed.filter(({ a }) => a.kind === 'photo');
     const others  = indexed.filter(({ a }) => a.kind !== 'photo');

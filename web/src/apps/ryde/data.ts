@@ -184,7 +184,7 @@ export function ryDevToggleData(): boolean {
     try {
         if (hide) localStorage.setItem(NOSEED_KEY, '1'); else localStorage.removeItem(NOSEED_KEY);
         localStorage.removeItem(RIDES_KEY);
-    } catch { /* */ }
+    } catch {}
     return hide;
 }
 
@@ -227,7 +227,7 @@ function seedRides(): Ride[] {
     });
 
     const driverSpecs: { from: string; to: string; tier: string; hrs: number; rider: number; rated?: number; tip?: number }[] = [
-        { from: 'legion',   to: 'vinewood', tier: 'comfort', hrs: 1,   rider: 0 },                       // recent — rider hasn't rated yet
+        { from: 'legion',   to: 'vinewood', tier: 'comfort', hrs: 1,   rider: 0 },
         { from: 'airport',  to: 'mirror',   tier: 'x',       hrs: 5,   rider: 2, rated: 5, tip: 5 },
         { from: 'arena',    to: 'casino',   tier: 'black',   hrs: 23,  rider: 4, rated: 5, tip: 10 },
         { from: 'pier',     to: 'legion',   tier: 'x',       hrs: 49,  rider: 1, rated: 4 },
@@ -252,7 +252,7 @@ function seedRides(): Ride[] {
             riderName: RIDER_NAMES[s.rider % RIDER_NAMES.length],
             placedAt: now - s.hrs * HOUR,
             etaMin: q.eta,
-            earn: q.fare,            // whole fare (DriverCut 1.0) — no phantom client cut
+            earn: q.fare,
             rated: s.rated,
             tip: s.tip,
         };
@@ -295,7 +295,7 @@ export function clearRydeData(): void {
         localStorage.removeItem(RIDES_KEY);
         localStorage.removeItem(DRV_KEY);
         localStorage.removeItem(ST_KEY);
-    } catch { /* */ }
+    } catch {}
 }
 
 export function loadState(): RyderState {

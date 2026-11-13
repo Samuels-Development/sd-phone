@@ -35,8 +35,6 @@ import { dirSign, useIsRtl } from '@/stores/directionStore';
 
 const { w: SCREEN_W, h: SCREEN_H } = device.screen;
 
-// A phone dock spans the screen and spreads its icons over it. A tablet dock is a floating tray
-// sized to its contents, so the slots stop stretching and the row is centred instead.
 const DOCK_FILL = device.screen.dockFill ?? true;
 
 const DOCK_TRAY: Record<DockStyle, string> = {
@@ -75,10 +73,6 @@ function cellFromCenter(cx: number, cy: number) {
     return r * g.cols + c;
 }
 
-// Which of the pages currently on screen the point is over, and the cell within it. Dragging is
-// done in page-local coordinates, so unfolded - where a second page sits beside the first - a
-// point past one page width belongs to the NEXT page. Without this the column clamp pins it to
-// the last column of the page being dragged from, which reads as the icon refusing to cross.
 function cellFromCenterPaged(cx: number, cy: number, pagesOnScreen: number) {
     const offset = Math.max(0, Math.min(pagesOnScreen - 1, Math.floor(cx / SCREEN_W)));
     return { offset, cell: cellFromCenter(cx - offset * SCREEN_W, cy) };
@@ -163,7 +157,6 @@ export interface HomescreenProps {
     onLayoutChange?: (layout: SavedLayout) => void;
     onEditingChange?: (editing: boolean) => void;
     homeActive?: boolean;
-    /** Play the icon bloom on mount; false when the phone is revealed with an app on top. */
     bloomOnMount?: boolean;
 }
 
@@ -178,10 +171,6 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
     const DOTS_BOTTOM = dotsBottom(ICON, dockHidden);
     const densityRef = useRef(getDensity());
     const badges = useBadges();
-    // The homescreen mounts exactly when the phone content is revealed (open without a lock,
-    // or the unlock swipe finishing), so a mount-triggered bloom staggers the icons in like
-    // iOS. Skipped when an app is revealed on top (the icons would flash through its resume
-    // zoom); cleared after the longest delay + duration so the animations drop off the tiles.
     const [bloom, setBloom] = useState(bloomOnMount);
     useEffect(() => {
         if (!bloomOnMount) return;
@@ -190,8 +179,6 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     const appMap   = useMemo(() => new Map(apps.map(a => [a.id, a])), [apps]);
-    // Tile elements keyed by widget uid, so an interactive custom widget's "open" postMessage
-    // (no MouseEvent to read a launch origin from) can still zoom the app open from its own tile.
     const widgetTileRefs = useRef<Record<string, HTMLElement>>({});
 
     const [dockIds, setDockIds] = useState<string[]>(() => savedLayout?.dock ?? dock);
@@ -216,7 +203,6 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
         if (savedLayout && savedLayout.slots.length) return normalize(savedLayout.slots);
         const seeded = new Set(Object.values(folders).flatMap(f => f.appIds));
         const loose = apps.filter(a => !dockIds.includes(a.id) && !seeded.has(a.id)).map(a => a.id);
-        // A seeding count, not a grid measure: how many apps land on page one before it spills.
         const wanted = firstPageApps ?? 12;
         const FIRST_PAGE = Math.min(wanted > 0 ? wanted : itemsPerPage(), itemsPerPage());
         const pages = Math.max(2, Math.ceil(loose.length / itemsPerPage()) + 1);
@@ -262,8 +248,6 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
         });
     }, [apps, dockIds, folders, folderedIds, widgets]);
 
-    // Read by the drag listeners, which are bound once per drag and would otherwise close over
-    // the widget list as it was when the drag started.
     const widgetsRef = useRef(widgets);
     widgetsRef.current = widgets;
 
@@ -329,14 +313,10 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
         setWidgets(prev => prev.filter(w => w.uid !== uid));
     }, []);
 
-    // Which card each stack is showing. Deliberately not persisted: a swipe is cheap to redo and
-    // writing the layout on every one would churn phone_settings for a purely visual preference.
     const [stackAt, setStackAt] = useState<Record<string, number>>({});
 
-    // uid the gallery is adding a card to, rather than placing a new widget.
     const [stackFor, setStackFor] = useState<string | null>(null);
 
-    /** Drops one card off a stack, or the whole widget when it was the last one. */
     const dropCard = useCallback((uid: string, index: number) => {
         setWidgets(prev => prev.flatMap(w => {
             if (w.uid !== uid) return [w];
@@ -346,22 +326,17 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
         setStackAt(prev => ({ ...prev, [uid]: Math.max(0, index - 1) }));
     }, []);
 
-    /** Appends a card to an existing stack. Same footprint, so size is fixed by the placement. */
     const addToStack = useCallback((uid: string, kind: string, align: WidgetAlign, theme: WidgetTheme): boolean => {
         setWidgets(prev => prev.map(w => (w.uid === uid ? addCard(w, { kind, align, theme }) : w)));
         setStackFor(null);
         return true;
     }, []);
 
-    // Widget dragging is deliberately separate from the icon drag above. Icons swap, fold into
-    // folders and reflow; a widget just moves to a free rectangle, so sharing that machinery
-    // would mean threading multi-cell cases through every branch of it.
     const [dragW, setDragW] = useState<{ uid: string; x: number; y: number } | null>(null);
     const dragWStart = useRef({ px: 0, py: 0, x: 0, y: 0, zoom: 1 });
     const dropSpot   = useRef<{ col: number; row: number } | null>(null);
     const [dropPreview, setDropPreview] = useState<{ page: number; col: number; row: number } | null>(null);
 
-    /** Nearest legal top-left cell for a widget dragged to (x, y), clamped inside the grid. */
     const cellFor = useCallback((size: WidgetSize, x: number, y: number) => {
         const g = getGrid();
         const span = spanOf(size);
@@ -370,7 +345,6 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
         return { col, row };
     }, []);
 
-    /** Page the widget will land on. Follows the visible page while an edge-flip is dragging it. */
     const dropPageRef = useRef(0);
     const dragSizeRef = useRef<WidgetSize>('sm');
 
@@ -378,9 +352,6 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
         if (!editingRef.current) return;
         e.stopPropagation();
         const s = slot(w.row * COLS + w.col);
-        // The same page-local to screen-local shift the icon drag makes: the dragged tile is drawn
-        // against the whole visible screen, so a widget on the second visible page has to be
-        // lifted at its real position rather than the first page's equivalent.
         const sx = s.x + (w.page - pageRef.current) * SCREEN_W;
         dragWStart.current = { px: e.clientX, py: e.clientY, x: sx, y: s.y, zoom: ancestorZoom(stripRef.current) };
         dropSpot.current = { col: w.col, row: w.row };
@@ -388,18 +359,8 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
         dragSizeRef.current = w.size;
         setDropPreview({ page: w.page, col: w.col, row: w.row });
         setDragW({ uid: w.uid, x: sx, y: s.y });
-        // No setPointerCapture: the dragged tile is re-parented into whichever page is showing,
-        // and capture does not survive that. The window listeners below own the gesture instead.
     }
 
-    /**
-     * Widget drag, driven from the WINDOW rather than the tile.
-     *
-     * Dragging a widget to another page means it has to be rendered on the page that is currently
-     * visible, which unmounts it from the page it started on. Pointer capture and element
-     * handlers both die with that unmount, so the move and release are tracked globally and the
-     * tile stays a passive thing to look at.
-     */
     useEffect(() => {
         const uid = dragW?.uid;
         if (!uid) return;
@@ -409,8 +370,6 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
             const x = g.x + ((e.clientX - g.px) * dirSign()) / g.zoom;
             const y = g.y + (e.clientY - g.py) / g.zoom;
             setDragW(d => (d && d.uid === uid ? { uid, x, y } : d));
-            // Which visible page the tile is over, so it can be dropped on the second one rather
-            // than being clamped into the first page's columns.
             const off = Math.max(0, Math.min(pagesOnScreenRef.current - 1, Math.floor(x / SCREEN_W)));
             dropPageRef.current = pageRef.current + off;
             const spot = cellFor(dragSizeRef.current, x - off * SCREEN_W, y);
@@ -419,8 +378,6 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
                 ? p
                 : { page: dropPageRef.current, col: spot.col, row: spot.row }));
 
-            // Same edge-hold as the icon drag, so carrying a widget between pages feels identical
-            // to carrying an icon: hover near an edge and the page turns under you.
             const stripW = stripRef.current?.offsetWidth ?? 0;
             const span = spanOf(dragSizeRef.current);
             const px = x + (span.w * getGrid().colStride) / 2;
@@ -467,8 +424,6 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
             window.removeEventListener('pointerup', up);
             window.removeEventListener('pointercancel', up);
         };
-        // Only the identity of the dragged widget matters; everything else is read from refs so
-        // the listeners are attached once per drag rather than re-bound on every pointer move.
     }, [dragW?.uid, cellFor]);
 
     const previewWidgets = useMemo(() => {
@@ -487,7 +442,6 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
 
     const reflowNote = useMemo(() => pageMoves(slots, previewSlots, itemsPerPage()), [slots, previewSlots]);
 
-    /** page -> cells hidden beneath a widget, so an icon is never drawn under one. */
     const coveredByPage = useMemo(() => {
         const m = new Map<number, Set<number>>();
         for (const w of previewWidgets) {
@@ -559,7 +513,6 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
     const grabZoom = useRef(1);
     const fromCell = useRef(0);
     const overCellRef = useRef(0);
-    // The page the pointer is over, which unfolded is not always the page being dragged from.
     const overPageRef = useRef(0);
     const [plopIds, setPlopIds] = useState<Set<string>>(() => new Set());
     const plopTimer = useRef<number | null>(null);
@@ -622,26 +575,15 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
         if (mergeCellRef.current !== null) setMergeCell(null);
     };
 
-    // A page counts as used if it holds an icon OR a widget. Counting only icons made a page
-    // holding nothing but a widget collapse the moment the drag ended: the page stopped being
-    // rendered and took the widget with it, which looked exactly like the widget was deleted.
     const lastIconPage   = Math.floor(lastFilledIndex(slots) / itemsPerPage());
     const lastWidgetPage = widgets.reduce((m, w) => Math.max(m, w.page), -1);
     const filledPages = Math.max(lastIconPage, lastWidgetPage) + 1;
     const foldW = useScreenW();
-    // While an app holds the other half, the home screen is the phone on THIS half and behaves
-    // like one: a single page, paged normally. Laying out for the full width would put its second
-    // page underneath the split app, where it can be scrolled to but never seen.
     const splitPane = useSplitPaneActive();
     const splitSide = useSplitSide();
     const paneW = splitPane ? SCREEN_W : foldW;
     const visiblePages = editing ? Math.max(1, filledPages + 1) : Math.max(1, filledPages);
-    // A page stays one closed-screen wide however wide the device is, so unfolding does not
-    // reflow anyone's arrangement - it reveals the next page beside the current one.
     const pagesOnScreen = Math.max(1, Math.round(paneW / SCREEN_W));
-    // Paging stops when the LAST page reaches the right edge, not when it reaches the left one:
-    // with two pages on screen, scrolling to the final page's own index would park it on the left
-    // and leave dead space beside it.
     const lastPage = Math.max(0, visiblePages - pagesOnScreen);
     const visiblePagesRef = useRef(1);
     visiblePagesRef.current = visiblePages;
@@ -649,25 +591,13 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
     pagesOnScreenRef.current = pagesOnScreen;
     const lastPageRef = useRef(0);
     lastPageRef.current = lastPage;
-    // `pages` is chunked from the ICON array, so a widget-only page has no chunk to render into.
-    // Pad with empty pages up to visiblePages so every page that exists gets a container - this
-    // is also what provides the spare trailing page to drag onto in edit mode.
     const renderPages = useMemo(() => {
         const out = pages.slice(0, visiblePages);
         while (out.length < visiblePages) out.push(Array<string | null>(itemsPerPage()).fill(null));
         return out;
     }, [pages, visiblePages]);
-    // Also catches unfolding while parked on the last page: the reachable range shrinks as a
-    // second page comes on screen, so the current page has to come back with it.
     useEffect(() => { if (page > lastPage) setPage(lastPage); }, [lastPage, page]);
 
-    /**
-     * True while the page strip is sliding, so glass widgets can drop their blur for the duration.
-     *
-     * Covers both halves of the gesture: the finger drag, and the settle transition that plays
-     * afterwards. The window is a hair longer than the 380ms transition so the blur returns to a
-     * stationary tile rather than a still-moving one.
-     */
     const [pageMoving, setPageMoving] = useState(false);
     const settleRef = useRef<number | null>(null);
     const markPageMotion = useCallback(() => {
@@ -679,8 +609,6 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
 
     const swiping = dragX !== 0;
     useEffect(() => { if (swiping) markPageMotion(); }, [swiping, markPageMotion]);
-    // Compares the PREVIOUS page rather than skipping the first run: StrictMode double-invokes
-    // effects in dev, which defeats a "first run" ref and would suspend the blur on mount.
     const prevPageRef = useRef(page);
     useEffect(() => {
         if (prevPageRef.current === page) return;
@@ -753,18 +681,11 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
 
     function onIconDown(e: ReactPointerEvent, id: string, localCell: number, fromPage: number) {
         e.stopPropagation();
-        // slot() is page-local, but the drag layer is a sibling of the paged strip and so is
-        // positioned against the whole visible screen. Unfolded, an icon on the second visible
-        // page would otherwise start its drag at the first page's coordinates and appear to jump
-        // across. Shifting by the page's offset from the current paging position puts the lifted
-        // icon exactly where the real one was.
         const s = slot(localCell);
         grabSlot.current = { x: s.x + (fromPage - pageRef.current) * SCREEN_W, y: s.y };
         startClient.current = { x: e.clientX, y: e.clientY };
         grabZoom.current = ancestorZoom(stripRef.current);
         fromCell.current = localCell;
-        // The page the icon is actually drawn on, not the paging index: unfolded, a second page
-        // is on screen beside it and its icons must not be lifted out of the first one's slots.
         fromPageRef.current = fromPage;
         overCellRef.current = localCell;
         overPageRef.current = fromPage;
@@ -924,7 +845,6 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
             return;
         }
 
-        // The page the pointer settled over, which unfolded may be the second one on screen.
         const dropPage = overPageRef.current;
         const dest = landingCell(slots, coveredByPage.get(dropPage), dropPage, overCellRef.current, itemsPerPage());
         if (dest === null) { endIconDrag(); return; }
@@ -987,10 +907,6 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
 
 
     return (
-        // Confined to its own half while an app holds the other one. Everything the home screen
-        // draws - wallpaper, page strip, page dots, dock - is positioned against this box, so
-        // giving it the pane's width is what stops that furniture spanning the whole device and
-        // centring itself on the seam.
         <div
             ref={rootRef}
             className="absolute inset-y-0 start-0 select-none"
@@ -1072,7 +988,6 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
                                     style={{ insetInlineStart: 0, top: 0, width: ICON, height: ICON, transform: `translate(calc(var(--dir-x, 1) * ${slot(padCell).x}px), ${slot(padCell).y}px)` }}
                                 />
                             )}
-                            {/* Landing pad under the dragged widget, so the snap target is visible. */}
                             {dragW && dropPreview && dragWidgetBox && pi === page && (
                                 <div
                                     className="pointer-events-none absolute rounded-[22px] border border-white/40 bg-white/10"
@@ -1099,10 +1014,6 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
                                             transition: 'transform 0.26s cubic-bezier(0.2,0.8,0.3,1)',
                                             zIndex: 1,
                                             touchAction: 'none',
-                                            // Where this tile sits on the SCREEN, so a glass widget can crop its own
-                                            // copy of the wallpaper to match the one behind it. Page index is absent
-                                            // deliberately: the wallpaper does not scroll with the pages, so the same
-                                            // cell on every page sits over the same part of it.
                                             '--glass-img': `url(${resolveWallpaper(wallpaper)})`,
                                             '--glass-w': `${SCREEN_W}px`,
                                             '--glass-h': `${SCREEN_H}px`,
@@ -1113,8 +1024,6 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
                                         <div
                                             ref={el => { if (el) widgetTileRefs.current[w.uid] = el; else delete widgetTileRefs.current[w.uid]; }}
                                             className={editing ? 'animate-app-jiggle' : ''}
-                                            // --jiggle scales the wobble down for bigger tiles so a
-                                            // 4x4 does not swing five times as far as an icon.
                                             style={editing
                                                 ? { animationDelay: `${jiggleDelay(w.uid)}ms`, '--jiggle': `${jiggleDeg(w.size)}deg` } as CSSProperties
                                                 : (bloom
@@ -1124,10 +1033,6 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
                                                 if (editing) return;
                                                 const a = appMap.get(def.appId);
                                                 if (!a) return;
-                                                // Zoom the app open from the widget itself, not the grid origin. Must
-                                                // be SCREEN FRACTIONS like every other launch site - passing client
-                                                // pixels here put the origin off-screen, so the app appeared with no
-                                                // transition at all.
                                                 launch(a, launchOriginFrom(e.currentTarget as HTMLElement));
                                             }}
                                         >
@@ -1143,9 +1048,6 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
                                                     return cd.render({ size: w.size, width, height, align: card.align ?? 'left', theme: card.theme ?? 'dark', picks: card.picks,
                                                         onPicks: ids => setWidgets(prev => prev.map(o => (o.uid === w.uid ? patchCard(o, ci, { picks: ids.length ? ids : undefined }) : o))),
                                                         editing,
-                                                        // Interactive custom widgets are real pointer targets, so their own
-                                                        // clicks/long-presses no longer bubble out of the (cross-origin)
-                                                        // iframe into this tile - they ask for the same behavior explicitly.
                                                         onOpen: () => {
                                                             if (editingRef.current || !homeActiveRef.current) return;
                                                             const a = appMap.get(cd.appId);
@@ -1201,7 +1103,6 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
                                 if (!editing) {
                                     return (
                                         <div key={id} style={{ position: 'absolute', insetInlineStart: 0, top: 0, width: ICON, transform: `translate(calc(var(--dir-x, 1) * ${s.x}px), ${s.y}px)` }}>
-                                            {/* Scale/opacity live on this inner div so the positioned parent's translate is untouched. */}
                                             <div style={bloom ? { animation: `${folder ? 'home-folder-in' : 'home-icon-in'} 0.38s cubic-bezier(0.34,1.3,0.64,1) both`, animationDelay: `${li * 20}ms` } : undefined}>
                                                 {folder
                                                     ? <FolderTile label={def!.name} apps={folderApps(fkey)} badge={folderBadge(fkey)} onOpen={() => setOpenFolder(fkey)} />
@@ -1225,7 +1126,7 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
                                             style={{ position: 'absolute', insetInlineStart: 0, top: 0, width: ICON, transform: `translate(calc(var(--dir-x, 1) * ${pos.x}px), ${pos.y}px)`, transition: 'transform 0.26s cubic-bezier(0.2,0.8,0.3,1)', zIndex: isMergeTarget ? 2 : 1 }}
                                         >
                                             <div className="animate-app-jiggle" style={{ animationDelay: `${jiggleDelay(id)}ms` }}>
-                                                <FolderTile label={def!.name} apps={folderApps(fkey)} badge={folderBadge(fkey)} merging={isMergeTarget} onOpen={() => { /* edit mode: drag, don't open */ }} />
+                                                <FolderTile label={def!.name} apps={folderApps(fkey)} badge={folderBadge(fkey)} merging={isMergeTarget} onOpen={() => {}} />
                                             </div>
                                         </div>
                                     );
@@ -1275,8 +1176,8 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
             {editing && dragId && (
                 <div className="pointer-events-none absolute start-0 top-0 z-[60]" style={{ width: ICON, transform: `translate(calc(var(--dir-x, 1) * ${dragPos.x}px), ${stripTop + dragPos.y}px)` }}>
                     {isFolderId(dragId)
-                        ? <div style={{ transform: 'scale(1.1)' }}><FolderTile label={folders[folderKeyOf(dragId)]?.name ?? ''} apps={folderApps(folderKeyOf(dragId))} badge={folderBadge(folderKeyOf(dragId))} onOpen={() => { /* lifted */ }} /></div>
-                        : appMap.get(dragId) && <EditTile app={appMap.get(dragId)!} dragging swapTarget={false} plopping={false} removable={false} merging={false} onRemove={() => { /* lifted */ }} />}
+                        ? <div style={{ transform: 'scale(1.1)' }}><FolderTile label={folders[folderKeyOf(dragId)]?.name ?? ''} apps={folderApps(folderKeyOf(dragId))} badge={folderBadge(folderKeyOf(dragId))} onOpen={() => {}} /></div>
+                        : appMap.get(dragId) && <EditTile app={appMap.get(dragId)!} dragging swapTarget={false} plopping={false} removable={false} merging={false} onRemove={() => {}} />}
                 </div>
             )}
 
@@ -1317,9 +1218,6 @@ export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpap
                 {lastPage > 0 && (
                     <div className="flex items-center gap-[7px] rounded-full bg-black/35 px-2.5 py-[7px] shadow-sm backdrop-blur-md">
                         {renderPages.map((_, i) => {
-                            // Unfolded, the screen is two page-widths wide, so two pages are on
-                            // screen at once and both read as current - a dot is measured against
-                            // whichever of them it is nearer.
                             const frac = page - dragX / SCREEN_W;
                             const dist = Math.min(1, ...Array.from(
                                 { length: pagesOnScreen },
@@ -1492,8 +1390,6 @@ const TILE_RADIUS = 0.276;
 const MINI_RADIUS = 0.30;
 const TILE_GLYPH  = 40;
 const MINI_GLYPH  = 10;
-// One cell of the folder's 3x3 preview: the tile less its 9px padding and two 3px gutters. Derived
-// rather than fixed so a native mini keeps filling its cell when the tile follows a bigger profile.
 function miniOf(tile: number): number {
     return (tile - 9 * 2 - 3 * 2) / 3;
 }
@@ -1610,7 +1506,7 @@ function FolderOverlay({ name, apps, badges, editing: homeEditing, autoEdit, wal
         grabZoom.current = ancestorZoom(panelRef.current);
         dragIdxRef.current = idx; overRef.current = null; outsideRef.current = false;
         setDragIdx(idx); setDragDelta({ x: 0, y: 0 }); setOverIdx(null);
-        try { panelRef.current?.setPointerCapture(capPid.current); } catch { /* ignore */ }
+        try { panelRef.current?.setPointerCapture(capPid.current); } catch {}
     }
     function onCellDown(e: ReactPointerEvent, idx: number) {
         e.stopPropagation();
@@ -1633,7 +1529,6 @@ function FolderOverlay({ name, apps, badges, editing: homeEditing, autoEdit, wal
             if (!inside) { overRef.current = null; setOverIdx(null); }
             else if (over !== null && over !== dragIdxRef.current) { overRef.current = over; setOverIdx(over); }
             else if (over === dragIdxRef.current) { overRef.current = null; setOverIdx(null); }
-            // else (inside, over a gap): keep the current overRef / overIdx
         } else if (lpTimer.current !== null) {
             const dx = e.clientX - startRef.current.x, dy = e.clientY - startRef.current.y;
             if (Math.abs(dx) > 6 || Math.abs(dy) > 6) { movedRef.current = true; clearLP(); }
@@ -1711,7 +1606,6 @@ function FolderOverlay({ name, apps, badges, editing: homeEditing, autoEdit, wal
                     style={{ touchAction: 'none' }}
                     className="w-[calc(100%-48px)] rounded-[34px] border border-white/15 bg-white/[0.14] p-5"
                 >
-                    {/* A folder page is its own 4-up grid, not the home grid, so it does not follow device cols. */}
                     <div ref={gridRef} className="relative grid grid-cols-4 gap-x-3 gap-y-5">
                         {apps.map((a, i) => {
                             const isDragging = dragIdx === i;
@@ -1745,7 +1639,7 @@ function FolderOverlay({ name, apps, badges, editing: homeEditing, autoEdit, wal
                                     className={plopIds.has(a.id) ? 'animate-plop' : (jiggle ? 'animate-app-jiggle' : '')}
                                     style={jiggle ? { animationDelay: `${jiggleDelay(a.id)}ms` } : undefined}
                                 >
-                                    <AppIcon app={a} badge={badges?.[a.id]} onOpen={() => { /* launch handled by the cell gesture */ }} />
+                                    <AppIcon app={a} badge={badges?.[a.id]} onOpen={() => {}} />
                                 </div>
                                 {editing && (
                                     <button

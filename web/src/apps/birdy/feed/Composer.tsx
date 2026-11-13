@@ -332,9 +332,6 @@ export function Composer({ me, onClose, onPost }: {
     );
 }
 
-/** Twitter's character budget as a filling ring: quiet blue while there's room, the remaining
- *  number fades in for the last 20 characters, red when the budget is spent. Hidden until the
- *  first character so an empty composer stays clean. */
 function CounterRing({ len }: { len: number }) {
     if (len === 0) return null;
     const remaining = MAX_POST_LENGTH - len;

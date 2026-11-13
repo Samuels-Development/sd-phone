@@ -77,7 +77,6 @@ export function RoomSettingsSheet({ room, nickname, onClose, onLeave, onMemberRe
         return () => { alive = false; };
     }, [room.id, nickname]);
 
-    // The regen cooldown ticks down locally; the server stays authoritative on the action.
     useEffect(() => {
         if (cooldown <= 0) return;
         const id = window.setInterval(() => setCooldown(c => (c > 0 ? c - 1 : 0)), 1000);

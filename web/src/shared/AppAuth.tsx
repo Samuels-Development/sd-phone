@@ -511,8 +511,6 @@ function AuthForm({ mode, appName, icon, theme, fields, notice, myNumber, myEmai
         if (focusingNewPw) setSuggestedPw(generateStrongPassword());
     }, [focusedKey]);
 
-    // One Mail account is the common case; several is why the bar cycles rather than picking for
-    // you, since only the player knows which address they want on this account.
     const emails = myEmails ?? [];
     const [emailPick, setEmailPick] = useState(0);
     const chosenEmail = emails.length > 0 ? emails[emailPick % emails.length] : null;
@@ -1106,7 +1104,6 @@ function Field({ label, value, onChange, type, last, suffix, onFocus, onBlur, re
     const isPassword = type === 'password';
     const [revealed, setRevealed] = useState(false);
 
-    // 'number' renders as text+numeric so e/E/+/-/. can't be typed like in a native number input.
     const isNumber = type === 'number';
     const inputType = suffix || isNumber ? 'text' : isPassword ? (revealed ? 'text' : 'password') : (type ?? 'text');
     const bad = !!error;

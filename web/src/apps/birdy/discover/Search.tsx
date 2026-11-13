@@ -52,7 +52,6 @@ export function Search({ me, onOpenProfile, onOpenPost, onToggleLike, onToggleRe
 
     const { data: trending } = useAsyncData(apiTrending, [searching], { enabled: !searching });
 
-    // Patch the local copy too; the parent's toggle only reaches the feed and open-post copies.
     function flipLike(id: string) {
         setPostResults(prev => prev.map(p => p.id === id
             ? { ...p, liked: !p.liked, likes: p.likes + (p.liked ? -1 : 1) } : p));
@@ -85,8 +84,6 @@ export function Search({ me, onOpenProfile, onOpenPost, onToggleLike, onToggleRe
                 {searching ? (
                     tagMode ? (
                         postResults.length === 0 ? (
-                            // While the debounce + fetch run, say nothing rather than a false
-                            // "no posts" that corrects itself a beat later.
                             pending ? null : (
                                 <div className="px-10 py-16 text-center text-[15px]" style={{ color: META }}>{t('squawk.noPostsFound', 'No posts found.')}</div>
                             )

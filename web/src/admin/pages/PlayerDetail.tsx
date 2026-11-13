@@ -89,7 +89,6 @@ export function PlayerDetail({ cid, onBack, toast, onOpenGallery }: {
 
     return (
         <div className="space-y-4">
-            {/* Header */}
             <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-3">
                     <Btn variant="subtle" onClick={onBack} title="Back"><ArrowLeft size={15} /></Btn>
@@ -118,7 +117,6 @@ export function PlayerDetail({ cid, onBack, toast, onOpenGallery }: {
                 </div>
             </div>
 
-            {/* Tabs */}
             <div className="flex gap-1 border-b border-adm-hair pb-0">
                 {TABS.map(t => (
                     <button
@@ -163,7 +161,6 @@ export function PlayerDetail({ cid, onBack, toast, onOpenGallery }: {
             {tab === 'calls' && <CallsTab cid={cid} />}
             {tab === 'moderation' && <ModerationTab ov={ov} setMutes={setMutes} toast={toast} />}
 
-            {/* Modals */}
             {modal === 'number' && (
                 <PromptModal
                     title="Change phone number"

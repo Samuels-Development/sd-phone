@@ -12,7 +12,6 @@ export function PlayersPage({ initialQuery, onOpenPlayer }: {
     onOpenPlayer: (cid: string) => void;
 }) {
     const [q, setQ] = useState(initialQuery);
-    // Only an Enter press (or the button) hits the database; typing alone never queries.
     const [submitted, setSubmitted] = useState(initialQuery.trim().length >= 2 ? initialQuery.trim() : '');
 
     const submit = () => {
@@ -28,7 +27,6 @@ export function PlayersPage({ initialQuery, onOpenPlayer }: {
 
     const { items, loading, hasMore, loadMore } = usePaged<AdminPlayerHit, string | number>(fetchPage, `players:${submitted}`);
 
-    // SIM trace tool (unique phones): number -> profile, first activator, current holder.
     const [tracing, setTracing] = useState(false);
     const [trace, setTrace] = useState<{ number: string; result?: AdminSimLookup; error?: string } | null>(null);
 

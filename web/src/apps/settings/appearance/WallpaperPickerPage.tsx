@@ -45,7 +45,6 @@ export function WallpaperPickerPage({ target, onBack }: { target: WallpaperTarge
     const [selected, setSelected] = useState<string>(target === 'home' ? wallpaperHome : wallpaperLock);
     const [importOpen, setImportOpen] = useState(false);
 
-    // The server's URL-import flag only resolves after a photos list round-trip.
     const { data: canImport } = useAsyncData(() => apiListPhotos().then(() => getCanImportPhotos()), []);
 
     function apply(src: string) {

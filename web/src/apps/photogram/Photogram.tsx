@@ -144,9 +144,6 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
         refreshCounts();
     }, [authed, refreshMe, refreshHome, refreshCounts]);
 
-    // Everything on screen belongs to the account that was signed in, so a change refetches all
-    // of it and closes whatever was open: a post detail or a profile drill-in from the previous
-    // account would otherwise sit there looking like this account's.
     const afterAccountChange = useCallback(() => {
         clearSessionState('photogram:');
         setTab('home');
@@ -171,8 +168,6 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
 
     useEffect(() => { if (authed) refreshCounts(); }, [dmOpen, authed, refreshCounts]);
 
-    // Content pushes reach only the phones showing Photogram, so the subscription follows the
-    // foreground. AppDeck keeps this subtree alive, so returning to it is not a remount.
     const deckActive = useDeckActive();
     const wasActive = useRef(deckActive);
     useEffect(() => {
@@ -181,7 +176,6 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
         return () => { apiWatch(false); };
     }, [deckActive]);
 
-    // Re-sync on the way back in: anything pushed while this phone was not listening is missed.
     const [syncNonce, setSyncNonce] = useState(0);
     useEffect(() => {
         const returning = deckActive && !wasActive.current;
@@ -189,7 +183,6 @@ export function Photogram({ onClose: _onClose }: { onClose: () => void }) {
         if (returning) setSyncNonce(n => n + 1);
     }, [deckActive]);
 
-    // The same refresh for someone who never left the screen while driving back into coverage.
     useRefreshOnReconnect(useCallback(() => setSyncNonce(n => n + 1), []));
 
     useEffect(() => {

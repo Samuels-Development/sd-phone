@@ -1,4 +1,3 @@
-// Charset mirrors RichText's tag highlighter and the server-side Lua extractor.
 const TAG_RE = /#([A-Za-z0-9_]+)/g;
 
 export interface TrendingTag { tag: string; count: number }
@@ -12,7 +11,6 @@ export function postHasTag(body: string, tag: string): boolean {
     return extractHashtags(body).some(t => t.toLowerCase() === want);
 }
 
-/** Counts posts (not occurrences) per case-insensitive tag; displays the most-used casing. */
 export function trendingFromBodies(bodies: string[], limit = 5): TrendingTag[] {
     const counts = new Map<string, number>();
     const casings = new Map<string, Map<string, number>>();

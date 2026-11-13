@@ -83,8 +83,6 @@ export async function sendMoney(target: SendTarget, amount: number, anonymous = 
         ?? { success: false, message: t('banking.noServerResponse', 'No response from server') };
 }
 
-// Person-to-person invoices: same row shape the services sent list uses (the server shapes both
-// with shapeSent), fetched through the banking proxies.
 export type PersonalInvoice = SentInvoice;
 
 const DEV_PERSONAL_SENT: PersonalInvoice[] = [

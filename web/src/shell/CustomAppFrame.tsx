@@ -32,8 +32,6 @@ import type { Contact } from '@/apps/phone/data';
 
 const EmojiPanel = lazy(() => import('@/shared/chat/EmojiPanel').then(m => ({ default: m.EmojiPanel })));
 
-// The SDK ships with whichever resource serves this page - a companion device may not reach
-// sd-phone's own files.
 const COMPONENTS_URL = `https://cfx-nui-${hostResource}/web/build/sdphone-sdk.js`;
 
 let frameDebugEnabled: boolean | null = null;
@@ -90,9 +88,6 @@ function applyPhoneTheme(body: HTMLElement) {
     for (const [name, value] of Object.entries(vars)) body.style.setProperty(name, value);
 }
 
-// The --phone-* colours, read off the iframe element: it sits inside the phone's themed wrapper,
-// so the theme tokens computed on it are the ones the phone's own apps are drawn with. They go in a
-// <style> at the very start of the page, so the page's own rules still win over them.
 function applyPageVars(iframe: HTMLIFrameElement, doc: Document) {
     const computed = getComputedStyle(iframe);
     const css = pageVarsCss(phoneVars(token => computed.getPropertyValue(token)));
@@ -166,18 +161,18 @@ export function CustomAppFrame({ appId, onClose }: { appId: string; onClose: () 
             if (outboxRef.current.length < 64) outboxRef.current.push(message);
             return;
         }
-        try { iframeRef.current?.contentWindow?.postMessage(message, '*'); } catch { /* cross-origin */ }
+        try { iframeRef.current?.contentWindow?.postMessage(message, '*'); } catch {}
     }, []);
 
     const markSdkReady = useCallback(() => {
         if (sdkReadyRef.current) return;
         sdkReadyRef.current = true;
         const win = iframeRef.current?.contentWindow;
-        try { win?.postMessage('componentsLoaded', '*'); } catch { /* cross-origin */ }
+        try { win?.postMessage('componentsLoaded', '*'); } catch {}
         const queued = outboxRef.current;
         outboxRef.current = [];
         for (const message of queued) {
-            try { win?.postMessage(message, '*'); } catch { /* cross-origin */ }
+            try { win?.postMessage(message, '*'); } catch {}
         }
     }, []);
 
@@ -191,7 +186,6 @@ export function CustomAppFrame({ appId, onClose }: { appId: string; onClose: () 
     const [saveLogin, setSaveLogin] = useState<SaveLoginReq | null>(null);
     const [fullImage, setFullImage] = useState<string | null>(null);
     const [cameraOpen, setCameraOpen] = useState(false);
-    // The camera, called up over this app by the app's resource (exports['sd-phone']:useCamera).
     const [cameraUse, setCameraUse] = useState<CameraUse | null>(null);
 
     const popupResolve   = useRef<((v: number | undefined) => void) | null>(null);
@@ -589,7 +583,7 @@ export function CustomAppFrame({ appId, onClose }: { appId: string; onClose: () 
                     const body = iframe.contentDocument?.body;
                     const root = iframe.contentDocument?.getElementById('root');
                     frameDebug(`${d.id}: after 3s body ${body?.innerHTML.length ?? -1} chars, #root ${root?.innerHTML.length ?? -1} chars, visible=${body ? getComputedStyle(body).visibility : 'n/a'}`);
-                } catch { /* cross-origin */ }
+                } catch {}
             }, 3000);
         } catch (err) {
             frameDebug(`${d.id}: injection threw ${err instanceof Error ? err.message : String(err)}`);
@@ -607,7 +601,7 @@ export function CustomAppFrame({ appId, onClose }: { appId: string; onClose: () 
             if (body) applyPhoneTheme(body);
             const doc = iframe.contentDocument;
             if (doc?.documentElement) applyPageVars(iframe, doc);
-        } catch { /* cross-origin */ }
+        } catch {}
         postToApp({ type: 'settingsUpdated', settings: buildSettings() } satisfies HostMessage);
     }, [theme, darkTheme, lightTheme, accent, customPalettes, airplaneMode, hour24, brightness, postToApp]);
 
@@ -629,9 +623,6 @@ export function CustomAppFrame({ appId, onClose }: { appId: string; onClose: () 
         postToApp(data.message);
     }, [appId, postToApp]));
 
-    // Lua says when this app's resource has called the camera, and when the call is over. A frame
-    // that was not there to hear (the phone was away, and is opened on the app by the call) asks
-    // as it comes to the front.
     const readCameraUse = (raw: unknown): CameraUse | null => {
         const u = raw as Partial<CameraUse> | null | false | undefined;
         if (!u || typeof u.id !== 'number') return null;
@@ -785,7 +776,6 @@ export function CustomAppFrame({ appId, onClose }: { appId: string; onClose: () 
                 </div>
             )}
 
-            {/* The same camera, called by the app's resource: its shutter is the resource's. */}
             {cameraUse && !cameraOpen && (
                 <div className="absolute inset-0 z-[80] bg-black">
                     <LazyCamera

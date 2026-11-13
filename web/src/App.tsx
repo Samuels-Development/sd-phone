@@ -99,9 +99,6 @@ const APP_CLOSE_MS = 300;
 
 const SETUP_KEY_BASE = 'sd-phone:setup:v1';
 
-// Unique-phones mode: setup completion is a per-PROFILE fact, keyed by the active SIM number,
-// so a new SIM shows the new-phone setup while switching back to a known phone doesn't. Legacy
-// mode (no SIM feature) keeps the bare key.
 let setupProfile = '';
 const AdminPanel  = lazy(() => import('@/admin/AdminPanel').then(m => ({ default: m.AdminPanel })));
 const PayphoneUI  = lazy(() => import('@/payphone/PayphoneUI').then(m => ({ default: m.PayphoneUI })));
@@ -123,9 +120,6 @@ interface SetupSaved {
     wallpaper?: string;
 }
 
-// A device without the wizard is set up by definition: theme, wallpaper, locale and passcode
-// all live in phone_settings and hydrate normally, so there is nothing left to ask for. Both
-// halves short-circuit, which is what keeps the key unwritten on such a device.
 function loadSetup(): SetupSaved {
     if (!device.setup) return { completed: true };
     try {
@@ -134,13 +128,13 @@ function loadSetup(): SetupSaved {
             const parsed = JSON.parse(raw) as SetupSaved;
             if (parsed && typeof parsed.completed === 'boolean') return parsed;
         }
-    } catch { /* ignore */ }
+    } catch {}
     return { completed: false };
 }
 
 function saveSetup(s: SetupSaved): void {
     if (!device.setup) return;
-    try { window.localStorage.setItem(SETUP_KEY(), JSON.stringify(s)); } catch { /* ignore */ }
+    try { window.localStorage.setItem(SETUP_KEY(), JSON.stringify(s)); } catch {}
 }
 
 interface ViewState {
@@ -158,22 +152,11 @@ interface ViewState {
 
 const SERVER_BADGE_APPS = new Set<AppId>(['messages', 'phone', 'mail', 'groups', 'photogram', 'birdy', 'vibez']);
 
-// How many apps the switcher shows / the recents list remembers. Every visible card
-// wants a live preview, so the retain cap below is bound to this - keeping them the
-// same value is what stops the extra cards from falling back to a grey icon card.
 const RECENTS_CAP = 10;
 
-// Fullscreen app slot with a reveal animation. This wrapper mounts exactly when phone content
-// is revealed (open without a lock, or the unlock swipe finishing), so capturing hasApp at
-// mount animates only a restored app (Reopen Last App): a gentle zoom-in instead of a hard
-// pop. Later in-session launches keep their icon-zoom and never replay this.
 function AppResumeStage({ hasApp }: { hasApp: boolean }) {
     const fxRef = useRef(hasApp);
     return (
-        // The reveal is handed to the main stage rather than played on this wrapper. The wrapper
-        // also contains the split pane, and an animation that means "the app that just appeared"
-        // must not run over an app that has been sitting there the whole time - which is what made
-        // opening something on the main half replay the split app's entrance alongside it.
         <div className="absolute inset-0 z-10" style={{ pointerEvents: 'none' }}>
             <FullscreenStage
                 mainAnim={fxRef.current ? 'app-resume-in 0.34s cubic-bezier(0.3,0.9,0.4,1) both' : undefined}
@@ -182,17 +165,10 @@ function AppResumeStage({ hasApp }: { hasApp: boolean }) {
     );
 }
 
-// How many preview-eligible apps are kept alive (live switcher cards) at once. The
-// active app is always live on top of this; anything past the cap downgrades to an
-// icon card. Matched to RECENTS_CAP so every card the switcher can show is a live
-// view. Safe to keep this high because backgrounded retained apps are suspended to
-// ~0 CPU (see deckActive.ts + the choke-point gates in appRegistry.tsx) - the only
-// remaining cost is an idle, frozen React tree per app the player actually opened.
 const RETAIN_CAP = RECENTS_CAP;
 
 const ALARM_TEST_ID = '__alarm_test__';
 
-// Anything that swallows a keystroke as text rather than as a shortcut.
 const NON_TEXT_INPUT_TYPES = new Set([
     'range', 'checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'color', 'image',
 ]);
@@ -224,9 +200,6 @@ export function App() {
 function AppContent() {
     const cctvActive = useCctvActive();
     const bodycamActive = useBodycamActive();
-    // Tone/volume fields are deliberately NOT subscribed here — they're only
-    // read inside event callbacks (via useThemeStore.getState()), so slider
-    // drags in Control Center don't re-render the whole tree from the root.
     const { theme, darkTheme, lightTheme, accent, customPalettes, wallpaperLock, wallpaperHome, setTheme, setWallpaper, statusLightOverride, statusBarAutoLight, hideHomeIndicator, airplaneMode, focus, rotationLock, hour24, setHour24, setSecurity, appLabels, homeDensity, dockStyle } = useTheme('theme', 'darkTheme', 'lightTheme', 'accent', 'wallpaperLock', 'wallpaperHome', 'setTheme', 'setWallpaper', 'statusLightOverride', 'statusBarAutoLight', 'hideHomeIndicator', 'airplaneMode', 'focus', 'rotationLock', 'hour24', 'setHour24', 'setSecurity', 'customPalettes', 'appLabels', 'homeDensity', 'dockStyle');
     const activeThemeId = theme === 'dark' ? darkTheme : lightTheme;
     const themeVars = useMemo(() => {
@@ -266,10 +239,7 @@ function AppContent() {
     const [launchTrigger,   setLaunchTrigger]   = useState(0);
     const pendingCcApp                          = useRef<string | null>(null);
     const pendingLaunchLink                     = useRef<Record<string, unknown> | undefined>(undefined);
-    // Active SIM number of the previous phone-open; a different number on the next open means
-    // the player switched phones and the UI must shed the old profile's state.
     const lastSimNumberRef                      = useRef<string | null>(null);
-    // App the phone was holstered on; sd-phone:open restores it when config allows.
     const lastOpenAppRef                        = useRef<AppId | null>(null);
     const [battery,         setBattery]         = useState<number>(100);
     const [currentApp,      setCurrentApp]      = useState<AppId | null>(null);
@@ -277,9 +247,6 @@ function AppContent() {
     const [launchExpand,    setLaunchExpand]    = useState<boolean>(false);
     const [isClosing,       setIsClosing]       = useState(false);
     const [recentApps,      setRecentApps]      = useState<AppId[]>([]);
-    // Retained keep-alive deck: preview-eligible apps foregrounded THIS phone-open
-    // session, most-recent first, capped. These + the active app are the ids the
-    // AppDeck keeps mounted. foregroundKeys drives per-app open-animation replays.
     const [retained,        setRetained]        = useState<AppId[]>([]);
     const [foregroundKeys,  setForegroundKeys]  = useState<Record<string, number>>({});
     const [switcherOpen,    setSwitcherOpen]    = useState(false);
@@ -288,17 +255,10 @@ function AppContent() {
     const [landscape,       setLandscape]       = useState(false);
     const [installedApps,   setInstalledApps]   = useState<Set<string>>(new Set());
     const [savedLayout,     setSavedLayout]     = useState<SavedLayout | null>(null);
-    // In FiveM the installed apps + saved layout arrive via the sd-phone:apps follow-up (kept off
-    // the open round-trip). Hold the home grid until they land: the Homescreen seeds its slot
-    // layout once at mount, so mounting it against the transient empty layout would auto-arrange
-    // and then persist that arrangement back, clobbering the real one. The dev harness resolves
-    // both synchronously on open, so it's ready immediately.
     const [appsReady,       setAppsReady]       = useState(!isFiveM);
     const [frameColor,      setFrameColor]      = useState<string>(DEFAULT_FRAME_COLOR);
     const downloadingIds = useDownloadingIds();
 
-    // Settings reads the installed set through a store rather than a prop: apps mount through a
-    // shared context that only carries onClose, so threading one down would mean special-casing.
     useEffect(() => {
         const all = [...(view?.apps ?? []), ...customDefs.filter(c => !(view?.apps ?? []).some(a => a.id === c.id))];
         useInstalledAppsStore.getState().setApps(
@@ -312,18 +272,9 @@ function AppContent() {
 
     const noSim = useNoSim();
     const simEnabled = useSimStore(s => s.enabled);
-    // Unique phones: setup completion lives in a per-profile localStorage namespace, and the
-    // profile arrives via the deferred SIM resolve - AFTER the reveal on a fresh NUI (rejoin).
-    // Until it lands, the bare namespace reads "not completed", so the Hello screen must wait
-    // for the profile or a set-up phone re-runs setup on every rejoin.
     const [simProfileReady, setSimProfileReady] = useState(false);
-    // Device mode: no SIM means no cellular service, but the phone still opens and works - the
-    // status bar shows "No Service" and only number-dependent actions (call/text) are refused
-    // server-side. (In legacy mode useNoSim drives the full-screen wall instead.)
     const noService = useNoService();
     const noServiceArea = useNoServiceArea();
-    // A pulled SIM drops the phone straight back to the (blocked) lock state: no app stays
-    // foregrounded and the switcher/control-center close.
     useEffect(() => {
         if (noSim) {
             setLocked(true);
@@ -335,19 +286,8 @@ function AppContent() {
     }, [noSim]);
 
     const [setup, setSetup] = useState<SetupSaved>(() => loadSetup());
-    // Server-side twin of the localStorage flag (phone_settings.setup_done): survives a cleared
-    // FiveM cache / another PC. null = this profile's hydrate hasn't answered yet.
     const serverSetupDone = useThemeStore(s => s.setupDone);
-    // In game the server row decides, and the localStorage flag is only the dev fallback where
-    // there is no server to ask. ORing the two let the client cache outvote the server, so
-    // nothing server-side could ever un-complete setup: a wiped phone and a fresh device both
-    // kept reading "done" from a flag the wipe never touched.
     const setupCompleted = isFiveM ? serverSetupDone === true : setup.completed;
-    // Theme and wallpaper are NOT re-applied from the saved setup on launch. Both
-    // persist server-side (phone_settings) and hydrate via settings:get on mount;
-    // re-applying the localStorage setup value every launch clobbered the player's
-    // later pick (a stale wallpaper URL, or the setup-time light/dark theme instead
-    // of their current one). Both are applied once at setup completion below.
 
     function handleSetupDone(result: SetupResult) {
         const next: SetupSaved = {
@@ -377,19 +317,11 @@ function AppContent() {
         }
     }, [recentApps, switcherOpen]);
 
-    // Unique phones: a phone whose SIM differs from the last seen one is a DIFFERENT phone -
-    // drop every trace of the previous profile from the UI (kept-alive apps, cached app
-    // logins, hydrated settings). The server never leaks across identities; this stops the
-    // client's own memory from doing it. Runs on every open AND on live SIM swaps.
-    // Drops every UI trace of the acting profile: kept-alive apps, cached logins, notification
-    // stacks, data caches, hydrated settings. Visuals reset to stock synchronously so the
-    // previous profile's wallpaper/clock never paint while the fresh hydrate is in flight.
-    // Runs on a phone/SIM switch AND when a cloud-backup restore replaces the data in place.
     const resetProfileUi = useCallback(() => {
         try {
             window.localStorage.removeItem('sd-phone:mail:folderOrder');
             window.localStorage.removeItem('sd-phone:mail:activeAccount');
-        } catch { /* ignore */ }
+        } catch {}
         lastOpenAppRef.current = null;
         resetAuth();
         useMusicLibrary.getState().reset();
@@ -414,8 +346,6 @@ function AppContent() {
     }, []);
 
     const applySimProfile = useCallback((enabled?: boolean, hasSim?: boolean, num?: string, device?: boolean, profile?: string) => {
-        // Device mode keys per-phone state off the DEVICE identity (stable across SIM swaps on
-        // one phone); legacy keys off the SIM number. Either way a null key means "don't switch".
         const key = enabled
             ? (device ? (profile || null) : ((hasSim && num) || null))
             : null;
@@ -428,8 +358,6 @@ function AppContent() {
             lastSimNumberRef.current = key;
             if (!prevKey) {
                 useThemeStore.getState().hydrate();
-                // First profile application this NUI session (fresh rejoin): collect banners
-                // parked for this phone by pocket buzzes that arrived before its first open.
                 const parked = lockNotifBankRef.current[key];
                 delete lockNotifBankRef.current[key];
                 if (parked && parked.length > 0) {
@@ -439,23 +367,15 @@ function AppContent() {
         }
         if (enabled) setSetup(loadSetup());
         if (switched) {
-            // Each phone keeps its OWN lockscreen stack: bank the outgoing phone's before the
-            // reset wipes it, and bring back whatever the incoming phone held when we last
-            // switched away from it (move semantics - the bank entry is consumed on return).
             if (prevKey) lockNotifBankRef.current[prevKey] = useNotificationStore.getState().lock;
             const banked = key ? lockNotifBankRef.current[key] : undefined;
             if (key) delete lockNotifBankRef.current[key];
             resetProfileUi();
             if (banked && banked.length > 0) setLockNotifs(banked);
         }
-        // After any reset above: paint this profile's last-known wallpaper in the SAME render
-        // batch as the reveal, so the first open never flashes the stock background while the
-        // authoritative hydrate is still in flight.
         useThemeStore.getState().applyWallpaperProfile(key);
     }, [resetProfileUi]);
 
-    // The framework loaded a character (first join or a switch): per-player settings become
-    // resolvable only now, so restart both hydration pulls with a fresh retry budget.
     useNuiEvent('sd-phone:client:characterLoaded', useCallback(() => {
         useThemeStore.getState().hydrate();
         useLocaleStore.getState().hydrate();
@@ -466,7 +386,7 @@ function AppContent() {
         if (!data) return;
         registerRuntimeLocales(data.locales);
         useDirectionStore.getState().setForceLtr(data.forceLtr === true);
-        if (data.locale) useLocaleStore.getState().applyServerDefault(data.locale);   // server default, unless the player already picked their own
+        if (data.locale) useLocaleStore.getState().applyServerDefault(data.locale);
         if (data.mailDomain) setMailDomain(data.mailDomain);
         if (data.number) setNumberFormat(data.number.formats, data.number.length, data.number.custom);
         setMusicSources(data.music);
@@ -491,13 +411,6 @@ function AppContent() {
         };
         setView(nextView);
         lastViewRef.current = nextView;
-        // Reopen: the deck now lives ABOVE the shell and is never unmounted, so last
-        // session's retained apps are still alive - we deliberately do NOT clear them,
-        // which is what brings the switcher previews back exactly where you left them.
-        // "Close All" is the only thing that wipes them (iOS: apps stay open otherwise).
-        // Reopen straight into the app the phone was holstered on when the player's Settings
-        // toggle (Settings > General > Reopen Last App, default off) says so. The deck kept
-        // the app alive, so this is a resume, not a launch; a SIM switch clears the memo.
         setCurrentApp(useThemeStore.getState().reopenLastApp ? lastOpenAppRef.current : null);
         setIsClosing(false);
         setLaunchOrigin(null);
@@ -505,10 +418,6 @@ function AppContent() {
         setSwitcherClosing(false);
         setSwitcherReady(false);
         setNotifs([]);
-        // In FiveM the installed list + saved layout normally arrive via the sd-phone:apps
-        // follow-up (kept off the open round-trip so the phone reveals instantly). An inline
-        // payload still counts as ready - the Homescreen must never wait on a follow-up that
-        // isn't coming. The dev harness fetches from its local mock instead.
         if (data.installedApps) {
             setInstalledApps(withCustomInstalled(data.installedApps));
             setAppsReady(true);
@@ -516,7 +425,6 @@ function AppContent() {
             if (!isFiveM) void listInstalledApps().then(ids => setInstalledApps(withCustomInstalled(ids)));
             setAppsReady(!isFiveM);
         }
-        // Under unique phones the localStorage layout fallback is another profile's - server only.
         setSavedLayout(data.homeLayout ? parseLayout(data.homeLayout) : (data.sim?.enabled ? null : loadHomeLayout()));
         setLocked(data.locked);
         setBattery(data.battery);
@@ -529,8 +437,6 @@ function AppContent() {
         useCustomAppsStore.getState().hydrate();
     }, []));
 
-    // Follow-up to sd-phone:open: the authoritative installed-apps list and saved home layout,
-    // fetched after the reveal so the server round-trip never delayed the phone appearing.
     useNuiEvent('sd-phone:apps', useCallback((data) => {
         if (!data) return;
         setInstalledApps(withCustomInstalled(data.installedApps ?? []));
@@ -544,9 +450,6 @@ function AppContent() {
         syncSimNumber(data);
     }, [applySimProfile]));
 
-    // Cloud-backup restore replaced the acting profile's data in place (same identity, new
-    // contents): the same full reset as a phone switch, so no kept-alive app or hydrated
-    // setting keeps showing pre-restore data.
     useNuiEvent('sd-phone:profileReset', useCallback(() => {
         resetProfileUi();
     }, [resetProfileUi]));
@@ -591,7 +494,7 @@ function AppContent() {
     }, []));
 
     useNuiEvent('sd-phone:wipe', useCallback(() => {
-        try { localStorage.clear(); } catch { /* ignore */ }
+        try { localStorage.clear(); } catch {}
         window.location.reload();
     }, []));
 
@@ -608,9 +511,6 @@ function AppContent() {
         setRadioIsland(s => ({ ...s, onAir: !!d.active }));
     }, []));
 
-    // Bring an app to the fullscreen foreground: single mount point of truth. Bumps
-    // its foreground key (replays the open animation on the retained instance) and,
-    // if it is preview-eligible, promotes it into the retained keep-alive deck.
     const foreground = useCallback((id: AppId, origin: { x: number; y: number }, expand = false) => {
         void preloadApp(id);
         setIsClosing(false);
@@ -625,9 +525,6 @@ function AppContent() {
         useBadgeStore.getState().clear(id);
     }, []);
 
-    // Reset the live deck: retained instances unmount, so their effects/subscriptions
-    // stop. Called on lock / holster / Close All - "where you left off" is a per
-    // phone-open concept (the deck provably cannot survive an unmount of the shell).
     const clearDeck = useCallback(() => {
         setRetained([]);
         setForegroundKeys({});
@@ -640,10 +537,6 @@ function AppContent() {
     }, [foreground]);
 
     const handleCloseApp = useCallback(() => {
-        // Close is purely: play the ios-app-close collapse, then unmount. NO html2canvas anywhere on
-        // this path (nor deferred to idle, which still blocks the same thread a beat later) - the
-        // synchronous rasterize is what froze the phone and left the collapsed speck stuck on screen.
-        // Snapshots are taken only when swiping up into the switcher, masked by its cover animation.
         setIsClosing(true);
     }, []);
 
@@ -652,10 +545,6 @@ function AppContent() {
         setLeaving(true);
     }, []);
 
-    // Called by the deck when the active app's close-collapse settles. The retained
-    // instance is NOT unmounted here - it stays alive in the deck's hidden pool (if
-    // preview-eligible) or is dropped from deckIds (if not). Either way: no capture,
-    // no rasterize, so hover/click are live the instant the collapse ends.
     const handleAnimEnd = useCallback(() => {
         setCurrentApp(null);
         setIsClosing(false);
@@ -663,19 +552,12 @@ function AppContent() {
     }, []);
 
     const handleShowSwitcher = useCallback(() => {
-        // No capture, no rasterize. The switcher shows real retained live views (the
-        // active app's card is the SAME instance re-parented, so it's live at once);
-        // switcherReady gates the staggered reveal of the other retained cards until
-        // after the open animation settles.
         setSwitcherReady(false);
         setSwitcherOpen(prev => (prev ? prev : true));
     }, []);
 
     const handleSwitcherDismiss  = useCallback(() => setSwitcherClosing(true), []);
 
-    // Sends a card into the pane beside the app you are already in. Only apps the deck already
-    // holds can get here, so this is a re-parent of something mounted rather than a cold launch
-    // into half a screen.
     const handleSplitApp = useCallback((id: string) => {
         useSplitStore.getState().open(id);
         setSwitcherClosing(true);
@@ -698,9 +580,6 @@ function AppContent() {
         setSwitcherReady(false);
     }, [switcherClosing]);
 
-    // Seeding session state only reaches an app on its FIRST mount, and the AppDeck keeps apps
-    // alive, so a link handed to an already-open app was silently dropped. Anything with a live
-    // deeplink channel goes through that instead, which apps consume whenever it fires.
     const applyNotifLink = useCallback((link?: Record<string, unknown>) => {
         if (!link) return;
         for (const [k, v] of Object.entries(link)) seedSessionState(k, v);
@@ -712,9 +591,6 @@ function AppContent() {
     }, []);
 
     const handleOpenFromSwitcher = useCallback((id: AppId, origin: { x: number; y: number }) => {
-        // Opening from an OPEN switcher card grows the app out of that near-fullscreen
-        // preview (ios-app-expand); notification / deeplink opens (switcher closed) keep
-        // the normal home-launch pop.
         const fromSwitcher = switcherOpen;
         setSwitcherOpen(false);
         setSwitcherClosing(false);
@@ -722,9 +598,6 @@ function AppContent() {
         foreground(id, origin, fromSwitcher);
     }, [foreground, switcherOpen]);
 
-    // Single launch chokepoint for out-of-band opens (notifications, deeplinks, Control
-    // Center). The home screen only hides uninstalled icons, so the gate must live here:
-    // an uninstalled app's notification routes to the App Store instead of opening it.
     const openAppById = useCallback((id: string | null | undefined, origin: { x: number; y: number }) => {
         const app = asAppId(id);
         if (!app) return;
@@ -739,19 +612,14 @@ function AppContent() {
 
     const openAppCentered = useCallback((id: string) => openAppById(id, { x: 0.5, y: 0.5 }), [openAppById]);
 
-    // The exact set of app ids the deck keeps mounted: the active app (always) plus
-    // the retained preview-eligible apps. Order is active-first for reveal priority.
     const unfolded = useFoldOpen();
     const splitRightId = useSplitId();
     const splitSide = useSplitSide();
-    // Folding shut drops the second app back to the pool on its own, and unfolding restores it.
     const splitId = (unfolded && splitRightId && splitRightId !== currentApp ? splitRightId : null) as AppId | null;
 
     const deckIds = useMemo<AppId[]>(() => {
         const ids: AppId[] = [];
         if (currentApp) ids.push(currentApp);
-        // The split pane's app has to be mounted like any other, so it joins the deck set even
-        // when it was never opened fullscreen - otherwise the right pane has nothing to show.
         if (splitId && !ids.includes(splitId)) ids.push(splitId);
         for (const id of retained) if (!ids.includes(id)) ids.push(id);
         return ids;
@@ -855,8 +723,6 @@ function AppContent() {
     }, [pumpDownloads]);
     const handleUninstallApp = useCallback((id: string) => {
         setInstalledApps(prev => { const n = new Set(prev); n.delete(id); return n; });
-        // Evict any live/retained instance and its switcher card, so a later reinstall + reopen
-        // mounts fresh and refetches instead of showing the stale state held at uninstall time.
         setRetained(prev => prev.filter(x => x !== id));
         setRecentApps(prev => prev.filter(x => x !== id));
         setForegroundKeys(m => { const n = { ...m }; delete n[id]; return n; });
@@ -882,13 +748,8 @@ function AppContent() {
         if (rotationLock) setLandscape(false);
     }, [rotationLock]);
 
-    // Stable-ish context handed to every deck app instance. Memoized so unrelated
-    // App re-renders (notifications, battery, island state) don't rebuild app nodes;
-    // it only changes when the app list / install set / stable callbacks change.
     const deckCtx = useMemo<DeckAppCtx>(() => ({
         onClose:           handleCloseApp,
-        // The App Store is this list's only consumer, so the exclusion has to land here: an app
-        // the device has no route to launch must not be advertised for install either.
         allApps:           [...(view?.apps ?? []), ...customDefs].filter(a => !device.excludedApps.includes(a.id)),
         installedApps,
         onInstall:         startDownload,
@@ -912,14 +773,10 @@ function AppContent() {
         useWifiStore.getState().apply(data);
     }, []));
 
-    // Home screen widgets render while their app is closed, so the pushes those apps listen for
-    // are mirrored into a store here, the same way the battery level is above.
     useNuiEvent('sd-phone:weather', useCallback((data) => {
         useWidgetData.getState().setWeather(data ?? null);
     }, []));
 
-    // The Wallet widget has no app to fetch for it, so it also refreshes on the pushes Banking
-    // itself listens to - money can arrive while the home screen is already on screen.
     const refreshWallet = useCallback(() => {
         void import('@/apps/banking/bankingApi')
             .then(m => m.fetchOverview())
@@ -929,22 +786,10 @@ function AppContent() {
     useNuiEvent('sd-phone:bank:received', refreshWallet);
     useNuiEvent('sd-phone:bank:txAdded', refreshWallet);
 
-    // Health is pushed on a timer whether or not the Health app is open, so the Activity widget
-    // just mirrors it. No fetch of its own.
     useNuiEvent('sd-phone:health', useCallback((data) => {
         useWidgetData.getState().setHealth(data ?? null);
     }, []));
 
-    /**
-     * Server reads for the widgets that have no push of their own.
-     *
-     * Driven off the home screen BECOMING VISIBLE rather than the phone opening: vehicles get
-     * taken out in the world, articles get published by other players, and holdings change inside
-     * the Stocks app - none of which fire an event this UI can hear. Refreshing on arrival at the
-     * home screen catches all of it, while an idle phone and a phone sitting inside an app both
-     * cost nothing. Deliberately NOT watchMarket(): subscribing to per-tick pushes is the right
-     * cost for an open Stocks screen and the wrong one for a tile you glance at.
-     */
     const homeVisible = !!view && !locked && !currentApp;
     useEffect(() => {
         if (!homeVisible) return;
@@ -963,8 +808,6 @@ function AppContent() {
             .catch(() => {});
     }, [homeVisible, refreshWallet]);
 
-    // Free liveness: these ticks are already arriving whenever the Stocks app is watching, so
-    // mirroring them means leaving the app does not drop you onto a frozen tile.
     useNuiEvent('sd-phone:stocks:prices', useCallback((data) => {
         if (data?.assets) useWidgetData.getState().setPrices(data.assets);
     }, []));
@@ -974,9 +817,6 @@ function AppContent() {
     }, []));
 
     const [ncOpen, setNcOpen] = useState(false);
-    // The panel fades for 320ms after ncOpen flips false, and is pointer-events-none the whole
-    // time. Without this grace the hotzones remount underneath it and a tap lands straight back
-    // on one, reopening what the player just closed.
     const [ncClosing, setNcClosing] = useState(false);
     const ncCloseTimer = useRef<number | undefined>(undefined);
     const closeNc = useCallback(() => {
@@ -985,16 +825,11 @@ function AppContent() {
         window.clearTimeout(ncCloseTimer.current);
         ncCloseTimer.current = window.setTimeout(() => setNcClosing(false), 360);
     }, []);
-    // Per-profile lockscreen stacks parked while another phone is active (in-memory, like the
-    // stacks themselves): written on switch-away, consumed on switch-back.
     const lockNotifBankRef = useRef<Record<string, NotificationItem[]>>({});
     const [peek, setPeek] = useState<'in' | 'out' | null>(null);
     const [peekNotif, setPeekNotif] = useState<NotificationItem | null>(null);
-    // Pocket buzz: the buzzing phone's frame colour, so the closed-shell peek wears THAT
-    // phone's rail instead of the last-opened one's. Null = active phone's colour.
     const [peekColor, setPeekColor] = useState<string | null>(null);
     const peekTimer = useRef<number | undefined>(undefined);
-    // An ongoing call keeps the closed shell peeked (green island + timer) until it ends.
     const callOngoing = useCallStore(s => s.phase !== null);
     const callIncoming = useCallStore(s => s.phase === 'incoming');
     const callerName = useCallStore(s => s.name);
@@ -1061,9 +896,6 @@ function AppContent() {
                 tones.ringtoneVol / 100,
             );
         }
-        // A pocket buzz belongs to the OTHER phone: transient banner + tone above, and the
-        // item parks on THAT phone's banked lockscreen stack for its next open - never this
-        // phone's live stack or badges.
         if (data.otherPhone) {
             const park = data.profileKey;
             if (park) {
@@ -1127,8 +959,6 @@ function AppContent() {
     useEffect(() => {
         if (view) { setPeek(null); setPeekNotif(null); setPeekColor(null); if (peekTimer.current) window.clearTimeout(peekTimer.current); }
     }, [view]);
-    // Closing the phone mid-call lands on the peek shell and STAYS there - the call island
-    // (green timer pill) keeps the call visible; the peek retracts when the call ends.
     useEffect(() => {
         if (view) return;
         if (callOngoing) {
@@ -1185,7 +1015,7 @@ function AppContent() {
         const audio = new Audio(toneUrl('ringtone', tones.ringtone));
         audio.loop = true;
         audio.volume = Math.max(0, Math.min(1, tones.ringtoneVol / 100));
-        void audio.play().catch(() => { /* autoplay may need a prior gesture */ });
+        void audio.play().catch(() => {});
         return () => { audio.pause(); };
     }, [ringingAlarm]);
 
@@ -1262,7 +1092,7 @@ function AppContent() {
         if (!src || warmedImages.current.has(src)) return;
         const img = new Image();
         img.src = src;
-        void img.decode?.().catch(() => { /* decode race / unsupported — ignore */ });
+        void img.decode?.().catch(() => {});
         warmedImages.current.set(src, img);
     }, []);
 
@@ -1290,15 +1120,10 @@ function AppContent() {
             setSwitcherOpen(false);
             setSwitcherClosing(false);
             setSwitcherReady(false);
-            // retained / foregroundKeys are intentionally kept: the deck outlives this
-            // teardown, so the apps stay mounted (suspended) and reappear on reopen.
         }, 440);
         return () => window.clearTimeout(t);
     }, [leaving]);
 
-    // Locking no longer tears the deck down (it lives above the shell and we force every
-    // app to suspend while locked, see deckActiveId). Keep retained/foregroundKeys so the
-    // switcher previews survive a lock/unlock; just make sure no stale switcher lingers.
     useEffect(() => {
         if (locked) setSwitcherReady(false);
     }, [locked]);
@@ -1310,9 +1135,6 @@ function AppContent() {
         return () => cancel?.();
     }, []);
 
-    // Warm the app chunks only once the phone has actually been opened — the
-    // NUI page mounts at player JOIN, and parsing ~3.6MB of lazy chunks during
-    // the spawn window is wasted work for players who never take the phone out.
     const preloadArmed = useRef(false);
     useEffect(() => {
         if (!view || preloadArmed.current) return;
@@ -1347,9 +1169,6 @@ function AppContent() {
     useEffect(() => {
         function onKey(e: KeyboardEvent) {
             const tgt = e.target as HTMLElement | null;
-            // isKeyboardCaptured() covers apps that type without a text field (the word
-            // games read keys off window), so the L hotkey does not lock the phone
-            // mid-guess.
             const typing = isKeyboardCaptured() || (!!tgt && (
                 tgt.tagName === 'INPUT'
                 || tgt.tagName === 'TEXTAREA'
@@ -1375,8 +1194,6 @@ function AppContent() {
 
     useEffect(() => {
         if (!isFiveM) return;
-        // Digit-only inputs take the numeric typing tier: the player keeps moving while the
-        // field is focused (client/main.lua suppresses the digit weapon binds instead).
         const isNumeric = (el: EventTarget | null) => {
             const t = el as HTMLInputElement | null;
             return !!t && t.tagName === 'INPUT'
@@ -1392,11 +1209,6 @@ function AppContent() {
         };
     }, []);
 
-    // Jump stays enabled while the phone is open (client/main.lua deliberately leaves control 22
-    // alone), so under keep-input every jump also lands on the page. Cancelling the keydown stops
-    // the button activation Chromium would otherwise dispatch on the matching keyup.
-    // Only the native activation: this does not stop propagation, so a component with its own
-    // Space handler still has to opt out for itself the way Lockscreen does.
     useEffect(() => {
         if (!isFiveM) return;
         function blockSpace(e: KeyboardEvent) {
@@ -1408,14 +1220,6 @@ function AppContent() {
         return () => window.removeEventListener('keydown', blockSpace, true);
     }, []);
 
-    // Shift is sprint, and the browser turns shift+wheel into horizontal scrolling, so a running
-    // player cannot scroll a list. Redirect it back to the vertical scroller under the cursor,
-    // unless something horizontal is there, where sideways scrolling is the point.
-    //
-    // The same handler animates ordinary wheel scrolling. The Legacy client's CEF eases wheel
-    // input for us; the Enhanced client's does not, so every tick lands instantly. Bubble phase,
-    // so an app that owns the wheel (map zoom, the switcher, the widget stack) has already run and
-    // is skipped via defaultPrevented or stopPropagation.
     useEffect(() => {
         function onWheel(e: WheelEvent) {
             if (e.defaultPrevented || e.ctrlKey) return;
@@ -1496,11 +1300,6 @@ function AppContent() {
         }
     }
 
-    // The keep-alive deck is rendered ABOVE the shell (in both the closed and open
-    // branches, under a stable key) so it is never unmounted by a holster/lock/locale
-    // change - that persistence is what lets the switcher previews survive the phone
-    // being put away. While holstered (no view) or locked, deckActiveId is null so the
-    // active app drops to the deck's hidden pool and every app suspends to ~0 CPU.
     const deckActiveId = (!view || locked) ? null : currentApp;
     const deckLayer = (
         <div key="deck-root" className={theme === 'dark' ? 'dark' : undefined} data-dark-theme={darkTheme} data-light-theme={lightTheme} style={themeVars}>
@@ -1569,8 +1368,6 @@ function AppContent() {
     const allApps       = appLabels && Object.keys(appLabels).length
         ? rawApps.map(a => (appLabels[a.id] ? { ...a, label: appLabels[a.id] } : a))
         : rawApps;
-    // Excluded apps are dropped here, not just refused at launch: this list is the home grid,
-    // the switcher's card set and the App Store's catalogue.
     const effectiveApps = allApps.filter(a => !device.excludedApps.includes(a.id) && (a.base || installedApps.has(a.id) || downloadingIds.includes(a.id)));
     const effectiveIds  = new Set(effectiveApps.map(a => a.id));
     const installableApps = effectiveIds.has('appstore')
@@ -1579,10 +1376,6 @@ function AppContent() {
 
     const canShowSwitcher = recentApps.length > 0 || !!currentApp;
 
-    // Hello only renders once the answer is trustworthy: the device has no wizard, or the
-    // localStorage flag OR the server flag says completed -> never; unique phones -> wait for
-    // the resolved profile; in-game -> wait for the profile's settings hydrate (serverSetupDone
-    // non-null) so a cleared cache can't flash setup at a phone whose server flag says done.
     const showSetup = device.setup
         && !setupCompleted
         && (!simEnabled || simProfileReady)
@@ -1709,8 +1502,6 @@ function AppContent() {
                     )
                 )}
 
-                {/* The active app renders here: this only registers the fullscreen slot;
-                    the actual live instance is re-parented in from the top-level deck. */}
                 {!showSetup && !locked && <AppResumeStage hasApp={currentApp !== null} />}
 
                 {!showSetup && switcherOpen && !locked && (
@@ -1755,10 +1546,6 @@ function AppContent() {
                     />
                 )}
 
-                {/* The split pane's own bar. Each half of an unfolded screen closes the app above
-                    it, so the gesture never has to guess which pane was meant - and it shows even
-                    while the left half is on the home screen, because the right one still has an
-                    app to dismiss. */}
                 {splitId && !showSetup && !hideHomeIndicator && !locked && (
                     <HomeIndicator
                         side={splitSide}
@@ -1767,8 +1554,6 @@ function AppContent() {
                     />
                 )}
 
-                {/* Must not MOUNT on a device without calls: CallLayer self-hydrates through
-                    getCurrentCall(), so an ongoing call would surface here even with no pushes. */}
                 {device.calls && <CallLayer wallpaper={homeWallpaper} />}
 
                 {ringingAlarm && (

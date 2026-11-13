@@ -6,8 +6,6 @@ import {
     type DocFile, type DocFolder, type DocList, type DocSignature,
 } from './data';
 
-// Dev store: a mutable in-memory mirror so isFiveM=false is fully navigable
-// (create / rename / move / duplicate / delete all persist for the session).
 const devFolders: DocFolder[] = MOCK_FOLDERS.map(f => ({ ...f }));
 const devDocs:    DocFile[]   = MOCK_DOCS.map(d => ({ ...d }));
 let devSignature: string | null = null;

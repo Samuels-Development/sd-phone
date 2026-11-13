@@ -51,9 +51,6 @@ export function Phone({ onClose: _onClose }: { onClose: () => void }) {
         });
     }, [setTab]);
 
-    // Replays the pane slide on a real tab change only. The element never unmounts now, and a
-    // CSS animation will not restart on its own, so it is cleared and reassigned around a forced
-    // reflow. offsetHeight is what flushes it; rAF is starved in CEF so double-rAF is out.
     const paneRef = useRef<HTMLDivElement>(null);
     const firstPane = useRef(true);
     useEffect(() => {
@@ -131,11 +128,6 @@ export function Phone({ onClose: _onClose }: { onClose: () => void }) {
             <StatusBarSpacer />
 
             <div className="flex flex-1 flex-col overflow-hidden">
-                {/* No key={tab} and no permanent animation class. key= remounted the whole
-                    500-row ContactsTab on every tab switch, and a class-borne animation replays
-                    whenever the deck re-parents the app, so a 0.45s opacity+translate slide was
-                    starting on every open and outliving the shell's 0.38s scale. The slide is now
-                    triggered only on a real tab change, in the effect above. */}
                 <div ref={paneRef} className="flex min-h-0 flex-1 flex-col animate-swipe-in-left">
                     {tab === 'contacts' ? (
                         <ContactsTab

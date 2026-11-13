@@ -70,7 +70,7 @@ function releaseMic() {
         const s = sharedMic;
         sharedMic = null;
         if (sharedMicStream) { unregisterGatedMic(sharedMicStream); sharedMicStream = null; }
-        void s.then(stream => stream?.getTracks().forEach(t => { try { t.stop(); } catch { /* gone */ } }));
+        void s.then(stream => stream?.getTracks().forEach(t => { try { t.stop(); } catch {} }));
     }
 }
 
@@ -168,15 +168,15 @@ class PeerSession {
         const queued = this.pendingIce;
         this.pendingIce = [];
         for (const c of queued) {
-            try { await this.pc.addIceCandidate(c); } catch { /* stale candidate */ }
+            try { await this.pc.addIceCandidate(c); } catch {}
         }
     }
 
     close() {
         if (this.closed) return;
         this.closed = true;
-        try { this.pc.onicecandidate = null; this.pc.ontrack = null; this.pc.onconnectionstatechange = null; } catch { /* gone */ }
-        try { this.pc.close(); } catch { /* already closed */ }
+        try { this.pc.onicecandidate = null; this.pc.ontrack = null; this.pc.onconnectionstatechange = null; } catch {}
+        try { this.pc.close(); } catch {}
         if (this.usedMic) releaseMic();
         this.onGone?.(this.remote);
         this.remote = null;
@@ -184,21 +184,14 @@ class PeerSession {
 }
 
 
-// Ceilings on sessions a remote player can make us open. A recorder captures at most
-// MaxNearbyVoices (6) peers and opens exactly one session with each, so anyone recording us needs
-// one slot; the second absorbs a restart whose stale session has not timed out yet.
 const INBOUND_MAX = 10;
 const INBOUND_PER_PEER = 2;
-// A real audio-only handshake connects in seconds. Anything still unconnected after this never
-// will, and would otherwise hold its slot until the peer disconnects.
 const INBOUND_CONNECT_MS = 30000;
 
 const ICE_MAX_AGE_MS = 20 * 60 * 1000;
 
 class VoiceHub {
     private sessions = new Map<string, PeerSession>();
-    // Sessions opened by someone else's offer, sid to peer id, oldest first. Ours are excluded so
-    // a flood of offers can never evict the mesh we started ourselves.
     private inbound = new Map<string, number>();
     private ice: RTCIceServer[] | null = null;
     private iceAt = 0;
@@ -227,8 +220,6 @@ class VoiceHub {
         s.close();
     }
 
-    // Frees whatever slots `peerId` needs before a new inbound session is opened for them, oldest
-    // first: their own over-quota sessions always, plus the oldest of all once the hub is full.
     private evictInbound(peerId: number) {
         let mine = 0;
         for (const id of this.inbound.values()) if (id === peerId) mine += 1;
@@ -246,7 +237,6 @@ class VoiceHub {
         if (!s) {
             if (msg.kind !== 'offer' || msg.from == null) return;
             const ice = await this.getIce();
-            // Re-read after the yield: a burst on one sid must not open a peer connection each.
             s = this.sessions.get(msg.sid);
             if (!s) {
                 const sid = msg.sid, from = msg.from;
@@ -261,8 +251,6 @@ class VoiceHub {
                 }, INBOUND_CONNECT_MS);
             }
         }
-        // Only the peer the session belongs to may drive it, so a third party cannot inject into
-        // someone else's negotiation by guessing the sid.
         if (msg.from != null && msg.from !== s.peer) return;
         void s.onSignal(msg);
     }

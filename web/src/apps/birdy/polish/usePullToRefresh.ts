@@ -4,10 +4,6 @@ const THRESHOLD = 64;
 const MAX_PULL  = 108;
 const HOLD_AT   = 56;
 
-/** Drag-down-to-refresh for a scroll container. Pointer-based with plain client-coordinate
- *  deltas (uniform under the phone's CSS zoom, unlike hit-testing), damped past the threshold,
- *  and holding a spinner while `onRefresh` runs. Returns the pull offset to translate the
- *  content by and the state the spinner renders from. */
 export function usePullToRefresh(
     ref: React.RefObject<HTMLElement | null>,
     onRefresh: () => Promise<unknown>,
@@ -20,7 +16,6 @@ export function usePullToRefresh(
     const refreshRef = useRef(onRefresh);
     refreshRef.current = onRefresh;
     const busy = useRef(false);
-    // The listeners live outside React's render loop; mirror the latest pull for onUp.
     const pullRef = useRef(pull);
     pullRef.current = pull;
 
@@ -49,10 +44,8 @@ export function usePullToRefresh(
                 else startY.current = null;
                 return;
             }
-            // Ignore micro-jitters so ordinary taps never grab the gesture.
             if (!pulling.current && dy < 8) return;
             pulling.current = true;
-            // Damped: full drags approach MAX_PULL instead of following the pointer 1:1.
             setPull(Math.min(MAX_PULL, dy * 0.45));
         }
 

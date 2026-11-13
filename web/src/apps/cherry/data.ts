@@ -14,10 +14,10 @@ import bg11 from '@/assets/photos/background11.webp';
 import bg12 from '@/assets/photos/background12.webp';
 
 export const CHERRY = {
-    pink:  '#FF3D6E',   // primary accent / logo / sent bubbles
-    nope:  '#FF4D5E',   // ✕ button
-    rewind:'#FFA320',   // ↺ button
-    like:  '#3CCB7F',   // ♥ button (reference heart is green)
+    pink:  '#FF3D6E',
+    nope:  '#FF4D5E',
+    rewind:'#FFA320',
+    like:  '#3CCB7F',
 };
 
 export function msgPreview(m: Message): string {

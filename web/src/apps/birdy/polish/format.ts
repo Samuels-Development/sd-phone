@@ -1,7 +1,5 @@
 import { t } from '@/i18n';
 
-/** Twitter-style compact counts: 999 stays literal, 1.2K / 345.6K / 3.4M above, with a single
- *  decimal that drops when zero. Floors toward zero so a count never reads higher than it is. */
 export function compactCount(n: number): string {
     if (n < 1000) return String(n);
     const unit = n < 1_000_000 ? 'K' : 'M';

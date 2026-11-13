@@ -40,8 +40,6 @@ export function Account({ onClose }: { onClose: () => void }) {
         void accountsSignInOptions('ryde').then(setSavedAccounts);
     }, []);
 
-    // Ryde keeps rides and the driver profile locally and only syncs them on mount, so without
-    // this wipe the new account inherits the previous one's history, earnings and driver status.
     const afterAccountChange = useCallback(() => {
         g.wipeAccount();
         void accountsMe('ryde').then(s => setAuth(s.loggedIn, s.me));

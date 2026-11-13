@@ -55,7 +55,6 @@ export function MediaPickerSheet({ onSelect, onSelectMany, multiple = false, max
 
     const { data: lib, loading } = useAsyncData<{ photos: Photo[]; albums: Album[] }>(
         async () => {
-            // First page only: the picker shows recent media, not the whole library.
             const [page, as] = await Promise.all([apiListPhotos(), apiListAlbums()]);
             return { photos: page.photos, albums: as };
         },

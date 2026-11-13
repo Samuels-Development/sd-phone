@@ -69,15 +69,8 @@ export function SoloGame({ pal, onFinish, onNew }: {
         if (/^[A-Z]$/.test(k)) setCurrent(c => (c.length < COLS ? c + k : c));
     }, [status, submit]);
 
-    // No text field to type into, so claim the keyboard explicitly - otherwise every
-    // letter also reaches the game and fires inventory / weapon wheel / other binds.
     useKeyboardCapture();
 
-    // Only listen while this is the foreground app. AppDeck keeps a played-then-home'd
-    // game mounted in the background, and a mount-scoped window listener would keep
-    // preventDefault()-ing every key, so text fields in other apps (Messages, DarkChat)
-    // receive nothing until the game is fully exited. Gate on deckActive so the listener
-    // detaches the instant the game is backgrounded and re-attaches when it returns.
     const deckActive = useDeckActive();
     const pressRef = useRef(press); pressRef.current = press;
     useEffect(() => {

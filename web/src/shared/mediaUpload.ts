@@ -31,7 +31,6 @@ export async function uploadDirect(
             success?: boolean; data?: { url?: unknown }; object?: { publicUrl?: unknown };
         } | null;
         if (body?.success === false) return null;
-        // Fivemanage returns data.url; FiveMesh returns a successful object.publicUrl.
         const hosted = body?.data?.url ?? (body?.success === true ? body.object?.publicUrl : null);
         if (typeof hosted !== 'string' || !hosted.startsWith('https://')) return null;
         clearTimeout(timer);

@@ -1,8 +1,5 @@
 import { clsx } from 'clsx';
 
-// The standard iOS modal-sheet header: Cancel on the left, optional centered
-// title, a bold confirm action on the right. Brand-styled sheets (Photogram
-// etc.) keep their own headers; this is the plain-iOS shape.
 export function SheetHeader({ cancelLabel, onCancel, title, doneLabel, onDone, doneDisabled = false }: {
     cancelLabel:   string;
     onCancel:      () => void;

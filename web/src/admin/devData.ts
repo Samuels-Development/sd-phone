@@ -19,8 +19,6 @@ import bg13 from '@/assets/photos/background13.webp';
 import bg14 from '@/assets/photos/background14.webp';
 import bg15 from '@/assets/photos/background15.webp';
 
-// Real bundled photos rather than a placeholder path: the moderation pages are
-// mostly image grids, and an empty frame makes them look broken.
 const PHOTOS: string[] = [bg3, bg4, bg5, bg6, bg7, bg8, bg10, bg11, bg12, bg13, bg14, bg15];
 
 const photo = (i: number) => PHOTOS[i % PHOTOS.length];

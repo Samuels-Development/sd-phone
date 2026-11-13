@@ -25,9 +25,6 @@ export function useClassifiedsFeed<T extends ClassifiedItem>(
         return () => { alive = false; };
     }, [listEvent, listKey]);
 
-    // Subscribe only while the app is mounted. The server pushes feed patches to watchers, so a
-    // player with the app closed no longer pays to receive and discard one. The list fetch above
-    // runs on every mount, so a push missed while closed can never leave the feed stale.
     useEffect(() => {
         if (!isFiveM) return;
         void fetchNui(watchEvent, { on: true }).catch(() => {});

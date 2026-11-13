@@ -68,7 +68,6 @@ export interface MapStyle {
     filter: string;
     wash?:  string;
     bg:     string;
-    /** Who the tiles are from, shown in the map's corner (the satellite set is CC BY 4.0: it must be credited). */
     credit?: string;
 }
 
@@ -79,8 +78,6 @@ export function getMapStyles(): MapStyle[] {
     ];
 }
 
-// Bumped whenever the tiles on the CDN change: they are served as immutable for a year, so a URL the phone has
-// seen before is never fetched again. 6: the satellite set rebuilt from gtadb.org (no watermarks).
 const TILE_V = 6;
 
 export function tileUrl(tiles: 'atlas' | 'satellite', z: number, x: number, y: number): string {
@@ -102,12 +99,12 @@ export function loadStyleId(): MapStyleId {
     try {
         const raw = window.localStorage.getItem(STYLE_KEY);
         if (raw && getMapStyles().some(s => s.id === raw)) return raw as MapStyleId;
-    } catch { /* ignore */ }
+    } catch {}
     return 'satellite';
 }
 
 export function saveStyleId(id: MapStyleId): void {
-    try { window.localStorage.setItem(STYLE_KEY, id); } catch { /* ignore */ }
+    try { window.localStorage.setItem(STYLE_KEY, id); } catch {}
 }
 
 

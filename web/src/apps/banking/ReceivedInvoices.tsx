@@ -12,10 +12,6 @@ import { useStreamerHidden } from '@/stores/themeStore';
 import { HIDDEN_TEXT } from '@/shell/streamerMode';
 import { failText } from '@/core/api';
 
-// Presentational: the fetch lives in Banking (above the animated tab subtree) so segment
-// switches re-render instantly from props instead of refetching through a loading flash.
-// Personal sender identity resolves live against the viewer's contact book: saved card wins,
-// otherwise the server-provided formatted number stands.
 export function ReceivedInvoices({ invoices, loading, onRefetch, onPaid, contactByNumber }: {
     invoices:  ReceivedInvoice[];
     loading:   boolean;

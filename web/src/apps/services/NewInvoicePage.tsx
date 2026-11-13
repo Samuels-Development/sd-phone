@@ -14,7 +14,6 @@ import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 
 const DRAFT_KEY = 'services:newInvoice';
 
-// Business invoice composer as a full drill-in page, matching the Wallet's composer chrome.
 export function NewInvoicePage({ onClose, onSent }: {
     onClose: () => void;
     onSent:  () => void;
@@ -28,7 +27,6 @@ export function NewInvoicePage({ onClose, onSent }: {
     const [exiting, setExiting] = useState(false);
 
     const amountNum = parseInt(amount || '0', 10);
-    // 5 digits or fewer is a server id (real phone numbers are 7+); longer input is a number.
     const recipientDigits = digits(number);
     const isServerId      = recipientDigits.length >= 1 && recipientDigits.length <= 5;
     const canSend         = recipientDigits.length >= 1 && amountNum > 0 && !busy;

@@ -1,11 +1,5 @@
 import { t } from '@/i18n';
 
-/**
- * Full-screen lock state shown when unique phones are enabled and the phone has
- * no SIM card installed: no number, no service, nothing browsable. Replaces the
- * lockscreen/homescreen entirely; the server refuses every data callback in this
- * state, this screen just makes that legible.
- */
 export function NoSimScreen() {
     return (
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-5 bg-gradient-to-b from-[#0b0b0f] via-[#101017] to-[#0b0b0f] px-10 text-center">

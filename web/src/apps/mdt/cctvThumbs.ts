@@ -29,7 +29,7 @@ function persist(map: ThumbMap): void {
     } catch {
         const keys = Object.keys(map);
         for (let i = 0; i < Math.ceil(keys.length / 2); i++) delete map[keys[i]];
-        try { window.localStorage.setItem(KEY, JSON.stringify(map)); } catch { /* give up quietly */ }
+        try { window.localStorage.setItem(KEY, JSON.stringify(map)); } catch {}
     }
     for (const fn of listeners) fn();
 }
@@ -82,9 +82,8 @@ export async function captureThumb(cameraId: string): Promise<void> {
         if (keys.length > MAX_STORED) delete map[keys[0]];
         persist(map);
     } catch {
-        /* a thumbnail is a nicety; never let it break the camera view */
     } finally {
-        try { render?.stop(); } catch { /* renderer gone */ }
+        try { render?.stop(); } catch {}
         capturing = false;
     }
 }
