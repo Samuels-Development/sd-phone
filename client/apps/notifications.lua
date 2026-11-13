@@ -1,8 +1,13 @@
----Shows one iOS-style banner in the React app; drops anything without a table payload and a
----string title. Fields: app, image, title (required), body, time, appId.
----@param data table notification payload
+---@type {enabled: fun(id: string): boolean} App id registry (client.appids): apps configs/apps.lua switched off.
+local appIds = require 'client.appids'
+
+---Shows one iOS-style banner in the React app; drops anything without a table payload and a string
+---title, and any non-emergency banner for an app disabled in configs/apps.lua.
+---@param data table notification payload: app, image, title (required), body, time, appId, emergency
 local function push(data)
     if type(data) ~= 'table' or type(data.title) ~= 'string' then return end
+    local target = data.appId or data.app
+    if target and not data.emergency and not appIds.enabled(target) then return end
     SendNUIMessage({ action = 'sd-phone:notification', data = data })
 end
 
