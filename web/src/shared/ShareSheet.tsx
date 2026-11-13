@@ -10,6 +10,7 @@ import { useMaskedPhone } from '@/stores/themeStore';
 import { Sheet } from '@/ui/Sheet';
 import { InitialsAvatar, PlaceholderAvatar } from '@/shared/ContactAvatar';
 import { useContacts } from '@/stores/contactsStore';
+import { useAsyncData } from '@/hooks/useAsyncData';
 
 
 export interface ShareTarget { id: number; name: string; number?: string }
@@ -26,18 +27,13 @@ export function ShareSheet({ onClose, onShare, children, top = '55%' }: {
     children?: ReactNode;
     top?:      string;
 }) {
-    const [targets, setTargets] = useState<ShareTarget[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [state,   setState]   = useState<Record<number, SendState>>({});
+    const [state, setState] = useState<Record<number, SendState>>({});
     const { contacts, load } = useContacts('contacts', 'load');
 
     useEffect(() => { void load(); }, [load]);
 
-    useEffect(() => {
-        let alive = true;
-        fetchNearby().then(t => { if (alive) { setTargets(t); setLoading(false); } }).catch(() => setLoading(false));
-        return () => { alive = false; };
-    }, []);
+    const { data: nearby, loading } = useAsyncData(fetchNearby, []);
+    const targets = nearby ?? [];
 
     async function send(t: ShareTarget) {
         if (state[t.id] === 'sending' || state[t.id] === 'sent') return;

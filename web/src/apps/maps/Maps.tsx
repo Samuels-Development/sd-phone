@@ -14,6 +14,7 @@ import { fetchNui, isFiveM } from '@/core/nui';
 import { apiCall } from '@/core/api';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useSessionState } from '@/hooks/useSessionState';
+import { useAsyncData } from '@/hooks/useAsyncData';
 import { mapsConfig } from './config';
 import { MapView, usePinStyle } from './MapView';
 import { LiveDot, useSelfLocation } from './LiveDot';
@@ -57,12 +58,11 @@ export function Maps({ onClose }: { onClose: () => void }) {
     const [selectedCompany, setSelectedCompany] = useSessionState<string | null>('maps:selectedCompany', null);
     const mapRef = useRef<MapViewHandle>(null);
 
-    const [companies, setCompanies] = useState<Company[]>([]);
-    useEffect(() => {
-        let alive = true;
-        void fetchDirectory().then(d => { if (alive) setCompanies((d.companies ?? []).filter(c => c.coords)); });
-        return () => { alive = false; };
-    }, []);
+    const { data: companyData } = useAsyncData(
+        () => fetchDirectory().then(d => (d.companies ?? []).filter(c => c.coords)),
+        [],
+    );
+    const companies = companyData ?? [];
 
     const [sheetTab, setSheetTab] = useSessionState<'pins' | 'people' | 'companies'>('maps:sheetTab', 'pins');
     const markersRef = useRef(markers);

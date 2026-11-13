@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { useNuiEvent } from '@/hooks/useNuiEvent';
+import { useAsyncData } from '@/hooks/useAsyncData';
 import { fetchNui, isFiveM } from '@/core/nui';
 import type { RydeLatLng, RydeRequestPush } from '@/core/types';
 import { LEADERBOARD, PLACES } from './data';
@@ -116,18 +117,18 @@ export function useRydeLeaderWeight(): { prior: number; weight: number } {
 
 interface RydeLocation { name: string; sub: string; x: number; y: number }
 
+const NO_PLACES: Place[] = [];
+
 export function useRydeLocations(): Place[] {
-    const [places, setPlaces] = useState<Place[]>(() => (isFiveM ? [] : PLACES));
-    useEffect(() => {
-        if (!isFiveM) return;
-        let alive = true;
-        void rydeCall<{ locations: RydeLocation[] }>('sd-phone:ryde:config').then(d => {
-            if (!alive || !d?.locations) return;
-            setPlaces(d.locations.map(l => ({ id: slug(l.name), name: l.name, sub: l.sub, x: l.x, y: l.y })));
-        });
-        return () => { alive = false; };
-    }, []);
-    return places;
+    const { data } = useAsyncData(
+        async () => {
+            const d = await rydeCall<{ locations: RydeLocation[] }>('sd-phone:ryde:config');
+            return d?.locations ? d.locations.map(l => ({ id: slug(l.name), name: l.name, sub: l.sub, x: l.x, y: l.y })) : null;
+        },
+        [],
+        { enabled: isFiveM },
+    );
+    return isFiveM ? data ?? NO_PLACES : PLACES;
 }
 
 export interface RydeVehicle { name: string; plate: string }
@@ -139,33 +140,24 @@ const DEV_VEHICLES: RydeVehicle[] = [
     { name: 'Declasse Tornado',   plate: 'VESP771' },
 ];
 
+const NO_VEHICLES: RydeVehicle[] = [];
+const NO_LEADERS: LeaderEntry[] = [];
+
 export function useRydeVehicles(): { vehicles: RydeVehicle[]; loading: boolean } {
-    const [vehicles, setVehicles] = useState<RydeVehicle[]>(() => (isFiveM ? [] : DEV_VEHICLES));
-    const [loading, setLoading] = useState(isFiveM);
-    useEffect(() => {
-        if (!isFiveM) return;
-        let alive = true;
-        void apiData<{ model: string; plate: string }[]>('sd-phone:garages:list')
-            .then(r => {
-                if (!alive) return;
-                setVehicles(r ? r.map(v => ({ name: v.model, plate: (v.plate || '').trim() })) : []);
-            })
-            .catch(() => { if (alive) setVehicles([]); })
-            .finally(() => { if (alive) setLoading(false); });
-        return () => { alive = false; };
-    }, []);
-    return { vehicles, loading };
+    const { data, loading } = useAsyncData(
+        () => apiData<{ model: string; plate: string }[]>('sd-phone:garages:list')
+            .then(r => (r ? r.map(v => ({ name: v.model, plate: (v.plate || '').trim() })) : null)),
+        [],
+        { enabled: isFiveM },
+    );
+    return { vehicles: isFiveM ? data ?? NO_VEHICLES : DEV_VEHICLES, loading };
 }
 
 export function useRydeLeaderboard(): LeaderEntry[] {
-    const [rows, setRows] = useState<LeaderEntry[]>(() => (isFiveM ? [] : LEADERBOARD));
-    useEffect(() => {
-        if (!isFiveM) return;
-        let alive = true;
-        void rydeCall<{ leaders: LeaderEntry[] }>('sd-phone:ryde:leaderboard').then(d => {
-            if (alive && d?.leaders) setRows(d.leaders);
-        });
-        return () => { alive = false; };
-    }, []);
-    return rows;
+    const { data } = useAsyncData(
+        () => rydeCall<{ leaders: LeaderEntry[] }>('sd-phone:ryde:leaderboard').then(d => d?.leaders ?? null),
+        [],
+        { enabled: isFiveM },
+    );
+    return isFiveM ? data ?? NO_LEADERS : LEADERBOARD;
 }

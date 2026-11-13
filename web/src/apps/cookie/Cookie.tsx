@@ -10,6 +10,7 @@ import { playCrunch } from './crunch';
 import { NicknameSheet } from './NicknameSheet';
 import { fetchNui, isFiveM } from '@/core/nui';
 import { apiData } from '@/core/api';
+import { useAsyncData } from '@/hooks/useAsyncData';
 import { MEDALS } from '@/apps/_arcade/GameLeaderboard';
 import { useDeckActive } from '@/shell/deckActive';
 import { t } from '@/i18n';
@@ -572,18 +573,14 @@ function LeaderboardTab({ earned, refreshKey, onEditNickname }: {
     refreshKey: number;
     onEditNickname: (currentNick: string) => void;
 }) {
-    const [rivals, setRivals] = useState<LeaderRow[] | null>(null);
-    const [me, setMe] = useState<{ name: string; nickname: string } | null>(null);
-    useEffect(() => {
-        if (!isFiveM) return;
-        let alive = true;
-        apiData<{ rivals: LeaderRow[]; me: { name: string; nickname: string } }>('sd-phone:cookie:leaderboard')
-            .then(r => { if (alive && r) { setRivals(r.rivals); setMe(r.me); } })
-            .catch(() => {});
-        return () => { alive = false; };
-    }, [refreshKey]);
+    const { data } = useAsyncData(
+        () => apiData<{ rivals: LeaderRow[]; me: { name: string; nickname: string } }>('sd-phone:cookie:leaderboard'),
+        [refreshKey],
+        { enabled: isFiveM },
+    );
+    const me = data?.me;
 
-    if (isFiveM && rivals === null) {
+    if (isFiveM && data === null) {
         return (
             <div className="flex animate-pulse flex-col gap-1.5">
                 {Array.from({ length: 8 }, (_, i) => (
@@ -601,7 +598,7 @@ function LeaderboardTab({ earned, refreshKey, onEditNickname }: {
         );
     }
 
-    const rows = isFiveM ? rankWithYou(rivals ?? [], earned, me?.name || t('cookie.you', 'You')) : leaderboard(earned);
+    const rows = isFiveM ? rankWithYou(data?.rivals ?? [], earned, me?.name || t('cookie.you', 'You')) : leaderboard(earned);
     return (
         <div className="flex flex-col gap-1.5" style={{ animation: 'cookie-fade-in 0.28s ease-out' }}>
             {rows.map((r, i) => {

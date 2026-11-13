@@ -8,6 +8,7 @@ import type { LucideIcon } from 'lucide-react';
 
 import { pluralSuffix, t } from '@/i18n';
 import { useSessionState, clearSessionState } from '@/hooks/useSessionState';
+import { useAsyncData } from '@/hooks/useAsyncData';
 import { useTheme } from '@/stores/themeStore';
 import { useDidEnter } from '@/hooks/useDidEnter';
 import { Scrubber } from '@/ui/Scrubber';
@@ -1055,18 +1056,12 @@ function AddForm({ onAdd, onClose, backLabel }: { onAdd: (url: string, title: st
 function AllowlistSheet({ onPick, onClose }: { onPick: (url: string) => void; onClose: () => void }) {
     const ids = useMemo(() => (youtubeCurated() ? allowedVideoIds() : []), []);
     const hosted = useMemo(() => allowedTrackList(), []);
-    const [titles, setTitles] = useState<Record<string, string>>({});
-
-    useEffect(() => {
-        let cancelled = false;
-        void Promise.all(ids.map(id =>
+    const { data: titles } = useAsyncData(
+        () => Promise.all(ids.map(id =>
             fetchYouTubeMeta(youtubeWatchUrl(id)).then(meta => [id, meta.title] as const),
-        )).then(pairs => {
-            if (cancelled) return;
-            setTitles(Object.fromEntries(pairs.filter(([, title]) => !!title)));
-        });
-        return () => { cancelled = true; };
-    }, [ids]);
+        )).then(pairs => Object.fromEntries(pairs.filter(([, title]) => !!title))),
+        [ids],
+    );
 
     return (
         <Sheet onClose={onClose} top={130} className="bg-base text-black dark:text-white font-sf">
@@ -1113,7 +1108,7 @@ function AllowlistSheet({ onPick, onClose }: { onPick: (url: string) => void; on
                                 <img src={youtubeThumb(id)} alt="" loading="lazy"
                                     className="h-[52px] w-[92px] shrink-0 rounded-[7px] bg-black/10 object-cover dark:bg-white/10" />
                                 <span className="min-w-0 flex-1 truncate text-[18px] font-semibold">
-                                    {titles[id] ?? t('music.gettingTitle', 'Getting title…')}
+                                    {titles?.[id] ?? t('music.gettingTitle', 'Getting title…')}
                                 </span>
                                 <Plus className="h-5 w-5 shrink-0 text-ios-blue" />
                             </button>

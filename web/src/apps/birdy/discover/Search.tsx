@@ -3,12 +3,12 @@ import { useEffect, useState } from 'react';
 import { t } from '@/i18n';
 import { useTheme } from '@/stores/themeStore';
 import { useSessionState } from '@/hooks/useSessionState';
+import { useAsyncData } from '@/hooks/useAsyncData';
 import { SearchBar } from '@/ui/SearchBar';
 import { apiHashtagPosts, apiSearch, apiTrending } from '../birdyApi';
 import { BG, BLUE, BRAND, BRAND_DIM, META, PILL, postKey, type BirdyAuthor, type BirdyPost} from '../data';
 import { BirdyBird } from '../BirdyBird';
 import { PostCard } from '../feed/PostCard';
-import type { TrendingTag } from '../hashtags';
 
 import { Avatar, VerifiedBadge } from '../ui';
 
@@ -25,8 +25,6 @@ export function Search({ me, onOpenProfile, onOpenPost, onToggleLike, onToggleRe
     const [query,       setQuery]       = useSessionState('birdy:searchQuery', '');
     const [results,     setResults]     = useState<BirdyAuthor[]>([]);
     const [postResults, setPostResults] = useState<BirdyPost[]>([]);
-    // null = not fetched yet, so the empty state never flashes ahead of the data.
-    const [trending,    setTrending]    = useState<TrendingTag[] | null>(null);
     const [pending,     setPending]     = useState(false);
     const trimmedQ  = query.trim();
     const searching = trimmedQ.length > 0;
@@ -52,12 +50,7 @@ export function Search({ me, onOpenProfile, onOpenPost, onToggleLike, onToggleRe
         return () => { alive = false; window.clearTimeout(timer); };
     }, [trimmedQ, searching, tagMode]);
 
-    useEffect(() => {
-        if (searching) return;
-        let alive = true;
-        void apiTrending().then(tags => { if (alive) setTrending(tags); });
-        return () => { alive = false; };
-    }, [searching]);
+    const { data: trending } = useAsyncData(apiTrending, [searching], { enabled: !searching });
 
     // Patch the local copy too; the parent's toggle only reaches the feed and open-post copies.
     function flipLike(id: string) {

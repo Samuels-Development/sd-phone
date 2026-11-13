@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Check, Plus, X } from 'lucide-react';
 
 import { t } from '@/i18n';
 import { PHOTO_SOURCES } from '@/apps/photos/data';
 import { apiListPhotos, getCanImportPhotos } from '@/core/photosApi';
+import { useAsyncData } from '@/hooks/useAsyncData';
 import { useIosPush } from '@/hooks/useIosPush';
 import { MAX_CUSTOM_WALLPAPERS, useTheme } from '@/stores/themeStore';
 import type { WallpaperTarget } from '@/stores/themeStore';
@@ -42,17 +43,10 @@ export function WallpaperPickerPage({ target, onBack }: { target: WallpaperTarge
         wallpaperLock, wallpaperHome, setWallpaper, customWallpapers, addCustomWallpaper, removeCustomWallpaper,
     } = useTheme('wallpaperLock', 'wallpaperHome', 'setWallpaper', 'customWallpapers', 'addCustomWallpaper', 'removeCustomWallpaper');
     const [selected, setSelected] = useState<string>(target === 'home' ? wallpaperHome : wallpaperLock);
-    const [canImport, setCanImport] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
 
     // The server's URL-import flag only resolves after a photos list round-trip.
-    useEffect(() => {
-        let cancelled = false;
-        void apiListPhotos().then(() => {
-            if (!cancelled) setCanImport(getCanImportPhotos());
-        });
-        return () => { cancelled = true; };
-    }, []);
+    const { data: canImport } = useAsyncData(() => apiListPhotos().then(() => getCanImportPhotos()), []);
 
     function apply(src: string) {
         setSelected(src);
