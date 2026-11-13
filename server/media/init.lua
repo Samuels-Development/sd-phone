@@ -120,11 +120,6 @@ local function deriveControlUrl(url)
     return (scheme == 'wss' and 'https://' or 'http://') .. host .. '/control'
 end
 
----Resolves the gate once and remembers it: the relay is available only with the switch on, a
----usable URL, a well-formed key and the Node crypto helper answering. Anything missing leaves it
----off and says which thing was missing, once, because a half-configured relay that silently does
----nothing is the hardest version of this to diagnose.
----@return boolean available
 ---A throwaway claim set used only to prove signing actually works at boot. Everything a real
 ---token carries is present so the check exercises the same encoding path a grant does.
 ---@return table claims
@@ -205,6 +200,11 @@ local function startHost()
     return hostedPort > 0
 end
 
+---Resolves the gate once and remembers it: the relay is available only with the switch on, a
+---usable URL, a well-formed key and the Node crypto helper answering. Anything missing leaves it
+---off and says which thing was missing, once, because a half-configured relay that silently does
+---nothing is the hardest version of this to diagnose.
+---@return boolean available
 local function resolve()
     if ready ~= nil then return ready end
     ready = false

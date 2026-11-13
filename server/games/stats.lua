@@ -165,10 +165,6 @@ function stats.submitScore(cid, game, score, name)
     return { best = math.max(prevHigh, score), isRecord = score > prevHigh, plays = prevPlays + 1, last = score }
 end
 
----Global leaderboards for a game: `cpu`/`online` ranked by wins, `winners`/`losers` ranked by net
----chips (won - lost). An unknown game id returns the empty shape. Read-only.
----@param game any game id (client-supplied)
----@return table boards { cpu, online, winners, losers }
 ---@type integer Seconds a computed board stays warm. The boards are cosmetic, and the callback
 ---behind them is ungated, so a short cache also bounds how often a client can force the queries.
 local BOARD_TTL = 30
@@ -195,6 +191,10 @@ local function cachedBoard(key, build)
     return data
 end
 
+---Global leaderboards for a game: `cpu`/`online` ranked by wins, `winners`/`losers` ranked by net
+---chips (won - lost). An unknown game id returns the empty shape. Read-only.
+---@param game any game id (client-supplied)
+---@return table boards { cpu, online, winners, losers }
 function stats.leaderboard(game)
     if not knownGame(game) then return { cpu = {}, online = {}, winners = {}, losers = {} } end
     return cachedBoard('lb:' .. game, function()

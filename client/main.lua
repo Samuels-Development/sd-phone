@@ -597,7 +597,7 @@ local function RevealPhone()
         },
     })
 
-    pushWeather(true)
+    pushWeather()
 
     SendNUIMessage({
         action = 'sd-phone:session',

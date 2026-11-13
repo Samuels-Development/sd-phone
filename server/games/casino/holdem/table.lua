@@ -331,11 +331,6 @@ local function potsFor(T)
     return layers
 end
 
----One seat's view of the table. Every other seat's hole cards are absent until they are revealed at
----showdown, so the secret half of the game never leaves the server for the wrong phone.
----@param T table table
----@param cid string|nil citizenid of the viewer (nil for a player who has not sat down)
----@return table view HoldemStatePush
 ---The category of the hand a seat currently holds, as an i18n key for handCatLabel. Preflop there
 ---are only two cards, which best7 refuses to score, so the pocket pair is read off directly.
 ---@param s table seat
@@ -351,6 +346,11 @@ local function rankFor(s, board)
     return eval.describe((eval.best7(cards)))
 end
 
+---One seat's view of the table. Every other seat's hole cards are absent until they are revealed at
+---showdown, so the secret half of the game never leaves the server for the wrong phone.
+---@param T table table
+---@param cid string|nil citizenid of the viewer (nil for a player who has not sat down)
+---@return table view HoldemStatePush
 function holdem.view(T, cid)
     local seats = {}
     for i = 1, SEATS do

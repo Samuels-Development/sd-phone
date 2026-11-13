@@ -429,8 +429,8 @@ local function hasDmContent(kind, body, meta)
     return body ~= ''
 end
 
----@-mentions in a caption / comment that resolve to real photogram accounts, deduplicated and
----excluding the author. Lookups cap at 50 per text.
+---Mentions (@handle) in a caption / comment that resolve to real photogram accounts, deduplicated
+---and excluding the author. Lookups cap at 50 per text.
 ---@param text string caption or comment body (already length-capped)
 ---@param exclude string author's own handle
 ---@return string[] handles

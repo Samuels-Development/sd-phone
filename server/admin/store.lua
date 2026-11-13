@@ -171,7 +171,8 @@ end
 ---@param query string raw search text (>= 2 chars, enforced by the caller)
 ---@param limit integer page size
 ---@param offset integer merged rows to skip (previous pages)
----@return table[] hits { citizenid, matchedOn }, integer|nil nextOffset
+---@return table[] hits rows carrying citizenid and matchedOn
+---@return integer|nil nextOffset
 function store.searchPlayers(query, limit, offset)
     local like   = '%' .. escapeLike(query) .. '%'
     local digits = util.digits(query)
@@ -229,7 +230,8 @@ end
 ---Players page's default listing. Keyset-paginated on (newest device row, citizenid). Read-only.
 ---@param cursor string|nil opaque "ts:cid" cursor from the previous page
 ---@param limit integer page size (already clamped)
----@return table[] hits { citizenid, matchedOn }, string|nil nextCursor
+---@return table[] hits rows carrying citizenid and matchedOn
+---@return string|nil nextCursor
 function store.listRecentPlayers(cursor, limit)
     local ts, cid
     if type(cursor) == 'string' and cursor ~= '' then

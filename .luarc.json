@@ -1,0 +1,32 @@
+{
+    "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
+    "runtime.version": "Lua 5.4",
+    "runtime.nonstandardSymbol": ["`"],
+    "diagnostics.globals": [
+        "MySQL",
+        "lib",
+        "cache",
+        "json",
+        "promise",
+        "source",
+        "exports",
+        "joaat",
+        "fx_version",
+        "game",
+        "lua54",
+        "name",
+        "author",
+        "version",
+        "description",
+        "shared_scripts",
+        "client_scripts",
+        "server_scripts",
+        "ui_page",
+        "files",
+        "dependencies",
+        "provide"
+    ],
+    "diagnostics.globalsRegex": ["^[A-Z][A-Za-z0-9_]*$"],
+    "workspace.ignoreDir": [".vscode", "tests", "web"],
+    "workspace.checkThirdParty": false
+}

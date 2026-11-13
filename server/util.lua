@@ -82,7 +82,7 @@ function util.truthy(v) return v == true or v == 1 or v == '1' end
 
 ---Trims leading/trailing whitespace. A non-string coerces to '' (never nil).
 ---@param s any
----@return string trimmed, or '' when not a string
+---@return string trimmed '' when s is not a string
 -- Linear, and it has to stay that way. The obvious `s:gsub('%s+$', '')` is
 -- quadratic on interior whitespace: for 'x' .. (' '):rep(n) .. 'x' the matcher
 -- re-expands the run at every start position and backtracks it against `$`.

@@ -114,6 +114,7 @@ util.onCleanup(function(src) pendingDirect[src] = nil end)
 ---The sentence a player sees when the upload budget or pacing refuses them.
 ---@param why string|nil 'cooldown'|'busy'|'identity'|'budget'|'server'
 ---@return string message
+---@return string messageKey i18n key for the message
 local function refusal(why)
     if why == 'cooldown' then return 'Slow down a moment', 'voicememos.uploadSlowDown' end
     if why == 'busy' then return 'Upload already in progress', 'voicememos.uploadBusy' end

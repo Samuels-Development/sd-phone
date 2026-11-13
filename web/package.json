@@ -14,7 +14,8 @@
         "i18n:check": "node scripts/i18n.mjs check",
         "i18n:gen": "node scripts/i18n.mjs gen",
         "i18n:status": "node scripts/i18n.mjs status",
-        "i18n:prune": "node scripts/i18n.mjs prune"
+        "i18n:prune": "node scripts/i18n.mjs prune",
+        "check": "npm run -s build && npm run -s lint && npm run -s test && npm run -s knip && npm run -s i18n:check"
     },
     "dependencies": {
         "@fontsource/great-vibes": "^5.3.0",

@@ -218,7 +218,6 @@ end
 ---@param follower string account handle
 ---@param target string account handle
 ---@param createdAt integer unix seconds
----@param gifUrl string|nil GIF reply url, nil for a plain text comment
 function store.addFollow(follower, target, createdAt)
     MySQL.query.await('INSERT IGNORE INTO phone_vibez_follows (follower, target, created_at) VALUES (?, ?, ?)', { follower, target, createdAt })
 end
@@ -452,7 +451,6 @@ end
 ---@param postId string post id
 ---@param username string account handle
 ---@param createdAt integer unix seconds
----@param gifUrl string|nil GIF reply url, nil for a plain text comment
 function store.addLike(postId, username, createdAt)
     MySQL.query.await('INSERT IGNORE INTO phone_vibez_likes (post_id, username, created_at) VALUES (?, ?, ?)', { postId, username, createdAt })
 end
@@ -476,7 +474,6 @@ end
 ---@param postId string post id
 ---@param username string account handle
 ---@param createdAt integer unix seconds
----@param gifUrl string|nil GIF reply url, nil for a plain text comment
 function store.addSave(postId, username, createdAt)
     MySQL.query.await('INSERT IGNORE INTO phone_vibez_saves (post_id, username, created_at) VALUES (?, ?, ?)', { postId, username, createdAt })
 end
@@ -542,7 +539,6 @@ end
 ---@param commentId string comment id
 ---@param username string account handle
 ---@param createdAt integer unix seconds
----@param gifUrl string|nil GIF reply url, nil for a plain text comment
 function store.addCommentLike(commentId, username, createdAt)
     MySQL.query.await('INSERT IGNORE INTO phone_vibez_comment_likes (comment_id, username, created_at) VALUES (?, ?, ?)', { commentId, username, createdAt })
 end
@@ -590,7 +586,6 @@ end
 ---@param postId string|nil related post id
 ---@param preview string|nil short body preview
 ---@param createdAt integer unix seconds
----@param gifUrl string|nil GIF reply url, nil for a plain text comment
 function store.insertNotification(id, recipient, kind, actor, postId, preview, createdAt)
     MySQL.insert.await([[
         INSERT INTO phone_vibez_notifications (id, recipient, kind, actor, post_id, preview, created_at)

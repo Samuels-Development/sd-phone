@@ -677,9 +677,6 @@ function actions.setHud(src, payload)
     return ok({ hud = hud })
 end
 
----Saves a track recorded with the in-game creator. The ace is re-checked here because the callback
----is reachable by any client regardless of who was allowed to run the command.
----@param src integer player server id
 ---Checks one track payload against the creator's own rules: a usable name, a gate count inside
 ---CREATOR.MinGates/MaxGates, and two finite 3D points per gate. Shared by the in-world creator and
 ---the JSON importer so an imported track can never bypass a limit the creator enforces.
@@ -727,6 +724,9 @@ local function validateTrack(payload)
     return name, gates, nil
 end
 
+---Saves a track recorded with the in-game creator. The ace is re-checked here because the callback
+---is reachable by any client regardless of who was allowed to run the command.
+---@param src integer player server id
 ---@param payload table { name, mode, gates }
 ---@return table envelope
 function actions.createTrack(src, payload)

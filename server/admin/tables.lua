@@ -6,8 +6,7 @@
 ---list would drop an lb-phone table and destroy the migration source for good.
 ---
 ---Regenerate with:
----  grep -rhoE "CREATE TABLE IF NOT EXISTS .?[a-z_0-9]+.?" --include=*.lua server/ \
----    | sed -E "s/.*EXISTS .?//; s/.$//" | sort -u
+---  grep -rhoE "CREATE TABLE IF NOT EXISTS .?[a-z_0-9]+.?" --include=*.lua server/ | sed -E "s/.*EXISTS .?//; s/.$//" | sort -u
 return {
     'darkchat_bans',
     'darkchat_members',
