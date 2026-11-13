@@ -128,8 +128,8 @@ export function useOnlineLobby(game: string, options: UseOnlineLobbyOptions): On
     const inHub = options.inLobbyScreen && !lobby && active;
     useEffect(() => {
         if (!inHub) return;
-        void lobbiesApi(game).then(setLobbies);
-        const timer = setInterval(() => { void lobbiesApi(game).then(setLobbies); }, 3000);
+        void lobbiesApi(game).then(setLobbies).catch(() => {});
+        const timer = setInterval(() => { void lobbiesApi(game).then(setLobbies).catch(() => {}); }, 3000);
         return () => clearInterval(timer);
     }, [inHub, game]);
 
@@ -228,7 +228,7 @@ export function useOnlineLobby(game: string, options: UseOnlineLobbyOptions): On
         setReadyApi(r);
     }, []);
 
-    const refresh = useCallback(() => { void lobbiesApi(game).then(setLobbies); }, [game]);
+    const refresh = useCallback(() => { void lobbiesApi(game).then(setLobbies).catch(() => {}); }, [game]);
 
     const returnToLobby = useCallback(() => {
         void returnToLobbyApi(game).then(r => {

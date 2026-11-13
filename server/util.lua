@@ -636,7 +636,9 @@ function util.cooldownLeft(cid, key, ms)
     if type(cid) ~= 'string' or cid == '' then return 0 end
     local b = buckets[cid .. '\0c\0' .. tostring(key)]
     if not b then return 0 end
-    local left = (tonumber(ms) or 0) - (GetGameTimer() - b.last)
+    local since = GetGameTimer() - b.last
+    if since < 0 then return 0 end
+    local left = (tonumber(ms) or 0) - since
     return left > 0 and math.floor(left) or 0
 end
 
