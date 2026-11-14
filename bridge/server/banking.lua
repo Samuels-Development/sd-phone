@@ -17,7 +17,7 @@ local aicore    = framework.aicore and require 'bridge.server.aicore' or nil
 local banking = {}
 
 -- Dedicated-path export shapes:
---   wasabi_banking : AddMoney/RemoveMoney/GetAccountBalance(identifier, amount, reason)
+--   wasabi_banking : AddMoney/RemoveMoney(accountType, accountID, amount, source), GetAccountBalance(accountID, accountType), Transaction(identifier, reason, amount, type, account)
 --   omes_banking   : AddBankMoney/RemoveBankMoney/GetBankBalance(source, amount, desc)
 --   prism_banking  : AddBankingTransaction(source, type, amount, spendType, tax, name, desc)
 --   tgg-banking    : GetPersonalAccountByPlayerId(source).balance (read only)
@@ -30,8 +30,8 @@ local KNOWN = {
 
 ---@type table<string, boolean> Resources that store the personal balance in their own tables.
 local OWN_TABLE = {
-    wasabi_banking = true, okokBanking = true, ['tgg-banking'] = true,
-    prism_banking  = true, fd_banking  = true,
+    okokBanking = true, ['tgg-banking'] = true,
+    prism_banking = true, fd_banking = true,
 }
 
 ---@type boolean, string|nil Detection-ran flag + cached provider name (nil = framework account).
@@ -78,7 +78,7 @@ function banking.getBalance(src)
     if name == 'wasabi_banking' then
         local id = player.getRealIdentifier(src)
         if id then
-            local ok, bal = pcall(function() return exports.wasabi_banking:GetAccountBalance(id) end)
+            local ok, bal = pcall(function() return exports.wasabi_banking:GetAccountBalance(id, 'bank') end)
             if ok and type(bal) == 'number' then return bal end
         end
     elseif name == 'omes_banking' then
@@ -162,7 +162,11 @@ function banking.addMoney(src, amount, reason)
     local name = banking.name
     if name == 'wasabi_banking' then
         local id = player.getRealIdentifier(src)
-        if id and try(function() exports.wasabi_banking:AddMoney(id, amount, reason or 'Phone transfer') end) then return true end
+        local viaProvider = id ~= nil and try(function() return exports.wasabi_banking:AddMoney('bank', id, amount, src) end)
+        if viaProvider then
+            try(function() return exports.wasabi_banking:Transaction(id, reason or 'Phone transfer', amount, 'deposit', 'personal') end)
+            return true
+        end
     elseif name == 'omes_banking' then
         if try(function() exports['omes_banking']:AddBankMoney(src, amount, reason or 'Phone transfer') end) then return true end
     elseif name == 'prism_banking' then
@@ -191,7 +195,10 @@ function banking.removeMoney(src, amount, reason)
     local viaProvider = false
     if name == 'wasabi_banking' then
         local id = player.getRealIdentifier(src)
-        viaProvider = id ~= nil and try(function() exports.wasabi_banking:RemoveMoney(id, amount, reason or 'Phone transfer') end)
+        viaProvider = id ~= nil and try(function() return exports.wasabi_banking:RemoveMoney('bank', id, amount, src) end)
+        if viaProvider then
+            try(function() return exports.wasabi_banking:Transaction(id, reason or 'Phone transfer', amount, 'sent', 'personal') end)
+        end
     elseif name == 'omes_banking' then
         viaProvider = try(function() exports['omes_banking']:RemoveBankMoney(src, amount, reason or 'Phone transfer') end)
     elseif name == 'prism_banking' then
