@@ -1,7 +1,8 @@
 ---@type table Store module; the table returned at end of file. Parameterized queries only; the
 ---layer stays dumb - callers encode/decode JSON and enforce every length/permission rule. Public
----rooms come from config (no row needed); only private rooms, memberships, messages, reactions
----and nicknames persist. Messages in a public room are keyed by the config room id; private rooms
+---rooms come from config; each is mirrored by an anchor row (see ensurePublicRooms) so its
+---messages satisfy the room foreign key. Only private rooms, memberships, messages, reactions and
+---nicknames carry state. Messages in a public room are keyed by the config room id; private rooms
 ---use 'p-<code>'.
 local store = {}
 
@@ -12,8 +13,11 @@ local isTruthy = util.truthy
 ---drop-in. `kind` tags a message's type and `meta` holds a JSON blob of its extra fields (media
 ---URL, audio + duration, waypoint, reply quote); rows from before those columns exist default to
 ---kind='text'/meta=NULL. Reactions are one row per (message, player, emoji) - a message's rendered
----set is the DISTINCT emoji across its rows. Run once at boot.
-function store.ensureSchema()
+---set is the DISTINCT emoji across its rows. Public-room anchor rows are written before the
+---foreign keys, so the orphan sweep in ensureForeignKey never clears public-room history. Run once
+---at boot.
+---@param publicRooms table[] config.DarkChat.PublicRooms
+function store.ensureSchema(publicRooms)
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS `darkchat_rooms` (
             `id`         VARCHAR(40)  NOT NULL,
@@ -84,6 +88,8 @@ function store.ensureSchema()
             ADD COLUMN IF NOT EXISTS `code_changed_at` BIGINT NULL
     ]])
 
+    store.ensurePublicRooms(publicRooms)
+
     -- Referential integrity, added on boot so existing installs migrate with no manual SQL.
     -- Each is a no-op once present; orphaned children are cleared first (they point at a
     -- parent that is already gone) and a type or collation mismatch is skipped, never fatal.
@@ -91,6 +97,36 @@ function store.ensureSchema()
     util.ensureForeignKey('darkchat_bans', 'room_id', 'darkchat_rooms', 'id', 'fk_darkchat_bans_room')
     util.ensureForeignKey('darkchat_messages', 'room_id', 'darkchat_rooms', 'id', 'fk_darkchat_messages_room')
     util.ensureForeignKey('darkchat_reactions', 'message_id', 'darkchat_messages', 'id', 'fk_darkchat_reactions_message')
+end
+
+---Upserts one anchor row per config public room, so public-room messages have the parent row the
+---room foreign key requires; the room list and access still come from config. A renamed room gets
+---its new name. An anchor is never a usable private room: owner is '' (no citizenid, so wipes and
+---room counts skip it) and its code is '#' .. id, which sanitizeCode can never produce, so no join
+---code reaches it. Anchors of rooms later removed from config are kept: deleting one would cascade
+---its history away. Run from ensureSchema, before the foreign keys.
+---@param rooms table[] config.DarkChat.PublicRooms entries ({ id, name })
+function store.ensurePublicRooms(rooms)
+    local now = os.time()
+    for _, room in ipairs(rooms or {}) do
+        local id = room.id
+        if type(id) ~= 'string' or id == '' or #id > 40 then
+            util.schemaWarn('darkchat_rooms', ('public room id %s (must be 1-40 characters)'):format(tostring(id)), 'invalid id')
+        else
+            local code = '#' .. id:sub(1, 15)
+            -- The code is UNIQUE, so a clash would make the upsert rename another room instead.
+            local holder = MySQL.scalar.await('SELECT id FROM `darkchat_rooms` WHERE code = ?', { code })
+            if holder and holder ~= id then
+                util.schemaWarn('darkchat_rooms', 'public room ' .. id, ('anchor code %s is taken by %s; ids must differ within their first 15 characters'):format(code, holder))
+            else
+                local ok, err = pcall(MySQL.query.await, [[
+                    INSERT INTO `darkchat_rooms` (id, code, name, owner, created_at) VALUES (?, ?, ?, '', ?)
+                    ON DUPLICATE KEY UPDATE name = VALUES(name)
+                ]], { id, code, tostring(room.name or id):sub(1, 60), now })
+                if not ok then util.schemaWarn('darkchat_rooms', 'public room ' .. id, err) end
+            end
+        end
+    end
 end
 
 ---Insert a private room row. Caller guarantees the code (and therefore the 'p-<code>' id) is
