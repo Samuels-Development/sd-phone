@@ -2,6 +2,10 @@
 ---sibling device resource (sd-tablet). Required FIRST - it shadows RegisterNUICallback and
 ---SendNUIMessage, so it has to be installed before any module that uses them loads.
 local companion = require 'client.companion'
+---@type table Optional prop screen (client.propscreen): the phone UI as a DUI on the held prop
+---(configs/phone.lua PropScreen, off by default = inert). Required right after the companion bus
+---so its push mirror / focus guard wrap that one.
+local propScreen = require 'client.propscreen'
 ---@type table sd-phone config root (configs/config.lua).
 local config = require 'configs.config'
 ---@type table Locale bridge (bridge.shared.locale): which catalogues this install ships.
@@ -692,6 +696,9 @@ local function TogglePhone()
     if phoneState.open then ClosePhone() return end
     OpenPhone()
 end
+
+-- Prop screen: ESC / vehicle / full-screen hand-offs close and reopen through the normal paths.
+propScreen.bind(ClosePhone, OpenPhone)
 
 -- Keybind wiring. lib.addKeybind registers the +/- command pair and the mapping together, refuses
 -- to fire while the pause menu is up, and clears both halves out of the chat suggestion list. It

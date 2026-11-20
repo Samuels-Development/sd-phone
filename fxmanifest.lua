@@ -38,6 +38,7 @@ files {
     'locales/*.json',
     'web/build/index.html',
     'web/build/uploader.html',
+    'web/dui/phone.html', -- optional prop screen DUI page (configs/phone.lua PropScreen)
     'web/build/sdphone-sdk.js',
     'web/build/sdphone-sdk.d.ts',
     'web/build/assets/*.js',

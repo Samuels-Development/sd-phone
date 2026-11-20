@@ -1,0 +1,165 @@
+<!doctype html>
+<!--
+  Prop screen DUI page (optional feature, see client/propscreen.lua and configs/phone.lua PropScreen).
+  Boots the unmodified web/build bundle (the asset list is read from web/build/index.html, so a rebuild
+  needs no edit here) and fits the phone's screen element to this viewport, so the DUI texture is
+  exactly the phone screen. Served as https://cfx-nui-<resource>/..., which makes the bundle detect
+  NUI mode and send its callbacks to https://<resource>/<action> like the NUI frame does.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<base href="../build/" />
+<style>
+  html, body { margin: 0; width: 100vw; height: 100vh; overflow: hidden; background: #000 !important; }
+  #root { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  .sd-propscreen-hide { display: none !important; }
+</style>
+<script>
+(() => {
+  'use strict';
+  const RES = location.hostname.replace(/^cfx-nui-/, '') || 'sd-phone';
+  const post = (action, body) => fetch(`https://${RES}/${action}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json; charset=UTF-8' }, body: JSON.stringify(body || {}),
+  }).catch(() => {});
+  const state = { active: false, debug: false };
+
+  // ---- audio gate: the NUI frame owns sound unless the prop session is up (no double ringtones)
+  const gains = new Set();
+  const applyGain = () => { for (const g of gains) { try { g.gain.value = state.active ? 1 : 0; } catch (_) {} } };
+  const RealAC = window.AudioContext || window.webkitAudioContext;
+  if (RealAC) {
+    const destGet = Object.getOwnPropertyDescriptor(BaseAudioContext.prototype, 'destination').get;
+    class GatedAC extends RealAC {
+      constructor(...a) { super(...a); const g = this.createGain(); g.connect(destGet.call(this)); this.__g = g; gains.add(g); applyGain(); }
+      get destination() { return this.__g || destGet.call(this); }
+    }
+    window.AudioContext = GatedAC; window.webkitAudioContext = GatedAC;
+  }
+  const realPlay = HTMLMediaElement.prototype.play;
+  HTMLMediaElement.prototype.play = function (...a) {
+    if (!state.active) this.muted = true; else if (this.__psMuted) this.muted = false;
+    this.__psMuted = !state.active;
+    return realPlay.apply(this, a);
+  };
+
+  // ---- fit: map the phone's screen element onto the whole viewport
+  let s = { sx: 1, sy: 1, tx: 0, ty: 0 };
+  function screenEl() {
+    // the phone screen: the largest clipped rounded rect inside the shell (440x956 CSS px shut)
+    let best = null, area = 0;
+    for (const el of document.querySelectorAll('#root div[style*="clip-path"]')) {
+      const r = el.getBoundingClientRect();
+      const a = r.width * r.height;
+      if (a > area && r.height > r.width * 0.9) { best = el; area = a; }
+    }
+    return best;
+  }
+  function fit() {
+    const root = document.getElementById('root');
+    const el = screenEl();
+    if (!root || !el) return;
+    // hide the bezel/frame svg drawn over the screen edge (the prop has its own bezel)
+    for (const c of el.parentElement.children) if (c.tagName.toLowerCase() === 'svg') c.classList.add('sd-propscreen-hide');
+    const r = el.getBoundingClientRect();
+    if (r.width < 10 || r.height < 10) return;
+    // undo our current transform to get the layout rect, then fit it to the viewport
+    const nx = (r.left - s.tx) / s.sx, ny = (r.top - s.ty) / s.sy, nw = r.width / s.sx, nh = r.height / s.sy;
+    const W = window.innerWidth, H = window.innerHeight;
+    let sx = W / nw, sy = H / nh, ox = 0, oy = 0;
+    // A screen whose aspect is far from the viewport's (an unfolded foldable) is letterboxed
+    // instead of stretched; a near match fills the viewport exactly.
+    if (Math.abs(sx / sy - 1) > 0.08) {
+      const k = Math.min(sx, sy); sx = sy = k;
+      ox = (W - nw * k) / 2; oy = (H - nh * k) / 2;
+    }
+    const n = { sx, sy, tx: ox - nx * sx, ty: oy - ny * sy };
+    if (Math.abs(n.sx - s.sx) > 1e-4 || Math.abs(n.sy - s.sy) > 1e-4 || Math.abs(n.tx - s.tx) > 0.5 || Math.abs(n.ty - s.ty) > 0.5) {
+      s = n;
+      root.style.transform = `matrix(${s.sx},0,0,${s.sy},${s.tx},${s.ty})`;
+    }
+  }
+  setInterval(fit, 200);
+  window.addEventListener('resize', fit);
+
+  // ---- text entry through the game's on-screen keyboard
+  let editing = null;
+  const isText = (el) => el && ((el.tagName === 'INPUT' && !/^(checkbox|radio|range|button|submit|color|file)$/i.test(el.type)) || el.tagName === 'TEXTAREA') && !el.readOnly && !el.disabled;
+  // A windowless DUI browser never has OS focus, so focus events are unreliable: a tap (pointerup) on
+  // a text field is the trigger, focusin the backup for fields the UI focuses itself.
+  const askText = (el) => {
+    if (!state.active || !isText(el) || editing === el) return;
+    editing = el;
+    try { el.focus(); } catch (_) {}
+    post('sd-phone:propscreen:text', { value: el.value || '', maxLength: el.maxLength > 0 ? el.maxLength : 255, type: el.type || 'text' });
+  };
+  const fieldAt = (t) => {
+    if (!t || !t.closest) return t;
+    const own = t.closest('input,textarea');
+    if (own) return own;
+    // a tap on a search pill / field wrapper (small box holding one text field) edits that field
+    const inner = t.querySelectorAll ? t.querySelectorAll('input,textarea') : [];
+    if (inner.length === 1 && t.getBoundingClientRect().height < 90) return inner[0];
+    return t;
+  };
+  document.addEventListener('pointerup', (e) => askText(fieldAt(e.target)), true);
+  document.addEventListener('focusin', (e) => askText(e.target), true);
+  document.addEventListener('pointerdown', (e) => {
+    if (!state.debug) return;
+    const t = e.target;
+    post('sd-phone:propscreen:log', { x: e.clientX, y: e.clientY, tag: t.tagName, cls: String(t.className || '').slice(0, 60), text: (t.textContent || '').trim().slice(0, 30) });
+  }, true);
+  function setValue(el, value) {
+    const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, value);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  function key(k) {
+    const t = document.activeElement || document.body;
+    for (const type of ['keydown', 'keyup']) t.dispatchEvent(new KeyboardEvent(type, { key: k, code: k, bubbles: true, cancelable: true }));
+  }
+
+  // ---- Lua -> page control messages ride the same message channel as the app's pushes
+  window.addEventListener('message', (e) => {
+    const d = e.data;
+    if (!d || !d.propScreen) return;
+    if (d.propScreen === 'active') {
+      state.active = !!d.on; state.debug = !!d.debug; applyGain();
+      if (!d.on && editing) { editing.blur(); editing = null; }
+    } else if (d.propScreen === 'text') {
+      const el = editing; editing = null;
+      if (el && !d.cancelled && typeof d.value === 'string') setValue(el, d.value);
+      if (el) el.blur();
+    } else if (d.propScreen === 'key') {
+      key(d.key);
+    }
+  });
+
+  // ---- boot the bundle from index.html
+  (async () => {
+    const html = await (await fetch('index.html')).text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    for (const el of doc.head.querySelectorAll('link[rel="stylesheet"], link[rel="modulepreload"], script[type="module"]')) {
+      const n = document.createElement(el.tagName.toLowerCase());
+      for (const a of el.attributes) n.setAttribute(a.name, a.value);
+      document.head.appendChild(n);
+    }
+    // ready once React has painted something into #root
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      const root = document.getElementById('root');
+      if ((root && root.childElementCount > 0) || Date.now() - t0 > 15000) {
+        clearInterval(iv);
+        fit();
+        post('sd-phone:propscreen:ready', { w: window.innerWidth, h: window.innerHeight, mounted: !!(root && root.childElementCount) });
+      }
+    }, 100);
+  })();
+})();
+</script>
+</head>
+<body>
+<div id="root"></div>
+</body>
+</html>
