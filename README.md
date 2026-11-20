@@ -167,3 +167,13 @@ cd web
 npm ci
 npm run build
 ```
+
+### DUI phone option (UI on the held prop)
+
+Optional and **off by default**. With `PropScreen.Enabled = true` in `configs/phone.lua`, the phone UI is drawn on the screen of the phone prop in the player's hand instead of the full-screen overlay: the live UI runs in a DUI whose image replaces the prop's screen texture, a close-up camera eases in on the phone, and the mouse cursor is mapped onto the tilted screen.
+
+- **Enable:** set `PropScreen.Enabled = true` and stream the prop art below. Model, texture dictionary, texture name, DUI resolution, screen rectangle, camera and foldable behaviour are all in the `PropScreen` block. No UI rebuild is needed: `web/dui/phone.html` boots the normal `web/build` bundle.
+- **Art required:** a phone model (default `sd_phone_dui`) whose screen is its own material using a texture (default `sd_phone_screen`) from a **standalone** streamed `.ytd` (default `sd_phone_dui`) that the model's `.ytyp` archetype names as its texture dictionary. `AddReplaceTexture` cannot swap a texture embedded in the `.ydr`, which is how `sd-phone-props` ships, so its models cannot be used as they are. If the model or `.ytd` is missing, a warning is printed in F8 once and the phone stays full-screen.
+- **Controls:** left click taps, the wheel scrolls, right click or Backspace goes back, Enter unlocks, ESC puts the phone away. Text fields open the game's on-screen keyboard, because a DUI cannot receive key presses.
+- **Falls back to full-screen:** in a vehicle, for the Camera app and video calls (the phone reopens full-screen; tap the app again), and when a foldable is unfolded (unless `PropScreen.Foldable = true`, which letterboxes the wide UI onto the portrait screen).
+- **Known limits:** on foot only; one held model for every frame colour (other players still see the normal coloured prop); the DUI runs a second copy of the UI that mirrors every push, so it costs extra memory/CPU while enabled (sound in the copy is muted except while it is on the prop); no live typing; the stock reading grip's thumb can cover the lower corner of the screen.
