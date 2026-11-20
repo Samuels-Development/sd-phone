@@ -9,6 +9,8 @@ local actions = require 'server.darkchat.actions'
 local player  = require 'bridge.server.player'
 ---@type table Shared server helpers (server.util): the configs/apps.lua switch.
 local util    = require 'server.util'
+---@type table Resource config (configs.config): DarkChat.PublicRooms seeds the public-room anchors.
+local config  = require 'configs.config'
 
 ---@type boolean Whether Dark Chat is switched on in configs/apps.lua. A disabled app takes no new
 ---messages, so there is nothing for the retention sweep to prune.
@@ -22,7 +24,7 @@ local SWEEP_MS = 30 * 60 * 1000
 
 -- Schema bootstrap runs once at load; a failure is printed.
 CreateThread(function()
-    local ok, err = pcall(store.ensureSchema)
+    local ok, err = pcall(store.ensureSchema, config.DarkChat.PublicRooms)
     if not ok then
         boot.schemaFailed('darkchat', err)
         return
