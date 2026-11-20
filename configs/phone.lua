@@ -315,6 +315,59 @@ return {
     -- (only you see your own prop).
     PropVisibleToOthers = true,
 
+    -- Optional: draw the phone UI ON the held prop's screen instead of the full-screen overlay.
+    -- The live UI runs in a DUI (off-screen browser) whose image replaces the prop's screen
+    -- texture; a close-up camera eases in on the phone and the mouse cursor is mapped onto the
+    -- tilted screen. Text fields use the game's on-screen keyboard (a DUI cannot receive keys).
+    -- In a vehicle, in the Camera app / a video call, and on an unfolded foldable (unless Foldable
+    -- below is on), the phone falls back to the normal full-screen UI. Other players keep seeing
+    -- the normal sd_phone_<colour> prop. Code: client/propscreen.lua + web/dui/phone.html.
+    --
+    -- Off by default: with Enabled = false nothing is created (no DUI, no threads) and the phone
+    -- behaves exactly as stock.
+    --
+    -- ART REQUIRED (not shipped with sd-phone or sd-phone-props): a phone model whose screen is a
+    -- separate material using a texture from a STANDALONE streamed .ytd. FiveM's AddReplaceTexture
+    -- cannot swap a texture embedded in the .ydr itself (which is how sd-phone-props ships), so:
+    --   * <Model>.ydr      the phone body; screen material uses texture <Texture>, ideally emissive
+    --                      and UV-mapped 0..1 over the visible screen (top-left = UV 0,0)
+    --   * <TextureDict>.ytd holding <Texture> (any placeholder image; it is replaced at runtime)
+    --   * a .ytyp archetype for <Model> whose textureDictionary is <TextureDict>
+    -- Stream them from any resource (e.g. next to sd-phone-props). If the model or the .ytd is
+    -- missing, a warning is printed once in F8 and the phone stays on the full-screen UI.
+    PropScreen = {
+        Enabled = false,
+
+        Model       = 'sd_phone_dui',    -- prop held while the UI is on its screen (any frame colour)
+        TextureDict = 'sd_phone_dui',    -- standalone .ytd with the screen texture (default: same as Model)
+        Texture     = 'sd_phone_screen', -- texture name inside TextureDict that gets replaced
+
+        -- DUI resolution in pixels. The UI's screen is 440x956 CSS px; keep the prop screen's aspect
+        -- (here 0.46) and go ~1.2x the UI size for a sharp image. Higher costs more GPU/VRAM.
+        Width  = 540,
+        Height = 1174,
+
+        -- The screen rectangle in prop-local metres (centre + full width/height), used to map the
+        -- cursor onto it: screen faces -Y, top is +Z. These values fit a model with the same size and
+        -- origin as sd_phone_black (73.6 x 158.6 mm screen); measure your own model if it differs.
+        ScreenCentre = vec3(0.0, -0.0021, 0.0),
+        ScreenSize   = vec2(0.07356, 0.1586),
+
+        -- Unfolded foldable (Foldable above). false = unfolding hands the phone to the full-screen
+        -- UI (the prop has one portrait screen). true = keep it on the prop; the wide UI is
+        -- letterboxed onto the same portrait screen.
+        Foldable = false,
+
+        -- Close-up camera that looks at the raised phone (the gameplay camera is restored on close).
+        Camera      = true,
+        CamFov      = 40.0,
+        CamDistance = 0.34,  -- metres from the screen along its normal
+        CamEaseMs   = 450,
+        CamFollow   = 1.0,   -- 1.0 = camera rigid to the phone (steady screen); lower = smoothed, phone sways
+
+        Debug = false,       -- F8 log of DUI start-up and each tap (x,y + element)
+    },
+
     -- Let nearby players HEAR your phone ring. Your ringtone is played by each nearby player's own
     -- phone UI at a volume set by how far away they are, so no audio is streamed and no extra
     -- resource is needed: every client already has the bundled ringtones in its build.

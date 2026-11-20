@@ -113,6 +113,8 @@ end
 ---the point of asking.
 ---@return { dict: string, anim: string, blendIn: number, blendOut: number, flags: integer }
 local function currentClip()
+    -- Prop screen (configs/phone.lua PropScreen): one reading pose for the whole session.
+    if pose.clipOverride then return pose.clipOverride end
     -- One camera pose covers both lenses: the native cell cam swapped pose on flip, but no
     -- outward-facing clip outside that native is verified to exist. Landscape is the exception:
     -- it turns the phone on its side, so it gets its own clip. Not while the selfie lens is up,
@@ -174,6 +176,9 @@ end
 ---@param open boolean|nil true for the unfolded body
 ---@return { name: string, fold: boolean }[] candidates
 local function propCandidates(frame, open)
+    -- Prop screen (configs/phone.lua PropScreen): the DUI-screen model replaces whatever the body
+    -- state would weld.
+    if pose.modelOverride then return { { name = pose.modelOverride, fold = false } } end
     local plain = { name = config.Phone.PropPrefix .. frame, fold = false }
     if not usesFoldModel(open) then return { plain } end
     return { { name = foldModel(frame, open), fold = true }, plain }
@@ -300,6 +305,13 @@ function pose.mirrorOnto(ped)
     end
 
     return pose.createProp(ped, color, landscape)
+end
+
+---The welded hand prop (nil while stowed or still streaming). Used by the prop screen.
+---@return integer|nil
+function pose.getProp()
+    if prop and DoesEntityExist(prop) then return prop end
+    return nil
 end
 
 ---Delete the attached phone prop, if any. Idempotent, and cancels any weld still streaming.
