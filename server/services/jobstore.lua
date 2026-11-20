@@ -134,13 +134,17 @@ function store.setSaved(citizenid, map)
     membersCache = {}
 end
 
----Adds (or updates the grade of) one saved job, with the grade coerced to an integer.
+---Adds (or updates the grade of) one saved job, with the grade coerced to an integer. `pending`
+---marks a grade a boss set from the phone while the member was not working the job: it is the
+---only saved grade the next load pushes into the framework (actions.reconcileJobs). Every other
+---write drops the mark, so a grade the framework reported is never pushed back at it.
 ---@param citizenid string
 ---@param job string
 ---@param grade number
-function store.addSaved(citizenid, job, grade)
+---@param pending? boolean
+function store.addSaved(citizenid, job, grade, pending)
     local map = store.getSaved(citizenid)
-    map[job] = { grade = math.floor(tonumber(grade) or 0) }
+    map[job] = { grade = math.floor(tonumber(grade) or 0), pending = pending or nil }
     store.setSaved(citizenid, map)
 end
 

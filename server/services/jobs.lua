@@ -80,7 +80,7 @@ function jobs.list(src)
     for jName, grade in pairs(job.getAll(src)) do
         if not BLACKLIST[jName] then
             local prev = map[jName]
-            if not prev or prev.grade ~= grade then
+            if not prev or (prev.grade ~= grade and not prev.pending) then
                 map[jName] = { grade = grade }
                 synced = true
             end
@@ -138,6 +138,7 @@ function jobs.switch(src, payload)
         return fail('services.couldNotSwitchJob', 'Could not switch to that job')
     end
     if OFF_DUTY then job.setDuty(src, false) end
+    if info.pending then store.addSaved(cid, target, info.grade or 0) end
 
     actions.notifyRoster(fromJob)
     actions.notifyRoster(target)

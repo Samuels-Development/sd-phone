@@ -582,7 +582,7 @@ function actions.promote(src, payload)
         if not job.set(info.src, myJob, nextGrade) then return fail('services.couldNotUpdateTheirGrade', 'Could not update their grade') end
         jobstore.addSaved(targetCid, myJob, nextGrade)
     elseif info.saved then
-        jobstore.addSaved(targetCid, myJob, nextGrade)
+        jobstore.addSaved(targetCid, myJob, nextGrade, true)
     else
         return fail('services.playerMustOnlinePromoted', 'That player must be online to be promoted')
     end
@@ -630,7 +630,7 @@ function actions.demote(src, payload)
         if not job.set(info.src, myJob, prevGrade) then return fail('services.couldNotUpdateTheirGrade', 'Could not update their grade') end
         jobstore.addSaved(targetCid, myJob, prevGrade)
     elseif info.saved then
-        jobstore.addSaved(targetCid, myJob, prevGrade)
+        jobstore.addSaved(targetCid, myJob, prevGrade, true)
     else
         return fail('services.playerMustOnlineDemoted', 'That player must be online to be demoted')
     end
@@ -972,8 +972,11 @@ end
 ---@type table<number, string> Cached citizenid per connected src (set on load, cleared on drop).
 local srcToCid = {}
 
----Applies phone-managed job changes from while the player was offline: consumes a pending fire,
----syncs the active job's grade to the saved grade, or seeds a missing saved entry; caches src -> cid.
+---Applies phone-managed job changes from while the player was offline: consumes a pending fire, or
+---pushes a grade a boss set from the phone (a saved entry marked pending). In every other case the
+---framework is the authority and the saved entry is seeded or refreshed from it: a grade changed
+---outside the phone (an admin command, a boss menu, another resource) must survive the relog, not
+---be reset to whatever the phone last saw. Caches src -> cid.
 ---@param src number
 function actions.reconcileJobs(src)
     local cid = player.getRealIdentifier(src)
@@ -988,14 +991,15 @@ function actions.reconcileJobs(src)
         return
     end
 
-    local saved = jobstore.getSaved(cid)[activeJob]
-    if saved then
-        local savedGrade = math.floor(tonumber(saved.grade) or 0)
-        if savedGrade ~= (job.getGrade(src) or 0) then
-            job.set(src, activeJob, savedGrade)
-        end
-    else
-        jobstore.addSaved(cid, activeJob, job.getGrade(src) or 0)
+    local saved      = jobstore.getSaved(cid)[activeJob]
+    local liveGrade  = job.getGrade(src) or 0
+    local savedGrade = saved and math.floor(tonumber(saved.grade) or 0) or nil
+
+    if saved and saved.pending then
+        if savedGrade ~= liveGrade then job.set(src, activeJob, savedGrade) end
+        jobstore.addSaved(cid, activeJob, savedGrade)
+    elseif savedGrade ~= liveGrade then
+        jobstore.addSaved(cid, activeJob, liveGrade)
     end
 end
 
