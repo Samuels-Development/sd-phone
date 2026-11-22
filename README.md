@@ -156,7 +156,7 @@ ensure sd-phone-props
 ensure sd-phone
 ```
 
-The database tables create themselves. Then add the eight phone items (`phone_black` to `phone_yellow`), your Fivemanage key and, for video calls between different networks, a TURN relay. All of it, step by step: **[installation docs](https://docs.samueldev.shop/resources/phone/installation)**.
+The database tables create themselves. Then add the phone items (one per colour in `configs/phone.lua`, `phone_black` onwards), your Fivemanage key and, for video calls between different networks, a TURN relay. All of it, step by step: **[installation docs](https://docs.samueldev.shop/resources/phone/installation)**.
 
 ### Building from source
 

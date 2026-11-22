@@ -177,8 +177,13 @@ end
 ---@return { name: string, fold: boolean }[] candidates
 local function propCandidates(frame, open)
     -- Prop screen (configs/phone.lua PropScreen): the DUI-screen model replaces whatever the body
-    -- state would weld.
-    if pose.modelOverride then return { { name = pose.modelOverride, fold = false } } end
+    -- state would weld, in the frame colour when the pack streams one (<Model>_<colour>).
+    if pose.modelOverride then
+        return {
+            { name = ('%s_%s'):format(pose.modelOverride, frame), fold = false },
+            { name = pose.modelOverride, fold = false },
+        }
+    end
     local plain = { name = config.Phone.PropPrefix .. frame, fold = false }
     if not usesFoldModel(open) then return { plain } end
     return { { name = foldModel(frame, open), fold = true }, plain }

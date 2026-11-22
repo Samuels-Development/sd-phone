@@ -2,21 +2,56 @@
 return {
     -- Inventory items that open the phone when used. Each entry maps an item
     -- name to a frame colour; that colour drives both the on-screen rail and
-    -- the prop model held in hand (PropPrefix .. colour). Add variants by
-    -- shipping the matching `sd_phone_<colour>` prop and listing it here.
+    -- the prop model held in hand (PropPrefix .. colour). Every colour here has
+    -- a model in sd-phone-props; drop the ones your server does not sell. Add a
+    -- variant by shipping the matching `sd_phone_<colour>` prop, listing it here
+    -- and adding its hex to web/src/shell/frameColors.ts.
     -- Order matters: the keybind opens the first owned variant when the
     -- last-used one isn't held. Every way of opening the phone (keybind, item,
     -- exports, compat commands) requires one of these items, so {} means
     -- nobody can open the phone.
     Items = {
-        { item = 'phone_black',  color = 'black'  },
-        { item = 'phone_blue',   color = 'blue'   },
-        { item = 'phone_green',  color = 'green'  },
-        { item = 'phone_orange', color = 'orange' },
-        { item = 'phone_pink',   color = 'pink'   },
-        { item = 'phone_purple', color = 'purple' },
-        { item = 'phone_red',    color = 'red'    },
-        { item = 'phone_yellow', color = 'yellow' },
+        { item = 'phone_black',         color = 'black'         },
+        { item = 'phone_blue',          color = 'blue'          },
+        { item = 'phone_green',         color = 'green'         },
+        { item = 'phone_orange',        color = 'orange'        },
+        { item = 'phone_pink',          color = 'pink'          },
+        { item = 'phone_purple',        color = 'purple'        },
+        { item = 'phone_red',           color = 'red'           },
+        { item = 'phone_yellow',        color = 'yellow'        },
+        { item = 'phone_white',         color = 'white'         },
+        { item = 'phone_silver',        color = 'silver'        },
+        { item = 'phone_graphite',      color = 'graphite'      },
+        { item = 'phone_titanium',      color = 'titanium'      },
+        { item = 'phone_gold',          color = 'gold'          },
+        { item = 'phone_rosegold',      color = 'rosegold',      label = 'Rose Gold Phone' },
+        { item = 'phone_bronze',        color = 'bronze'        },
+        { item = 'phone_mocha',         color = 'mocha'         },
+        { item = 'phone_cream',         color = 'cream'         },
+        { item = 'phone_burgundy',      color = 'burgundy'      },
+        { item = 'phone_coral',         color = 'coral'         },
+        { item = 'phone_peach',         color = 'peach'         },
+        { item = 'phone_lime',          color = 'lime'          },
+        { item = 'phone_mint',          color = 'mint'          },
+        { item = 'phone_sage',          color = 'sage'          },
+        { item = 'phone_forest',        color = 'forest'        },
+        { item = 'phone_teal',          color = 'teal'          },
+        { item = 'phone_cyan',          color = 'cyan'          },
+        { item = 'phone_skyblue',       color = 'skyblue',       label = 'Sky Blue Phone' },
+        { item = 'phone_navy',          color = 'navy'          },
+        { item = 'phone_indigo',        color = 'indigo'        },
+        { item = 'phone_lavender',      color = 'lavender'      },
+        { item = 'phone_magenta',       color = 'magenta'       },
+        { item = 'phone_rose',          color = 'rose'          },
+        { item = 'phone_jetblack',      color = 'jetblack',      label = 'Jet Black Phone' },
+        { item = 'phone_pearl',         color = 'pearl'         },
+        { item = 'phone_ruby',          color = 'ruby'          },
+        { item = 'phone_sapphire',      color = 'sapphire'      },
+        { item = 'phone_blackgold',     color = 'blackgold',     label = 'Black & Gold Phone' },
+        { item = 'phone_whitegold',     color = 'whitegold',     label = 'White & Gold Phone' },
+        { item = 'phone_leather_brown', color = 'leather_brown', label = 'Brown Leather Phone' },
+        { item = 'phone_leather_black', color = 'leather_black', label = 'Black Leather Phone' },
+        { item = 'phone_leather_tan',   color = 'leather_tan',   label = 'Tan Leather Phone' },
     },
 
     -- ESX only. ESX keeps its item catalogue in the `items` database table and
@@ -326,15 +361,17 @@ return {
     -- Off by default: with Enabled = false nothing is created (no DUI, no threads) and the phone
     -- behaves exactly as stock.
     --
-    -- ART REQUIRED (not shipped with sd-phone or sd-phone-props): a phone model whose screen is a
-    -- separate material using a texture from a STANDALONE streamed .ytd. FiveM's AddReplaceTexture
-    -- cannot swap a texture embedded in the .ydr itself (which is how sd-phone-props ships), so:
+    -- THE ART: sd-phone-props streams it (sd_phone_dui, one sd_phone_dui_<colour> per frame colour,
+    -- and sd_phone_dui.ytd). The phone in hand is <Model>_<colour> when that model is streamed and
+    -- plain <Model> otherwise. To use your own, it has to be a phone model whose screen is a
+    -- separate material using a texture from a STANDALONE streamed .ytd, because FiveM's
+    -- AddReplaceTexture cannot swap a texture embedded in the .ydr itself:
     --   * <Model>.ydr      the phone body; screen material uses texture <Texture>, ideally emissive
     --                      and UV-mapped 0..1 over the visible screen (top-left = UV 0,0)
     --   * <TextureDict>.ytd holding <Texture> (any placeholder image; it is replaced at runtime)
     --   * a .ytyp archetype for <Model> whose textureDictionary is <TextureDict>
-    -- Stream them from any resource (e.g. next to sd-phone-props). If the model or the .ytd is
-    -- missing, a warning is printed once in F8 and the phone stays on the full-screen UI.
+    -- If the model or the .ytd is missing, a warning is printed once in F8 and the phone stays on
+    -- the full-screen UI.
     PropScreen = {
         Enabled = false,
 
@@ -348,10 +385,10 @@ return {
         Height = 1174,
 
         -- The screen rectangle in prop-local metres (centre + full width/height), used to map the
-        -- cursor onto it: screen faces -Y, top is +Z. These values fit a model with the same size and
-        -- origin as sd_phone_black (73.6 x 158.6 mm screen); measure your own model if it differs.
-        ScreenCentre = vec3(0.0, -0.0021, 0.0),
-        ScreenSize   = vec2(0.07356, 0.1586),
+        -- cursor onto it: screen faces -Y, top is +Z. These values fit the sd-phone-props models
+        -- (73.4 x 158.4 mm screen); measure your own model if it differs.
+        ScreenCentre = vec3(0.0, -0.00186, 0.0),
+        ScreenSize   = vec2(0.07336, 0.1584),
 
         -- Unfolded foldable (Foldable above). false = unfolding hands the phone to the full-screen
         -- UI (the prop has one portrait screen). true = keep it on the prop; the wide UI is

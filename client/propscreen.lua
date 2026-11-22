@@ -49,8 +49,8 @@ local MODEL <const> = cfg.Model or 'sd_phone_dui'
 -- points at it, so by convention it is named like the model.
 local MODEL_TXD <const> = cfg.TextureDict or MODEL
 local MODEL_TEX <const> = cfg.Texture or 'sd_phone_screen'
-local SC <const> = cfg.ScreenCentre or vec3(0.0, -0.0021, 0.0)
-local SS <const> = cfg.ScreenSize or vec2(0.07356, 0.1586)
+local SC <const> = cfg.ScreenCentre or vec3(0.0, -0.00186, 0.0)
+local SS <const> = cfg.ScreenSize or vec2(0.07336, 0.1584)
 local ALLOW_FOLD <const> = cfg.Foldable == true
 -- The clip held for the whole session (the stock reading pose; no typing swap, see pose.clipOverride).
 local HOLD_CLIP <const> = {
