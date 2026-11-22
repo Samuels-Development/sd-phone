@@ -31,6 +31,7 @@ return {
     'phone_birdy_reposts',
     'phone_blocked',
     'phone_calls',
+    'phone_cases',
     'phone_casino_chips',
     'phone_cherry_blocks',
     'phone_cherry_matches',

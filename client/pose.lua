@@ -75,6 +75,8 @@ local cameraOn = false
 local landscape = false
 ---@type string Current frame colour; drives which prop model is welded.
 local color = config.Phone.DefaultColor or 'black'
+---@type table Cases (client.cases): the case this player wears, and the parts that dress a prop in one.
+local cases = require 'client.cases'
 ---@type integer|nil Handle of the attached phone prop, nil while stowed.
 local prop
 ---@type integer Bumped by every weld and every removal. Welding streams the model, which yields,
@@ -241,8 +243,9 @@ end
 ---@param frame string frame colour; must be a key of FRAME_COLORS
 ---@param wide boolean|nil weld it in the landscape grip
 ---@param open boolean|nil weld the unfolded body instead of the shut one
+---@param case CaseDesign|nil a case to dress the prop in (client.cases)
 ---@return integer? prop the welded prop entity, or nil if no candidate model would stream
-function pose.createProp(ped, frame, wide, open)
+function pose.createProp(ped, frame, wide, open, case)
     for _, candidate in ipairs(propCandidates(frame, open)) do
         local model = joaat(candidate.name)
         if not unavailableModels[model] then
@@ -254,6 +257,7 @@ function pose.createProp(ped, frame, wide, open)
                 AttachEntityToEntity(obj, ped, GetPedBoneIndex(ped, config.Phone.PropBone),
                     off.x, off.y, off.z, rot.x, rot.y, rot.z, false, false, false, false, 2, true)
                 SetModelAsNoLongerNeeded(model)
+                cases.dress(obj, candidate.fold and (open and 'open' or 'shut') or 'plain', case)
                 return obj
             end
             SetModelAsNoLongerNeeded(model)
@@ -276,11 +280,11 @@ local function attachProp(ped)
 
     weldSeq = weldSeq + 1
     local seq = weldSeq
-    local obj = pose.createProp(ped, color, landscape, foldOpen)
+    local obj = pose.createProp(ped, color, landscape, foldOpen, cases.mine(color))
     if not obj then return end
 
     if seq ~= weldSeq or not pose.shouldHold() or (prop and DoesEntityExist(prop)) then
-        DeleteObject(obj)
+        pose.deleteProp(obj)
         return
     end
     prop = obj
@@ -309,7 +313,7 @@ function pose.mirrorOnto(ped)
         RemoveAnimDict(clip.dict)
     end
 
-    return pose.createProp(ped, color, landscape)
+    return pose.createProp(ped, color, landscape, nil, cases.worn(color))
 end
 
 ---The welded hand prop (nil while stowed or still streaming). Used by the prop screen.
@@ -319,10 +323,23 @@ function pose.getProp()
     return nil
 end
 
+---Deletes a prop that pose.createProp made, together with the case it was dressed in.
+---@param obj integer the prop entity
+function pose.deleteProp(obj)
+    cases.undress(obj)
+    if DoesEntityExist(obj) then DeleteObject(obj) end
+end
+
+---The frame colour of the phone in hand.
+---@return string
+function pose.frame()
+    return color
+end
+
 ---Delete the attached phone prop, if any. Idempotent, and cancels any weld still streaming.
 function pose.removeProp()
     weldSeq = weldSeq + 1
-    if prop and DoesEntityExist(prop) then DeleteObject(prop) end
+    if prop then pose.deleteProp(prop) end
     prop = nil
 end
 

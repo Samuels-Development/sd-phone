@@ -39,6 +39,7 @@ files {
     'web/build/index.html',
     'web/build/uploader.html',
     'web/dui/phone.html', -- optional prop screen DUI page (configs/phone.lua PropScreen)
+    'web/dui/sticker.html', -- photo sticker page for phone cases (client/cases.lua)
     'web/build/sdphone-sdk.js',
     'web/build/sdphone-sdk.d.ts',
     'web/build/assets/*.js',

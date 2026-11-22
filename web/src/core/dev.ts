@@ -51,6 +51,7 @@ export function devInjectMockData(): () => void {
             { id: 'garages',     label: 'Garages',     icon: 'garages',     route: '/garages',     accent: '#6E5CF2' },
             { id: 'homes',       label: 'Homes',       icon: 'homes',       route: '/homes',       accent: '#12B866' },
             { id: 'stocks',      label: 'Stocks',      icon: 'stocks',      route: '/stocks',      accent: '#16C784' },
+            { id: 'cases',       label: 'Cases',       icon: 'cases',       route: '/cases',       accent: '#F59E0B', base: true },
             { id: 'ryde',        label: 'Ryde',        icon: 'ryde',        route: '/ryde',        accent: '#1c1c1e' },
             { id: 'radio',       label: 'Radio',       icon: 'radio',       route: '/radio',       accent: '#30B0C7' },
             { id: 'settings',   label: 'Settings',    icon: 'settings',   route: '/settings',   accent: '#8e8e93', base: true },

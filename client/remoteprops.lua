@@ -4,6 +4,8 @@ local config = require 'configs.config'
 local pose = require 'client.pose'
 ---@type table<string, boolean> Valid frame colours (client.framecolors).
 local FRAME_COLORS = require 'client.framecolors'
+---@type table Cases (client.cases): checks and names the case a holder broadcasts.
+local cases = require 'client.cases'
 
 ---@type table Module table; the table returned at end of file. Owns the local phone-prop copies
 ---welded onto OTHER players, driven by the replicated `sdPhone` statebag each holder broadcasts.
@@ -17,30 +19,39 @@ local wanted = {}
 
 ---@type string Marks the unfolded body in a variant key.
 local OPEN_TAG <const> = '|open'
+---@type string Separates the case signature from the rest of a variant key.
+local CASE_TAG <const> = '#'
+---@type table<integer, CaseDesign> Server id -> the case that holder is broadcasting, checked.
+local caseOf = {}
 
 ---Reads a broadcast `sdPhone` value into the variant a copy has to match. Holders shut (and every
----older client) broadcast a bare colour string; an unfolded holder broadcasts { c = , f = true }.
----Keeping the result one string leaves the generation and up-to-date checks single comparisons.
+---older client) broadcast a bare colour string; an unfolded holder or one with a case broadcasts
+---{ c = , f = true, k = <case> }. Keeping the result one string leaves the generation and
+---up-to-date checks single comparisons, so the case goes into it as its signature.
 ---@param value any the holder's statebag value
----@return string? variant, string? colour, boolean open
+---@return string? variant, string? colour, boolean open, CaseDesign? case
 local function variantOf(value)
-    local colour, open
+    local colour, open, case
     if type(value) == 'table' then
-        colour, open = value.c, value.f == true
+        colour, open, case = value.c, value.f == true, cases.clean(value.k)
     else
         colour, open = value, false
     end
-    if type(colour) ~= 'string' or not FRAME_COLORS[colour] then return nil, nil, false end
-    return colour .. (open and OPEN_TAG or ''), colour, open
+    if type(colour) ~= 'string' or not FRAME_COLORS[colour] then return nil, nil, false, nil end
+    if cases.blocked(colour) then case = nil end
+    local variant = colour .. (open and OPEN_TAG or '')
+    if case then variant = variant .. CASE_TAG .. cases.signature(case) end
+    return variant, colour, open, case
 end
 
 ---Splits a variant key back into the colour and whether it is the unfolded body.
 ---@param variant string
 ---@return string colour, boolean open
 local function splitVariant(variant)
-    local colour = variant:match('^(.-)%' .. OPEN_TAG .. '$')
+    local body = variant:match('^(.-)' .. CASE_TAG) or variant
+    local colour = body:match('^(.-)%' .. OPEN_TAG .. '$')
     if colour then return colour, true end
-    return variant, false
+    return body, false
 end
 ---@type table<integer, integer> Server id -> weld generation. Welding streams the model, which
 ---yields, so a weld can finish after another has replaced it or after the holder stowed their
@@ -55,7 +66,7 @@ local SWEEP_INTERVAL <const> = 1000
 function remoteprops.remove(source)
     seq[source] = (seq[source] or 0) + 1
     local entry = props[source]
-    if entry and entry.obj and DoesEntityExist(entry.obj) then DeleteObject(entry.obj) end
+    if entry and entry.obj then pose.deleteProp(entry.obj) end
     props[source] = nil
 end
 
@@ -64,6 +75,7 @@ end
 local function forget(source)
     remoteprops.remove(source)
     wanted[source] = nil
+    caseOf[source] = nil
     seq[source] = nil
 end
 
@@ -86,11 +98,11 @@ local function weld(source, ped, variant)
     seq[source] = mine
 
     local colour, open = splitVariant(variant)
-    local obj = pose.createProp(ped, colour, nil, open)
+    local obj = pose.createProp(ped, colour, nil, open, caseOf[source])
     if not obj then return end
 
     if seq[source] ~= mine or wanted[source] ~= variant then
-        DeleteObject(obj)
+        pose.deleteProp(obj)
         return
     end
 
@@ -117,10 +129,12 @@ function remoteprops.set(source, value)
         forget(source)
         return
     end
-    local variant = variantOf(value)
+    local variant, _, _, case = variantOf(value)
     if not variant then return end
 
+    if case then case.owner = source end
     wanted[source] = variant
+    caseOf[source] = case
     if upToDate(source, variant) then return end
 
     local ped = pedOf(source)
@@ -147,7 +161,7 @@ end
 ---Drops every copy this client has welded.
 function remoteprops.clear()
     for source in pairs(props) do remoteprops.remove(source) end
-    wanted, seq = {}, {}
+    wanted, seq, caseOf = {}, {}, {}
 end
 
 if config.Phone.PropVisibleToOthers then

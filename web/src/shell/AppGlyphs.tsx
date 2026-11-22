@@ -18,7 +18,7 @@ import {
     Percent, Phone, PhoneCall, PhoneIncoming, PhoneOutgoing, PiggyBank, Pill, Play, Plus, Podcast,
     Puzzle, Radar, Radio, RadioTower, ReceiptText, Rocket, Route, Rss, Sailboat, Satellite,
     ScanFace, ScanSearch, ScrollText, Search, Send, Settings, Shield, ShieldCheck, ShieldHalf, Ship,
-    ShipWheel, ShoppingBag, ShoppingBasket, ShoppingCart, Skull, SlidersHorizontal, Snowflake,
+    ShipWheel, ShoppingBag, ShoppingBasket, ShoppingCart, Skull, SlidersHorizontal, Smartphone, Snowflake,
     Spade, Sparkle, Sparkles, Speaker, SpellCheck, Star, StarHalf, Stethoscope, StickyNote, Store,
     Sun, SwitchCamera, Swords, Tag, Target, ThumbsUp, Ticket, Timer, ToggleRight,
     TrainTrack, TramFront, Trees, TrendingDown, TrendingUp, Truck, Tv, TvMinimal, Type, UserRound,
@@ -86,6 +86,7 @@ const APP_GLYPHS: Record<string, LucideIcon> = {
     emsmdt:      HeartPulse,
     dojmdt:      Landmark,
     racing:      Flag,
+    cases:       Smartphone,
 
     appstore_cloud:     CloudDownload,
     appstore_download:  Download,

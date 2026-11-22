@@ -1280,6 +1280,88 @@ function StocksIcon() {
     );
 }
 
+const CASES_STAR = Array.from({ length: 10 }, (_, i) => {
+    const angle = -Math.PI / 2 + (i * Math.PI) / 5;
+    const radius = i % 2 ? 2.45 : 5.4;
+    return `${i ? 'L' : 'M'}${(radius * Math.cos(angle)).toFixed(2)},${(radius * Math.sin(angle)).toFixed(2)}`;
+}).join(' ') + ' Z';
+
+const CASES_DOTS = Array.from({ length: 54 }, (_, i) => {
+    const row = Math.floor(i / 6);
+    return { id: i, x: 2.6 + (i % 6) * 4.6 + (row % 2 ? 2.3 : 0), y: 3 + row * 4.6 };
+});
+
+function CasesIcon() {
+    const u = useIconIds();
+    const lens = `url(#${u('cslens')})`;
+    const star = `url(#${u('csstar')})`;
+    return (
+        <svg viewBox={`0 0 ${S} ${S}`} width={S} height={S}>
+            <defs>
+                <LinearGrad id={u('csbg')} top="#FFCB3D" mid="#F59E0B" bot="#D26A04" angle={160} />
+                <radialGradient id={u('csglow')} cx="50%" cy="46%" r="55%">
+                    <stop offset="0" stopColor="#FFE9A8" stopOpacity="0.55" />
+                    <stop offset="1" stopColor="#FFE9A8" stopOpacity="0" />
+                </radialGradient>
+                <LinearGrad id={u('csback')} top="#7C6CF5" mid="#4F3FD6" bot="#2F2496" angle={135} />
+                <linearGradient id={u('csfront')} x1="0" y1="0" x2="0.7" y2="1">
+                    <stop offset="0" stopColor="#FFFFFF" />
+                    <stop offset="0.6" stopColor="#FFF8EA" />
+                    <stop offset="1" stopColor="#FFE6BA" />
+                </linearGradient>
+                <LinearGrad id={u('csglass')} top="#4A4A54" bot="#1A1A20" angle={135} />
+                <radialGradient id={u('cslens')} cx="38%" cy="34%" r="70%">
+                    <stop offset="0" stopColor="#3D4A6B" />
+                    <stop offset="0.55" stopColor="#10131C" />
+                    <stop offset="1" stopColor="#05060A" />
+                </radialGradient>
+                <LinearGrad id={u('csstar')} top="#FFC533" bot="#F08A00" angle={0} />
+                <clipPath id={u('csclip')}><rect width="26" height="44" rx="7.5" /></clipPath>
+                <filter id={u('cssh')} x="-40%" y="-30%" width="180%" height="160%">
+                    <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" floodColor="#6B2F00" floodOpacity="0.45" />
+                </filter>
+                <filter id={u('cssh2')} x="-40%" y="-30%" width="180%" height="160%">
+                    <feDropShadow dx="-0.6" dy="1.6" stdDeviation="1.7" floodColor="#3A1800" floodOpacity="0.55" />
+                </filter>
+            </defs>
+            <rect width={S} height={S} fill={`url(#${u('csbg')})`} />
+            <rect width={S} height={S} fill={`url(#${u('csglow')})`} />
+            <path d={`M0 0 H${S} V20 Q${S / 2} 27 0 20 Z`} fill="rgba(255,255,255,0.12)" />
+
+            <g transform="translate(8.9 9.5) rotate(-13 13 22)" filter={`url(#${u('cssh')})`}>
+                <rect width="26" height="44" rx="7.5" fill={`url(#${u('csback')})`} />
+                <g clipPath={`url(#${u('csclip')})`} fill="#B9B0FF" opacity="0.42">
+                    {CASES_DOTS.map(dot => <circle key={dot.id} cx={dot.x} cy={dot.y} r="0.95" />)}
+                </g>
+                <rect x="0.6" y="0.6" width="24.8" height="42.8" rx="6.9" fill="none" stroke="#FFFFFF" strokeOpacity="0.28" strokeWidth="0.9" />
+                <rect x="3.2" y="3.2" width="12.6" height="12.6" rx="4" fill="#1B1464" />
+                <circle cx="7.3" cy="7.3" r="2.5" fill={lens} stroke="#7C6CF5" strokeWidth="0.7" />
+                <circle cx="11.9" cy="11.9" r="2.5" fill={lens} stroke="#7C6CF5" strokeWidth="0.7" />
+            </g>
+
+            <g transform="translate(22.6 8) rotate(8 13 22)" filter={`url(#${u('cssh2')})`}>
+                <rect x="25.3" y="11.5" width="1.6" height="6.4" rx="0.8" fill="#E9C98E" />
+                <rect x="-0.9" y="10" width="1.6" height="4" rx="0.8" fill="#E9C98E" />
+                <rect x="-0.9" y="15.6" width="1.6" height="4" rx="0.8" fill="#E9C98E" />
+                <rect width="26" height="44" rx="7.5" fill={`url(#${u('csfront')})`} />
+                <rect x="1.1" y="1.1" width="23.8" height="41.8" rx="6.5" fill="none" stroke="#F59E0B" strokeOpacity="0.3" strokeWidth="0.9" />
+                <rect x="2.9" y="2.9" width="13.4" height="13.4" rx="4.4" fill="#E8C078" />
+                <rect x="3.5" y="3.5" width="12.2" height="12.2" rx="3.8" fill={`url(#${u('csglass')})`} />
+                <circle cx="7.4" cy="7.4" r="2.6" fill={lens} stroke="#6A6A76" strokeWidth="0.75" />
+                <circle cx="11.9" cy="11.9" r="2.6" fill={lens} stroke="#6A6A76" strokeWidth="0.75" />
+                <circle cx="6.6" cy="6.6" r="0.6" fill="#FFFFFF" opacity="0.8" />
+                <circle cx="11.1" cy="11.1" r="0.6" fill="#FFFFFF" opacity="0.8" />
+                <circle cx="12.4" cy="6.7" r="0.95" fill="#FFE9B0" />
+                <g transform="translate(13 29.5) rotate(-10)">
+                    <path d={CASES_STAR} transform="translate(0 0.7)" fill="#B85F00" stroke="#B85F00" strokeWidth="1.6" strokeLinejoin="round" opacity="0.35" />
+                    <path d={CASES_STAR} fill={star} stroke={star} strokeWidth="1.6" strokeLinejoin="round" />
+                </g>
+                <path d="M19.5 1.2 Q24.8 1.4 24.8 7 V30" fill="none" stroke="#FFFFFF" strokeOpacity="0.9" strokeWidth="0.9" strokeLinecap="round" />
+            </g>
+        </svg>
+    );
+}
+
 function RadioIcon() {
     const u = useIconIds();
     return (
@@ -1610,6 +1692,7 @@ const ICON_MAP: Record<string, IconComponent> = {
     emsmdt:      EmsMdtIcon,
     dojmdt:      DojMdtIcon,
     racing:      RacingIcon,
+    cases:       CasesIcon,
 };
 
 export type IconId = string;

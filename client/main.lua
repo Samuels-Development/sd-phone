@@ -201,6 +201,7 @@ require 'client.apps.clock'
 require 'client.apps.casino'
 require 'client.apps.cookie'
 require 'client.apps.stocks'
+require 'client.apps.cases'
 require 'client.apps.games'
 require 'client.apps.settings'
 require 'client.apps.sim'
@@ -302,9 +303,19 @@ local function broadcastHoldState()
     -- Widened from a bare colour so watchers weld the unfolded body too. A holder who is shut
     -- still broadcasts the plain string, which is what every older reader understands, and so
     -- does one whose fold never changes the prop, so watchers have no re-weld to do.
+    -- A case rides along as `k`. Readers that predate cases only look at `c` and `f`.
+    local unfolded = pose.isFolded() and pose.foldChangesProp()
+    local case = require('client.cases').broadcast(currentFrameColor)
     LocalPlayer.state:set('sdPhone',
-        (pose.isFolded() and pose.foldChangesProp()) and { c = currentFrameColor, f = true } or currentFrameColor, true)
+        (unfolded or case) and { c = currentFrameColor, f = unfolded or nil, k = case } or currentFrameColor, true)
 end
+
+-- The case changed (bought, put on, taken off, or tried on from the Cases app): re-dress the phone
+-- in hand and tell watchers.
+AddEventHandler('sd-phone:client:cases:changed', function()
+    pose.reweld()
+    broadcastHoldState()
+end)
 
 ---Pushes the current state into the pose module, which starts or stops the held clip to match,
 ---then broadcasts the result.

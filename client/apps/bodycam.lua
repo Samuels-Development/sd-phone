@@ -462,7 +462,7 @@ local function unpark()
         -- back while it is still invisible, THEN the stand-in goes, THEN the body is shown. Any
         -- other order gives everyone watching either two of them or none of them.
         if stash.decoyProp and DoesEntityExist(stash.decoyProp) then
-            DeleteObject(stash.decoyProp)
+            pose.deleteProp(stash.decoyProp)
         end
         if stash.decoy and DoesEntityExist(stash.decoy) then
             DeleteEntity(stash.decoy)

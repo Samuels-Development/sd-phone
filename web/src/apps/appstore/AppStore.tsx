@@ -53,6 +53,7 @@ function getDescriptions(): Record<string, string> {
         ryde:        t('appstore.descRyde', 'Request rides across town'),
         radio:       t('appstore.descRadio', 'Talk on shared frequencies'),
         stocks:      t('appstore.descStocks', 'Trade stocks & crypto'),
+        cases:       t('appstore.descCases', 'Design and wear phone cases'),
         vibez:       t('appstore.descVibez', 'Short videos and trends'),
         weazelnews:  t('appstore.descWeazelnews', 'Statewide headlines'),
         cookie:      t('appstore.descCookie', 'Addictive clicker game'),

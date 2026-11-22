@@ -36,6 +36,7 @@ local CID_SINGLE = {
     { 'phone_timer_recents',         'citizenid' },
     { 'phone_stock_holdings',        'citizenid' },
     { 'phone_stock_wallet',          'citizenid' },
+    { 'phone_cases',                 'citizenid' },
     { 'phone_racing_tracks',         'citizenid' },
     { 'phone_racing_profiles',       'citizenid' },
     { 'phone_racing_results',        'citizenid' },
