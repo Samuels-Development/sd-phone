@@ -15,9 +15,10 @@ import { StatusBarSpacer } from '@/ui/StatusBarSpacer';
 import { preloadLayers } from './CasePreview';
 import { cleanDesign, fetchCasesState, previewCase, type CasesState, type Design } from './casesApi';
 import { MyCases } from './MyCases';
+import { PhoneTab } from './PhoneTab';
 import { Studio } from './Studio';
 
-type Tab = 'design' | 'mine';
+type Tab = 'design' | 'mine' | 'phone';
 
 /** Where the studio starts: the case being worn, else the newest one owned, else a plain shell. */
 function startDesign(s: CasesState): Design {
@@ -41,15 +42,11 @@ function BlockedNotice() {
 }
 
 export function Cases({ onClose: _onClose }: { onClose: () => void }) {
-    const TABS = [
-        { value: 'design', label: t('cases.tabDesign', 'Design') },
-        { value: 'mine',   label: t('cases.tabMine', 'My Cases') },
-    ] as const;
-
-    const [tab, setTab] = useSessionState<Tab>('cases:tab', 'design');
+    const [stored, setTab] = useSessionState<Tab>('cases:tab', 'design');
     const [draft, setDraft] = useSessionState<Design | null>('cases:draft', null);
     const [state, setState] = useState<CasesState | null>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const tab: Tab = stored === 'phone' && !state?.phone?.enabled ? 'design' : stored;
     const deckActive = useDeckActive();
 
     const load = useCallback(async () => {
@@ -91,6 +88,11 @@ export function Cases({ onClose: _onClose }: { onClose: () => void }) {
     useEffect(() => () => previewCase(null), []);
 
     const patch = useCallback((p: Partial<CasesState>) => setState(s => (s ? { ...s, ...p } : s)), []);
+    const TABS = [
+        { value: 'design' as const, label: t('cases.tabDesign', 'Design') },
+        { value: 'mine' as const,   label: t('cases.tabMine', 'My Cases') },
+        ...(state?.phone?.enabled ? [{ value: 'phone' as const, label: t('cases.tabPhone', 'Phone') }] : []),
+    ];
     const hex = frameHex(state?.frame ?? '');
 
     let body: ReactNode;
@@ -125,6 +127,8 @@ export function Cases({ onClose: _onClose }: { onClose: () => void }) {
         ) : (
             <EmptyState icon={CircleAlert} title={t('cases.nothingForSale', 'Nothing for Sale')} subtitle={t('cases.nothingForSaleBody', 'There are no cases to design right now.')} />
         );
+    } else if (tab === 'phone') {
+        body = <PhoneTab state={state} frameHex={hex} onPatch={patch} />;
     } else {
         body = (
             <MyCases
@@ -146,7 +150,7 @@ export function Cases({ onClose: _onClose }: { onClose: () => void }) {
                 <SegmentedControl value={tab} onChange={setTab} options={TABS} slide />
             </div>
 
-            {state?.blocked && <BlockedNotice />}
+            {state?.blocked && tab !== 'phone' && <BlockedNotice />}
 
             <div className="relative flex min-h-0 flex-1 flex-col">{body}</div>
         </div>

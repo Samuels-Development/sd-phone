@@ -303,11 +303,13 @@ local function broadcastHoldState()
     -- Widened from a bare colour so watchers weld the unfolded body too. A holder who is shut
     -- still broadcasts the plain string, which is what every older reader understands, and so
     -- does one whose fold never changes the prop, so watchers have no re-weld to do.
-    -- A case rides along as `k`. Readers that predate cases only look at `c` and `f`.
+    -- A case rides along as `k` and the phone's design and trims as `s`. Readers that predate them
+    -- only look at `c` and `f`.
     local unfolded = pose.isFolded() and pose.foldChangesProp()
-    local case = require('client.cases').broadcast(currentFrameColor)
+    local cases = require 'client.cases'
+    local case, style = cases.broadcast(currentFrameColor), cases.style()
     LocalPlayer.state:set('sdPhone',
-        (unfolded or case) and { c = currentFrameColor, f = unfolded or nil, k = case } or currentFrameColor, true)
+        (unfolded or case or style) and { c = currentFrameColor, f = unfolded or nil, k = case, s = style } or currentFrameColor, true)
 end
 
 -- The case changed (bought, put on, taken off, or tried on from the Cases app): re-dress the phone

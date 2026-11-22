@@ -14,6 +14,12 @@ local DATA <const> = rules.data
 ---@type table<string, true> Frame colours whose prop already is a phone in a case.
 local NO_CASE <const> = {}
 for _, colour in ipairs((config.Cases or {}).NoCase or {}) do NO_CASE[colour] = true end
+---@type table|nil Phone designs and trims players may pick (configs/phone.lua Looks); nil when off.
+local LOOKS <const> = (type(config.Phone.Looks) == 'table' and config.Phone.Looks.Enabled ~= false) and config.Phone.Looks or nil
+---@type string Where this player's phone style is kept between sessions.
+local STYLE_KVP <const> = 'sd-phone:phone-style'
+---@type PhoneStyle|nil The design and trims of this player's own phone.
+local style
 ---@type integer Milliseconds the equipped case is trusted before it is asked for again, so a
 ---character switch is picked up without an event for it.
 local STALE_MS <const> = 60000
@@ -205,6 +211,23 @@ local function hang(parent, body, design, entry)
     swinging = swinging + 1
 end
 
+---Lists the trims a phone style fits to a body of a design, in the order they are created.
+---@param body string 'plain', 'shut' or 'open'
+---@param phoneStyle PhoneStyle? a style that came out of rules.style
+---@param look string the design of the model that was actually welded
+---@return { [1]: string, [2]: integer }[] trims model, tint row
+local function trimsOf(body, phoneStyle, look)
+    local out = {}
+    if not phoneStyle then return out end
+    for i = 1, #DATA.Trims do
+        local kind = DATA.Trims[i]
+        if phoneStyle[kind] then
+            out[#out + 1] = { ('sd_trim_%s_%s_%s'):format(kind, look, body), phoneStyle[kind] }
+        end
+    end
+    return out
+end
+
 ---Takes the case off a prop: deletes every part attached to it. Safe on a prop with none.
 ---@param parent integer the phone prop
 function cases.undress(parent)
@@ -223,18 +246,32 @@ function cases.undress(parent)
     end
 end
 
----Puts a case on a prop, on its own thread: the parts stream one by one and must never hold up the
----phone. A prop deleted or re-dressed meanwhile gets nothing more, and what was built for it goes.
+---Puts a case and the phone's trims on a prop, on its own thread: the parts stream one by one and
+---must never hold up the phone. A prop deleted or re-dressed meanwhile gets nothing more, and what
+---was built for it goes. Trims go on first; they sit on the phone itself, under any case.
 ---@param parent integer the phone prop
 ---@param body string 'plain', 'shut' or 'open'
----@param design CaseDesign? a design that came out of rules.clean; nil dresses nothing
-function cases.dress(parent, body, design)
+---@param design CaseDesign? a design that came out of rules.clean; nil for no case
+---@param phoneStyle PhoneStyle? a style that came out of rules.style; nil for no trims
+---@param look string? the design of the model that was welded; the classic one when left out
+function cases.dress(parent, body, design, phoneStyle, look)
     cases.undress(parent)
-    if not design or not DATA.Bodies[body] then return end
+    if not DATA.Bodies[body] then return end
+    local trims = trimsOf(body, phoneStyle, look or rules.DEFAULT_LOOK)
+    if not design and #trims == 0 then return end
     generation = generation + 1
     local entry = { gen = generation, parts = {} }
     worn[parent] = entry
     CreateThread(function()
+        for i = 1, #trims do
+            local obj = attach(parent, trims[i][1], 0.0, 0.0, 0.0, trims[i][2])
+            if worn[parent] ~= entry then
+                if obj then DeleteObject(obj) end
+                return
+            end
+            if obj then entry.parts[#entry.parts + 1] = obj end
+        end
+        if not design then return end
         for _, p in ipairs(partsOf(body, design)) do
             local obj = attach(parent, p[1], p[2], p[3], p[4], p[5])
             if worn[parent] ~= entry then
@@ -246,6 +283,53 @@ function cases.dress(parent, body, design)
         if design.sticker == rules.PHOTO then stickPhoto(parent, body, design, entry) end
         if worn[parent] == entry and design.charm then hang(parent, body, design, entry) end
     end)
+end
+
+---Reduces a phone style to what this server offers: a design it does not list becomes the classic
+---one, and trims go when they are switched off.
+---@param input any a style from the NUI, local storage or another player's statebag
+---@return PhoneStyle? style nil for the classic phone with no trims
+function cases.offered(input)
+    if not LOOKS then return nil end
+    local clean = rules.style(input)
+    if not clean then return nil end
+    if clean.look ~= rules.DEFAULT_LOOK and type(LOOKS[clean.look]) ~= 'table' then clean.look = rules.DEFAULT_LOOK end
+    if LOOKS.Trims == false then
+        for i = 1, #DATA.Trims do clean[DATA.Trims[i]] = nil end
+    end
+    return rules.style(clean)
+end
+
+---The design and trims of this player's own phone.
+---@return PhoneStyle? style nil for the classic phone with no trims
+function cases.style()
+    return style
+end
+
+---Changes this player's phone style and keeps it for next time.
+---@param input any a style from the NUI; anything that is not one goes back to the classic phone
+function cases.setStyle(input)
+    style = cases.offered(input)
+    if style then
+        SetResourceKvp(STYLE_KVP, json.encode(style))
+    else
+        DeleteResourceKvp(STYLE_KVP)
+    end
+end
+
+---What the Cases app needs to offer phone styles: the designs and trims this server allows, and the
+---style in use.
+---@return { enabled: boolean, looks: string[], trims: string[], style: PhoneStyle|false }
+function cases.styleOptions()
+    local looks, trims = {}, {}
+    if LOOKS then
+        for i = 1, #DATA.Looks do
+            local look = DATA.Looks[i]
+            if look == rules.DEFAULT_LOOK or type(LOOKS[look]) == 'table' then looks[#looks + 1] = look end
+        end
+        if LOOKS.Trims ~= false then trims = DATA.Trims end
+    end
+    return { enabled = LOOKS ~= nil and (#looks > 1 or #trims > 0), looks = looks, trims = trims, style = style or false }
 end
 
 ---Moves one hanging charm on by a frame: each segment's end keeps its momentum, falls, and is
@@ -367,6 +451,13 @@ end
 
 cases.clean = rules.clean
 cases.signature = rules.signature
+cases.styleSignature = rules.styleSignature
+
+do
+    local stored = GetResourceKvpString(STYLE_KVP)
+    local ok, saved = pcall(json.decode, stored or '')
+    if ok then style = cases.offered(saved) end
+end
 
 -- Swings every hanging charm each frame, and idles while nobody in range carries one.
 CreateThread(function()

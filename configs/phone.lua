@@ -327,6 +327,25 @@ return {
     PropPrefix    = 'sd_phone_',
     PropBone      = 28422,   -- SKEL_R_Hand
 
+    -- Phone designs and trims a player picks for their own phone in the Cases app (the Phone tab). It
+    -- costs nothing and is remembered on their machine; other players see it on the prop.
+    --   * The classic design is the models named above and under Foldable and PropScreen
+    --     (PropPrefix, FoldPropPrefix, PropScreen.Model).
+    --   * Every other entry is another design: the same phone, the same size, with its own models.
+    --     sd-phone-props streams `slate`. A design whose models are not streamed falls back to the
+    --     classic ones, and removing its entry takes it out of the app.
+    --   * Trims are small coloured parts fitted to the phone itself (sd_trim_* in sd-phone-props):
+    --     lens rings, the camera surround and button caps, each in any of the 64 case colours.
+    Looks = {
+        Enabled = true,    -- false: everyone holds the classic design and the Phone tab is hidden
+        Trims   = true,    -- false: designs only, no trims
+        slate = {
+            PropPrefix      = 'sd_slate_',
+            FoldPropPrefix  = 'sd_slate_fold_',
+            PropScreenModel = 'sd_slate_dui',   -- held when PropScreen is on
+        },
+    },
+
     -- Fine-tune where the prop sits in the hand. The cellphone@ anim is
     -- authored so a phone welded to SKEL_R_Hand at zero offset/rotation lands
     -- in the texting grip (this is what npwd ships), so leave these at 0 unless

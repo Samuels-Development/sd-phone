@@ -41,6 +41,24 @@ export function stickerGroup(item: StickerItem): StickerGroup {
     return item.group === 'brands' ? 'brands' : 'icons';
 }
 
+export type TrimKind = 'rings' | 'bezel' | 'buttons';
+
+/** The phone's own design and the palette row of each trim fitted to it (shared/cases.lua PhoneStyle). */
+export interface PhoneStyle {
+    look:     string;
+    rings?:   number;
+    bezel?:   number;
+    buttons?: number;
+}
+
+/** What this server lets a player choose for the phone itself, and what they have chosen. */
+export interface PhoneOptions {
+    enabled: boolean;
+    looks:   string[];
+    trims:   TrimKind[];
+    style:   PhoneStyle | false;
+}
+
 export interface CasesState {
     catalog:  Catalog;
     owned:    Design[];
@@ -49,6 +67,7 @@ export interface CasesState {
     maxOwned: number;
     frame:    string;
     blocked:  boolean;
+    phone?:   PhoneOptions;
 }
 
 /** The parts a style can carry, mirroring shared/cases.lua: an open style (a bumper) takes only a
@@ -189,7 +208,10 @@ function devState(): CasesState {
             { style: 'rugged', color: 9, pattern: 'camo', patternColor: 30, accessory: 'ring', accessoryColor: 6, sticker: 'skull' },
         ];
         const blocked = new URLSearchParams(window.location.search).get('cases') === 'blocked';
-        dev = { catalog: devCatalog(), owned, equipped: owned[1], balance: 5000, maxOwned: 12, frame: blocked ? 'leather_brown' : 'black', blocked };
+        dev = {
+            catalog: devCatalog(), owned, equipped: owned[1], balance: 5000, maxOwned: 12, frame: blocked ? 'leather_brown' : 'black', blocked,
+            phone: { enabled: true, looks: ['classic', 'slate'], trims: ['rings', 'bezel', 'buttons'], style: false },
+        };
     }
     return dev;
 }
@@ -206,6 +228,22 @@ function list<T>(v: unknown): T[] {
     return Array.isArray(v) ? (v as T[]) : [];
 }
 
+function phoneOptions(p: PhoneOptions | undefined): PhoneOptions {
+    return { enabled: p?.enabled === true, looks: list(p?.looks), trims: list(p?.trims), style: p?.style || false };
+}
+
+/** Sets the design and trims of the player's own phone; null goes back to the classic phone. */
+export async function setPhoneStyle(style: PhoneStyle | null): Promise<Envelope<PhoneOptions>> {
+    if (!isFiveM) {
+        const s = devState();
+        s.phone = { ...phoneOptions(s.phone), style: style ?? false };
+        return { success: true, data: copy(s.phone) };
+    }
+    const res = await apiCall<PhoneOptions>('sd-phone:cases:style', { style: style ?? false });
+    if (res.success && res.data) res.data = phoneOptions(res.data);
+    return res;
+}
+
 export async function fetchCasesState(): Promise<Envelope<CasesState>> {
     if (!isFiveM) return { success: true, data: copy(devState()) };
     const res = await apiCall<CasesState>('sd-phone:cases:state');
@@ -213,6 +251,7 @@ export async function fetchCasesState(): Promise<Envelope<CasesState>> {
     if (res.success && d) {
         d.owned = list(d.owned);
         d.equipped = d.equipped || false;
+        d.phone = phoneOptions(d.phone);
         d.catalog = {
             palette:     list(d.catalog?.palette),
             styles:      list(d.catalog?.styles),

@@ -7,6 +7,8 @@ local cases = {}
 
 ---@alias CaseDesign { style: string, color: integer, pattern?: string, patternColor?: integer, accessory?: string, accessoryColor?: integer, charm?: string, charmColor?: integer, sticker?: string, photo?: string|true, owner?: integer }
 
+---@alias PhoneStyle { look: string, rings?: integer, bezel?: integer, buttons?: integer }
+
 ---Turns a list of names into a set.
 ---@param list string[]
 ---@return table<string, true>
@@ -26,6 +28,10 @@ local ACCESSORIES <const> = setOf(data.Accessories)
 local CHARMS <const> = setOf(data.Charms)
 ---@type table<string, true> Known sticker names.
 local STICKERS <const> = setOf(data.Stickers)
+---@type table<string, true> Known phone designs.
+local LOOKS <const> = setOf(data.Looks)
+---@type string The design a phone has when nothing says otherwise.
+local DEFAULT_LOOK <const> = data.Looks[1]
 ---@type string The sticker that is the wearer's own picture rather than one of the models.
 local PHOTO <const> = 'photo'
 ---@type integer Longest picture address a design may carry.
@@ -115,7 +121,37 @@ function cases.signature(design)
     }, '.')
 end
 
+---Rebuilds a phone style from untrusted input: which design the phone is, and the palette row of
+---each trim fitted to it (lens rings, camera surround, button caps).
+---@param input any a style from the NUI, local storage or another player's statebag
+---@return PhoneStyle? style nil for the classic phone with no trims, which nothing needs to say
+function cases.style(input)
+    if type(input) ~= 'table' then return nil end
+    local style = { look = (type(input.look) == 'string' and LOOKS[input.look]) and input.look or DEFAULT_LOOK }
+    local fitted = false
+    for i = 1, #data.Trims do
+        local kind = data.Trims[i]
+        if input[kind] ~= nil and input[kind] ~= false then
+            style[kind] = row(input[kind])
+            fitted = true
+        end
+    end
+    if style.look == DEFAULT_LOOK and not fitted then return nil end
+    return style
+end
+
+---A short text form of a clean phone style; two styles look the same exactly when these match.
+---@param style PhoneStyle? a style that came out of cases.style
+---@return string signature '' for the classic phone with no trims
+function cases.styleSignature(style)
+    if not style then return '' end
+    local parts = { style.look }
+    for i = 1, #data.Trims do parts[#parts + 1] = style[data.Trims[i]] or '-' end
+    return table.concat(parts, '.')
+end
+
 cases.data = data
+cases.DEFAULT_LOOK = DEFAULT_LOOK
 cases.PHOTO = PHOTO
 
 return cases

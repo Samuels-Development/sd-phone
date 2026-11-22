@@ -21,27 +21,33 @@ local wanted = {}
 local OPEN_TAG <const> = '|open'
 ---@type string Separates the case signature from the rest of a variant key.
 local CASE_TAG <const> = '#'
+---@type string Separates the phone style's signature from the rest of a variant key.
+local STYLE_TAG <const> = '~'
 ---@type table<integer, CaseDesign> Server id -> the case that holder is broadcasting, checked.
 local caseOf = {}
+---@type table<integer, PhoneStyle> Server id -> the phone design and trims that holder is broadcasting, checked.
+local styleOf = {}
 
 ---Reads a broadcast `sdPhone` value into the variant a copy has to match. Holders shut (and every
 ---older client) broadcast a bare colour string; an unfolded holder or one with a case broadcasts
----{ c = , f = true, k = <case> }. Keeping the result one string leaves the generation and
----up-to-date checks single comparisons, so the case goes into it as its signature.
+---{ c = , f = true, k = <case>, s = <phone style> }. Keeping the result one string leaves the
+---generation and up-to-date checks single comparisons, so the case and the style go into it as their
+---signatures.
 ---@param value any the holder's statebag value
----@return string? variant, string? colour, boolean open, CaseDesign? case
+---@return string? variant, string? colour, boolean open, CaseDesign? case, PhoneStyle? style
 local function variantOf(value)
-    local colour, open, case
+    local colour, open, case, style
     if type(value) == 'table' then
-        colour, open, case = value.c, value.f == true, cases.clean(value.k)
+        colour, open, case, style = value.c, value.f == true, cases.clean(value.k), cases.offered(value.s)
     else
         colour, open = value, false
     end
-    if type(colour) ~= 'string' or not FRAME_COLORS[colour] then return nil, nil, false, nil end
+    if type(colour) ~= 'string' or not FRAME_COLORS[colour] then return nil, nil, false, nil, nil end
     if cases.blocked(colour) then case = nil end
     local variant = colour .. (open and OPEN_TAG or '')
+    if style then variant = variant .. STYLE_TAG .. cases.styleSignature(style) end
     if case then variant = variant .. CASE_TAG .. cases.signature(case) end
-    return variant, colour, open, case
+    return variant, colour, open, case, style
 end
 
 ---Splits a variant key back into the colour and whether it is the unfolded body.
@@ -49,6 +55,7 @@ end
 ---@return string colour, boolean open
 local function splitVariant(variant)
     local body = variant:match('^(.-)' .. CASE_TAG) or variant
+    body = body:match('^(.-)' .. STYLE_TAG) or body
     local colour = body:match('^(.-)%' .. OPEN_TAG .. '$')
     if colour then return colour, true end
     return body, false
@@ -76,6 +83,7 @@ local function forget(source)
     remoteprops.remove(source)
     wanted[source] = nil
     caseOf[source] = nil
+    styleOf[source] = nil
     seq[source] = nil
 end
 
@@ -98,7 +106,7 @@ local function weld(source, ped, variant)
     seq[source] = mine
 
     local colour, open = splitVariant(variant)
-    local obj = pose.createProp(ped, colour, nil, open, caseOf[source])
+    local obj = pose.createProp(ped, colour, nil, open, caseOf[source], styleOf[source])
     if not obj then return end
 
     if seq[source] ~= mine or wanted[source] ~= variant then
@@ -129,12 +137,13 @@ function remoteprops.set(source, value)
         forget(source)
         return
     end
-    local variant, _, _, case = variantOf(value)
+    local variant, _, _, case, style = variantOf(value)
     if not variant then return end
 
     if case then case.owner = source end
     wanted[source] = variant
     caseOf[source] = case
+    styleOf[source] = style
     if upToDate(source, variant) then return end
 
     local ped = pedOf(source)
@@ -161,7 +170,7 @@ end
 ---Drops every copy this client has welded.
 function remoteprops.clear()
     for source in pairs(props) do remoteprops.remove(source) end
-    wanted, seq, caseOf = {}, {}, {}
+    wanted, seq, caseOf, styleOf = {}, {}, {}, {}
 end
 
 if config.Phone.PropVisibleToOthers then

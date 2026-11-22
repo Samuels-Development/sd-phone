@@ -173,22 +173,37 @@ end
 
 ---The models to weld for a body state, best first: the fold model when this body uses one, then the
 ---plain phone. A server that has not installed the fold props streams only the plain ones, and the
----phone in hand falls back to them instead of vanishing.
+---phone in hand falls back to them instead of vanishing. A design other than the classic one
+---(configs/phone.lua Looks) puts its own models first and keeps the classic ones as the fallback.
+---With the prop screen on (configs/phone.lua PropScreen) the DUI-screen model replaces whatever the
+---body state would weld, in the frame colour when the pack streams one (<Model>_<colour>).
 ---@param frame string frame colour; must be a key of FRAME_COLORS
 ---@param open boolean|nil true for the unfolded body
----@return { name: string, fold: boolean }[] candidates
-local function propCandidates(frame, open)
-    -- Prop screen (configs/phone.lua PropScreen): the DUI-screen model replaces whatever the body
-    -- state would weld, in the frame colour when the pack streams one (<Model>_<colour>).
+---@param look string|nil the phone design asked for; nil for the classic one
+---@return { name: string, fold: boolean, look: string? }[] candidates
+local function propCandidates(frame, open, look)
+    local looks = config.Phone.Looks
+    local alt = (look and type(looks) == 'table' and type(looks[look]) == 'table') and looks[look] or nil
+    local out = {}
     if pose.modelOverride then
-        return {
-            { name = ('%s_%s'):format(pose.modelOverride, frame), fold = false },
-            { name = pose.modelOverride, fold = false },
-        }
+        if alt and alt.PropScreenModel then
+            out[#out + 1] = { name = ('%s_%s'):format(alt.PropScreenModel, frame), fold = false, look = look }
+            out[#out + 1] = { name = alt.PropScreenModel, fold = false, look = look }
+        end
+        out[#out + 1] = { name = ('%s_%s'):format(pose.modelOverride, frame), fold = false }
+        out[#out + 1] = { name = pose.modelOverride, fold = false }
+        return out
     end
-    local plain = { name = config.Phone.PropPrefix .. frame, fold = false }
-    if not usesFoldModel(open) then return { plain } end
-    return { { name = foldModel(frame, open), fold = true }, plain }
+    local fold = usesFoldModel(open)
+    if alt then
+        if fold and alt.FoldPropPrefix then
+            out[#out + 1] = { name = alt.FoldPropPrefix .. frame .. (open and (config.Phone.FoldOpenSuffix or '_open') or ''), fold = true, look = look }
+        end
+        if alt.PropPrefix then out[#out + 1] = { name = alt.PropPrefix .. frame, fold = false, look = look } end
+    end
+    if fold then out[#out + 1] = { name = foldModel(frame, open), fold = true } end
+    out[#out + 1] = { name = config.Phone.PropPrefix .. frame, fold = false }
+    return out
 end
 
 ---Whether folding or unfolding changes the prop in hand at all. False when both body states resolve
@@ -244,9 +259,10 @@ end
 ---@param wide boolean|nil weld it in the landscape grip
 ---@param open boolean|nil weld the unfolded body instead of the shut one
 ---@param case CaseDesign|nil a case to dress the prop in (client.cases)
+---@param style PhoneStyle|nil the phone's design and trims (client.cases)
 ---@return integer? prop the welded prop entity, or nil if no candidate model would stream
-function pose.createProp(ped, frame, wide, open, case)
-    for _, candidate in ipairs(propCandidates(frame, open)) do
+function pose.createProp(ped, frame, wide, open, case, style)
+    for _, candidate in ipairs(propCandidates(frame, open, style and style.look)) do
         local model = joaat(candidate.name)
         if not unavailableModels[model] then
             if pcall(lib.requestModel, model, 1000) then
@@ -257,7 +273,7 @@ function pose.createProp(ped, frame, wide, open, case)
                 AttachEntityToEntity(obj, ped, GetPedBoneIndex(ped, config.Phone.PropBone),
                     off.x, off.y, off.z, rot.x, rot.y, rot.z, false, false, false, false, 2, true)
                 SetModelAsNoLongerNeeded(model)
-                cases.dress(obj, candidate.fold and (open and 'open' or 'shut') or 'plain', case)
+                cases.dress(obj, candidate.fold and (open and 'open' or 'shut') or 'plain', case, style, candidate.look)
                 return obj
             end
             SetModelAsNoLongerNeeded(model)
@@ -280,7 +296,7 @@ local function attachProp(ped)
 
     weldSeq = weldSeq + 1
     local seq = weldSeq
-    local obj = pose.createProp(ped, color, landscape, foldOpen, cases.mine(color))
+    local obj = pose.createProp(ped, color, landscape, foldOpen, cases.mine(color), cases.style())
     if not obj then return end
 
     if seq ~= weldSeq or not pose.shouldHold() or (prop and DoesEntityExist(prop)) then
@@ -313,7 +329,7 @@ function pose.mirrorOnto(ped)
         RemoveAnimDict(clip.dict)
     end
 
-    return pose.createProp(ped, color, landscape, nil, cases.worn(color))
+    return pose.createProp(ped, color, landscape, nil, cases.worn(color), cases.style())
 end
 
 ---The welded hand prop (nil while stowed or still streaming). Used by the prop screen.
