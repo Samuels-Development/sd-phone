@@ -43,9 +43,11 @@ export function stickerGroup(item: StickerItem): StickerGroup {
 
 export type TrimKind = 'rings' | 'bezel' | 'buttons';
 
-/** The phone's own design and the palette row of each trim fitted to it (shared/cases.lua PhoneStyle). */
+/** The phone's own design, the logo on its back and the palette row of each trim fitted to it
+ *  (shared/cases.lua PhoneStyle). No logo means the one the server ships. */
 export interface PhoneStyle {
     look:     string;
+    logo?:    string;
     rings?:   number;
     bezel?:   number;
     buttons?: number;
@@ -55,6 +57,7 @@ export interface PhoneStyle {
 export interface PhoneOptions {
     enabled: boolean;
     looks:   string[];
+    logos:   Record<string, string[]>;
     trims:   TrimKind[];
     style:   PhoneStyle | false;
 }
@@ -210,7 +213,10 @@ function devState(): CasesState {
         const blocked = new URLSearchParams(window.location.search).get('cases') === 'blocked';
         dev = {
             catalog: devCatalog(), owned, equipped: owned[1], balance: 5000, maxOwned: 12, frame: blocked ? 'leather_brown' : 'black', blocked,
-            phone: { enabled: true, looks: ['classic', 'slate'], trims: ['rings', 'bezel', 'buttons'], style: false },
+            phone: {
+                enabled: true, looks: ['classic', 'slate'], trims: ['rings', 'bezel', 'buttons'], style: false,
+                logos: { classic: ['sd', 'ifruit', 'generic'], slate: ['sd', 'ifruit', 'generic'] },
+            },
         };
     }
     return dev;
@@ -229,7 +235,9 @@ function list<T>(v: unknown): T[] {
 }
 
 function phoneOptions(p: PhoneOptions | undefined): PhoneOptions {
-    return { enabled: p?.enabled === true, looks: list(p?.looks), trims: list(p?.trims), style: p?.style || false };
+    const logos: Record<string, string[]> = {};
+    for (const look of list<string>(p?.looks)) logos[look] = list(p?.logos?.[look]);
+    return { enabled: p?.enabled === true, looks: list(p?.looks), logos, trims: list(p?.trims), style: p?.style || false };
 }
 
 /** Sets the design and trims of the player's own phone; null goes back to the classic phone. */

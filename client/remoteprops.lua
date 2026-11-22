@@ -30,7 +30,7 @@ local styleOf = {}
 
 ---Reads a broadcast `sdPhone` value into the variant a copy has to match. Holders shut (and every
 ---older client) broadcast a bare colour string; an unfolded holder or one with a case broadcasts
----{ c = , f = true, k = <case>, s = <phone style> }. Keeping the result one string leaves the
+---{ c = , f = true, k = <case>, s = <phone style: design, logo, trims> }. Keeping the result one string leaves the
 ---generation and up-to-date checks single comparisons, so the case and the style go into it as their
 ---signatures.
 ---@param value any the holder's statebag value

@@ -173,33 +173,33 @@ end
 
 ---The models to weld for a body state, best first: the fold model when this body uses one, then the
 ---plain phone. A server that has not installed the fold props streams only the plain ones, and the
----phone in hand falls back to them instead of vanishing. A design other than the classic one
----(configs/phone.lua Looks) puts its own models first and keeps the classic ones as the fallback.
----With the prop screen on (configs/phone.lua PropScreen) the DUI-screen model replaces whatever the
----body state would weld, in the frame colour when the pack streams one (<Model>_<colour>).
+---phone in hand falls back to them instead of vanishing. A phone whose owner picked a design or a
+---logo (configs/phone.lua Looks) puts that set's models first, named from its stem, and keeps the
+---server's own as the fallback. With the prop screen on (configs/phone.lua PropScreen) the
+---DUI-screen model replaces whatever the body state would weld, in the frame colour when the pack
+---streams one (<Model>_<colour>).
 ---@param frame string frame colour; must be a key of FRAME_COLORS
 ---@param open boolean|nil true for the unfolded body
----@param look string|nil the phone design asked for; nil for the classic one
+---@param stem string|nil the stem of the picked set's model names (client.cases stem); nil for none
+---@param look string|nil the design that set is, handed back on its candidates
 ---@return { name: string, fold: boolean, look: string? }[] candidates
-local function propCandidates(frame, open, look)
-    local looks = config.Phone.Looks
-    local alt = (look and type(looks) == 'table' and type(looks[look]) == 'table') and looks[look] or nil
+local function propCandidates(frame, open, stem, look)
     local out = {}
     if pose.modelOverride then
-        if alt and alt.PropScreenModel then
-            out[#out + 1] = { name = ('%s_%s'):format(alt.PropScreenModel, frame), fold = false, look = look }
-            out[#out + 1] = { name = alt.PropScreenModel, fold = false, look = look }
+        if stem then
+            out[#out + 1] = { name = ('%s_dui_%s'):format(stem, frame), fold = false, look = look }
+            out[#out + 1] = { name = stem .. '_dui', fold = false, look = look }
         end
         out[#out + 1] = { name = ('%s_%s'):format(pose.modelOverride, frame), fold = false }
         out[#out + 1] = { name = pose.modelOverride, fold = false }
         return out
     end
     local fold = usesFoldModel(open)
-    if alt then
-        if fold and alt.FoldPropPrefix then
-            out[#out + 1] = { name = alt.FoldPropPrefix .. frame .. (open and (config.Phone.FoldOpenSuffix or '_open') or ''), fold = true, look = look }
+    if stem then
+        if fold then
+            out[#out + 1] = { name = ('%s_fold_%s%s'):format(stem, frame, open and (config.Phone.FoldOpenSuffix or '_open') or ''), fold = true, look = look }
         end
-        if alt.PropPrefix then out[#out + 1] = { name = alt.PropPrefix .. frame, fold = false, look = look } end
+        out[#out + 1] = { name = ('%s_%s'):format(stem, frame), fold = false, look = look }
     end
     if fold then out[#out + 1] = { name = foldModel(frame, open), fold = true } end
     out[#out + 1] = { name = config.Phone.PropPrefix .. frame, fold = false }
@@ -262,7 +262,7 @@ end
 ---@param style PhoneStyle|nil the phone's design and trims (client.cases)
 ---@return integer? prop the welded prop entity, or nil if no candidate model would stream
 function pose.createProp(ped, frame, wide, open, case, style)
-    for _, candidate in ipairs(propCandidates(frame, open, style and style.look)) do
+    for _, candidate in ipairs(propCandidates(frame, open, cases.stem(style), style and style.look)) do
         local model = joaat(candidate.name)
         if not unavailableModels[model] then
             if pcall(lib.requestModel, model, 1000) then

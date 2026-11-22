@@ -7,7 +7,7 @@ local cases = {}
 
 ---@alias CaseDesign { style: string, color: integer, pattern?: string, patternColor?: integer, accessory?: string, accessoryColor?: integer, charm?: string, charmColor?: integer, sticker?: string, photo?: string|true, owner?: integer }
 
----@alias PhoneStyle { look: string, rings?: integer, bezel?: integer, buttons?: integer }
+---@alias PhoneStyle { look: string, logo?: string, rings?: integer, bezel?: integer, buttons?: integer }
 
 ---Turns a list of names into a set.
 ---@param list string[]
@@ -30,6 +30,8 @@ local CHARMS <const> = setOf(data.Charms)
 local STICKERS <const> = setOf(data.Stickers)
 ---@type table<string, true> Known phone designs.
 local LOOKS <const> = setOf(data.Looks)
+---@type table<string, true> Known logos for the back of the phone.
+local LOGOS <const> = setOf(data.Logos)
 ---@type string The design a phone has when nothing says otherwise.
 local DEFAULT_LOOK <const> = data.Looks[1]
 ---@type string The sticker that is the wearer's own picture rather than one of the models.
@@ -121,14 +123,15 @@ function cases.signature(design)
     }, '.')
 end
 
----Rebuilds a phone style from untrusted input: which design the phone is, and the palette row of
----each trim fitted to it (lens rings, camera surround, button caps).
+---Rebuilds a phone style from untrusted input: which design the phone is, the logo on its back, and
+---the palette row of each trim fitted to it (lens rings, camera surround, button caps).
 ---@param input any a style from the NUI, local storage or another player's statebag
----@return PhoneStyle? style nil for the classic phone with no trims, which nothing needs to say
+---@return PhoneStyle? style nil for the classic phone as the server ships it, which nothing needs to say
 function cases.style(input)
     if type(input) ~= 'table' then return nil end
     local style = { look = (type(input.look) == 'string' and LOOKS[input.look]) and input.look or DEFAULT_LOOK }
-    local fitted = false
+    if type(input.logo) == 'string' and LOGOS[input.logo] then style.logo = input.logo end
+    local fitted = style.logo ~= nil
     for i = 1, #data.Trims do
         local kind = data.Trims[i]
         if input[kind] ~= nil and input[kind] ~= false then
@@ -142,10 +145,10 @@ end
 
 ---A short text form of a clean phone style; two styles look the same exactly when these match.
 ---@param style PhoneStyle? a style that came out of cases.style
----@return string signature '' for the classic phone with no trims
+---@return string signature '' for the classic phone as the server ships it
 function cases.styleSignature(style)
     if not style then return '' end
-    local parts = { style.look }
+    local parts = { style.look, style.logo or '-' }
     for i = 1, #data.Trims do parts[#parts + 1] = style[data.Trims[i]] or '-' end
     return table.concat(parts, '.')
 end

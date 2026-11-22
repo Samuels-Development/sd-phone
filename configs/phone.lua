@@ -327,22 +327,24 @@ return {
     PropPrefix    = 'sd_phone_',
     PropBone      = 28422,   -- SKEL_R_Hand
 
-    -- Phone designs and trims a player picks for their own phone in the Cases app (the Phone tab). It
-    -- costs nothing and is remembered on their machine; other players see it on the prop.
-    --   * The classic design is the models named above and under Foldable and PropScreen
-    --     (PropPrefix, FoldPropPrefix, PropScreen.Model).
-    --   * Every other entry is another design: the same phone, the same size, with its own models.
-    --     sd-phone-props streams `slate`. A design whose models are not streamed falls back to the
-    --     classic ones, and removing its entry takes it out of the app.
+    -- The design, logo and trims a player picks for their own phone in the Cases app (the Phone tab).
+    -- It costs nothing and is remembered on their machine; other players see it on the prop.
+    --   * Until a player picks, their phone is the models named above and under Foldable and
+    --     PropScreen (PropPrefix, FoldPropPrefix, PropScreen.Model).
+    --   * Models lists what they can pick: each design (`classic`, `slate`) and, for it, each logo
+    --     (`sd`, `ifruit`, `generic`) with the stem its models are named from: <stem>_<colour>,
+    --     <stem>_fold_<colour>, <stem>_fold_<colour>_open and <stem>_dui_<colour>. sd-phone-props
+    --     streams all six. Remove a logo or a whole design to take it out of the app; models that
+    --     are not streamed fall back to the ones named above.
     --   * Trims are small coloured parts fitted to the phone itself (sd_trim_* in sd-phone-props):
     --     lens rings, the camera surround and button caps, each in any of the 64 case colours.
     Looks = {
-        Enabled = true,    -- false: everyone holds the classic design and the Phone tab is hidden
-        Trims   = true,    -- false: designs only, no trims
-        slate = {
-            PropPrefix      = 'sd_slate_',
-            FoldPropPrefix  = 'sd_slate_fold_',
-            PropScreenModel = 'sd_slate_dui',   -- held when PropScreen is on
+        Enabled = true,    -- false: everyone holds the models named above and the Phone tab is hidden
+        Trims   = true,    -- false: no trims
+        Logos   = true,    -- false: no logo choice; a design shows the first logo it lists (sd, ifruit, generic)
+        Models = {
+            classic = { sd = 'sd_phone', ifruit = 'sd_ifruit', generic = 'sd_generic' },
+            slate   = { sd = 'sd_slate', ifruit = 'sd_ifruit_slate', generic = 'sd_generic_slate' },
         },
     },
 

@@ -40,6 +40,10 @@ return {
     Looks = {
         'classic', 'slate',
     },
+    -- The logos a phone's back can carry. Which models carry which is sd-phone's configs/phone.lua Looks.Models.
+    Logos = {
+        'sd', 'ifruit', 'generic',
+    },
     Trims = {
         'rings', 'bezel', 'buttons',
     },

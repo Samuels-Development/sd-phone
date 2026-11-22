@@ -285,19 +285,48 @@ function cases.dress(parent, body, design, phoneStyle, look)
     end)
 end
 
+---The logos a design is offered with on this server, in the order the app lists them.
+---@param look string a design name
+---@return string[] logos empty when the design is not offered at all
+local function logosOf(look)
+    local out = {}
+    local set = LOOKS and type(LOOKS.Models) == 'table' and LOOKS.Models[look]
+    if type(set) ~= 'table' then return out end
+    for i = 1, #DATA.Logos do
+        if type(set[DATA.Logos[i]]) == 'string' then out[#out + 1] = DATA.Logos[i] end
+    end
+    return out
+end
+
 ---Reduces a phone style to what this server offers: a design it does not list becomes the classic
----one, and trims go when they are switched off.
+---one, a logo the design does not come with is dropped, and trims go when they are switched off.
 ---@param input any a style from the NUI, local storage or another player's statebag
----@return PhoneStyle? style nil for the classic phone with no trims
+---@return PhoneStyle? style nil for the classic phone as the server ships it
 function cases.offered(input)
     if not LOOKS then return nil end
     local clean = rules.style(input)
     if not clean then return nil end
-    if clean.look ~= rules.DEFAULT_LOOK and type(LOOKS[clean.look]) ~= 'table' then clean.look = rules.DEFAULT_LOOK end
+    if clean.look ~= rules.DEFAULT_LOOK and #logosOf(clean.look) == 0 then clean.look = rules.DEFAULT_LOOK end
+    local set = type(LOOKS.Models) == 'table' and LOOKS.Models[clean.look]
+    if LOOKS.Logos == false or type(set) ~= 'table' or type(set[clean.logo]) ~= 'string' then clean.logo = nil end
     if LOOKS.Trims == false then
         for i = 1, #DATA.Trims do clean[DATA.Trims[i]] = nil end
     end
     return rules.style(clean)
+end
+
+---The stem a phone style's models are named from (configs/phone.lua Looks.Models): its design with
+---the logo it asks for, or with the first logo that design lists.
+---@param phoneStyle PhoneStyle? a style that came out of cases.offered
+---@return string? stem nil for the models the server names as its default
+function cases.stem(phoneStyle)
+    if not LOOKS or not phoneStyle or type(LOOKS.Models) ~= 'table' then return nil end
+    local set = LOOKS.Models[phoneStyle.look]
+    if type(set) ~= 'table' then return nil end
+    if phoneStyle.logo and type(set[phoneStyle.logo]) == 'string' then return set[phoneStyle.logo] end
+    if phoneStyle.look == rules.DEFAULT_LOOK then return nil end
+    local first = logosOf(phoneStyle.look)[1]
+    return first and set[first] or nil
 end
 
 ---The design and trims of this player's own phone.
@@ -317,19 +346,28 @@ function cases.setStyle(input)
     end
 end
 
----What the Cases app needs to offer phone styles: the designs and trims this server allows, and the
----style in use.
----@return { enabled: boolean, looks: string[], trims: string[], style: PhoneStyle|false }
+---What the Cases app needs to offer phone styles: the designs, logos and trims this server allows,
+---and the style in use.
+---@return { enabled: boolean, looks: string[], logos: table<string, string[]>, trims: string[], style: PhoneStyle|false }
 function cases.styleOptions()
-    local looks, trims = {}, {}
+    local looks, logos, trims = {}, {}, {}
+    local choice = false
     if LOOKS then
         for i = 1, #DATA.Looks do
             local look = DATA.Looks[i]
-            if look == rules.DEFAULT_LOOK or type(LOOKS[look]) == 'table' then looks[#looks + 1] = look end
+            local offered = logosOf(look)
+            if look == rules.DEFAULT_LOOK or #offered > 0 then
+                looks[#looks + 1] = look
+                logos[look] = LOOKS.Logos ~= false and offered or {}
+                if #logos[look] > 1 then choice = true end
+            end
         end
         if LOOKS.Trims ~= false then trims = DATA.Trims end
     end
-    return { enabled = LOOKS ~= nil and (#looks > 1 or #trims > 0), looks = looks, trims = trims, style = style or false }
+    return {
+        enabled = LOOKS ~= nil and (#looks > 1 or #trims > 0 or choice),
+        looks = looks, logos = logos, trims = trims, style = style or false,
+    }
 end
 
 ---Moves one hanging charm on by a frame: each segment's end keeps its momentum, falls, and is

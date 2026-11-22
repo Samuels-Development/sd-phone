@@ -19,6 +19,14 @@ function lookLabels(): Record<string, { name: string; blurb: string }> {
     };
 }
 
+function logoLabels(): Record<string, string> {
+    return {
+        sd:      t('cases.logoSd', 'SD'),
+        ifruit:  t('cases.logoIfruit', 'iFruit'),
+        generic: t('cases.logoGeneric', 'Plain Ring'),
+    };
+}
+
 function trimLabels(): Record<TrimKind, { name: string; blurb: string }> {
     return {
         rings:   { name: t('cases.trimRings', 'Lens Rings'), blurb: t('cases.trimRingsBlurb', 'A coloured ring round each lens.') },
@@ -64,10 +72,10 @@ function LookArt({ look, hex, ring }: { look: string; hex: string; ring?: string
     );
 }
 
-function styleOf(look: string, trims: Partial<Record<TrimKind, number>>): PhoneStyle | null {
+function styleOf(look: string, logo: string | undefined, trims: Partial<Record<TrimKind, number>>): PhoneStyle | null {
     const fitted = Object.keys(trims).length > 0;
-    if (look === DEFAULT_LOOK && !fitted) return null;
-    return { look, ...trims };
+    if (look === DEFAULT_LOOK && !logo && !fitted) return null;
+    return { look, ...(logo ? { logo } : {}), ...trims };
 }
 
 /** The Phone tab: the design of the phone itself and the small coloured trims on it. Nothing here is
@@ -81,6 +89,7 @@ export function PhoneTab({ state, frameHex, onPatch }: {
     const palette = state.catalog.palette;
     const current = phone.style || null;
     const [look, setLook] = useState(current?.look ?? DEFAULT_LOOK);
+    const [logo, setLogo] = useState<string | undefined>(current?.logo);
     const [trims, setTrims] = useState<Partial<Record<TrimKind, number>>>(() => {
         const out: Partial<Record<TrimKind, number>> = {};
         for (const kind of phone.trims) {
@@ -90,14 +99,18 @@ export function PhoneTab({ state, frameHex, onPatch }: {
         return out;
     });
 
-    async function apply(nextLook: string, nextTrims: Partial<Record<TrimKind, number>>) {
+    async function apply(nextLook: string, wantLogo: string | undefined, nextTrims: Partial<Record<TrimKind, number>>) {
+        const nextLogo = wantLogo && (phone.logos[nextLook] ?? []).includes(wantLogo) ? wantLogo : undefined;
         setLook(nextLook);
+        setLogo(nextLogo);
         setTrims(nextTrims);
-        const res = await setPhoneStyle(styleOf(nextLook, nextTrims));
+        const res = await setPhoneStyle(styleOf(nextLook, nextLogo, nextTrims));
         if (res.success && res.data) onPatch({ phone: res.data });
     }
 
     const looks = lookLabels();
+    const logoNames = logoLabels();
+    const logoChoices = phone.logos[look] ?? [];
     const trimNames = trimLabels();
     const ringHex = typeof trims.rings === 'number' ? palette[trims.rings] : undefined;
 
@@ -113,7 +126,7 @@ export function PhoneTab({ state, frameHex, onPatch }: {
                                 selected={look === id}
                                 label={looks[id]?.name ?? id}
                                 wellH={132}
-                                onPress={() => void apply(id, trims)}
+                                onPress={() => void apply(id, logo, trims)}
                             >
                                 <LookArt look={id} hex={frameHex} ring={ringHex} />
                             </OptionTile>
@@ -122,6 +135,31 @@ export function PhoneTab({ state, frameHex, onPatch }: {
                     <p className="mt-1 px-1 text-[13px] leading-snug text-ios-gray">
                         {looks[look]?.blurb} {t('cases.phoneDesignNote', 'Both are the same size, so every case fits either.')}
                     </p>
+                </section>
+            )}
+
+            {logoChoices.length > 1 && (
+                <section className="mt-5">
+                    <h3 className="px-1 text-[13px] font-semibold uppercase tracking-wide text-ios-gray">{t('cases.phoneLogo', 'Logo')}</h3>
+                    <div className="mt-2 flex gap-2 rounded-[14px] bg-surface p-1.5 ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
+                        {logoChoices.map(id => {
+                            const on = logo ? logo === id : false;
+                            return (
+                                <button
+                                    key={id}
+                                    type="button"
+                                    aria-pressed={on}
+                                    onClick={() => void apply(look, id, trims)}
+                                    className={`min-w-0 flex-1 truncate rounded-[10px] px-2 py-2 text-[14.5px] font-semibold transition-colors active:opacity-60 ${
+                                        on ? 'bg-[#F59E0B] text-white' : 'text-black/75 dark:text-white/80'
+                                    }`}
+                                >
+                                    {logoNames[id] ?? id}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <p className="mt-1.5 px-1 text-[13px] leading-snug text-ios-gray">{t('cases.phoneLogoNote', 'The mark on the back of the phone.')}</p>
                 </section>
             )}
 
@@ -152,7 +190,7 @@ export function PhoneTab({ state, frameHex, onPatch }: {
                                             onClick={() => {
                                                 const next = { ...trims };
                                                 delete next[kind];
-                                                void apply(look, next);
+                                                void apply(look, logo, next);
                                             }}
                                             className={`shrink-0 rounded-full px-3 py-1 text-[13px] font-semibold transition-opacity active:opacity-60 ${
                                                 fitted ? 'bg-black/[0.06] text-black/70 dark:bg-white/[0.10] dark:text-white/80' : 'bg-[#F59E0B] text-white'
@@ -161,7 +199,7 @@ export function PhoneTab({ state, frameHex, onPatch }: {
                                             {t('cases.trimStandard', 'Standard')}
                                         </button>
                                     </div>
-                                    <Swatches palette={palette} value={fitted ? row : -1} onChange={r => void apply(look, { ...trims, [kind]: r })} />
+                                    <Swatches palette={palette} value={fitted ? row : -1} onChange={r => void apply(look, logo, { ...trims, [kind]: r })} />
                                 </div>
                             );
                         })}
