@@ -3,7 +3,7 @@
 # sd-phone
 
 <a href="https://www.youtube.com/watch?v=65EoH00dlhw">
-  <img width="960" alt="sd-phone banner showing the Home screen in front of a wall of app screens" src="docs/previews/sd-phone-banner.webp">
+  <img width="960" alt="sd-phone: regular, Slate and foldable phones in several colours, two of them in cases, with the Home screen in front" src="docs/previews/sd-phone-banner.webp">
 </a>
 
 <sub>▶ **[Video demo](https://www.youtube.com/watch?v=65EoH00dlhw)**</sub>
@@ -58,15 +58,15 @@ Captured from the browser demo using sample data. Click an image for the full 19
 
 <p align="center"><a href="docs/previews/01-home-messages.webp"><img src="docs/previews/01-home-messages.webp" alt="Home and Messages" width="960" /></a></p>
 
-<p align="center"><a href="docs/previews/02-social-apps.webp"><img src="docs/previews/02-social-apps.webp" alt="Photogram and Squawk" width="960" /></a></p>
+<p align="center"><a href="docs/previews/02-social-apps.webp"><img src="docs/previews/02-social-apps.webp" alt="Photogram, Squawk and Clout" width="960" /></a></p>
 
-<p align="center"><a href="docs/previews/03-maps-ryde.webp"><img src="docs/previews/03-maps-ryde.webp" alt="Maps and Ryde" width="960" /></a></p>
+<p align="center"><a href="docs/previews/03-maps-ryde.webp"><img src="docs/previews/03-maps-ryde.webp" alt="Maps, Ryde and Garages" width="960" /></a></p>
 
-<p align="center"><a href="docs/previews/04-banking-marketplace.webp"><img src="docs/previews/04-banking-marketplace.webp" alt="Wallet and Marketplace" width="960" /></a></p>
+<p align="center"><a href="docs/previews/04-banking-marketplace.webp"><img src="docs/previews/04-banking-marketplace.webp" alt="Wallet, Marketplace and Pages" width="960" /></a></p>
 
 <p align="center"><a href="docs/previews/05-weather-health-services.webp"><img src="docs/previews/05-weather-health-services.webp" alt="Weather, Health and Services" width="960" /></a></p>
 
-<p align="center"><a href="docs/previews/06-fold-maps.webp"><img src="docs/previews/06-fold-maps.webp" alt="Maps on the opened fold screen" width="960" /></a></p>
+<p align="center"><a href="docs/previews/06-fold-maps.webp"><img src="docs/previews/06-fold-maps.webp" alt="Maps on the opened fold screen, beside a shut foldable" width="960" /></a></p>
 
 ---
 
