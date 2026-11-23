@@ -1746,9 +1746,14 @@ end
 ---@type table<string, boolean> Chassis ids that exist in the UI bundle; mirrors SHELLS in
 ---web/src/shell/shells.ts. A config naming anything else is ignored rather than trusted.
 local SHELL_IDS = {
-    ios = true, android = true, edge = true, classic = true, compact = true,
+    ios = true, slate = true, android = true, edge = true, classic = true, compact = true,
     droplet = true, dual = true, rugged = true, gaming = true, waterfall = true,
 }
+
+---@type string What is stored, and sent to the UI, for "the shell of the phone I hold": the UI draws
+---the classic phone as `ios` and the Slate one as `slate`, and falls back itself when the config
+---does not allow the one it wants.
+local SHELL_MATCH <const> = 'match'
 
 ---@type string Shell used when nothing valid is stored and the config forces nothing.
 local SHELL_DEFAULT = 'ios'
@@ -1771,7 +1776,9 @@ local function allowedShells()
 end
 
 ---Resolves what a stored choice actually renders as. Forced wins over the player's pick without
----overwriting it, so clearing Forced hands their own shell back instead of resetting it.
+---overwriting it, so clearing Forced hands their own shell back instead of resetting it. A player
+---who never picked, or picked "match my phone", follows the phone they hold (configs/shells.lua
+---FollowPhone).
 ---@param stored any the player's stored shell, if any
 ---@return string shell, boolean allowChoice
 local function resolveShell(stored)
@@ -1779,6 +1786,9 @@ local function resolveShell(stored)
     local forced  = SHELL_IDS[SHELL_CFG.Forced] and SHELL_CFG.Forced or nil
     local choose  = SHELL_CFG.AllowPlayerChoice ~= false and forced == nil
     if forced then return forced, false end
+    if choose and SHELL_CFG.FollowPhone ~= false and (stored == nil or stored == '' or stored == SHELL_MATCH) then
+        return SHELL_MATCH, choose
+    end
     for i = 1, #allowed do
         if allowed[i] == stored then return stored, choose end
     end
@@ -1788,12 +1798,15 @@ end
 ---Persists the caller's chassis choice. Stored even when the config currently forces a shell, so
 ---the pick survives an operator turning Forced on and off again.
 ---@param citizenid string framework per-character id
----@param shell string a key of SHELL_IDS
+---@param shell string a key of SHELL_IDS, or SHELL_MATCH
 function store.setShell(citizenid, shell, device)
     device = device or 'phone'
     if not citizenid or citizenid == '' then return end
-    if not SHELL_IDS[shell] then return end
-    if not lib.table.contains(allowedShells(), shell) then return end
+    if shell == SHELL_MATCH then
+        if SHELL_CFG.FollowPhone == false then return end
+    elseif not SHELL_IDS[shell] or not lib.table.contains(allowedShells(), shell) then
+        return
+    end
     MySQL.update.await([[
         INSERT INTO phone_settings (citizenid, device, shell) VALUES (?, ?, ?)
         ON DUPLICATE KEY UPDATE shell = VALUES(shell)

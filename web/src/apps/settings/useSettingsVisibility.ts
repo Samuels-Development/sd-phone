@@ -16,5 +16,6 @@ export function useSettingsVisibility(): SettingsVisibility {
         island: Boolean(device.screen.island),
         wifi,
         bluetooth,
+        phoneCase: device.id === 'phone',
     }), [sim, wifi, bluetooth]);
 }

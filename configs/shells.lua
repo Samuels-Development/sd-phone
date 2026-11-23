@@ -4,6 +4,7 @@
 --
 -- Shell ids ship in web/src/shell/shells.ts. The ones that exist today:
 --   ios        the default. Rounded rail, Dynamic Island, polished finish.
+--   slate      the Slate phone: rounded polished rail, centred punch-hole, both buttons on one side.
 --   android    flat matte rail, tighter corners, small centred punch-hole camera.
 --   edge       the thinnest bezel, near-square rail, tiny centred pinhole camera.
 --   classic    thicker bezel, centred notch, gently rounded corners, matte finish.
@@ -18,10 +19,16 @@ return {
     -- and hides the Phone Shell page from Settings entirely, so there is no dead control.
     AllowPlayerChoice = true,
 
+    -- The shell follows the phone a player actually holds: the classic phone is drawn as `ios` and
+    -- the Slate one (picked at a case store, configs/phone.lua Looks) as `slate`, until they pick a
+    -- shell of their own on the Phone Shell page, which then stays. false: the shell is only ever
+    -- what they picked there.
+    FollowPhone = true,
+
     -- Shells players may pick from. Remove entries to narrow the list. An id that does not exist
     -- is ignored rather than erroring, so a typo costs you one option and not the picker.
     Allowed = {
-        'ios', 'android', 'edge', 'classic', 'compact',
+        'ios', 'slate', 'android', 'edge', 'classic', 'compact',
         'droplet', 'dual', 'rugged', 'gaming', 'waterfall',
     },
 

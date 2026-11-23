@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 
 import { t } from '@/i18n';
-import { portalToPhoneScreen } from './portal';
+import { useScreenPortal } from './portal';
 
 export function Sheet({ onClose, top = 60, fit = 'top', title, grabber = true, className = '', forceDark = false, dim = true, dismissable = true, durationMs, zIndex = 60, children }: {
     onClose:      () => void;
@@ -19,6 +19,7 @@ export function Sheet({ onClose, top = 60, fit = 'top', title, grabber = true, c
     children:     (api: { close: () => void }) => ReactNode;
 }) {
     const [exiting, setExiting] = useState(false);
+    const portal = useScreenPortal();
     const exitMs = durationMs ?? 260;
 
     function close() {
@@ -84,5 +85,5 @@ export function Sheet({ onClose, top = 60, fit = 'top', title, grabber = true, c
         </div>
     );
 
-    return portalToPhoneScreen(sheet);
+    return portal(sheet);
 }

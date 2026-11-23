@@ -4,6 +4,7 @@ import { useSessionState } from '@/hooks/useSessionState';
 import { AppIconsPage } from './appearance/AppIconsPage';
 import { DisplayBrightnessPage } from './appearance/DisplayBrightnessPage';
 import { HomeDensityPage } from './appearance/HomeDensityPage';
+import { PhoneCasePage } from './appearance/PhoneCasePage';
 import { FaceUnlockPage } from './security/FaceUnlockPage';
 import { IslandPetPage } from './appearance/IslandPetPage';
 import { AccessibilityPage } from './general/AccessibilityPage';
@@ -87,6 +88,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
         : subPage === 'wallpaper'     ? <WallpaperPage         onBack={handleBack} />
         : subPage === 'app-icons'     ? <AppIconsPage          onBack={handleBack} />
         : subPage === 'home-density'  ? <HomeDensityPage       onBack={handleBack} />
+        : subPage === 'phone-case'    ? <PhoneCasePage         onBack={handleBack} />
         : subPage === 'notifications' ? <NotificationsPage     onBack={handleBack} />
         : subPage === 'sound-haptics' ? <SoundHapticsPage      onBack={handleBack} />
         : subPage === 'face-unlock'   ? <FaceUnlockPage        onBack={handleBack} />

@@ -28,6 +28,7 @@ import { BodycamOverlay, useBodycamActive } from '@/apps/mdt/BodycamOverlay';
 import { ryDevDataHidden, ryDevToggleData } from '@/apps/ryde/data';
 import { asAppId, isPreviewApp, preloadAllApps, preloadApp, setPreloadPaused, type AppId } from '@/shell/appRegistry';
 import { AppSwitcher } from '@/shell/AppSwitcher';
+import { asDesign } from '@/shell/shells';
 import { HOME_HOLD_MS, HOME_HOLD_SLOP, holdAction, swipeAction, tapAction, type HomeAction } from '@/shell/homeGesture';
 import { AppDeck, FullscreenStage, type DeckAppCtx } from '@/shell/AppDeck';
 import { Homescreen }  from '@/shell/Homescreen';
@@ -102,6 +103,7 @@ const SETUP_KEY_BASE = 'sd-phone:setup:v1';
 let setupProfile = '';
 const AdminPanel  = lazy(() => import('@/admin/AdminPanel').then(m => ({ default: m.AdminPanel })));
 const PayphoneUI  = lazy(() => import('@/payphone/PayphoneUI').then(m => ({ default: m.PayphoneUI })));
+const CaseStoreUI = lazy(() => import('@/casestore/CaseStoreUI').then(m => ({ default: m.CaseStoreUI })));
 const RaceOverlay = lazy(() => import('@/apps/racing/hud/RaceOverlay').then(m => ({ default: m.RaceOverlay })));
 
 function setSetupProfile(number: string | null | undefined): void {
@@ -189,6 +191,7 @@ export function App() {
                     <Suspense fallback={null}>
                         {device.admin && <AdminPanel />}
                         {!demoAdminOnly && device.payphone && <PayphoneUI />}
+                        {!demoAdminOnly && <CaseStoreUI />}
                         {!demoAdminOnly && device.id === 'phone' && <RaceOverlay />}
                     </Suspense>
                 </MusicProvider>
@@ -430,6 +433,7 @@ function AppContent() {
         setBattery(data.battery);
         useBatteryStore.getState().setLevel(data.battery);
         if (data.frameColor) setFrameColor(data.frameColor);
+        useThemeStore.getState().setPhoneLook(asDesign(data.phoneLook), data.shellFollowsPhone !== false);
         setLeaving(false);
         setEntering(true);
         if (isFiveM) void fetchNui<Record<string, number>>('sd-phone:badges:get').then(m => useBadgeStore.getState().setServer(m ?? {}));
@@ -460,6 +464,10 @@ function AppContent() {
 
     useNuiEvent('sd-phone:frameColor', useCallback((data) => {
         if (data?.color) setFrameColor(data.color);
+    }, []));
+
+    useNuiEvent('sd-phone:phoneLook', useCallback((data) => {
+        if (data?.look) useThemeStore.getState().setPhoneLook(asDesign(data.look));
     }, []));
 
     useNuiEvent('sd-phone:fold', useCallback((data) => {

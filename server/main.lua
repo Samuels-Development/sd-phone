@@ -134,6 +134,11 @@ require 'server.compat.qbphone.init'
 ---@type table SIM feature flags (server.sim.state): active + mode.
 local simState = require 'server.sim.state'
 
+---@type fun(entry: table): boolean Whether a phone item is a foldable (shared.phonefold).
+local folds = require('shared.phonefold').entry
+---@type fun(entry: table): string The design a phone item is (shared.phonefold).
+local lookOf = require('shared.phonefold').look
+
 ---Registers each configured phone item (config.Phone.Items) as a usable item; using one opens
 ---the phone with the variant's frame colour (plus the SIM snapshot under unique phones). The
 ---used slot marks that exact phone as the active one, so a player carrying several SIM'd
@@ -142,9 +147,10 @@ local function RegisterPhoneItems()
     for _, entry in ipairs(config.Phone.Items or {}) do
         inv.registerUsable(entry.item, function(source, itemArg, invArg, slotArg)
             local deviceHint
+            local usedSlot = (type(itemArg) == 'table' and tonumber(itemArg.slot)) or tonumber(slotArg)
+                or (type(invArg) == 'table' and tonumber(invArg.slot)) or nil
+            require('server.cases.actions').phoneOpened(source, entry.item, usedSlot)
             if simState.active then
-                local usedSlot = (type(itemArg) == 'table' and tonumber(itemArg.slot)) or tonumber(slotArg)
-                    or (type(invArg) == 'table' and tonumber(invArg.slot)) or nil
                 require('server.sim.session').setActive(source, { slot = usedSlot, color = entry.color })
                 -- Synchronous metadata peek (no DB): hands the client this phone's device
                 -- identity with the open, so switching phones tears the old profile down AT the
@@ -157,7 +163,7 @@ local function RegisterPhoneItems()
             end
             -- Open immediately: the SIM resolve does inventory scans + awaited DB writes, so it
             -- runs AFTER the reveal and reconciles through the live simState push.
-            TriggerClientEvent('sd-phone:client:openFromItem', source, entry.color, nil, simState.active, deviceHint)
+            TriggerClientEvent('sd-phone:client:openFromItem', source, entry.color, nil, simState.active, deviceHint, folds(entry), lookOf(entry))
             if simState.active then
                 CreateThread(function() require('server.sim.session').push(source) end)
             end
@@ -165,41 +171,53 @@ local function RegisterPhoneItems()
     end
 end
 
----Server-authoritative ownership gate for the keybind: returns the frame colour to open with,
----preferring the client's last-used hint among owned variants, else the first owned variant.
+---Server-authoritative ownership gate for the keybind: returns the phone to open, preferring the
+---one the client used last among those owned (that colour and kind, then that colour of any kind),
+---else the first owned.
 ---@param source integer player server id
 ---@param preferred string|nil last-used frame colour hint
+---@param preferFold boolean|nil whether the last-used phone was a foldable
+---@param preferLook string|nil the design of the last-used phone
 ---@return string|nil color frame colour to open with, nil when no phone item is owned
-local function ResolveOwnedColor(source, preferred)
+---@return boolean fold whether that phone is a foldable
+---@return string look the design of that phone
+---@return string? item that phone's item name
+local function ResolveOwnedColor(source, preferred, preferFold, preferLook)
     local items = config.Phone.Items or {}
     if preferred then
+        local other
         for _, entry in ipairs(items) do
             if entry.color == preferred and inv.count(source, entry.item) > 0 then
-                return entry.color
+                if (preferFold == nil or folds(entry) == preferFold) and (preferLook == nil or lookOf(entry) == preferLook) then
+                    return entry.color, folds(entry), lookOf(entry), entry.item
+                end
+                other = other or entry
             end
         end
+        if other then return other.color, folds(other), lookOf(other), other.item end
     end
     for _, entry in ipairs(items) do
         if inv.count(source, entry.item) > 0 then
-            return entry.color
+            return entry.color, folds(entry), lookOf(entry), entry.item
         end
     end
-    return nil
+    return nil, false, 'classic', nil
 end
 
 ---Keybind open request: may this player open a phone, and in which colour? Returns the bare
 ---colour string normally; under unique phones { color, pending = true } and the deferred
 ---simState push corrects hasSim/number - and the colour, since the SIM'd phone's wins.
-lib.callback.register('sd-phone:server:phone:resolveOpen', function(source, preferred)
-    local color = ResolveOwnedColor(source, preferred)
-    if not simState.active then return color end
+lib.callback.register('sd-phone:server:phone:resolveOpen', function(source, preferred, preferFold, preferLook)
+    local color, fold, look, item = ResolveOwnedColor(source, preferred, preferFold, preferLook)
+    if item then require('server.cases.actions').phoneOpened(source, item, nil) end
+    if not simState.active then return color, fold, look end
     if not color then return nil end
     if type(preferred) == 'string' then
         require('server.sim.session').setActive(source, { color = preferred })
     end
     -- Same deferral as the item path: answer with the colour now, resolve the SIM after.
     CreateThread(function() require('server.sim.session').push(source) end)
-    return { color = color, pending = true }
+    return { color = color, pending = true }, fold, look
 end)
 
 -- Boot: registers the usable phone items once, then prints the startup banner.
@@ -216,7 +234,7 @@ end)
 exports('hasPhone', function(source)
     if type(source) ~= 'number' then return nil end
     if not GetPlayerName(source) then return nil end
-    return ResolveOwnedColor(source, nil)
+    return (ResolveOwnedColor(source, nil))
 end)
 
 require 'server.compat.lbphone.clientsupport'

@@ -27,6 +27,10 @@ local STYLE_TAG <const> = '~'
 local caseOf = {}
 ---@type table<integer, PhoneStyle> Server id -> the phone design and trims that holder is broadcasting, checked.
 local styleOf = {}
+---@type table<integer, boolean> Server id -> whether that holder's phone is a foldable.
+local hingedOf = {}
+---@type string Marks a variant key as a foldable phone.
+local HINGED_TAG <const> = '~h'
 
 ---Reads a broadcast `sdPhone` value into the variant a copy has to match. Holders shut (and every
 ---older client) broadcast a bare colour string; an unfolded holder or one with a case broadcasts
@@ -34,20 +38,23 @@ local styleOf = {}
 ---generation and up-to-date checks single comparisons, so the case and the style go into it as their
 ---signatures.
 ---@param value any the holder's statebag value
----@return string? variant, string? colour, boolean open, CaseDesign? case, PhoneStyle? style
+---@return string? variant, string? colour, boolean open, CaseDesign? case, PhoneStyle? style, boolean hinged
 local function variantOf(value)
     local colour, open, case, style
+    local hinged = false
     if type(value) == 'table' then
         colour, open, case, style = value.c, value.f == true, cases.clean(value.k), cases.offered(value.s)
+        hinged = value.h == true
     else
-        colour, open = value, false
+        colour, open, style = value, false, cases.offered(nil)
     end
-    if type(colour) ~= 'string' or not FRAME_COLORS[colour] then return nil, nil, false, nil, nil end
+    if type(colour) ~= 'string' or not FRAME_COLORS[colour] then return nil, nil, false, nil, nil, false end
     if cases.blocked(colour) then case = nil end
     local variant = colour .. (open and OPEN_TAG or '')
     if style then variant = variant .. STYLE_TAG .. cases.styleSignature(style) end
     if case then variant = variant .. CASE_TAG .. cases.signature(case) end
-    return variant, colour, open, case, style
+    if hinged then variant = variant .. HINGED_TAG end
+    return variant, colour, open, case, style, hinged
 end
 
 ---Splits a variant key back into the colour and whether it is the unfolded body.
@@ -106,7 +113,7 @@ local function weld(source, ped, variant)
     seq[source] = mine
 
     local colour, open = splitVariant(variant)
-    local obj = pose.createProp(ped, colour, nil, open, caseOf[source], styleOf[source])
+    local obj = pose.createProp(ped, colour, nil, open, caseOf[source], styleOf[source], hingedOf[source])
     if not obj then return end
 
     if seq[source] ~= mine or wanted[source] ~= variant then
@@ -137,8 +144,9 @@ function remoteprops.set(source, value)
         forget(source)
         return
     end
-    local variant, _, _, case, style = variantOf(value)
+    local variant, _, _, case, style, hinged = variantOf(value)
     if not variant then return end
+    hingedOf[source] = hinged
 
     if case then case.owner = source end
     wanted[source] = variant

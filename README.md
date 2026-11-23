@@ -168,6 +168,60 @@ npm ci
 npm run build
 ```
 
+### Phone cases
+
+Players dress their phone in a case that everyone sees on the phone in their hand. A case is a shell in one of seven styles and 64 colours, with an optional pattern, back accessory, swinging charm and sticker (an icon, a brand, or one of the player's own gallery photos). The models come from [sd-phone-props](https://github.com/Samuels-Development/sd-phone-props).
+
+- **Case stores:** cases are designed and bought at stores in the world (`Stores` in `configs/cases.lua`: a clerk, a blip, a price list). Talking to the clerk stands the player's own phone in a studio booth in front of a camera in 3D: drag to turn it, scroll to zoom, and it wears whatever the customizer beside it has picked. With no target resource (ox_target, qb-target, qtarget) the store opens with E.
+- **A case is an item:** buying one puts a `phone_case` item in the player's pockets with the design stored on it. It can be given, traded, sold or handed out by other scripts like anything else.
+- **A case belongs to a phone:** using the item fits the case to the player's phone, asking which when they carry several, and the case that phone had comes back as an item. It is kept on that phone's own item, so each phone has its own case and it goes wherever the phone goes. At a store, "Put it on now" fits the phone on show.
+- **The phone itself:** the store's Phone tab holds the free choices about the phone: its design (classic or Slate), the logo on its back and coloured trims. `Looks.Designs` in `configs/phone.lua` says which designs a server has: both, or only one.
+- **Taking it off:** the phone item's Phone Case button (or `/phonecase`), or Settings, Phone Case, on the phone itself: the case comes back as an item.
+
+Add the item to your inventory. For ox_inventory, in `data/items.lua`:
+
+```lua
+['phone_case'] = {
+    label = 'Phone Case',
+    weight = 40,
+    stack = false,   -- every case carries its own design
+    close = true,
+    consume = 0,     -- required: sd-phone takes the item itself when the case goes on
+    description = 'A phone case. Use it to put it on your phone.',
+    server = { export = 'sd-phone.usePhone_case' },
+    buttons = {
+        { label = 'Put On a Phone', action = function(slot) exports['sd-phone']:fitPhoneCase(slot) end },
+    },
+},
+```
+
+and give each phone item a button for its own case, next to any it already has:
+
+```lua
+buttons = {
+    { label = 'Phone Case', action = function(slot) exports['sd-phone']:openPhoneCaseMenu(slot) end },
+},
+```
+
+Right-clicking a case then offers "Put On a Phone" (a list when the player carries several), and right-clicking a phone offers "Phone Case": take off the one it has, or fit one from the pockets. Inventories with no buttons on their items get the same list from the `/phonecase` command (`Command` in `configs/cases.lua`).
+
+For qb-core and Qbox items (`shared/items.lua`):
+
+```lua
+phone_case = { name = 'phone_case', label = 'Phone Case', weight = 40, type = 'item', image = 'phone_case.png', unique = true, useable = true, shouldClose = true, description = 'A phone case. Use it to put it on your phone.' },
+```
+
+The icon is `images/phone_case.png`. To hand a player a ready-made case from another script, give the item with the design as its data:
+
+```lua
+exports.ox_inventory:AddItem(source, 'phone_case', 1, {
+    case = { style = 'leather', color = 4, charm = 'heart', charmColor = 17 },
+    description = 'Leather case, heart charm',
+})
+```
+
+The inventory has to be able to keep data on a single item, which every inventory sd-phone reads SIM cards from can. Where it cannot, or with `AsItems = false`, there is no item: a bought case joins a list the character keeps (`MaxOwned`) and is swapped at any store under "Your cases". `Enabled = false` switches cases off altogether.
+
 ### DUI phone option (UI on the held prop)
 
 Optional and **off by default**. With `PropScreen.Enabled = true` in `configs/phone.lua`, the phone UI is drawn on the screen of the phone prop in the player's hand instead of the full-screen overlay: the live UI runs in a DUI whose image replaces the prop's screen texture, a close-up camera eases in on the phone, and the mouse cursor is mapped onto the tilted screen.

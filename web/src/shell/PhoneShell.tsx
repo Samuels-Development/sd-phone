@@ -20,7 +20,7 @@ import type { Track } from '@/apps/music/data';
 import { RingDuration } from '@/apps/clock/AlarmRinging';
 import { playShutter } from '@/media/shutter';
 import { SWITCHER_SCALE } from './AppSwitcher';
-import { DEFAULT_FRAME_COLOR, frameHex, frameStops } from './frameColors';
+import { DEFAULT_FRAME_COLOR, frameHex, frameMaterial, frameStops, type FrameMaterial } from './frameColors';
 import { BootSplash } from './BootSplash';
 import { chassisMetrics, rrect } from './chassis';
 import { tiltTransform } from './phoneTilt';
@@ -90,6 +90,14 @@ export interface PhoneShellProps {
 }
 
 const VOL_STEP = 100 / 16;
+
+/** The light on a rail that is not plain metal: polished glass catches far more of it, a leather
+ *  case almost none. Metal takes the shell finish's own (chassisMetrics). */
+const MATERIAL_SHEEN: Partial<Record<FrameMaterial, { top: number; mid: number; edge: number }>> = {
+    gloss:   { top: 0.24, mid: 0.06, edge: 0.32 },
+    leather: { top: 0.04, mid: 0.01, edge: 0.05 },
+};
+const STITCH = 'rgba(238,218,186,0.5)';
 
 function IslandPill({ m, active, onClick, compactX, compactW, expandedX, expandedW, children }: {
     m:         ChassisMetrics;
@@ -423,7 +431,7 @@ export function PhoneShell({ children, hidden = false, cameraActive = false, ent
     const m = useMemo(() => chassisMetrics(shellFor(shell, device.id), foldW), [shell, foldW]);
     const {
         SW, SH, W, H, SX, SY, BR, SR, SCREEN_MASK, BEZEL, hostsIsland, hasCutout, pillInCutout,
-        SCREEN_RRECT, OUTER_RRECT, softPatch, FOLD_BTN,
+        SCREEN_RRECT, OUTER_RRECT, softPatch, FOLD_BTN, BS, BT, BB,
         CUT_W, CUT_H, CUT_X, CUT_Y, CUT_R, CUT_PATH, CUT_LENS_X, CUT_COLLAR, CUT_OPTICS,
         DI_W, DI_H, DI_X, DI_Y, DI_R, MIP_X, PET_H, PET_TOP, petStage,
         CALL_W, CALL_X,
@@ -433,6 +441,12 @@ export function PhoneShell({ children, hidden = false, cameraActive = false, ent
         BUTTONS, VOL_UP_BTN, VOL_DOWN_BTN, POWER_BTN, SCREENSHOT_BTN,
     } = m;
     const rail = frameStops(frameColor, FINISH);
+    const material = frameMaterial(frameColor);
+    const sheen = MATERIAL_SHEEN[material] ?? { top: SHEEN_TOP, mid: SHEEN_MID, edge: EDGE_LIGHT };
+    const cased = material === 'leather';
+    const plate = cased ? null : PLATE;
+    const railBand = cased ? null : RAIL_BAND;
+    const stitchIn = Math.min(BS, BT, BB) / 2;
     const batteryLevel = useBatteryStore(s => s.level);
     const { current: nowPlaying, playing: musicPlaying, volume: musicVolume, setVolume: setMusicVolume, requestOpen: openMusic, toggle: toggleMusic, next: nextMusic, prev: prevMusic } = useMusic();
 
@@ -644,10 +658,31 @@ export function PhoneShell({ children, hidden = false, cameraActive = false, ent
                             </linearGradient>
 
                             <linearGradient id={`${GID}-sheen`} x1="0%" y1="0%" x2="60%" y2="100%">
-                                <stop offset="0%"   stopColor={`rgba(255,255,255,${SHEEN_TOP})`} />
-                                <stop offset="40%"  stopColor={`rgba(255,255,255,${SHEEN_MID})`} />
+                                <stop offset="0%"   stopColor={`rgba(255,255,255,${sheen.top})`} />
+                                <stop offset="40%"  stopColor={`rgba(255,255,255,${sheen.mid})`} />
                                 <stop offset="100%" stopColor="rgba(255,255,255,0.00)" />
                             </linearGradient>
+
+                            {material === 'gloss' && (
+                                <linearGradient id={`${GID}-gloss`} x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%"  stopColor="rgba(255,255,255,0)" />
+                                    <stop offset="17%" stopColor="rgba(255,255,255,0)" />
+                                    <stop offset="21%" stopColor="rgba(255,255,255,0.34)" />
+                                    <stop offset="25%" stopColor="rgba(255,255,255,0)" />
+                                    <stop offset="70%" stopColor="rgba(255,255,255,0)" />
+                                    <stop offset="73%" stopColor="rgba(255,255,255,0.16)" />
+                                    <stop offset="76%" stopColor="rgba(255,255,255,0)" />
+                                </linearGradient>
+                            )}
+
+                            {cased && (
+                                <pattern id={`${GID}-grain`} width={5} height={5} patternUnits="userSpaceOnUse">
+                                    <circle cx={1.2} cy={1.4} r={0.7} fill="rgba(0,0,0,0.16)" />
+                                    <circle cx={3.6} cy={3.3} r={0.8} fill="rgba(0,0,0,0.12)" />
+                                    <circle cx={3.9} cy={0.8} r={0.5} fill="rgba(255,255,255,0.06)" />
+                                    <circle cx={0.9} cy={4.1} r={0.5} fill="rgba(255,255,255,0.05)" />
+                                </pattern>
+                            )}
 
                             <clipPath id={`${GID}-screen`}>
                                 <path d={SCREEN_RRECT} />
@@ -703,9 +738,23 @@ export function PhoneShell({ children, hidden = false, cameraActive = false, ent
                             ) : null)}
                         </defs>
 
-                        <path d={BEZEL} fill={PLATE ?? `url(#${GID})`} fillRule="evenodd" />
-                        {RAIL_BAND && <path d={RAIL_BAND} fill={`url(#${GID})`} fillRule="evenodd" />}
-                        <path d={RAIL_BAND ?? BEZEL} fill={`url(#${GID}-sheen)`} fillRule="evenodd" />
+                        <path d={BEZEL} fill={plate ?? `url(#${GID})`} fillRule="evenodd" />
+                        {railBand && <path d={railBand} fill={`url(#${GID})`} fillRule="evenodd" />}
+                        <path d={railBand ?? BEZEL} fill={`url(#${GID}-sheen)`} fillRule="evenodd" />
+                        {material === 'gloss' && <path d={railBand ?? BEZEL} fill={`url(#${GID}-gloss)`} fillRule="evenodd" />}
+                        {cased && (
+                            <>
+                                <path d={BEZEL} fill={`url(#${GID}-grain)`} fillRule="evenodd" />
+                                <path
+                                    d={rrect(stitchIn, stitchIn, W - stitchIn * 2, H - stitchIn * 2, Math.max(0, BR - stitchIn))}
+                                    fill="none"
+                                    stroke={STITCH}
+                                    strokeWidth={1}
+                                    strokeDasharray="3.2 2.6"
+                                    strokeLinecap="round"
+                                />
+                            </>
+                        )}
 
                         {CAPS.length > 0 && CAP_COLOR && (
                             <g clipPath={`url(#${GID}-outer)`}>
@@ -752,11 +801,11 @@ export function PhoneShell({ children, hidden = false, cameraActive = false, ent
                         <path
                             d={rrect(0.5, 0.5, W - 1, stageH - 1, BR)}
                             fill="none"
-                            stroke={`rgba(255,255,255,${EDGE_LIGHT})`}
+                            stroke={`rgba(255,255,255,${sheen.edge})`}
                             strokeWidth="0.75"
                         />
 
-                        {RIM_PATH && (
+                        {RIM_PATH && !cased && (
                             <path
                                 d={RIM_PATH}
                                 fill="none"

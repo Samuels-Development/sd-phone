@@ -12,6 +12,8 @@ import type {
 } from '@/apps/racing/data';
 import type { VUser as VibezUser } from '@/apps/vibez/data';
 import type { Reaction } from '@/shared/chat/data';
+import type { StoreState } from '@/casestore/casesApi';
+import type { PhoneDesign } from '@/shell/shells';
 
 export interface OpenPayload {
     locale?: string;
@@ -20,6 +22,10 @@ export interface OpenPayload {
     locked: boolean;
     battery: number;
     frameColor?: string;
+    /** The design of the phone in hand (sd-phone-props, picked at a case store). Default classic. */
+    phoneLook?: PhoneDesign;
+    /** configs/shells.lua FollowPhone: false keeps the shell to what the player picked. Default true. */
+    shellFollowsPhone?: boolean;
     carrier: string;
     signal: number;
     showWifi: boolean;
@@ -294,6 +300,7 @@ export type NuiMessage =
     | { action: 'sd-phone:apps';    data: { installedApps?: string[]; homeLayout?: string | null } }
     | { action: 'sd-phone:simState'; data: SimStatePush }
     | { action: 'sd-phone:frameColor'; data: { color: string } }
+    | { action: 'sd-phone:phoneLook'; data: { look: PhoneDesign } }
     | { action: 'sd-phone:fold'; data: { open?: boolean; foldable?: boolean; openW?: number; restore?: boolean } }
     | { action: 'sd-phone:music:receive'; data: MusicSharePush }
     | { action: 'sd-phone:nowPlaying:set';   data: { appId: string; track: ExternalNowPlayingTrack } }
@@ -390,6 +397,8 @@ export type NuiMessage =
     | { action: 'sd-phone:payphone:ended';    data: { channel: number; reason: string } }
     | { action: 'sd-phone:payphone:incoming';      data: { channel: number } }
     | { action: 'sd-phone:payphone:incomingEnded'; data: { channel: number } }
+    | { action: 'sd-phone:casestore:open';  data: Partial<StoreState> }
+    | { action: 'sd-phone:casestore:close' }
     | { action: 'sd-phone:radio:status';   data: { on: boolean; freq: number; standby?: boolean } }
     | { action: 'sd-phone:radio:onair';    data: { active: boolean } }
     | { action: 'sd-phone:radio:count';    data: { count: number } }

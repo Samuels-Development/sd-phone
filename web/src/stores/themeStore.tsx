@@ -24,7 +24,7 @@ import type { CustomTone, ToneKind } from '@/apps/settings/tones';
 import { warmYouTube } from '@/apps/settings/tonePlayer';
 import { clampRecipe, isCustomPaletteId, MAX_CUSTOM_PALETTES, PALETTE_NAME_MAX } from '@/apps/settings/appearance/paletteRamp';
 import { DEFAULT_ACCENT, isAccentChoice } from '@/apps/settings/appearance/accentRamp';
-import { DEFAULT_SHELL, isShellId, SHELLS, shellFor } from '@/shell/shells';
+import { isShellPick, MATCH_SHELL, resolveShell, SHELLS, shellFor, type PhoneDesign, type ShellRules } from '@/shell/shells';
 import { shellHostsPet } from '@/shell/chassis';
 import type { PaletteMode, PaletteRecipe } from '@/apps/settings/appearance/paletteRamp';
 
@@ -87,11 +87,12 @@ function savePaletteChoiceLocal(key: string, v: string) {
 const DARK_THEME_KEY = 'sd-phone:darkTheme';
 const LIGHT_THEME_KEY = 'sd-phone:lightTheme';
 const SHELL_KEY = 'sd-phone:shell';
+/** The player's stored shell choice in the browser: a shell, or MATCH_SHELL for anyone who never picked. */
 function loadShellLocal(): string {
     try {
         const v = window.localStorage.getItem(SHELL_KEY);
-        return isShellId(v) ? v : DEFAULT_SHELL;
-    } catch { return DEFAULT_SHELL; }
+        return isShellPick(v) ? v : MATCH_SHELL;
+    } catch { return MATCH_SHELL; }
 }
 function saveShellLocal(v: string) {
     try { window.localStorage.setItem(SHELL_KEY, v); } catch {}
@@ -291,6 +292,13 @@ const initialIconScale: number = isFiveM ? 1 : loadIconScaleLocal();
 setIconScale(initialIconScale);
 
 const initialLook = isFiveM ? DEFAULT_SHELL_LOOK : loadShellLookLocal();
+const initialShellPick = isFiveM ? MATCH_SHELL : loadShellLocal();
+
+/** The shell to draw for a state, from the player's pick, the phone in hand and the server's rules. */
+function shellOf(st: { shellPick: string; phoneLook: PhoneDesign; shellChoice: boolean; shellFollowsPhone: boolean; shellsAllowed: string[] }): string {
+    const rules: ShellRules = { choice: st.shellChoice, follows: st.shellFollowsPhone, allowed: st.shellsAllowed };
+    return resolveShell(st.shellPick, st.phoneLook, rules);
+}
 setExtraRow(initialLook.dockStyle === 'hidden');
 
 const PHONE_SCALE_KEY = 'sd-phone:phoneScale';
@@ -332,10 +340,17 @@ interface ThemeState {
     setLightTheme:     (t: LightThemeChoice) => void;
     accent:            string;
     setAccent:         (a: string) => void;
+    /** The shell drawn: the player's pick, or the design of the phone in hand, under the server's rules. */
     shell:             string;
+    /** What the player chose on the Phone Shell page: a shell, or MATCH_SHELL to follow the phone. */
+    shellPick:         string;
     setShell:          (s: string) => void;
     shellChoice:       boolean;
     shellsAllowed:     string[];
+    /** The design of the phone in hand, and whether the server lets the shell follow it. */
+    phoneLook:         PhoneDesign;
+    shellFollowsPhone: boolean;
+    setPhoneLook:      (look: PhoneDesign, follows?: boolean) => void;
     customPalettes:      CustomPalette[];
     saveCustomPalette:   (p: CustomPalette) => Promise<string | null>;
     deleteCustomPalette: (id: CustomPaletteId) => void;
@@ -482,9 +497,12 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     darkTheme: isFiveM ? 'graphite' : loadDarkThemeLocal(),
     lightTheme: isFiveM ? 'silver' : loadLightThemeLocal(),
     accent: isFiveM ? DEFAULT_ACCENT : loadAccentLocal(),
-    shell: isFiveM ? DEFAULT_SHELL : loadShellLocal(),
+    shellPick: initialShellPick,
+    shell: resolveShell(initialShellPick, 'classic', { choice: true, follows: true, allowed: SHELLS.map(s => s.id) }),
     shellChoice: true,
     shellsAllowed: SHELLS.map(s => s.id),
+    phoneLook: 'classic',
+    shellFollowsPhone: true,
     customPalettes: isFiveM ? [] : loadPalettesLocal(),
     wallpaperLock: isFiveM ? lockscreenAsset : (loadWallpaperLocal() ?? devDefaultAsset),
     wallpaperHome: isFiveM ? lockscreenAsset : (loadWallpaperHomeLocal() ?? loadWallpaperLocal() ?? devDefaultAsset),
@@ -603,13 +621,19 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     },
 
     setShell: (next) => {
-        if (!isShellId(next)) return;
-        set({ shell: next });
+        if (!isShellPick(next)) return;
+        const shell = shellOf({ ...get(), shellPick: next });
+        set({ shellPick: next, shell });
         if (isFiveM) void fetchNui('sd-phone:settings:setShell', { shell: next }).catch(() => {});
         else saveShellLocal(next);
-        if (get().islandPet !== 'none' && !shellHostsPet(shellFor(next, device.id))) {
+        if (get().islandPet !== 'none' && !shellHostsPet(shellFor(shell, device.id))) {
             get().setIslandPet('none');
         }
+    },
+
+    setPhoneLook: (look, follows) => {
+        const next = { ...get(), phoneLook: look, shellFollowsPhone: follows ?? get().shellFollowsPhone };
+        set({ phoneLook: next.phoneLook, shellFollowsPhone: next.shellFollowsPhone, shell: shellOf(next) });
     },
 
     saveCustomPalette: async (palette) => {
@@ -857,7 +881,8 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
             darkTheme: 'graphite',
             lightTheme: 'silver',
             accent: DEFAULT_ACCENT,
-            shell: DEFAULT_SHELL,
+            shellPick: MATCH_SHELL,
+            shell: shellOf({ ...get(), shellPick: MATCH_SHELL }),
             wallpaperLock: stock,
             wallpaperHome: stock,
             blurLock: false,
@@ -975,10 +1000,10 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
                 if (isCustomPaletteId(d.darkTheme)) patch.darkTheme = d.darkTheme as CustomPaletteId;
                 if (isCustomPaletteId(d.lightTheme)) patch.lightTheme = d.lightTheme as CustomPaletteId;
                 if (isAccentChoice(d.accent)) patch.accent = d.accent;
-                if (isShellId(d.shell)) patch.shell = d.shell;
+                if (isShellPick(d.shell)) patch.shellPick = d.shell;
                 if (typeof d.shellChoice === 'boolean') patch.shellChoice = d.shellChoice;
-                if (Array.isArray(d.shellsAllowed)) patch.shellsAllowed = d.shellsAllowed.filter(isShellId);
-                if (isShellId(d.shell)) patch.shell = d.shell;
+                if (Array.isArray(d.shellsAllowed)) patch.shellsAllowed = d.shellsAllowed.filter(isShellPick).filter(id => id !== MATCH_SHELL);
+                patch.shell = shellOf({ ...get(), ...patch });
                 if (typeof d.chatTextScale === 'number') patch.chatTextScale = clampChatScale(d.chatTextScale);
                 patch.motion = motionFromCode(d.motion);
                 patch.boldText = d.boldText === true;

@@ -38,7 +38,8 @@ function M.wantedItems()
         if entry.item then
             out[#out + 1] = {
                 name   = entry.item,
-                label  = entry.label or (entry.color and (titled(entry.color) .. ' Phone')) or 'Phone',
+                label  = entry.label or (entry.color and ((entry.fold and 'Foldable ' or '') .. titled(entry.color)
+                    .. (entry.look == 'slate' and ' Slate' or '') .. ' Phone')) or 'Phone',
                 weight = tonumber(entry.weight) or DEFAULT_WEIGHT,
             }
         end

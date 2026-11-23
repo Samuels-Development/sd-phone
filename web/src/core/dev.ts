@@ -4,8 +4,11 @@ import { device } from '@device';
 import { useFoldStore } from '@/stores/foldStore';
 
 
+/** Dev switches on the URL: ?loc=de, ?ltr=1, ?frame=<colour> (FRAME_COLORS), ?look=slate (the phone
+ *  in hand), ?follow=0 (FollowPhone off), ?fold=open (start unfolded). */
 export function devInjectMockData(): () => void {
-    useFoldStore.getState().applyShell(true, device.screen.w * 2);
+    const params = new URLSearchParams(window.location.search);
+    useFoldStore.getState().applyShell(true, device.screen.w * 2, params.get('fold') === 'open');
 
     if (!isDemo) {
         document.documentElement.style.setProperty('background', '#0a0a0a', 'important');
@@ -16,6 +19,9 @@ export function devInjectMockData(): () => void {
     const payload: OpenPayload = {
         locked:   true,
         battery:  86,
+        frameColor: params.get('frame') ?? undefined,
+        phoneLook: params.get('look') === 'slate' ? 'slate' : 'classic',
+        shellFollowsPhone: params.get('follow') !== '0',
         carrier:  'LifeInvader',
         signal:   4,
         showWifi: true,
@@ -51,7 +57,6 @@ export function devInjectMockData(): () => void {
             { id: 'garages',     label: 'Garages',     icon: 'garages',     route: '/garages',     accent: '#6E5CF2' },
             { id: 'homes',       label: 'Homes',       icon: 'homes',       route: '/homes',       accent: '#12B866' },
             { id: 'stocks',      label: 'Stocks',      icon: 'stocks',      route: '/stocks',      accent: '#16C784' },
-            { id: 'cases',       label: 'Cases',       icon: 'cases',       route: '/cases',       accent: '#F59E0B', base: true },
             { id: 'ryde',        label: 'Ryde',        icon: 'ryde',        route: '/ryde',        accent: '#1c1c1e' },
             { id: 'radio',       label: 'Radio',       icon: 'radio',       route: '/radio',       accent: '#30B0C7' },
             { id: 'settings',   label: 'Settings',    icon: 'settings',   route: '/settings',   accent: '#8e8e93', base: true },
@@ -76,8 +81,8 @@ export function devInjectMockData(): () => void {
             { id: 'dojmdt',     label: 'DOJ',         icon: 'dojmdt',     route: '/dojmdt',     accent: '#6D28D9', base: true },
             { id: 'racing',     label: 'Racing',      icon: 'racing',     route: '/racing',     accent: '#0A8C72', base: true },
         ],
-        locale: new URLSearchParams(window.location.search).get('loc') ?? 'en',
-        forceLtr: new URLSearchParams(window.location.search).get('ltr') === '1',
+        locale: params.get('loc') ?? 'en',
+        forceLtr: params.get('ltr') === '1',
         wifiConfigured: true,
         bluetoothConfigured: true,
         wallpaper: { lock: 'lockscreen.jpg', home: 'lockscreen.jpg' },

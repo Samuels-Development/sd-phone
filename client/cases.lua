@@ -11,6 +11,8 @@ local cases = {}
 
 ---@type table Case model contract (shared.casesdata).
 local DATA <const> = rules.data
+---@type boolean False when cases are switched off (config.Cases.Enabled): nobody's case is drawn.
+local ENABLED <const> = (config.Cases or {}).Enabled ~= false
 ---@type table<string, true> Frame colours whose prop already is a phone in a case.
 local NO_CASE <const> = {}
 for _, colour in ipairs((config.Cases or {}).NoCase or {}) do NO_CASE[colour] = true end
@@ -18,8 +20,11 @@ for _, colour in ipairs((config.Cases or {}).NoCase or {}) do NO_CASE[colour] = 
 local LOOKS <const> = (type(config.Phone.Looks) == 'table' and config.Phone.Looks.Enabled ~= false) and config.Phone.Looks or nil
 ---@type string Where this player's phone style is kept between sessions.
 local STYLE_KVP <const> = 'sd-phone:phone-style'
----@type PhoneStyle|nil The design and trims of this player's own phone.
+---@type PhoneStyle|nil The logo and trims this player likes on their phones. The design is not in
+---here: that comes with the phone (its item says, configs/phone.lua Items).
 local style
+---@type string The design of the phone in use, as its item says.
+local itemLook = rules.DEFAULT_LOOK
 ---@type integer Milliseconds the equipped case is trusted before it is asked for again, so a
 ---character switch is picked up without an event for it.
 local STALE_MS <const> = 60000
@@ -27,7 +32,7 @@ local STALE_MS <const> = 60000
 local GRAVITY <const> = vector3(0.0, 0.0, -9.81)
 ---@type number Share of a charm's motion kept from one sixtieth of a second to the next.
 local DAMPING <const> = 0.972
----@type number Metres beyond which another player's charm is left hanging as it was.
+---@type number Metres from the camera beyond which a charm is left hanging as it was.
 local SWING_RANGE <const> = 30.0
 ---@type string This resource's name, for the photo sticker page's address.
 local RES <const> = GetCurrentResourceName()
@@ -51,8 +56,6 @@ local generation = 0
 local swinging = 0
 ---@type CaseDesign|nil The case this player owns and wears.
 local equipped
----@type CaseDesign|false|nil A design being tried on from the app: false tries on "no case".
-local preview
 ---@type integer Game timer of the last answer about the equipped case; -STALE_MS forces the first ask.
 local fetchedAt = -STALE_MS
 ---@type boolean True while that question is in flight.
@@ -65,8 +68,9 @@ local fetching = false
 ---@param y number
 ---@param z number
 ---@param tintRow integer? palette row; nil leaves the model untinted
+---@param turned number? degrees to turn it about the axis through the phone's back
 ---@return integer? part the created object, nil when the model does not stream or the prop is gone
-local function attach(parent, name, x, y, z, tintRow)
+local function attach(parent, name, x, y, z, tintRow, turned)
     local model = joaat(name)
     if not pcall(lib.requestModel, model, 1000) then return nil end
     if not DoesEntityExist(parent) then
@@ -76,7 +80,7 @@ local function attach(parent, name, x, y, z, tintRow)
     local coords = GetEntityCoords(parent)
     local obj = CreateObject(model, coords.x, coords.y, coords.z, false, true, true)
     SetEntityCollision(obj, false, false)
-    AttachEntityToEntity(obj, parent, 0, x, y, z, 0.0, 0.0, 0.0, false, false, false, false, 2, true)
+    AttachEntityToEntity(obj, parent, 0, x, y, z, 0.0, turned or 0.0, 0.0, false, false, false, false, 2, true)
     if tintRow then SetObjectTextureVariation(obj, tintRow) end
     SetModelAsNoLongerNeeded(model)
     return obj
@@ -85,7 +89,7 @@ end
 ---Lists the fixed parts a design is made of on a phone body, in the order they are created.
 ---@param body string 'plain', 'shut' or 'open'
 ---@param design CaseDesign a design that came out of rules.clean
----@return { [1]: string, [2]: number, [3]: number, [4]: number, [5]: integer? }[] parts model, x, y, z, tint row
+---@return { [1]: string, [2]: number, [3]: number, [4]: number, [5]: integer?, [6]: number? }[] parts model, x, y, z, tint row, degrees turned
 local function partsOf(body, design)
     local b, style = DATA.Bodies[body], DATA.Styles[design.style]
     local back = b.backY + style.back
@@ -96,8 +100,11 @@ local function partsOf(body, design)
     if design.accessory then
         parts[#parts + 1] = { 'sd_case_acc_' .. design.accessory, b.midX, back, DATA.AccessoryZ, design.accessoryColor }
     end
-    if design.sticker and design.sticker ~= rules.PHOTO then
-        parts[#parts + 1] = { 'sd_case_stk_' .. design.sticker, b.midX, back + DATA.StickerLift, DATA.StickerZ, nil }
+    for index, entry in ipairs(design.stickers or {}) do
+        if entry.id ~= rules.PHOTO then
+            local x, z, turned, lift = rules.stickerPlace(entry, index)
+            parts[#parts + 1] = { 'sd_case_stk_' .. entry.id .. rules.stickerSuffix(entry), b.midX + x, back + lift, z, nil, turned }
+        end
     end
     return parts
 end
@@ -180,7 +187,9 @@ local function stickPhoto(parent, body, design, entry)
     end
     entry.photoSlot = slot
     local b, style = DATA.Bodies[body], DATA.Styles[design.style]
-    local obj = attach(parent, ('sd_case_stk_photo_%d'):format(slot), b.midX, b.backY + style.back + DATA.StickerLift, DATA.StickerZ, nil)
+    local photo, index = rules.photoSticker(design)
+    local x, z, turned, lift = rules.stickerPlace(photo, index)
+    local obj = attach(parent, ('sd_case_stk_photo_%d%s'):format(slot, rules.stickerSuffix(photo)), b.midX + x, b.backY + style.back + lift, z, nil, turned)
     if worn[parent] ~= entry then
         if obj then DeleteObject(obj) end
         return
@@ -273,14 +282,14 @@ function cases.dress(parent, body, design, phoneStyle, look)
         end
         if not design then return end
         for _, p in ipairs(partsOf(body, design)) do
-            local obj = attach(parent, p[1], p[2], p[3], p[4], p[5])
+            local obj = attach(parent, p[1], p[2], p[3], p[4], p[5], p[6])
             if worn[parent] ~= entry then
                 if obj then DeleteObject(obj) end
                 return
             end
             if obj then entry.parts[#entry.parts + 1] = obj end
         end
-        if design.sticker == rules.PHOTO then stickPhoto(parent, body, design, entry) end
+        if rules.photoSticker(design) then stickPhoto(parent, body, design, entry) end
         if worn[parent] == entry and design.charm then hang(parent, body, design, entry) end
     end)
 end
@@ -298,15 +307,37 @@ local function logosOf(look)
     return out
 end
 
----Reduces a phone style to what this server offers: a design it does not list becomes the classic
----one, a logo the design does not come with is dropped, and trims go when they are switched off.
+---Whether this server has a design (configs/phone.lua Looks.Designs) and models to show it with.
+---@param look string a design name
+---@return boolean
+local function usable(look)
+    local designs = LOOKS and LOOKS.Designs
+    if type(designs) == 'table' and designs[look] == false then return false end
+    return look == rules.DEFAULT_LOOK or #logosOf(look) > 0
+end
+
+---The design a phone is here until its owner picks one: the first this server has.
+---@return string look
+local function homeLook()
+    for i = 1, #DATA.Looks do
+        if usable(DATA.Looks[i]) then return DATA.Looks[i] end
+    end
+    return rules.DEFAULT_LOOK
+end
+
+---@type string The design a phone is here until its owner picks one.
+local HOME <const> = homeLook()
+
+---Reduces a phone style to what this server offers: a design it does not have becomes the one it
+---starts players on, a logo the design does not come with is dropped, and trims go when they are
+---switched off. Nothing at all is the starting design too, so a server with only the second design
+---shows it on everyone.
 ---@param input any a style from the NUI, local storage or another player's statebag
 ---@return PhoneStyle? style nil for the classic phone as the server ships it
 function cases.offered(input)
     if not LOOKS then return nil end
-    local clean = rules.style(input)
-    if not clean then return nil end
-    if clean.look ~= rules.DEFAULT_LOOK and #logosOf(clean.look) == 0 then clean.look = rules.DEFAULT_LOOK end
+    local clean = rules.style(input) or { look = HOME }
+    if not usable(clean.look) then clean.look = HOME end
     local set = type(LOOKS.Models) == 'table' and LOOKS.Models[clean.look]
     if LOOKS.Logos == false or type(set) ~= 'table' or type(set[clean.logo]) ~= 'string' then clean.logo = nil end
     if LOOKS.Trims == false then
@@ -329,16 +360,40 @@ function cases.stem(phoneStyle)
     return first and set[first] or nil
 end
 
----The design and trims of this player's own phone.
----@return PhoneStyle? style nil for the classic phone with no trims
-function cases.style()
-    return style
+---This player's logo and trims on a phone of a given design.
+---@param look string? the phone's design; the one in use when left out
+---@return PhoneStyle? style nil for the classic phone as the server ships it
+function cases.styleFor(look)
+    local wanted = { look = look or itemLook }
+    for key, value in pairs(style or {}) do
+        if key ~= 'look' then wanted[key] = value end
+    end
+    return cases.offered(wanted)
 end
 
----Changes this player's phone style and keeps it for next time.
----@param input any a style from the NUI; anything that is not one goes back to the classic phone
+---The style of the phone this player is using: its own design, with their logo and trims.
+---@return PhoneStyle? style nil for the classic phone with no trims
+function cases.style()
+    return cases.styleFor(itemLook)
+end
+
+---Says which design the phone in use is. Its item decides, and the server passes that on whenever
+---a phone is opened.
+---@param look any a design name; anything else is the classic one
+function cases.setLook(look)
+    itemLook = type(look) == 'string' and look or rules.DEFAULT_LOOK
+end
+
+---Changes the logo and trims this player likes and keeps them for next time. A design named in the
+---input is ignored: that comes with the phone.
+---@param input any a style from the case store; anything that is not one clears both
 function cases.setStyle(input)
-    style = cases.offered(input)
+    local wanted = {}
+    for key, value in pairs(type(input) == 'table' and input or {}) do
+        if key ~= 'look' then wanted[key] = value end
+    end
+    wanted.look = rules.DEFAULT_LOOK
+    style = rules.style(wanted)
     if style then
         SetResourceKvp(STYLE_KVP, json.encode(style))
     else
@@ -346,27 +401,23 @@ function cases.setStyle(input)
     end
 end
 
----What the Cases app needs to offer phone styles: the designs, logos and trims this server allows,
----and the style in use.
+---What a case store needs to offer logos and trims for a phone of a given design: the design it
+---will be drawn as, the logos that design comes with here, the trims allowed, and the style in use.
+---@param look string? the phone's design; the one in use when left out
 ---@return { enabled: boolean, looks: string[], logos: table<string, string[]>, trims: string[], style: PhoneStyle|false }
-function cases.styleOptions()
-    local looks, logos, trims = {}, {}, {}
+function cases.styleOptions(look)
+    look = look or itemLook
+    local logos, trims = {}, {}
     local choice = false
     if LOOKS then
-        for i = 1, #DATA.Looks do
-            local look = DATA.Looks[i]
-            local offered = logosOf(look)
-            if look == rules.DEFAULT_LOOK or #offered > 0 then
-                looks[#looks + 1] = look
-                logos[look] = LOOKS.Logos ~= false and offered or {}
-                if #logos[look] > 1 then choice = true end
-            end
-        end
+        if not usable(look) then look = HOME end
+        logos[look] = LOOKS.Logos ~= false and logosOf(look) or {}
+        choice = #logos[look] > 1
         if LOOKS.Trims ~= false then trims = DATA.Trims end
     end
     return {
-        enabled = LOOKS ~= nil and (#looks > 1 or #trims > 0 or choice),
-        looks = looks, logos = logos, trims = trims, style = style or false,
+        enabled = LOOKS ~= nil and (#trims > 0 or choice),
+        looks = { look }, logos = logos, trims = trims, style = cases.styleFor(look) or false,
     }
 end
 
@@ -443,16 +494,6 @@ function cases.set(design)
     fetchedAt = GetGameTimer()
 end
 
----Tries a design on locally, or stops trying one on.
----@param design any a design to try, false to try "no case", nil to go back to the equipped one
-function cases.preview(design)
-    if design == nil then
-        preview = nil
-    else
-        preview = rules.clean(design) or false
-    end
-end
-
 ---What this player's `sdPhone` statebag says about their case: the equipped one, with a photo
 ---sticker's address left out.
 ---@param frame string the phone's frame colour
@@ -461,23 +502,19 @@ function cases.broadcast(frame)
     return rules.public(cases.worn(frame))
 end
 
----The case other players should see on this player's phone: the equipped one, never a try-on.
+---The case on this player's phone, for a phone of the given frame colour.
 ---@param frame string the phone's frame colour
----@return CaseDesign?
+---@return CaseDesign? design nil for none, and for a frame that already comes in a case
 function cases.worn(frame)
-    if NO_CASE[frame] then return nil end
+    if not ENABLED or NO_CASE[frame] then return nil end
     if GetGameTimer() - fetchedAt > STALE_MS then refresh() end
     return equipped
 end
 
----The case to draw on this player's own phone: a try-on when there is one, else the equipped case.
----@param frame string the phone's frame colour
+---The case this character has on their phone, whatever phone is in hand.
 ---@return CaseDesign?
-function cases.mine(frame)
-    local own = cases.worn(frame)
-    if NO_CASE[frame] then return nil end
-    if preview ~= nil then return preview or nil end
-    return own
+function cases.equipped()
+    return equipped
 end
 
 ---Whether a frame colour's prop already comes in a case.
@@ -494,7 +531,7 @@ cases.styleSignature = rules.styleSignature
 do
     local stored = GetResourceKvpString(STYLE_KVP)
     local ok, saved = pcall(json.decode, stored or '')
-    if ok then style = cases.offered(saved) end
+    cases.setStyle(ok and saved or nil)
 end
 
 -- Swings every hanging charm each frame, and idles while nobody in range carries one.
@@ -505,7 +542,7 @@ CreateThread(function()
         else
             Wait(0)
             local dt = math.min(GetFrameTime(), 0.05)
-            local here = GetEntityCoords(cache.ped)
+            local here = GetFinalRenderedCamCoord()
             for parent, entry in pairs(worn) do
                 local chain = entry.chain
                 if chain and DoesEntityExist(parent) and #(GetEntityCoords(parent) - here) < SWING_RANGE then

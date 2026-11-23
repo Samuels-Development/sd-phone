@@ -1,0 +1,237 @@
+<!doctype html>
+<!--
+  Case studio screen wall (see client/casestore.lua). Drawn off screen into the texture of the curved
+  LED wall behind the phone a case store has on show. The wall is a grid of round lamps, 276 by 138, and the
+  picture is computed lamp by lamp: one unbroken field of twinkling lamps, every row flowing sideways at
+  its own pace so the whole wall streams, thicker and thinner in slow drifting clouds, and a marquee
+  with the store's name along the top and bottom. Nothing steps from lamp to lamp: a light on its way across is shared between the two lamps it
+  is passing, so the field and the text glide. Each lamp is drawn round with dark between its neighbours,
+  and a soft copy of the picture is laid over the top so the bright ones glow. Everything is in the colour of the case being designed. The store's camera only ever sees the
+  middle and lower part of the wall (WINDOW, in wall coordinates), so the lamps fill that part and the
+  rest stays dark. The game sends { accent, focus, name, gain } with SendDuiMessage; all are optional
+  and can change at any time.
+    accent  '#rrggbb'   the colour of the wall
+    focus   [u, v]      where on the wall the phone stands, 0..1 from its top left
+    name    string      the store's name, run along the marquee
+    gain    number      overall brightness, 0.8 by default
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<style>
+  html, body { margin: 0; width: 100vw; height: 100vh; overflow: hidden; background: #050608; }
+  canvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="c" width="2048" height="1024"></canvas>
+<script>
+(() => {
+  'use strict';
+  const out = document.getElementById('c');
+  const octx = out.getContext('2d');
+  const OW = out.width, OH = out.height;
+  const W = 276, H = 138, CELL = 4;
+  const WINDOW = [0.26, 0.46, 0.80, 1.0];
+  const RX = Math.round(WINDOW[0] * OW), RY = OH - H * CELL, RW = W * CELL, RH = H * CELL;
+  const FRAME_MS = 1000 / 60;
+  const MARQUEE_ROWS = 11, MARQUEE_TOP = 12, MARQUEE_BOTTOM = H - 10 - MARQUEE_ROWS;
+
+  const grid = document.createElement('canvas');
+  grid.width = W; grid.height = H;
+  const gctx = grid.getContext('2d');
+  const image = gctx.createImageData(W, H);
+  const px = image.data;
+
+  const params = new URLSearchParams(location.search);
+  let focus = [0.37, 0.54];
+  let gain = 0.8;
+  let from = [245, 165, 36], to = [245, 165, 36], shown = [245, 165, 36];
+  let mixAt = -1e9;
+  let marquee = { bits: new Uint8Array(0), width: 1 };
+
+  /** '#rrggbb' as [r, g, b], or null. */
+  function rgb(hex) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+    if (!m) return null;
+    const n = parseInt(m[1], 16);
+    return [n >> 16 & 255, n >> 8 & 255, n & 255];
+  }
+
+  /** A colour lamps can glow in: greys and near-blacks would vanish, so they become a cool blue, and a
+   *  muted colour is pushed away from grey, because a dim lamp in a muted colour reads as mud. */
+  function lit(c) {
+    const max = Math.max(c[0], c[1], c[2]), min = Math.min(c[0], c[1], c[2]);
+    const sat = max === 0 ? 0 : (max - min) / max;
+    const base = sat < 0.18 ? [110, 150, 255] : c;
+    const top = Math.max(base[0], base[1], base[2]) || 1;
+    const low = Math.min(base[0], base[1], base[2]);
+    const want = Math.max(0.92, (top - low) / top);
+    const floor = top * (1 - want);
+    const spread = top - low || 1;
+    return base.map(v => (floor + (v - low) / spread * (top - floor)) * 255 / top);
+  }
+
+  function setAccent(hex) {
+    const c = rgb(hex);
+    if (!c) return;
+    from = shown.slice();
+    to = lit(c);
+    mixAt = performance.now();
+  }
+
+  /** The marquee's text as a row of lamps: drawn small, then read back as on or off. */
+  function setName(text) {
+    const line = `${(text || 'Phone Cases').toUpperCase()}   •   CUSTOM CASES   •   DESIGNED BY YOU   •   `;
+    const c = document.createElement('canvas');
+    const x = c.getContext('2d');
+    const font = `700 ${MARQUEE_ROWS + 2}px "Consolas", "Lucida Console", monospace`;
+    x.font = font;
+    c.width = Math.max(8, Math.ceil(x.measureText(line).width));
+    c.height = MARQUEE_ROWS;
+    x.font = font;
+    x.textBaseline = 'middle';
+    x.fillStyle = '#fff';
+    x.fillText(line, 0, MARQUEE_ROWS / 2 + 0.5);
+    const data = x.getImageData(0, 0, c.width, c.height).data;
+    const bits = new Uint8Array(c.width * c.height);
+    for (let i = 0; i < bits.length; i++) bits[i] = data[i * 4 + 3] > 96 ? 1 : 0;
+    marquee = { bits, width: c.width };
+  }
+
+  setAccent(params.get('accent') || '#F5A524');
+  setName(params.get('name') || '');
+
+  window.addEventListener('message', e => {
+    const d = e.data || {};
+    if (d.accent) setAccent(d.accent);
+    if (Array.isArray(d.focus) && d.focus.length === 2) {
+      focus = [
+        ((Number(d.focus[0]) || 0.5) - WINDOW[0]) / (WINDOW[2] - WINDOW[0]),
+        ((Number(d.focus[1]) || 0.5) - WINDOW[1]) / (WINDOW[3] - WINDOW[1]),
+      ];
+    }
+    if (typeof d.name === 'string') setName(d.name);
+    if (typeof d.gain === 'number' && d.gain > 0) gain = d.gain;
+  });
+
+  /** What sits over the lamps, drawn once: the dark between them, and the seams between cabinets. */
+  const mask = document.createElement('canvas');
+  mask.width = RW; mask.height = RH;
+  (() => {
+    const m = mask.getContext('2d');
+    m.fillStyle = 'rgba(0,0,0,0.90)';
+    m.fillRect(0, 0, RW, RH);
+    m.globalCompositeOperation = 'destination-out';
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        m.beginPath();
+        m.arc(x * CELL + CELL / 2, y * CELL + CELL / 2, CELL * 0.41, 0, Math.PI * 2);
+        m.fill();
+      }
+    }
+    m.globalCompositeOperation = 'source-over';
+    m.fillStyle = 'rgba(0,0,0,0.35)';
+    for (let x = 0; x <= W; x += 46) m.fillRect(x * CELL - 1, 0, 1, RH);
+    for (let y = 0; y <= H; y += 46) m.fillRect(0, y * CELL - 1, RW, 1);
+  })();
+
+  /** A repeatable random number in 0..1 for a pair of whole numbers. */
+  function hash(a, b) {
+    let h = (a * 374761393 + b * 668265263) | 0;
+    h = (h ^ (h >>> 13)) * 1274126177 | 0;
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+  }
+
+  /** How bright the lamp at a whole position in a band's own moving frame is right now, 0..1. */
+  function lamp(cx, y, density, t) {
+    const seed = hash(cx, y);
+    if (seed >= density) return 0;
+    const pace = 0.45 + hash(cx, y + 977) * 1.9;
+    const blink = 0.5 + 0.5 * Math.sin(t * pace + seed * 97);
+    return 0.10 + 0.90 * blink * blink * blink;
+  }
+
+  const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+  const smooth = (a, b, v) => { const k = clamp01((v - a) / (b - a)); return k * k * (3 - 2 * k); };
+
+  let last = 0;
+  function frame(now) {
+    requestAnimationFrame(frame);
+    if (now - last < FRAME_MS) return;
+    last = now;
+    const t = now / 1000;
+
+    const k = Math.min(1, (now - mixAt) / 900);
+    const ease = k * k * (3 - 2 * k);
+    shown = [0, 1, 2].map(n => from[n] + (to[n] - from[n]) * ease);
+    const [ar, ag, ab] = shown;
+
+    const fx = focus[0], fy = focus[1];
+    const scroll = t * 30;
+    const scrollWhole = Math.floor(scroll), scrollPart = scroll - scrollWhole;
+
+    let i = 0;
+    for (let y = 0; y < H; y++) {
+      const v = y / H;
+      const drift = t * (11 + 4.5 * Math.sin(v * 9.0) + 2.5 * Math.sin(v * 23.0 + 1.3));
+      const driftWhole = Math.floor(drift), driftPart = drift - driftWhole;
+      const cloud = Math.sin(v * 4.2 - t * 0.21) * 1.6;
+      const top = y >= MARQUEE_TOP && y < MARQUEE_TOP + MARQUEE_ROWS;
+      const bottom = y >= MARQUEE_BOTTOM && y < MARQUEE_BOTTOM + MARQUEE_ROWS;
+
+      for (let x = 0; x < W; x++, i += 4) {
+        const u = x / W;
+        const dx = (u - fx) * 2, dy = v - fy;
+        const near = smooth(0.10, 0.34, Math.sqrt(dx * dx + dy * dy));
+
+        const wash = 0.075 + 0.025 * Math.sin(u * 4.0 + t * 0.17) * Math.sin(v * 3.0 - t * 0.13);
+        let r = ar * wash, g = ag * wash, b = ab * wash;
+
+        if (top || bottom) {
+          const row = (top ? y - MARQUEE_TOP : y - MARQUEE_BOTTOM) * marquee.width;
+          const width = marquee.width;
+          const at = top ? x + scrollWhole : x - scrollWhole - 1;
+          const part = top ? scrollPart : 1 - scrollPart;
+          const here = marquee.bits[row + ((at % width) + width) % width];
+          const next = marquee.bits[row + (((at + 1) % width) + width) % width];
+          const ink = here * (1 - part) + next * part;
+          r *= 0.12; g *= 0.12; b *= 0.12;
+          r += (ar * 0.85 + 30) * ink; g += (ag * 0.85 + 30) * ink; b += (ab * 0.85 + 30) * ink;
+        } else if (y === MARQUEE_TOP + MARQUEE_ROWS + 3 || y === MARQUEE_BOTTOM - 4) {
+          r += ar * 0.45; g += ag * 0.45; b += ab * 0.45;
+        } else {
+          const density = 0.15 + 0.07 * Math.sin(u * 5.0 + t * 0.33 + cloud);
+          const cx = x + driftWhole;
+          const glow = lamp(cx, y, density, t) * (1 - driftPart) + lamp(cx + 1, y, density, t) * driftPart;
+          if (glow > 0) {
+            const spark = glow * (0.62 + 0.38 * near);
+            r += (ar * 0.86 + 34) * spark; g += (ag * 0.86 + 34) * spark; b += (ab * 0.86 + 34) * spark;
+          }
+        }
+
+        const edge = smooth(1.30, 0.55, Math.sqrt(Math.pow((u - 0.5) * 1.9, 2) + Math.pow((v - 0.5) * 1.5, 2)));
+        const level = gain * (0.45 + 0.55 * edge) * (0.80 + 0.20 * near);
+        px[i] = r * level; px[i + 1] = g * level; px[i + 2] = b * level; px[i + 3] = 255;
+      }
+    }
+
+    gctx.putImageData(image, 0, 0);
+    octx.fillStyle = '#050608';
+    octx.fillRect(0, 0, OW, OH);
+    octx.imageSmoothingEnabled = false;
+    octx.drawImage(grid, RX, RY, RW, RH);
+    octx.drawImage(mask, RX, RY);
+    octx.imageSmoothingEnabled = true;
+    octx.imageSmoothingQuality = 'high';
+    octx.globalCompositeOperation = 'lighter';
+    octx.globalAlpha = 0.42;
+    octx.drawImage(grid, RX, RY, RW, RH);
+    octx.globalAlpha = 1;
+    octx.globalCompositeOperation = 'source-over';
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

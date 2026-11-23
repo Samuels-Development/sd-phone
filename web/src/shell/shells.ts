@@ -123,6 +123,14 @@ export interface Shell {
 
 export const DEFAULT_SHELL = 'ios';
 
+/** The designs the phone prop comes in (sd-phone-props, picked at a case store), and the shell that
+ *  draws each one from the front. */
+export type PhoneDesign = 'classic' | 'slate';
+export const DESIGN_SHELL: Record<PhoneDesign, string> = { classic: 'ios', slate: 'slate' };
+
+/** The stored shell choice that means "draw the phone I am holding" rather than one shell. */
+export const MATCH_SHELL = 'match';
+
 export const SHELLS: readonly Shell[] = [
     {
         id:      'ios',
@@ -137,6 +145,23 @@ export const SHELLS: readonly Shell[] = [
             { side: 'left',  y: 346, h: 64, role: 'volumeDown' },
             { side: 'right', y: 217, h: 80, role: 'power' },
             { side: 'right', y: 566, h: 60, role: 'fold' },
+        ],
+    },
+    {
+        id:      'slate',
+        devices: ['phone'],
+        bezel:   10,
+        radius:  63,
+        cutout:  { kind: 'punch', w: 20, h: 20, x: 'center', y: 13 },
+        finish:  'polished',
+        plate:   { color: '#060709', rail: 4.5 },
+        rim:     { inset: 1.5, width: 1 },
+        buttons: [
+            { side: 'right', y: 139, h: 68, role: 'volumeUp' },
+            { side: 'right', y: 208, h: 68, role: 'volumeDown' },
+            { side: 'right', y: 322, h: 69, role: 'power' },
+            { side: 'right', y: 566, h: 60, role: 'fold' },
+            { side: 'left',  y: 300, h: 28, style: 'inset', role: 'screenshot' },
         ],
     },
     {
@@ -291,6 +316,38 @@ export const SHELLS: readonly Shell[] = [
 
 export function isShellId(v: unknown): v is string {
     return typeof v === 'string' && SHELLS.some(s => s.id === v);
+}
+
+/** A stored shell choice: a shell, or MATCH_SHELL. */
+export function isShellPick(v: unknown): v is string {
+    return v === MATCH_SHELL || isShellId(v);
+}
+
+export interface ShellRules {
+    /** The server lets players choose (configs/shells.lua AllowPlayerChoice, nothing Forced). */
+    choice:  boolean;
+    /** The shell follows the phone in hand when the player has not picked one (FollowPhone). */
+    follows: boolean;
+    /** The shells the server allows, in its order. */
+    allowed: readonly string[];
+}
+
+export function asDesign(v: unknown): PhoneDesign {
+    return v === 'slate' ? 'slate' : 'classic';
+}
+
+/** The shell to draw. Where players cannot choose, `pick` is what the server resolved (Forced, or
+ *  the first allowed shell) and is drawn as it is. Otherwise a shell the player picked is drawn,
+ *  and MATCH_SHELL draws the design of the phone in hand (classic as ios, slate as slate). A
+ *  server that does not follow the phone, or does not allow the shell wanted, gets the first shell
+ *  it allows: what it resolves a player who never picked to. */
+export function resolveShell(pick: string, design: PhoneDesign, rules: ShellRules): string {
+    const allowed = rules.allowed.filter(isShellId);
+    const first = allowed[0] ?? DEFAULT_SHELL;
+    if (!rules.choice) return isShellId(pick) ? pick : first;
+    const want = pick === MATCH_SHELL && rules.follows ? DESIGN_SHELL[design] : pick;
+    if (!isShellId(want)) return first;
+    return allowed.length === 0 || allowed.includes(want) ? want : first;
 }
 
 export function shellsFor(deviceId: DeviceId): Shell[] {

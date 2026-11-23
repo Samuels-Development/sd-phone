@@ -8,7 +8,7 @@ import { NavBar } from '@/ui/NavBar';
 import { chassisMetrics } from '@/shell/chassis';
 import { DEFAULT_FRAME_COLOR, frameStops } from '@/shell/frameColors';
 import type { FacePart } from '@/shell/chassis';
-import { SHELLS, shellsFor } from '@/shell/shells';
+import { MATCH_SHELL, resolveShell, SHELLS, shellFor, shellsFor } from '@/shell/shells';
 import type { Shell } from '@/shell/shells';
 
 const PREVIEW_H = 116;
@@ -333,15 +333,46 @@ function ShellPreview({ shell, frameColor }: { shell: Shell; frameColor: string 
     );
 }
 
+function ShellOption({ preview, label, hint, selected, onPick }: {
+    preview:  Shell;
+    label:    string;
+    hint:     string;
+    selected: boolean;
+    onPick:   () => void;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onPick}
+            className={`flex items-center gap-4 rounded-[14px] bg-surface px-4 py-4 text-start active:opacity-70 ${selected ? 'ring-2 ring-ios-blue' : ''}`}
+        >
+            <ShellPreview shell={preview} frameColor={DEFAULT_FRAME_COLOR} />
+            <span className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="text-[17px] font-semibold">{label}</span>
+                <span className="text-[13px] leading-snug text-ios-gray">{hint}</span>
+            </span>
+            {selected && (
+                <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-ios-blue">
+                    <Check className="h-[14px] w-[14px] text-white" strokeWidth={3} />
+                </span>
+            )}
+        </button>
+    );
+}
+
 export function PhoneShellPage({ onBack }: { onBack: () => void }) {
     const { goBack, pageStyle } = useIosPush(onBack);
-    const { shell, setShell, shellsAllowed } = useTheme('shell', 'setShell', 'shellsAllowed');
+    const { shell, shellPick, setShell, shellsAllowed, phoneLook, shellFollowsPhone } =
+        useTheme('shell', 'shellPick', 'setShell', 'shellsAllowed', 'phoneLook', 'shellFollowsPhone');
 
     const options = shellsFor(device.id).filter(s => shellsAllowed.includes(s.id));
     const list = options.length ? options : SHELLS.filter(s => s.id === shell);
+    const matching = shellFollowsPhone && shellPick === MATCH_SHELL;
+    const matched = shellFor(resolveShell(MATCH_SHELL, phoneLook, { choice: true, follows: true, allowed: shellsAllowed }), device.id);
 
     const LABEL: Record<string, string> = {
         ios:       t('settings.shellIos', 'Rounded'),
+        slate:     t('settings.shellSlate', 'Slate'),
         android:   t('settings.shellAndroid', 'Flat'),
         edge:      t('settings.shellEdge', 'Slim'),
         classic:   t('settings.shellClassic', 'Classic'),
@@ -355,6 +386,7 @@ export function PhoneShellPage({ onBack }: { onBack: () => void }) {
 
     const DESC: Record<string, string> = {
         ios:       t('settings.shellIosHint', 'Softly rounded rail with a pill cutout. The default look.'),
+        slate:     t('settings.shellSlateHint', 'A thin polished rail the glass curves into, a small camera hole in the middle and both keys down the right.'),
         android:   t('settings.shellAndroidHint', 'Flat matte sides, tighter corners and a small camera hole in the middle.'),
         edge:      t('settings.shellEdgeHint', 'The thinnest border of the lot, squared-off sides and a tiny pinhole camera.'),
         classic:   t('settings.shellClassicHint', 'Thicker border with a centred notch hanging from the top edge.'),
@@ -378,28 +410,26 @@ export function PhoneShellPage({ onBack }: { onBack: () => void }) {
 
             <div className="flex-1 overflow-y-auto no-scrollbar">
                 <div className="mt-6 flex flex-col gap-3 px-4 pb-12">
-                    {list.map(s => {
-                        const selected = s.id === shell;
-                        return (
-                            <button
-                                key={s.id}
-                                type="button"
-                                onClick={() => setShell(s.id)}
-                                className={`flex items-center gap-4 rounded-[14px] bg-surface px-4 py-4 text-start active:opacity-70 ${selected ? 'ring-2 ring-ios-blue' : ''}`}
-                            >
-                                <ShellPreview shell={s} frameColor={DEFAULT_FRAME_COLOR} />
-                                <span className="flex min-w-0 flex-1 flex-col gap-1">
-                                    <span className="text-[17px] font-semibold">{LABEL[s.id] ?? s.id}</span>
-                                    <span className="text-[13px] leading-snug text-ios-gray">{DESC[s.id] ?? ''}</span>
-                                </span>
-                                {selected && (
-                                    <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-ios-blue">
-                                        <Check className="h-[14px] w-[14px] text-white" strokeWidth={3} />
-                                    </span>
-                                )}
-                            </button>
-                        );
-                    })}
+                    {shellFollowsPhone && matched && (
+                        <ShellOption
+                            preview={matched}
+                            label={t('settings.shellMatch', 'Match my phone')}
+                            hint={t('settings.shellMatchHint', 'Drawn as the phone in your hand, and changes with it when you pick another design at a case store.')}
+                            selected={matching}
+                            onPick={() => setShell(MATCH_SHELL)}
+                        />
+                    )}
+
+                    {list.map(s => (
+                        <ShellOption
+                            key={s.id}
+                            preview={s}
+                            label={LABEL[s.id] ?? s.id}
+                            hint={DESC[s.id] ?? ''}
+                            selected={!matching && s.id === shell}
+                            onPick={() => setShell(s.id)}
+                        />
+                    ))}
 
                     <p className="mt-1 px-1 text-[12px] leading-snug text-ios-gray">
                         {t('settings.phoneShellHint', 'The shell changes the body of the phone only. The screen, your apps and everything on them stay exactly the same size.')}

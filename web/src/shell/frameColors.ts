@@ -43,10 +43,31 @@ const FRAME_COLORS: Record<string, string> = {
     leather_tan:   '#c08a54',
 };
 
+/** What a colour's rail is made of where it is not plain metal: polished glass, the gold frame of a
+ *  two-tone (its FRAME_COLORS entry is the frame's gold, not the back's colour), or the leather case
+ *  the phone comes in. Both tables are written from sd-phone-props by its wire_sd_phone.py. */
+export type FrameMaterial = 'metal' | 'gloss' | 'gold' | 'leather';
+
+const FRAME_MATERIALS: Record<string, FrameMaterial> = {
+    jetblack:      'gloss',
+    pearl:         'gloss',
+    ruby:          'gloss',
+    sapphire:      'gloss',
+    blackgold:     'gold',
+    whitegold:     'gold',
+    leather_brown: 'leather',
+    leather_black: 'leather',
+    leather_tan:   'leather',
+};
+
 export const DEFAULT_FRAME_COLOR = 'black';
 
 export function frameHex(name: string): string {
     return FRAME_COLORS[name] ?? FRAME_COLORS[DEFAULT_FRAME_COLOR];
+}
+
+export function frameMaterial(name: string): FrameMaterial {
+    return FRAME_MATERIALS[name] ?? 'metal';
 }
 
 function clamp(n: number): number { return Math.max(0, Math.min(255, Math.round(n))); }
@@ -60,13 +81,17 @@ function toHex(r: number, g: number, b: number): string {
     return '#' + [r, g, b].map(v => clamp(v).toString(16).padStart(2, '0')).join('');
 }
 
-function mix(hex: string, target: number, amt: number): string {
+type Rgb = readonly [number, number, number];
+
+function mix(hex: string, target: Rgb, amt: number): string {
     const [r, g, b] = parse(hex);
-    return toHex(r + (target - r) * amt, g + (target - g) * amt, b + (target - b) * amt);
+    return toHex(r + (target[0] - r) * amt, g + (target[1] - g) * amt, b + (target[2] - b) * amt);
 }
 
-const lighten = (hex: string, amt: number) => mix(hex, 255, amt);
-const darken  = (hex: string, amt: number) => mix(hex, 0, amt);
+const WHITE: Rgb = [255, 255, 255];
+const BLACK: Rgb = [0, 0, 0];
+const GOLD_LIGHT: Rgb = [255, 247, 222];
+const GOLD_SHADE: Rgb = [58, 36, 8];
 
 export interface FrameStops { s0: string; s20: string; s45: string; s68: string; s100: string }
 
@@ -77,14 +102,25 @@ const FINISH_RAMP = {
 
 export type FrameFinish = keyof typeof FINISH_RAMP;
 
+const MATERIAL_RAMP = {
+    gloss:   { top: 0.50, trough: 0.42, tail: 0.24 },
+    gold:    { top: 0.42, trough: 0.34, tail: 0.18 },
+    leather: { top: 0.08, trough: 0.16, tail: 0.03 },
+} as const;
+
+/** The rail's gradient. Metal takes the shell's finish; glass, gold and leather keep their own
+ *  whatever the shell, and gold lights and shades warm instead of towards white and black. */
 export function frameStops(name: string, finish: FrameFinish = 'polished'): FrameStops {
-    const base = FRAME_COLORS[name] ?? FRAME_COLORS[DEFAULT_FRAME_COLOR];
-    const ramp = FINISH_RAMP[finish] ?? FINISH_RAMP.polished;
+    const base = frameHex(name);
+    const material = frameMaterial(name);
+    const ramp = material === 'metal' ? FINISH_RAMP[finish] ?? FINISH_RAMP.polished : MATERIAL_RAMP[material];
+    const light = material === 'gold' ? GOLD_LIGHT : WHITE;
+    const shade = material === 'gold' ? GOLD_SHADE : BLACK;
     return {
-        s0:   lighten(base, ramp.top),
+        s0:   mix(base, light, ramp.top),
         s20:  base,
-        s45:  darken(base, ramp.trough),
+        s45:  mix(base, shade, ramp.trough),
         s68:  base,
-        s100: lighten(base, ramp.tail),
+        s100: mix(base, light, ramp.tail),
     };
 }

@@ -3,7 +3,7 @@ import {
     ChevronRight, Compass, CreditCard, Fingerprint, Gamepad2, Grid2x2, Hourglass,
     Image as ImageIcon, Key, Languages, LayoutGrid, ListTodo, Lock, Mail,
     MapPin, MessageCircle, Mic, Moon, Newspaper, PawPrint, Phone, Plane, Radar, Search,
-    Settings2, ShoppingBag, Siren, SlidersHorizontal,
+    Settings2, ShoppingBag, Siren, SlidersHorizontal, Smartphone,
     Sparkles, StickyNote, Sun, User, Video, Volume2, Wifi, Zap,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -18,7 +18,7 @@ const ICONS: Record<IconName, LucideIcon> = {
     Image: ImageIcon, Sparkles, Fingerprint, Siren,
     ShoppingBag, CreditCard, Gamepad2, Lock, Mail, User, Calendar, StickyNote,
     ListTodo, Mic, Phone, MessageCircle, Video, Compass, Newspaper, Languages,
-    MapPin, Zap, PawPrint, Grid2x2, Radar,
+    MapPin, Zap, PawPrint, Grid2x2, Radar, Smartphone,
 };
 
 export function SettingsRow({ row, divider, onPress }: { row: SettingsRowDef; divider: boolean; onPress?: () => void }) {

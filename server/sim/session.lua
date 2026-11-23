@@ -428,6 +428,8 @@ function session.push(source)
         hasSim  = s ~= nil and s.hasSim or false,
         number  = s and s.number or nil,
         color   = s and s.color or nil,
+        fold    = s and s.active and s.active.name and require('shared.phonefold').item(s.active.name) or nil,
+        look    = s and s.active and s.active.name and require('shared.phonefold').itemLook(s.active.name) or nil,
         -- Device/character mode: the setup/profile localStorage namespace keys off the acting
         -- identity (stable across SIM swaps); legacy keys off the number, client-side.
         profile = deviceLike and s and s.identity or nil,

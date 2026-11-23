@@ -1,6 +1,6 @@
 import { t } from '@/i18n';
 
-export const SETTINGS_PAGES = ['general', 'accessibility', 'display', 'island-pet', 'wallpaper', 'app-icons', 'home-density', 'notifications', 'sound-haptics', 'face-unlock', 'phone', 'streamer', 'sim', 'wifi', 'bluetooth'] as const;
+export const SETTINGS_PAGES = ['general', 'accessibility', 'display', 'island-pet', 'wallpaper', 'app-icons', 'home-density', 'phone-case', 'notifications', 'sound-haptics', 'face-unlock', 'phone', 'streamer', 'sim', 'wifi', 'bluetooth'] as const;
 
 export type SettingsPage = typeof SETTINGS_PAGES[number];
 
@@ -16,7 +16,7 @@ export type IconName =
     | 'ShoppingBag' | 'CreditCard' | 'Gamepad2' | 'Lock' | 'Mail'
     | 'User' | 'Calendar' | 'StickyNote' | 'ListTodo' | 'Mic'
     | 'Phone' | 'MessageCircle' | 'Video' | 'Compass' | 'Newspaper'
-    | 'Languages' | 'MapPin' | 'Zap' | 'PawPrint' | 'Grid2x2' | 'Radar';
+    | 'Languages' | 'MapPin' | 'Zap' | 'PawPrint' | 'Grid2x2' | 'Radar' | 'Smartphone';
 
 export interface SettingsRowDef {
     id:        string;
@@ -64,6 +64,7 @@ export function getSettingsGroups(): SettingsGroup[] {
                 { id: 'display',      icon: 'Sun',         iconBg: '#0a84ff', label: t('settings.displayBrightness', 'Display & Brightness'),  subtitle: t('settings.displayBrightnessSub', 'Wallpaper, theme and brightness'), keywords: t('settings.keywords.display', 'dark mode, light mode, theme, brightness') },
                 { id: 'island-pet',   icon: 'PawPrint',    iconBg: '#ff9f0a', label: t('settings.islandPet', 'Island Pets'),          subtitle: t('settings.islandPetSub', 'Pick a pixel pet for the Dynamic Island'), keywords: t('settings.keywords.islandPet', 'pet, dynamic island, animal') },
                 { id: 'wallpaper',    icon: 'Image',       iconBg: '#64d2ff', label: t('settings.wallpaper', 'Wallpaper'),             subtitle: t('settings.wallpaperSub', 'Wallpaper & background'), keywords: t('settings.keywords.wallpaper', 'background, lock screen, home screen') },
+                { id: 'phone-case',   icon: 'Smartphone',  iconBg: '#f59e0b', label: t('settings.phoneCase', 'Phone Case'),            subtitle: t('settings.phoneCaseSub', 'The case on your phone'), keywords: t('settings.keywords.phoneCase', 'case, cover, logo, trims, take off') },
                 { id: 'app-icons',    icon: 'LayoutGrid',  iconBg: '#5e5ce6', label: t('settings.appIcons', 'App Icons'),              subtitle: t('settings.appIconsSub', 'Icon theme and Home Screen names'), keywords: t('settings.keywords.appIcons', 'icon theme, app names, labels') },
                 { id: 'home-density', icon: 'Grid2x2',     iconBg: '#ff375f', label: t('settings.homeDensity', 'Home Screen'),         subtitle: t('settings.homeDensitySub', 'How many apps fit and how big they are'), keywords: t('settings.keywords.homeDensity', 'grid, layout, icon size, dock') },
                 { id: 'face-unlock',  icon: 'Fingerprint', iconBg: '#34c759', label: t('settings.faceScanPasscode', 'Face Scan & Passcode'), subtitle: t('settings.faceScanPasscodeSub', 'Lock and unlock options'), keywords: t('settings.keywords.faceUnlock', 'passcode, pin, lock, face id, security') },
@@ -85,6 +86,7 @@ export interface SettingsVisibility {
     island:    boolean;
     wifi:      boolean;
     bluetooth: boolean;
+    phoneCase: boolean;
 }
 
 export function filterSettingsGroups(groups: SettingsGroup[], v: SettingsVisibility): SettingsGroup[] {
@@ -94,6 +96,7 @@ export function filterSettingsGroups(groups: SettingsGroup[], v: SettingsVisibil
     if (!v.island) hidden.add('island-pet');
     if (!v.wifi) hidden.add('wifi');
     if (!v.bluetooth) hidden.add('bluetooth');
+    if (!v.phoneCase) hidden.add('phone-case');
     return groups
         .map(g => ({ ...g, rows: g.rows.filter(r => !hidden.has(r.id)) }))
         .filter(g => g.rows.length > 0);

@@ -202,6 +202,7 @@ require 'client.apps.casino'
 require 'client.apps.cookie'
 require 'client.apps.stocks'
 require 'client.apps.cases'
+require 'client.casestore'
 require 'client.apps.games'
 require 'client.apps.settings'
 require 'client.apps.sim'
@@ -229,6 +230,20 @@ local currentSimState = nil
 
 ---@type string Current frame colour; always one of FRAME_COLORS.
 local currentFrameColor = config.Phone.DefaultColor or 'black'
+---@type boolean Whether the phone in use is a foldable: its item says so, and the server passes it
+---on with every open (shared/phonefold.lua).
+local currentFold = false
+---@type string The design of the phone in use: its item says so too.
+local currentLook = 'classic'
+
+---Records what kind of phone is in use, as the server said when it was opened.
+---@param fold any whether it is a foldable
+---@param look any its design
+local function setPhoneKind(fold, look)
+    currentFold = fold == true
+    currentLook = type(look) == 'string' and look or 'classic'
+    require('client.cases').setLook(currentLook)
+end
 ---@type table<string, boolean> Whitelist of valid frame colours (client.framecolors).
 local FRAME_COLORS = require 'client.framecolors'
 
@@ -305,18 +320,23 @@ local function broadcastHoldState()
     -- does one whose fold never changes the prop, so watchers have no re-weld to do.
     -- A case rides along as `k` and the phone's design and trims as `s`. Readers that predate them
     -- only look at `c` and `f`.
+    -- A foldable says so as `h`, so watchers weld the hinged body even while it is shut.
     local unfolded = pose.isFolded() and pose.foldChangesProp()
     local cases = require 'client.cases'
     local case, style = cases.broadcast(currentFrameColor), cases.style()
+    local hinged = currentFold and config.Phone.Foldable == true
     LocalPlayer.state:set('sdPhone',
-        (unfolded or case or style) and { c = currentFrameColor, f = unfolded or nil, k = case, s = style } or currentFrameColor, true)
+        (unfolded or case or style or hinged)
+            and { c = currentFrameColor, f = unfolded or nil, k = case, s = style, h = hinged or nil }
+            or currentFrameColor, true)
 end
 
--- The case changed (bought, put on, taken off, or tried on from the Cases app): re-dress the phone
+-- The case or the phone's style changed (put on, taken off, picked in Settings): re-dress the phone
 -- in hand and tell watchers.
 AddEventHandler('sd-phone:client:cases:changed', function()
     pose.reweld()
     broadcastHoldState()
+    SendNUIMessage({ action = 'sd-phone:phoneLook', data = { look = currentLook } })
 end)
 
 ---Pushes the current state into the pose module, which starts or stops the held clip to match,
@@ -327,6 +347,7 @@ local function updatePose()
         torch  = flashlightOn,
         camera = cameraActive,
         color  = currentFrameColor,
+        fold   = currentFold,
         call   = callActive,
         callUi = not callMinimised,
     })
@@ -585,6 +606,8 @@ local function RevealPhone()
             locked    = phoneState.locked,
             battery   = phoneState.battery,
             frameColor = currentFrameColor,
+            phoneLook = currentLook,
+            shellFollowsPhone = (config.Shells or {}).FollowPhone ~= false,
             carrier   = config.StatusBar.Carrier,
             signal    = service.active() and service.bars() or config.StatusBar.SignalBars,
             showWifi  = config.StatusBar.ShowWifi,
@@ -681,7 +704,7 @@ end
 local function OpenPhone(silent)
     if phoneState.open then return true end
 
-    local res = lib.callback.await('sd-phone:server:phone:resolveOpen', false, currentFrameColor)
+    local res, fold, look = lib.callback.await('sd-phone:server:phone:resolveOpen', false, currentFrameColor, currentFold, currentLook)
     if not res then
         if not silent then
             notify.show({ description = locale.t('phone.noPhone', 'You don\'t have a phone.'), type = 'error' })
@@ -700,6 +723,7 @@ local function OpenPhone(silent)
         currentSimState = nil
     end
     if FRAME_COLORS[color] then currentFrameColor = color end
+    setPhoneKind(fold, look)
     RevealPhone()
     return phoneState.open
 end
@@ -782,7 +806,9 @@ lib.addKeybind({
 ---@param simPending boolean|nil true while the server resolves the SIM in the background (unique phones)
 ---@param deviceHint string|nil the used phone's device identity, read synchronously from its
 ---item metadata: a DIFFERENT device than the last snapshot seeds the switch at reveal time
-RegisterNetEvent('sd-phone:client:openFromItem', function(color, sim, simPending, deviceHint)
+---@param fold boolean|nil whether the used phone is a foldable
+---@param look string|nil the design of the used phone
+RegisterNetEvent('sd-phone:client:openFromItem', function(color, sim, simPending, deviceHint, fold, look)
     -- Only the server's item-use handler has proven ownership. Another client resource can raise
     -- this event locally, and then source is not a number, so that goes through the gate instead.
     if type(source) ~= 'number' then
@@ -790,6 +816,7 @@ RegisterNetEvent('sd-phone:client:openFromItem', function(color, sim, simPending
         return
     end
     if color and FRAME_COLORS[color] then currentFrameColor = color end
+    setPhoneKind(fold, look)
     if sim then
         currentSimState = { hasSim = sim.hasSim == true, number = sim.number }
     elseif simPending then
@@ -822,8 +849,13 @@ RegisterNetEvent('sd-phone:client:simState', function(state)
     -- The active SIM'd phone's colour wins: a pending keybind open answered with the owned
     -- colour before the resolve, so correct the frame, the hand prop and the UI rail here.
     if state.color and FRAME_COLORS[state.color] then
-        if state.color ~= currentFrameColor then
+        local fold, look = currentFold, currentLook
+        if state.fold ~= nil then fold = state.fold == true end
+        if type(state.look) == 'string' then look = state.look end
+        if state.color ~= currentFrameColor or fold ~= currentFold or look ~= currentLook then
             currentFrameColor = state.color
+            setPhoneKind(fold, look)
+            SendNUIMessage({ action = 'sd-phone:phoneLook', data = { look = currentLook } })
             -- Push the colour first, then re-weld: a prop already in hand keeps the old model
             -- otherwise, since attaching no-ops while one exists.
             updatePose()
@@ -1101,7 +1133,7 @@ end
 ---@param open boolean|nil true to unfold, false to fold, nil to toggle
 ---@return boolean open the state it settled on
 local function SetFolded(open)
-    if not FOLDABLE or not phoneState.open then return foldOpen end
+    if not FOLDABLE or not currentFold or not phoneState.open then return foldOpen end
     if open == nil then open = not foldOpen end
     foldOpen = open == true
     SendNUIMessage({
@@ -1122,6 +1154,16 @@ end
 -- it, since the player did not ask for a fold, they just opened the phone.
 local function AnnounceFold()
     if not FOLDABLE then return end
+    if not currentFold then
+        foldOpen = false
+        SendNUIMessage({
+            action = 'sd-phone:fold',
+            data   = { foldable = false, openW = FOLD_OPEN_W, open = false, restore = true },
+        })
+        pose.setFolded(false)
+        broadcastHoldState()
+        return
+    end
     foldOpen = LoadFold()
     SendNUIMessage({
         action = 'sd-phone:fold',
@@ -1146,7 +1188,7 @@ end)
 ---@param data { open: boolean }|nil
 ---@param cb fun(result: table) NUI response
 RegisterNUICallback('sd-phone:fold:set', function(data, cb)
-    if FOLDABLE then
+    if FOLDABLE and currentFold then
         foldOpen = data ~= nil and data.open == true
         pose.setFolded(foldOpen)
         broadcastHoldState()

@@ -52,6 +52,142 @@ return {
         { item = 'phone_leather_brown', color = 'leather_brown', label = 'Brown Leather Phone' },
         { item = 'phone_leather_black', color = 'leather_black', label = 'Black Leather Phone' },
         { item = 'phone_leather_tan',   color = 'leather_tan',   label = 'Tan Leather Phone' },
+
+        -- The same colours as foldable phones. A foldable has a hinge and unfolds to twice the width
+        -- (see Foldable below); a regular phone, every entry above, does not. Which kind a phone is
+        -- is said here, on its item, so a server sells both side by side. Drop these to sell only
+        -- regular phones, or drop the ones above to sell only foldables. A list where no entry says
+        -- `fold` at all is read the old way: every phone folds.
+        { item = 'phone_fold_black',         color = 'black',         fold = true, label = 'Foldable Black Phone' },
+        { item = 'phone_fold_blue',          color = 'blue',          fold = true, label = 'Foldable Blue Phone' },
+        { item = 'phone_fold_green',         color = 'green',         fold = true, label = 'Foldable Green Phone' },
+        { item = 'phone_fold_orange',        color = 'orange',        fold = true, label = 'Foldable Orange Phone' },
+        { item = 'phone_fold_pink',          color = 'pink',          fold = true, label = 'Foldable Pink Phone' },
+        { item = 'phone_fold_purple',        color = 'purple',        fold = true, label = 'Foldable Purple Phone' },
+        { item = 'phone_fold_red',           color = 'red',           fold = true, label = 'Foldable Red Phone' },
+        { item = 'phone_fold_yellow',        color = 'yellow',        fold = true, label = 'Foldable Yellow Phone' },
+        { item = 'phone_fold_white',         color = 'white',         fold = true, label = 'Foldable White Phone' },
+        { item = 'phone_fold_silver',        color = 'silver',        fold = true, label = 'Foldable Silver Phone' },
+        { item = 'phone_fold_graphite',      color = 'graphite',      fold = true, label = 'Foldable Graphite Phone' },
+        { item = 'phone_fold_titanium',      color = 'titanium',      fold = true, label = 'Foldable Titanium Phone' },
+        { item = 'phone_fold_gold',          color = 'gold',          fold = true, label = 'Foldable Gold Phone' },
+        { item = 'phone_fold_rosegold',      color = 'rosegold',      fold = true, label = 'Foldable Rose Gold Phone' },
+        { item = 'phone_fold_bronze',        color = 'bronze',        fold = true, label = 'Foldable Bronze Phone' },
+        { item = 'phone_fold_mocha',         color = 'mocha',         fold = true, label = 'Foldable Mocha Phone' },
+        { item = 'phone_fold_cream',         color = 'cream',         fold = true, label = 'Foldable Cream Phone' },
+        { item = 'phone_fold_burgundy',      color = 'burgundy',      fold = true, label = 'Foldable Burgundy Phone' },
+        { item = 'phone_fold_coral',         color = 'coral',         fold = true, label = 'Foldable Coral Phone' },
+        { item = 'phone_fold_peach',         color = 'peach',         fold = true, label = 'Foldable Peach Phone' },
+        { item = 'phone_fold_lime',          color = 'lime',          fold = true, label = 'Foldable Lime Phone' },
+        { item = 'phone_fold_mint',          color = 'mint',          fold = true, label = 'Foldable Mint Phone' },
+        { item = 'phone_fold_sage',          color = 'sage',          fold = true, label = 'Foldable Sage Phone' },
+        { item = 'phone_fold_forest',        color = 'forest',        fold = true, label = 'Foldable Forest Phone' },
+        { item = 'phone_fold_teal',          color = 'teal',          fold = true, label = 'Foldable Teal Phone' },
+        { item = 'phone_fold_cyan',          color = 'cyan',          fold = true, label = 'Foldable Cyan Phone' },
+        { item = 'phone_fold_skyblue',       color = 'skyblue',       fold = true, label = 'Foldable Sky Blue Phone' },
+        { item = 'phone_fold_navy',          color = 'navy',          fold = true, label = 'Foldable Navy Phone' },
+        { item = 'phone_fold_indigo',        color = 'indigo',        fold = true, label = 'Foldable Indigo Phone' },
+        { item = 'phone_fold_lavender',      color = 'lavender',      fold = true, label = 'Foldable Lavender Phone' },
+        { item = 'phone_fold_magenta',       color = 'magenta',       fold = true, label = 'Foldable Magenta Phone' },
+        { item = 'phone_fold_rose',          color = 'rose',          fold = true, label = 'Foldable Rose Phone' },
+        { item = 'phone_fold_jetblack',      color = 'jetblack',      fold = true, label = 'Foldable Jet Black Phone' },
+        { item = 'phone_fold_pearl',         color = 'pearl',         fold = true, label = 'Foldable Pearl Phone' },
+        { item = 'phone_fold_ruby',          color = 'ruby',          fold = true, label = 'Foldable Ruby Phone' },
+        { item = 'phone_fold_sapphire',      color = 'sapphire',      fold = true, label = 'Foldable Sapphire Phone' },
+        { item = 'phone_fold_blackgold',     color = 'blackgold',     fold = true, label = 'Foldable Black & Gold Phone' },
+        { item = 'phone_fold_whitegold',     color = 'whitegold',     fold = true, label = 'Foldable White & Gold Phone' },
+        { item = 'phone_fold_leather_brown', color = 'leather_brown', fold = true, label = 'Foldable Brown Leather Phone' },
+        { item = 'phone_fold_leather_black', color = 'leather_black', fold = true, label = 'Foldable Black Leather Phone' },
+        { item = 'phone_fold_leather_tan',   color = 'leather_tan',   fold = true, label = 'Foldable Tan Leather Phone' },
+
+        -- The same colours again as Slate phones, the second design sd-phone-props streams: rounded
+        -- polished rails, three lenses straight off the back glass, a punch-hole camera. Which design
+        -- a phone is is said here too (`look = 'slate'`; saying nothing is the classic design), so the
+        -- four kinds - classic, classic foldable, Slate, Slate foldable - are four items a server
+        -- sells side by side. Drop the kinds you do not sell.
+        { item = 'phone_slate_black',              color = 'black',         look = 'slate', label = 'Black Slate Phone' },
+        { item = 'phone_slate_blue',               color = 'blue',          look = 'slate', label = 'Blue Slate Phone' },
+        { item = 'phone_slate_green',              color = 'green',         look = 'slate', label = 'Green Slate Phone' },
+        { item = 'phone_slate_orange',             color = 'orange',        look = 'slate', label = 'Orange Slate Phone' },
+        { item = 'phone_slate_pink',               color = 'pink',          look = 'slate', label = 'Pink Slate Phone' },
+        { item = 'phone_slate_purple',             color = 'purple',        look = 'slate', label = 'Purple Slate Phone' },
+        { item = 'phone_slate_red',                color = 'red',           look = 'slate', label = 'Red Slate Phone' },
+        { item = 'phone_slate_yellow',             color = 'yellow',        look = 'slate', label = 'Yellow Slate Phone' },
+        { item = 'phone_slate_white',              color = 'white',         look = 'slate', label = 'White Slate Phone' },
+        { item = 'phone_slate_silver',             color = 'silver',        look = 'slate', label = 'Silver Slate Phone' },
+        { item = 'phone_slate_graphite',           color = 'graphite',      look = 'slate', label = 'Graphite Slate Phone' },
+        { item = 'phone_slate_titanium',           color = 'titanium',      look = 'slate', label = 'Titanium Slate Phone' },
+        { item = 'phone_slate_gold',               color = 'gold',          look = 'slate', label = 'Gold Slate Phone' },
+        { item = 'phone_slate_rosegold',           color = 'rosegold',      look = 'slate', label = 'Rose Gold Slate Phone' },
+        { item = 'phone_slate_bronze',             color = 'bronze',        look = 'slate', label = 'Bronze Slate Phone' },
+        { item = 'phone_slate_mocha',              color = 'mocha',         look = 'slate', label = 'Mocha Slate Phone' },
+        { item = 'phone_slate_cream',              color = 'cream',         look = 'slate', label = 'Cream Slate Phone' },
+        { item = 'phone_slate_burgundy',           color = 'burgundy',      look = 'slate', label = 'Burgundy Slate Phone' },
+        { item = 'phone_slate_coral',              color = 'coral',         look = 'slate', label = 'Coral Slate Phone' },
+        { item = 'phone_slate_peach',              color = 'peach',         look = 'slate', label = 'Peach Slate Phone' },
+        { item = 'phone_slate_lime',               color = 'lime',          look = 'slate', label = 'Lime Slate Phone' },
+        { item = 'phone_slate_mint',               color = 'mint',          look = 'slate', label = 'Mint Slate Phone' },
+        { item = 'phone_slate_sage',               color = 'sage',          look = 'slate', label = 'Sage Slate Phone' },
+        { item = 'phone_slate_forest',             color = 'forest',        look = 'slate', label = 'Forest Slate Phone' },
+        { item = 'phone_slate_teal',               color = 'teal',          look = 'slate', label = 'Teal Slate Phone' },
+        { item = 'phone_slate_cyan',               color = 'cyan',          look = 'slate', label = 'Cyan Slate Phone' },
+        { item = 'phone_slate_skyblue',            color = 'skyblue',       look = 'slate', label = 'Sky Blue Slate Phone' },
+        { item = 'phone_slate_navy',               color = 'navy',          look = 'slate', label = 'Navy Slate Phone' },
+        { item = 'phone_slate_indigo',             color = 'indigo',        look = 'slate', label = 'Indigo Slate Phone' },
+        { item = 'phone_slate_lavender',           color = 'lavender',      look = 'slate', label = 'Lavender Slate Phone' },
+        { item = 'phone_slate_magenta',            color = 'magenta',       look = 'slate', label = 'Magenta Slate Phone' },
+        { item = 'phone_slate_rose',               color = 'rose',          look = 'slate', label = 'Rose Slate Phone' },
+        { item = 'phone_slate_jetblack',           color = 'jetblack',      look = 'slate', label = 'Jet Black Slate Phone' },
+        { item = 'phone_slate_pearl',              color = 'pearl',         look = 'slate', label = 'Pearl Slate Phone' },
+        { item = 'phone_slate_ruby',               color = 'ruby',          look = 'slate', label = 'Ruby Slate Phone' },
+        { item = 'phone_slate_sapphire',           color = 'sapphire',      look = 'slate', label = 'Sapphire Slate Phone' },
+        { item = 'phone_slate_blackgold',          color = 'blackgold',     look = 'slate', label = 'Black & Gold Slate Phone' },
+        { item = 'phone_slate_whitegold',          color = 'whitegold',     look = 'slate', label = 'White & Gold Slate Phone' },
+        { item = 'phone_slate_leather_brown',      color = 'leather_brown', look = 'slate', label = 'Brown Leather Slate Phone' },
+        { item = 'phone_slate_leather_black',      color = 'leather_black', look = 'slate', label = 'Black Leather Slate Phone' },
+        { item = 'phone_slate_leather_tan',        color = 'leather_tan',   look = 'slate', label = 'Tan Leather Slate Phone' },
+
+        { item = 'phone_slate_fold_black',         color = 'black',         look = 'slate', fold = true, label = 'Foldable Black Slate Phone' },
+        { item = 'phone_slate_fold_blue',          color = 'blue',          look = 'slate', fold = true, label = 'Foldable Blue Slate Phone' },
+        { item = 'phone_slate_fold_green',         color = 'green',         look = 'slate', fold = true, label = 'Foldable Green Slate Phone' },
+        { item = 'phone_slate_fold_orange',        color = 'orange',        look = 'slate', fold = true, label = 'Foldable Orange Slate Phone' },
+        { item = 'phone_slate_fold_pink',          color = 'pink',          look = 'slate', fold = true, label = 'Foldable Pink Slate Phone' },
+        { item = 'phone_slate_fold_purple',        color = 'purple',        look = 'slate', fold = true, label = 'Foldable Purple Slate Phone' },
+        { item = 'phone_slate_fold_red',           color = 'red',           look = 'slate', fold = true, label = 'Foldable Red Slate Phone' },
+        { item = 'phone_slate_fold_yellow',        color = 'yellow',        look = 'slate', fold = true, label = 'Foldable Yellow Slate Phone' },
+        { item = 'phone_slate_fold_white',         color = 'white',         look = 'slate', fold = true, label = 'Foldable White Slate Phone' },
+        { item = 'phone_slate_fold_silver',        color = 'silver',        look = 'slate', fold = true, label = 'Foldable Silver Slate Phone' },
+        { item = 'phone_slate_fold_graphite',      color = 'graphite',      look = 'slate', fold = true, label = 'Foldable Graphite Slate Phone' },
+        { item = 'phone_slate_fold_titanium',      color = 'titanium',      look = 'slate', fold = true, label = 'Foldable Titanium Slate Phone' },
+        { item = 'phone_slate_fold_gold',          color = 'gold',          look = 'slate', fold = true, label = 'Foldable Gold Slate Phone' },
+        { item = 'phone_slate_fold_rosegold',      color = 'rosegold',      look = 'slate', fold = true, label = 'Foldable Rose Gold Slate Phone' },
+        { item = 'phone_slate_fold_bronze',        color = 'bronze',        look = 'slate', fold = true, label = 'Foldable Bronze Slate Phone' },
+        { item = 'phone_slate_fold_mocha',         color = 'mocha',         look = 'slate', fold = true, label = 'Foldable Mocha Slate Phone' },
+        { item = 'phone_slate_fold_cream',         color = 'cream',         look = 'slate', fold = true, label = 'Foldable Cream Slate Phone' },
+        { item = 'phone_slate_fold_burgundy',      color = 'burgundy',      look = 'slate', fold = true, label = 'Foldable Burgundy Slate Phone' },
+        { item = 'phone_slate_fold_coral',         color = 'coral',         look = 'slate', fold = true, label = 'Foldable Coral Slate Phone' },
+        { item = 'phone_slate_fold_peach',         color = 'peach',         look = 'slate', fold = true, label = 'Foldable Peach Slate Phone' },
+        { item = 'phone_slate_fold_lime',          color = 'lime',          look = 'slate', fold = true, label = 'Foldable Lime Slate Phone' },
+        { item = 'phone_slate_fold_mint',          color = 'mint',          look = 'slate', fold = true, label = 'Foldable Mint Slate Phone' },
+        { item = 'phone_slate_fold_sage',          color = 'sage',          look = 'slate', fold = true, label = 'Foldable Sage Slate Phone' },
+        { item = 'phone_slate_fold_forest',        color = 'forest',        look = 'slate', fold = true, label = 'Foldable Forest Slate Phone' },
+        { item = 'phone_slate_fold_teal',          color = 'teal',          look = 'slate', fold = true, label = 'Foldable Teal Slate Phone' },
+        { item = 'phone_slate_fold_cyan',          color = 'cyan',          look = 'slate', fold = true, label = 'Foldable Cyan Slate Phone' },
+        { item = 'phone_slate_fold_skyblue',       color = 'skyblue',       look = 'slate', fold = true, label = 'Foldable Sky Blue Slate Phone' },
+        { item = 'phone_slate_fold_navy',          color = 'navy',          look = 'slate', fold = true, label = 'Foldable Navy Slate Phone' },
+        { item = 'phone_slate_fold_indigo',        color = 'indigo',        look = 'slate', fold = true, label = 'Foldable Indigo Slate Phone' },
+        { item = 'phone_slate_fold_lavender',      color = 'lavender',      look = 'slate', fold = true, label = 'Foldable Lavender Slate Phone' },
+        { item = 'phone_slate_fold_magenta',       color = 'magenta',       look = 'slate', fold = true, label = 'Foldable Magenta Slate Phone' },
+        { item = 'phone_slate_fold_rose',          color = 'rose',          look = 'slate', fold = true, label = 'Foldable Rose Slate Phone' },
+        { item = 'phone_slate_fold_jetblack',      color = 'jetblack',      look = 'slate', fold = true, label = 'Foldable Jet Black Slate Phone' },
+        { item = 'phone_slate_fold_pearl',         color = 'pearl',         look = 'slate', fold = true, label = 'Foldable Pearl Slate Phone' },
+        { item = 'phone_slate_fold_ruby',          color = 'ruby',          look = 'slate', fold = true, label = 'Foldable Ruby Slate Phone' },
+        { item = 'phone_slate_fold_sapphire',      color = 'sapphire',      look = 'slate', fold = true, label = 'Foldable Sapphire Slate Phone' },
+        { item = 'phone_slate_fold_blackgold',     color = 'blackgold',     look = 'slate', fold = true, label = 'Foldable Black & Gold Slate Phone' },
+        { item = 'phone_slate_fold_whitegold',     color = 'whitegold',     look = 'slate', fold = true, label = 'Foldable White & Gold Slate Phone' },
+        { item = 'phone_slate_fold_leather_brown', color = 'leather_brown', look = 'slate', fold = true, label = 'Foldable Brown Leather Slate Phone' },
+        { item = 'phone_slate_fold_leather_black', color = 'leather_black', look = 'slate', fold = true, label = 'Foldable Black Leather Slate Phone' },
+        { item = 'phone_slate_fold_leather_tan',   color = 'leather_tan',   look = 'slate', fold = true, label = 'Foldable Tan Leather Slate Phone' },
     },
 
     -- ESX only. ESX keeps its item catalogue in the `items` database table and
@@ -170,10 +306,11 @@ return {
     -- list/detail apps (Mail, Files, MDT, Settings) showing both panes at once, and split view
     -- for running two apps together.
     --
-    -- On by default, so players have the option without an owner having to find this setting.
-    -- Nothing is forced on them: the phone opens folded every time and stays that way until the
-    -- hinge is pressed. Set false and the hinge key is not drawn on the shell at all, split view
-    -- is unreachable, and the phone behaves exactly as it did before any of this existed.
+    -- On by default. Which phones fold is said by their items (Items above, `fold = true`): those
+    -- get the hinge, the rest are regular phones with no hinge key on the shell. Nothing is forced
+    -- on a foldable's owner either: it opens the way it was last put away and stays that way until
+    -- the hinge is pressed. Set false and no phone folds whatever its item says: no hinge key is
+    -- drawn at all, split view is unreachable, and a foldable item is held as a regular phone.
     Foldable = true,
 
     -- Screen width unfolded, in the UI's own pixels. The closed screen is 440, so 880 is two
@@ -327,19 +464,23 @@ return {
     PropPrefix    = 'sd_phone_',
     PropBone      = 28422,   -- SKEL_R_Hand
 
-    -- The design, logo and trims a player picks for their own phone in the Cases app (the Phone tab).
-    -- It costs nothing and is remembered on their machine; other players see it on the prop.
-    --   * Until a player picks, their phone is the models named above and under Foldable and
-    --     PropScreen (PropPrefix, FoldPropPrefix, PropScreen.Model).
-    --   * Models lists what they can pick: each design (`classic`, `slate`) and, for it, each logo
-    --     (`sd`, `ifruit`, `generic`) with the stem its models are named from: <stem>_<colour>,
-    --     <stem>_fold_<colour>, <stem>_fold_<colour>_open and <stem>_dui_<colour>. sd-phone-props
-    --     streams all six. Remove a logo or a whole design to take it out of the app; models that
-    --     are not streamed fall back to the ones named above.
+    -- The logo and trims a player picks for their phones at a case store (its Phone tab,
+    -- configs/cases.lua). It costs nothing and is remembered on their machine; other players see it
+    -- on the prop. The design itself is not picked there: it comes with the phone, as its item says
+    -- (Items above, `look`).
+    --   * Designs says which phone designs this server has: `classic` (flat rails, a raised camera
+    --     block) and `slate` (rounded rails, three lenses straight off the glass). Set one to false
+    --     and phones of that design are held, and drawn, as the other.
+    --   * Models lists, for each design, each logo (`sd`, `ifruit`, `generic`) with the stem its
+    --     models are named from: <stem>_<colour>, <stem>_fold_<colour>, <stem>_fold_<colour>_open
+    --     and <stem>_dui_<colour>. sd-phone-props streams all six. Remove a logo to take it out of
+    --     the store; models that are not streamed fall back to the ones named above (PropPrefix,
+    --     FoldPropPrefix, PropScreen.Model), which is also what a classic phone with no logo picked is.
     --   * Trims are small coloured parts fitted to the phone itself (sd_trim_* in sd-phone-props):
     --     lens rings, the camera surround and button caps, each in any of the 64 case colours.
     Looks = {
-        Enabled = true,    -- false: everyone holds the models named above and the Phone tab is hidden
+        Enabled = true,    -- false: everyone holds the models named above and the store has no Phone tab
+        Designs = { classic = true, slate = true },   -- false: phones of that design are shown as the other one
         Trims   = true,    -- false: no trims
         Logos   = true,    -- false: no logo choice; a design shows the first logo it lists (sd, ifruit, generic)
         Models = {
