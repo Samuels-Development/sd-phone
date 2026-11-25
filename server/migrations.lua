@@ -1,4 +1,4 @@
----@type table Shared server helpers (server.util): ensureColumns.
+---@type table Shared server helpers (server.util): ensureColumns, tableExists, ensureIndex.
 local util = require 'server.util'
 
 ---@type table Migrations module; the table returned at end of file. The single place column
@@ -154,9 +154,10 @@ local COLUMNS = {
 }
 
 ---@type table<string, table<string, string>> table name -> index name -> column list incl. parens.
----Indexes added since v0.9.0, back-filled the same way: declare each in the store's CREATE TABLE
----too, so fresh installs get it, and here, so running servers pick it up. Applied after COLUMNS,
----so an index may cover a column that list adds.
+---Indexes added since v0.9.0, back-filled the same way. An index on a table its module owns is
+---declared in that store's CREATE TABLE too, so fresh installs get it, and is applied by M.apply
+---after COLUMNS, so it may cover a column that list adds. An index for a scan one module runs
+---against a table another module owns is applied by the scanning module through M.applyIndexes.
 local INDEXES = {
     -- The thread list's preview query filters each mailbox on withheld, groups it by conversation
     -- and reads created_at, direction and is_read; covering all of it keeps that one query off the
@@ -164,7 +165,32 @@ local INDEXES = {
     phone_messages = {
         idx_phone_messages_preview = '(citizenid, withheld, conversation, created_at, direction, is_read)',
     },
+
+    -- Cloud backup (server/sim/backup.lua) reads, copies and clears every row of one identity in
+    -- both, and neither table's keys lead with citizenid, so each of those statements read the
+    -- whole table.
+    phone_message_reactions = {
+        idx_phone_message_reactions_cid = '(citizenid)',
+    },
+    phone_app_sessions = {
+        idx_phone_app_sessions_cid = '(citizenid)',
+    },
 }
+
+---Adds the catalogued lookup indexes to one table; a no-op for tables the catalog does not list.
+---A table that does not exist yet is skipped rather than reported: on a fresh install its owner
+---creates it on another boot thread, and an empty table needs no index before the next boot.
+---@param tbl string table name
+---@return integer added indexes created on this call
+function M.applyIndexes(tbl)
+    local defs = INDEXES[tbl]
+    if not defs or not util.tableExists(tbl) then return 0 end
+    local added = 0
+    for name, ddl in pairs(defs) do
+        if util.ensureIndex(tbl, name, ddl) then added = added + 1 end
+    end
+    return added
+end
 
 ---Brings one table up to date: its missing columns in a single information_schema read and at
 ---most one ALTER, then any missing index. Called from the owning store's ensureSchema once the

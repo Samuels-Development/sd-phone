@@ -225,6 +225,9 @@ CreateThread(function()
         boot.schemaFailed('sim', err)
         return
     end
+    if config.Sim.Backup and config.Sim.Backup.Enabled ~= false then
+        pcall(backup.ensureIndexes)
+    end
 
     state.builtin = config.Sim.BuiltInNumbers == true
     -- Data owner: 'device' | 'sim' | 'character'. The legacy DeviceIdentity boolean still

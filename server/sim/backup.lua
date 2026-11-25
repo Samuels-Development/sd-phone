@@ -1,3 +1,6 @@
+---@type table Lookup-index catalog (server.migrations): indexes the identity scans below lean on.
+local migrations = require 'server.migrations'
+
 ---@type table Backup module; the table returned at end of file. Cloud-backup restore engine:
 ---copies one phone profile's data onto another identity. Mirrors the table catalog in
 ---server/admin/wipe.lua - keep the two in sync when an app gains a new per-character table.
@@ -7,9 +10,11 @@ local backup = {}
 ---@param sql string parameterized statement
 ---@param params table statement parameters
 ---@return integer affected rows affected (0 on failure)
+---@return boolean ok false when the statement raised
 local function run(sql, params)
     local ok, res = pcall(function() return MySQL.update.await(sql, params) end)
-    return ok and (tonumber(res) or 0) or 0
+    if not ok then return 0, false end
+    return tonumber(res) or 0, true
 end
 
 ---@type table<string, table> Memoised describe() results. A table's shape can't change while the
@@ -61,9 +66,10 @@ local FK_REMAP = {
 ---@param fromId string source identity
 ---@param toId string target identity
 ---@return integer rows
+---@return boolean ok false when the copy statement raised
 local function copyTable(tbl, cidCol, fromId, toId)
     local cols, autoinc, pk = describe(tbl)
-    if #cols == 0 then return 0 end
+    if #cols == 0 then return 0, true end
 
     -- Remap `id` only when it is the sole primary key (identity-composite PKs copy verbatim).
     local remapId = pk.id and not pk[cidCol]
@@ -157,17 +163,30 @@ local SETTINGS_COLS = {
 ---@param fromId string source identity
 ---@param toId string target identity
 ---@return integer rows
+---@return boolean ok false when either statement raised
 local function copySettings(fromId, toId)
-    local rows = run('INSERT IGNORE INTO phone_settings (citizenid) VALUES (?)', { toId })
+    local rows, created = run('INSERT IGNORE INTO phone_settings (citizenid) VALUES (?)', { toId })
     local setParts = {}
     for _, col in ipairs(SETTINGS_COLS) do
         setParts[#setParts + 1] = ('a.`%s` = b.`%s`'):format(col, col)
     end
-    return rows + run(([[
+    local updated, ok = run(([[
         UPDATE phone_settings a
         JOIN phone_settings b ON b.citizenid = ?
         SET %s WHERE a.citizenid = ?
     ]]):format(table.concat(setParts, ', ')), { fromId, toId })
+    return rows + updated, created and ok
+end
+
+---True when every named table exists, so a join copy over an app this server never created is
+---skipped as empty rather than counted as a failed statement.
+---@param ... string table names
+---@return boolean
+local function tablesExist(...)
+    for i = 1, select('#', ...) do
+        if #describe((select(i, ...))) == 0 then return false end
+    end
+    return true
 end
 
 ---Copies document signature rows across identities, remapping their own id and the doc_id FK
@@ -176,7 +195,9 @@ end
 ---@param fromId string source identity
 ---@param toId string target identity
 ---@return integer rows
+---@return boolean ok false when the copy statement raised
 local function copyDocSignatures(fromId, toId)
+    if not tablesExist('phone_document_signatures', 'phone_documents') then return 0, true end
     return run([[
         INSERT IGNORE INTO phone_document_signatures (id, doc_id, citizenid, signer, image, created_at)
         SELECT SUBSTRING(MD5(CONCAT(s.id, ?)), 1, 16),
@@ -193,7 +214,9 @@ end
 ---@param fromId string source identity
 ---@param toId string target identity
 ---@return integer rows
+---@return boolean ok false when the copy statement raised
 local function copyAlbumItems(fromId, toId)
+    if not tablesExist('phone_photo_album_items', 'phone_photo_albums') then return 0, true end
     return run([[
         INSERT IGNORE INTO phone_photo_album_items (album_id, photo_id, added_at)
         SELECT SUBSTRING(MD5(CONCAT(i.album_id, ?)), 1, 16),
@@ -203,6 +226,118 @@ local function copyAlbumItems(fromId, toId)
         JOIN phone_photo_albums a ON a.id = i.album_id
         WHERE a.citizenid = ?
     ]], { toId, toId, fromId })
+end
+
+---Copies a phone profile's data from one identity to another: settings, every COPY table and
+---the join-keyed children. Never a VALUE table.
+---@param fromId string source identity
+---@param toId string target identity
+---@return integer rows total rows written
+---@return boolean ok false when any copy statement raised
+local function copyAll(fromId, toId)
+    local rows, ok = copySettings(fromId, toId)
+    for _, t in ipairs(COPY) do
+        local n, fine = copyTable(t[1], t[2], fromId, toId)
+        rows, ok = rows + n, ok and fine
+    end
+    local docs, docsOk = copyDocSignatures(fromId, toId)
+    local albums, albumsOk = copyAlbumItems(fromId, toId)
+    return rows + docs + albums, ok and docsOk and albumsOk
+end
+
+---@type table<string, { from: string, print: string }> Per cloud identity: the phone it was last
+---copied from and that phone's data fingerprint at the time. A sync whose phone still matches
+---skips the wipe-and-copy. Held in memory, so the first sync after a restart always copies.
+local synced = {}
+
+---Aggregate select list for the fingerprint: a row count plus every row's columns hashed and
+---XORed together, so row order is irrelevant. Columns are read as bytes, so a table mixing
+---collations still concatenates. The 64-bit hash comes back as text: as a number it would lose
+---bits on the way into Lua.
+---@param cols string[] column names
+---@param alias string table alias the columns are read through
+---@return string selectList
+local function hashColumns(cols, alias)
+    local parts = {}
+    for i, col in ipairs(cols) do
+        parts[i] = ('IFNULL(CAST(%s.`%s` AS BINARY), 0x00)'):format(alias, col)
+    end
+    return ([[
+        COUNT(*) AS n,
+        CAST(COALESCE(BIT_XOR(
+            CAST(CONV(SUBSTRING(MD5(CONCAT_WS(0x1f, %s)), 1, 16), 16, 10) AS UNSIGNED)
+        ), 0) AS CHAR) AS h
+    ]]):format(table.concat(parts, ', '))
+end
+
+---Fingerprint of everything a sync would copy from `fromId`, read in ONE statement: the settings
+---columns, every COPY table, the join-keyed children, plus whether `cloudId`'s snapshot row still
+---exists (so a snapshot wiped behind this module's back is copied again). Tables this server
+---never created are left out, as copyAll leaves them out. Nil when the read fails.
+---@param fromId string enrolled phone identity
+---@param cloudId string snapshot identity
+---@return string|nil fingerprint
+local function fingerprint(fromId, cloudId)
+    local selects, params = {}, {}
+    local function add(label, sql, id)
+        selects[#selects + 1] = ("SELECT '%s' AS t, %s"):format(label, sql)
+        params[#params + 1] = id
+    end
+
+    local have = {}
+    for _, col in ipairs(describe('phone_settings')) do have[col] = true end
+
+    local settingsCols = {}
+    for _, col in ipairs(SETTINGS_COLS) do
+        if have[col] then settingsCols[#settingsCols + 1] = col end
+    end
+
+    if #settingsCols > 0 then
+        local hash = hashColumns(settingsCols, 'x')
+        add('phone_settings', hash .. ' FROM phone_settings x WHERE x.citizenid = ?', fromId)
+        add('~snapshot', "COUNT(*) AS n, '' AS h FROM phone_settings x WHERE x.citizenid = ?", cloudId)
+    end
+
+    for _, t in ipairs(COPY) do
+        local cols = {}
+        for _, col in ipairs(describe(t[1])) do
+            if col ~= t[2] then cols[#cols + 1] = col end
+        end
+        if #cols > 0 then
+            local hash = hashColumns(cols, 'x')
+            add(t[1], ('%s FROM `%s` x WHERE x.`%s` = ?'):format(hash, t[1], t[2]), fromId)
+        end
+    end
+
+    if tablesExist('phone_document_signatures', 'phone_documents') then
+        add('phone_document_signatures', ([[
+            %s FROM phone_document_signatures x
+            JOIN phone_documents d ON d.id = x.doc_id
+            WHERE d.citizenid = ?
+        ]]):format(hashColumns(describe('phone_document_signatures'), 'x')), fromId)
+    end
+
+    if tablesExist('phone_photo_album_items', 'phone_photo_albums') then
+        add('phone_photo_album_items', ([[
+            %s FROM phone_photo_album_items x
+            JOIN phone_photo_albums a ON a.id = x.album_id
+            WHERE a.citizenid = ?
+        ]]):format(hashColumns(describe('phone_photo_album_items'), 'x')), fromId)
+    end
+
+    if #selects == 0 then return nil end
+
+    local ok, rows = pcall(function()
+        return MySQL.query.await(table.concat(selects, ' UNION ALL '), params)
+    end)
+    if not ok or type(rows) ~= 'table' then return nil end
+
+    local parts = {}
+    for i, r in ipairs(rows) do
+        parts[i] = ('%s=%s:%s'):format(tostring(r.t), tostring(r.n), tostring(r.h))
+    end
+    table.sort(parts)
+    return table.concat(parts, ';')
 end
 
 ---True when `id` is a snapshot namespace rather than a live phone identity.
@@ -219,6 +354,7 @@ end
 ---@param cloudId string snapshot identity ('cloud:' prefixed)
 function backup.wipe(cloudId)
     if not isCloud(cloudId) then return end
+    synced[cloudId] = nil
     -- Join-keyed children go first: their parent rows are the only link to the cloud identity.
     run([[
         DELETE i FROM phone_photo_album_items i
@@ -243,19 +379,24 @@ end
 ---Wipe-then-copy (not merge) so deletions and edits on the phone reach the snapshot. Restore
 ---side effects (group-membership move, mail-login append) deliberately stay out - the cloud
 ---identity is a dead namespace that never acts.
+---
+---A phone whose data fingerprint still matches the one its snapshot was copied at is skipped:
+---the snapshot already holds exactly that data, and a holster-triggered auto-sync otherwise
+---rewrote every row of every table. The fingerprint is only recorded after a copy in which no
+---statement failed, so a partial snapshot is always copied again.
 ---@param fromId string enrolled phone identity
 ---@param cloudId string snapshot identity ('cloud:' prefixed)
----@return integer rows total rows written
+---@return integer rows total rows written (0 when skipped as unchanged)
 function backup.sync(fromId, cloudId)
     if not isCloud(cloudId) or fromId == cloudId then return 0 end
-    backup.wipe(cloudId)
+    local current = fingerprint(fromId, cloudId)
+    local last = synced[cloudId]
+    if current and last and last.from == fromId and last.print == current then return 0 end
 
-    local rows = copySettings(fromId, cloudId)
-    for _, t in ipairs(COPY) do
-        rows = rows + copyTable(t[1], t[2], fromId, cloudId)
-    end
-    rows = rows + copyDocSignatures(fromId, cloudId)
-    return rows + copyAlbumItems(fromId, cloudId)
+    backup.wipe(cloudId)
+    local rows, ok = copyAll(fromId, cloudId)
+    if current and ok then synced[cloudId] = { from = fromId, print = current } end
+    return rows
 end
 
 ---Restores a phone profile: copies `fromId`'s data onto `toId` (the current SIM identity) and
@@ -274,14 +415,7 @@ end
 function backup.restore(fromId, toId, toNumber, liveFromId)
     liveFromId = liveFromId or fromId
     if toId == fromId or toId == liveFromId then return 0 end
-    local rows = copySettings(fromId, toId)
-
-    for _, t in ipairs(COPY) do
-        rows = rows + copyTable(t[1], t[2], fromId, toId)
-    end
-
-    rows = rows + copyDocSignatures(fromId, toId)
-    rows = rows + copyAlbumItems(fromId, toId)
+    local rows = copyAll(fromId, toId)
 
     -- Group chats fan out by the member rows, so membership MOVES to the restored profile
     -- (the old phone drops out) and the stored member number becomes the new SIM's number.
@@ -315,6 +449,12 @@ function backup.restore(fromId, toId, toNumber, liveFromId)
     end
 
     return rows
+end
+
+---Adds the lookup indexes server.migrations declares for the tables a sync reads and wipes by
+---identity. Run at boot by server/sim/init.lua while cloud backup is on.
+function backup.ensureIndexes()
+    for _, t in ipairs(COPY) do migrations.applyIndexes(t[1]) end
 end
 
 return backup
