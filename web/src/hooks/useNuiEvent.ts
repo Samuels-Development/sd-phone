@@ -1,5 +1,6 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
 
+import { isHostMessage } from '@/core/messageSource';
 import type { NuiMessage } from '@/core/types';
 
 type AnyHandlerRef = MutableRefObject<(data: unknown) => void>;
@@ -11,6 +12,7 @@ function ensureListener(): void {
     if (listening || typeof window === 'undefined') return;
     listening = true;
     window.addEventListener('message', (event: MessageEvent) => {
+        if (!isHostMessage(event)) return;
         const msg = event.data as { action?: string; data?: unknown } | undefined;
         if (!msg?.action) return;
         const refs = registry.get(msg.action);

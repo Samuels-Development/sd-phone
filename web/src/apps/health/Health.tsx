@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { HeartPulse, Stethoscope, Trophy } from 'lucide-react';
 
+import { isHostMessage } from '@/core/messageSource';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { useSessionState } from '@/hooks/useSessionState';
@@ -25,6 +26,7 @@ const live = {
     heartRate: null as number | null,
 };
 window.addEventListener('message', (e: MessageEvent) => {
+    if (!isHostMessage(e)) return;
     const msg = e.data as { action?: string; data?: Record<string, unknown> } | undefined;
     if (!msg?.data) return;
     if (msg.action === 'sd-phone:health') {

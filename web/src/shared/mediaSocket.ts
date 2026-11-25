@@ -1,5 +1,6 @@
 import { device } from '@device';
 import { apiData } from '@/core/api';
+import { isHostMessage } from '@/core/messageSource';
 import { mediaDebug } from './mediaDebug';
 
 export const SDMR_HEADER_BYTES = 24;
@@ -926,6 +927,7 @@ export function relayJoin(o: RelayJoinOptions): Promise<RelayStreamHandle | null
 
 if (typeof window !== 'undefined') {
     window.addEventListener('message', (event: MessageEvent) => {
+        if (!isHostMessage(event)) return;
         const msg = event.data as { action?: string } | undefined;
         if (msg?.action === CHARACTER_LOADED) resetRelayEndpoint();
     });

@@ -1,3 +1,4 @@
+import { isHostMessage } from '@/core/messageSource';
 import { fetchNui } from '@/core/nui';
 
 /**
@@ -81,6 +82,7 @@ function stop(): void {
 /** Listens for the game turning capture on and off. Call once at boot. */
 export function installPropScreenCapture(): void {
     window.addEventListener('message', (event: MessageEvent) => {
+        if (!isHostMessage(event)) return;
         const msg = event.data as { action?: string; on?: boolean } | undefined;
         if (msg?.action !== 'sd-phone:propscreen:capture') return;
         if (msg.on) start(); else stop();

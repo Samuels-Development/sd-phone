@@ -1,3 +1,4 @@
+import { isHostMessage } from '@/core/messageSource';
 import { fetchNui } from '@/core/nui';
 import { TILE_SOURCES, tileUrl } from './data';
 
@@ -41,6 +42,7 @@ let running = false;
 
 export function initTileCheck(): void {
     window.addEventListener('message', async (event: MessageEvent) => {
+        if (!isHostMessage(event)) return;
         const msg = event.data as { action?: string } | undefined;
         if (!msg || msg.action !== 'sd-phone:maps:tilecheck' || running) return;
         running = true;
