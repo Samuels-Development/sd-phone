@@ -14,15 +14,22 @@ const catalogs: Record<string, Record<string, string>> = {
     en: {},
 };
 
-const catalogFiles = import.meta.glob<{ default: Record<string, unknown> }>(
-    ['../../../locales/*.json', '!../../../locales/en.json']);
+type CatalogModule = { default: Record<string, unknown> };
 
-const loaders: Record<string, () => Promise<{ default: Record<string, unknown> }>> = {};
+const catalogFiles: Record<string, () => Promise<CatalogModule>> = import.meta.env.SD_FETCH_LOCALES
+    ? {}
+    : import.meta.glob<CatalogModule>(['../../../locales/*.json', '!../../../locales/en.json']);
+
+const loaders: Record<string, () => Promise<CatalogModule>> = {};
 for (const path in catalogFiles) {
     const code = path.slice(path.lastIndexOf('/') + 1).replace('.json', '');
     if (code === 'en') continue;
     loaders[code] = catalogFiles[path];
 }
+
+const shippedCodes = new Set<string>(import.meta.env.SD_FETCH_LOCALES
+    ? (import.meta.env.SD_LOCALE_CODES ?? []).filter(code => code !== 'en')
+    : Object.keys(loaders));
 
 export interface LocaleOption { code: string; name: string }
 
@@ -36,7 +43,7 @@ function nativeName(code: string): string {
 
 export const SUPPORTED_LOCALES: LocaleOption[] = [
     { code: 'en', name: 'English' },
-    ...Object.keys(loaders).sort().map(code => ({ code, name: nativeName(code) })),
+    ...[...shippedCodes].sort().map(code => ({ code, name: nativeName(code) })),
 ];
 
 
@@ -48,7 +55,7 @@ export function registerRuntimeLocales(codes: unknown): void {
     let added = false;
     for (const raw of codes) {
         const code = String(raw);
-        if (code === 'en' || loaders[code] || runtimeCodes.has(code) || !/^[a-z]{2}(-[a-z]{2})?$/i.test(code)) continue;
+        if (code === 'en' || shippedCodes.has(code) || runtimeCodes.has(code) || !/^[a-z]{2}(-[a-z]{2})?$/i.test(code)) continue;
         runtimeCodes.add(code);
         SUPPORTED_LOCALES.push({ code, name: nativeName(code) });
         added = true;
@@ -86,7 +93,7 @@ function bundledCatalog(code: string): Promise<Record<string, unknown> | null> {
 }
 
 function isKnownLocale(code: string): boolean {
-    return Boolean(catalogs[code] || loaders[code] || runtimeCodes.has(code));
+    return Boolean(catalogs[code] || shippedCodes.has(code) || runtimeCodes.has(code));
 }
 
 export function setLocale(requested: string): Promise<void> {

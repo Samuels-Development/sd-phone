@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -19,9 +19,26 @@ function inlineModels(): Plugin {
     };
 }
 
+// The UI catalogs ship as locales/*.json, which fxmanifest already sends for the Lua side and
+// the phone fetches at runtime, so the FiveM build bundles none of them and only learns which
+// codes exist. The demo, the dev server, tests and sd-tablet (whose config has no such define)
+// bundle every catalog instead.
+function localeCodes(): string[] {
+    return readdirSync(new URL('../locales', import.meta.url))
+        .filter(file => file.endsWith('.json') && file !== 'en.json')
+        .map(file => file.slice(0, -'.json'.length))
+        .sort();
+}
+
 export default defineConfig(({ mode }) => ({
     plugins: [inlineModels(), react(), sdkAssets()],
     base: './',
+    define: mode === 'production'
+        ? {
+            'import.meta.env.SD_FETCH_LOCALES': 'true',
+            'import.meta.env.SD_LOCALE_CODES': JSON.stringify(localeCodes()),
+        }
+        : {},
     resolve: {
         alias: {
             '@': fileURLToPath(new URL('./src', import.meta.url)),
