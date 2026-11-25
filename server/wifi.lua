@@ -14,9 +14,64 @@ local store = require 'server.wifi.store'
 
 ---@type table Wi-Fi settings (configs/wifi.lua).
 local cfg = config.Wifi or {}
----@type table[] Configured networks, empty while the system is switched off. Folding Enabled in
----here means every reading downstream treats a disabled system as a world with no routers.
-local NETWORKS = (cfg.Enabled == true and type(cfg.Networks) == 'table') and cfg.Networks or {}
+
+---The server-only Wi-Fi passwords (configs/server/wifi.lua), keyed by network id. Empty when the
+---file is absent, as on a setup from before it existed.
+---@return table<string, string> passwords
+local function serverPasswords()
+    local found, secrets = pcall(require, 'configs.server.wifi')
+    local list = found and type(secrets) == 'table' and secrets.Passwords or nil
+    return type(list) == 'table' and list or {}
+end
+
+---The server's own copy of every configured network, with its password attached: the one still
+---written in configs/wifi.lua when there is one (an older setup keeps working as it was), else the
+---one in configs/server/wifi.lua. Prints a warning for each way the two files disagree, since the
+---first one is downloaded by every client.
+---@param list table[] networks from configs/wifi.lua
+---@param passwords table<string, string> passwords from configs/server/wifi.lua
+---@return table[] networks fresh tables the shared config never sees mutated
+local function withPasswords(list, passwords)
+    local out, exposed, unmarked, missing, known = {}, {}, {}, {}, {}
+    for i = 1, #list do
+        local net = list[i]
+        if type(net) == 'table' then
+            local copy = {}
+            for k, v in pairs(net) do copy[k] = v end
+            local id = type(net.id) == 'string' and net.id or nil
+            local legacy = type(net.password) == 'string' and net.password ~= '' and net.password or nil
+            local secret = id and type(passwords[id]) == 'string' and passwords[id] ~= '' and passwords[id] or nil
+            copy.password = legacy or secret
+            if id then known[id] = true end
+            if legacy then exposed[#exposed + 1] = tostring(id) end
+            if secret and not legacy and net.secured ~= true then unmarked[#unmarked + 1] = tostring(id) end
+            if net.secured == true and not copy.password then missing[#missing + 1] = tostring(id) end
+            out[#out + 1] = copy
+        end
+    end
+
+    local stray = {}
+    for id in pairs(passwords) do
+        if not known[id] then stray[#stray + 1] = tostring(id) end
+    end
+    table.sort(stray)
+
+    local function warn(ids, text)
+        if #ids == 0 then return end
+        print(('^3[sd-phone:wifi]^0 %s: %s'):format(text, table.concat(ids, ', ')))
+    end
+    warn(exposed, 'configs/wifi.lua still holds the password of these networks, and that file is sent to every client. Move each one to configs/server/wifi.lua and mark the network secured = true')
+    warn(unmarked, 'these networks have a password in configs/server/wifi.lua but are not marked secured = true in configs/wifi.lua, so phones show them as open')
+    warn(missing, 'these networks are marked secured but have no password in configs/server/wifi.lua, so nobody can join them')
+    warn(stray, 'configs/server/wifi.lua has passwords for networks configs/wifi.lua does not define')
+    return out
+end
+
+---@type table[] Configured networks with their passwords, empty while the system is switched off.
+---Folding Enabled in here means every reading downstream treats a disabled system as a world with
+---no routers. The only place a password is held.
+local NETWORKS = (cfg.Enabled == true and type(cfg.Networks) == 'table')
+    and withPasswords(cfg.Networks, serverPasswords()) or {}
 ---@type table Capability flags a connection carries (configs/wifi.lua Provides).
 local PROVIDES_CFG = type(cfg.Provides) == 'table' and cfg.Provides or {}
 ---@type table<string, boolean> Lowercased capability -> whether Wi-Fi carries it.
@@ -142,8 +197,9 @@ function wifiServer.networksFor(source)
     return wifi.scan(pos.x, pos.y, pos.z, NETWORKS, DROP_BELOW)
 end
 
----A client asking to join a network. The password lives only on this side and is compared only
----here, against a player the server has itself placed inside the network's radius.
+---A client asking to join a network. The password lives only on this side (configs/server/wifi.lua)
+---and is compared only here, against a player the server has itself placed inside the network's
+---radius.
 ---@param source number player server id
 ---@param payload table { id: string, password: string|nil }
 ---@return { success: boolean, message: string|nil }

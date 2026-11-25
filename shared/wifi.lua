@@ -25,11 +25,15 @@ function wifi.strength(x, y, z, net)
     return pct
 end
 
----Whether a network requires a password.
+---Whether a network requires a password: marked `secured` in configs/wifi.lua, or carrying a
+---password itself (the server's own copy of a network, or an older config that still keeps
+---passwords in that file).
 ---@param net table
 ---@return boolean
 function wifi.secured(net)
-    local pw = type(net) == 'table' and net.password or nil
+    if type(net) ~= 'table' then return false end
+    if net.secured == true then return true end
+    local pw = net.password
     return type(pw) == 'string' and pw ~= ''
 end
 
@@ -92,14 +96,15 @@ function wifi.bars(strength)
     return 3
 end
 
----Whether a password satisfies a network. An open network accepts anything, including nothing.
+---Whether a password satisfies a network. An open network accepts anything, including nothing; a
+---secured one with no password known to the server accepts nothing at all.
 ---@param net table|nil
 ---@param password string|nil
 ---@return boolean
 function wifi.accepts(net, password)
     if type(net) ~= 'table' then return false end
     if not wifi.secured(net) then return true end
-    return type(password) == 'string' and password == net.password
+    return type(password) == 'string' and type(net.password) == 'string' and password == net.password
 end
 
 return wifi

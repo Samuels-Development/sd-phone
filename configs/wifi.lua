@@ -7,9 +7,10 @@ return {
     -- the exports, the app gating, and a player's remembered networks, so renaming one drops
     -- every connection to it. `ssid` is only ever what the player reads on screen.
     --
-    -- `password` nil or omitted leaves the network open, which the phone shows without a padlock
-    -- and joins in one tap. Anything else is checked SERVER-SIDE, so the answer never travels to
-    -- a client that has not earned it.
+    -- `secured = true` puts a password on the network: the phone shows a padlock and asks for it.
+    -- The password itself lives in configs/server/wifi.lua, keyed by the same `id`, because this
+    -- file is sent to every client and anything written here can be read by whoever joins. Leave
+    -- `secured` out and the network is open, which the phone joins in one tap.
     --
     -- Unlike cell towers, range here is a true sphere: distance counts height. A router is a box
     -- in a room rather than a mast on a hill, so the floor above should be able to sit outside a
@@ -22,17 +23,17 @@ return {
         { id = 'pillbox',   ssid = 'Pillbox Medical',       coords = vec3(  298.0,  -584.0,  43.3), range = 50.0 },
 
         -- Secured networks: somewhere with a reason to keep people out.
-        { id = 'missionrow', ssid = 'LSPD-Secure',          coords = vec3(  441.0,  -982.0,  30.7), range = 45.0, password = 'lspd1234' },
-        { id = 'mazebank',   ssid = 'MazeBank-Corporate',   coords = vec3(  -70.0,  -800.0,  44.2), range = 50.0, password = 'maze2024' },
-        { id = 'lifeinvader',ssid = 'LifeInvader-Staff',    coords = vec3(-1047.9,  -233.5,  39.0), range = 40.0, password = 'gofuckyourself' },
-        { id = 'unicorn',    ssid = 'Unicorn-VIP',          coords = vec3(  127.0, -1298.0,  29.2), range = 35.0, password = 'backstage' },
-        { id = 'casino',     ssid = 'Diamond-Guest',        coords = vec3(  925.0,    46.0,  81.1), range = 60.0, password = 'jackpot' },
+        { id = 'missionrow', ssid = 'LSPD-Secure',          coords = vec3(  441.0,  -982.0,  30.7), range = 45.0, secured = true },
+        { id = 'mazebank',   ssid = 'MazeBank-Corporate',   coords = vec3(  -70.0,  -800.0,  44.2), range = 50.0, secured = true },
+        { id = 'lifeinvader',ssid = 'LifeInvader-Staff',    coords = vec3(-1047.9,  -233.5,  39.0), range = 40.0, secured = true },
+        { id = 'unicorn',    ssid = 'Unicorn-VIP',          coords = vec3(  127.0, -1298.0,  29.2), range = 35.0, secured = true },
+        { id = 'casino',     ssid = 'Diamond-Guest',        coords = vec3(  925.0,    46.0,  81.1), range = 60.0, secured = true },
 
         -- Out in the sticks, where the towers do not reach. This one is the point of the whole
         -- feature: a dead zone you can still get data in, if you know where to stand.
-        { id = 'gordo',      ssid = 'Gordo Ranger Station', coords = vec3( 2900.0,  5800.0,  98.0), range = 70.0, password = 'ranger' },
+        { id = 'gordo',      ssid = 'Gordo Ranger Station', coords = vec3( 2900.0,  5800.0,  98.0), range = 70.0, secured = true },
         { id = 'sandy',      ssid = 'Sandy Medical',        coords = vec3( 1839.0,  3672.0,  34.3), range = 45.0 },
-        { id = 'paleto',     ssid = 'Paleto Sheriff',       coords = vec3( -448.0,  6012.0,  31.7), range = 45.0, password = 'paleto' },
+        { id = 'paleto',     ssid = 'Paleto Sheriff',       coords = vec3( -448.0,  6012.0,  31.7), range = 45.0, secured = true },
     },
 
     -- What a connection actually carries. Data is the whole point of Wi-Fi, so it is on; calls
