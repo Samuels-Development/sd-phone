@@ -431,7 +431,7 @@ function actions.signUp(source, payload)
     end
     -- The number is deliberately NOT unique: one person runs several mailboxes off one phone.
     -- Recovery stays possible because a reset is identified by the address, not by the number.
-    if store.getAccount(email) then
+    if store.getAccountSummary(email) then
         return fail('mail.emailAlreadyRegistered', 'That email is already registered')
     end
 
@@ -458,7 +458,7 @@ function actions.signUp(source, payload)
     end
     actions.drainPending(me.cid, email)
 
-    local acc = store.getAccount(email)
+    local acc = store.getAccountSummary(email)
     if not acc then return fail('mail.accountVanishedAfterCreation', 'Account vanished after creation') end
     return ok({ account = serializeAccount(acc) })
 end
@@ -500,7 +500,7 @@ function actions.signIn(source, payload)
         return fail('mail.tooManySignInAttempts', 'Too many sign-in attempts. Try again shortly')
     end
 
-    local acc = store.getAccount(email)
+    local acc = store.getAccountSummary(email)
     if acc and not acctActions.allowGuessOn('mail', email) then
         return fail('mail.tooManySignInAttempts', 'Too many sign-in attempts. Try again shortly')
     end
@@ -530,7 +530,7 @@ function actions.signIn(source, payload)
 
     store.addSession(email, me.cid)
     actions.drainPending(me.cid, email)
-    return ok({ account = serializeAccount(store.getAccount(email) or acc) })
+    return ok({ account = serializeAccount(store.getAccountSummary(email) or acc) })
 end
 
 ---Signs out of an account on this player's phone; the account survives, only the caller's
@@ -563,7 +563,7 @@ function actions.send(source, payload)
     local fromEmail = trim(payload.fromEmail):lower()
     if fromEmail == '' then return fail('mail.senderAccountRequired', 'Sender account is required') end
 
-    local sender = store.getAccount(fromEmail)
+    local sender = store.getAccountSummary(fromEmail)
     if not sender then return fail('mail.senderAccountNotFound', 'Sender account not found') end
 
     if not lib.table.contains(sender.logged_in_citizens, me.cid) then
@@ -816,7 +816,7 @@ function actions.saveDraft(source, payload)
     local fromEmail = trim(payload.fromEmail):lower()
     if fromEmail == '' then return fail('mail.senderAccountRequired', 'Sender account is required') end
 
-    local sender = store.getAccount(fromEmail)
+    local sender = store.getAccountSummary(fromEmail)
     if not sender then return fail('mail.senderAccountNotFound', 'Sender account not found') end
 
     if not lib.table.contains(sender.logged_in_citizens, me.cid) then
@@ -860,19 +860,20 @@ function actions.saveDraft(source, payload)
 end
 
 ---Ownership gate for the per-message mutators: the caller's citizenid must appear in the
----account's signed-in list.
+---account's signed-in list. It reads the account without its messages blob: the mutator that
+---follows reads the blob itself, inside the mailbox lock, and a copy fetched here would be stale
+---by then, so opening one mail decodes the blob once rather than twice. Rate-limited here rather
+---than per action because markRead/toggleFlag/move are otherwise reachable at unlimited rate.
 ---@param source number
 ---@param accountEmail string
 ---@return string|nil cid, table|nil err
 local function requireOwnership(source, accountEmail)
     local me = whois(source); if not me then return nil, fail('mail.playerNotFound', 'Player not found') end
     if type(accountEmail) ~= 'string' or accountEmail == '' then return nil, fail('mail.accountEmailRequired', 'Account email is required') end
-    -- Gated here rather than per action: getAccount below is the whole-blob decode every one of
-    -- these mutators pays twice, and markRead/toggleFlag/move are reachable at unlimited rate.
     if not util.rateLimit(me.cid, 'mail:mutate', MUTATE_WINDOW_MS, MUTATE_PER_WINDOW) then
         return nil, fail('mail.slowDown', 'Slow down')
     end
-    local acc = store.getAccount(accountEmail); if not acc then return nil, fail('mail.accountNotFound', 'Account not found') end
+    local acc = store.getAccountSummary(accountEmail); if not acc then return nil, fail('mail.accountNotFound', 'Account not found') end
     if lib.table.contains(acc.logged_in_citizens, me.cid) then return me.cid, nil end
     return nil, fail('mail.notSignedIntoAccount', 'You are not signed into that account')
 end

@@ -65,6 +65,12 @@ local COLUMNS = {
         declined = 'declined TINYINT(1) NOT NULL DEFAULT 0',
     },
 
+    -- Unread inbox mail per mailbox, kept beside the messages blob so a badge reads a number
+    -- instead of decoding the blob. NULL means not counted yet; the mail store fills it in.
+    phone_mail_accounts = {
+        unread_inbox = 'unread_inbox INT NULL',
+    },
+
     -- Which terminal filed the report. Defaulting to 'leo' is what keeps the back-fill safe: every
     -- row that predates the medical terminal was written by a police department, and the default
     -- states exactly that rather than leaving a NULL for the scoping clause to interpret.

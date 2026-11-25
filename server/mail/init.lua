@@ -24,6 +24,7 @@ CreateThread(function()
     -- from a live one once phone_mail_accounts exists; the two schemas boot on separate threads.
     pcall(actions.repairOrphanAccounts)
     boot.schemaReady()
+    pcall(store.backfillUnread)
 end)
 
 ---Completes a successful send envelope: runs the delivery fan-out, then strips the pushes list
@@ -204,7 +205,7 @@ end)
 exports('mailAddressExists', function(email)
     local addr = trim(email):lower()
     if addr == '' then return false end
-    return store.getAccount(addr) ~= nil
+    return store.getAccountSummary(addr) ~= nil
 end)
 
 ---Reads a mailbox's messages in the serialized MailMessage shape; nil when the account doesn't

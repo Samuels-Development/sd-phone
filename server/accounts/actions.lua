@@ -62,9 +62,9 @@ local TARGET_MAX     = 30
 local function ownsAccount(app, cid, acc)
     if app == 'mail' then
         local want  = tostring(acc.username or ''):lower()
-        local boxes = mailStore.listAccountsForCitizen(cid) or {}
+        local boxes = mailStore.listEmailsForCitizen(cid) or {}
         for i = 1, #boxes do
-            if tostring(boxes[i].email or ''):lower() == want then return true end
+            if tostring(boxes[i]):lower() == want then return true end
         end
         return false
     end
@@ -363,8 +363,8 @@ function actions.signOutEverywhere(cid, app)
     -- Mail predates the engine and keeps its sessions in its own table, so it is never covered by
     -- the shared session clears below.
     if app == nil or app == 'mail' then
-        for _, acc in ipairs(mailStore.listAccountsForCitizen(cid)) do
-            if mailStore.removeSession(acc.email, cid) then signedOut = signedOut + 1 end
+        for _, email in ipairs(mailStore.listEmailsForCitizen(cid)) do
+            if mailStore.removeSession(email, cid) then signedOut = signedOut + 1 end
         end
     end
 
@@ -848,8 +848,8 @@ function actions.myEmail(source)
     local cid = player.getIdentifier(source)
     if not cid then return ok({ emails = {} }) end
     local emails = {}
-    for _, acc in ipairs(mailStore.listAccountsForCitizen(cid)) do
-        if acc.email and acc.email ~= '' then emails[#emails + 1] = acc.email end
+    for _, email in ipairs(mailStore.listEmailsForCitizen(cid)) do
+        if email ~= '' then emails[#emails + 1] = email end
     end
     return ok({ email = emails[1], emails = emails })
 end
