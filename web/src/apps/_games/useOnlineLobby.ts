@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useDeckActive } from '@/shell/deckActive';
+import { isHostMessage } from '@/core/messageSource';
 import { t } from '@/i18n';
 import {
     checkPendingApi, createLobbyApi, declineInviteApi, finishApi, inviteLobbyApi, joinLobbyApi,
@@ -52,11 +53,12 @@ export interface OnlineLobby {
     goHome: () => void;
 }
 
-function useGameEvent<T>(action: string, handler: (data: T) => void): void {
+export function useGameEvent<T>(action: string, handler: (data: T) => void): void {
     const handlerRef = useRef(handler);
     handlerRef.current = handler;
     useEffect(() => {
         function listener(event: MessageEvent) {
+            if (!isHostMessage(event)) return;
             const msg = event.data as { action?: string; data?: unknown } | undefined;
             if (!msg || msg.action !== action) return;
             handlerRef.current(msg.data as T);

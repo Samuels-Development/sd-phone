@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { COLS, RANK } from './engine';
 import type { Cell } from './engine';
 import { useCountdown } from '@/hooks/useCountdown';
@@ -8,7 +7,7 @@ import { useKeyboardCapture } from '@/hooks/useKeyboardCapture';
 import { useDeckActive } from '@/shell/deckActive';
 import { emptyProgress, type CoopState, type Progress } from './coopTypes';
 import { moveApi } from '@/apps/_games/onlineApi';
-import type { OnlineResult } from '@/apps/_games/useOnlineLobby';
+import { useGameEvent, type OnlineResult } from '@/apps/_games/useOnlineLobby';
 import { MatchView } from './MatchView';
 import { ResultsView } from './ResultsView';
 import { t } from '@/i18n';
@@ -45,7 +44,7 @@ export function OnlineMatch({ pal, dk, gameId, side, timeLimit, opponent, pot, v
 
     useEffect(() => { if (!notice) return; const id = setTimeout(() => setNotice(null), 1600); return () => clearTimeout(id); }, [notice]);
 
-    useNuiEvent('wordle:move', useCallback((d: { gameId: string; move: GuessView }) => {
+    useGameEvent('wordle:move', useCallback((d: { gameId: string; move: GuessView }) => {
         const m = d?.move;
         if (!m || d.gameId !== gameId || !Array.isArray(m.row)) return;
         const apply = (p: Progress, guess: string): Progress => ({
