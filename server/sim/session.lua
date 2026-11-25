@@ -125,10 +125,47 @@ local function pickActive(source, entries)
     return active or entries[1]
 end
 
+---Finds the explicitly selected physical phone when it has no SIM. Legacy mode's `entries`
+---contains only SIM-backed phones, so pickActive would otherwise fall back to another phone's SIM.
+---@param source number player server id
+---@param phones table[] every phone item the player carries
+---@param sims SimEntry[] phones with registered SIM identities
+---@return table|nil phone selected without a SIM
+local function pickSelectedPhoneWithoutSim(source, phones, sims)
+    local pref = prefs[source]
+    if not pref then return nil end
+
+    if pref.slot then
+        for _, phone in ipairs(phones) do
+            if phone.slot == pref.slot then
+                return not siminv.getSimNumber(source, phone) and phone or nil
+            end
+        end
+    end
+
+    if pref.number then
+        for _, sim in ipairs(sims) do
+            if sim.number == pref.number then return nil end
+        end
+    end
+
+    if pref.color then
+        for _, sim in ipairs(sims) do
+            if sim.color == pref.color then return nil end
+        end
+        for _, phone in ipairs(phones) do
+            if phone.color == pref.color and not siminv.getSimNumber(source, phone) then
+                return phone
+            end
+        end
+    end
+end
+
 ---LEGACY (SIM-is-identity) resolver. Binds every SIM found: unknown numbers are registered, the
 ---first activator stamped, and each SIM identity's phone_settings row mirrors its number so
 ---every existing "my number" read keeps working. The active phone is the last-opened one
----(prefs), else the first SIM'd phone in config order, else the first phone.
+---(prefs), else the first SIM'd phone in config order. A selected phone without a SIM stays
+---active without borrowing another phone's SIM.
 ---@param source number player server id
 ---@param phones { slot: number, name: string, color: string, metadata: table }[]
 ---@return SimSession
@@ -151,14 +188,15 @@ local function computeLegacy(source, phones)
         end
     end
 
-    local active = pickActive(source, sims)
+    local active = pickSelectedPhoneWithoutSim(source, phones, sims) or pickActive(source, sims)
+    local hasSim = active ~= nil and active.number ~= nil or false
     return {
         hasPhone = true,
-        hasSim   = active ~= nil,
+        hasSim   = hasSim,
         sims     = sims,
         active   = active,
-        identity = active and active.identity or nil,
-        number   = active and active.number or nil,
+        identity = hasSim and active.identity or nil,
+        number   = hasSim and active.number or nil,
         color    = active and active.color or phones[1].color,
         slot     = active and active.slot or phones[1].slot,
     }
