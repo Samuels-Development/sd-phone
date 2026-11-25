@@ -114,5 +114,9 @@ return {
         -- How many phones one character can back up at once (each holds a full cloud snapshot).
         -- Enabling backup on another phone past the cap asks the player to delete one first.
         MaxProfiles = 3,
+
+        -- Minimum time between two restores by one character, in seconds. A restore adds the
+        -- backup's rows again, so back-to-back backup/restore rounds would pile up duplicates.
+        RestoreCooldown = 600,
     },
 }

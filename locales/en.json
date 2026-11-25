@@ -6928,7 +6928,7 @@
     "phoneSSimBuilt": "This phone's SIM is built in.",
     "pickWhichBackupRestore": "Pick which backup to restore.",
     "playerNotFound": "Player not found",
-    "restoredMomentsAgoTryAgain": "Restored moments ago. Try again in a moment.",
+    "restoreCooldown": "You restored a backup recently. Try again in {minutes} min.",
     "takeSimOutPhoneS": "Take the SIM out of the phone's SIM tray instead.",
     "tooManyPasswordAttempts": "Too many password attempts. Try again shortly.",
     "wrongBackupPassword": "Wrong backup password.",

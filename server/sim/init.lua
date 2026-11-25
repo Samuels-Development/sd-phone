@@ -505,6 +505,14 @@ local AUTO_SYNC_MIN_GAP = 300
 ---responsive, but enough that the ~88-statement run can't be looped at will.
 local MANUAL_SYNC_MIN_GAP = 30
 
+---Milliseconds one character waits between two restores: Backup.RestoreCooldown seconds, 600 when
+---a config predates the key. Read per call so a config edit applies on the next restore.
+---@return integer
+local function restoreGap()
+    local secs = tonumber(config.Sim.Backup and config.Sim.Backup.RestoreCooldown) or 600
+    return math.max(0, math.floor(secs * 1000))
+end
+
 ---@type integer Rolling window for backup-password checks (ms), shared by enabling and restoring.
 local GUESS_WINDOW = 300000
 
@@ -706,7 +714,8 @@ end)
 ---mode allows it, since every phone there is the character: it brings back what was deleted.
 ---A legacy pointer backup (made before cloud snapshots) is refused: it could only copy whatever
 ---its phone holds today. With no pick, a character holding only such a backup is told so rather
----than told they have none.
+---than told they have none. One character restores at most once per Backup.RestoreCooldown,
+---checked before the password and armed after it, since each restore adds the backup's rows again.
 lib.callback.register('sd-phone:server:sim:backup:restore', function(source, payload)
     if not (config.Sim.Backup and config.Sim.Backup.Enabled ~= false) then
         return util.fail('sim.cloudBackupDisabled', 'Cloud backup is disabled.')
@@ -748,6 +757,12 @@ lib.callback.register('sd-phone:server:sim:backup:restore', function(source, pay
         return util.fail('sim.oldBackupMakeNew', 'This is an old backup and can no longer be restored. Make a new Cloud Backup instead.')
     end
 
+    local cooldownLeft = util.cooldownLeft(realCid, 'sim:backupRestore', restoreGap())
+    if cooldownLeft > 0 then
+        return util.fail('sim.restoreCooldown', 'You restored a backup recently. Try again in {minutes} min.',
+            { minutes = math.ceil(cooldownLeft / 60000) })
+    end
+
     local stored = simStore.getBackupPassword(realCid)
     if stored then
         if not mayCheckPassword(realCid) then
@@ -761,10 +776,10 @@ lib.callback.register('sd-phone:server:sim:backup:restore', function(source, pay
     end
 
     if syncBusy[source] then return util.fail('sim.backupAlreadyRunning', 'A backup is already running.') end
-    -- Checked after the password so a fumbled one can be retried at once. A restore is idempotent
-    -- (the rows are remapped, so a repeat writes nothing) but costs the full copy every time.
-    if not util.cooldown(realCid, 'sim:backupRestore', 30000) then
-        return util.fail('sim.restoredMomentsAgoTryAgain', 'Restored moments ago. Try again in a moment.')
+    -- Armed only past the password, so a fumbled one does not start the wait.
+    if not util.cooldown(realCid, 'sim:backupRestore', restoreGap()) then
+        return util.fail('sim.restoreCooldown', 'You restored a backup recently. Try again in {minutes} min.',
+            { minutes = math.ceil(restoreGap() / 60000) })
     end
 
     -- Snapshot untouched: restore copies OUT of the cloud (see backup.restore).
