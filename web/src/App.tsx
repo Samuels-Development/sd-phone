@@ -105,6 +105,17 @@ let setupProfile = '';
 
 type DownloadEntry = { id: string; profile?: string; downloadProfile?: string };
 
+function sameContent<T>(a: T, b: T): boolean {
+    return a === b || JSON.stringify(a) === JSON.stringify(b);
+}
+
+function sameSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+    if (a === b) return true;
+    if (a.size !== b.size) return false;
+    for (const v of a) if (!b.has(v)) return false;
+    return true;
+}
+
 function customAppsProfileFor(sim?: SimStatePush): string | undefined {
     if (!sim?.enabled) return undefined;
     if (sim.device) return sim.profile;
@@ -634,13 +645,15 @@ function AppContent() {
         }
     }, []);
 
+    const switcherOpenRef = useRef(switcherOpen);
+    switcherOpenRef.current = switcherOpen;
     const handleOpenFromSwitcher = useCallback((id: AppId, origin: { x: number; y: number }) => {
-        const fromSwitcher = switcherOpen;
+        const fromSwitcher = switcherOpenRef.current;
         setSwitcherOpen(false);
         setSwitcherClosing(false);
         setSwitcherReady(false);
         foreground(id, origin, fromSwitcher);
-    }, [foreground, switcherOpen]);
+    }, [foreground]);
 
     const openAppById = useCallback((id: string | null | undefined, origin: { x: number; y: number }) => {
         const app = asAppId(id);
@@ -654,7 +667,9 @@ function AppContent() {
         handleOpenFromSwitcher(app, origin);
     }, [handleOpenFromSwitcher, view, customDefs, installedApps]);
 
-    const openAppCentered = useCallback((id: string) => openAppById(id, { x: 0.5, y: 0.5 }), [openAppById]);
+    const openAppByIdRef = useRef(openAppById);
+    openAppByIdRef.current = openAppById;
+    const openAppCentered = useCallback((id: string) => openAppByIdRef.current(id, { x: 0.5, y: 0.5 }), []);
 
     const unfolded = useFoldOpen();
     const splitRightId = useSplitId();
@@ -817,14 +832,30 @@ function AppContent() {
         if (rotationLock) setLandscape(false);
     }, [rotationLock]);
 
+    const viewAppsSeen = useRef<AppDef[] | null>(null);
+    const deckViewApps = useRef<AppDef[]>([]);
+    if (view && view.apps !== viewAppsSeen.current) {
+        viewAppsSeen.current = view.apps;
+        if (!sameContent(deckViewApps.current, view.apps)) deckViewApps.current = view.apps;
+    }
+    const deckInstalledRef = useRef(installedApps);
+    if (installedApps !== deckInstalledRef.current && !sameSet(deckInstalledRef.current, installedApps)) {
+        deckInstalledRef.current = installedApps;
+    }
+    const deckApps = deckViewApps.current;
+    const deckInstalled = deckInstalledRef.current;
+    const deckAllApps = useMemo(
+        () => [...deckApps, ...customDefs].filter(a => !device.excludedApps.includes(a.id)),
+        [deckApps, customDefs],
+    );
     const deckCtx = useMemo<DeckAppCtx>(() => ({
         onClose:           handleCloseApp,
-        allApps:           [...(view?.apps ?? []), ...customDefs].filter(a => !device.excludedApps.includes(a.id)),
-        installedApps,
+        allApps:           deckAllApps,
+        installedApps:     deckInstalled,
         onInstall:         startDownload,
         onOpenApp:         openAppCentered,
         onLandscapeChange: applyLandscape,
-    }), [handleCloseApp, view, customDefs, installedApps, startDownload, openAppCentered, applyLandscape]);
+    }), [handleCloseApp, deckAllApps, deckInstalled, startDownload, openAppCentered, applyLandscape]);
 
     useEffect(() => () => {
         if (downloadTimer.current !== undefined) clearInterval(downloadTimer.current);

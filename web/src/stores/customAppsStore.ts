@@ -62,6 +62,10 @@ function forThisDevice(apps: CustomAppDef[] | null | undefined): CustomAppDef[] 
     return apps.filter(a => !a.devices?.length || a.devices.includes(device.id));
 }
 
+function keepIfSame(prev: CustomAppsState, next: CustomAppDef[]): CustomAppsState | { apps: CustomAppDef[] } {
+    return JSON.stringify(prev.apps) === JSON.stringify(next) ? prev : { apps: next };
+}
+
 interface CustomAppsState {
     apps:    CustomAppDef[];
     setAll:  (apps: CustomAppDef[] | null | undefined) => void;
@@ -70,10 +74,10 @@ interface CustomAppsState {
 
 export const useCustomAppsStore = create<CustomAppsState>((set) => ({
     apps: [],
-    setAll: (apps) => set({ apps: forThisDevice(apps) }),
+    setAll: (apps) => set(s => keepIfSame(s, forThisDevice(apps))),
     hydrate: () => {
         void fetchNui<CustomAppDef[]>('customApps/get').then(list => {
-            if (Array.isArray(list)) set({ apps: forThisDevice(list) });
+            if (Array.isArray(list)) set(s => keepIfSame(s, forThisDevice(list)));
         }).catch(() => {});
     },
 }));
