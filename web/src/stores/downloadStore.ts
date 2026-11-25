@@ -10,7 +10,6 @@ interface DownloadState {
     start:       (id: string, queued: boolean, profile?: string) => void;
     setProgress: (id: string, p: number, profile?: string) => void;
     remove:      (id: string, profile?: string) => void;
-    clear:       () => void;
 }
 
 export const useDownloadStore = create<DownloadState>((set) => ({
@@ -35,7 +34,6 @@ export const useDownloadStore = create<DownloadState>((set) => ({
         delete downloads[id];
         return { byProfile: { ...s.byProfile, [key]: downloads }, ...(s.profile === key ? { downloads } : {}) };
     }),
-    clear: () => set({ downloads: {}, byProfile: {} }),
 }));
 
 export function useDownloadProgress(id: string): number | undefined {

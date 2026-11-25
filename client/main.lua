@@ -653,16 +653,25 @@ local function RevealPhone()
     CreateThread(PushInstalledApps)
 end
 
+---The data profile a SIM snapshot acts as: the device or character identity, or the SIM number
+---under DataOwner 'sim'. Nil without unique phones, where every phone shares one profile.
+---@param simState table|nil a currentSimState snapshot
+---@return string|nil
+local function appsProfileOf(simState)
+    return simState and (simState.profile or simState.number) or nil
+end
+
 ---Fetches the acting profile's installed apps + home layout and pushes them into the NUI of
----whichever device is on screen. Runs as the open follow-up and again after a cloud-backup
----restore replaces the profile data.
+---whichever device is on screen. Runs as the open follow-up, after a SIM push that switched the
+---acting phone, and after a cloud-backup restore replaces the profile data. The answer is dropped
+---when the profile changed during the round-trip, since it belongs to the phone left behind.
 function PushInstalledApps()
-    local profile = currentSimState and (currentSimState.profile or currentSimState.number)
+    local profile = appsProfileOf(currentSimState)
     local installedRes = lib.callback.await('sd-phone:server:apps:list', false)
     -- Re-checked after the round-trip: the device may have been put away while the server
     -- answered, and a push into a screen nobody is looking at reopens it on stale apps.
     if not (phoneState.open or companion.companionOpen) then return end
-    if profile ~= (currentSimState and (currentSimState.profile or currentSimState.number)) then return end
+    if profile ~= appsProfileOf(currentSimState) then return end
     SendNUIMessage({
         action = 'sd-phone:apps',
         data   = {
@@ -843,13 +852,14 @@ end)
 ---@param state { enabled: boolean, hasSim: boolean, number: string|nil, device: boolean|nil, profile: string|nil, color: string|nil }
 RegisterNetEvent('sd-phone:client:simState', function(state)
     if type(state) ~= 'table' then return end
+    local previousProfile = appsProfileOf(currentSimState)
     currentSimState = state.enabled and {
         hasSim  = state.hasSim == true,
         number  = state.number,
         device  = state.device == true,
         profile = state.profile,
     } or nil
-    -- The active SIM'd phone's colour wins: a pending keybind open answered with the owned
+    -- The session's active phone's colour wins: a pending keybind open answered with the owned
     -- colour before the resolve, so correct the frame, the hand prop and the UI rail here.
     if state.color and FRAME_COLORS[state.color] then
         local fold, look = currentFold, currentLook
@@ -883,7 +893,9 @@ RegisterNetEvent('sd-phone:client:simState', function(state)
                 profile = state.profile,
             },
         })
-        CreateThread(PushInstalledApps)
+        if appsProfileOf(currentSimState) ~= previousProfile then
+            CreateThread(PushInstalledApps)
+        end
     end
 end)
 

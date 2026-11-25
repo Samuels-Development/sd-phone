@@ -206,7 +206,7 @@ end
 
 ---Keybind open request: may this player open a phone, and in which colour? Returns the bare
 ---colour string normally; under unique phones { color, pending = true } and the deferred
----simState push corrects hasSim/number - and the colour, since the SIM'd phone's wins.
+---simState push corrects hasSim/number - and the colour, since the session's active phone wins.
 lib.callback.register('sd-phone:server:phone:resolveOpen', function(source, preferred, preferFold, preferLook)
     local color, fold, look, item = ResolveOwnedColor(source, preferred, preferFold, preferLook)
     if item then require('server.cases.actions').phoneOpened(source, item, nil) end
