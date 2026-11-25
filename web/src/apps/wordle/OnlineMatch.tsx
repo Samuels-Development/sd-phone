@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { COLS, RANK } from './engine';
 import type { Cell } from './engine';
-import { isWord } from './words';
 import { useCountdown } from '@/hooks/useCountdown';
 import { useKeyboardCapture } from '@/hooks/useKeyboardCapture';
 import { useDeckActive } from '@/shell/deckActive';
@@ -65,7 +64,6 @@ export function OnlineMatch({ pal, dk, gameId, side, timeLimit, opponent, pot, v
     const submit = useCallback((guess: string) => {
         if (pendingRef.current) return;
         const g = guess.toUpperCase();
-        if (!isWord(g)) { setNotice(t('wordle.notInWordList', 'Not in word list')); return; }
         setPending(true);
         void moveApi(gameId, { guess: g }).then(r => {
             if (r.ok) return;

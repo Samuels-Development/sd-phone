@@ -1,8 +1,8 @@
 ---@type integer, integer Word length and guesses allowed; match web/src/apps/wordle/engine.ts.
 local COLS, ROWS = 5, 6
 
----@type string[] Answers, and the only guesses accepted. Mirrors WORDS in
----web/src/apps/wordle/words.ts, which the client checks first so a typo shakes without a round trip.
+---@type string[] Answers the server draws from. Mirrors WORDS in web/src/apps/wordle/words.ts,
+---which solo play draws from. Guesses are not limited to it: like solo, any five letters count.
 local WORDS = {
     'about', 'above', 'abuse', 'actor', 'acute', 'admit', 'adopt', 'adult', 'after', 'again',
     'agent', 'agree', 'ahead', 'alarm', 'album', 'alert', 'alike', 'alive', 'allow', 'alone',
@@ -59,12 +59,7 @@ local WORDS = {
     'worst', 'worth', 'would', 'wound', 'write', 'wrong', 'wrote', 'yield', 'young', 'youth',
 }
 
----@type table<string, boolean> Upper-cased WORDS, for guess checks.
-local VALID = {}
-for i, w in ipairs(WORDS) do
-    WORDS[i] = w:upper()
-    VALID[WORDS[i]] = true
-end
+for i, w in ipairs(WORDS) do WORDS[i] = w:upper() end
 
 ---@type table Wordle rules; the table returned at end of file. The server picks the word and keeps
 ---it until the game is over, colours every guess itself and times both players on its own clock, so
@@ -136,8 +131,10 @@ function rules.new(sides, ctx)
     }
 end
 
----Takes one guess from side. The mover sees its letters and colours; the opponent sees only the
----colours, so watching the other board never gives the word away.
+---Takes one guess from side: any five letters A-Z, in either case, as solo play allows. The letter
+---check is an explicit A-Z class because %u follows the C locale. The mover sees its letters and
+---colours; the opponent sees only the colours, so watching the other board never gives the word
+---away.
 ---@param state table
 ---@param side string
 ---@param move any client payload { guess }
@@ -150,8 +147,7 @@ function rules.move(state, side, move)
     local elapsed = state.now() - state.startedAt
     if elapsed > state.limitMs then return nil, 'games.timeUp', "Time's up" end
     local guess = type(move) == 'table' and type(move.guess) == 'string' and move.guess:upper() or ''
-    if #guess ~= COLS or not guess:match('^%u+$') then return nil, 'games.badMove', 'Bad move' end
-    if not VALID[guess] then return nil, 'games.notInWordList', 'Not in word list' end
+    if #guess ~= COLS or not guess:match('^[A-Z]+$') then return nil, 'games.badMove', 'Bad move' end
 
     local row = rules.score(guess, state.word)
     p.rows[#p.rows + 1] = row

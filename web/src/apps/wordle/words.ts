@@ -71,9 +71,3 @@ const WORDS: string[] = [
 export function randomWord(): string {
     return WORDS[Math.floor(Math.random() * WORDS.length)].toUpperCase();
 }
-
-const WORD_SET = new Set(WORDS.map(w => w.toUpperCase()));
-
-export function isWord(guess: string): boolean {
-    return WORD_SET.has(guess.toUpperCase());
-}
