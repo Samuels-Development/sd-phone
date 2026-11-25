@@ -22,20 +22,73 @@ local actions = {}
 ---dropped when they leave rather than trusted from the client.
 local lastFlush = {}
 
+---@type integer How often accepted activity is written to the database (ms). Clients report every
+---minute; holding it here turns one write per player per minute into one statement every five.
+local SAVE_EVERY_MS <const> = 5 * 60 * 1000
+---@type integer Shortest gap between the writes a leaderboard fetch forces (ms), so the board can
+---be fresh without letting a client spam writes.
+local BOARD_SAVE_GAP_MS <const> = 30 * 1000
+
+---@type table<string, { name: string, steps: integer, distanceM: integer, activeMs: integer, peakHr: integer }>
+---Activity accepted but not yet written, per citizenid.
+local pending = {}
+---@type table<number, string> Server id -> the citizenid its pending activity is held under, so the
+---player leaving can write theirs even after the framework has forgotten who they were.
+local holder = {}
+---@type string|nil The server's date the pending activity was gathered on; a new day writes the old
+---day's first, so it is not banked against the wrong row.
+local pendingDay = nil
+---@type integer GetGameTimer of the last write a leaderboard fetch forced.
+local boardSavedAt = -BOARD_SAVE_GAP_MS
+
 ---Whether the leaderboard is switched on.
 ---@return boolean
 function actions.leaderboardEnabled()
     return LB.Enabled ~= false
 end
 
----Forgets a player's flush clock. A reconnect starts a fresh budget.
+---Writes held activity to the database: everyone's, or one character's. What is written leaves
+---the buffer first, so a write that fails loses that window rather than repeating it forever.
+---@param cid string|nil one citizenid; nil writes everyone's
+---@param detached boolean|nil true to send without waiting for the result
+---@return integer written rows written
+function actions.save(cid, detached)
+    local rows = {}
+    if cid then
+        local entry = pending[cid]
+        if entry then
+            pending[cid] = nil
+            entry.citizenid = cid
+            rows[1] = entry
+        end
+    else
+        for key, entry in pairs(pending) do
+            entry.citizenid = key
+            rows[#rows + 1] = entry
+        end
+        pending = {}
+    end
+    if #rows == 0 then return 0 end
+    local ok, written = pcall(store.bankMany, rows, detached)
+    if not ok then
+        print(('^1[sd-phone:health]^0 could not save activity: %s'):format(tostring(written)))
+        return 0
+    end
+    return written
+end
+
+---Forgets a player's flush clock and writes whatever they still have held, without waiting on the
+---write so the other disconnect sweeps are not held up behind it. A reconnect starts a fresh budget.
 ---@param source number
 function actions.forget(source)
     lastFlush[source] = nil
+    local cid = holder[source]
+    holder[source] = nil
+    if cid then actions.save(cid, true) end
 end
 
----Banks a flush from one player. The elapsed budget is the gap since their previous flush, or the
----flush interval on their first one.
+---Accepts a flush from one player and holds it in memory until the next save. The elapsed budget
+---is the gap since their previous flush, or the flush interval on their first one.
 ---@param source number
 ---@param delta table client-reported deltas since its last flush
 ---@return boolean accepted
@@ -49,8 +102,38 @@ function actions.flush(source, delta)
     local elapsed = lastFlush[source] and (now - lastFlush[source]) or 60
     lastFlush[source] = now
 
-    store.bank(cid, player.getName(source) or '', delta, elapsed)
+    local got = store.accept(delta, elapsed)
+    if got.steps == 0 and got.distanceM == 0 and got.activeMs == 0 and got.peakHr == 0 then return true end
+
+    local today = os.date('%Y-%m-%d')
+    if pendingDay and pendingDay ~= today then actions.save() end
+    pendingDay = today
+
+    local previous = holder[source]
+    if previous and previous ~= cid then actions.save(previous) end
+    holder[source] = cid
+
+    local entry = pending[cid]
+    if not entry then
+        entry = { steps = 0, distanceM = 0, activeMs = 0, peakHr = 0 }
+        pending[cid] = entry
+    end
+    entry.name      = player.getName(source) or ''
+    entry.steps     = entry.steps + got.steps
+    entry.distanceM = entry.distanceM + got.distanceM
+    entry.activeMs  = entry.activeMs + got.activeMs
+    if got.peakHr > entry.peakHr then entry.peakHr = got.peakHr end
     return true
+end
+
+---Starts the periodic save. Called once by server/health/init.lua.
+function actions.startSaving()
+    CreateThread(function()
+        while true do
+            Wait(SAVE_EVERY_MS)
+            actions.save()
+        end
+    end)
 end
 
 ---Everything the Summary tab draws: today's totals, the last week of daily rows, and the goal the
@@ -63,6 +146,13 @@ function actions.summary(source)
 
     local history = store.history(cid, CHART_DAYS)
     local today   = history[#history] or { steps = 0, distanceM = 0, activeMs = 0, peakHr = 0 }
+    local held    = pending[cid]
+    if held and pendingDay == os.date('%Y-%m-%d') then
+        today.steps     = today.steps + held.steps
+        today.distanceM = today.distanceM + held.distanceM
+        today.activeMs  = today.activeMs + held.activeMs
+        if held.peakHr > (today.peakHr or 0) then today.peakHr = held.peakHr end
+    end
 
     return {
         goal    = math.max(1, math.floor(tonumber(H.StepGoal) or 10000)),
@@ -72,7 +162,8 @@ function actions.summary(source)
 end
 
 ---Today's steps board, with the caller's own standing attached. Returns display names only, never
----citizenids.
+---citizenids. Held activity is written first (at most every BOARD_SAVE_GAP_MS), so the ranking is
+---never more than that behind.
 ---@param source number
 ---@return table|nil board nil when the caller has no character or the board is switched off
 function actions.leaderboard(source)
@@ -80,6 +171,12 @@ function actions.leaderboard(source)
 
     local cid = player.getRealIdentifier(source)
     if not cid then return nil end
+
+    local now = GetGameTimer()
+    if next(pending) and now - boardSavedAt >= BOARD_SAVE_GAP_MS then
+        boardSavedAt = now
+        actions.save()
+    end
 
     local board = store.leaderboard(cid, LB_SIZE)
     local rows  = {}

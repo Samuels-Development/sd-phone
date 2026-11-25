@@ -19,6 +19,20 @@ end)
 
 util.onCleanup(function(src) actions.forget(src) end)
 
+actions.startSaving()
+
+---The resource stopping writes everything still held. Sent without waiting: an awaited query would
+---never be resumed once the resource is gone, while oxmysql runs one already handed to it.
+AddEventHandler('onResourceStop', function(resource)
+    if resource ~= GetCurrentResourceName() then return end
+    actions.save(nil, true)
+end)
+
+---txAdmin's warning before a scheduled restart or shutdown: write what is held while it still can.
+AddEventHandler('txAdmin:events:serverShuttingDown', function()
+    actions.save()
+end)
+
 ---Banks a client's activity deltas. Fire and forget; the client does not read the result.
 ---@param delta table steps/distanceM/activeMs/heartRate accumulated since the client's last flush
 RegisterNetEvent('sd-phone:server:health:flush', function(delta)

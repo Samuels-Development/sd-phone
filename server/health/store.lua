@@ -56,38 +56,64 @@ function store.cap(claimed, perSecond, elapsed)
     return math.floor(math.min(n, ceiling))
 end
 
----Banks one flush against today's row, creating it on the first flush of the day, and stores the
----display name the board shows.
----@param citizenid string
----@param name string display name to show on the board
+---One client flush reduced to what the server accepts: every amount capped against the time it
+---had to happen in, the heart rate clamped to a plausible peak.
 ---@param delta { steps: any, distanceM: any, activeMs: any, heartRate: any }
 ---@param elapsed number seconds since that player's previous flush
----@return { steps: integer, distanceM: integer, activeMs: integer } accepted the amounts banked
-function store.bank(citizenid, name, delta, elapsed)
-    local steps    = store.cap(delta.steps,     MAX_STEPS_PER_S,  elapsed)
-    local distance = store.cap(delta.distanceM, MAX_METRES_PER_S, elapsed)
-    local active   = store.cap(delta.activeMs,  1000,             elapsed)
-
+---@return { steps: integer, distanceM: integer, activeMs: integer, peakHr: integer } accepted
+function store.accept(delta, elapsed)
     local hr = tonumber(delta.heartRate) or 0
     if hr ~= hr or hr < 0 then hr = 0 elseif hr > MAX_HR then hr = MAX_HR end
-    hr = math.floor(hr)
+    return {
+        steps     = store.cap(delta.steps,     MAX_STEPS_PER_S,  elapsed),
+        distanceM = store.cap(delta.distanceM, MAX_METRES_PER_S, elapsed),
+        activeMs  = store.cap(delta.activeMs,  1000,             elapsed),
+        peakHr    = math.floor(hr),
+    }
+end
 
-    if steps == 0 and distance == 0 and active == 0 and hr == 0 then
-        return { steps = 0, distanceM = 0, activeMs = 0 }
+---@type integer Rows one banking statement carries.
+local BANK_CHUNK <const> = 100
+
+---@type string One row's placeholders in the banking statement.
+local BANK_ROW <const> = '(?, CURDATE(), ?, ?, ?, ?, ?)'
+
+---Adds accumulated activity to today's rows, many players per statement, creating a row on its
+---first write of the day and storing the display name the board shows. Totals add up; the peak
+---heart rate keeps the higher. Fire-and-forget when `detached` is set, for the resource stopping,
+---where an awaited write would never be resumed.
+---@param rows { citizenid: string, name: string, steps: integer, distanceM: integer, activeMs: integer, peakHr: integer }[]
+---@param detached boolean|nil true to send without waiting for the result
+---@return integer written rows sent
+function store.bankMany(rows, detached)
+    local written = 0
+    for first = 1, #rows, BANK_CHUNK do
+        local last = math.min(first + BANK_CHUNK - 1, #rows)
+        local holes, params = {}, {}
+        for i = first, last do
+            local r = rows[i]
+            holes[#holes + 1] = BANK_ROW
+            params[#params + 1] = r.citizenid
+            params[#params + 1] = tostring(r.name or ''):sub(1, 64)
+            params[#params + 1] = math.floor(r.steps or 0)
+            params[#params + 1] = math.floor(r.distanceM or 0)
+            params[#params + 1] = math.floor(r.activeMs or 0)
+            params[#params + 1] = math.floor(r.peakHr or 0)
+        end
+        local sql = ([[
+            INSERT INTO phone_health_daily (citizenid, day, name, steps, distance_m, active_ms, peak_hr)
+            VALUES %s
+            ON DUPLICATE KEY UPDATE
+                name       = VALUES(name),
+                steps      = steps + VALUES(steps),
+                distance_m = distance_m + VALUES(distance_m),
+                active_ms  = active_ms + VALUES(active_ms),
+                peak_hr    = GREATEST(peak_hr, VALUES(peak_hr))
+        ]]):format(table.concat(holes, ', '))
+        if detached then MySQL.update(sql, params) else MySQL.update.await(sql, params) end
+        written = written + (last - first + 1)
     end
-
-    MySQL.update.await([[
-        INSERT INTO phone_health_daily (citizenid, day, name, steps, distance_m, active_ms, peak_hr)
-        VALUES (?, CURDATE(), ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE
-            name       = VALUES(name),
-            steps      = steps + VALUES(steps),
-            distance_m = distance_m + VALUES(distance_m),
-            active_ms  = active_ms + VALUES(active_ms),
-            peak_hr    = GREATEST(peak_hr, VALUES(peak_hr))
-    ]], { citizenid, tostring(name or ''):sub(1, 64), steps, distance, active, hr })
-
-    return { steps = steps, distanceM = distance, activeMs = active }
+    return written
 end
 
 ---The player's last `days` daily rows, oldest first, with missing days filled in as zeroes.
