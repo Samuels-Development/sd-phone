@@ -282,6 +282,8 @@ local flashlightOn = false
 local cameraActive = false
 ---@type string Which surface owns the cell-cam while active: 'camera' or 'video' (video call).
 local cameraSurface = 'camera'
+---@type boolean True while a video call has the view, which hides the HUD and radar every frame.
+local videoView = false
 ---@type boolean True while the Camera app has handed the mouse to the game to aim the lens.
 local cameraCursorFree = false
 ---@type boolean True while a call is live; holds the pose up after the phone is put away.
@@ -357,7 +359,9 @@ end
 -- The four control sets the phone suppresses, as data. They are handed to ox_lib's
 -- lib.disableControls, which keeps ONE refcounted set and re-asserts all of it in a single call per
 -- frame - so the thread below toggles a group when the state changes rather than reissuing the same
--- two dozen DisableControlAction calls every frame regardless of whether anything moved.
+-- two dozen DisableControlAction calls every frame regardless of whether anything moved. The Camera
+-- app, a video call and the scripted lens add their own keys to the same set, and that thread is the
+-- one that applies it.
 
 ---@type integer[] INPUT_FRONTEND_PAUSE and its alternate; held whenever the phone is on screen.
 local CONTROLS_PAUSE <const> = { 199, 200 }
@@ -399,25 +403,39 @@ end
 
 ---@type boolean True while the per-frame input thread is running.
 local inputThreadRunning = false
+---@type integer Frames the pause group stays held after the phone closes, or the closing keypress
+---opens the escape menu.
+local PAUSE_TAIL <const> = 15
 
----Runs ONE per-frame thread per open: holds the pause control down unconditionally, and with
----AllowMovement on also suppresses combat, mouse-look, weapon-wheel and chat.
+---Whether a camera surface is still up: the Camera app's viewfinder, a video call or the scripted
+---lens. Each adds its own keys to the shared set, so the input thread keeps applying it for them
+---even once the phone has been put away.
+---@return boolean
+local function surfaceUp()
+    return cameraActive or videoView or phonecam.active()
+end
+
+---Runs THE per-frame input thread: the only caller of lib.disableControls() and the only place the
+---HUD is hidden for a video call. While the phone is open it holds the pause control down, and with
+---AllowMovement on also suppresses combat, mouse-look, weapon-wheel and chat; while a camera surface
+---is up it keeps applying the keys that surface added, phone open or not.
 ---
 ---The mouse-look group is dropped while the Camera app's Alt toggle has the lens, because
 ---suppressing it there makes the lens immovable. DisablePlayerFiring is not a control, so it stays
 ---a native and stays inside the frame loop.
 ---
----The pause group is held for a few frames past the close, or the closing keypress opens the escape
----menu. The outer loop exists so a reopen DURING that trailing hold rejoins rather than dying with
----the flag about to clear, which would leave an open phone suppressing nothing; nothing yields
----between the break and the flag clearing, so an open can never be refused by a thread on its way
----out.
+---The pause group is held for PAUSE_TAIL frames past the close. A reopen during that hold, or a
+---surface still up, keeps the thread running rather than letting it die with the flag about to
+---clear, which would leave an open phone suppressing nothing; nothing yields between the break and
+---the flag clearing, so an open can never be refused by a thread on its way out.
 local function startInputThread()
     if inputThreadRunning then return end
     inputThreadRunning = true
     CreateThread(function()
+        local tail = 0
         while true do
-            while phoneState.open do
+            if phoneState.open then
+                tail = PAUSE_TAIL
                 setControlGroup(CONTROLS_PAUSE, true)
 
                 ---@type boolean Whether the movement suppression applies this frame.
@@ -436,26 +454,22 @@ local function startInputThread()
                 setControlGroup(CONTROLS_JUMP, phoneState.locked)
 
                 if suppress then DisablePlayerFiring(cache.playerId, true) end
+            else
+                setControlGroup(CONTROLS_MOVEMENT, false)
+                setControlGroup(CONTROLS_LOOK, false)
+                setControlGroup(CONTROLS_DIGITS, false)
+                setControlGroup(CONTROLS_JUMP, false)
 
-                lib.disableControls()
-                Wait(0)
+                local held = tail > 0
+                if held then tail = tail - 1 end
+                setControlGroup(CONTROLS_PAUSE, held)
+                if not held and not surfaceUp() then break end
             end
 
-            setControlGroup(CONTROLS_PAUSE, true)
-            setControlGroup(CONTROLS_MOVEMENT, false)
-            setControlGroup(CONTROLS_LOOK, false)
-            setControlGroup(CONTROLS_DIGITS, false)
-            setControlGroup(CONTROLS_JUMP, false)
-
-            local held = 0
-            while held < 15 and not phoneState.open do
-                lib.disableControls()
-                held = held + 1
-                Wait(0)
-            end
-            if not phoneState.open then break end
+            if videoView then HideHudAndRadarThisFrame() end
+            lib.disableControls()
+            Wait(0)
         end
-        setControlGroup(CONTROLS_PAUSE, false)
         inputThreadRunning = false
     end)
 end
@@ -491,15 +505,18 @@ local function exitLookMode()
 end
 
 ---Tracks the Camera app's cell-cam state, then re-syncs the pose and keep-input. Payload coerced
----to a strict boolean.
+---to a strict boolean. A surface coming up starts the input thread, which applies the keys it added
+---and hides the HUD for a video call, whether or not the phone is open.
 ---@param on any truthy while the cell-cam view is live
 ---@param surface string|nil which surface owns it: 'video' for the video call, otherwise the Camera app
 AddEventHandler('sd-phone:client:cameraMode', function(on, surface)
     cameraActive  = on and true or false
     cameraSurface = surface == 'video' and 'video' or 'camera'
+    if cameraSurface == 'video' then videoView = cameraActive end
     if not cameraActive then cameraCursorFree = false end
     updatePose()
     syncKeepInput()
+    if cameraActive then startInputThread() end
 end)
 
 ---Tracks whether a call is live and whether its screen has been minimised away, then re-syncs the

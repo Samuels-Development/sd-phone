@@ -86,24 +86,21 @@ local CONTROLS_VIEWFINDER <const> = {
     CTRL_NEXT, CTRL_DOWN, CTRL_ZOOM_IN, CTRL_ZOOM_OUT,
 }
 
----Runs the viewfinder keyboard loop: disables each control's default action for as long as the
----app is up, and relays presses into the NUI while the cursor is off.
+---Runs the viewfinder keyboard loop: relays presses into the NUI while the cursor is off.
 ---
----The set is added once and dropped on the way out rather than reissued per frame, but
----lib.disableControls still has to be CALLED every frame: IsDisabledControlJustPressed below only
----reads a control that was disabled this frame. The relays run only while the mouse belongs to the
----game; with the cursor up the page receives these events itself and the wheel zooms from its own
----handler.
+---The keys themselves are suppressed for as long as the app is up by the set added on the way in
+---(enterCameraView), which client.main's input thread applies every frame along with the phone's
+---own. The relays run only while the mouse belongs to the game; with the cursor up the page receives
+---these events itself and the wheel zooms from its own handler, so the loop only looks in now and
+---then until the cursor is handed over.
 local function startInputLoop()
     if inputLoopRunning then return end
     inputLoopRunning = true
     CreateThread(function()
-        lib.disableControls:Add(CONTROLS_VIEWFINDER)
         while active do
-            Wait(0)
-            lib.disableControls()
+            Wait(cursorOn and 100 or 0)
 
-            if not cursorOn then
+            if active and not cursorOn then
                 if IsDisabledControlJustPressed(0, CTRL_ZOOM_IN) then
                     sendKey('zoomIn')
                 elseif IsDisabledControlJustPressed(0, CTRL_ZOOM_OUT) then
@@ -124,19 +121,19 @@ local function startInputLoop()
                 end
             end
         end
-        lib.disableControls:Remove(CONTROLS_VIEWFINDER)
         inputLoopRunning = false
     end)
 end
 
----Takes the viewfinder view and hides the HUD/radar when they were not hidden already. The
----scripted cam frames it wherever movement is allowed, the native cell cam otherwise. Idempotent
----while already active.
+---Takes the viewfinder view, suppresses its keys and hides the HUD/radar when they were not hidden
+---already. The scripted cam frames it wherever movement is allowed, the native cell cam otherwise.
+---Idempotent while already active, so the key set is added exactly once per view.
 local function enterCameraView()
     if active then return end
     active   = true
     frontCam = false
     setCursorState(true)
+    lib.disableControls:Add(CONTROLS_VIEWFINDER)
 
     -- Take the view BEFORE announcing the mode: the pose handler asks phonecam.active() which lens
     -- is framing, so announcing first would have it read the native path and stand the pose down
@@ -157,12 +154,13 @@ local function enterCameraView()
     startInputLoop()
 end
 
----Hands the view back to whichever camera took it, re-shows the HUD/radar this module hid, and
----re-focuses the NUI. Idempotent while already inactive.
+---Hands the view back to whichever camera took it, drops the viewfinder's keys, re-shows the
+---HUD/radar this module hid, and re-focuses the NUI. Idempotent while already inactive.
 local function exitCameraView()
     if not active then return end
     active   = false
     frontCam = false
+    lib.disableControls:Remove(CONTROLS_VIEWFINDER)
 
     if phonecam.active() then
         phonecam.stop()

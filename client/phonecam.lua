@@ -109,6 +109,27 @@ local fov = CAM_FOV
 local savedViewMode = nil
 ---@type boolean True while the selfie lens is attached to the ped by the engine.
 local selfieAttached = false
+---@type integer[] Sprint and jump, held off while the selfie lens is live. Both roughly double the sway
+---the lens has to absorb (9 cm of sideways head travel at a walk against 11 cm sprinting, and 5 cm of
+---fore-aft pumping against 10 cm), and neither reads as something you do while filming your own face.
+---Walking is untouched.
+local CONTROLS_STRIDE <const> = { 21, 22 }
+---@type boolean True while CONTROLS_STRIDE is in the shared disabled set.
+local strideHeld = false
+
+---Puts the selfie lens's sprint and jump block into ox_lib's shared disabled set, which client.main's
+---input thread applies every frame, or takes it out. Exactly once each way, since the set is
+---refcounted and the phone's lockscreen holds jump through it too.
+---@param on boolean
+local function holdStride(on)
+    if strideHeld == on then return end
+    strideHeld = on
+    if on then
+        lib.disableControls:Add(CONTROLS_STRIDE)
+    else
+        lib.disableControls:Remove(CONTROLS_STRIDE)
+    end
+end
 
 ---Whether a surface may keep the player moving, which decides scripted cam vs native cell cam.
 ---The native pins the ped at engine level regardless of NUI keep-input, so free movement and the
@@ -351,14 +372,6 @@ function phonecam.start()
         while cam do
             place()
             applyZoom()
-            -- Sprinting and jumping are held off while the selfie lens is live. Both roughly double
-            -- the sway the lens has to absorb (9 cm of sideways head travel at a walk against 11 cm
-            -- sprinting, and 5 cm of fore-aft pumping against 10 cm), and neither reads as something
-            -- you do while filming your own face. Walking is untouched.
-            if selfie then
-                DisableControlAction(0, 21, true)
-                DisableControlAction(0, 22, true)
-            end
             Wait(0)
         end
         loopRunning = false
@@ -377,6 +390,7 @@ function phonecam.stop()
     DestroyCam(cam, false)
     cam = nil
     selfie = false
+    holdStride(false)
     if savedViewMode then
         SetFollowPedCamViewMode(savedViewMode)
         savedViewMode = nil
@@ -390,6 +404,7 @@ function phonecam.setSelfie(on)
     if not cam then return end
     selfie = on and true or false
     selfieAttached = selfie
+    holdStride(selfie)
     if not selfie then
         -- The rear lens drives its own coord and rotation, which an attachment silently overrides.
         DetachCam(cam)

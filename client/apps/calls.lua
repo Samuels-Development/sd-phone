@@ -223,23 +223,21 @@ local function sendKey(key)
     SendNUIMessage({ action = 'sd-phone:video:key', data = { key = key } })
 end
 
----Runs the video-call keyboard loop: disables each control's default action for as long as the call
----view is up, and relays presses into the NUI while the cursor is off.
+---Runs the video-call keyboard loop: relays presses into the NUI while the cursor is off.
 ---
----The set is added once and dropped on the way out rather than reissued per frame, but
----lib.disableControls still has to be CALLED every frame: IsDisabledControlJustPressed below only
----reads a control that was disabled this frame. The relays run only while the mouse belongs to the
----game; with the cursor up the page has its own handlers and receives these keys itself.
+---The keys themselves are suppressed for as long as the call view is up by the set added on the way
+---in (setVideoCamera), which client.main's input thread applies every frame along with the phone's
+---own; that thread hides the HUD for the call too. The relays run only while the mouse belongs to
+---the game; with the cursor up the page has its own handlers and receives these keys itself, so the
+---loop only looks in now and then until the cursor is handed over.
 local function startVideoInputLoop()
     if inputLoopRunning then return end
     inputLoopRunning = true
     CreateThread(function()
-        lib.disableControls:Add(CONTROLS_VIDEO)
         while videoCamActive do
-            Wait(0)
-            lib.disableControls()
+            Wait(cursorOn and 100 or 0)
 
-            if not cursorOn then
+            if videoCamActive and not cursorOn then
                 if IsDisabledControlJustPressed(0, CTRL_ZOOM_IN) then
                     sendKey('zoomIn')
                 elseif IsDisabledControlJustPressed(0, CTRL_ZOOM_OUT) then
@@ -252,14 +250,14 @@ local function startVideoInputLoop()
                 end
             end
         end
-        lib.disableControls:Remove(CONTROLS_VIDEO)
         inputLoopRunning = false
     end)
 end
 
----Toggles the camera takeover for a video call and hides the HUD per frame while active. The
----scripted cam frames it wherever movement is allowed, the native cell cam otherwise. Idempotent
----per direction.
+---Toggles the camera takeover for a video call and the call's keys with it. client.main hides the
+---HUD per frame for as long as the 'video' camera mode announced here is on. The scripted cam frames
+---it wherever movement is allowed, the native cell cam otherwise. Idempotent per direction, so the
+---key set is added exactly once per call view.
 ---@param on boolean|nil activate (truthy) or deactivate
 ---@param front boolean|nil front lens (default true); false switches to the rear lens
 local function setVideoCamera(on, front)
@@ -267,6 +265,7 @@ local function setVideoCamera(on, front)
         if not videoCamActive then
             videoCamActive = true
             setVideoCursor(true)
+            lib.disableControls:Add(CONTROLS_VIDEO)
             -- Take the view BEFORE announcing the mode: the pose handler asks phonecam.active()
             -- which lens is framing, and the scripted cam animates no pose of its own.
             if phonecam.movementAllowed('video') then
@@ -276,12 +275,6 @@ local function setVideoCamera(on, front)
                 CellCamActivate(true, true)
             end
             TriggerEvent('sd-phone:client:cameraMode', true, 'video')
-            CreateThread(function()
-                while videoCamActive do
-                    Wait(0)
-                    HideHudAndRadarThisFrame()
-                end
-            end)
             startVideoInputLoop()
         end
         if phonecam.active() then
@@ -291,6 +284,7 @@ local function setVideoCamera(on, front)
         end
     elseif videoCamActive then
         videoCamActive = false
+        lib.disableControls:Remove(CONTROLS_VIDEO)
         if phonecam.active() then
             phonecam.stop()
         else
