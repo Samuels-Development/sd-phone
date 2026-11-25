@@ -145,15 +145,33 @@ local COLUMNS = {
     },
 }
 
----Brings one table up to date, in a single information_schema read and at most one ALTER. Called
----from the owning store's ensureSchema right after its CREATE TABLE, where the table is known to
----exist - that keeps execution order correct without a central boot sequence.
+---@type table<string, table<string, string>> table name -> index name -> column list incl. parens.
+---Indexes added since v0.9.0, back-filled the same way: declare each in the store's CREATE TABLE
+---too, so fresh installs get it, and here, so running servers pick it up. Applied after COLUMNS,
+---so an index may cover a column that list adds.
+local INDEXES = {
+    -- The thread list's preview query filters each mailbox on withheld, groups it by conversation
+    -- and reads created_at, direction and is_read; covering all of it keeps that one query off the
+    -- table rows for a mailbox of any size.
+    phone_messages = {
+        idx_phone_messages_preview = '(citizenid, withheld, conversation, created_at, direction, is_read)',
+    },
+}
+
+---Brings one table up to date: its missing columns in a single information_schema read and at
+---most one ALTER, then any missing index. Called from the owning store's ensureSchema once the
+---table and every column an index covers are known to exist - that keeps execution order correct
+---without a central boot sequence.
 ---@param tbl string table name
----@return boolean added true when at least one column was created
+---@return boolean added true when at least one column or index was created
 function M.apply(tbl)
+    local added = false
     local defs = COLUMNS[tbl]
-    if not defs then return false end
-    return util.ensureColumns(tbl, defs)
+    if defs then added = util.ensureColumns(tbl, defs) end
+    for name, columns in pairs(INDEXES[tbl] or {}) do
+        if util.ensureIndex(tbl, name, columns) then added = true end
+    end
+    return added
 end
 
 return M

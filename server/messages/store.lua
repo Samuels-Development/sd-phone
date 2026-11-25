@@ -3,6 +3,8 @@ local store = {}
 
 
 local util = require 'server.util'
+---@type table Column and index back-fills for tables that predate them (server.migrations).
+local migrations = require 'server.migrations'
 local function newId() return util.newId(7) end
 
 store.newId = newId
@@ -64,7 +66,8 @@ function store.ensureSchema()
             seen_at       BIGINT       NULL,
             PRIMARY KEY (id),
             INDEX idx_phone_messages_thread (citizenid, conversation, created_at),
-            INDEX idx_phone_messages_mid (mid)
+            INDEX idx_phone_messages_mid (mid),
+            INDEX idx_phone_messages_preview (citizenid, withheld, conversation, created_at, direction, is_read)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
     util.ensureIndex('phone_messages', 'idx_phone_messages_unread', '(citizenid, is_read)')
@@ -134,6 +137,7 @@ function store.ensureSchema()
     })
     util.ensureIndex('phone_messages', 'idx_phone_messages_mid', '(mid)')
     util.ensureIndex('phone_messages', 'idx_phone_messages_thread', '(citizenid, conversation, created_at)')
+    migrations.apply('phone_messages')
     MySQL.query.await('UPDATE phone_messages SET mid = id WHERE mid IS NULL')
 
     util.ensureColumns('phone_message_groups', { avatar = 'avatar VARCHAR(512) NULL' })
