@@ -100,7 +100,8 @@ end
 ---restore should carry to the new SIM. Deliberately absent: number-keyed public content
 ---(marketplace/pages/service messages - tied to the old number), username-keyed social apps
 ---(Photogram/Birdy/Cherry/Ryde survive via account login, and their sessions ARE copied via
----phone_app_sessions), and darkchat/groups room state (moved, not copied, below).
+---phone_app_sessions), darkchat/groups room state (moved, not copied, below), and every VALUE
+---table.
 local COPY = {
     { 'phone_contacts',          'citizenid' },
     { 'phone_blocked',           'citizenid' },
@@ -117,10 +118,6 @@ local COPY = {
     { 'phone_passwords',         'citizenid' },
     { 'phone_alarms',            'citizenid' },
     { 'phone_timer_recents',     'citizenid' },
-    { 'phone_stock_holdings',    'citizenid' },
-    { 'phone_stock_wallet',      'citizenid' },
-    { 'phone_cases',             'citizenid' },
-    { 'phone_casino_chips',      'citizenid' },
     { 'phone_cookie',            'citizenid' },
     { 'phone_game_stats',        'citizenid' },
     { 'phone_radio_saved',       'citizenid' },
@@ -130,6 +127,18 @@ local COPY = {
     { 'phone_documents',         'citizenid' },
     { 'phone_document_folders',  'citizenid' },
     { 'phone_signatures',        'citizenid' },
+}
+
+---@type string[] Tables holding value: the stocks app's cash and shares, casino chips, and owned
+---phone cases, which a case store hands out as items. A snapshot never copies them and a restore
+---never writes them, so backing up, spending and restoring cannot bring the spent value back;
+---value stays with the phone identity that earned it. The wipe still clears them under a cloud
+---identity, because snapshots taken before this rule hold copies.
+local VALUE = {
+    'phone_stock_holdings',
+    'phone_stock_wallet',
+    'phone_casino_chips',
+    'phone_cases',
 }
 
 ---@type string[] phone_settings columns carried by a restore. The number, citizenid and
@@ -196,10 +205,20 @@ local function copyAlbumItems(fromId, toId)
     ]], { toId, toId, fromId })
 end
 
+---True when `id` is a snapshot namespace rather than a live phone identity.
+---@param id any
+---@return boolean
+local function isCloud(id)
+    return type(id) == 'string' and id:sub(1, 6) == 'cloud:'
+end
+
 ---Deletes every snapshot row a cloud identity holds (profile deletion, and the wipe phase of
----a sync). The phone_settings row goes too - a dead namespace keeps nothing.
+---a sync), VALUE tables included. The phone_settings row goes too - a dead namespace keeps
+---nothing. Anything but a `cloud:` identity is refused: this deletes by identity across every
+---phone table, and a live phone's data must never be the target.
 ---@param cloudId string snapshot identity ('cloud:' prefixed)
 function backup.wipe(cloudId)
+    if not isCloud(cloudId) then return end
     -- Join-keyed children go first: their parent rows are the only link to the cloud identity.
     run([[
         DELETE i FROM phone_photo_album_items i
@@ -214,6 +233,9 @@ function backup.wipe(cloudId)
     for _, t in ipairs(COPY) do
         run(('DELETE FROM `%s` WHERE `%s` = ?'):format(t[1], t[2]), { cloudId })
     end
+    for _, tbl in ipairs(VALUE) do
+        run(('DELETE FROM `%s` WHERE citizenid = ?'):format(tbl), { cloudId })
+    end
     run('DELETE FROM phone_settings WHERE citizenid = ?', { cloudId })
 end
 
@@ -225,6 +247,7 @@ end
 ---@param cloudId string snapshot identity ('cloud:' prefixed)
 ---@return integer rows total rows written
 function backup.sync(fromId, cloudId)
+    if not isCloud(cloudId) or fromId == cloudId then return 0 end
     backup.wipe(cloudId)
 
     local rows = copySettings(fromId, cloudId)
@@ -240,6 +263,9 @@ end
 ---The source profile keeps its rows - whoever holds the old SIM keeps what was on it. Live
 ---room state (groups, mail logins) can't come from a snapshot, so it moves from `liveFromId` -
 ---the previously enrolled phone - which for legacy pointer backups IS the backup identity.
+---
+---Nothing is written when `toId` is the profile's own phone: its data would be copied back over
+---itself under fresh ids, so every restore would duplicate it.
 ---@param fromId string backed-up identity (cloud snapshot, or a phone identity on legacy rows)
 ---@param toId string current SIM identity
 ---@param toNumber string current SIM bare-digit number
@@ -247,6 +273,7 @@ end
 ---@return integer rows total rows written
 function backup.restore(fromId, toId, toNumber, liveFromId)
     liveFromId = liveFromId or fromId
+    if toId == fromId or toId == liveFromId then return 0 end
     local rows = copySettings(fromId, toId)
 
     for _, t in ipairs(COPY) do
