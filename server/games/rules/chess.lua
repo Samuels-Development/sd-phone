@@ -24,11 +24,15 @@ local QUEEN    = { DIAG[1], DIAG[2], DIAG[3], DIAG[4], ORTHO[1], ORTHO[2], ORTHO
 ---@type table<string, boolean> Pieces a pawn may promote to, as the mover's upper-case letter.
 local PROMOS = { Q = true, R = true, B = true, N = true }
 
+---@return integer row 0..7, 0 being rank 8
 local function rowOf(sq) return sq // 8 end
+---@return integer column 0..7, 0 being the a-file
 local function colOf(sq) return sq % 8 end
+---@return boolean true when (r, c) lies on the board
 local function onBoard(r, c) return r >= 0 and r < 8 and c >= 0 and c < 8 end
 ---@return string 'w' for an upper-case piece, 'b' for a lower-case one
 local function colorOf(p) return (p:upper() == p) and 'w' or 'b' end
+---@return string the other colour
 local function enemy(c) return c == 'w' and 'b' or 'w' end
 ---@return string piece letter in the mover's case
 local function cased(c, letter) return c == 'w' and letter or letter:lower() end
@@ -79,6 +83,41 @@ local function inCheck(state, c)
     return isAttacked(state.board, findKing(state.board, c), enemy(c))
 end
 
+---@type table<string, table[]> Each colour's two castles: the right that allows it, the king's
+---start and landing squares, the rook's home, the squares that must be empty, and the squares the
+---king stands on, crosses and lands on, none of which may be attacked.
+local CASTLES = {
+    w = {
+        { right = 'wK', king = 60, to = 62, rook = 63, between = { 61, 62 }, path = { 60, 61, 62 } },
+        { right = 'wQ', king = 60, to = 58, rook = 56, between = { 59, 58, 57 }, path = { 60, 59, 58 } },
+    },
+    b = {
+        { right = 'bK', king = 4, to = 6, rook = 7, between = { 5, 6 }, path = { 4, 5, 6 } },
+        { right = 'bQ', king = 4, to = 2, rook = 0, between = { 3, 2, 1 }, path = { 4, 3, 2 } },
+    },
+}
+
+---True when colour c may castle this way now. Castling out of, through or into check is refused,
+---as on the client.
+---@param state table
+---@param c string 'w' or 'b'
+---@param castle table one CASTLES entry
+---@return boolean
+local function canCastle(state, c, castle)
+    if not state.castling[castle.right] then return false end
+    if state.board[castle.rook] ~= cased(c, 'R') then return false end
+
+    for _, sq in ipairs(castle.between) do
+        if state.board[sq] ~= '' then return false end
+    end
+
+    local opp = enemy(c)
+    for _, sq in ipairs(castle.path) do
+        if isAttacked(state.board, sq, opp) then return false end
+    end
+    return true
+end
+
 ---Every pseudo-legal move for colour c (own king may be left in check), in the client's shape.
 ---@return table[] moves { from, to, promo?, flag? }
 local function genPseudo(state, c)
@@ -112,8 +151,11 @@ local function genPseudo(state, c)
                     local tr, tc = r + dir, cc + dc
                     if onBoard(tr, tc) then
                         local t = tr * 8 + tc
-                        if foe(t) then pushPawn(sq, t)
-                        elseif t == state.ep then moves[#moves + 1] = { from = sq, to = t, flag = 'ep' } end
+                        if foe(t) then
+                            pushPawn(sq, t)
+                        elseif t == state.ep then
+                            moves[#moves + 1] = { from = sq, to = t, flag = 'ep' }
+                        end
                     end
                 end
             elseif kind == 'N' or kind == 'K' then
@@ -124,24 +166,9 @@ local function genPseudo(state, c)
                     end
                 end
                 if kind == 'K' then
-                    local opp, cs = enemy(c), state.castling
-                    if c == 'w' and sq == 60 then
-                        if cs.wK and empty(61) and empty(62) and board[63] == 'R'
-                            and not isAttacked(board, 60, opp) and not isAttacked(board, 61, opp) and not isAttacked(board, 62, opp) then
-                            moves[#moves + 1] = { from = 60, to = 62, flag = 'castle' }
-                        end
-                        if cs.wQ and empty(59) and empty(58) and empty(57) and board[56] == 'R'
-                            and not isAttacked(board, 60, opp) and not isAttacked(board, 59, opp) and not isAttacked(board, 58, opp) then
-                            moves[#moves + 1] = { from = 60, to = 58, flag = 'castle' }
-                        end
-                    elseif c == 'b' and sq == 4 then
-                        if cs.bK and empty(5) and empty(6) and board[7] == 'r'
-                            and not isAttacked(board, 4, opp) and not isAttacked(board, 5, opp) and not isAttacked(board, 6, opp) then
-                            moves[#moves + 1] = { from = 4, to = 6, flag = 'castle' }
-                        end
-                        if cs.bQ and empty(3) and empty(2) and empty(1) and board[0] == 'r'
-                            and not isAttacked(board, 4, opp) and not isAttacked(board, 3, opp) and not isAttacked(board, 2, opp) then
-                            moves[#moves + 1] = { from = 4, to = 2, flag = 'castle' }
+                    for _, castle in ipairs(CASTLES[c]) do
+                        if sq == castle.king and canCastle(state, c, castle) then
+                            moves[#moves + 1] = { from = sq, to = castle.to, flag = 'castle' }
                         end
                     end
                 end
@@ -283,6 +310,5 @@ function rules.move(state, side, move)
 end
 
 rules.legalMoves = legalMoves
-rules.status = status
 
 return rules

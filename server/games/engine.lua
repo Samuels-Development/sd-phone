@@ -370,7 +370,7 @@ local function conclude(gameId, g, winner, reason)
             if side == gone then
                 pushClient(psrc, g.game, 'stats', { stats = s })
             elseif gone then
-                pushClient(psrc, g.game, 'ended', { gameId = gameId, reason = reason, stats = s })
+                pushClient(psrc, g.game, 'ended', { gameId = gameId, reason = reason, reveal = reveal, stats = s })
             else
                 pushClient(psrc, g.game, 'result', { gameId = gameId, winner = winner, reason = reason, reveal = reveal, stats = s })
             end
@@ -728,9 +728,9 @@ lib.callback.register('sd-phone:server:games:startLobby', function(src, payload)
     local turnSeconds  = rules.turnBased and secondsFor(gamesConfig.TurnSeconds, game, 60) or nil
     local setupSeconds = rules.requiresSetup and secondsFor(gamesConfig.SetupSeconds, game, 90) or nil
     local timeLimit    = limitMs and limitMs // 1000 or nil
-    for _, seat in ipairs({ { hostSrc, hostSide, oppSrc }, { oppSrc, oppSide, hostSrc } }) do
-        pushClient(seat[1], game, 'start', {
-            gameId = gameId, color = seat[2], opponent = nameOf(seat[3]), pot = wager * 2,
+    for side, psrc in pairs(g.players) do
+        pushClient(psrc, game, 'start', {
+            gameId = gameId, color = side, opponent = g.names[otherSide(game, side)], pot = wager * 2,
             turnSeconds = turnSeconds, setupSeconds = setupSeconds, timeLimit = timeLimit,
         })
     end

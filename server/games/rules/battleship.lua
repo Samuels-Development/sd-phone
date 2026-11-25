@@ -139,6 +139,4 @@ function rules.reveal(state)
     return { fleets = fleets }
 end
 
-rules.FLEET_CELLS = FLEET_CELLS
-
 return rules
