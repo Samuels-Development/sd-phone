@@ -53,6 +53,42 @@ function store.ensureSchema()
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
     util.ensureIndex('phone_ryde_rides', 'idx_ryde_rides_rider_recent', '(rider_username, created_at)')
+
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS phone_ryde_holds (
+            trip_id    VARCHAR(16)  NOT NULL,
+            citizenid  VARCHAR(64)  NOT NULL,
+            amount     INT          NOT NULL DEFAULT 0,
+            created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (trip_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ]])
+end
+
+---Records a fare held from a rider for a started trip. Trips live in memory only, so this row is
+---what lets a restart or crash between the hold and its settlement still find the money and hand
+---it back (store.orphanHolds).
+---@param tripId string
+---@param citizenid string the rider's real character identifier
+---@param amount number
+function store.addHold(tripId, citizenid, amount)
+    MySQL.insert.await('INSERT INTO phone_ryde_holds (trip_id, citizenid, amount) VALUES (?, ?, ?)',
+        { tripId, citizenid, math.floor(amount) })
+end
+
+---Forgets a held fare once it has been paid out or refunded; returns the affected-row count, so a
+---boot-time refund can tell it was the one to claim the row.
+---@param tripId string
+---@return number affected
+function store.dropHold(tripId)
+    return MySQL.update.await('DELETE FROM phone_ryde_holds WHERE trip_id = ?', { tripId }) or 0
+end
+
+---Every held fare on record. At boot no trip is live, so each one belongs to a trip the server lost
+---and is owed back to its rider. Read-only.
+---@return { trip_id: string, citizenid: string, amount: number }[]
+function store.orphanHolds()
+    return MySQL.query.await('SELECT trip_id, citizenid, amount FROM phone_ryde_holds') or {}
 end
 
 ---Fetches a driver record by account username. Read-only.

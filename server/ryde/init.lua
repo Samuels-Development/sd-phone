@@ -6,7 +6,7 @@ local store   = require 'server.ryde.store'
 ---@type table Authoritative Ryde handlers (server.ryde.actions): matching, trips, money movement.
 local actions = require 'server.ryde.actions'
 
--- Schema bootstrap.
+-- Schema bootstrap, then any fare a trip lost to a restart still held goes back to its rider.
 CreateThread(function()
     local success, err = pcall(store.ensureSchema)
     if not success then
@@ -14,6 +14,8 @@ CreateThread(function()
         return
     end
     boot.schemaReady()
+    local refunded, rerr = pcall(actions.refundOrphanHolds)
+    if not refunded then print(('^1[sd-phone:ryde]^0 held fares were not refunded: %s'):format(tostring(rerr))) end
 end)
 
 -- Authoritative Ryde callbacks: thin delegates into server.ryde.actions.

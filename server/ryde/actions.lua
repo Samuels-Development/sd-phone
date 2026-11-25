@@ -4,6 +4,9 @@ local player    = require 'bridge.server.player'
 local acctStore = require 'server.accounts.store'
 ---@type table Money bridge (bridge.server.money): framework-agnostic bank debits/credits.
 local money     = require 'bridge.server.money'
+---@type table Banking bridge (bridge.server.banking): the offline bank credit, for a refund or
+---payout owed to someone who has already left.
+local banking   = require 'bridge.server.banking'
 ---@type table Ryde persistence layer (server.ryde.store): driver profiles + finished rides.
 local store     = require 'server.ryde.store'
 ---@type table Settings store (server.settings.store): phone-number provisioning for trip cards.
@@ -43,6 +46,10 @@ local REQUEST_COOLDOWN = 5000
 ---@type integer Offers one request may hold. A real driver can only bid once (driverActive gates
 ---them), so this only bounds the synthetic /rydeoffer cards.
 local MAX_OFFERS = 8
+
+---@type boolean Whether a rider who ends a started trip early pays for the share already driven.
+---Off unless asked for: a cancel has always cost the rider nothing.
+local RIDER_CANCEL_PAYS = config.RiderCancelPays == true
 
 local util = require 'server.util'
 local ok, fail = util.ok, util.fail
@@ -206,16 +213,152 @@ local function publicTrip(t, role)
     }
 end
 
----Tears down an engaged trip, records it as cancelled, and notifies the party who didn't
----trigger the cancel. `by` is 'rider' | 'driver' | 'disconnect'.
+---Pays a character into their bank: live while they are connected, through an offline write
+---otherwise, so a refund or payout owed to someone who just left still lands. Keyed on the REAL
+---identifier, because the offline write needs the character and not a SIM identity.
+---@param realCid string|nil
+---@param amount number
+---@param reason string
+---@return boolean credited
+local function credit(realCid, amount, reason)
+    if not realCid or amount <= 0 then return false end
+    local src = player.getSourceByRealIdentifier(realCid)
+    if src and player.get(src) then
+        money.add(src, 'bank', amount, reason)
+        return true
+    end
+    local landed = banking.addOffline(realCid, amount)
+    if not landed then
+        print(('^1[sd-phone:ryde]^0 could not credit $%d (%s) to %s'):format(amount, reason, realCid))
+    end
+    return landed
+end
+
+---A live player's server-side position as { x, y }, or nil when it cannot be read.
+---@param src integer|nil
+---@return table|nil
+local function posOf(src)
+    if not src then return nil end
+    local ped = GetPlayerPed(src)
+    if not ped or ped == 0 then return nil end
+    local c = GetEntityCoords(ped)
+    return c and { x = c.x, y = c.y } or nil
+end
+
+---How much of a started trip has been driven, 0 to 1: the straight-line distance closed on the
+---drop-off since the server saw the trip start, measured from the rider, else the driver. Both
+---ends are server-read, never the pickup the client sent. Nothing measurable counts as no progress,
+---which errs in the rider's favour.
+---@param trip table
+---@return number progress
+local function progressOf(trip)
+    local start = trip.startPos
+    local now = posOf(srcOf(trip.riderCid)) or posOf(srcOf(trip.driverCid))
+    if not (start and now) then return 0 end
+    local total = distanceKm(start, trip.dropoff)
+    if total <= 0.001 then return 0 end
+    return math.max(0, math.min(1, 1 - distanceKm(now, trip.dropoff) / total))
+end
+
+---Pays the driver their cut of `amount` the rider paid, live or offline, with the Wallet entry and
+---banner. Returns what the driver earned.
+---@param trip table
+---@param amount number fare actually collected from the rider
+---@return number earned
+local function payDriver(trip, amount)
+    local earned = lib.math.round(amount * (config.DriverCut or 1.0))
+    if earned <= 0 then return 0 end
+    credit(trip.driverRealCid, earned, 'Ryde earnings')
+    bank.addExternal(trip.driverCid, { label = 'Ryde earnings', amount = earned, category = 'ryde', counterparty = trip.riderName })
+    notifyBank(trip.driverCid, ('You earned $%d from your Ryde trip'):format(earned))
+    return earned
+end
+
+---Takes the agreed fare from the rider as the trip starts and holds it until drop-off, so paying
+---no longer depends on the rider still having the money, or still being connected, at the end.
+---The hold is written down before any money moves (store.addHold), and the trip is re-checked
+---after that write because a cancel can land while it is in flight. Returns a refusal envelope
+---when the trip cannot start, nil once the fare is held.
+---@param trip table
+---@param driverSrc integer the driver starting the trip
+---@return table|nil refusal
+local function holdFare(trip, driverSrc)
+    if trip.holding then return fail('ryde.tripAlreadyStarting', 'The trip is already starting.') end
+    local riderSrc = srcOf(trip.riderCid)
+    local riderReal = riderSrc and player.getRealIdentifier(riderSrc)
+    if not riderReal then return fail('ryde.riderNeedsVehicleStartTrip', 'Your rider needs to be in your vehicle to start the trip.') end
+    if money.get(riderSrc, 'bank') < trip.fare then
+        notifyRyde(trip.riderCid, ('You need $%d in the bank to start your Ryde trip.'):format(trip.fare))
+        return fail('ryde.riderCannotPayFare', 'Your rider cannot pay this fare.')
+    end
+
+    trip.holding = true
+    local saved = pcall(store.addHold, trip.id, riderReal, trip.fare)
+    if not saved then
+        trip.holding = nil
+        return fail('ryde.couldNotStartTrip', 'Could not start the trip. Try again.')
+    end
+    riderSrc = srcOf(trip.riderCid)
+    if trips[trip.id] ~= trip or not riderSrc or money.get(riderSrc, 'bank') < trip.fare
+        or not money.remove(riderSrc, 'bank', trip.fare, 'Ryde fare') then
+        trip.holding = nil
+        store.dropHold(trip.id)
+        if trips[trip.id] ~= trip then return fail('ryde.noActiveTrip', 'No active trip.') end
+        return fail('ryde.riderCannotPayFare', 'Your rider cannot pay this fare.')
+    end
+
+    trip.held, trip.holding = trip.fare, nil
+    trip.holdCid       = riderReal
+    trip.driverRealCid = player.getRealIdentifier(driverSrc)
+    trip.startPos      = posOf(driverSrc) or posOf(riderSrc)
+    bank.addExternal(trip.riderCid, { label = 'Ryde trip', amount = -trip.fare, category = 'ryde', counterparty = trip.driverName })
+    notifyBank(trip.riderCid, ('Charged $%d for your Ryde trip'):format(trip.fare))
+    return nil
+end
+
+---Settles the held fare of a trip that ended without a drop-off: refunded in full, as a cancel has
+---always left the rider owing nothing. With RiderCancelPays a rider who cancels or drops after the
+---start pays for the share already driven instead, and the driver gets their cut of it, so walking
+---away at the kerb of the destination is no way round the fare. The hold row goes before any money
+---moves: a crash in between loses a payout rather than paying one twice.
+---@param trip table
+---@param party string 'rider'|'driver' the side that ended the trip
+---@return number charged what the rider paid in the end
+local function settleCancelled(trip, party)
+    local held = trip.held or 0
+    if held <= 0 then return 0 end
+    trip.held = 0
+
+    local charged = 0
+    if party == 'rider' and RIDER_CANCEL_PAYS then
+        charged = math.min(held, math.floor(held * progressOf(trip)))
+    end
+
+    store.dropHold(trip.id)
+    local refund = held - charged
+    if refund > 0 then
+        credit(trip.holdCid, refund, 'Ryde refund')
+        bank.addExternal(trip.riderCid, { label = 'Ryde refund', amount = refund, category = 'ryde', counterparty = trip.driverName })
+        notifyBank(trip.riderCid, ('Refunded $%d for your cancelled Ryde trip'):format(refund))
+    end
+    if charged > 0 then payDriver(trip, charged) end
+    return charged
+end
+
+---Tears down an engaged trip, settles any held fare, records it as cancelled, and notifies the
+---party who didn't trigger the cancel. `by` is 'rider' | 'driver' | 'disconnect'; `party` names
+---the side that ended it when `by` alone does not (a disconnect), for settleCancelled.
 ---@param trip table
 ---@param by string
-local function cancelTrip(trip, by)
+---@param party? string 'rider'|'driver', defaulting to `by`
+local function cancelTrip(trip, by, party)
     trips[trip.id] = nil
     if riderActive[trip.riderUsername] == trip.id then riderActive[trip.riderUsername] = nil end
     driverActive[trip.driverUsername] = nil
     trip.status = 'cancelled'
-    trip.paid   = false
+    local charged = settleCancelled(trip, party or by)
+    trip.paid = charged > 0
+    if charged > 0 then trip.fare = charged end
     store.insertRide(trip)
     if by ~= 'rider' then
         pushTo(trip.riderCid,  'tripUpdate', { id = trip.id, status = 'cancelled', role = 'rider',  by = by })
@@ -330,6 +473,8 @@ end
 
 ---Rider responds to a driver's offer: accept locks the trip in, pulls the request off the board,
 ---bounces other bids and pushes the engaged trip to both parties; decline drops just this offer.
+---An offer the rider cannot pay is refused at accept, so no driver drives to a pickup whose fare
+---will fail to hold when the trip starts.
 ---@param src integer player server id
 ---@param payload table { tripId: string, accept?: boolean }
 ---@return table result
@@ -342,6 +487,9 @@ function actions.respond(src, payload)
     end
 
     if p.accept then
+        if money.get(src, 'bank') < trip.fare then
+            return fail('ryde.cannotAffordFare', 'You cannot afford that fare.')
+        end
         if trip.requestId and requests[trip.requestId] then
             requests[trip.requestId] = nil
             broadcastToDrivers('requestRemoved', { id = trip.requestId })
@@ -489,6 +637,10 @@ function actions.tripStatus(src, payload)
     if nextStatus == 'in_progress' and not inSameVehicle(trip) then
         return fail('ryde.riderNeedsVehicleStartTrip', 'Your rider needs to be in your vehicle to start the trip.')
     end
+    if nextStatus == 'in_progress' and not trip.held then
+        local refusal = holdFare(trip, src)
+        if refusal then return refusal end
+    end
     trip.status = nextStatus
 
     pushTo(trip.riderCid, 'tripUpdate', publicTrip(trip, 'rider'))
@@ -516,8 +668,10 @@ function actions.sameVehicle(src, payload)
     return ok({ same = inSameVehicle(trip) })
 end
 
----Driver completes an 'in_progress' trip within 250m of the drop-off: charges the rider bank ->
----bank, pays the driver's cut, persists the ride and bumps stats; unpaid rides record paid = false.
+---Driver completes an 'in_progress' trip within 250m of the drop-off: pays the driver's cut out of
+---the fare held from the rider at the start (no second charge), persists the ride and bumps stats.
+---The fare is fixed once the rider accepts the offer, so the hold is exactly what is owed; a trip
+---somehow started without one records paid = false.
 ---@param src integer player server id
 ---@param payload table { tripId: string }
 ---@return table result { rideId, fare, paid }
@@ -536,24 +690,13 @@ function actions.complete(src, payload)
     riderActive[trip.riderUsername]   = nil
     driverActive[trip.driverUsername] = nil
 
-    local riderSrc  = srcOf(trip.riderCid)
-    local driverSrc = srcOf(trip.driverCid)
-    local driverEarn = lib.math.round(trip.fare * (config.DriverCut or 1.0))
-
-    local paid = false
-    if riderSrc and money.get(riderSrc, 'bank') >= trip.fare then
-        money.remove(riderSrc, 'bank', trip.fare, 'Ryde fare')
-        if driverSrc then money.add(driverSrc, 'bank', driverEarn, 'Ryde earnings') end
-        paid = true
-    end
-
+    local held = trip.held or 0
+    trip.held = 0
+    local paid = held > 0
+    local driverEarn = 0
     if paid then
-        bank.addExternal(trip.riderCid, { label = 'Ryde trip', amount = -trip.fare, category = 'ryde', counterparty = trip.driverName })
-        notifyBank(trip.riderCid, ('Charged $%d for your Ryde trip'):format(trip.fare))
-        if driverSrc then
-            bank.addExternal(trip.driverCid, { label = 'Ryde earnings', amount = driverEarn, category = 'ryde', counterparty = trip.riderName })
-            notifyBank(trip.driverCid, ('You earned $%d from your Ryde trip'):format(driverEarn))
-        end
+        store.dropHold(trip.id)
+        driverEarn = payDriver(trip, held)
     end
 
     trip.status = 'completed'
@@ -947,7 +1090,9 @@ function actions.devOffer(src)
 end
 
 ---Handles a player leaving: clears the per-src caches, drops them from the duty board, bins
----their pending request and its bids, withdraws an offered trip, and cancels an engaged trip.
+---their pending request and its bids, withdraws an offered trip, and cancels an engaged trip as
+---the side that left. Their trips are gathered before any is cancelled: a cancel yields on its
+---database writes, and the trip table must not be walked across those.
 ---@param src number player server id
 function actions.onPlayerDropped(src)
     local cid = srcCid[src] or player.getIdentifier(src)
@@ -966,16 +1111,33 @@ function actions.onPlayerDropped(src)
             clearOffersFor(id, nil, 'cancelled')
         end
     end
-    for id, t in pairs(trips) do
-        if t.riderCid == cid or t.driverCid == cid then
+    local theirs = {}
+    for _, t in pairs(trips) do
+        if t.riderCid == cid or t.driverCid == cid then theirs[#theirs + 1] = t end
+    end
+    for _, t in ipairs(theirs) do
+        if trips[t.id] == t then
             if t.status == 'offered' then
                 dropOffer(t)
                 if t.driverCid == cid then
-                    pushTo(t.riderCid, 'offerRemoved', { id = id, requestId = t.requestId })
+                    pushTo(t.riderCid, 'offerRemoved', { id = t.id, requestId = t.requestId })
                 end
             else
-                cancelTrip(t, 'disconnect')
+                cancelTrip(t, 'disconnect', t.riderCid == cid and 'rider' or 'driver')
             end
+        end
+    end
+end
+
+---Hands back every fare still held from before this boot. Trips live in memory only, so a hold
+---found at start belongs to a trip lost to a restart or crash, and its rider gets it back in full.
+---Each row is claimed by deleting it before the credit, so a refund is paid once.
+function actions.refundOrphanHolds()
+    for _, row in ipairs(store.orphanHolds()) do
+        local amount = math.floor(tonumber(row.amount) or 0)
+        if amount > 0 and store.dropHold(row.trip_id) > 0 then
+            credit(row.citizenid, amount, 'Ryde refund')
+            print(('^3[sd-phone:ryde]^0 refunded a $%d fare held on trip %s, lost to a restart'):format(amount, row.trip_id))
         end
     end
 end
