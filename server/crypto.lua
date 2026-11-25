@@ -38,13 +38,18 @@ function crypto.hashPassword(plain)
     return (okCall and type(res) == 'string') and res or nil
 end
 
----Checks a plaintext password against a scrypt hash.
+---Checks a plaintext password against a scrypt hash. From a thread that can yield (every
+---callback, event handler and CreateThread) the hash runs on Node's worker pool and only this
+---thread waits for it, so a burst of sign-ins no longer stalls the whole server; FiveM awaits the
+---Promise the async export returns. Anywhere that cannot yield, such as a file's main chunk, it
+---falls back to the synchronous hash rather than failing the check.
 ---@param plain string plaintext password
 ---@param stored string stored scrypt hash
 ---@return boolean verified
 function crypto.verifyPassword(plain, stored)
     if not crypto.available() then return false end
-    local okCall, res = call('sdCryptoVerifyPassword', plain, stored)
+    local name = coroutine.isyieldable() and 'sdCryptoVerifyPasswordAsync' or 'sdCryptoVerifyPassword'
+    local okCall, res = call(name, plain, stored)
     return okCall and res == true
 end
 

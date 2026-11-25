@@ -45,19 +45,47 @@ function hashPassword(plain) {
     return `scrypt$${SCRYPT_N}$${SCRYPT_R}$${SCRYPT_P}$${salt.toString('base64')}$${dk.toString('base64')}`;
 }
 
-function verifyPassword(plain, stored) {
-    if (typeof stored !== 'string') return false;
+function parseScrypt(stored) {
+    if (typeof stored !== 'string') return null;
     const parts = stored.split('$');
-    if (parts.length !== 6 || parts[0] !== 'scrypt') return false;
+    if (parts.length !== 6 || parts[0] !== 'scrypt') return null;
+    const want = Buffer.from(parts[5], 'base64');
+    if (want.length === 0) return null;
+    return {
+        salt: Buffer.from(parts[4], 'base64'),
+        want,
+        opts: { N: Number(parts[1]), r: Number(parts[2]), p: Number(parts[3]) },
+    };
+}
+
+function matches(dk, want) {
+    return dk.length === want.length && crypto.timingSafeEqual(dk, want);
+}
+
+function verifyPassword(plain, stored) {
+    const h = parseScrypt(stored);
+    if (!h) return false;
     try {
-        const want = Buffer.from(parts[5], 'base64');
-        const dk = crypto.scryptSync(peppered(plain), Buffer.from(parts[4], 'base64'), want.length, {
-            N: Number(parts[1]), r: Number(parts[2]), p: Number(parts[3]),
-        });
-        return dk.length === want.length && crypto.timingSafeEqual(dk, want);
+        return matches(crypto.scryptSync(peppered(plain), h.salt, h.want.length, h.opts), h.want);
     } catch (err) {
         return false;
     }
+}
+
+// The same check on libuv's worker pool, so a burst of sign-ins never stalls the server thread.
+// The Lua caller awaits the returned Promise; it always resolves, never rejects.
+function verifyPasswordAsync(plain, stored) {
+    const h = parseScrypt(stored);
+    if (!h) return Promise.resolve(false);
+    return new Promise((resolve) => {
+        try {
+            crypto.scrypt(peppered(plain), h.salt, h.want.length, h.opts, (err, dk) => {
+                resolve(!err && matches(dk, h.want));
+            });
+        } catch (err) {
+            resolve(false);
+        }
+    });
 }
 
 function encrypt(plain) {
@@ -111,6 +139,7 @@ function verifyBcrypt(plain, stored) {
 registerExport('sdCryptoReady', () => true);
 registerExport('sdCryptoHashPassword', hashPassword);
 registerExport('sdCryptoVerifyPassword', verifyPassword);
+registerExport('sdCryptoVerifyPasswordAsync', verifyPasswordAsync);
 registerExport('sdCryptoVerifyBcrypt', verifyBcrypt);
 registerExport('sdCryptoEncrypt', encrypt);
 registerExport('sdCryptoDecrypt', decrypt);
