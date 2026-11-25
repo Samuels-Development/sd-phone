@@ -56,15 +56,17 @@ end
 ---@return string
 local function encodeJson(tbl) return json.encode(tbl or {}) end
 
----@type table<string, { owner: thread|nil, depth: integer, waiting: table[] }> Mailbox write
----locks, keyed by lowercased address. An entry exists only while someone holds or awaits it.
+---@type table<string, { owner: thread|nil, waiting: table[] }> Mailbox write locks, keyed by
+---lowercased address. An entry exists only while someone holds or awaits it.
 local locks = {}
 
 ---Runs `fn` while holding the mailbox's write lock. Every write here reads the whole messages
 ---blob, changes it in Lua and writes it back, awaiting the database at both ends, so two writes to
 ---one mailbox used to interleave and the second silently dropped what the first had added - a
 ---lost mail on a busy inbox. Holders run one at a time in arrival order; the thread that already
----holds the lock may take it again, so a locked write can call another.
+---holds the lock may take it again, so a locked write can call another. Code that cannot yield
+---(a main chunk) cannot wait its turn either, so it runs unlocked rather than stranding a waiter
+---that would jam the mailbox for good.
 ---@param email string mailbox address
 ---@param fn fun(): any work to run under the lock
 ---@return any ... whatever `fn` returns; an error inside it releases the lock and is re-raised
@@ -72,24 +74,19 @@ local function withMailbox(email, fn)
     local key = tostring(email or ''):lower()
     local me = coroutine.running()
     local lock = locks[key]
-    if lock and lock.owner == me then
-        lock.depth = lock.depth + 1
-        local res = table.pack(pcall(fn))
-        lock.depth = lock.depth - 1
-        if not res[1] then error(res[2], 0) end
-        return table.unpack(res, 2, res.n)
-    end
+    if lock and lock.owner == me then return fn() end
     if lock then
+        if not coroutine.isyieldable() then return fn() end
         local turn = promise.new()
         lock.waiting[#lock.waiting + 1] = turn
         Citizen.Await(turn)
     else
-        lock = { depth = 0, waiting = {} }
+        lock = { waiting = {} }
         locks[key] = lock
     end
-    lock.owner, lock.depth = me, 1
+    lock.owner = me
     local res = table.pack(pcall(fn))
-    lock.owner, lock.depth = nil, 0
+    lock.owner = nil
     local nextTurn = table.remove(lock.waiting, 1)
     if nextTurn then nextTurn:resolve() else locks[key] = nil end
     if not res[1] then error(res[2], 0) end

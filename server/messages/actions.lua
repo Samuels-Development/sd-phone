@@ -945,7 +945,6 @@ function actions.createGroup(source, payload)
     for _, m in ipairs(resolved) do
         store.addGroupMember(groupId, m.cid, m.number, memberLabel(m.cid))
     end
-    -- One pass over the connected players for the push below.
     local activeSrcs = player.activeCidMap()
 
     local key = 'g-' .. groupId
@@ -1004,7 +1003,6 @@ function actions.addGroupMember(source, payload)
     for _, m in ipairs(resolved) do
         store.addGroupMember(groupId, m.cid, m.number, memberLabel(m.cid))
     end
-    -- One pass over the connected players for the push below.
     local activeSrcs = player.activeCidMap()
 
     local groupName = (store.getGroup(groupId) or {}).name or 'Group'
