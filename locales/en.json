@@ -1808,6 +1808,7 @@
     "tapToCopy": "Tap to copy",
     "thisRoom": "this room",
     "title": "Dark Chat",
+    "tooManyWrongCodes": "Too many wrong codes. Try again later",
     "unban": "Unban",
     "voicePreview": "🎤 Voice message",
     "waitBeforeChangingCode": "Wait {n}s before changing the code again",

@@ -24,11 +24,17 @@ for _, r in ipairs(DC.PublicRooms) do PUBLIC_BY_ID[r.id] = r end
 ---@type string Room-code alphabet; ambiguous 0/O/1/I excluded.
 local CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
----Mint a random room code of DC.CodeLength characters from CODE_ALPHABET.
+---@type integer Shortest code a new room may get, minted or proposed. Six characters is over a
+---billion codes; the four that were allowed left about a million, which a handful of alts could
+---walk. Rooms already holding a shorter code keep it and stay joinable.
+local MIN_NEW_CODE_LENGTH = 6
+
+---Mint a random room code of DC.CodeLength characters (never fewer than MIN_NEW_CODE_LENGTH)
+---from CODE_ALPHABET.
 ---@return string code
 local function genCode()
     local t = {}
-    for i = 1, DC.CodeLength do
+    for i = 1, math.max(tonumber(DC.CodeLength) or 0, MIN_NEW_CODE_LENGTH) do
         local n = math.random(#CODE_ALPHABET)
         t[i] = CODE_ALPHABET:sub(n, n)
     end
@@ -43,6 +49,16 @@ local trim = util.trim
 ---40 a minute is roughly twice the fastest a person sustains in a busy room.
 local SEND_GAP_MS = 750
 local SEND_WINDOW_MS, SEND_PER_WINDOW = 60000, 40
+
+---@type integer Minimum gap between join attempts, per character (ms).
+local JOIN_GAP_MS = 1000
+---@type integer Wrong codes a character may enter inside the window before joining locks, and how
+---long the lock lasts (ms). A player who mistypes a code a few times never gets near this.
+local WRONG_CODE_WINDOW_MS, WRONG_CODES_PER_WINDOW = 600000, 10
+local JOIN_LOCK_MS = 600000
+---@type integer Minimum gap between room creations, per character, and the rolling budget.
+local CREATE_GAP_MS = 3000
+local CREATE_WINDOW_MS, CREATE_PER_WINDOW = 3600000, 10
 
 ---Trims a client string and caps its byte length; nil for non-strings and empties.
 ---@param s any client-supplied value
@@ -69,6 +85,24 @@ local function fmtTime(ts) return os.date('%H:%M', ts) end
 ---@param src integer player server id
 ---@return string|nil citizenid or nil if the player can't be resolved
 local function cidOf(src) return player.getIdentifier(src) end
+
+---True while a character is locked out of room codes after entering too many wrong ones.
+---Read-only, so polling it never extends the lock.
+---@param cid string citizenid
+---@return boolean locked
+local function codesLocked(cid)
+    return util.cooldownLeft(cid, 'darkchat:codeLock', JOIN_LOCK_MS) > 0
+end
+
+---Counts one wrong room code against the character. Past WRONG_CODES_PER_WINDOW inside the window
+---they are locked out of codes for JOIN_LOCK_MS, which is what makes guessing a room's code by
+---brute force impractical.
+---@param cid string citizenid
+local function noteWrongCode(cid)
+    if not util.rateLimit(cid, 'darkchat:wrongCode', WRONG_CODE_WINDOW_MS, WRONG_CODES_PER_WINDOW) then
+        util.cooldown(cid, 'darkchat:codeLock', JOIN_LOCK_MS)
+    end
+end
 
 ---Normalises a client-supplied room code: uppercase, strip everything outside A-Z0-9.
 ---Non-strings collapse to ''.
@@ -314,7 +348,10 @@ function actions.react(src, roomId, messageId, emoji)
 end
 
 ---Creates a private room owned by the caller and auto-joins them. A well-formed, untaken
----client-proposed code is honoured, otherwise a unique one is minted; room ids are 'p-<code>'.
+---client-proposed code of at least MIN_NEW_CODE_LENGTH is honoured, otherwise a unique one is
+---minted; room ids are 'p-<code>'. A proposed code that is already taken would tell the caller a
+---room exists under it, so it counts as a wrong code, and a caller locked out of codes always gets
+---a minted one.
 ---@param src integer player server id
 ---@param name any room display name (trimmed, length-capped)
 ---@param code any client-proposed room code
@@ -322,6 +359,10 @@ end
 function actions.create(src, name, code)
     local cid = cidOf(src)
     if not cid then return { success = false } end
+    if not util.cooldown(cid, 'darkchat:create', CREATE_GAP_MS)
+        or not util.rateLimit(cid, 'darkchat:create', CREATE_WINDOW_MS, CREATE_PER_WINDOW) then
+        return { success = false, messageKey = 'darkchat.slowDown', message = 'Slow down' }
+    end
     name = trim(name)
     if #name < DC.MinRoomNameLength then return { success = false, messageKey = 'darkchat.nameTooShort', message = 'Name too short' } end
     if #name > DC.MaxRoomNameLength then name = name:sub(1, DC.MaxRoomNameLength) end
@@ -330,7 +371,12 @@ function actions.create(src, name, code)
     end
 
     code = sanitizeCode(code)
-    if #code < 4 or #code > 16 or store.roomByCode(code) then
+    local usable = #code >= MIN_NEW_CODE_LENGTH and #code <= 16 and not codesLocked(cid)
+    if usable and store.roomByCode(code) then
+        noteWrongCode(cid)
+        usable = false
+    end
+    if not usable then
         repeat code = genCode() until not store.roomByCode(code)
     end
 
@@ -343,7 +389,9 @@ function actions.create(src, name, code)
 end
 
 ---Joins a private room by its code; anyone holding the code may join. New memberships count
----against the DC.MaxPrivateRoomsPerPlayer cap. Idempotent.
+---against the DC.MaxPrivateRoomsPerPlayer cap. Attempts are a second apart at most, and wrong codes
+---lock the caller out of joining once they pass the budget, so a code cannot be found by walking
+---the code space. Idempotent.
 ---@param src integer player server id
 ---@param code any client-supplied room code
 ---@return table result { success, data = { room } }
@@ -352,9 +400,18 @@ function actions.join(src, code)
     if not cid then return { success = false } end
     code = sanitizeCode(code)
     if code == '' then return { success = false, messageKey = 'darkchat.codeRequired', message = 'Enter a code' } end
+    if codesLocked(cid) then
+        return { success = false, messageKey = 'darkchat.tooManyWrongCodes', message = 'Too many wrong codes. Try again later' }
+    end
+    if not util.cooldown(cid, 'darkchat:join', JOIN_GAP_MS) then
+        return { success = false, messageKey = 'darkchat.slowDown', message = 'Slow down' }
+    end
 
     local row = store.roomByCode(code)
-    if not row then return { success = false, messageKey = 'darkchat.noRoomWithCode', message = 'No room with that code' } end
+    if not row then
+        noteWrongCode(cid)
+        return { success = false, messageKey = 'darkchat.noRoomWithCode', message = 'No room with that code' }
+    end
     if store.isBanned(row.id, cid) then return { success = false, messageKey = 'darkchat.bannedFromRoom', message = 'You are banned from this room' } end
 
     if not store.isMember(row.id, cid) and store.privateCountFor(cid) >= DC.MaxPrivateRoomsPerPlayer then

@@ -19,7 +19,7 @@ return {
     MaxRoomNameLength        = 30,
     MinNicknameLength        = 1,
     MaxNicknameLength        = 20,
-    CodeLength               = 6,    -- generated private-room code length
+    CodeLength               = 6,    -- generated private-room code length (6 at least)
     -- How long a room creator must wait between "generate new code" uses (seconds), so the
     -- code can't be spam-cycled.
     CodeRegenCooldownSeconds = 300,
