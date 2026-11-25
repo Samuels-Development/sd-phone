@@ -43,7 +43,8 @@ local ITEMS <const> = ENABLED and CFG.AsItems ~= false and inventory.supportsSlo
 local MAX_OWNED <const> = math.max(1, math.tointeger(tonumber(CFG.MaxOwned)) or 12)
 ---@type number Metres from a store within which a case can be bought there.
 local RADIUS <const> = math.max(2.0, tonumber(CFG.Radius) or 8.0)
----@type table<string, true> Characters with a write in flight, so two taps cannot interleave.
+---@type table<string, thread> Characters with a write in flight, so two taps cannot interleave,
+---mapped to the thread running it.
 local busy = {}
 
 actions.ITEM = ITEM
@@ -151,13 +152,19 @@ local function caller(src)
     return cid
 end
 
----Runs a write for one character at a time.
+---Runs a write for one character at a time. Re-entrant on the thread already holding it, so a
+---write that moves an old case over first (carryOver) runs inside the same hold.
 ---@param cid string framework per-character id
 ---@param fn fun(): table the write; its envelope is returned
 ---@return table envelope
 local function exclusive(cid, fn)
-    if busy[cid] then return util.fail('cases.busy', 'Still working on your last request') end
-    busy[cid] = true
+    local me = coroutine.running()
+    local holder = busy[cid]
+    if holder then
+        if holder ~= me then return util.fail('cases.busy', 'Still working on your last request') end
+        return fn()
+    end
+    busy[cid] = me
     local ok, res = pcall(fn)
     busy[cid] = nil
     if not ok then error(res, 0) end
@@ -329,31 +336,42 @@ local function isInUse(src, row)
 end
 
 ---Moves a case a character wore before cases were fitted to phones onto the phone they are using,
----or into their pockets when that phone has one already or cannot take one. Once.
+---or into their pockets when that phone has one already or cannot take one. Once: it runs under
+---the character's write lock and re-reads their row there, because the store, the phone's Settings
+---and every phone open all ask at once, and each of them handed the same case out as an item. A
+---call that finds the lock taken leaves the move to the one holding it.
 ---@param src number player server id
 ---@param cid string framework per-character id
+---@return CaseDesign[]? owned the designs kept after the move, nil when nothing moved
 local function carryOver(src, cid)
-    local worn, owned = load(cid)
-    if not worn then return end
-    local row = phoneInUse(src)
-    local placed = false
-    if row and not caseOn(row) and not cased(row) then placed = fit(src, row, worn) end
-    if not placed then placed = give(src, worn) end
-    if not placed then return end
-    dropOne(owned, worn)
-    store.save(cid, nil, owned)
+    local moved
+    exclusive(cid, function()
+        local worn, owned = load(cid)
+        if not worn then return util.ok() end
+        local row = phoneInUse(src)
+        local placed = false
+        if row and not caseOn(row) and not cased(row) then placed = fit(src, row, worn) end
+        if not placed then placed = give(src, worn) end
+        if not placed then return util.ok() end
+        dropOne(owned, worn)
+        store.save(cid, nil, owned)
+        moved = owned
+        return util.ok()
+    end)
+    return moved
 end
 
 ---The case on the phone a player is using. With cases as items that is the case fitted to that
----phone; without, the one the character wears.
+---phone; without, the one the character wears. One read of the character's row serves the answer,
+---and the carry-over only reads again when there is an old case to move.
 ---@param src number player server id
 ---@param cid string framework per-character id
 ---@return CaseDesign? design
 ---@return CaseDesign[] owned the designs the character keeps (legacy or list mode)
 local function wornBy(src, cid)
-    if not ITEMS then return load(cid) end
-    carryOver(src, cid)
-    local _, owned = load(cid)
+    local worn, owned = load(cid)
+    if not ITEMS then return worn, owned end
+    if worn then owned = carryOver(src, cid) or owned end
     return caseOn(phoneInUse(src)), owned
 end
 
