@@ -1177,7 +1177,7 @@ function actions.markRead(source, payload)
 
     store.markThreadRead(cid, conversation)
     pushSeen(cid, conversation)
-    badges.push(source)
+    badges.pushApp(source, 'messages')
     return ok({ conversation = conversation })
 end
 
@@ -1272,7 +1272,7 @@ function actions.deleteConversation(source, payload)
         if store.groupMemberCount(groupId) == 0 then store.deleteGroup(groupId) end
     end
 
-    badges.push(source)
+    badges.pushApp(source, 'messages')
     return ok({ conversation = conversation })
 end
 
@@ -1334,7 +1334,7 @@ function actions.deliverPending(source, cid, number)
     end
 
     if airplane or not GetPlayerName(source) then
-        badges.push(source)
+        badges.pushApp(source, 'messages')
         return
     end
 

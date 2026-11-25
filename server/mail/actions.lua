@@ -352,7 +352,7 @@ function actions.deliver(pushes)
                     },
                 } or nil,
             })
-            badges.push(src)
+            badges.pushApp(src, 'mail')
         end
     end
 end
