@@ -77,6 +77,10 @@ Captured from the browser demo using sample data. Click an image for the full 19
 
 <p align="center"><a href="docs/previews/06-fold-maps.webp"><img src="docs/previews/06-fold-maps.webp" alt="Maps on the opened fold screen, beside a shut foldable" width="960" /></a></p>
 
+<p align="center"><a href="docs/previews/07-in-game.webp"><img src="docs/previews/07-in-game.webp" alt="In game: the full-screen phone beside the player, and the optional DUI mode with the UI on the phone in the player's hand" width="960" /></a></p>
+
+<p align="center"><sub>In game. Left: the default full-screen phone. Right: the optional <a href="#dui-phone-option-ui-on-the-held-prop">DUI mode</a>, with the UI on the phone in your hand.</sub></p>
+
 ---
 
 > [!IMPORTANT]
