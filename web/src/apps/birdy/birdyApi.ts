@@ -1,6 +1,6 @@
 import { fetchNui, isFiveM } from '@/core/nui';
 import { useMocks } from '@/core/demo';
-import { apiCall, apiData as call } from '@/core/api';
+import { apiCall, apiData as call, type Envelope } from '@/core/api';
 import { formatClockTime } from '@/lib/time';
 import type { MessageDraft } from '@/shared/chat/ChatView';
 import type { Reaction } from '@/shared/chat/data';
@@ -264,9 +264,9 @@ export async function apiUpdateProfile(input: { name: string; bio: string; prote
     return (await call<{ profile: BirdyProfile }>('sd-phone:birdy:updateProfile', input))?.profile ?? null;
 }
 
-export async function apiDeleteAccount(): Promise<void> {
-    if (!isFiveM) { devLoggedIn = false; return; }
-    await fetchNui('sd-phone:birdy:deleteAccount');
+export async function apiDeleteAccount(password: string): Promise<Envelope<unknown>> {
+    if (!isFiveM) { devLoggedIn = false; return { success: true }; }
+    return apiCall<unknown>('sd-phone:birdy:deleteAccount', { password });
 }
 
 export interface VerificationOffer {

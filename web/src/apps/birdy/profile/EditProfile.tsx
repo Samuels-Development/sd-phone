@@ -5,6 +5,7 @@ import { t } from '@/i18n';
 import { formatMoney } from '@/lib/money';
 import { MediaPickerSheet } from '@/shared/MediaPickerSheet';
 import { AlertDialog } from '@/ui/AlertDialog';
+import { PromptDialog } from '@/ui/PromptDialog';
 import { Toggle } from '@/ui/Toggle';
 import { apiDeleteAccount, apiPurchaseVerification, apiUpdateProfile, apiVerificationOffer, type VerificationOffer } from '../birdyApi';
 import { ChangePasswordPage } from '@/shared/ChangePasswordPage';
@@ -61,9 +62,11 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onSignOutAl
         onSignOut();
     }
 
-    async function remove() {
-        await apiDeleteAccount();
+    async function remove(password: string): Promise<string | null> {
+        const res = await apiDeleteAccount(password);
+        if (!res.success) return failText(res, t('squawk.deleteAccountFailed', 'Could not delete the account. Please try again.'));
         onDeleted();
+        return null;
     }
 
     async function buyVerification() {
@@ -185,11 +188,13 @@ export function EditProfile({ profile, onCancel, onSaved, onSignOut, onSignOutAl
                 />
             )}
             {confirmDel && (
-                <AlertDialog
+                <PromptDialog
                     title={t('squawk.deleteAccountTitle', 'Delete account?')}
                     message={t('squawk.deleteAccountMessage', "This permanently removes your profile, posts and messages, and its saved login from the Passwords app. This can't be undone.")}
+                    label={t('common.currentPassword', 'Current password')}
+                    secure
+                    maxLength={64}
                     confirmLabel={t('squawk.delete', 'Delete')}
-                    destructive
                     onCancel={() => setConfirmDel(false)}
                     onConfirm={remove}
                 />

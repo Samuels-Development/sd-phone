@@ -270,6 +270,7 @@ end
 ---Registers a new Birdy account and signs the character in. Handle uniqueness is checked
 ---against both stores; every field is trimmed and bounds-checked against config.Birdy. How many
 ---accounts one character may hold is the accounts engine's per-app cap (configs/accounts.lua).
+---The password lives in the engine account alone; the profile row keeps no digest of it.
 ---@param source number player server id
 ---@param payload { name?: string, username?: string, password?: string, bio?: string, email?: string, phone?: string }
 ---@return table envelope
@@ -314,7 +315,7 @@ function actions.register(source, payload)
     }, cid)
     if not acctRes.success then return acctRes end
 
-    if not store.insertAccount(handle, cid, name, store.hashPassword(password), bio, birdyCfg.DefaultVerified == true, os.date('%B %Y')) then
+    if not store.insertAccount(handle, cid, name, '', bio, birdyCfg.DefaultVerified == true, os.date('%B %Y')) then
         acctStore.deleteAccount(acctRes.data.account.id)
         return fail('birdy.failedCreateAccount', 'Failed to create the account')
     end
@@ -567,36 +568,51 @@ function actions.purchaseVerification(source)
     return ok({ me = serializeAuthor(store.getProfileByHandle(prof.handle)) })
 end
 
----Changes the signed-in account's password, syncing the engine hash, the Passwords-app vault
----copy, and Birdy's legacy profile-row hash.
+---Changes the signed-in account's password. The current password is required: a session alone
+---(a phone left unlocked, a borrowed character) must not be enough to take the account over, so
+---the change goes through the accounts engine, which checks it, throttles it per caller and per
+---account, and updates the Passwords-app copy. Squawk's own profile-row digest is cleared rather
+---than rewritten: nothing reads it any more, and that format is cheap to crack.
 ---@param source number player server id
----@param payload { password?: string }|nil
+---@param payload { currentPassword?: string, newPassword?: string }|nil
 ---@return table envelope
 function actions.changePassword(source, payload)
     local cid = player.getIdentifier(source)
     local acc = cid and acctStore.getSessionAccount('birdy', cid) or nil
     if not acc then return fail('birdy.notSigned', 'Not signed in') end
     payload = tbl(payload)
-    local password = payload and payload.password
-    if type(password) ~= 'string' or #password < birdyCfg.MinPasswordLength then
-        return fail('birdy.passwordMustLeastCharacters', 'Password must be at least {n} characters', { n = birdyCfg.MinPasswordLength })
-    end
-    if #password > birdyCfg.MaxPasswordLength then return fail('birdy.passwordTooLong', 'Password is too long') end
-    acctStore.setPassword(acc.id, acctStore.hashPassword(password))
-    acctStore.syncVaultPassword('birdy', acc.username, password)
+    local res = acctActions.changePassword(source, {
+        app             = 'birdy',
+        identity        = acc.username,
+        currentPassword = payload.currentPassword,
+        newPassword     = payload.newPassword,
+    })
+    if not res.success then return res end
     local prof = store.getProfileByHandle(acc.username)
-    if prof then store.setPassword(prof.handle, store.hashPassword(password)) end
+    if prof then store.setPassword(prof.handle, '') end
     return ok()
 end
 
----Permanently deletes the signed-in account and all of its content: content rows first,
----then the engine account.
+---Permanently deletes the signed-in account and all of its content: content rows first, then
+---the engine account. The account's password is required, for the same reason a password change
+---needs it, and is throttled like a sign-in before it is hashed.
 ---@param source number player server id
+---@param payload { password?: string }|nil
 ---@return table envelope
-function actions.deleteAccount(source)
+function actions.deleteAccount(source, payload)
     local cid = player.getIdentifier(source)
     local acc = cid and acctStore.getSessionAccount('birdy', cid) or nil
     if not acc then return fail('birdy.notSigned', 'Not signed in') end
+    payload = tbl(payload)
+    if type(payload.password) ~= 'string' or payload.password == '' then
+        return fail('birdy.enterPasswordToDelete', 'Enter your password to delete the account')
+    end
+    if not acctActions.allowGuess(cid, 'birdy:deleteAccount') or not acctActions.allowGuessOn('birdy', acc.username) then
+        return fail('birdy.tooManyAttempts', 'Too many attempts. Try again shortly')
+    end
+    if not acctActions.verifyPassword(acc, payload.password) then
+        return fail('birdy.passwordIncorrect', 'Password is incorrect')
+    end
     local prof = store.getProfileByHandle(acc.username)
     if prof then store.deleteAccount(prof.handle) end
     acctStore.deleteAccount(acc.id)
