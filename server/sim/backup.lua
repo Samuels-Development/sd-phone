@@ -147,6 +147,23 @@ local VALUE = {
     'phone_cases',
 }
 
+---@type { kind: string, tbl: string, col: string, cid: string }[] Sign-ins and memberships a phone
+---holds in rows other identities share: the mailboxes it is signed into, the group chats it is a
+---member of, and the ones it owns. They cannot be copied under a cloud identity, so a sync
+---records which ones the phone held (phone_cloud_access) and a restore grants only those.
+local ACCESS = {
+    { kind = 'mail',  tbl = 'phone_mail_sessions',         col = 'email',    cid = 'citizenid' },
+    { kind = 'group', tbl = 'phone_message_group_members', col = 'group_id', cid = 'citizenid' },
+    { kind = 'owner', tbl = 'phone_message_groups',        col = 'id',       cid = 'owner_cid' },
+}
+
+---`?, ?, ...` for an IN list of `n` parameters.
+---@param n integer
+---@return string
+local function placeholders(n)
+    return ('?'):rep(n, ', ')
+end
+
 ---@type string[] phone_settings columns carried by a restore. The number, citizenid and
 ---timestamps stay out: the new SIM keeps its own number.
 local SETTINGS_COLS = {
@@ -270,10 +287,11 @@ local function hashColumns(cols, alias)
     ]]):format(table.concat(parts, ', '))
 end
 
----Fingerprint of everything a sync would copy from `fromId`, read in ONE statement: the settings
----columns, every COPY table, the join-keyed children, plus whether `cloudId`'s snapshot row still
----exists (so a snapshot wiped behind this module's back is copied again). Tables this server
----never created are left out, as copyAll leaves them out. Nil when the read fails.
+---Fingerprint of everything a sync would copy or record from `fromId`, read in ONE statement: the
+---settings columns, every COPY table, the join-keyed children, the ACCESS rows, plus whether
+---`cloudId`'s snapshot row still exists (so a snapshot wiped behind this module's back is copied
+---again). Tables this server never created are left out, as the copy leaves them out. Nil when
+---the read fails.
 ---@param fromId string enrolled phone identity
 ---@param cloudId string snapshot identity
 ---@return string|nil fingerprint
@@ -325,6 +343,13 @@ local function fingerprint(fromId, cloudId)
         ]]):format(hashColumns(describe('phone_photo_album_items'), 'x')), fromId)
     end
 
+    for _, a in ipairs(ACCESS) do
+        if #describe(a.tbl) > 0 then
+            local hash = hashColumns({ a.col }, 'x')
+            add('access:' .. a.kind, ('%s FROM `%s` x WHERE x.`%s` = ?'):format(hash, a.tbl, a.cid), fromId)
+        end
+    end
+
     if #selects == 0 then return nil end
 
     local ok, rows = pcall(function()
@@ -345,6 +370,125 @@ end
 ---@return boolean
 local function isCloud(id)
     return type(id) == 'string' and id:sub(1, 6) == 'cloud:'
+end
+
+---Records under `cloudId` every ACCESS row `fromId` holds right now: the backup-time list a
+---restore later grants from. The caller has already wiped the previous list.
+---@param fromId string enrolled phone identity
+---@param cloudId string snapshot identity
+---@return boolean ok false when a read or write failed
+local function recordAccess(fromId, cloudId)
+    local ok = true
+    for _, a in ipairs(ACCESS) do
+        if #describe(a.tbl) > 0 then
+            local sql = ('SELECT `%s` AS ref FROM `%s` WHERE `%s` = ?'):format(a.col, a.tbl, a.cid)
+            local read, rows = pcall(function() return MySQL.query.await(sql, { fromId }) end)
+            if not read or type(rows) ~= 'table' then
+                ok = false
+            elseif #rows > 0 then
+                local values, params = {}, {}
+                for i, r in ipairs(rows) do
+                    values[i] = '(?, ?, ?)'
+                    params[#params + 1] = cloudId
+                    params[#params + 1] = a.kind
+                    params[#params + 1] = tostring(r.ref)
+                end
+                local _, wrote = run('INSERT IGNORE INTO phone_cloud_access (identity, kind, ref) VALUES '
+                    .. table.concat(values, ', '), params)
+                ok = ok and wrote
+            end
+        end
+    end
+    return ok
+end
+
+---The ACCESS rows a snapshot recorded at backup time, by kind. Empty for anything but a cloud
+---identity: a legacy pointer backup never recorded any, and reading them off its live identity
+---would hand over whatever that phone holds today.
+---@param cloudId string snapshot identity
+---@return table<string, string[]> refs kind -> recorded refs
+local function recordedAccess(cloudId)
+    local out = {}
+    for _, a in ipairs(ACCESS) do out[a.kind] = {} end
+    if not isCloud(cloudId) then return out end
+
+    local ok, rows = pcall(function()
+        return MySQL.query.await('SELECT kind, ref FROM phone_cloud_access WHERE identity = ?', { cloudId })
+    end)
+    if not ok or type(rows) ~= 'table' then return out end
+
+    for _, r in ipairs(rows) do
+        local list = out[r.kind]
+        if list then list[#list + 1] = r.ref end
+    end
+    return out
+end
+
+---Grants `toId` the recorded group chats: membership MOVES from the source phone (group chats
+---fan out by member rows, so the old phone drops out) with the stored member number rewritten to
+---the new SIM's, and ownership follows. Only groups recorded at backup time AND still held by the
+---source phone move: one joined after the backup, or one the phone was removed from, never does.
+---@param access table<string, string[]> recordedAccess result
+---@param toId string current phone identity
+---@param toNumber string current bare-digit number
+---@param liveFromId string the profile's source phone identity
+---@return integer rows
+local function grantGroups(access, toId, toNumber, liveFromId)
+    local rows = 0
+    local groups, owned = access.group, access.owner
+
+    if #groups > 0 then
+        local params = { toId, toNumber, liveFromId }
+        for _, id in ipairs(groups) do params[#params + 1] = id end
+        rows = rows + run(([[
+            UPDATE IGNORE phone_message_group_members SET citizenid = ?, number = ?
+            WHERE citizenid = ? AND group_id IN (%s)
+        ]]):format(placeholders(#groups)), params)
+    end
+
+    if #owned > 0 then
+        local params = { toId, liveFromId }
+        for _, id in ipairs(owned) do params[#params + 1] = id end
+        rows = rows + run(([[
+            UPDATE phone_message_groups SET owner_cid = ?
+            WHERE owner_cid = ? AND id IN (%s)
+        ]]):format(placeholders(#owned)), params)
+    end
+
+    return rows
+end
+
+---Signs `toId` into the recorded mailboxes, the source phone staying signed in too. Only
+---mailboxes recorded at backup time AND that the source phone is still signed into: one signed
+---into after the backup never transfers, and one signed out of since is never signed back in.
+---The phone_mail_sessions row is written even when the JSON already carries `toId`, so that index
+---ends up right whichever write an earlier restore made.
+---@param emails string[] recorded mailboxes
+---@param toId string current phone identity
+---@param liveFromId string the profile's source phone identity
+---@return integer rows
+local function grantMail(emails, toId, liveFromId)
+    if #emails == 0 then return 0 end
+
+    local ok, mails = pcall(function()
+        return MySQL.query.await(('SELECT email, logged_in_citizens FROM phone_mail_accounts WHERE email IN (%s)')
+            :format(placeholders(#emails)), emails)
+    end)
+    if not ok or type(mails) ~= 'table' then return 0 end
+
+    local rows = 0
+    for _, m in ipairs(mails) do
+        local arr = json.decode(m.logged_in_citizens or '[]') or {}
+        if lib.table.contains(arr, liveFromId) then
+            run('INSERT IGNORE INTO phone_mail_sessions (citizenid, email) VALUES (?, ?)', { toId, m.email })
+            if not lib.table.contains(arr, toId) then
+                arr[#arr + 1] = toId
+                rows = rows + run('UPDATE phone_mail_accounts SET logged_in_citizens = ? WHERE email = ?',
+                    { json.encode(arr), m.email })
+            end
+        end
+    end
+    return rows
 end
 
 ---Deletes every snapshot row a cloud identity holds (profile deletion, and the wipe phase of
@@ -372,13 +516,14 @@ function backup.wipe(cloudId)
     for _, tbl in ipairs(VALUE) do
         run(('DELETE FROM `%s` WHERE citizenid = ?'):format(tbl), { cloudId })
     end
+    run('DELETE FROM phone_cloud_access WHERE identity = ?', { cloudId })
     run('DELETE FROM phone_settings WHERE citizenid = ?', { cloudId })
 end
 
 ---Snapshot sync: replaces the cloud profile's rows with a fresh copy of the enrolled phone's.
----Wipe-then-copy (not merge) so deletions and edits on the phone reach the snapshot. Restore
----side effects (group-membership move, mail-login append) deliberately stay out - the cloud
----identity is a dead namespace that never acts.
+---Wipe-then-copy (not merge) so deletions and edits on the phone reach the snapshot. Mailbox
+---sign-ins and group memberships are only RECORDED (recordAccess), never granted to the cloud
+---identity - it is a dead namespace that never acts.
 ---
 ---A phone whose data fingerprint still matches the one its snapshot was copied at is skipped:
 ---the snapshot already holds exactly that data, and a holster-triggered auto-sync otherwise
@@ -395,15 +540,17 @@ function backup.sync(fromId, cloudId)
 
     backup.wipe(cloudId)
     local rows, ok = copyAll(fromId, cloudId)
-    if current and ok then synced[cloudId] = { from = fromId, print = current } end
+    local recorded = recordAccess(fromId, cloudId)
+    if current and ok and recorded then synced[cloudId] = { from = fromId, print = current } end
     return rows
 end
 
----Restores a phone profile: copies `fromId`'s data onto `toId` (the current SIM identity) and
----moves live group-chat membership over, rewriting the stored member number to the new SIM's.
----The source profile keeps its rows - whoever holds the old SIM keeps what was on it. Live
----room state (groups, mail logins) can't come from a snapshot, so it moves from `liveFromId` -
----the previously enrolled phone - which for legacy pointer backups IS the backup identity.
+---Restores a phone profile: copies `fromId`'s data onto `toId` (the current SIM identity), then
+---grants the mailboxes and group chats the snapshot recorded at backup time (grantMail,
+---grantGroups), each only while the source phone `liveFromId` still holds it. Nothing is read
+---live off the source phone as something to hand over, so whoever holds it now keeps whatever
+---they signed into or joined since. A legacy pointer backup recorded nothing and grants none.
+---The source profile keeps its rows.
 ---
 ---Nothing is written when `toId` is the profile's own phone: its data would be copied back over
 ---itself under fresh ids, so every restore would duplicate it.
@@ -415,40 +562,11 @@ end
 function backup.restore(fromId, toId, toNumber, liveFromId)
     liveFromId = liveFromId or fromId
     if toId == fromId or toId == liveFromId then return 0 end
+
     local rows = copyAll(fromId, toId)
-
-    -- Group chats fan out by the member rows, so membership MOVES to the restored profile
-    -- (the old phone drops out) and the stored member number becomes the new SIM's number.
-    rows = rows + run(
-        'UPDATE IGNORE phone_message_group_members SET citizenid = ?, number = ? WHERE citizenid = ?',
-        { toId, toNumber, liveFromId })
-    rows = rows + run(
-        'UPDATE phone_message_groups SET owner_cid = ? WHERE owner_cid = ?', { toId, liveFromId })
-
-    -- Mailboxes: add the new identity to every account the previously enrolled phone was
-    -- signed into (mail logins are live state - the snapshot identity never signs in).
-    local ok, mails = pcall(function()
-        return MySQL.query.await(
-            "SELECT email, logged_in_citizens FROM phone_mail_accounts WHERE JSON_SEARCH(logged_in_citizens, 'one', ?) IS NOT NULL",
-            { liveFromId })
-    end)
-    if ok and type(mails) == 'table' then
-        for _, m in ipairs(mails) do
-            -- Unconditional: the JSON ends up carrying toId either way, and phone_mail_sessions
-            -- indexes it, so a restore that skipped the write must still leave the index right.
-            run('INSERT IGNORE INTO phone_mail_sessions (citizenid, email) VALUES (?, ?)', { toId, m.email })
-
-            local arr = json.decode(m.logged_in_citizens or '[]') or {}
-            if not lib.table.contains(arr, toId) then
-                arr[#arr + 1] = toId
-                rows = rows + run(
-                    'UPDATE phone_mail_accounts SET logged_in_citizens = ? WHERE email = ?',
-                    { json.encode(arr), m.email })
-            end
-        end
-    end
-
-    return rows
+    local access = recordedAccess(fromId)
+    rows = rows + grantGroups(access, toId, toNumber, liveFromId)
+    return rows + grantMail(access.mail, toId, liveFromId)
 end
 
 ---Adds the lookup indexes server.migrations declares for the tables a sync reads and wipes by

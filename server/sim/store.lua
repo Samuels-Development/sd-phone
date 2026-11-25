@@ -92,6 +92,16 @@ function store.ensureSchema()
     -- server created before scrypt rejects the write outright ("Data too long for column
     -- 'password'") the first time a character turns Cloud Backup on.
     util.ensureColumnWidth('phone_cloud_accounts', 'password', 'password VARCHAR(255) NULL', 255)
+    -- What a snapshot's phone was signed into or a member of at backup time ('mail' = email,
+    -- 'group' = member of group id, 'owner' = owns group id): a restore grants only these.
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS phone_cloud_access (
+            identity VARCHAR(64)  NOT NULL,
+            kind     VARCHAR(8)   NOT NULL,
+            ref      VARCHAR(128) NOT NULL,
+            PRIMARY KEY (identity, kind, ref)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ]])
     -- One-shot migration of single-slot rows (a legacy pointer row's device IS its identity).
     -- Only when the profiles table has never been populated, so deleted profiles stay deleted.
     local migrated = MySQL.scalar.await('SELECT 1 FROM phone_cloud_profiles LIMIT 1')

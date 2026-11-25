@@ -760,8 +760,7 @@ lib.callback.register('sd-phone:server:sim:backup:restore', function(source, pay
         return util.fail('sim.restoredMomentsAgoTryAgain', 'Restored moments ago. Try again in a moment.')
     end
 
-    -- Snapshot untouched: restore copies OUT of the cloud. Live room state (groups, mail
-    -- logins) moves from the profile's source phone; legacy pointer rows ARE that phone.
+    -- Snapshot untouched: restore copies OUT of the cloud (see backup.restore).
     syncBusy[source] = true
     local okRun, rows = pcall(backup.restore, profile.identity, s.identity, s.number or '', profile.deviceIdentity)
     syncBusy[source] = nil

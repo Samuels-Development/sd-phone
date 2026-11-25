@@ -38,6 +38,7 @@ return {
     'phone_cherry_messages',
     'phone_cherry_profiles',
     'phone_cherry_swipes',
+    'phone_cloud_access',
     'phone_cloud_accounts',
     'phone_cloud_backups',
     'phone_cloud_profiles',
