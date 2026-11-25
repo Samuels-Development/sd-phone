@@ -111,27 +111,53 @@ local function watchedItems()
     return watched
 end
 
----Flushes the whole session cache and pushes fresh SIM state to `source` on the next tick, after
----the inventory has finished the move that triggered it.
----@param source any player server id from a hook payload
-local function refreshAfterMove(source)
+---The players a hook payload's move touched: whoever made it, plus the owner of the inventory on
+---either side when that side is a player's (a give, or taking from a searched player). Stash,
+---drop, glovebox and tray ids are nobody's, and tray moves are made by the phone's holder.
+---@param payload table ox_inventory or one_inventory hook payload
+---@return number[] sources
+local function movedPlayers(payload)
+    local out, seen = {}, {}
+    for _, side in ipairs({
+        { payload.source },
+        { payload.fromInventory, payload.fromType },
+        { payload.toInventory, payload.toType },
+    }) do
+        local src = (side[2] == nil or side[2] == 'player') and tonumber(side[1]) or nil
+        if src and src > 0 and not seen[src] then
+            seen[src] = true
+            out[#out + 1] = src
+        end
+    end
+    return out
+end
+
+---Re-reads the SIM state of every player a move touched and pushes it to them on the next tick,
+---after the inventory has finished the move. Only those players: every other session is
+---unaffected by the move, and flushing them all made each phone drag cost a re-scan per player.
+---@param payload table hook payload
+local function refreshAfterMove(payload)
+    local players = movedPlayers(payload)
     SetTimeout(0, function()
-        session.invalidate(nil)
-        local src = tonumber(source)
-        if src then session.push(src) end
+        for _, src in ipairs(players) do
+            if GetPlayerName(src) then session.push(src) end
+        end
     end)
 end
 
 ---ox_inventory: watch SIM/phone item moves so a pulled SIM cuts service within a swap, not a
----cache TTL. Tray mode adds two guards: only the phone's holder may open its tray, and only a SIM
----may go in it.
+---cache TTL. The item filter keeps ox from calling in for any other item; it matches either side
+---of a swap, so a phone displaced by another item is caught too. Tray mode adds two guards: only
+---the phone's holder may open its tray, and only a SIM may go in it.
 local function registerOxHooks()
     local watched = watchedItems()
     pcall(function()
         exports.ox_inventory:registerHook('swapItems', function(payload)
-            if not watched[payload.fromSlot and payload.fromSlot.name or ''] then return end
-            refreshAfterMove(payload.source)
-        end, {})
+            local moved = payload.fromSlot and payload.fromSlot.name
+            local displaced = type(payload.toSlot) == 'table' and payload.toSlot.name
+            if not watched[moved or ''] and not watched[displaced or ''] then return end
+            refreshAfterMove(payload)
+        end, { itemFilter = watched })
     end)
 
     if state.mode ~= 'tray' then return end
@@ -160,7 +186,7 @@ end
 ---Tray mode also adds a SIM Tray entry to each phone item's right-click menu.
 local function registerOneHooks()
     local watched = watchedItems()
-    local function onMove(payload) refreshAfterMove(payload.source) end
+    local function onMove(payload) refreshAfterMove(payload) end
     for _, hook in ipairs({ 'beforeItemSwap', 'beforeItemDrop', 'beforeItemGive' }) do
         pcall(function() exports.one_inventory:RegisterHook(hook, onMove, { itemFilter = watched }) end)
     end
