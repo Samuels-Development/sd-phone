@@ -853,8 +853,10 @@ local rawTrigger = TriggerClientEvent
 function util.pushMany(event, targets, ...)
     if type(targets) ~= 'table' or not targets[1] then return end
     if event == util.BANNER_EVENT then
-        targets = util.bannerRecipients(targets, (...))
+        local data = ...
+        targets = util.bannerRecipients(targets, data)
         if not targets[1] then return end
+        if type(data) == 'table' then data.gated = true end
     end
 
     if HAS_BATCHED_PUSH then

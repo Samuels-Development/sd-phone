@@ -11,10 +11,18 @@ local function push(data)
     SendNUIMessage({ action = 'sd-phone:notification', data = data })
 end
 
----Landing point for every server banner; shape-checked by push. The server only sends one to a
----player carrying a phone (emergency alerts go to everyone), so nothing is asked back here.
+---Landing point for every server banner; shape-checked by push. Banners sent through sd-phone's own
+---fan-out arrive `gated`: the server already checked this player carries a phone. Another resource
+---triggering this event directly skips that gate, so its banners still ask once before showing.
+---Emergency alerts reach players with no phone either way.
 ---@param data table notification payload
-RegisterNetEvent('sd-phone:client:notify', push)
+RegisterNetEvent('sd-phone:client:notify', function(data)
+    if type(data) == 'table' and not data.emergency and not data.gated
+        and not lib.callback.await('sd-phone:server:carriesPhone', false) then
+        return
+    end
+    push(data)
+end)
 
 ---Client-side direct banner for scripts on this machine:
 ---exports['sd-phone']:showNotification({ title = '...', body = '...' }).
