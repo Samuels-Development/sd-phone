@@ -20,7 +20,7 @@ function readInstalled(key = installedKey()): string[] {
     return arr ? arr.filter((x): x is string => typeof x === 'string') : [];
 }
 
-/** Selects the active phone data profile and migrates the old shared list to its first profile. */
+/** Selects the active phone data profile and copies the old shared list to its first profile. */
 export function setCustomAppsProfile(profile: string | undefined): boolean {
     const next = typeof profile === 'string' && profile.trim() ? profile.trim() : undefined;
     const changed = next !== activeProfile;
@@ -36,7 +36,6 @@ export function setCustomAppsProfile(profile: string | undefined): boolean {
         if (legacy && localStorage.getItem(profileStorageKey) === null
             && !writeJson(profileStorageKey, legacy)) return changed;
 
-        localStorage.removeItem(INSTALLED_KEY);
         localStorage.setItem(MIGRATED_KEY, '1');
     } catch {
         // Keep the active profile usable if browser storage is unavailable.
