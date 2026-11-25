@@ -22,11 +22,11 @@ return {
     DriverCut = 0.8,
 
     -- The agreed fare leaves the rider's bank when the driver starts the trip
-    -- and is paid out at drop-off. A trip cancelled after the start (by either
-    -- side, or a disconnect) refunds the rider in full. true makes a rider who
-    -- cancels or disconnects pay for the share already driven (the driver gets
-    -- their cut of it), so a rider cannot cancel at the kerb to ride for free.
-    RiderCancelPays = false,
+    -- and is paid out at drop-off. A rider who cancels or disconnects after the
+    -- start pays for the share already driven (the driver gets their cut of it),
+    -- so nobody can cancel at the kerb to ride for free. false refunds the rider
+    -- in full on any cancel after the start, as older versions did.
+    RiderCancelPays = true,
 
     -- Guard rails on the fare a driver may quote (whole dollars).
     MinFare = 1,
