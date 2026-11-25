@@ -1,5 +1,7 @@
 ---@type table Shared server helpers (server.util): index, column and constraint bootstrap.
 local util = require 'server.util'
+---@type table Post-0.9.0 column back-fills (server.migrations), applied right after each CREATE.
+local migrations = require 'server.migrations'
 
 ---@type table Store module; the table returned at end of file.
 local store = {}
@@ -12,9 +14,12 @@ function store.ensureSchema()
             current_streak  INT         NOT NULL DEFAULT 0,
             longest_streak  INT         NOT NULL DEFAULT 0,
             last_post_date  DATE        NULL,
+            reward_streak   INT         NOT NULL DEFAULT 0,
+            reward_date     DATE        NULL,
             PRIMARY KEY (citizenid)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     ]])
+    migrations.apply('phone_streaks')
 
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_streak_posts (
@@ -74,6 +79,35 @@ function store.upsertStreak(cid, current, longest, postDate)
             longest_streak = VALUES(longest_streak),
             last_post_date = VALUES(last_post_date)
     ]], { cid, current, longest, postDate })
+end
+
+---A character's milestone counter: the consecutive days they have posted on ANY phone, and the
+---last day counted, read off the phone_streaks row of their real identity. Under unique phones
+---that row carries no posts of its own (current_streak 0 keeps it off the leaderboard); without
+---them it is the one row the character posts under. Read-only.
+---@param realCid string the character's real identifier (player.getRealIdentifier)
+---@return table|nil row { reward_streak, reward_date } with reward_date as 'YYYY-MM-DD' or nil
+function store.getRewardStreak(realCid)
+    return MySQL.single.await([[
+        SELECT reward_streak, DATE_FORMAT(reward_date, '%Y-%m-%d') AS reward_date
+        FROM phone_streaks WHERE citizenid = ?
+    ]], { realCid })
+end
+
+---Counts `day` for a character at `streak`, creating their row when it is missing. Only a day
+---later than the last one counted is written, so two posts on one day (two phones, or two calls in
+---flight) count it once: true for the call that counted it, false for every other.
+---@param realCid string the character's real identifier
+---@param streak integer the counter value `day` brings them to
+---@param day string 'YYYY-MM-DD'
+---@return boolean counted
+function store.claimRewardDay(realCid, streak, day)
+    MySQL.update.await('INSERT IGNORE INTO phone_streaks (citizenid) VALUES (?)', { realCid })
+    local changed = MySQL.update.await([[
+        UPDATE phone_streaks SET reward_streak = ?, reward_date = ?
+        WHERE citizenid = ? AND (reward_date IS NULL OR reward_date < ?)
+    ]], { streak, day, realCid, day })
+    return (tonumber(changed) or 0) > 0
 end
 
 ---@type string Shared post projection. Binds the viewer's cid once up front (the `liked` subquery

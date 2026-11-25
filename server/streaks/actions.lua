@@ -27,6 +27,45 @@ local ok, fail, trim = util.ok, util.fail, util.trim
 ---@return string|nil citizenid nil when the player can't be resolved
 local function cidOf(src) return player.getIdentifier(src) end
 
+---@type table<string, boolean> Characters with a milestone count in flight, so two posts racing
+---on one character (two phones) cannot both read the counter before either writes it.
+local counting = {}
+
+---The milestone day a post brings the CHARACTER to, or nil when today is already counted for them.
+---Streak state stays per phone account (getIdentifier, a SIM identity under unique phones), but the
+---money is per character: counted on the real identity, a fresh SIM's day-one streak cannot pay the
+---same milestones again. The first count seeds from the posting phone's own streak, so a run in
+---progress when this counter was added keeps its schedule.
+---@param src integer player server id
+---@param current integer the posting phone's streak after this post
+---@param today string 'YYYY-MM-DD'
+---@param yesterday string 'YYYY-MM-DD'
+---@return integer|nil day
+local function countRewardDay(src, current, today, yesterday)
+    local realCid = player.getRealIdentifier(src)
+    if not realCid or counting[realCid] then return nil end
+    counting[realCid] = true
+    local okCount, day = pcall(function()
+        local row  = store.getRewardStreak(realCid)
+        local last = row and row.reward_date
+        if last == today then return nil end
+        local streak = 1
+        if not last then
+            streak = current
+        elseif last == yesterday then
+            streak = (tonumber(row.reward_streak) or 0) + 1
+        end
+        if not store.claimRewardDay(realCid, streak, today) then return nil end
+        return streak
+    end)
+    counting[realCid] = nil
+    if not okCount then
+        print(('^1[sd-phone:streaks]^0 milestone count failed: %s'):format(day))
+        return nil
+    end
+    return day
+end
+
 ---Coerce a client-supplied id/cursor to a positive integer. Rejects non-numbers, NaN, infinities
 ---and non-positives, flooring what survives.
 ---@param v any client-supplied value
@@ -148,8 +187,9 @@ function actions.sync(src)
     })
 end
 
----Create today's photo post and advance the caller's streak. A milestone day pays
----config.Streaks.Milestones[day] into config.Streaks.RewardAccount and logs a Wallet statement row.
+---Create today's photo post and advance the caller's streak. A milestone day, counted on the
+---character (countRewardDay), pays config.Streaks.Milestones[day] into config.Streaks.RewardAccount
+---and logs a Wallet statement row.
 ---@param src integer player server id
 ---@param payload table { imageUrl: string, caption?: string }
 ---@return table result { state, post, reward? }
@@ -188,19 +228,20 @@ function actions.post(src, payload)
     store.upsertStreak(cid, current, longest, today)
 
     local reward = nil
-    if CFG.Milestones[current] then
-        local amount = CFG.Milestones[current]
+    local rewardDay = countRewardDay(src, current, today, yesterday)
+    if rewardDay and CFG.Milestones[rewardDay] then
+        local amount = CFG.Milestones[rewardDay]
         money.add(src, CFG.RewardAccount, amount, 'Streaks milestone reward')
         if CFG.RewardAccount == 'bank' then
             banking.addExternal(cid, {
-                label        = ('Day %d streak milestone'):format(current),
+                label        = ('Day %d streak milestone'):format(rewardDay),
                 amount       = amount,
                 category     = 'streaks',
                 counterparty = 'Streaks',
-                notify       = ('You received %s for hitting a %d day Streaks milestone!'):format(fmtMoney(amount), current),
+                notify       = ('You received %s for hitting a %d day Streaks milestone!'):format(fmtMoney(amount), rewardDay),
             })
         end
-        reward = { day = current, reward = amount }
+        reward = { day = rewardDay, reward = amount }
     end
 
     live.newPost({

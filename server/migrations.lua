@@ -129,6 +129,14 @@ local COLUMNS = {
         publish_status    = "publish_status VARCHAR(20) NOT NULL DEFAULT 'published'",
         rejection_reason  = 'rejection_reason TEXT NULL',
     },
+
+    -- The milestone counter, kept per CHARACTER on the row of their real identity, so a streak
+    -- run on a fresh SIM cannot pay the same milestones again. NULL reward_date means not counted
+    -- yet, which the first post after the upgrade seeds from that phone's own streak.
+    phone_streaks = {
+        reward_streak = 'reward_streak INT NOT NULL DEFAULT 0',
+        reward_date   = 'reward_date DATE NULL',
+    },
 }
 
 ---Brings one table up to date, in a single information_schema read and at most one ALTER. Called
