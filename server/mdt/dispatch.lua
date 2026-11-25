@@ -196,11 +196,8 @@ local function markDirty()
         -- Both boards are built once and handed out by the recipient's own domain, rather than
         -- rebuilt per terminal: the snapshot is the expensive half and there are only ever two.
         local byDomain = { leo = snapshot('leo'), ems = snapshot('ems') }
-        for _, src in ipairs(access.audience()) do
-            local me = access.identity(src)
-            if me then
-                TriggerClientEvent('sd-phone:client:mdt:dispatch', src, byDomain[access.domain(me)])
-            end
+        for domain, targets in pairs(access.audienceByDomain()) do
+            util.pushMany('sd-phone:client:mdt:dispatch', targets, byDomain[domain])
         end
     end)
 end
@@ -420,9 +417,10 @@ function dispatch.createCall(data)
         util.pushMany('sd-phone:client:mdt:call', access.audience(), { call = fresh })
     else
         local targets = {}
-        for _, src in ipairs(access.audience()) do
-            local me = access.identity(src)
-            if me and onBoard(domain, access.domain(me)) then targets[#targets + 1] = src end
+        for viewerDomain, srcs in pairs(access.audienceByDomain()) do
+            if onBoard(domain, viewerDomain) then
+                for i = 1, #srcs do targets[#targets + 1] = srcs[i] end
+            end
         end
         util.pushMany('sd-phone:client:mdt:call', targets, { call = fresh })
     end

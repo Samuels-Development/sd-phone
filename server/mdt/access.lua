@@ -354,13 +354,32 @@ function access.restrictions(me)
 end
 
 ---Every connected player whose active job has a terminal. Dispatch, chat and bulletins fan their
----pushes out over exactly this set.
+---pushes out over exactly this set. Read from the bridge's job index: the position tick asks for it
+---every few seconds while a unit is on air, and a framework lookup per connected player each time
+---was the whole cost of that tick.
 ---@return integer[] sources
 function access.audience()
     local out = {}
-    for _, id in ipairs(GetPlayers()) do
-        local src = tonumber(id)
-        if src and access.canAccess(src) then out[#out + 1] = src end
+    for jobName in pairs(byJob) do
+        local srcs = job.sourcesOf(jobName)
+        for i = 1, #srcs do out[#out + 1] = srcs[i] end
+    end
+    return out
+end
+
+---The audience grouped by the record domain each department works, so a push addressed per domain
+---needs no identity resolution per recipient.
+---@return table<'leo'|'ems'|'doj', integer[]> sources by domain; a domain with nobody is absent
+function access.audienceByDomain()
+    local out = {}
+    for jobName, dept in pairs(byJob) do
+        local srcs = job.sourcesOf(jobName)
+        if srcs[1] then
+            local domain = domainOf(dept)
+            local list = out[domain]
+            if not list then list = {}; out[domain] = list end
+            for i = 1, #srcs do list[#list + 1] = srcs[i] end
+        end
     end
     return out
 end
@@ -369,12 +388,7 @@ end
 ---@param jobName string department job
 ---@return integer[] sources
 function access.audienceOf(jobName)
-    local out = {}
-    for _, id in ipairs(GetPlayers()) do
-        local src = tonumber(id)
-        if src and job.getName(src) == jobName then out[#out + 1] = src end
-    end
-    return out
+    return job.sourcesOf(jobName)
 end
 
 ---@type table Refusal shown when the caller's job carries no terminal at all.
