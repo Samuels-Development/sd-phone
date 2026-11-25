@@ -40,7 +40,22 @@ local pose = require 'client.pose'
 local companion = require 'client.companion'
 
 local RES <const> = GetCurrentResourceName()
-local W <const>, H <const> = math.floor(cfg.Width or 540), math.floor(cfg.Height or 1174)
+---The size the screen is drawn at. A texture much larger than the phone appears on the monitor is
+---shrunk by the game with no smoothing, which frays small text, so by default it is sized to how
+---tall the phone stands in the close-up camera on this player's monitor, in the proportions the
+---config gives.
+---@return integer width, integer height
+local function screenPixels()
+    local w, h = cfg.Width or 540, cfg.Height or 1174
+    if cfg.AutoResolution == false or cfg.Camera == false then return math.floor(w), math.floor(h) end
+    local _, monitor = GetActiveScreenResolution()
+    local tall = (cfg.ScreenSize or vec2(0.07336, 0.1584)).y
+    local share = tall / (2.0 * (cfg.CamDistance or 0.28) * math.tan(math.rad((cfg.CamFov or 40.0) / 2.0)))
+    local height = math.max(640, math.min(1800, math.floor(monitor * share + 0.5)))
+    return math.floor(height * w / h + 0.5), height
+end
+
+local W <const>, H <const> = screenPixels()
 -- Runtime texture dictionary the DUI is drawn into (created here, any unique name works).
 local RT_TXD <const>, RT_TEX <const> = 'sd_phone_propscreen_rt', 'screen'
 local MODEL <const> = cfg.Model or 'sd_phone_dui'
@@ -52,11 +67,30 @@ local MODEL_TEX <const> = cfg.Texture or 'sd_phone_screen'
 local SC <const> = cfg.ScreenCentre or vec3(0.0, -0.00186, 0.0)
 local SS <const> = cfg.ScreenSize or vec2(0.07336, 0.1584)
 local ALLOW_FOLD <const> = cfg.Foldable == true
--- The clip held for the whole session (the stock reading pose; no typing swap, see pose.clipOverride).
+---@type string, string The hold made for this view (stream/sd_phone@hold.ycd): the stock reading pose with the
+---thumb laid along the phone's edge, where the stock one rests it across the glass.
+local HOLD_DICT <const>, HOLD_ANIM <const> = 'sd_phone@hold', 'hold'
+-- The clip held for the whole session (no typing swap, see pose.clipOverride): the stock reading pose
+-- until the first session finds the phone's own hold streamed (chooseHold).
 local HOLD_CLIP <const> = {
-    dict = config.Phone.AnimDict or 'cellphone@', anim = config.Phone.AnimName or 'cellphone_text_read_base',
+    dict = (cfg.HoldAnim or {}).dict or config.Phone.AnimDict or 'cellphone@',
+    anim = (cfg.HoldAnim or {}).anim or config.Phone.AnimName or 'cellphone_text_read_base',
     blendIn = 4.0, blendOut = -4.0, flags = 1 | 16 | 32,
 }
+
+---Switches the session's clip to the phone's own hold once it is streamed, unless the config names a
+---clip. Asked when a session starts and not when this file loads, as a resource's streamed files are
+---not yet known to the game while its scripts are first read.
+local function chooseHold()
+    if cfg.HoldAnim or HOLD_CLIP.dict == HOLD_DICT or not DoesAnimDictExist(HOLD_DICT) then return end
+    HOLD_CLIP.dict, HOLD_CLIP.anim = HOLD_DICT, HOLD_ANIM
+end
+
+---@type { offset: vector3, rot: vector3 } Where the phone sits in the hand while its screen is in use, on top of
+---PropOffset and PropRot.
+local HAND_SHIFT <const> = { offset = cfg.HandOffset or vec3(0.0, 0.0, 0.0), rot = cfg.HandRot or vec3(0.0, 0.0, 0.0) }
+---@type number, number How bright the screen is drawn (0-1) at midday and in the dead of night.
+local GAIN_DAY <const>, GAIN_NIGHT <const> = (cfg.Brightness or {}).Day or 0.95, (cfg.Brightness or {}).Night or 0.62
 
 local dui, duiReady, duiFailed = nil, false, false
 local queue = {}
@@ -204,14 +238,46 @@ end
 
 ---------------------------------------------------------------- camera
 
-local function camTarget(prop)
-    local c = GetOffsetFromEntityInWorldCoords(prop, SC.x, SC.y, SC.z)
-    local n = GetOffsetFromEntityInWorldCoords(prop, SC.x, SC.y - 1.0, SC.z) - c
-    local up = GetOffsetFromEntityInWorldCoords(prop, SC.x, SC.y, SC.z + 1.0) - c
-    local right = GetOffsetFromEntityInWorldCoords(prop, SC.x + 1.0, SC.y, SC.z) - c
-    local d = cfg.CamDistance or 0.34
-    -- slightly above and to the right of the screen normal, so the phone reads as held and angled
-    return c + n * d + up * (d * 0.12) + right * (d * 0.10), c
+---@type number Degrees the phone may turn away from the steady camera's heading before the camera is aimed
+---again: well past what a hand at rest does, so only a real change of pose (a turn, a new hold) moves it.
+local CAM_REAIM <const> = 6.0
+
+---@type vector3|nil The heading the steady camera keeps (CamSteady), taken from the phone when it was last aimed.
+local camRot
+---@type boolean Set to have the camera aimed at the phone again on its next look (the hold has just settled).
+local camReaim = false
+
+---Puts the close-up camera on the phone: square on to the screen, the phone's top as its up. The engine
+---carries it with the phone, so the phone stays in the middle of the picture with none of the frame of
+---lag a script moving it would add.
+---
+---A hand is never still: measured in game, the hold turns the phone through about two degrees every few
+---seconds. Fixed rigidly to the phone (CamSteady = false) the camera turns with it, and at arm's length
+---two degrees swings the whole world behind the phone across the monitor. The steady camera follows only
+---where the phone is and keeps the heading it was aimed with, so the world stands still and the phone
+---turns those two degrees in place, which is too little to see.
+---@param prop integer the phone in hand
+local function rideProp(prop)
+    local x, y, z = SC.x, SC.y - (cfg.CamDistance or 0.28), SC.z + (cfg.CamRise or 0.0)
+    if cfg.CamSteady == false then
+        camRot = nil
+        HardAttachCamToEntity(cam, prop, 0.0, 0.0, 0.0, x, y, z, true)
+        return
+    end
+    local off = GetOffsetFromEntityInWorldCoords(prop, x, y, z) - GetEntityCoords(prop)
+    camRot = GetEntityRotation(prop, 2)
+    AttachCamToEntity(cam, prop, off.x, off.y, off.z, false)
+    SetCamRot(cam, camRot.x, camRot.y, camRot.z, 2)
+end
+
+---How far the phone has turned from the heading the steady camera keeps, in degrees: the larger of the
+---turn up and down and the turn left and right.
+---@param prop integer the phone in hand
+---@return number
+local function camDrift(prop)
+    local now = GetEntityRotation(prop, 2)
+    local yaw = math.abs(((now.z - camRot.z + 180.0) % 360.0) - 180.0)
+    return math.max(math.abs(now.x - camRot.x), yaw)
 end
 
 local function startCam(seq)
@@ -228,24 +294,26 @@ local function startCam(seq)
         if seq ~= sessionSeq then return end
         prop = pose.getProp()
         if not prop then return end
-        local pos, look = camTarget(prop)
-        cam = CreateCamWithParams('DEFAULT_SCRIPTED_CAMERA', pos.x, pos.y, pos.z, 0.0, 0.0, 0.0, cfg.CamFov or 40.0, false, 2)
-        PointCamAtCoord(cam, look.x, look.y, look.z)
+        cam = CreateCam('DEFAULT_SCRIPTED_CAMERA', false)
+        SetCamFov(cam, cfg.CamFov or 40.0)
+        SetCamNearClip(cam, 0.03)
+        rideProp(prop)
         SetCamActive(cam, true)
         RenderScriptCams(true, true, cfg.CamEaseMs or 450, true, false)
-        local fpos, flook = pos, look
-        local k = cfg.CamFollow or 1.0
+        local turned = 0
         while seq == sessionSeq and cam do
-            prop = pose.getProp()
-            if prop then
-                pos, look = camTarget(prop)
-                -- 1.0 = rigid to the prop: the phone holds still under the cursor and the world sways
-                fpos = fpos + (pos - fpos) * k
-                flook = flook + (look - flook) * k
-                SetCamCoord(cam, fpos.x, fpos.y, fpos.z)
-                PointCamAtCoord(cam, flook.x, flook.y, flook.z)
+            local now = pose.getProp()
+            if now and (now ~= prop or camReaim) then
+                prop, camReaim = now, false
+                rideProp(prop)
+            elseif now and camRot then
+                turned = camDrift(now) > CAM_REAIM and turned + 1 or 0
+                if turned >= 4 then
+                    turned = 0
+                    rideProp(now)
+                end
             end
-            Wait(0)
+            Wait(100)
         end
     end)
 end
@@ -280,6 +348,77 @@ local BLOCK <const> = {
     30, 31, 32, 33, 34, 35, 21, 22, 36, 44, 23, 75, 45, 47, 58, 199, 200, 322, 177, 191, 201, 241, 242,
 }
 
+---@type string, string The pointer over the phone: a ring drawn by the game at the mouse itself each frame.
+---A pointer drawn inside the screen's own picture trails the mouse by the frames the picture takes to arrive,
+---and the game's own cursor only comes as an arrow or a pointing hand.
+local TOUCH_TXD <const>, TOUCH_TEX <const> = 'sd_phone_touch', 'ring'
+
+---Paints the pointer ring into a texture of its own: a white ring with a faint white fill, on a soft
+---dark halo that keeps it readable over a white page. Painted here so the phone ships no picture for it.
+local function paintTouch()
+    local size <const> = 64
+    local texture = CreateRuntimeTexture(CreateRuntimeTxd(TOUCH_TXD), TOUCH_TEX, size, size)
+    local mid <const>, outer <const>, inner <const> = (size - 1) / 2, 23.0, 18.5
+    for y = 0, size - 1 do
+        for x = 0, size - 1 do
+            local r = math.sqrt((x - mid) ^ 2 + (y - mid) ^ 2)
+            local ring = math.max(0.0, math.min(1.0, outer - r + 0.5)) * math.max(0.0, math.min(1.0, r - inner + 0.5))
+            local fill = r < inner and 0.26 or 0.0
+            local halo = r > outer and math.max(0.0, 1.0 - (r - outer) / 8.0) ^ 2 * 0.42 or 0.0
+            local white = math.max(ring, fill)
+            local alpha = math.max(white, halo)
+            local shade = alpha > 0 and math.floor(255 * white / alpha + 0.5) or 255
+            SetRuntimeTexturePixel(texture, x, y, shade, shade, shade, math.floor(alpha * 255 + 0.5))
+        end
+    end
+    CommitRuntimeTexture(texture)
+end
+paintTouch()
+
+---Draws the pointer ring at a spot on the monitor, a little smaller while the button is held.
+---@param x number 0-1 across the monitor
+---@param y number 0-1 down it
+---@param pressed boolean whether the mouse button is down
+local function drawTouch(x, y, pressed)
+    local tall = (cfg.PointerSize or 0.034) * (pressed and 0.78 or 1.0)
+    DrawSprite(TOUCH_TXD, TOUCH_TEX, x, y, tall / GetAspectRatio(false), tall, 0.0, 255, 255, 255, 255)
+end
+
+---@type boolean True while a text field on the phone is being typed into. The game cannot hand key presses
+---to the screen's own page, so the phone's NUI frame takes the keyboard and the mouse for as long as it lasts
+---(web/src/core/propScreenCapture.ts) and reports both here; nothing reaches the game, so a typed T opens no chat.
+local typing = false
+---@type { x: number, y: number, pressed: boolean, released: boolean, wheel: number, back: boolean } What the
+---frame reported since the input loop last looked.
+local reported = { x = 0.5, y = 0.5, pressed = false, released = false, wheel = 0, back = false }
+
+---Gives the keyboard and mouse to the NUI frame, or hands them back to the game.
+---@param on boolean
+local function setTyping(on)
+    if typing == on then return end
+    typing = on
+    reported.pressed, reported.released, reported.wheel, reported.back = false, false, 0, false
+    nextFocus(on, on)
+    nextKeep(false)
+    nextSend({ action = 'sd-phone:propscreen:capture', on = on })
+end
+
+---Where the pointer is and what it did this frame, from the game's own controls or, while typing, from
+---what the NUI frame reported.
+---@return number x, number y, boolean pressed, boolean released, number wheel, boolean back
+local function pointer()
+    if typing then
+        local pressed, released, wheel, back = reported.pressed, reported.released, reported.wheel, reported.back
+        reported.pressed, reported.released, reported.wheel, reported.back = false, false, 0, false
+        return reported.x, reported.y, pressed, released, wheel, back
+    end
+    SetMouseCursorActiveThisFrame()
+    local wheel = (IsDisabledControlJustPressed(0, 241) and 1 or 0) - (IsDisabledControlJustPressed(0, 242) and 1 or 0)
+    return GetDisabledControlNormal(0, 239), GetDisabledControlNormal(0, 240),
+        IsDisabledControlJustPressed(0, 24), IsDisabledControlJustReleased(0, 24), wheel,
+        IsDisabledControlJustPressed(0, 25) or IsDisabledControlJustPressed(0, 177)
+end
+
 local function inputLoop(seq)
     CreateThread(function()
         local lastX, lastY = -1, -1
@@ -287,43 +426,44 @@ local function inputLoop(seq)
         while seq == sessionSeq do
             if not keyboardUp then
                 for i = 1, #BLOCK do DisableControlAction(0, BLOCK[i], true) end
-                SetMouseCursorActiveThisFrame()
+                local mx, my, pressed, released, wheel, back = pointer()
                 local prop = pose.getProp()
                 local q = prop and projectQuad(prop)
                 if q then
-                    local mx, my = GetDisabledControlNormal(0, 239), GetDisabledControlNormal(0, 240)
                     local u, v = quadToUv(q, mx, my)
                     if u then
                         local inside = u >= 0 and u <= 1 and v >= 0 and v <= 1
-                        SetMouseCursorSprite(inside and 5 or 1)
+                        SetMouseCursorVisibleInMenus(not inside)
+                        if inside or typing then drawTouch(mx, my, down) end
                         local px = math.floor(math.min(math.max(u, 0), 1) * (W - 1) + 0.5)
                         local py = math.floor(math.min(math.max(v, 0), 1) * (H - 1) + 0.5)
                         if (inside or down) and (px ~= lastX or py ~= lastY) then
                             SendDuiMouseMove(dui, px, py)
                             lastX, lastY = px, py
                         end
-                        if inside and IsDisabledControlJustPressed(0, 24) then
+                        if inside and pressed then
                             SendDuiMouseMove(dui, px, py)
                             SendDuiMouseDown(dui, 'left')
                             down = true
+                        elseif pressed and typing then
+                            duiSend({ propScreen = 'type', key = 'Escape' })
                         end
                     end
                 end
-                if down and IsDisabledControlJustReleased(0, 24) then
+                if down and released then
                     SendDuiMouseUp(dui, 'left')
                     down = false
                 end
-                if IsDisabledControlJustPressed(0, 241) then SendDuiMouseWheel(dui, 120, 0) end
-                if IsDisabledControlJustPressed(0, 242) then SendDuiMouseWheel(dui, -120, 0) end
+                if wheel ~= 0 then SendDuiMouseWheel(dui, wheel * 120, 0) end
                 -- Back: right mouse or Backspace -> the UI's own escape (closes an app/sheet, at home closes)
-                if IsDisabledControlJustPressed(0, 25) or IsDisabledControlJustPressed(0, 177) then
-                    duiSend({ action = 'sd-phone:escape' })
-                end
-                -- Enter unlocks the lockscreen / submits, as on the full-screen phone
-                if IsDisabledControlJustPressed(0, 191) then duiSend({ propScreen = 'key', key = 'Enter' }) end
-                -- ESC puts the phone away
-                if IsDisabledControlJustPressed(0, 200) or IsDisabledControlJustPressed(0, 322) then
-                    if closer then closer() end
+                if back then duiSend({ action = 'sd-phone:escape' }) end
+                if not typing then
+                    -- Enter unlocks the lockscreen / submits, as on the full-screen phone
+                    if IsDisabledControlJustPressed(0, 191) then duiSend({ propScreen = 'key', key = 'Enter' }) end
+                    -- ESC puts the phone away
+                    if IsDisabledControlJustPressed(0, 200) or IsDisabledControlJustPressed(0, 322) then
+                        if closer then closer() end
+                    end
                 end
                 if IsPedInAnyVehicle(PlayerPedId(), true) and closer then closer() end
                 -- The DUI model has one portrait screen: an unfolded foldable goes full-screen.
@@ -332,25 +472,43 @@ local function inputLoop(seq)
             Wait(0)
         end
         if down and dui then SendDuiMouseUp(dui, 'left') end
+        SetMouseCursorVisibleInMenus(true)
+        setTyping(false)
     end)
 end
 
--- Text entry. A DUI has no keyboard path, so a tapped text field asks for the game's on-screen
--- keyboard and the result is written back into the field (React-safe setter in phone.html).
-RegisterNUICallback('sd-phone:propscreen:text', function(data, cb)
+---A text field on the phone was tapped: typing starts, straight onto the screen.
+RegisterNUICallback('sd-phone:propscreen:text', function(_, cb)
     cb({ ok = true })
-    if not M.active or keyboardUp then return end
-    keyboardUp = true
-    CreateThread(function()
-        local max = math.max(1, math.min(tonumber(data and data.maxLength) or 255, 600))
-        DisplayOnscreenKeyboard(1, 'FMMC_KEY_TIP8', '', tostring(data and data.value or ''), '', '', '', max)
-        while UpdateOnscreenKeyboard() == 0 do Wait(0) end
-        local status = UpdateOnscreenKeyboard()
-        local result = status == 1 and GetOnscreenKeyboardResult() or nil
-        Wait(150) -- swallow the Enter/ESC that closed the keyboard
-        keyboardUp = false
-        duiSend({ propScreen = 'text', value = result, cancelled = result == nil })
-    end)
+    if M.active then setTyping(true) end
+end)
+
+---The field being typed into was left (a tap elsewhere, Escape, or the page closed it).
+RegisterNUICallback('sd-phone:propscreen:blur', function(_, cb)
+    cb({ ok = true })
+    setTyping(false)
+end)
+
+---A key, a paste or a pointer event from the NUI frame while it holds the keyboard and mouse.
+---@param data { t: string, key: string?, ctrl: boolean?, shift: boolean?, text: string?, x: number?, y: number?, button: integer?, delta: number? }
+RegisterNUICallback('sd-phone:propscreen:input', function(data, cb)
+    cb({ ok = true })
+    if not typing or type(data) ~= 'table' then return end
+    local kind = data.t
+    if kind == 'key' and type(data.key) == 'string' then
+        duiSend({ propScreen = 'type', key = data.key, ctrl = data.ctrl == true, shift = data.shift == true })
+    elseif kind == 'paste' and type(data.text) == 'string' then
+        duiSend({ propScreen = 'type', text = data.text:sub(1, 2000) })
+    elseif kind == 'wheel' then
+        reported.wheel = reported.wheel + ((tonumber(data.delta) or 0) < 0 and 1 or -1)
+    elseif type(data.x) == 'number' and type(data.y) == 'number' then
+        reported.x, reported.y = data.x, data.y
+        if kind == 'down' then
+            if data.button == 2 then reported.back = true elseif data.button == 0 then reported.pressed = true end
+        elseif kind == 'up' and data.button == 0 then
+            reported.released = true
+        end
+    end
 end)
 
 RegisterNUICallback('sd-phone:propscreen:log', function(data, cb)
@@ -362,14 +520,44 @@ end)
 
 ---------------------------------------------------------------- session
 
+---How bright the screen should be drawn right now. The screen is a light of its own, so at night the
+---game's exposure turns a full-strength one into a white glare: it is drawn dimmer after dark, the way a
+---phone dims itself, and climbs back through dawn. The player's own Brightness setting dims it further
+---inside the page.
+---@return number gain 0-1
+local function screenGain()
+    local hour = GetClockHours() + GetClockMinutes() / 60.0
+    local light = math.max(0.0, math.min(1.0, math.min(hour - 5.0, 21.0 - hour) / 2.0))
+    return GAIN_NIGHT + (GAIN_DAY - GAIN_NIGHT) * light
+end
+
+---Keeps the screen's brightness in step with the time of day for as long as a session lasts.
+---@param seq integer the session this loop belongs to
+local function gainLoop(seq)
+    CreateThread(function()
+        local sent
+        while seq == sessionSeq and M.active do
+            local gain = math.floor(screenGain() * 100 + 0.5) / 100
+            if gain ~= sent then
+                sent = gain
+                duiSend({ propScreen = 'gain', value = gain })
+            end
+            Wait(2000)
+        end
+    end)
+end
+
 local function startSession()
     sessionSeq = sessionSeq + 1
     local seq = sessionSeq
     M.active = true
     nextFocus(false, false)
     duiSend({ propScreen = 'active', on = true, debug = cfg.Debug == true })
+    chooseHold()
     pose.modelOverride = MODEL
     pose.clipOverride = HOLD_CLIP
+    pose.handShift = HAND_SHIFT
+    gainLoop(seq)
     CreateThread(function()
         RequestStreamedTextureDict(MODEL_TXD, false)
         local t = GetGameTimer()
@@ -392,6 +580,7 @@ local function endSession()
     RemoveReplaceTexture(MODEL_TXD, MODEL_TEX)
     pose.modelOverride = nil
     pose.clipOverride = nil
+    pose.handShift = nil
     -- the torch or a live call can keep the phone in hand after the UI closes: put the normal body back
     if pose.shouldHold() then CreateThread(function() pose.reweld() end) end
 end

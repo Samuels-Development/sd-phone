@@ -542,9 +542,13 @@ return {
         Texture     = 'sd_phone_screen', -- texture name inside TextureDict that gets replaced
 
         -- DUI resolution in pixels. The UI's screen is 440x956 CSS px; keep the prop screen's aspect
-        -- (here 0.46) and go ~1.2x the UI size for a sharp image. Higher costs more GPU/VRAM.
+        -- (here 0.46). With AutoResolution the height is worked out from how tall the phone stands
+        -- on each player's monitor in the close-up camera, since a picture larger than that is
+        -- shrunk without smoothing and small text frays; Width and Height then only give the
+        -- proportions. Set it false to draw at exactly Width x Height.
         Width  = 540,
         Height = 1174,
+        AutoResolution = true,
 
         -- The screen rectangle in prop-local metres (centre + full width/height), used to map the
         -- cursor onto it: screen faces -Y, top is +Z. These values fit the sd-phone-props models
@@ -560,9 +564,25 @@ return {
         -- Close-up camera that looks at the raised phone (the gameplay camera is restored on close).
         Camera      = true,
         CamFov      = 40.0,
-        CamDistance = 0.34,  -- metres from the screen along its normal
+        CamDistance = 0.28,  -- metres from the screen along its normal
         CamEaseMs   = 450,
-        CamFollow   = 1.0,   -- 1.0 = camera rigid to the phone (steady screen); lower = smoothed, phone sways
+        CamRise     = 0.0,   -- metres the camera sits above the middle of the screen (the phone drops in the picture)
+        CamSteady   = true,  -- the camera keeps its own heading, so the world behind the phone stands still; false = fixed rigidly to the phone, and the world sways with the hand
+
+        -- How the phone is held while its screen is in use. The phone streams a hold made for
+        -- this view (stream/sd_phone@hold.ycd): the normal phone pose with the thumb laid along the
+        -- phone's edge, where the stock pose rests it across the glass. HoldAnim names another
+        -- ({ dict = ..., anim = ... }); HandOffset and HandRot are added to PropOffset and PropRot.
+        -- HoldAnim = { dict = 'cellphone@', anim = 'cellphone_text_read_base' },
+        HandOffset = vec3(0.0, 0.0, 0.0),
+        HandRot    = vec3(0.0, 0.0, 0.0),
+
+        -- How bright the screen is drawn, 0-1. The screen is a light of its own, so at night a
+        -- full-strength one glares white; it dims after dark and comes back up through dawn. The
+        -- player's own Brightness setting (Settings, Display & Brightness) dims it further.
+        Brightness = { Day = 0.95, Night = 0.62 },
+
+        PointerSize = 0.034, -- the pointer ring over the phone, as a share of the monitor's height
 
         Debug = false,       -- F8 log of DUI start-up and each tap (x,y + element)
     },

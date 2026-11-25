@@ -12,8 +12,16 @@
 <base href="../build/" />
 <style>
   html, body { margin: 0; width: 100vw; height: 100vh; overflow: hidden; background: #000 !important; }
-  #root { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  /* sd-tone (below) undoes the game's tone mapping, so the UI is not shown faded */
+  #root { position: absolute; left: 0; top: 0; transform-origin: 0 0; filter: url(#sd-tone); }
+  /* the glass: a thin dark edge, so the picture sits in the phone and not on it */
+  #glass { position: fixed; inset: 0; pointer-events: none; z-index: 2147483647;
+    box-shadow: inset 0 0 0.9vw 0.25vw rgba(0, 0, 0, 0.5); }
   .sd-propscreen-hide { display: none !important; }
+  /* the text cursor of the field being typed into (drawn here: a windowless browser shows none) */
+  #caret { position: fixed; display: none; pointer-events: none; z-index: 2147483646; border-radius: 1px;
+    animation: sd-caret 1.06s steps(1) infinite; }
+  @keyframes sd-caret { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
 </style>
 <script>
 (() => {
@@ -55,12 +63,37 @@
     }
     return best;
   }
+  // The shell draws the frame and the screen's cutout (the island, a notch or a punch hole) in one svg over
+  // the screen. The prop has its own frame, so the frame parts are hidden; the cutout has to stay, as the
+  // picture replaces the prop's own screen texture, the island painted on it included. The cutout is the
+  // svg's black shape, and whatever lies inside its box (its collar and lenses) belongs to it.
+  let bezelKey = '';
+  function dressBezel(svg) {
+    const kids = [...svg.children].filter((c) => c.tagName.toLowerCase() !== 'defs');
+    const cut = kids.find((c) => c.getAttribute('fill') === '#000' && /^(rect|path)$/i.test(c.tagName));
+    const key = kids.length + '|' + (cut ? (cut.getAttribute('d') || ['x', 'y', 'width', 'height'].map((a) => cut.getAttribute(a)).join(',')) : '');
+    if (key === bezelKey && kids.every((c) => c.dataset.sdBezel)) return;
+    bezelKey = key;
+    for (const c of kids) c.classList.remove('sd-propscreen-hide');
+    let box = null;
+    try { box = cut ? cut.getBBox() : null; } catch (_) {}
+    for (const c of kids) {
+      let keep = false;
+      if (box && box.width > 0) {
+        try {
+          const b = c.getBBox(), pad = 14;
+          keep = b.width > 0 && b.x >= box.x - pad && b.y >= box.y - pad && b.x + b.width <= box.x + box.width + pad && b.y + b.height <= box.y + box.height + pad;
+        } catch (_) {}
+      }
+      c.dataset.sdBezel = keep ? 'keep' : 'hide';
+      c.classList.toggle('sd-propscreen-hide', !keep);
+    }
+  }
   function fit() {
     const root = document.getElementById('root');
     const el = screenEl();
     if (!root || !el) return;
-    // hide the bezel/frame svg drawn over the screen edge (the prop has its own bezel)
-    for (const c of el.parentElement.children) if (c.tagName.toLowerCase() === 'svg') c.classList.add('sd-propscreen-hide');
+    for (const c of el.parentElement.children) if (c.tagName.toLowerCase() === 'svg') dressBezel(c);
     const r = el.getBoundingClientRect();
     if (r.width < 10 || r.height < 10) return;
     // undo our current transform to get the layout rect, then fit it to the viewport
@@ -91,8 +124,82 @@
     if (!state.active || !isText(el) || editing === el) return;
     editing = el;
     try { el.focus(); } catch (_) {}
-    post('sd-phone:propscreen:text', { value: el.value || '', maxLength: el.maxLength > 0 ? el.maxLength : 255, type: el.type || 'text' });
+    caret = (el.value || '').length;
+    showCaret();
+    post('sd-phone:propscreen:text', {});
   };
+  // Leaving the field: a tap on anything that is not a text field, Escape, or the session ending.
+  const leaveText = () => {
+    if (!editing) return;
+    const el = editing; editing = null;
+    try { el.blur(); } catch (_) {}
+    showCaret();
+    post('sd-phone:propscreen:blur', {});
+  };
+  // ---- typing: keys arrive from the NUI frame by way of Lua and are applied to the field here
+  let caret = 0;
+  const bar = document.createElement('div');
+  bar.id = 'caret';
+  // A windowless browser draws no text cursor of its own, so one is drawn: the field's text up to the
+  // caret is measured in the field's own font and the bar set at the end of it.
+  const measure = document.createElement('canvas').getContext('2d');
+  function showCaret() {
+    const el = editing;
+    if (!el || !el.isConnected) { bar.style.display = 'none'; return; }
+    if (!bar.isConnected) document.body.appendChild(bar);
+    const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+    const scale = r.width / (el.offsetWidth || r.width);
+    const size = parseFloat(cs.fontSize) * scale;
+    measure.font = `${cs.fontStyle} ${cs.fontWeight} ${size}px ${cs.fontFamily}`;
+    const shown = el.type === 'password' ? '\u2022'.repeat(caret) : (el.value || '').slice(0, caret);
+    const line = el.tagName === 'TEXTAREA' ? shown.slice(shown.lastIndexOf('\n') + 1) : shown;
+    const row = el.tagName === 'TEXTAREA' ? shown.split('\n').length - 1 : 0;
+    const pad = parseFloat(cs.paddingLeft) * scale, top = parseFloat(cs.paddingTop) * scale;
+    const lh = (parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.25) * scale;
+    const centred = cs.textAlign === 'center' ? (r.width - measure.measureText(el.value || '').width) / 2 - pad : 0;
+    const x = Math.min(r.right - 2, r.left + pad + Math.max(0, centred) + measure.measureText(line).width - el.scrollLeft * scale);
+    const y = el.tagName === 'TEXTAREA' ? r.top + top + row * lh - el.scrollTop * scale : r.top + (r.height - lh) / 2;
+    bar.style.cssText = `display:block;left:${x}px;top:${y}px;height:${lh}px;width:${Math.max(1.5, size * 0.09)}px;background:${cs.caretColor && cs.caretColor !== 'auto' ? cs.caretColor : cs.color}`;
+  }
+  setInterval(() => { if (editing && !editing.isConnected) leaveText(); else if (editing) showCaret(); }, 250);
+  function typeKey(d) {
+    const el = editing;
+    if (!el) return;
+    if (!el.isConnected) { leaveText(); return; }
+    let v = el.value || '';
+    caret = Math.max(0, Math.min(caret, v.length));
+    const max = el.maxLength > 0 ? el.maxLength : 100000;
+    const put = (text) => {
+      const room = Math.max(0, max - v.length);
+      const add = (el.tagName === 'TEXTAREA' ? text : text.replace(/[\r\n]+/g, ' ')).slice(0, room);
+      if (!add) return;
+      v = v.slice(0, caret) + add + v.slice(caret); caret += add.length; setValue(el, v);
+    };
+    if (typeof d.text === 'string') { put(d.text); showCaret(); return; }
+    const k = d.key;
+    if (k === 'Escape') { leaveText(); return; }
+    if (k === 'Enter') {
+      if (el.tagName === 'TEXTAREA' && d.shift) put('\n');
+      else {
+        for (const type of ['keydown', 'keypress', 'keyup']) el.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+        if (el.form && el.form.requestSubmit) { try { el.form.requestSubmit(); } catch (_) {} }
+        caret = (el.value || '').length;
+      }
+    } else if (k === 'Backspace') {
+      if (d.ctrl) { const cut = v.slice(0, caret).replace(/\S*\s*$/, ''); v = cut + v.slice(caret); caret = cut.length; setValue(el, v); }
+      else if (caret > 0) { v = v.slice(0, caret - 1) + v.slice(caret); caret -= 1; setValue(el, v); }
+    } else if (k === 'Delete') {
+      if (caret < v.length) { v = v.slice(0, caret) + v.slice(caret + 1); setValue(el, v); }
+    } else if (k === 'ArrowLeft') caret = Math.max(0, caret - 1);
+    else if (k === 'ArrowRight') caret = Math.min(v.length, caret + 1);
+    else if (k === 'Home') caret = 0;
+    else if (k === 'End') caret = v.length;
+    else if (k === 'Tab') { leaveText(); return; }
+    else if (d.ctrl && k.toLowerCase() === 'a') caret = v.length;
+    else if (k.length === 1 && !d.ctrl) put(k);
+    try { el.setSelectionRange(caret, caret); } catch (_) {}
+    showCaret();
+  }
   const fieldAt = (t) => {
     if (!t || !t.closest) return t;
     const own = t.closest('input,textarea');
@@ -102,7 +209,11 @@
     if (inner.length === 1 && t.getBoundingClientRect().height < 90) return inner[0];
     return t;
   };
-  document.addEventListener('pointerup', (e) => askText(fieldAt(e.target)), true);
+  document.addEventListener('pointerup', (e) => {
+    const el = fieldAt(e.target);
+    if (isText(el)) { if (el !== editing) { editing = null; askText(el); } }
+    else leaveText();
+  }, true);
   document.addEventListener('focusin', (e) => askText(e.target), true);
   document.addEventListener('pointerdown', (e) => {
     if (!state.debug) return;
@@ -124,15 +235,20 @@
   window.addEventListener('message', (e) => {
     const d = e.data;
     if (!d || !d.propScreen) return;
-    if (d.propScreen === 'active') {
+    if (d.propScreen === 'type') {
+      typeKey(d);
+    } else if (d.propScreen === 'active') {
       state.active = !!d.on; state.debug = !!d.debug; applyGain();
-      if (!d.on && editing) { editing.blur(); editing = null; }
+      if (!d.on) leaveText();
     } else if (d.propScreen === 'text') {
       const el = editing; editing = null;
       if (el && !d.cancelled && typeof d.value === 'string') setValue(el, d.value);
       if (el) el.blur();
     } else if (d.propScreen === 'key') {
       key(d.key);
+    } else if (d.propScreen === 'gain') {
+      const v = Math.max(0.1, Math.min(1, +d.value || 1));
+      document.getElementById('root').style.filter = `url(#sd-tone) brightness(${v})`;
     }
   });
 
@@ -160,6 +276,22 @@
 </script>
 </head>
 <body>
+<!--
+  The game tone-maps the screen like any lit surface: measured on the prop, a 25% grey comes out at 35%,
+  a 50% grey at 56%, and white at 80%, which flattens the whole UI. This curve is the inverse of that
+  measurement (17 points, 0 to 255 in steps of 16), so a grey lands where it was meant to, under the same
+  white. Measure again with a grey ramp as the screen texture if the phone's screen material changes.
+-->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="sd-tone" color-interpolation-filters="sRGB" x="0" y="0" width="100%" height="100%">
+    <feComponentTransfer>
+      <feFuncR type="table" tableValues="0 .019 .051 .086 .123 .165 .207 .256 .305 .362 .419 .488 .558 .653 .747 .873 1" />
+      <feFuncG type="table" tableValues="0 .019 .051 .086 .123 .165 .207 .256 .305 .362 .419 .488 .558 .653 .747 .873 1" />
+      <feFuncB type="table" tableValues="0 .019 .051 .086 .123 .165 .207 .256 .305 .362 .419 .488 .558 .653 .747 .873 1" />
+    </feComponentTransfer>
+  </filter>
+</svg>
 <div id="root"></div>
+<div id="glass"></div>
 </body>
 </html>

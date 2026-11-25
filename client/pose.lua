@@ -107,6 +107,11 @@ function pose.shouldHold()
     return phoneOpen or torchOn or inCall
 end
 
+---@type table<string, { dict: string, anim: string }> Every clip a pose.clipOverride has handed out, by
+---"dict/anim". They are not in CLIPS, and the override is cleared before the pose is stopped, so pose.stop
+---could not find the one still playing and the ped kept holding a phone that was gone.
+local overrideClips = {}
+
 ---The clip that should be held right now. Every caller reads the pose through this, so adding a
 ---clip can never leave the watchdog hunting for one the player was never given.
 ---
@@ -116,7 +121,10 @@ end
 ---@return { dict: string, anim: string, blendIn: number, blendOut: number, flags: integer }
 local function currentClip()
     -- Prop screen (configs/phone.lua PropScreen): one reading pose for the whole session.
-    if pose.clipOverride then return pose.clipOverride end
+    if pose.clipOverride then
+        overrideClips[pose.clipOverride.dict .. '/' .. pose.clipOverride.anim] = pose.clipOverride
+        return pose.clipOverride
+    end
     -- One camera pose covers both lenses: the native cell cam swapped pose on flip, but no
     -- outward-facing clip outside that native is verified to exist. Landscape is the exception:
     -- it turns the phone on its side, so it gets its own clip. Not while the selfie lens is up,
@@ -247,6 +255,9 @@ local function propTransform(wide, open, fold)
     if fold then
         local shift = open and config.Phone.FoldOpenPropOffset or config.Phone.FoldPropOffset
         if shift then off = off + shift end
+    end
+    if pose.handShift then
+        off, rot = off + pose.handShift.offset, rot + pose.handShift.rot
     end
     return off, rot
 end
@@ -439,7 +450,7 @@ local function play()
 end
 
 ---Stops whichever of our clips is playing and removes the prop. Every clip is checked because
----entering the viewfinder or a vehicle swaps which one is up.
+---entering the viewfinder or a vehicle swaps which one is up, the prop screen's own hold included.
 function pose.stop()
     local ped = cache.ped
     for _, contexts in pairs(CLIPS) do
@@ -447,6 +458,11 @@ function pose.stop()
             if IsEntityPlayingAnim(ped, clip.dict, clip.anim, 3) then
                 StopAnimTask(ped, clip.dict, clip.anim, 1.0)
             end
+        end
+    end
+    for _, clip in pairs(overrideClips) do
+        if IsEntityPlayingAnim(ped, clip.dict, clip.anim, 3) then
+            StopAnimTask(ped, clip.dict, clip.anim, 1.0)
         end
     end
     pose.removeProp()
