@@ -905,6 +905,7 @@ function races.start()
             end
 
             racegen = racegen or require 'server.racing.racegen'
+            racegen.announceBoards()
             local starting = racegen.collectStarting()
             for i = 1, #starting do
                 local race = starting[i]

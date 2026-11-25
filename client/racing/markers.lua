@@ -26,6 +26,11 @@ local STEM_MAX <const> = 2.0
 local VISIBLE <const> = 2
 ---@type string NUI action the race HUD layer listens on for billboards.
 local NUI_ACTION <const> = 'sd-phone:racing:markers'
+---@type integer Shortest gap between two billboard pushes, in ms (about 30 Hz). The race loop calls
+---update every frame, and each push is a JSON round into the NUI.
+local PUSH_MS <const> = 33
+---@type number Screen-fraction movement (position, stem or scale) below which nothing is re-sent.
+local EPSILON <const> = 0.0005
 
 ---@type table Module table; the table returned at end of file.
 local markers = {}
@@ -38,6 +43,12 @@ local colorClosest = '#FFD60A'
 local enabled = true
 ---@type boolean Whether the NUI is currently holding any billboards of ours.
 local painted = false
+---@type table[]|nil Billboards last pushed, compared against so an unchanged frame sends nothing.
+local sent = nil
+---@type string|nil Colours last pushed, so a style change mid-race still goes out.
+local sentStyle = nil
+---@type integer GetGameTimer of the last billboard push.
+local sentAt = 0
 
 ---Takes the driver's marker preferences. Called from the race engine whenever the HUD settings
 ---change, so a colour picked mid-race lands on the next frame.
@@ -88,8 +99,25 @@ local function billboard(target, coords, label, primary)
     }
 end
 
+---Whether a frame's billboards differ from the ones last pushed by more than EPSILON anywhere.
+---@param list table[] billboards built this frame
+---@return boolean changed
+local function changed(list)
+    if not sent or #sent ~= #list then return true end
+    for i = 1, #list do
+        local a, b = sent[i], list[i]
+        if a.label ~= b.label or a.dist ~= b.dist or a.on ~= b.on or a.primary ~= b.primary then return true end
+        if math.abs(a.x - b.x) > EPSILON or math.abs(a.y - b.y) > EPSILON
+            or math.abs(a.stem - b.stem) > EPSILON or math.abs(a.scale - b.scale) > EPSILON then
+            return true
+        end
+    end
+    return false
+end
+
 ---Pushes the billboards for the gate being driven to and the one after it. The lookahead wraps back
----to gate 1 on every lap but the last, where there is nothing after the finish to point at.
+---to gate 1 on every lap but the last, where there is nothing after the finish to point at. Called
+---every frame, but only a frame that moved something goes to the NUI, and no faster than PUSH_MS.
 ---@param targets number[][] gate rows for the lap, gate 1 of the track excluded
 ---@param current integer index of the gate being driven to
 ---@param cpPerLap integer gates in one lap
@@ -102,6 +130,9 @@ function markers.update(targets, current, cpPerLap, lap, totalLaps, playerCoords
         return
     end
 
+    local now = GetGameTimer()
+    if now - sentAt < PUSH_MS then return end
+
     local list = {}
     for k = 0, VISIBLE - 1 do
         local idx = current + k
@@ -112,7 +143,10 @@ function markers.update(targets, current, cpPerLap, lap, totalLaps, playerCoords
         end
     end
 
-    painted = true
+    local style = color .. colorClosest
+    if style == sentStyle and not changed(list) then return end
+
+    painted, sent, sentStyle, sentAt = true, list, style, now
     SendNUIMessage({ action = NUI_ACTION, data = { markers = list, color = color, colorClosest = colorClosest } })
 end
 
@@ -120,7 +154,7 @@ end
 ---something is actually being drawn.
 function markers.clear()
     if not painted then return end
-    painted = false
+    painted, sent, sentStyle = false, nil, nil
     SendNUIMessage({ action = NUI_ACTION, data = { markers = {}, color = color, colorClosest = colorClosest } })
 end
 

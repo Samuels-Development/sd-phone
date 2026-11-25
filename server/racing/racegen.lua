@@ -244,6 +244,7 @@ local function createRace(track, startInSeconds, class)
         members        = {},
         joinedCount    = 0,
         isCustom       = false,
+        boardAnnounced = startInSeconds <= math.max(0, int(GEN.BoardLeadMinutes, 5)) * 60,
     }
 
     Races[id] = race
@@ -375,6 +376,22 @@ end
 ---@return boolean
 function racegen.isFull(race)
     return race.joinedCount >= race.maxRacers
+end
+
+---Tells every phone the board list moved once a lobby comes within BoardLeadMinutes of its start.
+---Nothing else happens at that moment, so without this push a sign-up board would only appear on
+---the client's slow fallback poll. Each lobby is announced once.
+function racegen.announceBoards()
+    local now  = os.time()
+    local lead = math.max(0, int(GEN.BoardLeadMinutes, 5)) * 60
+    local due  = false
+    for _, race in pairs(Races) do
+        if not race.boardAnnounced and race.start and int(race.startsAt, 0) - now <= lead then
+            race.boardAnnounced = true
+            due = true
+        end
+    end
+    if due then broadcastChanged() end
 end
 
 ---Every lobby the caller can see, soonest first.
@@ -683,12 +700,12 @@ function racegen.start()
             Wait(1000)
             waited = waited + 1000
         end
-        generateBatch()
+        if generateBatch() > 0 then broadcastChanged() end
 
         while true do
             Wait(interval)
             prune()
-            generateBatch()
+            if generateBatch() > 0 then broadcastChanged() end
         end
     end)
 end

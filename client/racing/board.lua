@@ -29,8 +29,20 @@ local FACE_DEGREES = tonumber(RACE.LineupFaceDegrees) or 90.0
 ---not treated as a jumped start.
 local LINE_METRES = tonumber(RACE.LineupLineMetres) or 3.5
 
----@type integer How often the board list is refetched, in ms. A push refreshes it sooner.
-local POLL_MS = 15000
+---@type integer How often the board list is refetched when no push has arrived, in ms. The server
+---pushes racesChanged whenever a lobby opens, fills, closes or comes within its board lead, so this
+---is only the backstop for a missed push.
+local POLL_MS = 60000
+
+---@type integer How often the start-point blips are re-synced, in ms. Stood at a board the draw loop
+---runs every frame, and walking a blip in or out of MARKER_DIST does not need frame precision.
+local BLIPS_MS = 500
+
+---@type integer Shortest gap between two screen-position pushes for the board, in ms (about 30 Hz).
+local POS_MS = 33
+
+---@type number Screen-fraction movement below which the board's position is not re-sent.
+local POS_EPSILON = 0.0005
 
 ---@type integer How often the lineup verdict is recomputed and reported, in ms.
 local READY_MS = 500
@@ -54,6 +66,9 @@ local Shown = nil
 ---forever after the first send and the grid count, pot and start time freeze at whatever they were
 ---when the player walked up.
 local ShownSig = nil
+
+---@type table|nil Screen position last sent up for the board, so a still camera sends nothing.
+local ShownPos = nil
 
 ---@type string|nil Last lineup verdict reported to the server, so only changes go over the wire.
 local Reported = nil
@@ -100,11 +115,21 @@ local function syncBlips(coords)
     end
 end
 
----@return number|nil hash joaat of the vehicle the player is in, nil on foot
-local function currentModel()
-    local vehicle = GetVehiclePedIsIn(cache.ped, false)
-    if vehicle == 0 then return nil end
-    return GetEntityModel(vehicle)
+---Takes the board off the screen and forgets what it last showed, so the next one sends in full.
+local function hideBoard()
+    Shown, ShownSig, ShownPos = nil, nil, nil
+    SendNUIMessage({ action = 'sd-phone:racing:board:hide' })
+end
+
+---Whether a board screen position differs enough from the last one sent to be worth a push.
+---@param last table|nil position last sent
+---@param pos table position this frame
+---@return boolean changed
+local function posChanged(last, pos)
+    if not last then return true end
+    if last.on ~= pos.on or last.joined ~= pos.joined then return true end
+    return math.abs((last.x or 0) - (pos.x or 0)) > POS_EPSILON
+        or math.abs((last.y or 0) - (pos.y or 0)) > POS_EPSILON
 end
 
 ---Refetches the board list. Silent on failure: a board that cannot be reached is simply not drawn.
@@ -122,11 +147,7 @@ function board.refresh()
         for i = 1, #Boards do
             if Boards[i].id == Shown.id then still = Boards[i] break end
         end
-        Shown = still
-        if not Shown then
-            ShownSig = nil
-            SendNUIMessage({ action = 'sd-phone:racing:board:hide' })
-        end
+        if still then Shown = still else hideBoard() end
     end
 end
 
@@ -249,20 +270,24 @@ local function toggle(entry)
     end)
 end
 
----Per-frame: keeps the on-screen board pinned to its start point and reads [E].
+---Per-frame while stood at a board: reads [E] every frame, but pushes the board's screen position
+---only when it moved (at most POS_MS apart) and re-syncs the blips every BLIPS_MS, since a
+---message to the NUI and a walk over every board each frame cost far more than reading a key.
 local function drawLoop()
     CreateThread(function()
+        local blipsAt, posAt = 0, 0
         while ENABLED do
             local wait = 500
+            local now  = GetGameTimer()
 
             local here = GetEntityCoords(cache.ped)
-            syncBlips(here)
+            if now - blipsAt >= BLIPS_MS then
+                blipsAt = now
+                syncBlips(here)
+            end
 
             if race.active() or #Boards == 0 then
-                if Shown then
-                    Shown, ShownSig = nil, nil
-                    SendNUIMessage({ action = 'sd-phone:racing:board:hide' })
-                end
+                if Shown then hideBoard() end
             else
                 local entry, distance = nearest(here)
 
@@ -276,7 +301,7 @@ local function drawLoop()
                         tostring(entry.prizePool), tostring(entry.startsAt))
 
                     if sig ~= ShownSig then
-                        Shown, ShownSig = entry, sig
+                        Shown, ShownSig, ShownPos = entry, sig, nil
                         SendNUIMessage({
                             action = 'sd-phone:racing:board:show',
                             data   = {
@@ -297,15 +322,15 @@ local function drawLoop()
                         })
                     end
 
-                    SendNUIMessage({
-                        action = 'sd-phone:racing:board:pos',
-                        data   = { on = on == 1 or on == true, x = sx, y = sy, joined = entry.joined == true },
-                    })
+                    local pos = { on = on == 1 or on == true, x = sx, y = sy, joined = entry.joined == true }
+                    if now - posAt >= POS_MS and posChanged(ShownPos, pos) then
+                        ShownPos, posAt = pos, now
+                        SendNUIMessage({ action = 'sd-phone:racing:board:pos', data = pos })
+                    end
 
                     if IsControlJustPressed(0, KEY_JOIN) then toggle(entry) end
                 elseif Shown then
-                    Shown, ShownSig = nil, nil
-                    SendNUIMessage({ action = 'sd-phone:racing:board:hide' })
+                    hideBoard()
                 end
             end
 
@@ -371,7 +396,7 @@ end
 function board.cleanup()
     clearBlips()
     Boards = {}
-    Shown = nil
+    Shown, ShownSig, ShownPos = nil, nil, nil
     Reported = nil
 end
 
