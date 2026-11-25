@@ -41,6 +41,98 @@ end
 local phoneColors = {}
 for _, entry in ipairs(config.Phone.Items or {}) do phoneColors[entry.item] = entry.color end
 
+---@type table<string, integer> Phone item name -> its first position in config.Phone.Items, the
+---priority order findPhones answers in.
+local phoneRank = {}
+for i, entry in ipairs(config.Phone.Items or {}) do
+    if phoneRank[entry.item] == nil then phoneRank[entry.item] = i end
+end
+
+---The player bridge (bridge.server.player), required on first use: only the qb-family and codem
+---reads below need it, and the rest of the SIM inventory glue loads without the framework bridge.
+---@return table
+local function playerBridge()
+    return require 'bridge.server.player'
+end
+
+---The items table of a QBCore player object, which the qb-family inventories keep current.
+---@param src number player server id
+---@return table|nil items
+local function qbItems(src)
+    local p = playerBridge().get(src)
+    local items = p and p.PlayerData and p.PlayerData.items
+    return type(items) == 'table' and items or nil
+end
+
+---@type table<string, fun(src: number): table|nil> One read of a player's whole inventory per slot
+---backend: the call the bridge's own per-item search makes for that backend before it filters
+---by name, or the item getter the SIM tray already reads stashes through (ox, one_inventory).
+---Backends missing here (tgiann, jaksam) have no whole-inventory read the bridge relies on.
+local READERS = {
+    ox_inventory         = function(src) return exports.ox_inventory:GetInventoryItems(src) end,
+    one_inventory        = function(src) return exports.one_inventory:GetInventoryItems(src) end,
+    ['ai-core']          = function(src) return exports['ai-core']:GetItems(src) end,
+    ['qb-core']          = qbItems,
+    ['qb-inventory']     = qbItems,
+    ['ps-inventory']     = qbItems,
+    ['lj-inventory']     = qbItems,
+    ['qs-inventory']     = function(src) return exports['qs-inventory']:GetInventory(src) end,
+    ['qs-inventory-pro'] = function(src) return exports['qs-inventory-pro']:GetInventory(src) end,
+    ['codem-inventory']  = function(src)
+        local cid = playerBridge().getRealIdentifier(src)
+        return cid and exports['codem-inventory']:GetInventory(cid, src) or nil
+    end,
+    origen_inventory     = function(src)
+        local snapshot = exports.origen_inventory:GetPlayerInventory(src)
+        if type(snapshot) ~= 'table' then return nil end
+        return snapshot.inventory or snapshot.items or snapshot
+    end,
+}
+
+---Orders phone rows by config.Phone.Items priority, then by slot.
+---@param a { name: string, slot: number|string }
+---@param b { name: string, slot: number|string }
+---@return boolean
+local function phoneBefore(a, b)
+    local ra, rb = phoneRank[a.name], phoneRank[b.name]
+    if ra ~= rb then return ra < rb end
+    local na, nb = tonumber(a.slot), tonumber(b.slot)
+    if na and nb then return na < nb end
+    return tostring(a.slot) < tostring(b.slot)
+end
+
+---Every phone item row in ONE read of the player's inventory, matched against the configured
+---phone items. config.Phone.Items lists every colour of every model as its own item, so a search
+---per item crossed into the inventory resource well over a hundred times on each session resolve.
+---Nil when the backend has no whole-inventory read, or it errors or answers with no table (an
+---unexpected answer must not read as "no phones"), so the caller searches per item instead.
+---@param source number player server id
+---@return { slot: number|string, name: string, color: string, metadata: table }[]|nil
+local function readPhones(source)
+    local read = READERS[bridge.slotBackendName() or '']
+    if not read then return nil end
+    local ok, items = pcall(read, source)
+    if not ok or type(items) ~= 'table' then return nil end
+
+    local out = {}
+    for key, row in pairs(items) do
+        local rank = type(row) == 'table' and phoneRank[row.name]
+        if rank then
+            local metadata = row.metadata
+            if type(metadata) ~= 'table' then metadata = row.info end
+            local slot = row.slot ~= nil and row.slot or key
+            out[#out + 1] = {
+                slot     = tonumber(slot) or slot,
+                name     = row.name,
+                color    = config.Phone.Items[rank].color,
+                metadata = type(metadata) == 'table' and metadata or {},
+            }
+        end
+    end
+    table.sort(out, phoneBefore)
+    return out
+end
+
 ---True when the running inventory can carry the SIM feature (per-slot metadata reachable).
 ---@return boolean
 function inv.supported()
@@ -60,19 +152,23 @@ function inv.isOx()
 end
 
 ---All phone items the player carries, as { slot, name, color, metadata } rows in
----config.Phone.Items priority order. Metadata is never nil.
+---config.Phone.Items priority order. Metadata is never nil. One inventory read where the backend
+---allows it (readPhones), one search per phone item otherwise.
 ---@param source number player server id
 ---@return { slot: number, name: string, color: string, metadata: table }[]
 function inv.findPhones(source)
-    local out = {}
-    for _, entry in ipairs(config.Phone.Items or {}) do
-        for _, row in ipairs(bridge.searchSlots(source, entry.item)) do
-            out[#out + 1] = {
-                slot     = row.slot,
-                name     = entry.item,
-                color    = entry.color,
-                metadata = row.metadata,
-            }
+    local out = readPhones(source)
+    if not out then
+        out = {}
+        for _, entry in ipairs(config.Phone.Items or {}) do
+            for _, row in ipairs(bridge.searchSlots(source, entry.item)) do
+                out[#out + 1] = {
+                    slot     = row.slot,
+                    name     = entry.item,
+                    color    = entry.color,
+                    metadata = row.metadata,
+                }
+            end
         end
     end
     -- Every phone lookup funnels through here, so it is also where a phone still carrying a

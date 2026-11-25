@@ -411,8 +411,8 @@ end)
 lib.callback.register('sd-phone:server:sim:get', function(source)
     local realCid = player.getRealIdentifier(source)
     if not realCid then return util.fail('sim.playerNotFound', 'Player not found') end
-    -- A rescan is an inventory search per carried phone plus registry writes. Shares the push
-    -- window so the panel is never more than one session-cache generation behind either way.
+    -- A rescan reads the inventory and writes the registry. Shares the push window so the
+    -- panel is never more than one session-cache generation behind either way.
     local now = GetGameTimer()
     if not lastRequestPush[source] or (now - lastRequestPush[source]) >= 5000 then
         lastRequestPush[source] = now
