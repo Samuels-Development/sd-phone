@@ -417,14 +417,14 @@ lib.callback.register('sd-phone:server:sim:get', function(source)
 
     -- Backup profiles: one per phone. A profile restores once its snapshot exists (legacy
     -- pointer rows restore from the live phone identity instead), and never onto the phone
-    -- that made it.
+    -- that made it outside character mode.
     local myProfile
     local profiles = {}
     local restorable = false
     for _, p in ipairs(simStore.listProfiles(realCid)) do
         local isCloud = lib.string.startsWith(p.identity, 'cloud:')
         local thisPhone = s ~= nil and s.identity == p.deviceIdentity
-        local canUse = not thisPhone
+        local canUse = (state.character or not thisPhone)
             and ((isCloud and p.syncedAt ~= nil) or (not isCloud and (s == nil or s.identity ~= p.identity)))
         if thisPhone then myProfile = p end
         profiles[#profiles + 1] = {
@@ -703,8 +703,9 @@ end)
 ---number is lost), and neither is anything of value (see VALUE in server/sim/backup.lua).
 ---`payload.device` picks the profile (optional when only one restores). Requires the
 ---character's backup password. Restoring does NOT touch the snapshot or move any profile
----enrollment - the source phone keeps backing itself up - and a profile never restores onto the
----phone that made it, which would only roll that phone back and duplicate its data.
+---enrollment - the source phone keeps backing itself up. In device and sim mode a profile never
+---restores onto the phone that made it, which already holds everything the backup does. Character
+---mode allows it, since every phone there is the character: it brings back what was deleted.
 lib.callback.register('sd-phone:server:sim:backup:restore', function(source, payload)
     if not (config.Sim.Backup and config.Sim.Backup.Enabled ~= false) then
         return util.fail('sim.cloudBackupDisabled', 'Cloud backup is disabled.')
@@ -727,7 +728,7 @@ lib.callback.register('sd-phone:server:sim:backup:restore', function(source, pay
         for _, p in ipairs(simStore.listProfiles(realCid)) do
             local isCloud = isCloudIdentity(p.identity)
             local usable = (isCloud and p.syncedAt ~= nil) or (not isCloud and p.identity ~= s.identity)
-            if usable and p.deviceIdentity ~= s.identity then
+            if usable and (state.character or p.deviceIdentity ~= s.identity) then
                 candidates[#candidates + 1] = p
             end
         end
@@ -737,7 +738,8 @@ lib.callback.register('sd-phone:server:sim:backup:restore', function(source, pay
     if not profile then return util.fail('sim.noCloudBackupFoundCharacter', 'No cloud backup found for this character.') end
     local isCloud = isCloudIdentity(profile.identity)
     if isCloud and profile.syncedAt == nil then return util.fail('sim.backupHasNeverCompleted', 'That backup has never completed.') end
-    if profile.deviceIdentity == s.identity or (not isCloud and profile.identity == s.identity) then
+    local ownPhone = profile.deviceIdentity == s.identity and not state.character
+    if ownPhone or (not isCloud and profile.identity == s.identity) then
         return util.fail('sim.phoneAlreadyHoldsBackedUp', 'This phone already holds the backed-up data.')
     end
 
@@ -762,7 +764,8 @@ lib.callback.register('sd-phone:server:sim:backup:restore', function(source, pay
 
     -- Snapshot untouched: restore copies OUT of the cloud (see backup.restore).
     syncBusy[source] = true
-    local okRun, rows = pcall(backup.restore, profile.identity, s.identity, s.number or '', profile.deviceIdentity)
+    local okRun, rows = pcall(backup.restore, profile.identity, s.identity, s.number or '',
+        profile.deviceIdentity, state.character)
     syncBusy[source] = nil
     if not okRun then error(rows, 0) end
     print(('^3[sd-phone:sim]^0 restored backup %s -> %s for %s (%d rows)')

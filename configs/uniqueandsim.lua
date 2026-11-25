@@ -104,9 +104,9 @@ return {
     -- contacts, photos, notes, settings, app logins, ...) onto the new SIM's profile. The old
     -- SIM keeps the old number and the data that was on it. Nothing of value is ever backed up
     -- (stocks app cash and shares, casino chips, owned phone cases): it stays with the phone
-    -- that holds it, and a backup never restores onto the phone it was taken from. Mailbox
-    -- sign-ins and group chats come back only as they stood at backup time, and only while the
-    -- old phone still has them.
+    -- that holds it. Mailbox sign-ins and group chats come back only as they stood at backup
+    -- time, and only while the old phone still has them. Outside DataOwner = 'character' a
+    -- backup never restores onto the phone it was taken from.
     Backup = {
         Enabled = true,
 

@@ -552,16 +552,19 @@ end
 ---they signed into or joined since. A legacy pointer backup recorded nothing and grants none.
 ---The source profile keeps its rows.
 ---
----Nothing is written when `toId` is the profile's own phone: its data would be copied back over
----itself under fresh ids, so every restore would duplicate it.
+---Nothing is written when `toId` is the profile's own phone, unless `allowSelf` (character mode,
+---where every phone is the character): elsewhere a self-restore would only copy the phone's data
+---back over itself under fresh ids.
 ---@param fromId string backed-up identity (cloud snapshot, or a phone identity on legacy rows)
 ---@param toId string current SIM identity
 ---@param toNumber string current SIM bare-digit number
 ---@param liveFromId string|nil previously enrolled phone identity (defaults to fromId)
+---@param allowSelf boolean|nil restore onto `liveFromId` itself (character mode)
 ---@return integer rows total rows written
-function backup.restore(fromId, toId, toNumber, liveFromId)
+function backup.restore(fromId, toId, toNumber, liveFromId, allowSelf)
     liveFromId = liveFromId or fromId
-    if toId == fromId or toId == liveFromId then return 0 end
+    if toId == fromId then return 0 end
+    if toId == liveFromId and not allowSelf then return 0 end
 
     local rows = copyAll(fromId, toId)
     local access = recordedAccess(fromId)
