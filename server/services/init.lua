@@ -36,13 +36,18 @@ CreateThread(function()
 end)
 
 -- Reconciles phone-managed offline job changes when a player loads in (actions.reconcileJobs).
-if framework.name == 'qb' then
+-- framework.qb covers QBox as well, which fires the same QBCore load event.
+if framework.qb then
     AddEventHandler('QBCore:Server:PlayerLoaded', function(pl)
         local src = pl and pl.PlayerData and pl.PlayerData.source
         if src then SetTimeout(1500, function() actions.reconcileJobs(src) end) end
     end)
 elseif framework.name == 'esx' then
     AddEventHandler('esx:playerLoaded', function(playerId)
+        if playerId then SetTimeout(1500, function() actions.reconcileJobs(playerId) end) end
+    end)
+elseif framework.name == 'ox' then
+    AddEventHandler('ox:playerLoaded', function(playerId)
         if playerId then SetTimeout(1500, function() actions.reconcileJobs(playerId) end) end
     end)
 elseif framework.name == 'nd' then

@@ -239,12 +239,14 @@ end
 ---live in the `player_groups` table and are surfaced on the player object as PlayerData.jobs
 ---(jobName -> grade level); plain QBCore and ESX have no multi-job model, so there it is just the
 ---active job. The active job is always included and always wins, since it carries the live grade.
+---Nil, not an empty map, when the player can't be resolved: an empty map means "holds no job", and
+---a caller syncing saved jobs against it would drop every one of them.
 ---@param source number player server id
----@return table<string, integer> jobs jobName -> grade level
+---@return table<string, integer>|nil jobs jobName -> grade level
 function job.getAll(source)
     local out = {}
     local p = player_mod.get(source)
-    if not p then return out end
+    if not p then return nil end
 
     if framework.qb then
         local jobs = p.PlayerData and p.PlayerData.jobs

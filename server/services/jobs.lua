@@ -60,9 +60,29 @@ local function savedCount(map)
     return n
 end
 
+---The jobs the framework holds for the player, less any a boss fired them from through the phone
+---while they worked another one. Where the framework keeps several memberships that fire could
+---only be queued, and the membership it left behind would otherwise re-seed the saved job; it is
+---applied here instead, before anything is listed or switched to.
+---@param src number
+---@param cid string
+---@param activeJob string|nil
+---@return table<string, integer>|nil held jobName -> grade, nil when the player can't be resolved
+local function heldJobs(src, cid, activeJob)
+    local held = job.getAll(src)
+    if not held then return nil end
+    for name in pairs(store.pendingFiresFor(cid)) do
+        if held[name] ~= nil and name ~= activeJob then
+            if store.takePendingFire(cid, name) then job.leave(src, name) end
+            held[name] = nil
+        end
+    end
+    return held
+end
+
 ---Returns a player's saved jobs + pending offers, or `multijob = false` when the framework has
----no multi-job model; every job the FRAMEWORK has assigned (all of them on QBox, not just the
----active one) is seeded/refreshed into the map first.
+---no multi-job model; the saved jobs are synced against every job the FRAMEWORK holds first
+---(store.syncHeld), which seeds them and drops the ones taken away outside the phone.
 ---@param src number
 ---@return table
 function jobs.list(src)
@@ -74,19 +94,10 @@ function jobs.list(src)
     if not cid then return fail('services.playerNotFound', 'Player not found') end
 
     local activeJob = job.getName(src)
+    local held = heldJobs(src, cid, activeJob)
+    if not held then return fail('services.playerNotFound', 'Player not found') end
 
-    local map    = store.getSaved(cid)
-    local synced = false
-    for jName, grade in pairs(job.getAll(src)) do
-        if not BLACKLIST[jName] then
-            local prev = map[jName]
-            if not prev or (prev.grade ~= grade and not prev.pending) then
-                map[jName] = { grade = grade }
-                synced = true
-            end
-        end
-    end
-    if synced then store.setSaved(cid, map) end
+    local map = store.syncHeld(cid, held, BLACKLIST)
 
     local list = {}
     for jName, info in pairs(map) do
@@ -114,8 +125,12 @@ function jobs.list(src)
     return ok({ multijob = true, jobs = list, invites = invites, max = MAX })
 end
 
----Makes a saved job the active one (framework SetJob at its saved grade); blacklisted jobs are
----rejected, switching can drop the player off duty, and both affected rosters refresh.
+---Makes a saved job the active one. The saved list is synced against the framework first, so a job
+---the framework no longer holds (fired outside the phone) is refused and forgotten, and a job it
+---does hold is set at the grade it holds, never at a stale saved one; only a grade a boss set from
+---the phone (pending) overrides it. A job only the phone keeps (store.syncHeld) switches at its
+---saved grade, as on a framework without memberships. Blacklisted jobs are rejected, switching can
+---drop the player off duty, and both affected rosters refresh.
 ---@param src number
 ---@param payload { job?: string }
 ---@return table
@@ -128,17 +143,28 @@ function jobs.switch(src, payload)
     local target = tostring(payload.job or '')
     if target == '' or BLACKLIST[target] then return fail('services.invalidJob', 'Invalid job') end
 
-    local map = store.getSaved(cid)
+    local fromJob = job.getName(src)
+    local held = heldJobs(src, cid, fromJob)
+    if not held then return fail('services.playerNotFound', 'Player not found') end
+    local map = store.syncHeld(cid, held, BLACKLIST)
     local info = map[target]
     if not info then return fail('services.havenTGotJobSaved', "You haven't got that job saved") end
-    local fromJob = job.getName(src)
     if fromJob == target then return fail('services.jobAlreadyActive', 'That job is already active') end
 
-    if not job.set(src, target, info.grade or 0) then
+    local grade = math.floor(tonumber(info.grade) or 0)
+    local from = fromJob and map[fromJob]
+    if type(from) == 'table' and from.fw then
+        from.fw = nil
+        store.setSaved(cid, map)
+    end
+
+    if not job.set(src, target, grade) then
         return fail('services.couldNotSwitchJob', 'Could not switch to that job')
     end
+    job.reindex(src)
     if OFF_DUTY then job.setDuty(src, false) end
-    if info.pending then store.addSaved(cid, target, info.grade or 0) end
+    map[target] = { grade = grade, fw = true }
+    store.setSaved(cid, map)
 
     actions.notifyRoster(fromJob)
     actions.notifyRoster(target)

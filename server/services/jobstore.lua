@@ -63,6 +63,17 @@ function store.takePendingFire(citizenid, job)
     return true
 end
 
+---Returns the set of jobs a character has a pending fire for. Non-consuming.
+---@param citizenid string
+---@return table<string, boolean>
+function store.pendingFiresFor(citizenid)
+    local set = {}
+    if not citizenid or citizenid == '' then return set end
+    local rows = MySQL.query.await('SELECT job FROM phone_job_fires WHERE citizenid = ?', { citizenid }) or {}
+    for _, r in ipairs(rows) do set[r.job] = true end
+    return set
+end
+
 ---Returns the set of citizenids with a pending fire for `jobName`. Non-consuming.
 ---@param jobName string
 ---@return table<string, boolean>
@@ -137,15 +148,58 @@ end
 ---Adds (or updates the grade of) one saved job, with the grade coerced to an integer. `pending`
 ---marks a grade a boss set from the phone while the member was not working the job: it is the
 ---only saved grade the next load pushes into the framework (actions.reconcileJobs). Every other
----write drops the mark, so a grade the framework reported is never pushed back at it.
+---write drops the mark, so a grade the framework reported is never pushed back at it. The `fw`
+---mark (see store.syncHeld) is about membership rather than grade, so a grade write keeps it.
 ---@param citizenid string
 ---@param job string
 ---@param grade number
 ---@param pending? boolean
 function store.addSaved(citizenid, job, grade, pending)
     local map = store.getSaved(citizenid)
-    map[job] = { grade = math.floor(tonumber(grade) or 0), pending = pending or nil }
+    local prev = map[job]
+    map[job] = {
+        grade   = math.floor(tonumber(grade) or 0),
+        pending = pending or nil,
+        fw      = type(prev) == 'table' and prev.fw or nil,
+    }
     store.setSaved(citizenid, map)
+end
+
+---Brings a saved-jobs map in line with the jobs the framework holds for the character right now,
+---and writes it back when anything changed. A held job is seeded or has its grade refreshed (a
+---pending grade is left for the next switch or load to push) and is marked `fw`: the framework
+---backs that membership. A saved job marked `fw` that the framework no longer holds was taken
+---away outside the phone (a boss menu, an admin, a fire while offline), so it is dropped: kept, it
+---would let a fired member switch straight back in at the grade they were fired from. A saved job
+---never marked is one only the phone keeps (an accepted offer not worked yet, or a job switched
+---away from on a framework that holds one job at a time), and stays.
+---@param citizenid string
+---@param held table<string, integer> jobName -> grade the framework holds (job.getAll)
+---@param blacklist table<string, boolean> jobs never listed
+---@return table map the synced saved-jobs map
+function store.syncHeld(citizenid, held, blacklist)
+    local map = store.getSaved(citizenid)
+    local changed = false
+    for name, grade in pairs(held) do
+        if not blacklist[name] then
+            local prev = type(map[name]) == 'table' and map[name] or nil
+            if not prev or (prev.grade ~= grade and not prev.pending) then
+                map[name] = { grade = grade, fw = true }
+                changed = true
+            elseif not prev.fw then
+                prev.fw = true
+                changed = true
+            end
+        end
+    end
+    for name, info in pairs(map) do
+        if held[name] == nil and type(info) == 'table' and info.fw then
+            map[name] = nil
+            changed = true
+        end
+    end
+    if changed then store.setSaved(citizenid, map) end
+    return map
 end
 
 ---Removes one saved job; no-op when the job isn't saved.

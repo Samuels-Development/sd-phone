@@ -977,7 +977,9 @@ local srcToCid = {}
 ---pushes a grade a boss set from the phone (a saved entry marked pending). In every other case the
 ---framework is the authority and the saved entry is seeded or refreshed from it: a grade changed
 ---outside the phone (an admin command, a boss menu, another resource) must survive the relog, not
----be reset to whatever the phone last saw. Caches src -> cid.
+---be reset to whatever the phone last saw. Where saved jobs exist, the list is then synced against
+---the framework (jobstore.syncHeld), so a job taken away while the player was offline is dropped
+---before they can switch back into it. Caches src -> cid.
 ---@param src number
 function actions.reconcileJobs(src)
     local cid = player.getRealIdentifier(src)
@@ -985,23 +987,25 @@ function actions.reconcileJobs(src)
     srcToCid[src] = cid
 
     local activeJob = job.getName(src)
-    if not activeJob or activeJob == '' or BLACKLIST[activeJob] then return end
+    if activeJob and activeJob ~= '' and not BLACKLIST[activeJob] then
+        if jobstore.takePendingFire(cid, activeJob) then
+            job.set(src, UNEMPLOYED, 0)
+        else
+            local saved      = jobstore.getSaved(cid)[activeJob]
+            local liveGrade  = job.getGrade(src) or 0
+            local savedGrade = saved and math.floor(tonumber(saved.grade) or 0) or nil
 
-    if jobstore.takePendingFire(cid, activeJob) then
-        job.set(src, UNEMPLOYED, 0)
-        return
+            if saved and saved.pending then
+                if savedGrade ~= liveGrade then job.set(src, activeJob, savedGrade) end
+                jobstore.addSaved(cid, activeJob, savedGrade)
+            elseif savedGrade ~= liveGrade then
+                jobstore.addSaved(cid, activeJob, liveGrade)
+            end
+        end
     end
 
-    local saved      = jobstore.getSaved(cid)[activeJob]
-    local liveGrade  = job.getGrade(src) or 0
-    local savedGrade = saved and math.floor(tonumber(saved.grade) or 0) or nil
-
-    if saved and saved.pending then
-        if savedGrade ~= liveGrade then job.set(src, activeJob, savedGrade) end
-        jobstore.addSaved(cid, activeJob, savedGrade)
-    elseif savedGrade ~= liveGrade then
-        jobstore.addSaved(cid, activeJob, liveGrade)
-    end
+    local held = job.supportsMultijob() and job.getAll(src)
+    if held then jobstore.syncHeld(cid, held, BLACKLIST) end
 end
 
 ---Refreshes the rosters of every company a disconnecting player belonged to, using the cached
