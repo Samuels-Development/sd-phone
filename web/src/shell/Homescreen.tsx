@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { LayoutGrid, Minus, Plus } from 'lucide-react';
 
@@ -160,7 +160,9 @@ export interface HomescreenProps {
     bloomOnMount?: boolean;
 }
 
-export function Homescreen({ apps, installableApps, dock, firstPageApps, wallpaper, onLaunchApp, onUninstall, savedLayout, onLayoutChange, onEditingChange, homeActive = true, bloomOnMount = true }: HomescreenProps) {
+export const Homescreen = memo(HomescreenView);
+
+function HomescreenView({ apps, installableApps, dock, firstPageApps, wallpaper, onLaunchApp, onUninstall, savedLayout, onLayoutChange, onEditingChange, homeActive = true, bloomOnMount = true }: HomescreenProps) {
     const { blurHome, dockStyle, wallpaperParallax } = useTheme('blurHome', 'dockStyle', 'wallpaperParallax');
     const grid = useGrid();
     const rtl = useIsRtl();

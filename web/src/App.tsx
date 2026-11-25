@@ -21,7 +21,7 @@ import { ScannedMedicalLayer } from '@/shell/ScannedMedicalLayer';
 import { useIdStore } from '@/stores/idStore';
 import { ControlCenter, ControlCenterHotzone } from '@/shell/ControlCenter';
 import { NotificationCenter, NotificationCenterHotzone } from '@/shell/NotificationCenter';
-import { MusicProvider, useMusic } from '@/apps/music/MusicContext';
+import { MusicProvider, useMusicOpenSignal } from '@/apps/music/MusicContext';
 import { LockscreenWidgetsProvider } from '@/shell/LockscreenWidgetsContext';
 import { CctvOverlay, useCctvActive } from '@/apps/mdt/CctvOverlay';
 import { BodycamOverlay, useBodycamActive } from '@/apps/mdt/BodycamOverlay';
@@ -684,13 +684,13 @@ function AppContent() {
         return ids;
     }, [currentApp, splitId, retained]);
 
-    const music = useMusic();
+    const musicOpenSignal = useMusicOpenSignal();
     useEffect(() => {
-        if (music.openSignal === 0) return;
+        if (musicOpenSignal === 0) return;
         setLocked(false);
         handleOpenFromSwitcher('music', { x: 0.5, y: 0.08 });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [music.openSignal]);
+    }, [musicOpenSignal]);
 
     useEffect(() => onOpenMaps(() => {
         setLocked(false);
@@ -1416,6 +1416,20 @@ function AppContent() {
         }
     }
 
+    const homeApps = useMemo(() => {
+        if (!view) return null;
+        const rawApps = [...view.apps, ...customDefs.filter(c => !view.apps.some(a => a.id === c.id))];
+        const allApps = appLabels && Object.keys(appLabels).length
+            ? rawApps.map(a => (appLabels[a.id] ? { ...a, label: appLabels[a.id] } : a))
+            : rawApps;
+        const effective = allApps.filter(a => !device.excludedApps.includes(a.id) && (a.base || installedApps.has(a.id) || downloadingIds.includes(a.id)));
+        const ids = new Set(effective.map(a => a.id));
+        const installable = ids.has('appstore')
+            ? allApps.filter(a => !device.excludedApps.includes(a.id) && !ids.has(a.id))
+            : undefined;
+        return { effective, ids, installable };
+    }, [view, customDefs, appLabels, installedApps, downloadingIds]);
+
     const deckActiveId = (!view || locked) ? null : currentApp;
     const deckLayer = (
         <div key="deck-root" className={theme === 'dark' ? 'dark' : undefined} data-dark-theme={darkTheme} data-light-theme={lightTheme} style={themeVars}>
@@ -1480,15 +1494,7 @@ function AppContent() {
     const statusLight = locked || !currentApp || theme === 'dark';
     const homeWallpaper = wallpaperHome || view.wallpaperHome;
     const lockWallpaper = wallpaperLock || view.wallpaperLock;
-    const rawApps       = [...view.apps, ...customDefs.filter(c => !view.apps.some(a => a.id === c.id))];
-    const allApps       = appLabels && Object.keys(appLabels).length
-        ? rawApps.map(a => (appLabels[a.id] ? { ...a, label: appLabels[a.id] } : a))
-        : rawApps;
-    const effectiveApps = allApps.filter(a => !device.excludedApps.includes(a.id) && (a.base || installedApps.has(a.id) || downloadingIds.includes(a.id)));
-    const effectiveIds  = new Set(effectiveApps.map(a => a.id));
-    const installableApps = effectiveIds.has('appstore')
-        ? allApps.filter(a => !device.excludedApps.includes(a.id) && !effectiveIds.has(a.id))
-        : undefined;
+    const { effective: effectiveApps, ids: effectiveIds, installable: installableApps } = homeApps!;
 
     const canShowSwitcher = recentApps.length > 0 || !!currentApp;
 

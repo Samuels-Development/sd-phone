@@ -61,6 +61,11 @@ export function useMusic(): MusicCtx {
     return c;
 }
 
+const OpenSignalCtx = createContext(0);
+export function useMusicOpenSignal(): number {
+    return useContext(OpenSignalCtx);
+}
+
 const ProgressCtx = createContext<MusicProgress | null>(null);
 export function useMusicProgress(): MusicProgress {
     const c = useContext(ProgressCtx);
@@ -69,6 +74,8 @@ export function useMusicProgress(): MusicProgress {
 }
 
 const isYt = (t: Track | null) => !!t && youtubeId(t.url) !== null;
+
+const VOLUME_SAVE_MS = 400;
 
 export function MusicProvider({ children }: { children: ReactNode }) {
     const audioRef  = useRef<HTMLAudioElement>(null);
@@ -212,7 +219,10 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (audioRef.current) audioRef.current.volume = volume;
         if (ytRef.current && ytReady.current) ytRef.current.setVolume?.(Math.round(volume * 100));
-        try { window.localStorage.setItem('sd-phone:music:vol', String(volume)); } catch {}
+        const id = window.setTimeout(() => {
+            try { window.localStorage.setItem('sd-phone:music:vol', String(volume)); } catch {}
+        }, VOLUME_SAVE_MS);
+        return () => window.clearTimeout(id);
     }, [volume]);
 
     useEffect(() => { timeRef.current = time; }, [time]);
@@ -299,20 +309,22 @@ export function MusicProvider({ children }: { children: ReactNode }) {
 
     return (
         <Ctx.Provider value={value}>
-            <ProgressCtx.Provider value={progress}>
-                <audio
-                    ref={audioRef}
-                    onTimeUpdate={e => setTime(e.currentTarget.currentTime)}
-                    onLoadedMetadata={e => setDuration(e.currentTarget.duration)}
-                    onEnded={() => handlers.current.ended()}
-                    onPlay={() => setPlaying(true)}
-                    onPause={() => { if (!wantPlay.current) setPlaying(false); }}
-                />
-                <div style={{ position: 'fixed', width: 1, height: 1, left: -9999, top: -9999, opacity: 0, pointerEvents: 'none' }}>
-                    <div ref={ytHostRef} />
-                </div>
-                {children}
-            </ProgressCtx.Provider>
+            <OpenSignalCtx.Provider value={openSignal}>
+                <ProgressCtx.Provider value={progress}>
+                    <audio
+                        ref={audioRef}
+                        onTimeUpdate={e => setTime(e.currentTarget.currentTime)}
+                        onLoadedMetadata={e => setDuration(e.currentTarget.duration)}
+                        onEnded={() => handlers.current.ended()}
+                        onPlay={() => setPlaying(true)}
+                        onPause={() => { if (!wantPlay.current) setPlaying(false); }}
+                    />
+                    <div style={{ position: 'fixed', width: 1, height: 1, left: -9999, top: -9999, opacity: 0, pointerEvents: 'none' }}>
+                        <div ref={ytHostRef} />
+                    </div>
+                    {children}
+                </ProgressCtx.Provider>
+            </OpenSignalCtx.Provider>
         </Ctx.Provider>
     );
 }
