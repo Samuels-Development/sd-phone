@@ -676,7 +676,9 @@ function actions.suggestCode(source, payload)
 end
 
 ---Redeems a reset code and sets a new password, enforcing expiry and attempt limits, deleting
----the code on success, and syncing mail's credential column and vault copies.
+---the code on success, and syncing the vault copies. Mail's own credential column is cleared
+---rather than rewritten: the engine account holds the password, and that column only ever held
+---the old in-file digest, which is cheap to crack.
 ---@param source number player server id
 ---@param payload { app: string, identity: string, code: string, password: string }|nil
 ---@return table envelope
@@ -704,16 +706,14 @@ function actions.confirmReset(source, payload)
     local password, pr = validPassword(payload.password); if not password then return pr end
 
     store.setPassword(acc.id, store.hashPassword(password))
-    if app == 'mail' then
-        mailStore.setPasswordHash(acc.username, mailStore.hashPassword(password))
-    end
+    if app == 'mail' then mailStore.setPasswordHash(acc.username, '') end
     store.syncVaultPassword(app, acc.username, password)
     resetCodes[key] = nil
     return ok()
 end
 
----Changes an account's password using the current password, syncing mail's credential column
----and saved Passwords-app copies.
+---Changes an account's password using the current password, syncing the saved Passwords-app
+---copies and clearing mail's old credential column the way confirmReset does.
 ---@param source number player server id
 ---@param payload { app?: string, identity?: string, currentPassword?: string, newPassword?: string }
 ---@return table envelope
@@ -740,9 +740,7 @@ function actions.changePassword(source, payload)
     end
     local password, pr = validPassword(payload.newPassword); if not password then return pr end
     store.setPassword(acc.id, store.hashPassword(password))
-    if app == 'mail' then
-        mailStore.setPasswordHash(acc.username, mailStore.hashPassword(password))
-    end
+    if app == 'mail' then mailStore.setPasswordHash(acc.username, '') end
     store.syncVaultPassword(app, acc.username, password)
     return ok()
 end

@@ -401,7 +401,8 @@ function actions.repairOrphanAccounts()
 end
 
 ---Creates a brand-new email account and signs the caller straight into it. Every field is
----validated server-side; the password is hashed and mirrored into the accounts engine.
+---validated server-side; the password lives in the accounts engine alone, so the mailbox row's
+---own credential column is left empty.
 ---@param source number
 ---@param payload { email?: string, password?: string, displayName?: string, phone?: string }
 ---@return table
@@ -439,7 +440,7 @@ function actions.signUp(source, payload)
         return fail('mail.mostAccountsSignedIn', 'You can have at most {n} accounts signed in', { n = mailCfg.MaxAccountsPerPlayer })
     end
 
-    if not store.insertAccount(email, store.hashPassword(password), displayName, me.cid) then
+    if not store.insertAccount(email, '', displayName, me.cid) then
         return fail('mail.failedCreateAccount', 'Failed to create account')
     end
     store.addSession(email, me.cid)
@@ -462,9 +463,25 @@ function actions.signUp(source, payload)
     return ok({ account = serializeAccount(acc) })
 end
 
+---Moves a mailbox that only matched its pre-engine digest onto the engine's scrypt hash: the
+---engine account is rewritten, or created if the mailbox predates it. Returns the engine account
+---when one now holds the password, so the caller knows the old column can be cleared.
+---@param acc table mailbox row
+---@param engineAcc table|nil the mailbox's engine account, when it has one
+---@param plain string the password that just matched
+---@return table|nil engineAcc
+local function adoptLegacyPassword(acc, engineAcc, plain)
+    if engineAcc then
+        acctStore.setPassword(engineAcc.id, acctStore.hashPassword(plain))
+        return engineAcc
+    end
+    local id = acctStore.insertAccount('mail', acc.email, acc.display_name, acctStore.hashPassword(plain), acc.email, nil, nil)
+    return id and acctStore.getAccountById(id) or nil
+end
+
 ---Signs into an existing email account; any player who knows the password may sign in. The
----accounts engine is verified first, then the legacy hash column. Spends the engine's shared
----sign-in budget, per caller and per mailbox, before any password is hashed. Idempotent.
+---accounts engine is verified first, then the mailbox's pre-engine digest. Spends the engine's
+---shared sign-in budget, per caller and per mailbox, before any password is hashed. Idempotent.
 ---@param source number
 ---@param payload { email?: string, password?: string }
 ---@return table
@@ -491,7 +508,11 @@ function actions.signIn(source, payload)
     if acc then
         local engineAcc = acctStore.getAccount('mail', email)
         if engineAcc then valid = acctActions.verifyPassword(engineAcc, payload.password) end
-        if not valid then valid = acc.password_hash == store.hashPassword(payload.password) end
+        if not valid and acc.password_hash ~= '' and acc.password_hash == store.hashPassword(payload.password) then
+            valid = true
+            engineAcc = adoptLegacyPassword(acc, engineAcc, payload.password)
+        end
+        if valid and engineAcc and acc.password_hash ~= '' then store.setPasswordHash(email, '') end
     end
     if not valid then
         return fail('mail.emailPasswordIncorrect', 'Email or password is incorrect')

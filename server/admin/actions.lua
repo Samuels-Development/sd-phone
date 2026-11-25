@@ -449,9 +449,7 @@ function actions.resetAccountPassword(source, payload)
     if not acc then return fail('admin.accountNotFound', 'Account not found') end
 
     acctStore.setPassword(acc.id, acctStore.hashPassword(password))
-    if acc.app == 'mail' then
-        mailStore.setPasswordHash(acc.username, mailStore.hashPassword(password))
-    end
+    if acc.app == 'mail' then mailStore.setPasswordHash(acc.username, '') end
     acctStore.syncVaultPassword(acc.app, acc.username, password)
 
     local aCid, aName = adminIdent(source)

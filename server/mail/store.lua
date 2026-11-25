@@ -18,7 +18,9 @@ local PENDING_CAP = 25
 ---@type integer Seconds a held mail waits for a mailbox before it is dropped.
 local PENDING_TTL = 14 * 24 * 3600
 
----Hashes a password into a stable, deterministic 24-character hex digest.
+---The pre-engine mailbox digest: a stable 24-character hex string under a pepper shipped in the
+---source, so it protects nothing. Verification only; nothing new is written in this format, and a
+---mailbox still holding one is moved to the engine's scrypt hash on its next sign-in.
 ---@param password string
 ---@return string 24-char hex digest
 function store.hashPassword(password)
