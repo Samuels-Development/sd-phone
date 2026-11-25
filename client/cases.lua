@@ -41,10 +41,12 @@ local TXD <const> = 'sd_phone_cases'
 ---@type integer Pixels along each side of a photo sticker's texture.
 local PHOTO_SIZE <const> = 256
 
----@type table<integer, { url: string, dui: integer, users: integer }> Photo slot -> the picture drawn into it.
+---@type table<integer, { url: string|nil, dui: integer, users: integer }> Photo slot -> its page and
+---the picture drawn into it. A slot keeps its page and texture once made: a runtime texture
+---dictionary cannot be freed, and a fresh browser per phone opened is the cost being avoided.
 local slots = {}
----@type integer Counts runtime texture dictionaries, so each one gets a name of its own.
-local runtimeSeq = 0
+---@type string The page a photo slot shows while no phone wears its picture.
+local BLANK_PAGE <const> = 'about:blank'
 ---@type table<integer, { url: string|false, at: integer }> Server id -> that player's photo sticker, as last answered.
 local photoCache = {}
 
@@ -116,46 +118,65 @@ local function encode(text)
     return (text:gsub('[^%w%-%._~]', function(c) return ('%%%02X'):format(c:byte()) end))
 end
 
----Claims a photo slot for a picture: the slot already showing it, or a free one that gets an
----off-screen page drawing the picture, whose image replaces that slot's sticker texture.
+---The page that draws a picture into a photo slot.
+---@param url string an https picture address
+---@return string
+local function stickerPage(url)
+    return ('nui://%s/web/dui/sticker.html?src=%s'):format(RES, encode(url))
+end
+
+---Claims a photo slot for a picture: the slot already showing it, or a free one whose off-screen page
+---is pointed at the picture and whose image replaces that slot's sticker texture. A free slot that
+---already has a page is taken before one that would need a new browser, and each slot's page and
+---runtime texture are made once, the first time it is used.
 ---@param url string an https picture address
 ---@return integer? slot nil when every slot shows some other picture
 local function acquire(url)
-    local free
+    local reuse, fresh
     for i = 1, DATA.PhotoSlots do
         local slot = slots[i]
-        if slot and slot.url == url then
+        if slot and slot.url == url and slot.users > 0 then
             slot.users = slot.users + 1
             return i
         end
-        if not slot and not free then free = i end
+        if slot and slot.users <= 0 then
+            reuse = reuse or i
+        elseif not slot then
+            fresh = fresh or i
+        end
     end
-    if not free then return nil end
+    local index = reuse or fresh
+    if not index then return nil end
 
-    local dui = CreateDui(('nui://%s/web/dui/sticker.html?src=%s'):format(RES, encode(url)), PHOTO_SIZE, PHOTO_SIZE)
-    slots[free] = { url = url, dui = dui, users = 1 }
-    local started = GetGameTimer()
-    while not IsDuiAvailable(dui) and GetGameTimer() - started < 5000 do Wait(50) end
+    local slot = slots[index]
+    if slot then
+        slot.url, slot.users = url, 1
+        SetDuiUrl(slot.dui, stickerPage(url))
+    else
+        slot = { url = url, dui = CreateDui(stickerPage(url), PHOTO_SIZE, PHOTO_SIZE), users = 1 }
+        slots[index] = slot
+        local started = GetGameTimer()
+        while not IsDuiAvailable(slot.dui) and GetGameTimer() - started < 5000 do Wait(50) end
+        CreateRuntimeTextureFromDuiHandle(CreateRuntimeTxd(('sd_case_photo_rt_%d'):format(index)), 'photo', GetDuiHandle(slot.dui))
+    end
     RequestStreamedTextureDict(TXD, false)
-    started = GetGameTimer()
+    local started = GetGameTimer()
     while not HasStreamedTextureDictLoaded(TXD) and GetGameTimer() - started < 3000 do Wait(50) end
-    runtimeSeq = runtimeSeq + 1
-    local name = ('sd_case_photo_rt_%d'):format(runtimeSeq)
-    CreateRuntimeTextureFromDuiHandle(CreateRuntimeTxd(name), 'photo', GetDuiHandle(dui))
-    AddReplaceTexture(TXD, ('sd_case_photo_%d'):format(free), name, 'photo')
-    return free
+    AddReplaceTexture(TXD, ('sd_case_photo_%d'):format(index), ('sd_case_photo_rt_%d'):format(index), 'photo')
+    return index
 end
 
----Gives a photo slot back; the last user leaving frees it for another picture.
+---Gives a photo slot back; the last user leaving frees it for another picture. The slot keeps its page,
+---blanked so it stops holding the picture, for the next picture to reuse.
 ---@param index integer
 local function release(index)
     local slot = slots[index]
-    if not slot then return end
+    if not slot or slot.users <= 0 then return end
     slot.users = slot.users - 1
     if slot.users > 0 then return end
+    slot.url = nil
     RemoveReplaceTexture(TXD, ('sd_case_photo_%d'):format(index))
-    DestroyDui(slot.dui)
-    slots[index] = nil
+    SetDuiUrl(slot.dui, BLANK_PAGE)
 end
 
 ---The picture on another player's photo sticker, as the server holds it. Asked at most once a
@@ -562,6 +583,16 @@ CreateThread(function()
             if not DoesEntityExist(parent) then cases.undress(parent) end
         end
     end
+end)
+
+-- The photo slots' pages live as long as the resource: this is where they go.
+AddEventHandler('onResourceStop', function(res)
+    if res ~= RES then return end
+    for index, slot in pairs(slots) do
+        if slot.users > 0 then RemoveReplaceTexture(TXD, ('sd_case_photo_%d'):format(index)) end
+        DestroyDui(slot.dui)
+    end
+    slots = {}
 end)
 
 return cases
