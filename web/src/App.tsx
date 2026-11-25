@@ -26,7 +26,7 @@ import { LockscreenWidgetsProvider } from '@/shell/LockscreenWidgetsContext';
 import { CctvOverlay, useCctvActive } from '@/apps/mdt/CctvOverlay';
 import { BodycamOverlay, useBodycamActive } from '@/apps/mdt/BodycamOverlay';
 import { ryDevDataHidden, ryDevToggleData } from '@/apps/ryde/data';
-import { asAppId, isPreviewApp, preloadAllApps, preloadApp, setPreloadPaused, type AppId } from '@/shell/appRegistry';
+import { asAppId, isPreviewApp, preloadApp, preloadApps, setPreloadPaused, type AppId } from '@/shell/appRegistry';
 import { AppSwitcher } from '@/shell/AppSwitcher';
 import { asDesign } from '@/shell/shells';
 import { HOME_HOLD_MS, HOME_HOLD_SLOP, holdAction, swipeAction, tapAction, type HomeAction } from '@/shell/homeGesture';
@@ -1202,11 +1202,16 @@ function AppContent() {
     }, []);
 
     const preloadArmed = useRef(false);
+    const preloadPick = useRef<() => string[]>(() => []);
+    preloadPick.current = () => {
+        if (!view) return [];
+        const usable = new Set(view.apps.filter(a => a.base || installedApps.has(a.id)).map(a => a.id));
+        return [...(savedLayout?.dock ?? view.dock), ...recentApps].filter(id => usable.has(id));
+    };
     useEffect(() => {
         if (!view || preloadArmed.current) return;
         preloadArmed.current = true;
-        const ids = view.apps.filter(a => a.base || installedApps.has(a.id)).map(a => a.id);
-        const t = window.setTimeout(() => preloadAllApps(ids), 1500);
+        const t = window.setTimeout(() => preloadApps(preloadPick.current()), 1500);
         return () => window.clearTimeout(t);
     }, [view]);
 

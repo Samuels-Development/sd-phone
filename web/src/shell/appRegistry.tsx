@@ -112,7 +112,6 @@ const APP_REGISTRY = {
 } satisfies Record<string, AppEntry>;
 
 export type AppId = keyof typeof APP_REGISTRY;
-const APP_IDS = Object.keys(APP_REGISTRY) as readonly AppId[];
 
 export function getAppEntry(id: AppId): AppEntry {
     return APP_REGISTRY[id];
@@ -136,20 +135,30 @@ export function asAppId(id: string | null | undefined): AppId | null {
 }
 
 const loadedApps = new Set<string>();
+const coldWarmers = new Map<string, () => void>();
 
 export function isAppLoaded(id: AppId): boolean {
     return !(id in APP_REGISTRY) || loadedApps.has(id);
 }
 
-export function preloadApp(id: AppId): Promise<void> {
+function loadApp(id: AppId): Promise<void> {
     if (isAppLoaded(id)) return Promise.resolve();
     const e = getAppEntry(id);
     return e.load().then(m => {
         const mod = m as { default?: ComponentType<AppComponentProps>; warm?: () => void } | undefined;
         if (mod?.default) e.Resolved = mod.default;
         loadedApps.add(id);
-        if (typeof mod?.warm === 'function') mod.warm();
+        if (typeof mod?.warm === 'function') coldWarmers.set(id, mod.warm);
     }, () => { loadedApps.add(id); });
+}
+
+export function preloadApp(id: AppId): Promise<void> {
+    return loadApp(id).then(() => {
+        const warm = coldWarmers.get(id);
+        if (!warm) return;
+        coldWarmers.delete(id);
+        warm();
+    });
 }
 
 let preloadPaused = false;
@@ -162,9 +171,8 @@ export function setPreloadPaused(paused: boolean): void {
     if (!paused) preloadResume?.();
 }
 
-export function preloadAllApps(ids?: readonly string[]): void {
-    const wanted = ids ? new Set(ids) : null;
-    const queue = wanted ? APP_IDS.filter(id => wanted.has(id)) : APP_IDS.slice();
+export function preloadApps(ids: readonly string[]): void {
+    const queue = [...new Set(ids)].filter((id): id is AppId => id in APP_REGISTRY && !EXCLUDED_APPS.has(id));
     const schedule = () => {
         if (preloadPaused || preloadBusy) return;
         if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(() => pump(), { timeout: 200 });
@@ -175,7 +183,7 @@ export function preloadAllApps(ids?: readonly string[]): void {
         const id = queue.shift();
         if (!id) { preloadResume = null; return; }
         preloadBusy = true;
-        void preloadApp(id).finally(() => { preloadBusy = false; schedule(); });
+        void loadApp(id).finally(() => { preloadBusy = false; schedule(); });
     };
     preloadResume = schedule;
     schedule();
