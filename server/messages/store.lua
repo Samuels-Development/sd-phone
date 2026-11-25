@@ -31,6 +31,14 @@ local function encodeJson(tbl)
     return json.encode(tbl)
 end
 
+---Clears every stored group-member name. Members used to be stored under their character name,
+---which unmasked whoever was behind a burner number to everyone in the group; names are now the
+---member's own My Card name or nothing, and rows from before that fall back to the number.
+---@return table stats { cleared }
+local function clearGroupMemberNames()
+    return { cleared = MySQL.update.await("UPDATE phone_message_group_members SET name = ''") or 0 }
+end
+
 ---Creates the message tables idempotently, back-fills missing columns, and upgrades the
 ---reactions primary key. Run once at boot.
 function store.ensureSchema()
@@ -129,6 +137,7 @@ function store.ensureSchema()
     MySQL.query.await('UPDATE phone_messages SET mid = id WHERE mid IS NULL')
 
     util.ensureColumns('phone_message_groups', { avatar = 'avatar VARCHAR(512) NULL' })
+    util.runOnce('messages_group_member_names', clearGroupMemberNames)
 
     MySQL.query.await([[
         CREATE TABLE IF NOT EXISTS phone_pending_messages (

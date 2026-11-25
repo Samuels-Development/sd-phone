@@ -81,6 +81,16 @@ local SEND_WINDOW_MS, SEND_PER_WINDOW = 60000, 60
 ---an existing conversation always goes through; a heavy roleplay character sits well under this.
 local MAX_CONVERSATIONS = 300
 
+---@type integer Minimum gap between group creations, per character, and the rolling budget. Each
+---creation pushes a new thread to every member, so a scripted client could otherwise spam any list
+---of numbers with groups faster than they can leave them.
+local GROUP_GAP_MS = 5000
+local GROUP_WINDOW_MS, GROUP_PER_WINDOW = 3600000, 10
+---@type integer Minimum gap between member adds, per character, and the rolling budget. An add is
+---the same push to every member, so it gets the same treatment as a creation.
+local ADD_GAP_MS = 1000
+local ADD_WINDOW_MS, ADD_PER_WINDOW = 3600000, 60
+
 
 
 
@@ -112,6 +122,16 @@ local function resolveParticipant(numberDigits, contactRow, fallbackName)
         color    = colorFor(numberDigits ~= '' and numberDigits or name),
         phone    = numberDigits,
     }
+end
+
+---The name a group keeps for a member: the one they put on their own My Card, or '' so every
+---viewer falls back to their own saved contact or the number. Never the character name: a group
+---is joined by number, and a burner number must not unmask the character behind it.
+---@param memberCid string member's framework character id
+---@return string label '' when the member set no card name
+local function memberLabel(memberCid)
+    local card = settings.getCard(memberCid) or {}
+    return util.limitedString(card.name, 64) or ''
 end
 
 ---Build a viewer's `digits -> contact row` lookup from their saved contacts.
@@ -694,7 +714,8 @@ local function sendGroup(source, cid, myNumber, groupId, kind, body, meta, ts, m
     if not store.isGroupMember(groupId, cid) then return fail('messages.notConversation', 'You are not in this conversation') end
 
     local key        = 'g-' .. groupId
-    local senderName = player.getName(source)
+    local senderName = memberLabel(cid)
+    if senderName == '' then senderName = formatNumber(myNumber) end
     local members    = store.groupMembers(groupId)
     local outId
 
@@ -727,7 +748,8 @@ local function sendGroup(source, cid, myNumber, groupId, kind, body, meta, ts, m
                     pinned       = false,
                     muted        = false,
                 })
-                notify(targetSrc, group.name, senderName .. ': ' .. previewFor(kind, body, meta))
+                local saved = theirContacts[myNumber]
+                notify(targetSrc, group.name, (saved and saved.name or senderName) .. ': ' .. previewFor(kind, body, meta))
             elseif not withheld then
                 notifications.notifyCid(m.citizenid, {
                     appId = 'messages',
@@ -861,6 +883,31 @@ function actions.react(source, payload)
     return ok({ id = id, reactions = buildReactions(rows, cid) })
 end
 
+---Resolves client-supplied numbers to the characters behind them for a group roster, skipping
+---the adder's own number, anyone already in `seenCid`, and anyone who has blocked the adder: a
+---block has to hold in a group too, or adding someone to one would reach them anyway. Scans at
+---most MAX_MEMBER_SCAN entries and fills `seenCid` as it goes.
+---@param list any[] client-supplied numbers
+---@param myNumber string adder's own number digits
+---@param seenCid table<string, boolean> characters to leave out
+---@return { cid: string, number: string }[] resolved
+local function resolveMembers(list, myNumber, seenCid)
+    local resolved = {}
+    for i = 1, math.min(#list, MAX_MEMBER_SCAN) do
+        local d = digits(list[i])
+        if d ~= '' and d ~= myNumber then
+            local mcid = settings.getCitizenByNumber(d)
+            if mcid and not seenCid[mcid] then
+                seenCid[mcid] = true
+                if myNumber == '' or not contactsStore.isBlocked(mcid, myNumber) then
+                    resolved[#resolved + 1] = { cid = mcid, number = d }
+                end
+            end
+        end
+    end
+    return resolved
+end
+
 ---Creates a group thread from a set of recipient numbers + a name, resolving numbers to
 ---citizens and capping the roster. Returns the new empty conversation; online members get it pushed.
 ---@param source number
@@ -870,6 +917,10 @@ function actions.createGroup(source, payload)
     payload = type(payload) == 'table' and payload or {}
     local cid = player.getIdentifier(source)
     if not cid then return fail('messages.playerNotFound', 'Player not found') end
+    if not util.cooldown(cid, 'messages:createGroup', GROUP_GAP_MS)
+        or not util.rateLimit(cid, 'messages:createGroup', GROUP_WINDOW_MS, GROUP_PER_WINDOW) then
+        return fail('messages.slowDown', 'Slow down')
+    end
 
     local name = trim(payload.name)
     if name == '' then return fail('messages.groupNameRequired', 'Group name required') end
@@ -878,17 +929,7 @@ function actions.createGroup(source, payload)
     local myNumber = digits(settings.ensurePhoneNumber(cid) or '')
 
     local list = type(payload.members) == 'table' and payload.members or {}
-    local resolved, seenCid = {}, { [cid] = true }
-    for i = 1, math.min(#list, MAX_MEMBER_SCAN) do
-        local d = digits(list[i])
-        if d ~= '' and d ~= myNumber then
-            local mcid = settings.getCitizenByNumber(d)
-            if mcid and not seenCid[mcid] then
-                seenCid[mcid] = true
-                resolved[#resolved + 1] = { cid = mcid, number = d }
-            end
-        end
-    end
+    local resolved = resolveMembers(list, myNumber, { [cid] = true })
 
     if #resolved == 0 then return fail('messages.addLeastOneValidMember', 'Add at least one valid member') end
     if #resolved + 1 > cfg.MaxGroupMembers then
@@ -900,14 +941,12 @@ function actions.createGroup(source, payload)
         return fail('messages.failedCreateGroup', 'Failed to create group')
     end
 
-    store.addGroupMember(groupId, cid, myNumber, player.getName(source))
-    -- One pass over the connected players, shared by both loops below.
-    local activeSrcs = player.activeCidMap()
+    store.addGroupMember(groupId, cid, myNumber, memberLabel(cid))
     for _, m in ipairs(resolved) do
-        local msrc  = activeSrcs[m.cid]
-        local mname = msrc and player.getName(msrc) or formatNumber(m.number)
-        store.addGroupMember(groupId, m.cid, m.number, mname)
+        store.addGroupMember(groupId, m.cid, m.number, memberLabel(m.cid))
     end
+    -- One pass over the connected players for the push below.
+    local activeSrcs = player.activeCidMap()
 
     local key = 'g-' .. groupId
 
@@ -944,6 +983,10 @@ function actions.addGroupMember(source, payload)
     if not lib.string.startsWith(key, 'g-') then return fail('messages.notGroupConversation', 'Not a group conversation') end
     local groupId = key:sub(3)
     if not store.isGroupMember(groupId, cid) then return fail('messages.notGroup', 'You are not in this group') end
+    if not util.cooldown(cid, 'messages:addGroupMember', ADD_GAP_MS)
+        or not util.rateLimit(cid, 'messages:addGroupMember', ADD_WINDOW_MS, ADD_PER_WINDOW) then
+        return fail('messages.slowDown', 'Slow down')
+    end
 
     local myNumber = digits(settings.ensurePhoneNumber(cid) or '')
 
@@ -951,30 +994,18 @@ function actions.addGroupMember(source, payload)
     for _, m in ipairs(current) do seenCid[m.citizenid] = true end
 
     local list = type(payload.members) == 'table' and payload.members or {}
-    local resolved = {}
-    for i = 1, math.min(#list, MAX_MEMBER_SCAN) do
-        local d = digits(list[i])
-        if d ~= '' and d ~= myNumber then
-            local mcid = settings.getCitizenByNumber(d)
-            if mcid and not seenCid[mcid] then
-                seenCid[mcid] = true
-                resolved[#resolved + 1] = { cid = mcid, number = d }
-            end
-        end
-    end
+    local resolved = resolveMembers(list, myNumber, seenCid)
 
     if #resolved == 0 then return fail('messages.addLeastOneValidMember', 'Add at least one valid member') end
     if #current + #resolved > cfg.MaxGroupMembers then
         return fail('messages.groupsCappedMembers', 'Groups are capped at {n} members', { n = cfg.MaxGroupMembers })
     end
 
-    -- One pass over the connected players, shared by both loops below.
-    local activeSrcs = player.activeCidMap()
     for _, m in ipairs(resolved) do
-        local msrc  = activeSrcs[m.cid]
-        local mname = msrc and player.getName(msrc) or formatNumber(m.number)
-        store.addGroupMember(groupId, m.cid, m.number, mname)
+        store.addGroupMember(groupId, m.cid, m.number, memberLabel(m.cid))
     end
+    -- One pass over the connected players for the push below.
+    local activeSrcs = player.activeCidMap()
 
     local groupName = (store.getGroup(groupId) or {}).name or 'Group'
     local roster = store.groupMembers(groupId)
