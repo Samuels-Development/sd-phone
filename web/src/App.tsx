@@ -68,9 +68,9 @@ import { useMusicLibrary } from '@/stores/musicLibraryStore';
 import { DEFAULT_FRAME_COLOR } from '@/shell/frameColors';
 import { ThemeProvider, useTheme, useThemeStore } from '@/stores/themeStore';
 import { useCallStore } from '@/stores/callStore';
-import type { AppDef } from '@/core/types';
+import type { AppDef, SimStatePush } from '@/core/types';
 import { listInstalledApps, installApp, uninstallApp, loadHomeLayout, saveHomeLayout, parseLayout, type SavedLayout } from '@/apps/appstore/appsApi';
-import { clearCustomInstalled, customToAppDef, isCustomApp, setCustomInstalled, useCustomApps, useCustomAppsStore, withCustomInstalled } from '@/stores/customAppsStore';
+import { clearCustomInstalled, customToAppDef, isCustomApp, setCustomAppsProfile, setCustomInstalled, useCustomApps, useCustomAppsStore, withCustomInstalled } from '@/stores/customAppsStore';
 import { resolveWallpaper } from '@/shell/wallpapers';
 import { NoSimScreen } from '@/shell/NoSimScreen';
 import { useNoService, useNoSim, useSimStore } from '@/stores/simStore';
@@ -101,6 +101,13 @@ const APP_CLOSE_MS = 300;
 const SETUP_KEY_BASE = 'sd-phone:setup:v1';
 
 let setupProfile = '';
+
+function customAppsProfileFor(sim?: SimStatePush): string | undefined {
+    if (!sim?.enabled) return undefined;
+    if (sim.device) return sim.profile;
+    return sim.hasSim ? sim.number : undefined;
+}
+
 const AdminPanel  = lazy(() => import('@/admin/AdminPanel').then(m => ({ default: m.AdminPanel })));
 const PayphoneUI  = lazy(() => import('@/payphone/PayphoneUI').then(m => ({ default: m.PayphoneUI })));
 const CaseStoreUI = lazy(() => import('@/casestore/CaseStoreUI').then(m => ({ default: m.CaseStoreUI })));
@@ -243,6 +250,9 @@ function AppContent() {
     const pendingCcApp                          = useRef<string | null>(null);
     const pendingLaunchLink                     = useRef<Record<string, unknown> | undefined>(undefined);
     const lastSimNumberRef                      = useRef<string | null>(null);
+    const customAppsProfileRevisionRef           = useRef(0);
+    const appProfileRef = useRef<string | undefined>(undefined);
+    const downloadProfileRef = useRef<string | undefined>(undefined);
     const lastOpenAppRef                        = useRef<AppId | null>(null);
     const [battery,         setBattery]         = useState<number>(100);
     const [currentApp,      setCurrentApp]      = useState<AppId | null>(null);
@@ -270,7 +280,7 @@ function AppContent() {
         );
     }, [view, customDefs, installedApps, downloadingIds]);
 
-    const downloadQueue = useRef<string[]>([]);
+    const downloadQueue = useRef<{ id: string; profile?: string; downloadProfile?: string }[]>([]);
     const downloadTimer = useRef<number | undefined>(undefined);
 
     const noSim = useNoSim();
@@ -387,6 +397,12 @@ function AppContent() {
 
     useNuiEvent('sd-phone:open', useCallback((data) => {
         if (!data) return;
+        appProfileRef.current = data.sim?.device ? data.sim.profile : undefined;
+        downloadProfileRef.current = customAppsProfileFor(data.sim);
+        useDownloadStore.getState().setProfile(downloadProfileRef.current);
+        if (data.sim && setCustomAppsProfile(customAppsProfileFor(data.sim))) {
+            customAppsProfileRevisionRef.current += 1;
+        }
         registerRuntimeLocales(data.locales);
         useDirectionStore.getState().setForceLtr(data.forceLtr === true);
         if (data.locale) useLocaleStore.getState().applyServerDefault(data.locale);
@@ -443,12 +459,29 @@ function AppContent() {
 
     useNuiEvent('sd-phone:apps', useCallback((data) => {
         if (!data) return;
+        if (appProfileRef.current && data.profile !== appProfileRef.current) return;
         setInstalledApps(withCustomInstalled(data.installedApps ?? []));
         setSavedLayout(data.homeLayout ? parseLayout(data.homeLayout) : null);
         setAppsReady(true);
     }, []));
 
     useNuiEvent('sd-phone:simState', useCallback((data) => {
+        if (data && setCustomAppsProfile(customAppsProfileFor(data))) {
+            const revision = ++customAppsProfileRevisionRef.current;
+            appProfileRef.current = data.device ? data.profile : undefined;
+            downloadProfileRef.current = customAppsProfileFor(data);
+            useDownloadStore.getState().setProfile(downloadProfileRef.current);
+            setInstalledApps(new Set());
+            setAppsReady(false);
+            if (isFiveM) {
+                void listInstalledApps().then(ids => {
+                    if (revision === customAppsProfileRevisionRef.current) {
+                        setInstalledApps(withCustomInstalled(ids));
+                        setAppsReady(true);
+                    }
+                }).catch(() => {});
+            }
+        }
         useSimStore.getState().apply(data);
         applySimProfile(data?.enabled, data?.hasSim, data?.number, data?.device, data?.profile);
         syncSimNumber(data);
@@ -697,25 +730,34 @@ function AppContent() {
 
     useNuiEvent('sd-phone:client:characterLoaded', handleRemoveAll);
 
-    const finishInstall = useCallback((id: string) => {
-        setInstalledApps(prev => new Set(prev).add(id));
-        if (isCustomApp(id)) { setCustomInstalled(id, true); void fetchNui('customApps/lifecycle', { id, action: 'install' }); }
-        else void installApp(id).then(ids => setInstalledApps(withCustomInstalled(ids)));
+    const finishInstall = useCallback((entry: { id: string; profile?: string; downloadProfile?: string }) => {
+        const { id, profile, downloadProfile } = entry;
+        const active = downloadProfile === downloadProfileRef.current;
+        if (isCustomApp(id)) {
+            setCustomInstalled(id, true, downloadProfile);
+            if (active) {
+                setInstalledApps(prev => new Set(prev).add(id));
+                void fetchNui('customApps/lifecycle', { id, action: 'install' });
+            }
+        } else void installApp(id, profile).then(ids => {
+            if (downloadProfile === downloadProfileRef.current) setInstalledApps(withCustomInstalled(ids));
+        }).catch(() => {});
     }, []);
     const pumpDownloads = useCallback(function pump() {
-        const id = downloadQueue.current[0];
-        if (id === undefined) { downloadTimer.current = undefined; return; }
-        useDownloadStore.getState().start(id, false);
+        const entry = downloadQueue.current[0];
+        if (entry === undefined) { downloadTimer.current = undefined; return; }
+        const { id, downloadProfile } = entry;
+        useDownloadStore.getState().start(id, false, downloadProfile);
         const DURATION = 4000;
         const start = performance.now();
         const step = () => {
             const p = Math.min(1, (performance.now() - start) / DURATION);
-            useDownloadStore.getState().setProgress(id, p);
+            useDownloadStore.getState().setProgress(id, p, downloadProfile);
             if (p >= 1) {
                 clearInterval(downloadTimer.current);
                 downloadTimer.current = undefined;
-                finishInstall(id);
-                useDownloadStore.getState().remove(id);
+                finishInstall(entry);
+                useDownloadStore.getState().remove(id, downloadProfile);
                 downloadQueue.current = downloadQueue.current.slice(1);
                 pump();
             }
@@ -723,22 +765,31 @@ function AppContent() {
         downloadTimer.current = window.setInterval(step, 50);
     }, [finishInstall]);
     const startDownload = useCallback((id: string) => {
-        if (downloadQueue.current.includes(id)) return;
+        const downloadProfile = downloadProfileRef.current;
+        if (downloadQueue.current.some(entry => entry.id === id && entry.downloadProfile === downloadProfile)) return;
         const wasIdle = downloadQueue.current.length === 0;
-        downloadQueue.current = [...downloadQueue.current, id];
-        useDownloadStore.getState().start(id, !wasIdle);
+        downloadQueue.current = [...downloadQueue.current, { id, profile: appProfileRef.current, downloadProfile }];
+        useDownloadStore.getState().start(id, !wasIdle, downloadProfile);
         if (wasIdle) pumpDownloads();
     }, [pumpDownloads]);
     const handleUninstallApp = useCallback((id: string) => {
+        const revision = customAppsProfileRevisionRef.current;
+        const profile = appProfileRef.current;
         setInstalledApps(prev => { const n = new Set(prev); n.delete(id); return n; });
         setRetained(prev => prev.filter(x => x !== id));
         setRecentApps(prev => prev.filter(x => x !== id));
         setForegroundKeys(m => { const n = { ...m }; delete n[id]; return n; });
         if (isCustomApp(id)) { setCustomInstalled(id, false); void fetchNui('customApps/lifecycle', { id, action: 'uninstall' }); }
-        else void uninstallApp(id).then(ids => setInstalledApps(withCustomInstalled(ids)));
+        else void uninstallApp(id, profile).then(ids => {
+            if (revision === customAppsProfileRevisionRef.current) setInstalledApps(withCustomInstalled(ids));
+        }).catch(() => {
+            if (revision === customAppsProfileRevisionRef.current) {
+                void listInstalledApps().then(ids => setInstalledApps(withCustomInstalled(ids)));
+            }
+        });
     }, []);
     const handleSaveLayout = useCallback((layout: SavedLayout) => {
-        saveHomeLayout(layout);
+        saveHomeLayout(layout, appProfileRef.current);
     }, []);
 
     const homeLayout = useMemo(() => {

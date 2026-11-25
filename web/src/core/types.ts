@@ -297,7 +297,7 @@ export interface ActiveLockscreenWidget {
 
 export type NuiMessage =
     | { action: 'sd-phone:open';    data: OpenPayload }
-    | { action: 'sd-phone:apps';    data: { installedApps?: string[]; homeLayout?: string | null } }
+    | { action: 'sd-phone:apps';    data: { profile?: string; installedApps?: string[]; homeLayout?: string | null } }
     | { action: 'sd-phone:simState'; data: SimStatePush }
     | { action: 'sd-phone:frameColor'; data: { color: string } }
     | { action: 'sd-phone:phoneLook'; data: { look: PhoneDesign } }

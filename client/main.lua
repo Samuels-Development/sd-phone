@@ -657,13 +657,16 @@ end
 ---whichever device is on screen. Runs as the open follow-up and again after a cloud-backup
 ---restore replaces the profile data.
 function PushInstalledApps()
+    local profile = currentSimState and (currentSimState.profile or currentSimState.number)
     local installedRes = lib.callback.await('sd-phone:server:apps:list', false)
     -- Re-checked after the round-trip: the device may have been put away while the server
     -- answered, and a push into a screen nobody is looking at reopens it on stale apps.
     if not (phoneState.open or companion.companionOpen) then return end
+    if profile ~= (currentSimState and (currentSimState.profile or currentSimState.number)) then return end
     SendNUIMessage({
         action = 'sd-phone:apps',
         data   = {
+            profile       = installedRes and installedRes.data and installedRes.data.profile or nil,
             installedApps = (installedRes and installedRes.success and installedRes.data and installedRes.data.installed) or {},
             homeLayout    = (installedRes and installedRes.success and installedRes.data and installedRes.data.layout) or nil,
         },
@@ -880,6 +883,7 @@ RegisterNetEvent('sd-phone:client:simState', function(state)
                 profile = state.profile,
             },
         })
+        CreateThread(PushInstalledApps)
     end
 end)
 
