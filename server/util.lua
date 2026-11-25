@@ -861,8 +861,9 @@ function util.pushMany(event, targets, ...)
         return lib.triggerClientEvent(event, targets, ...)
     end
 
+    local send = event == util.BANNER_EVENT and rawTrigger or TriggerClientEvent
     for i = 1, #targets do
-        rawTrigger(event, targets[i], ...)
+        send(event, targets[i], ...)
     end
 end
 
