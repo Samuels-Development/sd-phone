@@ -64,6 +64,28 @@ local function sanitize(ids)
     return out
 end
 
+---A character's installed app ids and home-screen layout from ONE read of their phone_settings
+---row. Both live on that row and the phone asks for them together on every open; decoded exactly
+---as settings.getInstalledApps and settings.getHomeLayout decode them one at a time.
+---@param cid string framework per-character id
+---@return string[] installed stored app ids, unsanitised (empty when none or malformed)
+---@return string|nil layout opaque layout JSON, nil when never saved
+local function homeScreen(cid)
+    local row = MySQL.single.await(
+        'SELECT installed_apps, home_layout FROM phone_settings WHERE citizenid = ? AND device = ?',
+        { cid, 'phone' }
+    )
+    if not row then return {}, nil end
+    local installed = {}
+    if type(row.installed_apps) == 'string' and row.installed_apps ~= '' then
+        local decoded, ids = pcall(json.decode, row.installed_apps)
+        if decoded and type(ids) == 'table' then installed = ids end
+    end
+    local layout = row.home_layout
+    if layout == '' then layout = nil end
+    return installed, layout
+end
+
 ---The caller's installed downloadable apps + saved home-screen layout, scoped to the citizenid
 ---resolved from src. Read-only.
 ---@param source number player server id
@@ -71,10 +93,11 @@ end
 function actions.list(source)
     local cid = player.getIdentifier(source)
     if not cid then return fail('apps.playerNotFound', 'Player not found') end
+    local installed, layout = homeScreen(cid)
     return ok({
         profile   = cid,
-        installed = sanitize(settings.getInstalledApps(cid)),
-        layout    = settings.getHomeLayout(cid),
+        installed = sanitize(installed),
+        layout    = layout,
     })
 end
 
