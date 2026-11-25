@@ -7416,6 +7416,7 @@
   },
   "voicemail": {
     "badAudio": "Bad audio payload",
+    "callFirst": "You can only leave a voicemail after a call that was not answered",
     "cannotLeaveYourself": "You cannot leave yourself a voicemail",
     "couldNotLeaveVoicemail": "Could not leave a voicemail",
     "invalidRecording": "Invalid recording",

@@ -23,6 +23,8 @@ local voice    = require 'bridge.server.voice'
 ---@type table Shared ICE provisioning (server.voice.ice): the STUN + Cloudflare TURN set every
 ---WebRTC feature uses, so one credential pair serves calls, the voice mesh, Live and bodycams.
 local ice      = require 'server.voice.ice'
+---@type table Voicemail offers (server.voicemail.offers): each unanswered call opens one message.
+local voicemailOffers = require 'server.voicemail.offers'
 
 ---@type table Actions module; the table returned at end of file.
 local actions = {}
@@ -495,6 +497,7 @@ local function endCall(channel, reason, endedBy)
         and s.callee.number ~= ''
         and { number = s.callee.number, name = contactNameFor(s.caller.cid, s.callee.number) }
         or nil
+    if mailbox then voicemailOffers.record(s.caller.cid, s.callee.number) end
 
     TriggerClientEvent('sd-phone:client:call:ended', s.caller.src, { channel = channel, reason = reason, voicemail = mailbox })
     TriggerClientEvent('sd-phone:client:call:ended', s.callee.src, { channel = channel, reason = reason })
@@ -677,6 +680,7 @@ function actions.dial(source, payload)
     local function unavailable(key, message)
         local res = fail(key, message)
         res.data = { voicemail = { number = dialed, name = contactNameFor(cid, dialed) } }
+        voicemailOffers.record(cid, dialed)
         return res
     end
 

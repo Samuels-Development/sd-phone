@@ -14,6 +14,8 @@ local notifications = require 'server.notifications.init'
 local util          = require 'server.util'
 ---@type table Media trust boundary: only the caller's just-uploaded recording may be delivered.
 local mediaGuard    = require 'server.media.guard'
+---@type table Voicemail offers (server.voicemail.offers): the unanswered calls a message may follow.
+local offers        = require 'server.voicemail.offers'
 
 local ok, fail = util.ok, util.fail
 local digits, trim = util.digits, util.trim
@@ -100,9 +102,15 @@ end
 ---validated as an http link and capped, exactly as a Streaks photo is, because it reaches the
 ---server from the client that uploaded it.
 ---
+---A message must follow an unanswered call from this caller to this number, which the calls
+---module records when it offers the mailbox; without one, a crafted client could drop messages on
+---any number it liked. Each such call allows one message.
+---
 ---A caller the owner has blocked is answered with a plain success and nothing is stored. The
 ---mailbox would otherwise be the one place a block can be probed from: refusing here tells a
----blocked caller they are blocked rather than merely unavailable.
+---blocked caller they are blocked rather than merely unavailable. The block is checked against
+---the caller's real number even when caller ID is withheld, as a call is; withholding the number
+---used to skip the check entirely.
 ---@param src number caller's server id
 ---@param payload { number?: string, url?: string, duration?: any }
 ---@return table result { success, message?, data? }
@@ -123,6 +131,9 @@ function actions.leave(src, payload)
     local ownerCid = settings.getCitizenByNumber(dialed)
     if not ownerCid then return fail('voicemail.numberNotService', 'Number not in service') end
     if ownerCid == cid then return fail('voicemail.cannotLeaveYourself', 'You cannot leave yourself a voicemail') end
+    if not offers.take(cid, dialed) then
+        return fail('voicemail.callFirst', 'You can only leave a voicemail after a call that was not answered')
+    end
 
     local duration = math.floor(tonumber(payload.duration) or 0)
     if duration ~= duration or duration < 0 then duration = 0 end
@@ -130,10 +141,9 @@ function actions.leave(src, payload)
 
     -- Caller ID is honoured here the way it is on a call: with the number withheld the message
     -- lands anonymously, so the owner can hear it but cannot ring back.
-    local fromNumber = ''
-    if settings.getCallerId(cid) then fromNumber = digits(settings.ensurePhoneNumber(cid) or ''):sub(1, 32) end
-
-    if fromNumber ~= '' and contacts.isBlocked(ownerCid, fromNumber) then return ok({ delivered = false }) end
+    local realNumber = digits(settings.ensurePhoneNumber(cid) or ''):sub(1, 32)
+    if realNumber ~= '' and contacts.isBlocked(ownerCid, realNumber) then return ok({ delivered = false }) end
+    local fromNumber = settings.getCallerId(cid) and realNumber or ''
 
     -- Trimmed before the insert rather than after, so the mailbox is never briefly over its cap.
     if store.countFor(ownerCid) >= MAX_PER_OWNER then store.trim(ownerCid, MAX_PER_OWNER - 1) end
