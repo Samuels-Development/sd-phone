@@ -8,6 +8,7 @@
 
 [![Watch the preview](https://img.shields.io/badge/%E2%96%B6%20%20WATCH%20THE%20PREVIEW-2%20minutes%20on%20YouTube-FF5A5A?style=for-the-badge&labelColor=101114)](https://www.youtube.com/watch?v=Hn3WNeOE3Qc)
 [![Open the live demo](https://img.shields.io/badge/%E2%96%B6%20%20OPEN%20THE%20LIVE%20DEMO-fivem.samueldev.shop%2Fphone-F0E155?style=for-the-badge&labelColor=101114&logoColor=F0E155)](https://fivem.samueldev.shop/phone)
+[![Get the phone props](https://img.shields.io/badge/%E2%AC%87%20%20GET%20THE%20PROPS-sd--phone--props%20%28required%29-5FE3C8?style=for-the-badge&labelColor=101114)](https://github.com/Samuels-Development/sd-phone-props)
 
 ### Preview video
 
@@ -42,6 +43,8 @@ Scripts and custom apps written for lb-phone, qs-smartphone, gksphone, roadphone
 ![Compatibility](https://img.shields.io/badge/Drop--in%20compatible-lb--phone%2C%20qs%2C%20gks%2C%20road%2C%20YSeries-3b82f6)
 
 [**Live demo**](https://fivem.samueldev.shop/phone) · [**Documentation**](https://docs.samueldev.shop/resources/phone/) · [**Store**](https://fivem.samueldev.shop) · [**Discord**](https://discord.gg/FzPehMQaBQ)
+
+**Required:** [**sd-phone-props**](https://github.com/Samuels-Development/sd-phone-props), the phones, foldables and cases you hold in game · [**ox_lib**](https://github.com/CommunityOx/ox_lib) · [**oxmysql**](https://github.com/CommunityOx/oxmysql)
 
 **Works together:** **sd-phone** · [**sd-tablet**](https://github.com/Samuels-Development/sd-tablet) · [**sd-computers**](https://github.com/Samuels-Development/sd-computers)
 
