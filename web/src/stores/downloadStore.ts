@@ -4,16 +4,38 @@ import { useShallow } from 'zustand/react/shallow';
 
 interface DownloadState {
     downloads: Record<string, number>;
-    start:       (id: string, queued: boolean) => void;
-    setProgress: (id: string, p: number) => void;
-    remove:      (id: string) => void;
+    byProfile:   Record<string, Record<string, number>>;
+    profile:     string;
+    setProfile:  (profile?: string) => void;
+    start:       (id: string, queued: boolean, profile?: string) => void;
+    setProgress: (id: string, p: number, profile?: string) => void;
+    remove:      (id: string, profile?: string) => void;
+    clear:       () => void;
 }
 
 export const useDownloadStore = create<DownloadState>((set) => ({
     downloads: {},
-    start:       (id, queued) => set(s => ({ downloads: { ...s.downloads, [id]: queued ? -1 : 0 } })),
-    setProgress: (id, p) => set(s => (s.downloads[id] === undefined ? s : { downloads: { ...s.downloads, [id]: p } })),
-    remove:      (id) => set(s => { const n = { ...s.downloads }; delete n[id]; return { downloads: n }; }),
+    byProfile: {},
+    profile: '',
+    setProfile: profile => set(s => ({ profile: profile ?? '', downloads: s.byProfile[profile ?? ''] ?? {} })),
+    start: (id, queued, profile) => set(s => {
+        const key = profile ?? '';
+        const downloads = { ...s.byProfile[key], [id]: queued ? -1 : 0 };
+        return { byProfile: { ...s.byProfile, [key]: downloads }, ...(s.profile === key ? { downloads } : {}) };
+    }),
+    setProgress: (id, p, profile) => set(s => {
+        const key = profile ?? '';
+        if (s.byProfile[key]?.[id] === undefined) return s;
+        const downloads = { ...s.byProfile[key], [id]: p };
+        return { byProfile: { ...s.byProfile, [key]: downloads }, ...(s.profile === key ? { downloads } : {}) };
+    }),
+    remove: (id, profile) => set(s => {
+        const key = profile ?? '';
+        const downloads = { ...s.byProfile[key] };
+        delete downloads[id];
+        return { byProfile: { ...s.byProfile, [key]: downloads }, ...(s.profile === key ? { downloads } : {}) };
+    }),
+    clear: () => set({ downloads: {}, byProfile: {} }),
 }));
 
 export function useDownloadProgress(id: string): number | undefined {

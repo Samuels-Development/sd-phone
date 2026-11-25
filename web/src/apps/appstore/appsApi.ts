@@ -20,16 +20,18 @@ export async function listInstalledApps(): Promise<string[]> {
     return (await apiData<{ installed: string[] }>('sd-phone:apps:list'))?.installed ?? [];
 }
 
-export async function installApp(id: string): Promise<string[]> {
+export async function installApp(id: string, profile?: string): Promise<string[]> {
     if (!isFiveM) { const ids = [...new Set([...devRead(), id])]; devWrite(ids); return ids; }
-    const r = await apiData<{ installed: string[] }>('sd-phone:apps:install', { id });
-    return r ? r.installed : listInstalledApps();
+    const r = await apiData<{ installed: string[] }>('sd-phone:apps:install', { id, profile });
+    if (!r) throw new Error('App installation failed');
+    return r.installed;
 }
 
-export async function uninstallApp(id: string): Promise<string[]> {
+export async function uninstallApp(id: string, profile?: string): Promise<string[]> {
     if (!isFiveM) { const ids = devRead().filter(x => x !== id); devWrite(ids); return ids; }
-    const r = await apiData<{ installed: string[] }>('sd-phone:apps:uninstall', { id });
-    return r ? r.installed : listInstalledApps();
+    const r = await apiData<{ installed: string[] }>('sd-phone:apps:uninstall', { id, profile });
+    if (!r) throw new Error('App removal failed');
+    return r.installed;
 }
 
 const LAYOUT_KEY = device.id === 'phone' ? 'sd-phone:home-layout' : `sd-phone:home-layout:${device.id}`;
@@ -180,7 +182,7 @@ export function loadHomeLayout(): SavedLayout | null {
     } catch { return null; }
 }
 
-export function saveHomeLayout(layout: SavedLayout): void {
+export function saveHomeLayout(layout: SavedLayout, profile?: string): void {
     if (!isFiveM) { writeJson(LAYOUT_KEY, layout); return; }
-    void fetchNui('sd-phone:apps:saveLayout', { layout: JSON.stringify(layout), device: device.id });
+    void fetchNui('sd-phone:apps:saveLayout', { layout: JSON.stringify(layout), device: device.id, profile });
 }
