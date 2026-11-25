@@ -39,7 +39,7 @@ local TTL = 5000
 ---@field hasPhone boolean player carries at least one configured phone item
 ---@field hasSim boolean the active phone has a SIM
 ---@field sims SimEntry[] every SIM'd phone carried (all stay reachable for calls/messages)
----@field active SimEntry|nil the phone the player last opened (falls back to the first SIM)
+---@field active SimEntry|table|nil the phone the player last opened (falls back to the first SIM; a SIM-less pick is the bare item)
 ---@field identity string|nil active SIM's data identity
 ---@field number string|nil active SIM's number
 ---@field color string|nil active phone's frame colour
@@ -127,6 +127,9 @@ end
 
 ---Finds the explicitly selected physical phone when it has no SIM. Legacy mode's `entries`
 ---contains only SIM-backed phones, so pickActive would otherwise fall back to another phone's SIM.
+---A phone counts as SIM-less when it is missing from `sims`, so its SIM is not read a second time
+---(in tray mode that read can activate a blank card), and a SIM that failed to register leaves
+---its phone without service instead of lending it another phone's.
 ---@param source number player server id
 ---@param phones table[] every phone item the player carries
 ---@param sims SimEntry[] phones with registered SIM identities
@@ -135,10 +138,13 @@ local function pickSelectedPhoneWithoutSim(source, phones, sims)
     local pref = prefs[source]
     if not pref then return nil end
 
+    local simSlots = {}
+    for _, sim in ipairs(sims) do simSlots[sim.slot] = true end
+
     if pref.slot then
         for _, phone in ipairs(phones) do
             if phone.slot == pref.slot then
-                return not siminv.getSimNumber(source, phone) and phone or nil
+                return not simSlots[phone.slot] and phone or nil
             end
         end
     end
@@ -154,7 +160,7 @@ local function pickSelectedPhoneWithoutSim(source, phones, sims)
             if sim.color == pref.color then return nil end
         end
         for _, phone in ipairs(phones) do
-            if phone.color == pref.color and not siminv.getSimNumber(source, phone) then
+            if phone.color == pref.color and not simSlots[phone.slot] then
                 return phone
             end
         end
@@ -189,14 +195,18 @@ local function computeLegacy(source, phones)
     end
 
     local active = pickSelectedPhoneWithoutSim(source, phones, sims) or pickActive(source, sims)
-    local hasSim = active ~= nil and active.number ~= nil or false
+    local number, identity
+    if active and active.number then
+        number, identity = active.number, active.identity
+    end
+
     return {
         hasPhone = true,
-        hasSim   = hasSim,
+        hasSim   = number ~= nil,
         sims     = sims,
         active   = active,
-        identity = hasSim and active.identity or nil,
-        number   = hasSim and active.number or nil,
+        identity = identity,
+        number   = number,
         color    = active and active.color or phones[1].color,
         slot     = active and active.slot or phones[1].slot,
     }

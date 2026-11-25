@@ -102,6 +102,8 @@ const SETUP_KEY_BASE = 'sd-phone:setup:v1';
 
 let setupProfile = '';
 
+type DownloadEntry = { id: string; profile?: string; downloadProfile?: string };
+
 function customAppsProfileFor(sim?: SimStatePush): string | undefined {
     if (!sim?.enabled) return undefined;
     if (sim.device) return sim.profile;
@@ -250,9 +252,9 @@ function AppContent() {
     const pendingCcApp                          = useRef<string | null>(null);
     const pendingLaunchLink                     = useRef<Record<string, unknown> | undefined>(undefined);
     const lastSimNumberRef                      = useRef<string | null>(null);
-    const customAppsProfileRevisionRef           = useRef(0);
-    const appProfileRef = useRef<string | undefined>(undefined);
-    const downloadProfileRef = useRef<string | undefined>(undefined);
+    const customAppsProfileRevisionRef          = useRef(0);
+    const appProfileRef                         = useRef<string | undefined>(undefined);
+    const downloadProfileRef                    = useRef<string | undefined>(undefined);
     const lastOpenAppRef                        = useRef<AppId | null>(null);
     const [battery,         setBattery]         = useState<number>(100);
     const [currentApp,      setCurrentApp]      = useState<AppId | null>(null);
@@ -280,7 +282,7 @@ function AppContent() {
         );
     }, [view, customDefs, installedApps, downloadingIds]);
 
-    const downloadQueue = useRef<{ id: string; profile?: string; downloadProfile?: string }[]>([]);
+    const downloadQueue = useRef<DownloadEntry[]>([]);
     const downloadTimer = useRef<number | undefined>(undefined);
 
     const noSim = useNoSim();
@@ -473,14 +475,12 @@ function AppContent() {
             useDownloadStore.getState().setProfile(downloadProfileRef.current);
             setInstalledApps(new Set());
             setAppsReady(false);
-            if (isFiveM) {
-                void listInstalledApps().then(ids => {
-                    if (revision === customAppsProfileRevisionRef.current) {
-                        setInstalledApps(withCustomInstalled(ids));
-                        setAppsReady(true);
-                    }
-                }).catch(() => {});
-            }
+            void listInstalledApps().then(ids => {
+                if (revision === customAppsProfileRevisionRef.current) {
+                    setInstalledApps(withCustomInstalled(ids));
+                    setAppsReady(true);
+                }
+            }).catch(() => {});
         }
         useSimStore.getState().apply(data);
         applySimProfile(data?.enabled, data?.hasSim, data?.number, data?.device, data?.profile);
@@ -730,7 +730,7 @@ function AppContent() {
 
     useNuiEvent('sd-phone:client:characterLoaded', handleRemoveAll);
 
-    const finishInstall = useCallback((entry: { id: string; profile?: string; downloadProfile?: string }) => {
+    const finishInstall = useCallback((entry: DownloadEntry) => {
         const { id, profile, downloadProfile } = entry;
         const active = downloadProfile === downloadProfileRef.current;
         if (isCustomApp(id)) {
@@ -739,9 +739,16 @@ function AppContent() {
                 setInstalledApps(prev => new Set(prev).add(id));
                 void fetchNui('customApps/lifecycle', { id, action: 'install' });
             }
-        } else void installApp(id, profile).then(ids => {
-            if (downloadProfile === downloadProfileRef.current) setInstalledApps(withCustomInstalled(ids));
-        }).catch(() => {});
+            return;
+        }
+        if (!profile && !active) return;
+        if (active) setInstalledApps(prev => new Set(prev).add(id));
+        const stillActive = () => downloadProfile === downloadProfileRef.current;
+        void installApp(id, profile).then(ids => {
+            if (stillActive()) setInstalledApps(withCustomInstalled(ids));
+        }).catch(() => {
+            if (stillActive()) void listInstalledApps().then(ids => setInstalledApps(withCustomInstalled(ids)));
+        });
     }, []);
     const pumpDownloads = useCallback(function pump() {
         const entry = downloadQueue.current[0];

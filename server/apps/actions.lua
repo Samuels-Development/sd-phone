@@ -92,7 +92,7 @@ function actions.install(source, payload)
         -- active. Only device mode permits targeting that still-carried device identity.
         if not simState.device or type(payload.profile) ~= 'string'
             or not simSession.hasIdentity(source, payload.profile) then
-            return fail('apps.playerNotFound', 'Phone changed')
+            return fail('apps.phoneChanged', 'You switched to another phone.')
         end
         cid = payload.profile
     end
@@ -126,7 +126,7 @@ function actions.uninstall(source, payload)
     local cid = player.getIdentifier(source)
     if not cid then return fail('apps.playerNotFound', 'Player not found') end
     if payload.profile ~= nil and payload.profile ~= cid then
-        return fail('apps.playerNotFound', 'Phone changed')
+        return fail('apps.phoneChanged', 'You switched to another phone.')
     end
 
     local id = payload.id
@@ -192,7 +192,7 @@ function actions.saveLayout(source, payload)
     local cid = player.getIdentifier(source)
     if not cid then return fail('apps.playerNotFound', 'Player not found') end
     if payload.profile ~= nil and payload.profile ~= cid then
-        return fail('apps.playerNotFound', 'Phone changed')
+        return fail('apps.phoneChanged', 'You switched to another phone.')
     end
 
     -- The home screen already debounces a rearrange into one save every 500ms, so this only ever
