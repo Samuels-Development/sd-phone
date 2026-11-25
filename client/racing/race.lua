@@ -201,14 +201,6 @@ function race.active()
     return active and active.id or nil
 end
 
----Model hash of the vehicle the player is in, 0 on foot. The finish report sends this and the server
----decides the class from it; the client never names a class the server has to trust.
----@return integer hash
-function race.currentModelHash()
-    local vehicle = GetVehiclePedIsIn(cache.ped, false)
-    return vehicle ~= 0 and GetEntityModel(vehicle) or 0
-end
-
 ---Race class of the vehicle the player is in, for display in the app. On foot this answers the
 ---lowest class so the race setup screen never blocks on a missing vehicle.
 ---@return string class one of 'D' | 'C' | 'B' | 'A' | 'S'
@@ -602,7 +594,6 @@ local function finishTrial(state)
     local res = lib.callback.await('sd-phone:server:racing:trialFinish', false, {
         bestLapMs = state.bestLapMs,
         sectors   = state.bestLapSectors,
-        modelHash = race.currentModelHash(),
     })
 
     local data = type(res) == 'table' and res.success and res.data or nil
@@ -679,7 +670,7 @@ local function runLoop(state)
                         if state.trial then
                             finishTrial(state)
                         else
-                            TriggerServerEvent('sd-phone:server:racing:finish', state.id, race.currentModelHash(), tick - state.startedAt)
+                            TriggerServerEvent('sd-phone:server:racing:finish', state.id, tick - state.startedAt)
                         end
                         race.stop(true)
                         break

@@ -423,20 +423,25 @@ function racegen.boards(cid)
 end
 
 ---Registers the caller for a lobby and takes their buy-in. The only place an entry fee is ever
----charged: if anything after the debit refuses the seat, the money goes back in the same call.
+---charged: if anything after the debit refuses the seat, the money goes back in the same call. The
+---class is judged on the car the server sees them driving, so the seat is refused on foot.
 ---@param src integer player server id
 ---@param cid string citizenid
 ---@param raceId any
----@param modelHash any joaat hash of the vehicle they are sitting in, 0 on foot
 ---@return table envelope
-function racegen.join(src, cid, raceId, modelHash)
+function racegen.join(src, cid, raceId)
     local race = racegen.get(raceId)
     if not race then return util.fail('racing.raceNoLongerAvailable', 'That race is no longer available') end
     if racegen.hasStarted(race) then return util.fail('racing.raceHasAlreadyStarted', 'That race has already started') end
     if racegen.isMember(race, cid) then return util.fail('racing.alreadyRegisteredRace', 'You are already registered for that race') end
     if racegen.isFull(race) then return util.fail('racing.raceFull', 'That race is full') end
 
-    local mine = actions.classForModel(modelHash)
+    local model = actions.drivenModel(src)
+    if not model then
+        return util.fail('racing.driveToJoinRace', "Get in the driver's seat of the car you will race to join")
+    end
+
+    local mine = actions.classForModel(model)
     if actions.classRank(mine) > actions.classRank(race.class) then
         return util.fail('racing.vehicleClassRaceTopsOut', 'Your vehicle is class {yours} and this race tops out at class {max}', { yours = mine, max = race.class })
     end

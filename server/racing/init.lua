@@ -133,7 +133,7 @@ end)
 register('join', function(src, payload)
     local cid = player.getIdentifier(src)
     if not cid then return LOADING end
-    return racegen.join(src, cid, payload.raceId, payload.modelHash)
+    return racegen.join(src, cid, payload.raceId)
 end)
 
 register('leave', function(src, payload)
@@ -166,11 +166,11 @@ RegisterNetEvent('sd-phone:server:racing:checkpoint', function(raceId, index, cl
     races.checkpoint(source, raceId, index, clientMs)
 end)
 
----A racer crossed the line. The model hash is what decides their class; the elapsed time is
+---A racer crossed the line. The car is read off the server's own world and the elapsed time is
 ---recomputed server-side, so clientMs only ever reaches the display deltas.
-RegisterNetEvent('sd-phone:server:racing:finish', function(raceId, modelHash, clientMs)
+RegisterNetEvent('sd-phone:server:racing:finish', function(raceId, clientMs)
     if not ENABLED then return end
-    races.finish(source, raceId, modelHash, clientMs)
+    races.finish(source, raceId, clientMs)
 end)
 
 ---A joined racer's client reporting whether they are lined up at the start.

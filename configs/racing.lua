@@ -1,7 +1,8 @@
 -- Racing app - the tablet's race board. Tracks are drawn in-game with the gate
 -- creator, ranked events are generated on a timer, and every finish is timed and
--- scored SERVER-side: a client only ever reports which checkpoint it passed and
--- which car it was in. Nothing below runs while Enabled is false.
+-- scored SERVER-side: a client only ever reports which checkpoint it passed, and
+-- the car is read from the one the server sees the racer driving. Nothing below
+-- runs while Enabled is false.
 return {
     -- Whether this server runs Racing at all. Off is genuinely inert: no tables are
     -- built, the generator never ticks, no commands are registered and every
@@ -20,8 +21,9 @@ return {
     -- Race classes, keyed by letter. A race carries a class CEILING rather than a
     -- fixed class: anyone whose vehicle resolves to that class or below may join,
     -- so an S race is open to everything and a D race is open to D cars only. The
-    -- class is always resolved server-side from the model the joiner is sitting in
-    -- (see Vehicles), never sent by the client.
+    -- class is always resolved server-side from the car the joiner is driving (see
+    -- Vehicles), never sent by the client, and checked again at the finish line: a
+    -- racer who swaps into a car above the class after joining does not finish.
     --   level - shown beside the class name in the app. Nothing gates on it: entry
     --           is decided by the car, not by the driver.
     --   label - display name in the UI.
@@ -319,6 +321,10 @@ return {
         -- ignored, so a narrow gate on a wide road is still a 14 metre circle.
         -- Shrink it for tighter racing and expect more missed gates at speed.
         CheckpointRadius   = 14.0,
+
+        -- Fastest believable speed between gates, in m/s (120 is about 430 km/h).
+        -- A gate or trial lap reached faster than this allows does not count.
+        MaxGateSpeed       = 120.0,
 
         -- Numbers counted down on the line before the field is released.
         CountdownSeconds   = 3,

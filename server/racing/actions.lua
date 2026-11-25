@@ -278,7 +278,7 @@ local function trackRow(row, byId)
 end
 
 ---The race class a vehicle model belongs to. The only class resolver on the server: every caller
----sends a model hash and this decides, so a client can never name its own class.
+---passes the model actions.drivenModel read, so a client can never name its own class.
 ---@param modelHash any joaat hash of the vehicle model, signed or unsigned
 ---@return string class 'D'|'C'|'B'|'A'|'S'
 function actions.classForModel(modelHash)
@@ -295,6 +295,21 @@ function actions.classForModel(modelHash)
         if called and NATIVE_CLASS[native] then return NATIVE_CLASS[native] end
     end
     return DEFAULT_CLASS
+end
+
+---The model of the vehicle the player is driving, read from the server's own copy of the world.
+---Nil on foot and in any seat but the driver's. The class gate, the prize and the record row all
+---describe the car being raced, and a hash the client named could be any car at all.
+---@param src integer player server id
+---@return integer|nil modelHash
+function actions.drivenModel(src)
+    local ped = GetPlayerPed(src)
+    if not ped or ped == 0 then return nil end
+    local vehicle = GetVehiclePedIsIn(ped, false)
+    if not vehicle or vehicle == 0 or GetPedInVehicleSeat(vehicle, -1) ~= ped then return nil end
+    local model = GetEntityModel(vehicle)
+    if not model or model == 0 then return nil end
+    return model
 end
 
 ---Where a class sits on the ladder. An unknown letter reads as the lowest rung, so it can only

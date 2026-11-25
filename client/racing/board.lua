@@ -237,10 +237,7 @@ local function toggle(entry)
             end
 
             if go then
-                local res = lib.callback.await('sd-phone:server:racing:join', false, {
-                    raceId    = entry.id,
-                    modelHash = currentModel(),
-                })
+                local res = lib.callback.await('sd-phone:server:racing:join', false, { raceId = entry.id })
                 if type(res) == 'table' and res.message then
                     lib.notify({ title = locale.t('apps.racing', 'Racing'), description = res.message, type = res.success and 'success' or 'error' })
                 end

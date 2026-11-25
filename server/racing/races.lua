@@ -64,6 +64,12 @@ local COUNTDOWN = math.max(0, math.floor(tonumber((config.Race or {}).CountdownS
 local CHECKPOINT_RADIUS = math.max(1.0, tonumber((config.Race or {}).CheckpointRadius) or 14.0) + 10.0
 ---@type integer Seconds before an abandoned run is swept out of memory.
 local RUN_MAX_AGE = math.max(60, math.floor(tonumber((config.Race or {}).RunMaxAgeSeconds) or 3600))
+---@type number Fastest believable speed between two gates, in metres per second. A pass that would
+---need more than this from the previous gate is a teleport and does not count.
+local MAX_GATE_SPEED = math.max(10.0, tonumber((config.Race or {}).MaxGateSpeed) or 120.0)
+---@type integer Milliseconds forgiven on every gate-to-gate time, for the earlier gate's report
+---reaching the server late while the later one arrives on time.
+local GATE_SLACK_MS = 500
 
 ---Normalises a model hash to unsigned 32 bit, so a client's signed GetEntityModel and the server's
 ---own joaat of a configured model name always land on the same key.
@@ -257,6 +263,49 @@ local function checkpointsPerLap(points, race)
     return math.max(1, count - 1)
 end
 
+---The route point a racer drives to as overall checkpoint `idx`. Gate 1 of the route is the start
+---line, so index 0 answers it and every lap after the first wraps back onto gate 2.
+---@param run table live run carrying the authoritative route
+---@param idx integer overall checkpoint index across every lap, 0 for the start line
+---@return table|nil point
+local function gatePoint(run, idx)
+    local route = run.route
+    if type(route) ~= 'table' then return nil end
+    if idx <= 0 then return route[1] end
+    return route[((idx - 1) % run.cpPerLap) + 2]
+end
+
+---Shortest time, in ms, a car at MAX_GATE_SPEED could take between two route points. Measured on
+---the straight line, less the server's hit radius at both ends, so it is a floor no real drive
+---between those two gates can beat.
+---@param from table|nil route point
+---@param to table|nil route point
+---@return number ms
+local function minLegMs(from, to)
+    if type(from) ~= 'table' or type(to) ~= 'table' then return 0 end
+    local x1, y1, x2, y2 = tonumber(from[1]), tonumber(from[2]), tonumber(to[1]), tonumber(to[2])
+    if not (x1 and y1 and x2 and y2) then return 0 end
+    local dx, dy = x2 - x1, y2 - y1
+    local metres = math.sqrt(dx * dx + dy * dy) - 2 * CHECKPOINT_RADIUS
+    if metres <= 0 then return 0 end
+    return metres / MAX_GATE_SPEED * 1000
+end
+
+---Shortest believable time for any one lap of a route, with the gate slack taken once off the
+---whole. The first lap leaves from the start line and every later one from the last gate, so the
+---opening leg counts whichever of the two is the shorter way onto gate 2.
+---@param route table[] authoritative route points
+---@return number ms
+local function minLapMs(route)
+    local count = type(route) == 'table' and #route or 0
+    if count < 2 then return 0 end
+    local total = math.min(minLegMs(route[1], route[2]), minLegMs(route[count], route[2]))
+    for i = 3, count do
+        total = total + minLegMs(route[i - 1], route[i])
+    end
+    return total - GATE_SLACK_MS
+end
+
 ---Whether the player's server-owned position is close enough to the checkpoint their client
 ---reported. Gates use the same midpoint-based 2D hit test as the client.
 ---@param src integer player server id
@@ -267,7 +316,7 @@ local function nearCheckpoint(src, run, idx)
     local route = run.route
     if type(route) ~= 'table' or #route < 2 then return false end
 
-    local gate = route[((idx - 1) % run.cpPerLap) + 2]
+    local gate = gatePoint(run, idx)
     if type(gate) ~= 'table' then return false end
     local x, y = tonumber(gate[1]), tonumber(gate[2])
     if not x or not y then return false end
@@ -467,6 +516,7 @@ function races.beginRun(race, members, now)
         cpPerLap    = checkpointsPerLap(route, race),
         route       = route,
         laps        = math.max(1, math.floor(tonumber(race.laps) or 1)),
+        class       = race.class,
         prizePool   = isCustom and (util.wholeAmount(race.entryFee) * #members) or util.wholeAmount(race.prizePool),
         isCustom    = isCustom,
         -- The green light is the client's, not the dispatcher's: the countdown runs before anyone
@@ -501,9 +551,10 @@ function races.beginRun(race, members, now)
     broadcastStandings(race.id, run)
 end
 
----A racer reported a checkpoint. It must be the exact next gate, arrive after the green light and
----match the player's server-side position; skipped, forged and pre-countdown reports are discarded.
----`clientMs` is advisory and only ever feeds the display gaps in the standings.
+---A racer reported a checkpoint. It must be the exact next gate, arrive after the green light,
+---match the player's server-side position and come no sooner after the previous gate (or the green
+---light) than the straight line between them allows at MAX_GATE_SPEED; skipped, forged, teleported
+---and pre-countdown reports are discarded. `clientMs` only ever feeds the display gaps.
 ---@param src integer player server id
 ---@param raceId string
 ---@param index integer overall checkpoint index across every lap
@@ -514,7 +565,8 @@ function races.checkpoint(src, raceId, index, clientMs)
 
     local run = type(raceId) == 'string' and ActiveRuns[raceId] or nil
     if not run or not run.memberSet[cid] or run.finished[cid] ~= nil then return end
-    if GetGameTimer() < run.startedAt then return end
+    local now = GetGameTimer()
+    if now < run.startedAt then return end
 
     local idx = util.wholeAmount(index)
     if idx <= 0 or idx > run.cpPerLap * run.laps then return end
@@ -525,8 +577,11 @@ function races.checkpoint(src, raceId, index, clientMs)
         run.progress[cid] = p
     end
     if idx ~= p.idx + 1 or not nearCheckpoint(src, run, idx) then return end
+    local fastest = minLegMs(gatePoint(run, idx - 1), gatePoint(run, idx)) - GATE_SLACK_MS
+    if now - (p.at or run.startedAt) < fastest then return end
 
     p.idx = idx
+    p.at  = now
     p.times[idx] = util.wholeAmount(clientMs)
 
     if util.rateLimit(cid, 'racing:standings', BROADCAST_WINDOW, BROADCAST_MAX) then
@@ -534,15 +589,44 @@ function races.checkpoint(src, raceId, index, clientMs)
     end
 end
 
+---Settles a finish the server will not accept as a loss: the racer took every gate, but crossed the
+---line on foot, as a passenger, or in a car above the race's class. Their client has already torn
+---the race down, so leaving the run waiting would only hold it open until the DNF clock or the sweep.
+---@param raceId string
+---@param run table
+---@param cid string
+---@param src integer player server id
+---@param refusal table failure envelope whose message tells the racer why
+local function disqualify(raceId, run, cid, src, refusal)
+    TriggerClientEvent(EV .. 'raceDnf', src, { dnf = true, mmrDelta = applyLoss(run, cid) })
+    TriggerClientEvent('ox_lib:notify', src, { title = 'Racing', description = refusal.message, type = 'error' })
+    retireIfDone(raceId, run)
+end
+
+---The refusal for a finishing car the race does not admit, or nil when the finish stands.
+---@param run table
+---@param model integer|nil actions.drivenModel of the finisher
+---@return table|nil refusal
+local function finishRefusal(run, model)
+    if not model then
+        return util.fail('racing.finishNotDriving', 'You crossed the line without driving, so the finish did not count')
+    end
+    local class = actions.classForModel(model)
+    if run.class and actions.classRank(class) > actions.classRank(run.class) then
+        return util.fail('racing.finishAboveClass', 'You finished in a class {yours} car and this race tops out at class {max}, so the finish did not count',
+            { yours = class, max = run.class })
+    end
+    return nil
+end
+
 ---A racer crossed the line: settles their rating, writes the result row and pays their share of the
 ---pool. The finish is only real when the racer reported every gate on the way to it, the time is
----the server's own clock rather than anything the client sent, and the class comes from the model
----hash through the one server-side resolver.
+---the server's own clock rather than anything the client sent, and the class comes from the car the
+---server sees them driving, through the one server-side resolver.
 ---@param src integer player server id
 ---@param raceId string
----@param modelHash integer GetEntityModel of the finishing vehicle
 ---@param clientMs integer the racer's own race clock, kept for display gaps only
-function races.finish(src, raceId, modelHash, clientMs)
+function races.finish(src, raceId, clientMs)
     local cid = player.getIdentifier(src)
     if not cid then return end
     if not util.rateLimit(cid, 'racing:finish', FINISH_WINDOW, FINISH_MAX) then return end
@@ -555,6 +639,14 @@ function races.finish(src, raceId, modelHash, clientMs)
 
     local now = GetGameTimer()
     if now < run.startedAt then return end
+
+    local modelHash = actions.drivenModel(src)
+    local refusal = finishRefusal(run, modelHash)
+    if refusal then
+        disqualify(raceId, run, cid, src, refusal)
+        return
+    end
+
     local elapsedMs = now - run.startedAt
     p.times[p.idx] = util.wholeAmount(clientMs)
 
@@ -633,7 +725,8 @@ end
 
 ---Opens a solo run against the clock. The clock is stamped HERE rather than taken from the client
 ---at the end: a trial has no other racers to contradict it, so a client-reported time would be a
----world record for anyone willing to edit one number.
+---world record for anyone willing to edit one number. The fastest believable lap of the route is
+---fixed here too, so the finish can refuse a lap no car could drive.
 ---@param src integer player server id
 ---@param payload table client-supplied { trackId }
 ---@return table envelope
@@ -649,15 +742,20 @@ function races.trialStart(src, payload)
         return util.fail('racing.trackNoLongerAvailable', 'That track is no longer available')
     end
 
-    Trials[cid] = { trackId = trackId, startedAt = GetGameTimer() }
+    if not actions.drivenModel(src) then
+        return util.fail('racing.driveToStartTrial', "Get in the driver's seat to start the clock")
+    end
+
+    Trials[cid] = { trackId = trackId, startedAt = GetGameTimer(), minLapMs = minLapMs(store.routeFor(trackId)) }
     return util.ok({ trackId = trackId })
 end
 
 ---Closes a trial and writes it to the record board. Unranked by definition: no rating moves, no
 ---payout, no position - the row exists so the time can stand on the track's board beside the
----times set in traffic.
+---times set in traffic. The car on the board is the one the server sees the racer driving, and a
+---lap quicker than the route allows at MAX_GATE_SPEED is refused rather than recorded.
 ---@param src integer player server id
----@param payload table client-supplied { bestLapMs, sectors, modelHash }
+---@param payload table client-supplied { bestLapMs, sectors }
 ---@return table envelope on success data = { timeMs, bestLapMs, personalBest, record }
 function races.trialFinish(src, payload)
     local cid = player.getIdentifier(src)
@@ -670,12 +768,20 @@ function races.trialFinish(src, payload)
     if not trial then return util.fail('racing.notTimedRun', 'You are not on a timed run') end
     Trials[cid] = nil
 
+    local modelHash = actions.drivenModel(src)
+    if not modelHash then
+        return util.fail('racing.trialFinishNotDriving', 'You crossed the line without driving, so the run was not recorded')
+    end
+
     local elapsedMs = math.max(1, GetGameTimer() - trial.startedAt)
 
     -- Everything below the elapsed time is client-reported and only ever shown back to the racer
     -- who sent it, so it is clamped into the run rather than trusted or rejected.
     local bestLapMs = math.floor(tonumber(payload.bestLapMs) or 0)
     if bestLapMs <= 0 or bestLapMs > elapsedMs then bestLapMs = elapsedMs end
+    if bestLapMs < (trial.minLapMs or 0) then
+        return util.fail('racing.trialTooFast', 'That lap was faster than any car can drive this track, so it was not recorded')
+    end
 
     local splits, last = {}, 0
     if type(payload.sectors) == 'table' then
@@ -689,7 +795,7 @@ function races.trialFinish(src, payload)
     end
 
     local before = store.personalBest(trial.trackId, cid)
-    local key    = hashKey(payload.modelHash)
+    local key    = hashKey(modelHash)
 
     store.saveResult({
         trackId   = trial.trackId,
@@ -697,7 +803,7 @@ function races.trialFinish(src, payload)
         name      = (store.profileRow(cid) or {}).name or 'Racer',
         timeMs    = elapsedMs,
         vehicle   = (key and MODEL_NAMES[key]) or 'Unknown',
-        class     = actions.classForModel(payload.modelHash),
+        class     = actions.classForModel(modelHash),
         position  = 1,
         racers    = 1,
         bestLapMs = bestLapMs,
