@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { AlertDialog } from '@/ui/AlertDialog';
-import { Board } from './Board';
+import { BOARD, Board } from './Board';
 import { CapturedStrip, MoveList } from './GameInfo';
 import { ChessIcon } from '@/shell/AppIconSVG';
 import { StartScreen, type GameStartConfig } from '@/apps/_games/StartScreen';
@@ -14,8 +14,9 @@ import {
     AI, chooseMove, initialState, makeMove, status, toSan,
     type AiOptions, type Color, type Difficulty, type Move,
 } from './logic';
-import { finishApi, moveApi, registerGameSides, reportResultApi, type Side } from '@/apps/_games/onlineApi';
-import { useOnlineLobby } from '@/apps/_games/useOnlineLobby';
+import { moveApi, offerDrawApi, registerGameSides, type Side } from '@/apps/_games/onlineApi';
+import { useOnlineLobby, type OnlineResult } from '@/apps/_games/useOnlineLobby';
+import { LOW_CLOCK, useTurnClock } from '@/apps/_games/useTurnClock';
 import { loadLeaderboard, loadStats, recordResultApi, type GameLeaderboard, type GameStats } from '@/apps/_games/statsApi';
 import { t } from '@/i18n';
 
@@ -68,6 +69,9 @@ export function Chess({ onClose: _onClose }: Props) {
     const [stats,      setStats]      = useState<GameStats>(() => ({ cpu: { wins: 0, losses: 0, draws: 0 }, online: { wins: 0, losses: 0, draws: 0 }, won: 0, lost: 0 }));
 
     const [ended,      setEnded]      = useState<{ reason: string } | null>(null);
+    const [verdict,    setVerdict]    = useState<OnlineResult | null>(null);
+    const [drawSent,   setDrawSent]   = useState(false);
+    const [drawOffer,  setDrawOffer]  = useState(false);
     const [confirmLeave, setConfirmLeave] = useState(false);
     const [leaderboard, setLeaderboard] = useState<GameLeaderboard | null>(null);
     const [lbLoading,  setLbLoading]  = useState(false);
@@ -84,29 +88,35 @@ export function Chess({ onClose: _onClose }: Props) {
 
     const st = useMemo(() => status(game), [game]);
     const cpuOver = st === 'checkmate' || st === 'stalemate';
-    const over = mode === 'cpu' ? cpuOver : (cpuOver || !!ended);
+    const over = mode === 'cpu' ? cpuOver : (cpuOver || !!ended || !!verdict);
 
-    const applyMove = useCallback((mv: Move) => { setMoves(ms => [...ms, mv]); }, []);
+    const applyMove = useCallback((mv: Move) => {
+        setMoves(ms => [...ms, mv]);
+        setDrawSent(false); setDrawOffer(false);
+    }, []);
+    const clearOnline = () => { setEnded(null); setVerdict(null); setDrawSent(false); setDrawOffer(false); };
 
     const online = useOnlineLobby(GAME, {
         onStart: d => {
             clearTimeout(aiTimer.current);
             recorded.current = false;
             setMode('online'); setHumanColor(d.color as Color);
-            setMoves([]); setEnded(null); setThinking(false);
+            setMoves([]); clearOnline(); setThinking(false);
             setScreen('game');
         },
         onMove: mv => applyMove(mv as Move),
+        onResult: setVerdict,
+        onDrawOffer: () => setDrawOffer(true),
         onEnded: reason => setEnded({ reason }),
         onReset: () => {
             clearTimeout(aiTimer.current);
             recorded.current = false;
-            setEnded(null); setMoves([]); setThinking(false);
+            clearOnline(); setMoves([]); setThinking(false);
             setScreen('lobby');
         },
         onHome: () => {
             clearTimeout(aiTimer.current);
-            setEnded(null);
+            clearOnline();
             setScreen('home');
         },
         onStats: setStats,
@@ -120,8 +130,20 @@ export function Chess({ onClose: _onClose }: Props) {
 
     const onHumanMove = useCallback((mv: Move) => {
         applyMove(mv);
-        if (mode === 'online' && onlineRef.current) moveApi(onlineRef.current.gameId, mv);
-    }, [applyMove, mode]);
+        if (mode !== 'online' || !onlineRef.current) return;
+        const played = moves.length + 1;
+        void moveApi(onlineRef.current.gameId, { from: mv.from, to: mv.to, promo: mv.promo }).then(r => {
+            if (!r.ok) setMoves(ms => (ms.length === played ? ms.slice(0, -1) : ms));
+        });
+    }, [applyMove, mode, moves.length]);
+
+    const offerDraw = useCallback(() => {
+        if (!onlineRef.current) return;
+        setDrawSent(true);
+        offerDrawApi(onlineRef.current.gameId);
+    }, []);
+
+    const clock = useTurnClock(onlineGame?.turnSeconds ?? 0, mode === 'online' && screen === 'game' && !over, moves.length);
 
     useEffect(() => {
         if (mode !== 'cpu' || screen !== 'game' || cpuOver || game.turn === humanColor) return;
@@ -135,20 +157,14 @@ export function Chess({ onClose: _onClose }: Props) {
     }, [mode, screen, cpuOver, game, humanColor, aiOpts, applyMove]);
 
     useEffect(() => {
-        if (screen !== 'game' || !over || recorded.current) return;
+        if (mode !== 'cpu' || screen !== 'game' || !over || recorded.current) return;
         let result: 'win' | 'loss' | 'draw';
-        if (mode === 'online' && ended) result = 'win';
-        else if (st === 'stalemate') result = 'draw';
+        if (st === 'stalemate') result = 'draw';
         else if (st === 'checkmate') result = game.turn !== humanColor ? 'win' : 'loss';
         else return;
         recorded.current = true;
         void recordResultApi(GAME, mode, result).then(s => { if (s) setStats(s); });
-        if (mode === 'online' && !ended && onlineRef.current) {
-            const og = onlineRef.current;
-            finishApi(og.gameId);
-            if (og.pot > 0) reportResultApi(og.gameId, result);
-        }
-    }, [screen, over, ended, st, game.turn, humanColor, mode]);
+    }, [screen, over, st, game.turn, humanColor, mode]);
 
     useEffect(() => () => clearTimeout(aiTimer.current), []);
 
@@ -171,6 +187,14 @@ export function Chess({ onClose: _onClose }: Props) {
         const pot = mode === 'online' ? (onlineGame?.pot ?? 0) : 0;
         const win = pot > 0 ? t('chess.youWinAmount','you win ${amount}!', { amount: pot.toLocaleString('en-US') }) : t('chess.youWin','you win!');
         if (mode === 'online' && ended) return { text: (ended.reason === 'resign' ? t('chess.opponentResigned','Opponent resigned, ') : t('chess.opponentLeft','Opponent left, ')) + win, color: '#FFD54F' };
+        if (mode === 'online' && verdict) {
+            const youWin = verdict.winner === humanColor;
+            if (verdict.reason === 'timeout') return { text: youWin ? t('chess.oppOutOfTime','Opponent ran out of time, {win}', { win }) : t('chess.youOutOfTime','You ran out of time'), color: '#FFD54F' };
+            if (verdict.reason === 'agreed') return { text: pot > 0 ? t('chess.drawAgreedRefunded','Draw agreed (wager refunded)') : t('chess.drawAgreed','Draw agreed'), color: '#B0BEC5' };
+            if (verdict.reason === 'material') return { text: pot > 0 ? t('chess.deadDrawRefunded','No mate possible, draw (wager refunded)') : t('chess.deadDraw','No mate possible, draw'), color: '#B0BEC5' };
+            if (!verdict.winner) return { text: pot > 0 ? t('chess.stalemateRefunded','Stalemate, draw (wager refunded)') : t('chess.stalemateDraw','Stalemate, draw'), color: '#B0BEC5' };
+            return { text: youWin ? t('chess.checkmateWin','Checkmate, {win}', { win }) : t('chess.checkmateLose','Checkmate, you lose'), color: '#FFD54F' };
+        }
         if (st === 'checkmate') { const youWin = game.turn !== humanColor; return { text: youWin ? t('chess.checkmateWin','Checkmate, {win}', { win }) : t('chess.checkmateLose','Checkmate, you lose'), color: '#FFD54F' }; }
         if (st === 'stalemate') return { text: pot > 0 ? t('chess.stalemateRefunded','Stalemate, draw (wager refunded)') : t('chess.stalemateDraw','Stalemate, draw'), color: '#B0BEC5' };
         if (mode === 'cpu' && thinking) return { text: t('chess.computerThinking','Computer is thinking…'), color: '#FFD54F' };
@@ -182,7 +206,8 @@ export function Chess({ onClose: _onClose }: Props) {
                 : { text: t('chess.oppInCheck','{opp} is in check', { opp }), color: '#FF8A80' };
         }
         const text = yourTurn ? t('chess.yourMove','Your move') : t('chess.oppMove','{opp}’s move', { opp });
-        return { text, color: '#fff' };
+        const low = mode === 'online' && clock > 0 && clock <= LOW_CLOCK;
+        return { text: low ? t('games.withClock', '{text} · {n}s', { text, n: clock }) : text, color: low ? '#FF8A80' : '#fff' };
     })();
 
     const oppColor: Color = humanColor === 'w' ? 'b' : 'w';
@@ -249,6 +274,15 @@ export function Chess({ onClose: _onClose }: Props) {
                         />
 
                         <CapturedStrip name={t('chess.you','You')} captured={youCaptured} dark={oppColor === 'b'} advantage={youAdv} active={!over && game.turn === humanColor} />
+
+                        {mode === 'online' && !over && (
+                            <div className="flex shrink-0 items-center justify-end gap-2" style={{ width: BOARD }}>
+                                {drawOffer && <span dir="auto" className="min-w-0 flex-1 truncate text-[13px] font-semibold text-white/70">{t('chess.drawOffered','{opp} offers a draw', { opp: oppName })}</span>}
+                                <button type="button" disabled={drawSent} onClick={offerDraw} className="shrink-0 rounded-[10px] px-3 py-1.5 text-[13px] font-bold text-white active:opacity-80 disabled:opacity-40" style={{ background: drawOffer ? ACCENT : 'rgba(255,255,255,0.12)' }}>
+                                    {drawOffer ? t('chess.acceptDraw','Accept draw') : drawSent ? t('chess.drawOfferSent','Draw offered') : t('chess.offerDraw','Offer draw')}
+                                </button>
+                            </div>
+                        )}
 
                         <MoveList items={info.items} />
                     </div>

@@ -1,10 +1,13 @@
 import { fetchNui, isFiveM } from '@/core/nui';
-import { apiCall, apiData } from '@/core/api';
+import { apiCall, apiData, failText, type Envelope } from '@/core/api';
 
 export type Side = string;
 
 export interface LobbyMember { name: string; you: boolean; host: boolean; color: Side; canAfford: boolean; ready: boolean; returned: boolean }
-export interface LobbyState { id: string; host: string; public: boolean; wager: number; isHost: boolean; canStart: boolean; members: LobbyMember[] }
+export interface LobbyState { id: string; host: string; public: boolean; wager: number; maxWager?: number; isHost: boolean; canStart: boolean; members: LobbyMember[] }
+export interface ApiResult { ok: boolean; message?: string }
+
+const toResult = (r: Envelope<unknown>): ApiResult => ({ ok: r.success, message: r.success ? undefined : failText(r, undefined) });
 export interface LobbyListItem { id: string; host: string; count: number; wager: number }
 export interface PendingInvite { lobbyId: string; fromName: string }
 
@@ -27,7 +30,7 @@ const devJoin = (game: string, id: string): LobbyState => {
 export async function createLobbyApi(game: string, isPublic: boolean, side: Side, wager: number): Promise<{ lobby?: LobbyState; message?: string }> {
     if (!isFiveM) return { lobby: devLobby(isPublic, side, wager) };
     const r = await apiCall<LobbyState>('sd-phone:games:createLobby', { game, public: isPublic, color: side, wager });
-    return r.success && r.data ? { lobby: r.data } : { message: r.message };
+    return r.success && r.data ? { lobby: r.data } : { message: failText(r, undefined) };
 }
 
 export async function lobbiesApi(game: string): Promise<LobbyListItem[]> {
@@ -38,19 +41,17 @@ export async function lobbiesApi(game: string): Promise<LobbyListItem[]> {
 export async function joinLobbyApi(game: string, id: string): Promise<{ lobby?: LobbyState; message?: string }> {
     if (!isFiveM) return { lobby: devJoin(game, id) };
     const r = await apiCall<LobbyState>('sd-phone:games:joinLobby', { id });
-    return r.success && r.data ? { lobby: r.data } : { message: r.message };
+    return r.success && r.data ? { lobby: r.data } : { message: failText(r, undefined) };
 }
 
-export async function inviteLobbyApi(target: string): Promise<{ ok: boolean; message?: string }> {
+export async function inviteLobbyApi(target: string): Promise<ApiResult> {
     if (!isFiveM) return { ok: true };
-    const r = await apiCall<unknown>('sd-phone:games:inviteLobby', { target });
-    return { ok: r.success, message: r.message };
+    return toResult(await apiCall<unknown>('sd-phone:games:inviteLobby', { target }));
 }
 
-export async function startLobbyApi(id: string): Promise<{ ok: boolean; message?: string }> {
+export async function startLobbyApi(id: string): Promise<ApiResult> {
     if (!isFiveM) return { ok: true };
-    const r = await apiCall<unknown>('sd-phone:games:startLobby', { id });
-    return { ok: r.success, message: r.message };
+    return toResult(await apiCall<unknown>('sd-phone:games:startLobby', { id }));
 }
 
 export function declineInviteApi(): void { if (!isFiveM) return; void fetchNui('sd-phone:games:declineInvite'); }
@@ -58,12 +59,15 @@ export function leaveLobbyApi():   void { if (!isFiveM) return; void fetchNui('s
 
 export function kickMemberApi(): void { if (!isFiveM) return; void fetchNui('sd-phone:games:kickMember'); }
 export function setWagerApi(wager: number): void { if (!isFiveM) return; void fetchNui('sd-phone:games:setWager', { wager }); }
-export function setReadyApi(ready: boolean): void { if (!isFiveM) return; void fetchNui('sd-phone:games:setReady', { ready }); }
+export async function setReadyApi(ready: boolean, wager: number): Promise<ApiResult> {
+    if (!isFiveM) return { ok: true };
+    return toResult(await apiCall<unknown>('sd-phone:games:setReady', { ready, wager }));
+}
 
 export async function returnToLobbyApi(game: string): Promise<{ lobby?: LobbyState; message?: string }> {
     if (!isFiveM) return { lobby: devLobby(true, sidesFor(game)[0], 0) };
     const r = await apiCall<LobbyState>('sd-phone:games:returnToLobby');
-    return r.success && r.data ? { lobby: r.data } : { message: r.message };
+    return r.success && r.data ? { lobby: r.data } : { message: failText(r, undefined) };
 }
 
 export async function checkPendingApi(game: string): Promise<PendingInvite | null> {
@@ -71,19 +75,14 @@ export async function checkPendingApi(game: string): Promise<PendingInvite | nul
     return (await apiData<{ invite?: PendingInvite }>('sd-phone:games:pending', { game }))?.invite ?? null;
 }
 
-export function moveApi(gameId: string, move: unknown): void {
-    if (!isFiveM) return;
-    void fetchNui('sd-phone:games:move', { gameId, move });
+export async function moveApi(gameId: string, move: unknown): Promise<ApiResult> {
+    if (!isFiveM) return { ok: true };
+    return toResult(await apiCall<unknown>('sd-phone:games:move', { gameId, move }));
 }
 
-export function relayApi(gameId: string, data: unknown): void {
-    if (!isFiveM) return;
-    void fetchNui('sd-phone:games:relay', { gameId, data });
-}
-
-export function setupReadyApi(gameId: string): void {
-    if (!isFiveM || !gameId) return;
-    void fetchNui('sd-phone:games:setupReady', { gameId });
+export async function setupReadyApi(gameId: string, fleet: unknown): Promise<ApiResult> {
+    if (!isFiveM || !gameId) return { ok: true };
+    return toResult(await apiCall<unknown>('sd-phone:games:setupReady', { gameId, fleet }));
 }
 
 export function resignApi(gameId: string): void {
@@ -96,7 +95,7 @@ export function finishApi(gameId: string): void {
     void fetchNui('sd-phone:games:finish', { gameId });
 }
 
-export function reportResultApi(gameId: string, result: 'win' | 'loss' | 'draw'): void {
+export function offerDrawApi(gameId: string): void {
     if (!isFiveM || !gameId) return;
-    void fetchNui('sd-phone:games:report', { gameId, result });
+    void fetchNui('sd-phone:games:report', { gameId, result: 'draw' });
 }

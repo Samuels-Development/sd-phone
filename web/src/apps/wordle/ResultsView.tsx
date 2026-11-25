@@ -17,9 +17,11 @@ export function ResultsView({ pal, dk, state, outcome, onRematch, onMenu, rematc
     return (
         <div className="flex flex-1 flex-col px-4 pt-3 pb-7">
             <div className="mb-1 text-center text-[20px] font-extrabold" style={{ color: outcome.color }}>{outcome.text}</div>
-            <div className="mb-2.5 text-center text-[14px] font-semibold" style={{ color: pal.sub }}>
-                {t('wordle.theWordWas', 'The word was')} <span dir="ltr" style={{ color: pal.correct }}>{state.word}</span>
-            </div>
+            {state.word && (
+                <div className="mb-2.5 text-center text-[14px] font-semibold" style={{ color: pal.sub }}>
+                    {t('wordle.theWordWas', 'The word was')} <span dir="ltr" style={{ color: pal.correct }}>{state.word}</span>
+                </div>
+            )}
 
             <div className="flex-1 overflow-y-auto no-scrollbar">
                 <div className="flex flex-col gap-3">

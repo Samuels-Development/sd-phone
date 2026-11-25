@@ -4,7 +4,7 @@
 local ACTIONS = {
     'createLobby', 'lobbies', 'joinLobby', 'inviteLobby', 'declineInvite',
     'leaveLobby', 'kickMember', 'setWager', 'setReady', 'setupReady', 'returnToLobby', 'startLobby', 'pending', 'move',
-    'relay', 'resign', 'finish', 'report', 'stats', 'record', 'leaderboard', 'submitScore', 'scoreboard',
+    'resign', 'finish', 'report', 'stats', 'record', 'leaderboard', 'submitScore', 'scoreboard',
     'chipsGet', 'chipsBuy', 'chipsSell',
     'bjDeal', 'bjHit', 'bjStand', 'bjDouble',
     'slotsSpin', 'rouletteSpin',

@@ -14,8 +14,9 @@ import { LobbyRoom } from '@/apps/_games/LobbyRoom';
 import { Leaderboard } from '@/apps/_games/Leaderboard';
 import { GameOverDialog } from '@/apps/_games/GameOverDialog';
 import { GameHeader } from '@/apps/_games/GameHeader';
-import { finishApi, moveApi, registerGameSides, reportResultApi, type Side } from '@/apps/_games/onlineApi';
-import { useOnlineLobby } from '@/apps/_games/useOnlineLobby';
+import { moveApi, registerGameSides, type Side } from '@/apps/_games/onlineApi';
+import { useOnlineLobby, type OnlineResult } from '@/apps/_games/useOnlineLobby';
+import { LOW_CLOCK, useTurnClock } from '@/apps/_games/useTurnClock';
 import { loadLeaderboard, loadStats, recordResultApi, type GameLeaderboard, type GameStats } from '@/apps/_games/statsApi';
 
 interface Props { onClose: () => void; }
@@ -70,6 +71,7 @@ export function ConnectFour({ onClose: _onClose }: Props) {
     const [stats,      setStats]      = useState<GameStats>(() => ({ cpu: { wins: 0, losses: 0, draws: 0 }, online: { wins: 0, losses: 0, draws: 0 }, won: 0, lost: 0 }));
 
     const [ended,      setEnded]      = useState<{ reason: string } | null>(null);
+    const [verdict,    setVerdict]    = useState<OnlineResult | null>(null);
     const [confirmLeave, setConfirmLeave] = useState(false);
     const [leaderboard, setLeaderboard] = useState<GameLeaderboard | null>(null);
     const [lbLoading,  setLbLoading]  = useState(false);
@@ -83,7 +85,7 @@ export function ConnectFour({ onClose: _onClose }: Props) {
     const view = useMemo(() => replay(moves), [moves]);
     const { board, turn, lastDrop, status: gameStatus, winner, winLine } = view;
     const cpuOver = gameStatus !== 'playing';
-    const over = mode === 'cpu' ? cpuOver : (cpuOver || !!ended);
+    const over = mode === 'cpu' ? cpuOver : (cpuOver || !!ended || !!verdict);
 
     const applyCol = useCallback((col: number) => { setMoves(ms => [...ms, col]); }, []);
 
@@ -92,23 +94,24 @@ export function ConnectFour({ onClose: _onClose }: Props) {
             clearTimeout(aiTimer.current);
             recorded.current = false;
             setMode('online'); setHumanColor(Number(d.color) as Player);
-            setMoves([]); setEnded(null); setThinking(false);
+            setMoves([]); setEnded(null); setVerdict(null); setThinking(false);
             setScreen('game');
         },
         onMove: mv => {
             const m = mv as { col?: number };
             if (typeof m?.col === 'number') applyCol(m.col);
         },
+        onResult: setVerdict,
         onEnded: reason => setEnded({ reason }),
         onReset: () => {
             clearTimeout(aiTimer.current);
             recorded.current = false;
-            setEnded(null); setMoves([]); setThinking(false);
+            setEnded(null); setVerdict(null); setMoves([]); setThinking(false);
             setScreen('lobby');
         },
         onHome: () => {
             clearTimeout(aiTimer.current);
-            setEnded(null);
+            setEnded(null); setVerdict(null);
             setScreen('home');
         },
         onStats: setStats,
@@ -123,8 +126,14 @@ export function ConnectFour({ onClose: _onClose }: Props) {
     const onHumanDrop = useCallback((col: number) => {
         if (over || thinking || turn !== humanColor || dropRow(board, col) < 0) return;
         applyCol(col);
-        if (mode === 'online' && onlineRef.current) moveApi(onlineRef.current.gameId, { col });
-    }, [over, thinking, turn, humanColor, board, applyCol, mode]);
+        if (mode !== 'online' || !onlineRef.current) return;
+        const played = moves.length + 1;
+        void moveApi(onlineRef.current.gameId, { col }).then(r => {
+            if (!r.ok) setMoves(ms => (ms.length === played ? ms.slice(0, -1) : ms));
+        });
+    }, [over, thinking, turn, humanColor, board, applyCol, mode, moves.length]);
+
+    const clock = useTurnClock(onlineGame?.turnSeconds ?? 0, mode === 'online' && screen === 'game' && !over, moves.length);
 
     useEffect(() => {
         if (mode !== 'cpu' || screen !== 'game' || cpuOver || turn === humanColor) return;
@@ -138,20 +147,14 @@ export function ConnectFour({ onClose: _onClose }: Props) {
     }, [mode, screen, cpuOver, turn, humanColor, board, ai, applyCol]);
 
     useEffect(() => {
-        if (screen !== 'game' || !over || recorded.current) return;
+        if (mode !== 'cpu' || screen !== 'game' || !over || recorded.current) return;
         let result: 'win' | 'loss' | 'draw';
-        if (mode === 'online' && ended) result = 'win';
-        else if (gameStatus === 'draw') result = 'draw';
+        if (gameStatus === 'draw') result = 'draw';
         else if (gameStatus === 'win') result = winner === humanColor ? 'win' : 'loss';
         else return;
         recorded.current = true;
         void recordResultApi(GAME, mode, result).then(s => { if (s) setStats(s); });
-        if (mode === 'online' && !ended && onlineRef.current) {
-            const og = onlineRef.current;
-            finishApi(og.gameId);
-            if (og.pot > 0) reportResultApi(og.gameId, result);
-        }
-    }, [screen, over, ended, gameStatus, winner, humanColor, mode]);
+    }, [screen, over, gameStatus, winner, humanColor, mode]);
 
     useEffect(() => () => clearTimeout(aiTimer.current), []);
 
@@ -176,6 +179,13 @@ export function ConnectFour({ onClose: _onClose }: Props) {
             const win = pot > 0 ? t('connectfour.youWinAmountLc', 'you win ${amount}!', { amount: pot.toLocaleString('en-US') }) : t('connectfour.youWinLc', 'you win!');
             return { text: (ended.reason === 'resign' ? t('connectfour.opponentResigned', 'Opponent resigned, ') : t('connectfour.opponentLeft', 'Opponent left, ')) + win, color: '#FFD54F' };
         }
+        if (mode === 'online' && verdict) {
+            const youWin = verdict.winner === String(humanColor);
+            const winText = pot > 0 ? t('connectfour.youWinAmount', 'You win ${amount}!', { amount: pot.toLocaleString('en-US') }) : t('connectfour.youWin', 'You win!');
+            if (verdict.reason === 'timeout') return { text: youWin ? t('connectfour.oppOutOfTime', 'Opponent ran out of time. {win}', { win: winText }) : t('connectfour.youOutOfTime', 'You ran out of time'), color: '#FFD54F' };
+            if (!verdict.winner) return { text: pot > 0 ? t('connectfour.drawRefunded', 'Draw, wager refunded') : t('connectfour.itsADraw', "It's a draw"), color: '#B0BEC5' };
+            return { text: youWin ? winText : t('connectfour.youLose', 'You lose'), color: '#FFD54F' };
+        }
         if (gameStatus === 'win') {
             const youWin = winner === humanColor;
             if (mode === 'cpu') return { text: youWin ? t('connectfour.youWin', 'You win!') : t('connectfour.computerWins', 'Computer wins'), color: discColor(winner ?? 1).hi };
@@ -185,7 +195,9 @@ export function ConnectFour({ onClose: _onClose }: Props) {
         if (mode === 'cpu' && thinking) return { text: t('connectfour.computerThinking', 'Computer is thinking…'), color: discColor(turn).hi };
         const yourTurn = turn === humanColor;
         const opp = mode === 'cpu' ? t('connectfour.computer', 'Computer') : (onlineGame?.opponent ?? t('connectfour.opponent', 'Opponent'));
-        return { text: yourTurn ? t('connectfour.yourMove', 'Your move') : t('connectfour.oppMove', '{opp}’s move', { opp }), color: discColor(turn).hi };
+        const text = yourTurn ? t('connectfour.yourMove', 'Your move') : t('connectfour.oppMove', '{opp}’s move', { opp });
+        const low = mode === 'online' && clock > 0 && clock <= LOW_CLOCK;
+        return { text: low ? t('games.withClock', '{text} · {n}s', { text, n: clock }) : text, color: discColor(turn).hi };
     })();
 
     const startConfig = c4Config();

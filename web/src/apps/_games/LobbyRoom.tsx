@@ -29,6 +29,8 @@ export function LobbyRoom({ lobby, inviteError, accent, sideLabel, wagered = tru
     const id = target.replace(/\D/g, '');
     const seatOpen = lobby.members.length < 2;
     const parsedWager = Math.max(0, Math.floor(Number(wagerInput.replace(/\D/g, '')) || 0));
+    const cap = lobby.maxWager ?? Infinity;
+    const overCap = parsedWager > cap;
 
     const opponent = lobby.members.find(m => !m.host);
     const oppReady = opponent?.ready ?? false;
@@ -69,7 +71,7 @@ export function LobbyRoom({ lobby, inviteError, accent, sideLabel, wagered = tru
                 </div>
             </div>
 
-            {wagered && lobby.isHost && (
+            {wagered && lobby.isHost && cap > 0 && (
                 <div className="mt-3 rounded-[18px] p-4" style={{ background: 'rgba(255,255,255,0.07)' }}>
                     <div className="mb-1.5 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-white/45">
                         {currency === 'chips' ? t('games.wagerChipsOptional', 'Wager (chips), optional') : t('games.wagerBankOptional', 'Wager (bank), optional')}
@@ -87,9 +89,10 @@ export function LobbyRoom({ lobby, inviteError, accent, sideLabel, wagered = tru
                                 className="w-full rounded-[12px] bg-black/30 py-2.5 ps-8 pe-4 text-[17px] text-white outline-none placeholder-white/30 disabled:opacity-50"
                             />
                         </div>
-                        <button type="button" disabled={oppReady || parsedWager === lobby.wager} onClick={() => onSetWager(parsedWager)} className="shrink-0 rounded-[12px] px-5 text-[15px] font-bold text-white active:opacity-80 disabled:opacity-40" style={{ background: accent }}>{t('games.update', 'Update')}</button>
+                        <button type="button" disabled={oppReady || overCap || parsedWager === lobby.wager} onClick={() => onSetWager(parsedWager)} className="shrink-0 rounded-[12px] px-5 text-[15px] font-bold text-white active:opacity-80 disabled:opacity-40" style={{ background: accent }}>{t('games.update', 'Update')}</button>
                     </div>
                     {oppReady && <div className="mt-1.5 text-[12px] font-medium text-white/45">{t('games.wagerLockedNote', 'Your opponent is ready. The wager is locked in.')}</div>}
+                    {!oppReady && Number.isFinite(cap) && <div className="mt-1.5 text-[12px] font-medium" style={{ color: overCap ? '#FF8A80' : 'rgba(255,255,255,0.45)' }}>{t('games.wagerCapNote', 'Wagers are capped at {amount}', { amount: fmtAmt(cap) })}</div>}
                 </div>
             )}
 
@@ -131,6 +134,7 @@ export function LobbyRoom({ lobby, inviteError, accent, sideLabel, wagered = tru
                     </>
                 ) : (
                     <>
+                        {inviteError && <div className="text-center text-[13px] font-medium text-[#FF8A80]">{inviteError}</div>}
                         {youReady && (
                             <div className="flex items-center justify-center gap-2 rounded-[12px] px-3 py-2.5 text-center text-[13px] font-semibold text-white/55" style={{ background: 'rgba(255,255,255,0.06)' }}>
                                 <Loader2 className="h-[15px] w-[15px] animate-spin text-white/40" strokeWidth={2.2} />

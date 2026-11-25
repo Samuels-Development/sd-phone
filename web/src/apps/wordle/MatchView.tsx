@@ -11,9 +11,9 @@ const mmss = (sec: number) => formatDuration(sec);
 
 const TILE = 37;
 
-export function MatchView({ pal, state, you, youDone, input, timeLeft, low, keyStates, onKey }: {
+export function MatchView({ pal, state, you, youDone, input, timeLeft, low, keyStates, notice, onKey }: {
     pal: Pal; state: CoopState; you: Progress | undefined; youDone: boolean; input: string;
-    timeLeft: number; low: boolean; keyStates: Record<string, Cell>; onKey: (k: string) => void;
+    timeLeft: number; low: boolean; keyStates: Record<string, Cell>; notice: string | null; onKey: (k: string) => void;
 }) {
     const oppPlayer = state.players.find(p => !p.you);
     const opp = oppPlayer ? state.progress[oppPlayer.id] : undefined;
@@ -91,10 +91,13 @@ export function MatchView({ pal, state, you, youDone, input, timeLeft, low, keyS
                 </div>
             </div>
 
-            {youDone && (
+            {(youDone || notice) && (
                 <div className="flex shrink-0 flex-col items-center px-5 pb-2">
-                    <div className="text-[14px] font-semibold" style={{ color: pal.sub }}>
-                        {you?.solved ? t('wordle.solvedWaiting', 'Solved in {tries}! Waiting on your opponent.', { tries: you.tries }) : t('wordle.outOfGuessesWord', 'Out of guesses. The word was {word}', { word: state.word })}
+                    <div className="text-[14px] font-semibold" style={{ color: notice ? pal.danger : pal.sub }}>
+                        {notice
+                            ?? (you?.solved ? t('wordle.solvedWaiting', 'Solved in {tries}! Waiting on your opponent.', { tries: you.tries })
+                            : you?.failed ? t('wordle.outOfGuessesWaiting', 'Out of guesses. Waiting on your opponent.')
+                            : t('wordle.timeUpWaiting', "Time's up! Waiting for the result."))}
                     </div>
                 </div>
             )}

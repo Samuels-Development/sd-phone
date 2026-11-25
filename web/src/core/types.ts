@@ -518,13 +518,13 @@ export type NuiMessage =
     | { action: 'battleship:lobby';    data: { id: string; host: string; public: boolean; wager: number; isHost: boolean; canStart: boolean; members: { name: string; you: boolean; host: boolean; color: string; canAfford: boolean; ready: boolean; returned: boolean }[] } }
     | { action: 'battleship:lobbyClosed'; data: Record<string, never> }
     | { action: 'battleship:start';    data: { gameId: string; color: string; opponent: string; pot: number } }
-    | { action: 'battleship:move';     data: { gameId: string; move: { shot: { r: number; c: number } | null; prevResult: { hit: boolean; sunk: string | null } | null } } }
+    | { action: 'battleship:move';     data: { gameId: string; move: { by: string; cell: number; hit: boolean; sunk?: string } } }
     | { action: 'battleship:ended';    data: { reason: string } }
     | { action: 'wordle:invited';      data: { fromSrc: string; fromName: string; lobbyId: string } }
     | { action: 'wordle:lobby';        data: { id: string; host: string; public: boolean; wager: number; isHost: boolean; canStart: boolean; members: { name: string; you: boolean; host: boolean; color: string; canAfford: boolean; ready: boolean; returned: boolean }[] } }
     | { action: 'wordle:lobbyClosed';  data: Record<string, never> }
     | { action: 'wordle:start';        data: { gameId: string; color: string; opponent: string; pot: number } }
-    | { action: 'wordle:move';         data: { gameId: string; move: { rows: string[][]; solved: boolean; failed: boolean; tries: number; finishMs: number } } }
+    | { action: 'wordle:move';         data: { gameId: string; move: { side: string; guess?: string; row: ('correct' | 'present' | 'absent')[]; solved: boolean; failed: boolean; tries: number } } }
     | { action: 'wordle:ended';        data: { reason: string } }
     | { action: 'sd-phone:notification';       data: { id?: string; app?: string; image?: string; titleKey?: string; title: string; titleVars?: Record<string, string | number>; bodyKey?: string; body?: string; bodyVars?: Record<string, string | number>; time?: string; appId?: string; quietInApp?: boolean; emergency?: boolean; otherPhone?: boolean; phoneColor?: string; profileKey?: string; link?: Record<string, unknown> } }
     | { action: 'sd-phone:badges';             data: Record<string, number> }

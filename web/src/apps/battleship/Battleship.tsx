@@ -6,7 +6,7 @@ import { BattleshipIcon } from '@/shell/AppIconSVG';
 import { t } from '@/i18n';
 import { Grid, type CellView } from './Board';
 import {
-    CELLS, FLEET_CELLS, aiNextShot, colOf, idx, randomFleet, rowOf, shipAt, sunkCells,
+    CELLS, FLEET_CELLS, aiNextShot, randomFleet, shipAt, sunkCells,
     type Difficulty, type Fleet,
 } from './logic';
 import { StartScreen, type GameStartConfig } from '@/apps/_games/StartScreen';
@@ -15,8 +15,9 @@ import { LobbyRoom } from '@/apps/_games/LobbyRoom';
 import { Leaderboard } from '@/apps/_games/Leaderboard';
 import { GameOverDialog } from '@/apps/_games/GameOverDialog';
 import { GameHeader } from '@/apps/_games/GameHeader';
-import { finishApi, moveApi, registerGameSides, relayApi, reportResultApi, setupReadyApi, type Side } from '@/apps/_games/onlineApi';
-import { useOnlineLobby } from '@/apps/_games/useOnlineLobby';
+import { moveApi, registerGameSides, setupReadyApi, type Side } from '@/apps/_games/onlineApi';
+import { useOnlineLobby, type OnlineResult } from '@/apps/_games/useOnlineLobby';
+import { LOW_CLOCK, useTurnClock } from '@/apps/_games/useTurnClock';
 import { loadLeaderboard, loadStats, recordResultApi, type GameLeaderboard, type GameStats } from '@/apps/_games/statsApi';
 
 interface Props { onClose: () => void; }
@@ -41,8 +42,8 @@ const bsConfig = (): GameStartConfig => ({
 });
 const sideLabel = (s: Side) => (s === 'random' ? t('battleship.random', 'Random') : s === '1' ? t('battleship.first', 'First') : t('battleship.second', 'Second'));
 
-interface ShotResult { hit: boolean; sunk: string | null }
-interface BSMove { shot: { r: number; c: number } | null; prevResult: ShotResult | null }
+interface ShotView { by: string; cell: number; hit: boolean; sunk?: string }
+interface Reveal { fleets?: Record<string, Fleet> }
 type Shots = Record<number, 'hit' | 'miss'>;
 
 const CELL  = 34;
@@ -66,6 +67,7 @@ export function Battleship({ onClose: _onClose }: Props) {
     const [flash,        setFlash]        = useState<string | null>(null);
 
     const [ended,       setEnded]       = useState<{ reason: string } | null>(null);
+    const [verdict,     setVerdict]     = useState<OnlineResult | null>(null);
     const [confirmLeave, setConfirmLeave] = useState(false);
     const [leaderboard, setLeaderboard] = useState<GameLeaderboard | null>(null);
     const [lbLoading,   setLbLoading]   = useState(false);
@@ -75,18 +77,19 @@ export function Battleship({ onClose: _onClose }: Props) {
     const myFleetRef   = useRef(myFleet);    useEffect(() => { myFleetRef.current = myFleet; }, [myFleet]);
     const enemyFleetRef = useRef(enemyFleet); useEffect(() => { enemyFleetRef.current = enemyFleet; }, [enemyFleet]);
     const phaseRef     = useRef(phase);      useEffect(() => { phaseRef.current = phase; }, [phase]);
+    const sideRef      = useRef(humanSide);  useEffect(() => { sideRef.current = humanSide; }, [humanSide]);
     const enemyRef     = useRef<Shots>({});
     const meRef        = useRef<Shots>({});
-    const myLastTarget = useRef<number | null>(null);
-    const lastResolved = useRef<ShotResult | null>(null);
-    const pendingShot  = useRef<{ r: number; c: number } | null>(null);
 
     useEffect(() => { void loadStats(GAME).then(setStats); }, []);
 
 
     const enemyCellsHit = useMemo(() => Object.values(shotsAtEnemy).filter(v => v === 'hit').length, [shotsAtEnemy]);
     const myCellsHit     = useMemo(() => Object.values(shotsAtMe).filter(v => v === 'hit').length, [shotsAtMe]);
-    const result: 'win' | 'loss' | null = enemyCellsHit >= FLEET_CELLS ? 'win' : myCellsHit >= FLEET_CELLS ? 'loss' : null;
+    const verdictResult: 'win' | 'loss' | 'draw' | null = verdict ? (verdict.winner ? (verdict.winner === humanSide ? 'win' : 'loss') : 'draw') : null;
+    const result: 'win' | 'loss' | 'draw' | null = mode === 'online'
+        ? verdictResult
+        : enemyCellsHit >= FLEET_CELLS ? 'win' : myCellsHit >= FLEET_CELLS ? 'loss' : null;
     const over = (mode === 'online' && !!ended) || result !== null;
 
     const online = useOnlineLobby(GAME, {
@@ -94,27 +97,15 @@ export function Battleship({ onClose: _onClose }: Props) {
             resetMatch('online', d.color === '1' ? '1' : '2', 'medium');
             setScreen('game');
         },
-        onMove: mv => {
-            const m = mv as BSMove;
-            if (m) handleIncoming(m);
-        },
-        onRelay: data => handleRelay(data),
+        onMove: mv => handleShot(mv as ShotView),
         onBegin: d => {
             phaseRef.current = 'firing';
             setPhase('firing');
             setOppDeployed(true);
-            const mine = d.turn === d.you;
-            if (pendingShot.current) {
-                const shot = pendingShot.current;
-                pendingShot.current = null;
-                const lost = resolveIncoming(shot);
-                relayResult();
-                setMyTurn(!lost);
-                return;
-            }
-            setMyTurn(mine);
+            setMyTurn(d.turn === d.you);
         },
         onOppReady: () => setOppDeployed(true),
+        onResult: setVerdict,
         onEnded: reason => setEnded({ reason }),
         onReset: () => {
             clearGame();
@@ -141,8 +132,13 @@ export function Battleship({ onClose: _onClose }: Props) {
         return sunkCells(myFleet, hits);
     }, [shotsAtMe, myFleet]);
 
+    const revealed: Fleet | undefined = useMemo(() => {
+        const fleets = (verdict?.reveal as Reveal | undefined)?.fleets;
+        return fleets?.[humanSide === '1' ? '2' : '1'];
+    }, [verdict, humanSide]);
+
     const enemyView: CellView[] = useMemo(() => Array.from({ length: CELLS }, (_, i) =>
-        shotsAtEnemy[i] === 'hit' ? 'hit' : shotsAtEnemy[i] === 'miss' ? 'miss' : 'water'), [shotsAtEnemy]);
+        shotsAtEnemy[i] === 'hit' ? 'hit' : shotsAtEnemy[i] === 'miss' ? 'miss' : revealed && shipAt(revealed, i) ? 'ship' : 'water'), [shotsAtEnemy, revealed]);
     const myFleetView: CellView[] = useMemo(() => Array.from({ length: CELLS }, (_, i) => {
         if (shipAt(myFleet, i)) return mySunk.has(i) ? 'sunk' : shotsAtMe[i] === 'hit' ? 'hit' : 'ship';
         return shotsAtMe[i] === 'miss' ? 'miss' : 'water';
@@ -151,57 +147,31 @@ export function Battleship({ onClose: _onClose }: Props) {
     const writeEnemy = (next: Shots) => { enemyRef.current = next; setShotsAtEnemy(next); };
     const writeMe    = (next: Shots) => { meRef.current = next; setShotsAtMe(next); };
 
-    const resolveIncoming = useCallback((shot: { r: number; c: number }): boolean => {
-        const cell = idx(shot.r, shot.c);
-        const ship = shipAt(myFleetRef.current, cell);
-        const hit = !!ship;
-        const next: Shots = { ...meRef.current, [cell]: hit ? 'hit' : 'miss' };
-        writeMe(next);
-        let sunkName: string | null = null;
-        if (ship) {
-            const hits = new Set<number>(Object.keys(next).map(Number).filter(c => next[c] === 'hit'));
-            if (ship.cells.every(c => hits.has(c))) sunkName = ship.name;
+    const handleShot = useCallback((m: ShotView) => {
+        if (typeof m?.cell !== 'number') return;
+        const mark = m.hit ? 'hit' : 'miss';
+        if (m.by === sideRef.current) {
+            writeEnemy({ ...enemyRef.current, [m.cell]: mark });
+            setFlash(m.hit ? (m.sunk ? t('battleship.youSankTheir', 'You sank their {name}!', { name: m.sunk }) : t('battleship.directHit', 'Direct hit!')) : t('battleship.miss', 'Miss.'));
+            setMyTurn(false);
+            return;
         }
-        lastResolved.current = { hit, sunk: sunkName };
-        if (hit) setFlash(sunkName ? t('battleship.theySankYour', 'They sank your {name}!', { name: sunkName }) : t('battleship.theyHitFleet', 'They hit your fleet!'));
-        return Object.values(next).filter(v => v === 'hit').length >= FLEET_CELLS;
-    }, []);
-
-    const relayResult = () => {
-        if (onlineRef.current) relayApi(onlineRef.current.gameId, { prevResult: lastResolved.current });
-        lastResolved.current = null;
-    };
-
-    const handleIncoming = useCallback((m: BSMove) => {
-        if (!m.shot) return;
-        if (phaseRef.current !== 'firing') { pendingShot.current = m.shot; return; }
-        const lost = resolveIncoming(m.shot);
-        relayResult();
-        setMyTurn(!lost);
-    }, [resolveIncoming]);
-
-    const handleRelay = useCallback((data: unknown) => {
-        const res = (data as { prevResult?: ShotResult | null } | null)?.prevResult;
-        if (!res || myLastTarget.current == null) return;
-        const tcell = myLastTarget.current;
-        const next: Shots = { ...enemyRef.current, [tcell]: res.hit ? 'hit' : 'miss' };
-        writeEnemy(next);
-        myLastTarget.current = null;
-        setFlash(res.hit ? (res.sunk ? t('battleship.youSankTheir', 'You sank their {name}!', { name: res.sunk }) : t('battleship.directHit', 'Direct hit!')) : t('battleship.miss', 'Miss.'));
-        if (Object.values(next).filter(v => v === 'hit').length >= FLEET_CELLS) setMyTurn(false);
+        writeMe({ ...meRef.current, [m.cell]: mark });
+        setFlash(m.hit ? (m.sunk ? t('battleship.theySankYour', 'They sank your {name}!', { name: m.sunk }) : t('battleship.theyHitFleet', 'They hit your fleet!')) : t('battleship.theyMissed', 'They missed.'));
+        setMyTurn(true);
     }, []);
 
     const resetMatch = useCallback((newMode: Mode, side: '1' | '2', diff: Difficulty) => {
         clearTimeout(aiTimer.current);
         recorded.current = false;
-        myLastTarget.current = null; lastResolved.current = null; pendingShot.current = null;
         enemyRef.current = {}; meRef.current = {};
         phaseRef.current = 'placing';
+        sideRef.current = side;
         setMode(newMode); setHumanSide(side); setDifficulty(diff);
         setMyFleet(randomFleet());
         setEnemyFleet(newMode === 'cpu' ? randomFleet() : null);
         setShotsAtEnemy({}); setShotsAtMe({});
-        setPhase('placing'); setMyTurn(false); setThinking(false); setEnded(null); setFlash(null);
+        setPhase('placing'); setMyTurn(false); setThinking(false); setEnded(null); setVerdict(null); setFlash(null);
         setOppDeployed(false);
     }, []);
 
@@ -227,18 +197,10 @@ export function Battleship({ onClose: _onClose }: Props) {
     useEffect(() => { if (!flash) return; const t = setTimeout(() => setFlash(null), 1700); return () => clearTimeout(t); }, [flash]);
 
     useEffect(() => {
-        if (screen !== 'game' || !over || recorded.current) return;
-        let res: 'win' | 'loss';
-        if (mode === 'online' && ended) res = 'win';
-        else if (result) res = result;
-        else return;
+        if (mode !== 'cpu' || screen !== 'game' || !result || recorded.current) return;
         recorded.current = true;
-        void recordResultApi(GAME, mode, res).then(s => { if (s) setStats(s); });
-        if (mode === 'online' && !ended && onlineRef.current) {
-            finishApi(onlineRef.current.gameId);
-            if ((onlineRef.current.pot || 0) > 0) reportResultApi(onlineRef.current.gameId, res);
-        }
-    }, [screen, over, ended, result, mode]);
+        void recordResultApi(GAME, mode, result).then(s => { if (s) setStats(s); });
+    }, [screen, result, mode]);
 
     useEffect(() => () => clearTimeout(aiTimer.current), []);
 
@@ -250,10 +212,16 @@ export function Battleship({ onClose: _onClose }: Props) {
     function shuffleFleet() { if (phase === 'placing') setMyFleet(randomFleet()); }
     function confirmPlacement() {
         if (mode === 'online') {
+            if (!onlineRef.current) return;
             phaseRef.current = 'waiting';
             setPhase('waiting');
             setMyTurn(false);
-            if (onlineRef.current) setupReadyApi(onlineRef.current.gameId);
+            void setupReadyApi(onlineRef.current.gameId, myFleet.map(s => ({ id: s.id, cells: s.cells }))).then(r => {
+                if (r.ok || phaseRef.current !== 'waiting') return;
+                phaseRef.current = 'placing';
+                setPhase('placing');
+                if (r.message) setFlash(r.message);
+            });
             return;
         }
         phaseRef.current = 'firing';
@@ -272,10 +240,13 @@ export function Battleship({ onClose: _onClose }: Props) {
                 setFlash(ship.cells.every(c => hits.has(c)) ? t('battleship.sunkTheir', 'Sunk their {name}!', { name: ship.name }) : t('battleship.hit', 'Hit!'));
             } else setFlash(t('battleship.miss', 'Miss.'));
             setMyTurn(false);
-        } else {
-            myLastTarget.current = cell;
-            moveApi(onlineRef.current!.gameId, { shot: { r: rowOf(cell), c: colOf(cell) }, prevResult: null });
+        } else if (onlineRef.current) {
             setMyTurn(false);
+            void moveApi(onlineRef.current.gameId, { cell }).then(r => {
+                if (r.ok) return;
+                setMyTurn(true);
+                if (r.message) setFlash(r.message);
+            });
         }
     }
 
@@ -286,16 +257,30 @@ export function Battleship({ onClose: _onClose }: Props) {
     function clearGame() {
         clearTimeout(aiTimer.current);
         enemyRef.current = {}; meRef.current = {};
-        myLastTarget.current = null; lastResolved.current = null; pendingShot.current = null;
-        setShotsAtEnemy({}); setShotsAtMe({}); setPhase('placing'); setMyTurn(false); setThinking(false); setEnded(null); setFlash(null);
+        setShotsAtEnemy({}); setShotsAtMe({}); setPhase('placing'); setMyTurn(false); setThinking(false); setEnded(null); setVerdict(null); setFlash(null);
         setOppDeployed(false);
         phaseRef.current = 'placing';
         recorded.current = false;
     }
-    const banner = (() => {
+    const shotCount = Object.keys(shotsAtEnemy).length + Object.keys(shotsAtMe).length;
+    const clock = useTurnClock(
+        (phase === 'firing' ? onlineGame?.turnSeconds : onlineGame?.setupSeconds) ?? 0,
+        mode === 'online' && screen === 'game' && !over,
+        phase === 'firing' ? shotCount : -1,
+    );
+
+    const special = (() => {
+        const youWin = pot > 0 ? t('battleship.youWinAmount', 'You win ${amount}!', { amount: pot.toLocaleString('en-US') }) : t('battleship.youWin', 'You win!');
+        if (mode === 'online' && ended) return (ended.reason === 'resign' ? t('battleship.opponentResigned', 'Opponent resigned. ') : t('battleship.opponentLeft', 'Opponent left. ')) + youWin;
+        if (result === 'draw') return pot > 0 ? t('battleship.nobodyDeployedRefunded', 'Nobody deployed. Wager refunded.') : t('battleship.nobodyDeployed', 'Nobody deployed.');
+        if (mode === 'online' && verdict?.reason === 'timeout') return result === 'win' ? t('battleship.oppOutOfTime', 'Opponent ran out of time. ') + youWin : t('battleship.youOutOfTime', 'You ran out of time.');
+        return null;
+    })();
+
+    const baseBanner = (() => {
         if (over) {
             const win = pot > 0 ? t('battleship.youWinAmount', 'You win ${amount}!', { amount: pot.toLocaleString('en-US') }) : t('battleship.victoryFleetSunk', 'Victory! Their fleet is sunk.');
-            if (mode === 'online' && ended) return (ended.reason === 'resign' ? t('battleship.opponentResigned', 'Opponent resigned. ') : t('battleship.opponentLeft', 'Opponent left. ')) + (pot > 0 ? t('battleship.youWinAmount', 'You win ${amount}!', { amount: pot.toLocaleString('en-US') }) : t('battleship.youWin', 'You win!'));
+            if (special) return special;
             return result === 'win' ? win : t('battleship.defeatFleetSunk', 'Defeat. Your fleet was sunk.');
         }
         if (phase === 'placing') return t('battleship.positionFleet', 'Position your fleet');
@@ -307,10 +292,11 @@ export function Battleship({ onClose: _onClose }: Props) {
         if (flash) return flash;
         return myTurn ? t('battleship.yourShot', 'Your shot, fire!') : (thinking ? t('battleship.takingAim', '{name} is taking aim…', { name: oppName }) : t('battleship.oppTurn', "{name}'s turn", { name: oppName }));
     })();
-    const resultTitle = (mode === 'online' && ended)
-        ? (ended.reason === 'resign' ? t('battleship.opponentResigned', 'Opponent resigned. ') : t('battleship.opponentLeft', 'Opponent left. ')) + (pot > 0 ? t('battleship.youWinAmount', 'You win ${amount}!', { amount: pot.toLocaleString('en-US') }) : t('battleship.youWin', 'You win!'))
-        : result === 'win' ? (pot > 0 ? t('battleship.youWinAmount', 'You win ${amount}!', { amount: pot.toLocaleString('en-US') }) : t('battleship.victoryFleetSunkShort', 'Victory! Fleet sunk.'))
-        : t('battleship.defeatFleetSunk', 'Defeat. Your fleet was sunk.');
+    const lowClock = mode === 'online' && !over && !flash && clock > 0 && clock <= LOW_CLOCK;
+    const banner = lowClock ? t('games.withClock', '{text} · {n}s', { text: baseBanner, n: clock }) : baseBanner;
+    const resultTitle = special
+        ?? (result === 'win' ? (pot > 0 ? t('battleship.youWinAmount', 'You win ${amount}!', { amount: pot.toLocaleString('en-US') }) : t('battleship.victoryFleetSunkShort', 'Victory! Fleet sunk.'))
+        : t('battleship.defeatFleetSunk', 'Defeat. Your fleet was sunk.'));
 
     const startConfig = bsConfig();
     const screenKey = screen === 'lobby' ? (lobby ? 'lobby-room' : 'lobby-hub') : screen;
@@ -367,7 +353,7 @@ export function Battleship({ onClose: _onClose }: Props) {
                     ) : (
                         <div className="flex min-h-0 flex-1 flex-col items-center gap-2 pt-2" style={{ paddingBottom: 'calc(var(--safe-bottom) + 16px)' }}>
                             <div className="text-[11px] font-semibold uppercase tracking-wide text-white/45">{t('battleship.enemyWaters', 'Enemy waters')}</div>
-                            <Grid cells={enemyView} cell={CELL} accent={ACCENT} onTap={fire} locked={!myTurn || over || thinking} />
+                            <Grid cells={enemyView} cell={CELL} accent={ACCENT} onTap={fire} locked={!myTurn || over || thinking} ships={revealed} />
                             <div className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-white/45">{t('battleship.yourFleet', 'Your fleet')}</div>
                             <Grid cells={myFleetView} cell={CELL} accent={ACCENT} ships={myFleet} />
                         </div>

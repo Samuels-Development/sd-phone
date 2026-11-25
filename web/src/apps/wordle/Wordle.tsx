@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { AlertDialog } from '@/ui/AlertDialog';
 import { WordleIcon } from '@/shell/AppIconSVG';
@@ -8,8 +8,9 @@ import { StartScreen, type GameStartConfig } from '@/apps/_games/StartScreen';
 import { OnlineHub } from '@/apps/_games/OnlineHub';
 import { LobbyRoom } from '@/apps/_games/LobbyRoom';
 import { Leaderboard } from '@/apps/_games/Leaderboard';
-import { finishApi, registerGameSides, reportResultApi, type Side } from '@/apps/_games/onlineApi';
-import { useOnlineLobby } from '@/apps/_games/useOnlineLobby';
+import { registerGameSides, type Side } from '@/apps/_games/onlineApi';
+import { useOnlineLobby, type OnlineResult } from '@/apps/_games/useOnlineLobby';
+import { TIME_LIMIT } from './stats';
 import { loadLeaderboard, loadStats as loadServerStats, recordResultApi, type GameLeaderboard, type GameStats } from '@/apps/_games/statsApi';
 import { GameHeader } from '@/apps/_games/GameHeader';
 import { t } from '@/i18n';
@@ -47,57 +48,41 @@ export function Wordle({ onClose: _onClose }: Props) {
     const [serverStats, setServerStats] = useState<GameStats>(() => ({ cpu: { wins: 0, losses: 0, draws: 0 }, online: { wins: 0, losses: 0, draws: 0 }, won: 0, lost: 0 }));
     const [soloSeed, setSoloSeed] = useState(0);
 
-    const [ended,    setEnded]    = useState(false);
-    const [resolved, setResolved] = useState(false);
+    const [ended,    setEnded]    = useState<{ reveal: unknown } | null>(null);
+    const [verdict,  setVerdict]  = useState<OnlineResult | null>(null);
     const [confirmLeave, setConfirmLeave] = useState(false);
     const [leaderboard, setLeaderboard] = useState<GameLeaderboard | null>(null);
     const [lbLoading, setLbLoading] = useState(false);
-
-    const endedRef  = useRef(ended);      useEffect(() => { endedRef.current = ended; }, [ended]);
-    const recordedRef = useRef(false);
 
     useEffect(() => { void loadServerStats(GAME).then(setServerStats); }, []);
 
     const online = useOnlineLobby(GAME, {
         onStart: () => {
-            recordedRef.current = false; setResolved(false); setEnded(false);
+            setVerdict(null); setEnded(null);
             setScreen('game');
         },
-        onEnded: () => setEnded(true),
+        onResult: setVerdict,
+        onEnded: (_reason, reveal) => setEnded({ reveal }),
         onReset: () => {
-            recordedRef.current = false;
-            setEnded(false); setResolved(false);
+            setEnded(null); setVerdict(null);
             setScreen('lobby');
         },
         onHome: () => {
-            setEnded(false); setResolved(false);
+            setEnded(null); setVerdict(null);
             setScreen('home');
             void loadServerStats(GAME).then(setServerStats);
         },
         onStats: setServerStats,
         inLobbyScreen: screen === 'lobby',
-        matchOver: resolved || ended,
+        matchOver: !!verdict || !!ended,
     });
     const { lobby, lobbies, incoming, hubError, inviteError, lobbyGone, onlineGame } = online;
-
-    const onlineRef = useRef(onlineGame);
-    onlineRef.current = onlineGame;
-
 
     function startSolo() { setSoloSeed(s => s + 1); setScreen('solo'); }
 
     function finishSolo(won: boolean) {
         void recordResultApi(GAME, 'cpu', won ? 'win' : 'loss').then(s => { if (s) setServerStats(s); });
     }
-
-    const onMatchResult = useCallback((r: 'win' | 'loss' | 'draw') => {
-        setResolved(true);
-        if (recordedRef.current) return;
-        recordedRef.current = true;
-        void recordResultApi(GAME, 'online', r).then(s => { if (s) setServerStats(s); });
-        const og = onlineRef.current;
-        if (og && !endedRef.current) { finishApi(og.gameId); if (og.pot > 0) reportResultApi(og.gameId, r); }
-    }, []);
 
     function openLeaderboard() {
         setScreen('leaderboard');
@@ -106,7 +91,7 @@ export function Wordle({ onClose: _onClose }: Props) {
     }
 
     const startConfig = wordleConfig();
-    const inMatch = screen === 'game' && !resolved && !ended;
+    const inMatch = screen === 'game' && !verdict && !ended;
     const title = screen === 'lobby' ? (lobby ? t('wordle.lobby', 'Lobby') : t('wordle.playOnline', 'Play Online')) : screen === 'leaderboard' ? t('wordle.leaderboard', 'Leaderboard') : t('wordle.title', 'Penta');
 
     return (
@@ -148,7 +133,7 @@ export function Wordle({ onClose: _onClose }: Props) {
                 )}
 
                 {screen === 'game' && onlineGame && (
-                    <OnlineMatch pal={PAL} dk gameId={onlineGame.gameId} opponent={onlineGame.opponent} pot={onlineGame.pot} oppLeft={ended} onResult={onMatchResult} onRematch={online.returnToLobby} onMenu={online.goHome} rematchDisabled={lobbyGone} />
+                    <OnlineMatch pal={PAL} dk gameId={onlineGame.gameId} side={onlineGame.side} timeLimit={onlineGame.timeLimit || TIME_LIMIT} opponent={onlineGame.opponent} pot={onlineGame.pot} verdict={verdict} oppLeft={!!ended} reveal={ended?.reveal} onRematch={online.returnToLobby} onMenu={online.goHome} rematchDisabled={lobbyGone} />
                 )}
             </div>
 
