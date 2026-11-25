@@ -1,11 +1,10 @@
-import { memo, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { lazy, memo, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 
 import { getAppEntry, isPreviewApp, type AppId } from './appRegistry';
 import { getCardStage, getFullscreenStage, getSplitStage, registerFullscreenStage, registerSplitStage, subscribeCardStages } from './appDeckBridge';
 import { DeckActiveProvider } from './deckActive';
-import { CustomAppFrame } from './CustomAppFrame';
 import { getCustomApp } from '@/stores/customAppsStore';
 import { useFoldOpen } from '@/stores/foldStore';
 import { useLocaleStore } from '@/stores/localeStore';
@@ -15,6 +14,8 @@ import type { AppDef } from '@/core/types';
 import { ArrowLeftRight } from 'lucide-react';
 import { t } from '@/i18n';
 
+
+const CustomAppFrame = lazy(() => import('./CustomAppFrame').then(m => ({ default: m.CustomAppFrame })));
 
 export interface DeckAppCtx {
     onClose:           () => void;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AlarmClock, Music2, Pause, Phone, Play, Radio, SkipBack, SkipForward } from 'lucide-react';
 
@@ -12,7 +12,6 @@ import { useFoldOpen, useFoldStore, useFoldable, useFoldSwing, useScreenW } from
 import { FoldRig, spineInset, SPINE_OUT, SPINE_W, type FoldAnchor } from './FoldRig';
 import { requestFold, STAGE_ATTR } from './foldSnapshot';
 import { useBatteryStore } from '@/stores/batteryStore';
-import { IslandPet } from './IslandPet';
 import { fetchNui } from '@/core/nui';
 import { useMusic } from '@/apps/music/MusicContext';
 import { coverGradient, coverUrl } from '@/apps/music/data';
@@ -29,6 +28,8 @@ import type { ChassisMetrics, FacePart, RailButton } from './chassis';
 import { shellFor } from './shells';
 import { t } from '@/i18n';
 import { useDirection } from '@/stores/directionStore';
+
+const IslandPet = lazy(() => import('./IslandPet').then(m => ({ default: m.IslandPet })));
 
 
 const MI_MORPH =
@@ -1035,15 +1036,17 @@ export function PhoneShell({ children, hidden = false, cameraActive = false, ent
                     )}
 
                     {pillInCutout && islandPet !== 'none' && (
-                        <IslandPet
-                            id={islandPet}
-                            stage={petStageNow}
-                            top={PET_TOP}
-                            height={PET_H}
-                            battery={batteryLevel}
-                            playing={musicPlaying && !musicExpanded}
-                            ringing={callRinging || alarmRinging}
-                        />
+                        <Suspense fallback={null}>
+                            <IslandPet
+                                id={islandPet}
+                                stage={petStageNow}
+                                top={PET_TOP}
+                                height={PET_H}
+                                battery={batteryLevel}
+                                playing={musicPlaying && !musicExpanded}
+                                ringing={callRinging || alarmRinging}
+                            />
+                        </Suspense>
                     )}
 
                     {hostsIsland && islandTrack && !callActive && !radioOn && !radioStandby && !alarmRinging && (

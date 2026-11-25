@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { LayoutGrid, Minus, Plus } from 'lucide-react';
 
@@ -25,7 +25,6 @@ import { useDockReflow } from './useDockReflow';
 import { PARALLAX_SCALE, PARALLAX_SHIFT, type DockStyle } from './shellLook';
 import { widgetByKind } from './widgets/registry';
 import { launchOriginFrom } from './launchOrigin';
-import { Spotlight, SPOTLIGHT_PULL_COMMIT } from './spotlight/Spotlight';
 import { WidgetGallery } from './widgets/WidgetGallery';
 import { WidgetStack } from './widgets/WidgetStack';
 import { addCard, cardsOf, patchCard, removeCard } from './widgets/stack';
@@ -159,6 +158,10 @@ export interface HomescreenProps {
     homeActive?: boolean;
     bloomOnMount?: boolean;
 }
+
+const Spotlight = lazy(() => import('./spotlight/Spotlight').then(m => ({ default: m.Spotlight })));
+
+const SPOTLIGHT_PULL_COMMIT = 70;
 
 export const Homescreen = memo(HomescreenView);
 
@@ -1335,15 +1338,17 @@ function HomescreenView({ apps, installableApps, dock, firstPageApps, wallpaper,
             )}
 
             {(searchShown || searchOpen) && (
-                <Spotlight
-                    apps={apps}
-                    installableApps={installableApps}
-                    open={searchOpen}
-                    pull={searchPull}
-                    onLaunchApp={onLaunchApp}
-                    onClose={() => setSearchOpen(false)}
-                    onHidden={hideSearch}
-                />
+                <Suspense fallback={null}>
+                    <Spotlight
+                        apps={apps}
+                        installableApps={installableApps}
+                        open={searchOpen}
+                        pull={searchPull}
+                        onLaunchApp={onLaunchApp}
+                        onClose={() => setSearchOpen(false)}
+                        onHidden={hideSearch}
+                    />
+                </Suspense>
             )}
         </div>
     );

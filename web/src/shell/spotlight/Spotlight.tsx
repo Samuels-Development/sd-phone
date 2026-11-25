@@ -23,8 +23,6 @@ import { SpotlightResults } from './SpotlightResults';
 
 const SPOTLIGHT_PULL_FULL = 140;
 
-export const SPOTLIGHT_PULL_COMMIT = 70;
-
 const EASE = 'cubic-bezier(0.32, 0.72, 0, 1)';
 
 function material(reveal: number): string {

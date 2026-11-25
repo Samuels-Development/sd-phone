@@ -15,7 +15,7 @@ import { useCallRing } from '@/apps/phone/calls/useCallRing';
 import { applyNearbyRings } from '@/apps/phone/calls/nearbyRing';
 import { BannerHost, NotificationHost, resolveNotifText, type NotificationItem } from '@/shell/Notifications';
 import { AirShareCard, type AirShareRequest } from '@/shared/AirShare';
-import { SignRequestLayer, type SignRequestData } from '@/apps/documents/SignRequestLayer';
+import type { SignRequestData } from '@/apps/documents/SignRequestLayer';
 import { ReceivedIdLayer } from '@/shell/ReceivedIdLayer';
 import { ScannedMedicalLayer } from '@/shell/ScannedMedicalLayer';
 import { useIdStore } from '@/stores/idStore';
@@ -23,8 +23,7 @@ import { ControlCenter, ControlCenterHotzone } from '@/shell/ControlCenter';
 import { NotificationCenter, NotificationCenterHotzone } from '@/shell/NotificationCenter';
 import { MusicProvider, useMusicOpenSignal } from '@/apps/music/MusicContext';
 import { LockscreenWidgetsProvider } from '@/shell/LockscreenWidgetsContext';
-import { CctvOverlay, useCctvActive } from '@/apps/mdt/CctvOverlay';
-import { BodycamOverlay, useBodycamActive } from '@/apps/mdt/BodycamOverlay';
+import { useBodycamActive, useCctvActive } from '@/apps/mdt/overlayActive';
 import { ryDevDataHidden, ryDevToggleData } from '@/apps/ryde/data';
 import { asAppId, isPreviewApp, preloadApp, preloadApps, setPreloadPaused, type AppId } from '@/shell/appRegistry';
 import { AppSwitcher } from '@/shell/AppSwitcher';
@@ -49,7 +48,6 @@ import { BootReplayButton, setBootScreenEnabled } from '@/shell/BootSplash';
 import { StatusBar }   from '@/shell/StatusBar';
 import { useAutoContrast } from '@/shell/useAutoContrast';
 import { VolumeHUD }   from '@/shell/VolumeHUD';
-import { SetupFlow }   from '@/shell/SetupFlow';
 import type { SetupResult } from '@/shell/SetupFlow';
 import { isKeyboardCaptured } from '@/hooks/useKeyboardCapture';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
@@ -126,6 +124,10 @@ const AdminPanel  = lazy(() => import('@/admin/AdminPanel').then(m => ({ default
 const PayphoneUI  = lazy(() => import('@/payphone/PayphoneUI').then(m => ({ default: m.PayphoneUI })));
 const CaseStoreUI = lazy(() => import('@/casestore/CaseStoreUI').then(m => ({ default: m.CaseStoreUI })));
 const RaceOverlay = lazy(() => import('@/apps/racing/hud/RaceOverlay').then(m => ({ default: m.RaceOverlay })));
+const SetupFlow        = lazy(() => import('@/shell/SetupFlow').then(m => ({ default: m.SetupFlow })));
+const SignRequestLayer = lazy(() => import('@/apps/documents/SignRequestLayer').then(m => ({ default: m.SignRequestLayer })));
+const CctvOverlay      = lazy(() => import('@/apps/mdt/CctvOverlay').then(m => ({ default: m.CctvOverlay })));
+const BodycamOverlay   = lazy(() => import('@/apps/mdt/BodycamOverlay').then(m => ({ default: m.BodycamOverlay })));
 
 function setSetupProfile(number: string | null | undefined): void {
     setupProfile = number ?? '';
@@ -1588,7 +1590,9 @@ function AppContent() {
                 {noSim ? (
                     <NoSimScreen />
                 ) : showSetup ? (
-                    <SetupFlow onDone={handleSetupDone} onHelloChange={setSetupHello} />
+                    <Suspense fallback={null}>
+                        <SetupFlow onDone={handleSetupDone} onHelloChange={setSetupHello} />
+                    </Suspense>
                 ) : locked ? (
                     <Lockscreen
                         use24h={hour24}
@@ -1710,11 +1714,13 @@ function AppContent() {
                 )}
 
                 {signReqs[0] && (
-                    <SignRequestLayer
-                        key={signReqs[0].requestId}
-                        request={signReqs[0]}
-                        onDone={() => setSignReqs(prev => prev.slice(1))}
-                    />
+                    <Suspense fallback={null}>
+                        <SignRequestLayer
+                            key={signReqs[0].requestId}
+                            request={signReqs[0]}
+                            onDone={() => setSignReqs(prev => prev.slice(1))}
+                        />
+                    </Suspense>
                 )}
 
                 {shownIdCard && (
@@ -1751,8 +1757,10 @@ function AppContent() {
                 )}
             </PhoneShell>
         </div>
-        {cctvActive && <CctvOverlay active={cctvActive} />}
-        {bodycamActive && <BodycamOverlay active={bodycamActive} />}
+        <Suspense fallback={null}>
+            {cctvActive && <CctvOverlay active={cctvActive} />}
+            {bodycamActive && <BodycamOverlay active={bodycamActive} />}
+        </Suspense>
         </>
     );
 }

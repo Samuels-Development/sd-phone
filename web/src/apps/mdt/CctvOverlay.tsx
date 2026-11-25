@@ -1,14 +1,8 @@
 import { useEffect, useState } from 'react';
 
 import { t } from '@/i18n';
-import { useNuiEvent } from '@/hooks/useNuiEvent';
 import { captureThumb } from './cctvThumbs';
-
-export interface CctvActive {
-    cameraId: string;
-    label:    string;
-    category: string;
-}
+import type { CctvActive } from './overlayActive';
 
 const CLOCK_MS = 1000;
 
@@ -99,21 +93,4 @@ export function CctvOverlay({ active }: { active: CctvActive }) {
             <div className="absolute left-1/2 bottom-6 h-[2px] w-9 -translate-x-1/2 bg-white/25" />
         </div>
     );
-}
-
-export function useCctvActive(): CctvActive | null {
-    const [active, setActive] = useState<CctvActive | null>(null);
-
-    useNuiEvent('sd-phone:cctv:enter', (data: CctvActive | undefined) => {
-        if (!data || typeof data.cameraId !== 'string') return;
-        setActive({
-            cameraId: data.cameraId,
-            label:    data.label ?? data.cameraId,
-            category: data.category ?? '',
-        });
-    });
-
-    useNuiEvent('sd-phone:cctv:exit', () => setActive(null));
-
-    return active;
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ChevronDown, Disc, Mic, MicOff, Phone, Plus, Video, Volume2 } from 'lucide-react';
 
@@ -16,13 +16,14 @@ import { Sheet } from '@/ui/Sheet';
 import { callRecorder } from './calls/callRecorder';
 import { recordingEnabled } from './callrecApi';
 import { useThemeStore } from '@/stores/themeStore';
-import { VideoCall } from './calls/VideoCall';
 import { acceptVideo, requestVideo, stopVideo } from './calls/webrtc';
 import { useCallStore } from '@/stores/callStore';
-import { VoicemailLayer } from './voicemail/VoicemailLayer';
 import { t } from '@/i18n';
 import { formatDuration } from '@/lib/time';
 import { failText } from '@/core/api';
+
+const VideoCall      = lazy(() => import('./calls/VideoCall').then(m => ({ default: m.VideoCall })));
+const VoicemailLayer = lazy(() => import('./voicemail/VoicemailLayer').then(m => ({ default: m.VoicemailLayer })));
 
 function fmtElapsed(seconds: number): string {
     return formatDuration(seconds);
@@ -38,6 +39,7 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
     const number    = useCallStore(s => s.number);
     const startedAt = useCallStore(s => s.startedAt);
     const others    = useCallStore(s => s.others);
+    const vmOffer   = useCallStore(s => s.vmOffer);
     const pending   = useCallStore(s => s.pending);
     const isVideo   = useCallStore(s => s.video);
     const minimised = useCallStore(s => s.minimised);
@@ -216,7 +218,11 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
         />
     );
 
-    const voicemail = <VoicemailLayer wallpaper={wallpaper} />;
+    const voicemail = vmOffer && (
+        <Suspense fallback={null}>
+            <VoicemailLayer wallpaper={wallpaper} />
+        </Suspense>
+    );
 
     if (!phase || (hidden && phase === 'active')) return <>{dropNotice}{recNotice}{voicemail}</>;
 
@@ -456,15 +462,17 @@ export function CallLayer({ wallpaper }: { wallpaper?: string }) {
             )}
 
             {videoPhase === 'active' && (
-                <VideoCall
-                    peerName={title}
-                    initiator={videoInitiator}
-                    muted={muted}
-                    canMute={canMute}
-                    onToggleMute={() => { const on = !muted; setMuted(on); void fetchNui('sd-phone:call:mute', { on }); }}
-                    onEndVideo={() => { stopVideo(); setVideoPhase('off'); }}
-                    onHangup={() => void hangupCall(channel!)}
-                />
+                <Suspense fallback={null}>
+                    <VideoCall
+                        peerName={title}
+                        initiator={videoInitiator}
+                        muted={muted}
+                        canMute={canMute}
+                        onToggleMute={() => { const on = !muted; setMuted(on); void fetchNui('sd-phone:call:mute', { on }); }}
+                        onEndVideo={() => { stopVideo(); setVideoPhase('off'); }}
+                        onHangup={() => void hangupCall(channel!)}
+                    />
+                </Suspense>
             )}
 
             {recNotice}
