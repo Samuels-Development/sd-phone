@@ -10,6 +10,8 @@ local share  = require 'server.share.core'
 local util   = require 'server.util'
 ---@type table Media URL ownership checks for note images that may be shared with another player.
 local mediaGuard = require 'server.media.guard'
+---@type table Sketch checks (server.notes.sketches): what a stored drawing may be.
+local sketchCheck = require 'server.notes.sketches'
 
 ---@type table Notes config (configs/notes.lua): per-player note count + content caps.
 local N = config.Notes
@@ -25,6 +27,11 @@ local MAX_MEDIA_JSON = 16000000
 ---@type integer Per-sketch ceiling. A sketch is a phone-screen PNG data URL; even a canvas
 ---scribbled edge to edge lands near 350 KB, so a megabyte only rejects a fabricated entry.
 local MAX_SKETCH_BYTES = 1024 * 1024
+---@type integer Encoded sketch data one note may hold (configs/notes.lua MaxSketchBytesPerNote).
+local NOTE_SKETCH_BYTES = math.floor(tonumber(N.MaxSketchBytesPerNote) or 5 * 1024 * 1024)
+---@type integer Encoded sketch data one character may keep across every note
+---(configs/notes.lua MaxSketchBytesPerPlayer).
+local PLAYER_SKETCH_BYTES = math.floor(tonumber(N.MaxSketchBytesPerPlayer) or 30 * 1024 * 1024)
 ---@type integer Per-image ceiling. An image entry is a hosted URL, not inline data, and matches
 ---the 512-char url column Photos stores.
 local MAX_IMAGE_BYTES = 512
@@ -58,6 +65,13 @@ local function sanitizeList(arr, limit, maxLen)
     return out
 end
 
+---The valid sketches from a client-supplied list, capped at the configured count.
+---@param arr any client-supplied array
+---@return string[] sketches
+local function cleanSketches(arr)
+    return sketchCheck.clean(arr, N.MaxSketches, MAX_SKETCH_BYTES)
+end
+
 ---Decodes a JSON-array text column back into a Lua array (empty on null/garbage).
 ---@param raw string|nil stored JSON text
 ---@return table arr decoded array, empty when absent or malformed
@@ -69,7 +83,22 @@ local function decodeArr(raw)
     return {}
 end
 
----All of the caller's notes, newest-edited first, scoped to the caller's citizenid. Read-only.
+---Whether `bytes` more sketch data still fits in a character's allowance, counting every other
+---note they keep. `replacing` is the note's current sketch size: shrinking or keeping a note's
+---drawings never needs the check, so a character already over the allowance can still tidy up.
+---@param cid string citizenid
+---@param id string|nil note being written, left out of the total
+---@param bytes integer encoded size about to be stored
+---@param replacing integer encoded size it replaces (0 for a new note)
+---@return boolean fits
+local function sketchesFit(cid, id, bytes, replacing)
+    if bytes <= replacing then return true end
+    return store.sketchBytesFor(cid, id) + bytes <= PLAYER_SKETCH_BYTES
+end
+
+---All of the caller's notes, newest-edited first, with every sketch on them. Read-only and heavy:
+---kept for the desk link (server/compat/computers.lua), which edits a note's text and carries its
+---sketches back. The phone lists through actions.summaries.
 ---@param src integer player server id
 ---@return table result envelope with { notes }
 function actions.list(src)
@@ -90,8 +119,56 @@ function actions.list(src)
     return { success = true, data = { notes = out } }
 end
 
+---The caller's notes for the list, newest-edited first: text, timestamps and how many sketches and
+---images each holds. Sketches stay on the server until a note is opened (actions.get). Read-only.
+---@param src integer player server id
+---@return table result envelope with { notes = { id, body, sketchCount, imageCount, createdAt, updatedAt }[] }
+function actions.summaries(src)
+    local cid = cidOf(src)
+    if not cid then return { success = false, data = { notes = {} } } end
+
+    local out = {}
+    for _, row in ipairs(store.summaries(cid)) do
+        out[#out + 1] = {
+            id          = row.id,
+            body        = row.body or '',
+            sketchCount = tonumber(row.sketch_count) or 0,
+            imageCount  = #decodeArr(row.images),
+            createdAt   = row.created_at,
+            updatedAt   = row.updated_at,
+        }
+    end
+    return { success = true, data = { notes = out } }
+end
+
+---One of the caller's notes in full, sketches and images included, for the editor to open.
+---Read-only.
+---@param src integer player server id
+---@param id any client-supplied note id
+---@return table result envelope with { note }
+function actions.get(src, id)
+    local cid = cidOf(src)
+    if not cid then return { success = false } end
+    if type(id) ~= 'string' or id == '' or #id > 40 then return util.fail('notes.badNoteId', 'Bad note id') end
+
+    local row = store.get(cid, id)
+    if not row then return util.fail('notes.noteNotFound', 'Note not found') end
+    return util.ok({ note = {
+        id        = row.id,
+        body      = row.body or '',
+        sketches  = decodeArr(row.sketches),
+        images    = decodeArr(row.images),
+        createdAt = row.created_at,
+        updatedAt = row.updated_at,
+    } })
+end
+
 ---Inserts or updates one of the caller's notes (PK citizenid+id). The per-player cap applies only
 ---to brand-new notes; timestamps fall back to server time when malformed, media JSON is size-capped.
+---Sketches are written only when the payload carries them, which the phone does only when they
+---changed: a save without them keeps the stored ones. When the sketches do not fit the per-note or
+---per-character allowance, the text and images are saved anyway and the answer is a failure with
+---`data.textSaved`, so a drawing that was refused never costs the words typed alongside it.
 ---@param src integer player server id
 ---@param payload any client-supplied note { id, body?, sketches?, images?, createdAt?, updatedAt? }
 ---@return table result envelope
@@ -107,18 +184,17 @@ function actions.save(src, payload)
         return { success = false, messageKey = 'notes.slowDownMoment', message = 'Slow down a moment' }
     end
 
-    if not store.exists(cid, id) and store.countFor(cid) >= N.MaxNotesPerPlayer then
+    local current = store.meta(cid, id)
+    if not current and store.countFor(cid) >= N.MaxNotesPerPlayer then
         return { success = false, messageKey = 'notes.noteLimitReached', message = 'Note limit reached' }
     end
 
     local body = type(payload.body) == 'string' and payload.body or ''
     if #body > N.MaxBodyLength then body = body:sub(1, N.MaxBodyLength) end
 
-    local sketches     = sanitizeList(payload.sketches, N.MaxSketches, MAX_SKETCH_BYTES)
-    local images       = mediaGuard.photos(cid, payload.images, N.MaxImages)
-    local sketchesJson = json.encode(sketches)
-    local imagesJson   = json.encode(images)
-    if #sketchesJson > MAX_MEDIA_JSON or #imagesJson > MAX_MEDIA_JSON then
+    local images     = mediaGuard.photos(cid, payload.images, N.MaxImages, current and decodeArr(current.images))
+    local imagesJson = json.encode(images)
+    if #imagesJson > MAX_MEDIA_JSON then
         return { success = false, messageKey = 'notes.noteTooLarge', message = 'Note is too large' }
     end
 
@@ -127,7 +203,26 @@ function actions.save(src, payload)
     local updatedAt = type(payload.updatedAt) == 'string' and #payload.updatedAt <= 40 and payload.updatedAt
         or createdAt
 
-    store.upsert(cid, id, body, sketchesJson, imagesJson, createdAt, updatedAt)
+    if payload.sketches == nil then
+        store.saveText(cid, id, body, imagesJson, createdAt, updatedAt)
+        return { success = true }
+    end
+
+    local sketches     = cleanSketches(payload.sketches)
+    local sketchesJson = json.encode(sketches)
+    local refusal
+    if #sketchesJson > NOTE_SKETCH_BYTES or #sketchesJson > MAX_MEDIA_JSON then
+        refusal = util.fail('notes.drawingsTooLarge', 'These drawings are too large for one note')
+    elseif not sketchesFit(cid, id, #sketchesJson, current and tonumber(current.sketch_bytes) or 0) then
+        refusal = util.fail('notes.drawingStorageFull', 'Your drawing storage is full. Delete some drawings first.')
+    end
+    if refusal then
+        store.saveText(cid, id, body, imagesJson, createdAt, updatedAt)
+        refusal.data = { textSaved = true }
+        return refusal
+    end
+
+    store.upsert(cid, id, body, sketchesJson, imagesJson, createdAt, updatedAt, #sketches)
     return { success = true }
 end
 
@@ -144,7 +239,8 @@ function actions.delete(src, id)
 end
 
 ---Opens an AirShare request offering this note's text, sketches and image URLs to a nearby
----player. Content is clamped with the same caps as a save; delivery happens only on accept.
+---player. Content is clamped with the same caps as a save, so only valid sketches within one
+---note's allowance ever travel; delivery happens only on accept.
 ---@param src integer sender server id
 ---@param target any client-supplied recipient server id (validated by share.request)
 ---@param payload any client-supplied note content { body?, sketches?, images? }
@@ -157,7 +253,10 @@ function actions.requestShare(src, target, payload)
     local body = type(payload.body) == 'string' and payload.body or ''
     if #body > N.MaxBodyLength then body = body:sub(1, N.MaxBodyLength) end
 
-    local sketches = sanitizeList(payload.sketches, N.MaxSketches, MAX_SKETCH_BYTES)
+    local sketches = cleanSketches(payload.sketches)
+    if #json.encode(sketches) > NOTE_SKETCH_BYTES then
+        return util.fail('notes.drawingsTooLarge', 'These drawings are too large for one note')
+    end
     local images   = mediaGuard.photos(cid, payload.images, N.MaxImages)
     if body:gsub('%s', '') == '' and #sketches == 0 and #images == 0 then
         return { success = false, messageKey = 'notes.nothingShare', message = 'Nothing to share' }
@@ -171,10 +270,12 @@ function actions.requestShare(src, target, payload)
 end
 
 ---Delivers an accepted note share as a fresh note in the recipient's list; runs only as the
----AirShare 'note' handler. The id is server-generated, the recipient's note cap applies.
+---AirShare 'note' handler. The id is server-generated, the recipient's note cap and drawing
+---allowance apply, and the sketches are checked again rather than trusted from the request.
 ---@param targetSrc number recipient server id
 ---@param payload { body: string, sketches: string[], images: string[] } vetted share payload
 ---@return boolean delivered
+---@return string|nil reason shown to the recipient when the note could not be kept
 function actions.deliverShare(targetSrc, payload)
     local tcid = player.getIdentifier(targetSrc)
     if not tcid then return false end
@@ -182,17 +283,20 @@ function actions.deliverShare(targetSrc, payload)
 
     local body     = type(payload.body) == 'string' and payload.body or ''
     if #body > N.MaxBodyLength then body = body:sub(1, N.MaxBodyLength) end
-    local sketches = sanitizeList(payload.sketches, N.MaxSketches, MAX_SKETCH_BYTES)
+    local sketches = cleanSketches(payload.sketches)
     local images   = sanitizeList(payload.images, N.MaxImages, MAX_IMAGE_BYTES)
     if body == '' and #sketches == 0 and #images == 0 then return false end
 
     local sketchesJson = json.encode(sketches)
     local imagesJson   = json.encode(images)
-    if #sketchesJson > MAX_MEDIA_JSON or #imagesJson > MAX_MEDIA_JSON then return false end
+    if #sketchesJson > NOTE_SKETCH_BYTES or #sketchesJson > MAX_MEDIA_JSON or #imagesJson > MAX_MEDIA_JSON then return false end
+    if #sketches > 0 and not sketchesFit(tcid, nil, #sketchesJson, 0) then
+        return false, 'Your drawing storage is full'
+    end
 
     local now = os.date('!%Y-%m-%dT%H:%M:%S.000Z')
     local id  = ('shr%d%d'):format(os.time(), math.random(100000, 999999))
-    store.upsert(tcid, id, body, sketchesJson, imagesJson, now, now)
+    store.upsert(tcid, id, body, sketchesJson, imagesJson, now, now, #sketches)
 
     TriggerClientEvent('sd-phone:client:notes:added', targetSrc, {
         id = id, body = body, sketches = sketches, images = images, createdAt = now, updatedAt = now,

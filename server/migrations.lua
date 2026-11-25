@@ -143,6 +143,14 @@ local COLUMNS = {
         reward_streak = 'reward_streak INT NOT NULL DEFAULT 0',
         reward_date   = 'reward_date DATE NULL',
     },
+
+    -- How many sketches a note holds and how big they are, so the list and the storage caps never
+    -- read the sketches themselves. NULL marks a row written before these existed; the notes store
+    -- measures those the first time their owner opens Notes.
+    phone_notes = {
+        sketch_count = '`sketch_count` SMALLINT UNSIGNED NULL',
+        sketch_bytes = '`sketch_bytes` INT UNSIGNED NULL',
+    },
 }
 
 ---@type table<string, table<string, string>> table name -> index name -> column list incl. parens.

@@ -3,6 +3,7 @@ local proxy = require 'client.nui'
 
 -- Thin delegates into server/notes: note CRUD and nearby sharing.
 proxy('sd-phone:notes:list',   'sd-phone:server:notes:list')
+proxy('sd-phone:notes:get',    'sd-phone:server:notes:get')
 proxy('sd-phone:notes:save',   'sd-phone:server:notes:save')
 proxy('sd-phone:notes:delete', 'sd-phone:server:notes:delete')
 proxy('sd-phone:notes:share',  'sd-phone:server:notes:share')
