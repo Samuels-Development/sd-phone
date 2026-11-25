@@ -74,8 +74,9 @@ end
 ---from before the key existed reads as 'card'.
 ---@param viewerSrc number player whose screen shows the name
 ---@param subjectSrc number player being named
+---@param viewerContacts? table[] the viewer's saved contacts, when the caller already has them
 ---@return string label
-local function nameFor(viewerSrc, subjectSrc)
+local function nameFor(viewerSrc, subjectSrc, viewerContacts)
     local mode = config.Share.DisplayName or 'card'
     if mode == 'character' then return player.getName(subjectSrc) end
 
@@ -84,8 +85,11 @@ local function nameFor(viewerSrc, subjectSrc)
     local numberDigits = number and util.digits(number) or ''
 
     if numberDigits ~= '' then
-        local viewerCid = player.getIdentifier(viewerSrc)
-        for _, row in ipairs(viewerCid and contacts.listContacts(viewerCid) or {}) do
+        if not viewerContacts then
+            local viewerCid = player.getIdentifier(viewerSrc)
+            viewerContacts = viewerCid and contacts.listContacts(viewerCid) or {}
+        end
+        for _, row in ipairs(viewerContacts) do
             if util.digits(row.phone) == numberDigits then return row.name end
         end
     end
@@ -242,8 +246,9 @@ local function coordsOf(src)
 end
 
 ---Players (other than `src`) with their phone open, within config.Share.Range, nearest first,
----capped at config.Share.MaxTargets. Each carries their phone number so the picker can show
----the receiver as a saved contact (or their number) instead of a character name. Read-only.
+---capped at config.Share.MaxTargets. Each is named the way config.Share.DisplayName says, exactly
+---as the share prompt names them, so the picker never shows the character behind a number the
+---server chose to hide; the number rides along for the picker's own contact match. Read-only.
 ---@param src number player server id
 ---@return { id: number, name: string, number?: string }[] targets
 function core.nearby(src)
@@ -258,7 +263,7 @@ function core.nearby(src)
             if c then
                 local dist = #(origin - c)
                 if dist <= range then
-                    found[#found + 1] = { id = tgt, name = player.getName(tgt), dist = dist }
+                    found[#found + 1] = { id = tgt, dist = dist }
                 end
             end
         end
@@ -266,10 +271,16 @@ function core.nearby(src)
 
     table.sort(found, function(a, b) return a.dist < b.dist end)
 
+    local viewerCid = player.getIdentifier(src)
+    local viewerContacts = viewerCid and contacts.listContacts(viewerCid) or {}
     local out = {}
     for i = 1, math.min(#found, config.Share.MaxTargets) do
         local cid = player.getIdentifier(found[i].id)
-        out[#out + 1] = { id = found[i].id, name = found[i].name, number = cid and settings.getPhoneNumber(cid) or nil }
+        out[#out + 1] = {
+            id     = found[i].id,
+            name   = nameFor(src, found[i].id, viewerContacts),
+            number = cid and settings.getPhoneNumber(cid) or nil,
+        }
     end
     return out
 end
