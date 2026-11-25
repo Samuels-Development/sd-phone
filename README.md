@@ -2,17 +2,26 @@
 
 # sd-phone
 
-<a href="https://www.youtube.com/watch?v=65EoH00dlhw">
+<a href="https://www.youtube.com/watch?v=Hn3WNeOE3Qc">
   <img width="960" alt="sd-phone: regular, Slate and foldable phones in several colours, two of them in cases, with the Home screen in front" src="docs/previews/sd-phone-banner.webp">
 </a>
 
-<sub>▶ **[Video demo](https://www.youtube.com/watch?v=65EoH00dlhw)**</sub>
+[![Watch the preview](https://img.shields.io/badge/%E2%96%B6%20%20WATCH%20THE%20PREVIEW-2%20minutes%20on%20YouTube-FF5A5A?style=for-the-badge&labelColor=101114)](https://www.youtube.com/watch?v=Hn3WNeOE3Qc)
+[![Open the live demo](https://img.shields.io/badge/%E2%96%B6%20%20OPEN%20THE%20LIVE%20DEMO-fivem.samueldev.shop%2Fphone-F0E155?style=for-the-badge&labelColor=101114&logoColor=F0E155)](https://fivem.samueldev.shop/phone)
+
+### Preview video
+
+<a href="https://www.youtube.com/watch?v=Hn3WNeOE3Qc">
+  <img width="720" alt="Watch the sd-phone preview: the Classic phone from the front and the back, the Slate design and the foldable" src="docs/previews/sd-phone-video.webp">
+</a>
+
+A two-minute tour of the phone: 51 apps, both designs, the foldables and the cases you design yourself.
+
+<sub>[Watch on YouTube](https://www.youtube.com/watch?v=Hn3WNeOE3Qc)</sub>
 
 ### Browser demo
 
-[![Open the live demo](https://img.shields.io/badge/%E2%96%B6%20%20OPEN%20THE%20LIVE%20DEMO-fivem.samueldev.shop%2Fphone-F0E155?style=for-the-badge&labelColor=101114&logoColor=F0E155)](https://fivem.samueldev.shop/phone)
-
-The phone and tablet UIs run here with sample data. Unlock the phone, move apps around, install apps, open the police terminal or use fullscreen. Nothing to install.
+The phone and tablet UIs run in your browser with sample data. Unlock the phone, move apps around, install apps, open the police terminal or use fullscreen. Nothing to install.
 
 <sub>[fivem.samueldev.shop/phone](https://fivem.samueldev.shop/phone)</sub>
 
