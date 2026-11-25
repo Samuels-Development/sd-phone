@@ -268,9 +268,9 @@ export function CustomAppFrame({ appId, onClose }: { appId: string; onClose: () 
         }, '*');
     }, []);
 
-    const createCall = useCallback((data: Record<string, unknown>) => {
+    const createCall = useCallback(() => {
         if (!device.calls) { warnOnce('CreateCall'); return; }
-        window.postMessage({ action: 'sd-phone:launchApp', data: { id: 'phone', link: data } }, '*');
+        window.postMessage({ action: 'sd-phone:launchApp', data: { id: 'phone' } }, '*');
         warnOnce('CreateCall(auto-dial)');
     }, []);
 
@@ -344,7 +344,7 @@ export function CustomAppFrame({ appId, onClose }: { appId: string; onClose: () 
                 notify(data ?? {});
                 return Promise.resolve(null);
             case 'CreateCall':
-                createCall(data ?? {});
+                createCall();
                 return Promise.resolve(null);
             case 'toggleInput':
                 typingRef.current = !!data;
@@ -684,7 +684,8 @@ export function CustomAppFrame({ appId, onClose }: { appId: string; onClose: () 
                         src={src}
                         title={def.name}
                         onLoad={onLoad}
-                        allow="autoplay; microphone; camera; clipboard-read; clipboard-write"
+                        allow="autoplay; clipboard-write"
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads allow-pointer-lock"
                         className="absolute inset-0 h-full w-full border-0 transition-opacity duration-200"
                         style={{ colorScheme: theme === 'dark' ? 'dark' : 'light', opacity: ready ? 1 : 0 }}
                     />

@@ -1,8 +1,19 @@
+function webUrl(candidate: string): string {
+    try {
+        const url = new URL(candidate);
+        return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : '';
+    } catch {
+        return '';
+    }
+}
+
 export function resolveCustomUi(ui: string | null | undefined): string {
-    if (!ui) return '';
-    if (ui.startsWith('nui://')) return `https://cfx-nui-${ui.slice(6)}`;
-    if (ui.includes('http')) return ui;
-    return `https://cfx-nui-${ui.replace(/^\//, '')}`;
+    const raw = typeof ui === 'string' ? ui.trim() : '';
+    if (!raw) return '';
+    if (raw.startsWith('nui://')) return webUrl(`https://cfx-nui-${raw.slice(6)}`);
+    if (/^https?:\/\//i.test(raw)) return webUrl(raw);
+    if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return '';
+    return webUrl(`https://cfx-nui-${raw.replace(/^\/+/, '')}`);
 }
 
 export function withQuery(url: string, params: Record<string, string | number>): string {
