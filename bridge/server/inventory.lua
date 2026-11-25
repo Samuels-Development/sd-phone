@@ -146,6 +146,93 @@ end
 ---@type fun(source: number, item: string): number Backend item-count reader, bound once at load.
 inventory.count = chooseCount()
 
+---QBCore PlayerData.items, shared by the qb-family backends (qb-inventory / ps / lj keep the
+---player object's items table authoritative) and the slot API below.
+---@param src number player server id
+---@return table<any, any>|nil items
+local function qbItems(src)
+    local p = player_mod.get(src)
+    local items = p and p.PlayerData and p.PlayerData.items
+    return type(items) == 'table' and items or nil
+end
+
+---Adds up the stacks of every wanted item in one inventory listing. Rows carry `count` on ox-style
+---backends and `amount` on qb-style ones; anything that is not a row is skipped.
+---@param rows any inventory listing (array or slot-keyed table)
+---@param names string[] wanted item names
+---@return table<string, number> counts every wanted name, 0 when not held
+local function tally(rows, names)
+    local out = {}
+    for i = 1, #names do out[names[i]] = 0 end
+    if type(rows) ~= 'table' then return out end
+    for _, row in pairs(rows) do
+        if type(row) == 'table' then
+            local held = out[row.name]
+            if held then out[row.name] = held + (tonumber(row.count or row.amount) or 0) end
+        end
+    end
+    return out
+end
+
+---Pick the backend's many-items count once at module load: one inventory read for a whole list of
+---item names, where the backend has a way to list a player's items or search several at once.
+---Backends with neither fall back to one `count` per name.
+---@return fun(source: number, names: string[]): table<string, number>
+local function chooseCountMany()
+    local function each(src, names)
+        local out = {}
+        for i = 1, #names do out[names[i]] = inventory.count(src, names[i]) end
+        return out
+    end
+
+    if ON_LAYER then return function(src, names) return tally(exports[LAYER]:GetItems(src), names) end end
+    if active == OX then
+        return function(src, names)
+            if #names == 1 then return each(src, names) end
+            local found = exports[OX]:Search(src, 'count', names)
+            local out = {}
+            for i = 1, #names do
+                local name = names[i]
+                local n = type(found) == 'table' and (found[name] or found[name:lower()]) or 0
+                out[name] = tonumber(n) or 0
+            end
+            return out
+        end
+    end
+    if active == QS or active == QSP then
+        local res = active
+        return function(src, names) return tally(exports[res]:GetInventory(src), names) end
+    end
+    if active == OG then
+        return function(src, names)
+            local snapshot = exports[OG]:GetPlayerInventory(src)
+            local rows = type(snapshot) == 'table' and (snapshot.inventory or snapshot.items or snapshot) or nil
+            return tally(rows, names)
+        end
+    end
+    if active == CD then
+        return function(src, names)
+            local cid = player_mod.getRealIdentifier(src)
+            if not cid then return tally(nil, names) end
+            return tally(exports[CD]:GetInventory(cid, src), names)
+        end
+    end
+    if active == ONE or active == TG or active == JK then return each end
+    if active == QB then return function(src, names) return tally(qbItems(src), names) end end
+
+    if framework.name == 'esx' then
+        return function(src, names)
+            local p = player_mod.get(src)
+            return tally(p and p.getInventory() or nil, names)
+        end
+    end
+    if framework.qb then return function(src, names) return tally(qbItems(src), names) end end
+    return each
+end
+
+---@type fun(source: number, names: string[]): table<string, number> Many-items count reader, bound once at load.
+inventory.countMany = chooseCountMany()
+
 ---Predicate form of `count`: true when the player has at least `amount` of `item` (default 1).
 ---Fails closed on a nil item name.
 ---@param source number
@@ -450,16 +537,6 @@ end
 ---@return number|string|nil
 local function coerceSlot(slot)
     return tonumber(slot) or (type(slot) == 'string' and slot ~= '' and slot or nil)
-end
-
----QBCore PlayerData.items scan shared by the qb-family backends (qb-inventory / ps / lj keep
----the player object's items table authoritative).
----@param src number player server id
----@return table<any, any>|nil items
-local function qbItems(src)
-    local p = player_mod.get(src)
-    local items = p and p.PlayerData and p.PlayerData.items
-    return type(items) == 'table' and items or nil
 end
 
 ---Per-backend slot-API implementations. Each entry may provide:

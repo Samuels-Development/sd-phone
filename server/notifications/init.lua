@@ -85,8 +85,9 @@ function notifications.notifyCid(cid, data)
     })
 end
 
----Asked by the client before it shows a banner: a player with no phone item has nothing to buzz,
----so the pop-up is dropped. Answered from the live inventory, never cached.
+---Asked by the client-side compat shims before they show a banner of their own: a player with no
+---phone item has nothing to buzz. sd-phone's own banners are gated on the server before they are
+---sent (util.pushBanner), so they never ask.
 lib.callback.register('sd-phone:server:carriesPhone', function(src)
     return require('server.util').carriesPhone(src)
 end)

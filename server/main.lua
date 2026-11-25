@@ -27,6 +27,17 @@ do
     end
 end
 
+-- Phone banners are gated here, once, for every module: a player who carries no phone item gets
+-- none, emergency alerts excepted. Wrapping the send covers every place that fires the banner
+-- event, so no client has to call the server back before it may show one.
+do
+    local trigger = TriggerClientEvent
+    TriggerClientEvent = function(eventName, target, ...)
+        if eventName == util.BANNER_EVENT then return util.pushBanner(target, ...) end
+        return trigger(eventName, target, ...)
+    end
+end
+
 -- Loaded for side effects: each module self-registers its callbacks, events, commands and exports on require.
 -- SIM first: when unique phones are enabled it wraps player.getIdentifier before any app module
 -- captures a callback against it (they all resolve identity at call time, but keep it first for
@@ -171,9 +182,22 @@ local function RegisterPhoneItems()
     end
 end
 
+---@type string[] Every configured phone item name once, in config order: the list a single
+---inventory read asks about, instead of one search per item.
+local PHONE_ITEM_NAMES = {}
+do
+    local seen = {}
+    for _, entry in ipairs(config.Phone.Items or {}) do
+        if type(entry.item) == 'string' and not seen[entry.item] then
+            seen[entry.item] = true
+            PHONE_ITEM_NAMES[#PHONE_ITEM_NAMES + 1] = entry.item
+        end
+    end
+end
+
 ---Server-authoritative ownership gate for the keybind: returns the phone to open, preferring the
 ---one the client used last among those owned (that colour and kind, then that colour of any kind),
----else the first owned.
+---else the first owned. Every phone item is counted in one inventory read up front.
 ---@param source integer player server id
 ---@param preferred string|nil last-used frame colour hint
 ---@param preferFold boolean|nil whether the last-used phone was a foldable
@@ -184,10 +208,12 @@ end
 ---@return string? item that phone's item name
 local function ResolveOwnedColor(source, preferred, preferFold, preferLook)
     local items = config.Phone.Items or {}
+    if #PHONE_ITEM_NAMES == 0 then return nil, false, 'classic', nil end
+    local held = inv.countMany(source, PHONE_ITEM_NAMES)
     if preferred then
         local other
         for _, entry in ipairs(items) do
-            if entry.color == preferred and inv.count(source, entry.item) > 0 then
+            if entry.color == preferred and (held[entry.item] or 0) > 0 then
                 if (preferFold == nil or folds(entry) == preferFold) and (preferLook == nil or lookOf(entry) == preferLook) then
                     return entry.color, folds(entry), lookOf(entry), entry.item
                 end
@@ -197,11 +223,71 @@ local function ResolveOwnedColor(source, preferred, preferFold, preferLook)
         if other then return other.color, folds(other), lookOf(other), other.item end
     end
     for _, entry in ipairs(items) do
-        if inv.count(source, entry.item) > 0 then
+        if (held[entry.item] or 0) > 0 then
             return entry.color, folds(entry), lookOf(entry), entry.item
         end
     end
     return nil, false, 'classic', nil
+end
+
+---Clears the cached carry answer of every player a phone item just moved for. Deferred a tick:
+---inventory hooks fire before the move lands, and a read in between would cache the old state.
+---@param ... any server ids or inventory ids from a hook payload; non-numeric ones are ignored
+local function PhoneMoved(...)
+    local ids = { ... }
+    SetTimeout(0, function()
+        for i = 1, #ids do
+            local id = tonumber(ids[i])
+            if id then util.forgetCarry(id) end
+        end
+    end)
+end
+
+---@type table<string, true> Phone item names as a set, the item filter every hook below uses.
+local PHONE_ITEM_SET = {}
+for _, name in ipairs(PHONE_ITEM_NAMES) do PHONE_ITEM_SET[name] = true end
+
+---Hooks the running inventory so a phone item moving (swapped, dropped, given, created) clears its
+---holder's cached carry answer at once. Called at boot and again whenever the inventory restarts,
+---since its hooks die with it. Inventories with no such hook fall back to the cache's short life.
+local function WatchPhoneMoves()
+    if #PHONE_ITEM_NAMES == 0 then return end
+    if GetResourceState('one_inventory') == 'started' then
+        for _, hook in ipairs({ 'beforeItemSwap', 'beforeItemDrop', 'beforeItemGive' }) do
+            pcall(function()
+                exports.one_inventory:RegisterHook(hook, function(payload)
+                    PhoneMoved(payload.source, payload.fromInventory, payload.toInventory, payload.target)
+                end, { itemFilter = PHONE_ITEM_SET })
+            end)
+        end
+    elseif GetResourceState('ox_inventory') == 'started' then
+        pcall(function()
+            exports.ox_inventory:registerHook('swapItems', function(payload)
+                PhoneMoved(payload.source, payload.fromInventory, payload.toInventory)
+            end, { itemFilter = PHONE_ITEM_SET })
+        end)
+        pcall(function()
+            exports.ox_inventory:registerHook('createItem', function(payload)
+                PhoneMoved(payload.inventoryId)
+            end, { itemFilter = PHONE_ITEM_SET })
+        end)
+    end
+end
+
+---An inventory resource coming back up has forgotten every hook registered with it.
+AddEventHandler('onResourceStart', function(resource)
+    if resource == 'ox_inventory' or resource == 'one_inventory' then WatchPhoneMoves() end
+end)
+
+-- ESX's own inventory reports item changes as plain server events rather than hooks.
+if require('bridge.shared.framework').name == 'esx' then
+    ---@param src number player server id
+    ---@param name string item name
+    local function onEsxItem(src, name)
+        if PHONE_ITEM_SET[name] then PhoneMoved(src) end
+    end
+    AddEventHandler('esx:onAddInventoryItem', onEsxItem)
+    AddEventHandler('esx:onRemoveInventoryItem', onEsxItem)
 end
 
 ---Keybind open request: may this player open a phone, and in which colour? Returns the bare
@@ -224,7 +310,7 @@ end)
 CreateThread(function()
     Wait(50)
     RegisterPhoneItems()
-
+    WatchPhoneMoves()
 end)
 
 ---Public export: does this player own a phone - exports['sd-phone']:hasPhone(source). Returns
