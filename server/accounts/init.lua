@@ -59,7 +59,8 @@ local APP_TABLES = {
     },
     birdy = {
         'phone_birdy_notifications', 'phone_birdy_dms', 'phone_birdy_follows',
-        'phone_birdy_reposts', 'phone_birdy_likes', 'phone_birdy_posts', 'phone_birdy_profiles',
+        'phone_birdy_reposts', 'phone_birdy_likes', 'phone_birdy_hashtags', 'phone_birdy_posts',
+        'phone_birdy_profiles',
     },
     photogram = {
         'phone_photogram_story_views', 'phone_photogram_stories', 'phone_photogram_comment_likes',

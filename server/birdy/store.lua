@@ -192,8 +192,66 @@ local function rekeyToHandle()
     return stats
 end
 
+---@type integer Longest hashtag the index keeps. The search box caps a tag at the same length, so
+---a longer one could never be searched for anyway.
+local MAX_TAG_LEN = 64
+
+---@type integer Tag rows written per INSERT when a batch of posts is indexed.
+local TAG_CHUNK = 200
+
+---Distinct lowercased hashtags in a post body, as the hashtag index stores them.
+---@param body string|nil
+---@return string[] tags
+local function tagsOf(body)
+    local seen, out = {}, {}
+    for raw in tostring(body or ''):gmatch('#([%w_]+)') do
+        local tag = raw:lower()
+        if #tag <= MAX_TAG_LEN and not seen[tag] then
+            seen[tag] = true
+            out[#out + 1] = tag
+        end
+    end
+    return out
+end
+
+---Writes the hashtag rows for a set of posts in chunked multi-row inserts. INSERT IGNORE against
+---the (tag, post_id) key makes a re-index of a post a no-op.
+---@param posts { id: string, body: string }[]
+---@return integer rows tag rows offered
+local function indexTags(posts)
+    local tagRows = {}
+    for i = 1, #posts do
+        for _, tag in ipairs(tagsOf(posts[i].body)) do tagRows[#tagRows + 1] = { tag, posts[i].id } end
+    end
+    for i = 1, #tagRows, TAG_CHUNK do
+        local marks, params = {}, {}
+        for j = i, math.min(i + TAG_CHUNK - 1, #tagRows) do
+            marks[#marks + 1] = '(?, ?)'
+            params[#params + 1] = tagRows[j][1]
+            params[#params + 1] = tagRows[j][2]
+        end
+        MySQL.insert.await(
+            'INSERT IGNORE INTO phone_birdy_hashtags (tag, post_id) VALUES ' .. table.concat(marks, ','), params)
+    end
+    return #tagRows
+end
+
+---Indexes every post that carries a '#' but has no hashtag rows: the whole history on the first
+---boot after the index shipped, then only posts that reached the table some other way (an import,
+---a hand edit). A post whose '#' is not a tag is looked at again each boot and adds nothing.
+---@return integer indexed posts given rows
+local function backfillHashtags()
+    local rows = MySQL.query.await([[
+        SELECT p.id, p.body FROM phone_birdy_posts p
+        WHERE p.body LIKE '%#%'
+          AND NOT EXISTS (SELECT 1 FROM phone_birdy_hashtags h WHERE h.post_id = p.id)
+    ]]) or {}
+    indexTags(rows)
+    return #rows
+end
+
 ---Creates every Birdy table idempotently and back-fills columns added after first release. Runs
----once at boot.
+---once at boot. The hashtag index is filled for any post it is missing last, after its foreign key.
 function store.ensureSchema()
     -- Before the CREATEs: they are IF NOT EXISTS, so an install still on the citizenid shape would
     -- keep it and every query below would select columns that no longer match the code.
@@ -377,6 +435,14 @@ function store.ensureSchema()
     -- the handle's half of the pair, so they need their own covering index.
     util.ensureIndex('phone_birdy_poll_votes', 'idx_birdy_poll_votes_option', '(post_id, idx)')
 
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS phone_birdy_hashtags (
+            tag     VARCHAR(64) NOT NULL,
+            post_id VARCHAR(16) NOT NULL,
+            PRIMARY KEY (tag, post_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    ]])
+
     -- Referential integrity, added on boot so existing installs migrate with no manual SQL.
     -- Each is a no-op once present; orphaned children are cleared first (they point at a
     -- parent that is already gone) and a type or collation mismatch is skipped, never fatal.
@@ -386,6 +452,8 @@ function store.ensureSchema()
     util.ensureForeignKey('phone_birdy_polls', 'post_id', 'phone_birdy_posts', 'id', 'fk_birdy_polls_post')
     util.ensureForeignKey('phone_birdy_poll_options', 'post_id', 'phone_birdy_posts', 'id', 'fk_birdy_poll_options_post')
     util.ensureForeignKey('phone_birdy_poll_votes', 'post_id', 'phone_birdy_posts', 'id', 'fk_birdy_poll_votes_post')
+    util.ensureForeignKey('phone_birdy_hashtags', 'post_id', 'phone_birdy_posts', 'id', 'fk_birdy_hashtags_post')
+    backfillHashtags()
 end
 
 ---Decodes a JSON column into a Lua table, tolerating nil / empty / corrupt values (always
@@ -768,6 +836,7 @@ function store.deleteAccount(handle)
     MySQL.update.await('DELETE FROM phone_birdy_poll_votes WHERE post_id IN (SELECT id FROM phone_birdy_posts WHERE author = ?)', { handle })
     MySQL.update.await('DELETE FROM phone_birdy_poll_options WHERE post_id IN (SELECT id FROM phone_birdy_posts WHERE author = ?)', { handle })
     MySQL.update.await('DELETE FROM phone_birdy_polls WHERE post_id IN (SELECT id FROM phone_birdy_posts WHERE author = ?)', { handle })
+    MySQL.update.await('DELETE FROM phone_birdy_hashtags WHERE post_id IN (SELECT id FROM phone_birdy_posts WHERE author = ?)', { handle })
     MySQL.update.await('DELETE FROM phone_birdy_posts WHERE author = ?', { handle })
     MySQL.update.await('DELETE FROM phone_birdy_follows WHERE follower = ? OR target = ?', { handle, handle })
     MySQL.update.await('DELETE FROM phone_birdy_dms WHERE from_handle = ? OR to_handle = ?', { handle, handle })
@@ -985,30 +1054,25 @@ function store.trendingHashtags(windowDays, limit)
 end
 
 ---Posts and replies carrying an exact hashtag, newest first, honouring the feed's
----protected-author visibility. `tagLower` arrives lowercased without the '#'.
+---protected-author visibility. `tagLower` arrives lowercased without the '#'. Read off the
+---hashtag index: the old `body LIKE '%#tag%'` scanned every post body on every search.
 ---@param tagLower string
 ---@param viewerHandle string
 ---@param limit number
 ---@return table[]
 function store.postsByHashtag(tagLower, viewerHandle, limit)
-    local like = '%#' .. escapeLike(tagLower) .. '%'
     local rows = MySQL.query.await(POST_SELECT .. [[
-        WHERE p.body LIKE ?
+        WHERE p.id IN (SELECT h.post_id FROM phone_birdy_hashtags h WHERE h.tag = ?)
           AND (pr.protected = 0 OR p.author = ?
                OR p.author IN (SELECT target FROM phone_birdy_follows WHERE follower = ?))
         ORDER BY p.created_at DESC LIMIT ?
-    ]], { viewerHandle, viewerHandle, like, viewerHandle, viewerHandle, limit }) or {}
+    ]], { viewerHandle, viewerHandle, tagLower, viewerHandle, viewerHandle, limit }) or {}
 
-    local out = {}
-    for i = 1, #rows do
-        if extractTags(rows[i].body or '')[tagLower] then
-            out[#out + 1] = hydratePost(rows[i])
-        end
-    end
-    return attachPolls(out, viewerHandle)
+    for i = 1, #rows do rows[i] = hydratePost(rows[i]) end
+    return attachPolls(rows, viewerHandle)
 end
 
----Inserts a post row.
+---Inserts a post row and its hashtag rows.
 ---@param id string
 ---@param author string
 ---@param body string
@@ -1017,9 +1081,11 @@ end
 ---@return boolean
 function store.insertPost(id, author, body, parentId, images)
     local imagesJson = (type(images) == 'table' and #images > 0) and json.encode(images) or nil
-    return MySQL.insert.await([[
+    local inserted = MySQL.insert.await([[
         INSERT INTO phone_birdy_posts (id, author, body, parent_id, images) VALUES (?, ?, ?, ?, ?)
     ]], { id, author, body, parentId, imagesJson }) ~= nil
+    if inserted then indexTags({ { id = id, body = body } }) end
+    return inserted
 end
 
 ---Attaches a poll to a post that has just been inserted: the deadline row plus one row per
@@ -1073,8 +1139,8 @@ function store.getPostAuthor(id)
     return MySQL.scalar.await('SELECT author FROM phone_birdy_posts WHERE id = ?', { id })
 end
 
----Deletes a post and everything hanging off it: its replies, and the likes, reposts and
----notifications belonging to the post or any of those replies. There is no ON DELETE CASCADE on
+---Deletes a post and everything hanging off it: its replies, and the likes, reposts, hashtag rows
+---and notifications belonging to the post or any of those replies. There is no ON DELETE CASCADE on
 ---these tables, so orphans would otherwise sit in the likes and notifications tables forever and
 ---keep counting toward reply totals.
 ---@param id string post id
@@ -1092,6 +1158,7 @@ function store.deletePost(id)
     MySQL.query.await(('DELETE FROM phone_birdy_poll_votes WHERE post_id IN (%s)'):format(marks), ids)
     MySQL.query.await(('DELETE FROM phone_birdy_poll_options WHERE post_id IN (%s)'):format(marks), ids)
     MySQL.query.await(('DELETE FROM phone_birdy_polls WHERE post_id IN (%s)'):format(marks), ids)
+    MySQL.query.await(('DELETE FROM phone_birdy_hashtags WHERE post_id IN (%s)'):format(marks), ids)
     return MySQL.update.await(('DELETE FROM phone_birdy_posts WHERE id IN (%s)'):format(marks), ids) or 0
 end
 
