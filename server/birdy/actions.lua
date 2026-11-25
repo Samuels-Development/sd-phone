@@ -325,7 +325,8 @@ function actions.register(source, payload)
 end
 
 ---Signs in to any existing Birdy account by handle + password. Accepts the handle or the linked
----email; a bare handle that matches no account retries as handle@<mail domain>.
+---email; a bare handle that matches no account retries as handle@<mail domain>. Spends the
+---engine's shared sign-in budget, per caller and per account, before the password is hashed.
 ---@param source number player server id
 ---@param payload { username?: string, password?: string }
 ---@return table envelope
@@ -333,6 +334,9 @@ function actions.login(source, payload)
     local cid = player.getIdentifier(source)
     if not cid then return fail('birdy.playerNotFound', 'Player not found') end
     payload = tbl(payload)
+    if not acctActions.allowGuess(cid, 'accounts:login') then
+        return fail('birdy.tooManySignInAttempts', 'Too many sign-in attempts. Try again shortly')
+    end
 
     local raw = trimmed(payload.username) or ''
     local acc
@@ -348,6 +352,9 @@ function actions.login(source, payload)
                 if #matches == 1 then acc = matches[1] end
             end
         end
+    end
+    if acc and not acctActions.allowGuessOn('birdy', acc.username) then
+        return fail('birdy.tooManySignInAttempts', 'Too many sign-in attempts. Try again shortly')
     end
     if not acc or not acctActions.verifyPassword(acc, payload.password) then
         return fail('birdy.wrongUsernamePassword', 'Wrong username or password')

@@ -551,6 +551,7 @@
     "replyTooLong": "Reply is too long",
     "slowDown": "Slow down",
     "theyNeedOnlineReceiveMoney": "They need to be online to receive money",
+    "tooManySignInAttempts": "Too many sign-in attempts. Try again shortly",
     "usernameMustCharactersFewer": "Username must be {n} characters or fewer",
     "usernameNeedsLeastLetters": "Username needs at least {n} letters, numbers or _",
     "usernameTaken": "That username is taken",
@@ -2637,6 +2638,7 @@
     "toLabel": "To:",
     "toRecipients": "to {recipients}",
     "tooManyRecipients": "Too many recipients",
+    "tooManySignInAttempts": "Too many sign-in attempts. Try again shortly",
     "usernameMustLeast2Characters": "Username must be at least 2 characters",
     "voiceMemo": "Voice Memo"
   },

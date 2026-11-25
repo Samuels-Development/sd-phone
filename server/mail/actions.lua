@@ -455,7 +455,8 @@ function actions.signUp(source, payload)
 end
 
 ---Signs into an existing email account; any player who knows the password may sign in. The
----accounts engine is verified first, then the legacy hash column. Idempotent.
+---accounts engine is verified first, then the legacy hash column. Spends the engine's shared
+---sign-in budget, per caller and per mailbox, before any password is hashed. Idempotent.
 ---@param source number
 ---@param payload { email?: string, password?: string }
 ---@return table
@@ -470,8 +471,14 @@ function actions.signIn(source, payload)
     if #payload.password > MAX_SIGNIN_PASSWORD_LEN then
         return fail('mail.emailPasswordIncorrect', 'Email or password is incorrect')
     end
+    if not acctActions.allowGuess(me.cid, 'accounts:login') then
+        return fail('mail.tooManySignInAttempts', 'Too many sign-in attempts. Try again shortly')
+    end
 
     local acc = store.getAccount(email)
+    if acc and not acctActions.allowGuessOn('mail', email) then
+        return fail('mail.tooManySignInAttempts', 'Too many sign-in attempts. Try again shortly')
+    end
     local valid = false
     if acc then
         local engineAcc = acctStore.getAccount('mail', email)

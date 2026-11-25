@@ -39,14 +39,19 @@ local LEGACY_HASHERS = {
     mail  = mailStore.hashPassword,
 }
 
--- Password-guessing budget, keyed on the caller rather than the account being guessed: a
--- per-target bucket would let anyone lock a player out of their own login by burning it.
+-- Password-guessing budget. The caller's own bucket stops one character hammering; the
+-- per-account bucket is what stops a crowd of alts splitting the work, so it sits well above
+-- what one caller can spend and only a coordinated flood can fill it.
 ---@type integer Guess window in milliseconds.
 local GUESS_WINDOW   = 300000
----@type integer Sign-in attempts allowed per caller per window.
+---@type integer Minimum gap between password checks, per caller and per account (ms).
+local GUESS_GAP      = 1000
+---@type integer Sign-in attempts allowed per caller per window, shared by every sign-in form.
 local LOGIN_MAX      = 15
 ---@type integer Password changes allowed per caller per window.
 local CHANGE_MAX     = 10
+---@type integer Password checks allowed against one account per window, from everyone.
+local TARGET_MAX     = 30
 
 ---True when the caller holds the account. Mail keys ownership by mailbox address, every other
 ---app by session.
@@ -71,6 +76,31 @@ local function ownsAccount(app, cid, acc)
 end
 
 
+
+---Spends one password check from the caller's budget for `scope`. Every check costs an scrypt
+---on the server, so this runs before the account lookup and a refused call never reaches the
+---hash. The sign-in forms of every app pass 'accounts:login', so a caller cannot collect a fresh
+---budget per app.
+---@param cid string caller citizenid
+---@param scope string caller budget key, e.g. 'accounts:login'
+---@param max? integer checks allowed per window, LOGIN_MAX when omitted
+---@return boolean allowed
+function actions.allowGuess(cid, scope, max)
+    return util.cooldown(cid, scope, GUESS_GAP)
+        and util.rateLimit(cid, scope, GUESS_WINDOW, max or LOGIN_MAX)
+end
+
+---Spends one password check from the budget of the account being checked, shared by everyone
+---who tries it. Runs after the lookup and before the hash, so alts splitting a guessing run
+---between them still meet one ceiling per account.
+---@param app string account app key
+---@param username string account username (a mailbox address for Mail)
+---@return boolean allowed
+function actions.allowGuessOn(app, username)
+    local key = 'account\0' .. tostring(app) .. '\0' .. tostring(username or ''):lower()
+    return util.cooldown(key, 'accounts:guess', GUESS_GAP)
+        and util.rateLimit(key, 'accounts:guess', GUESS_WINDOW, TARGET_MAX)
+end
 
 ---@type integer Longest password any creation path accepts.
 local MAX_PASSWORD_LEN = math.max(64, config.Birdy.MaxPasswordLength or 0, config.Mail.MaxPasswordLength or 0)
@@ -274,8 +304,7 @@ function actions.login(source, payload)
     if not DIRECT_APPS[app] then return fail('accounts.unknownApp', 'Unknown app') end
     local cid = player.getIdentifier(source); if not cid then return fail('accounts.playerNotFound', 'Player not found') end
 
-    if not util.cooldown(cid, 'accounts:login', 1000)
-        or not util.rateLimit(cid, 'accounts:login', GUESS_WINDOW, LOGIN_MAX) then
+    if not actions.allowGuess(cid, 'accounts:login') then
         return fail('accounts.tooManySignAttemptsTry', 'Too many sign-in attempts. Try again shortly')
     end
 
@@ -288,6 +317,9 @@ function actions.login(source, payload)
         if not e:find('@', 1, true) then e = e .. '@' .. MAIL_DOMAIN end
         local matches = store.findAccountsByContact(app, e, nil)
         if #matches == 1 then acc = matches[1] end
+    end
+    if acc and not actions.allowGuessOn(app, acc.username) then
+        return fail('accounts.tooManySignAttemptsTry', 'Too many sign-in attempts. Try again shortly')
     end
     if not acc or not actions.verifyPassword(acc, payload.password) then
         return fail('accounts.wrongUsernamePassword', 'Wrong username or password')
@@ -446,7 +478,8 @@ end
 
 ---Signs the caller into another of their own saved accounts without retyping the password. The
 ---vault is a convenience, not an authority: its stored password is verified against the account,
----so a stale entry fails rather than granting access.
+---so a stale entry fails rather than granting access. Anyone can write any login into their own
+---vault, which makes that check a password guess, so it spends the sign-in budget like one.
 ---@param source number player server id
 ---@param payload table|nil client-supplied { app, username }
 ---@return table envelope on success data = { me }
@@ -477,6 +510,9 @@ function actions.switchAccount(source, payload)
     if not saved then return fail('accounts.noSavedPasswordAccount', 'No saved password for that account') end
 
     local acc = store.getAccount(app, saved.username)
+    if acc and not (actions.allowGuess(cid, 'accounts:login') and actions.allowGuessOn(app, acc.username)) then
+        return fail('accounts.tooManySignAttemptsTry', 'Too many sign-in attempts. Try again shortly')
+    end
     if not acc or not actions.verifyPassword(acc, saved.password) then
         return fail('accounts.savedPasswordNoLongerWorks', 'Saved password no longer works. Sign in again')
     end
@@ -686,15 +722,20 @@ function actions.changePassword(source, payload)
     local app = payload.app
     if not ALL_APPS[app] then return fail('accounts.unknownApp', 'Unknown app') end
     local cid = player.getIdentifier(source); if not cid then return fail('accounts.playerNotFound', 'Player not found') end
-    if not util.cooldown(cid, 'accounts:changePassword', 1000)
-        or not util.rateLimit(cid, 'accounts:changePassword', GUESS_WINDOW, CHANGE_MAX) then
+    if not actions.allowGuess(cid, 'accounts:changePassword', CHANGE_MAX) then
         return fail('accounts.tooManyAttemptsTryAgain', 'Too many attempts. Try again shortly')
     end
 
     local username = trim(payload.identity or '')
     if username == '' then return fail('accounts.accountRequired', 'Account is required') end
     local acc = store.getAccount(app, username)
-    if not acc or not ownsAccount(app, cid, acc) or not actions.verifyPassword(acc, payload.currentPassword) then
+    if not acc or not ownsAccount(app, cid, acc) then
+        return fail('accounts.currentPasswordIncorrect', 'Current password is incorrect')
+    end
+    if not actions.allowGuessOn(app, acc.username) then
+        return fail('accounts.tooManyAttemptsTryAgain', 'Too many attempts. Try again shortly')
+    end
+    if not actions.verifyPassword(acc, payload.currentPassword) then
         return fail('accounts.currentPasswordIncorrect', 'Current password is incorrect')
     end
     local password, pr = validPassword(payload.newPassword); if not password then return pr end
