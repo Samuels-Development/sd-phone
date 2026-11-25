@@ -924,11 +924,16 @@ function actions.followRequests(src)
     return ok({ requests = out })
 end
 
----Followers / following list for a profile, privacy-gated to an empty list for locked profiles.
----Each card carries the viewer's relationship to that user. Read-only.
+---@type integer Accounts one follow-list page carries. A page past the first is asked for with
+---the `nextOffset` the previous one returned.
+local FOLLOW_PAGE = 100
+
+---Followers / following list for a profile, privacy-gated to an empty list for locked profiles,
+---one page at a time. Each card carries the viewer's relationship to that user, read in the same
+---query as the page. Read-only.
 ---@param src integer player server id
----@param payload table { handle?: string, kind?: string }
----@return table result { users }
+---@param payload table { handle?: string, kind?: string, offset?: integer }
+---@return table result { users, nextOffset? } nextOffset is set only when another page exists
 function actions.followList(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
@@ -936,17 +941,20 @@ function actions.followList(src, payload)
     local target = trim(payload.handle)
     if target == '' then target = acc.username else target = target:lower() end
     local kind = payload.kind == 'following' and 'following' or 'followers'
+    local offset = math.min(math.max(math.floor(tonumber(payload.offset) or 0), 0), 100000)
 
     local row = store.getProfile(target)
     if row and not canView(acc.username, row) then return ok({ users = {} }) end
 
+    local rows = store.followList(target, kind, acc.username, FOLLOW_PAGE + 1, offset)
     local out = {}
-    for _, r in ipairs(store.followList(target, kind)) do
+    for i = 1, math.min(#rows, FOLLOW_PAGE) do
+        local r = rows[i]
         local card = userCard(r)
-        card.followStatus = (r.username == acc.username) and 'self' or (store.followStatus(acc.username, r.username) or 'none')
+        card.followStatus = (r.username == acc.username) and 'self' or (r.viewer_status or 'none')
         out[#out + 1] = card
     end
-    return ok({ users = out })
+    return ok({ users = out, nextOffset = #rows > FOLLOW_PAGE and offset + FOLLOW_PAGE or nil })
 end
 
 ---Searches accounts by handle or display name (LIKE '%q%', 20 rows). Empty queries skip the DB;
@@ -1244,10 +1252,11 @@ function actions.dmList(src)
     for i = 1, #peers do handles[i] = peers[i].peer end
     local profiles = store.profilesByUsernames(handles)
     local unread   = store.dmUnreadByPeer(acc.username)
+    local lastBy   = #peers > 0 and store.dmLastByPeer(acc.username) or {}
 
     local out = {}
     for _, p in ipairs(peers) do
-        local last = store.dmLast(acc.username, p.peer)
+        local last = lastBy[p.peer]
         out[#out + 1] = {
             id      = p.peer,
             user    = peerCard(p.peer, profiles[p.peer]),

@@ -229,26 +229,29 @@ function store.removeFollow(follower, target)
     MySQL.update.await('DELETE FROM phone_vibez_follows WHERE follower = ? AND target = ?', { follower, target })
 end
 
----Accounts that follow `username` (any kind value) or that `username` follows
----(kind='following'), each row a full profile card. Read-only.
+---One page of the accounts that follow `username` (any kind value) or that `username` follows
+---(kind='following'), newest edge first, each row a full profile card plus `viewer_follows`
+---(1 when the viewer follows that account, else 0), joined in so a page costs one query however
+---long it is. Read-only.
 ---@param username string account handle
 ---@param kind string 'following' for the following list; anything else means followers
----@return table[] profile rows
-function store.followList(username, kind)
-    if kind == 'following' then
-        return MySQL.query.await([[
-            SELECT pr.* FROM phone_vibez_follows f
-            JOIN phone_vibez_profiles pr ON pr.username = f.target
-            WHERE f.follower = ?
-            ORDER BY f.created_at DESC
-        ]], { username }) or {}
-    end
-    return MySQL.query.await([[
-        SELECT pr.* FROM phone_vibez_follows f
-        JOIN phone_vibez_profiles pr ON pr.username = f.follower
-        WHERE f.target = ?
-        ORDER BY f.created_at DESC
-    ]], { username }) or {}
+---@param viewer string account handle of whoever is looking
+---@param limit integer most rows returned (clamped 1..201)
+---@param offset integer rows skipped (clamped >= 0)
+---@return table[] profile rows (+ viewer_follows)
+function store.followList(username, kind, viewer, limit, offset)
+    local n = math.min(math.max(math.floor(tonumber(limit) or 100), 1), 201)
+    local skip = math.max(math.floor(tonumber(offset) or 0), 0)
+    local other, own = 'follower', 'target'
+    if kind == 'following' then other, own = 'target', 'follower' end
+    return MySQL.query.await(([[
+        SELECT pr.*, (vf.follower IS NOT NULL) AS viewer_follows FROM phone_vibez_follows f
+        JOIN phone_vibez_profiles pr ON pr.username = f.%s
+        LEFT JOIN phone_vibez_follows vf ON vf.follower = ? AND vf.target = pr.username
+        WHERE f.%s = ?
+        ORDER BY f.created_at DESC, pr.username ASC
+        LIMIT %d OFFSET %d
+    ]]):format(other, own, n, skip), { viewer, username }) or {}
 end
 
 ---Usernames of everyone who follows `username`.

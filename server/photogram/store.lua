@@ -357,26 +357,29 @@ function store.countFollowing(username)
     return row and tonumber(row.n) or 0
 end
 
----Accounts that follow `username` (any kind value) or that `username` follows
----(kind='following'), each row a full profile card. Accepted edges only.
+---One page of the accounts that follow `username` (any kind value) or that `username` follows
+---(kind='following'), newest edge first, each row a full profile card plus `viewer_status`: the
+---viewer's own follow edge to that account ('accepted' | 'pending' | NULL), joined in so a page
+---costs one query however long it is. Accepted edges only.
 ---@param username string account handle
 ---@param kind string 'following' for the following list; anything else means followers
----@return table[] profile rows
-function store.followList(username, kind)
-    if kind == 'following' then
-        return MySQL.query.await([[
-            SELECT pr.* FROM phone_photogram_follows f
-            JOIN phone_photogram_profiles pr ON pr.username = f.target
-            WHERE f.follower = ? AND f.status = 'accepted'
-            ORDER BY f.created_at DESC
-        ]], { username }) or {}
-    end
-    return MySQL.query.await([[
-        SELECT pr.* FROM phone_photogram_follows f
-        JOIN phone_photogram_profiles pr ON pr.username = f.follower
-        WHERE f.target = ? AND f.status = 'accepted'
-        ORDER BY f.created_at DESC
-    ]], { username }) or {}
+---@param viewer string account handle of whoever is looking
+---@param limit integer most rows returned (clamped 1..201)
+---@param offset integer rows skipped (clamped >= 0)
+---@return table[] profile rows (+ viewer_status)
+function store.followList(username, kind, viewer, limit, offset)
+    local n = math.min(math.max(math.floor(tonumber(limit) or 100), 1), 201)
+    local skip = math.max(math.floor(tonumber(offset) or 0), 0)
+    local other, own = 'follower', 'target'
+    if kind == 'following' then other, own = 'target', 'follower' end
+    return MySQL.query.await(([[
+        SELECT pr.*, vf.status AS viewer_status FROM phone_photogram_follows f
+        JOIN phone_photogram_profiles pr ON pr.username = f.%s
+        LEFT JOIN phone_photogram_follows vf ON vf.follower = ? AND vf.target = pr.username
+        WHERE f.%s = ? AND f.status = 'accepted'
+        ORDER BY f.created_at DESC, pr.username ASC
+        LIMIT %d OFFSET %d
+    ]]):format(other, own, n, skip), { viewer, username }) or {}
 end
 
 ---Pending follow requests waiting on `username` to accept, newest first, each with the
@@ -907,16 +910,31 @@ function store.dmPeers(username)
     ]], { username, username }) or {}
 end
 
----The newest message between two users (conversation-list preview). Read-only.
----@param a string account handle
----@param b string account handle
----@return table|nil row
-function store.dmLast(a, b)
-    return MySQL.single.await([[
-        SELECT * FROM phone_photogram_dms
-        WHERE (from_user = ? AND to_user = ?) OR (from_user = ? AND to_user = ?)
-        ORDER BY created_at DESC LIMIT 1
-    ]], { a, b, b, a })
+---The newest message of every conversation `username` has, keyed by peer, in one query: each
+---peer's latest created_at is found first, then the message carrying it. Two messages sharing that
+---second resolve to the one with the higher id, so every peer gets exactly one. Read-only.
+---@param username string account handle
+---@return table<string, table> last newest message row per peer handle
+function store.dmLastByPeer(username)
+    local rows = MySQL.query.await([[
+        SELECT d.*, t.peer AS peer FROM (
+            SELECT peer, MAX(created_at) AS last_at FROM (
+                SELECT to_user   AS peer, created_at FROM phone_photogram_dms WHERE from_user = ?
+                UNION ALL
+                SELECT from_user AS peer, created_at FROM phone_photogram_dms WHERE to_user = ?
+            ) x
+            GROUP BY peer
+        ) t
+        JOIN phone_photogram_dms d ON d.created_at = t.last_at
+            AND ((d.from_user = ? AND d.to_user = t.peer) OR (d.from_user = t.peer AND d.to_user = ?))
+    ]], { username, username, username, username }) or {}
+    local out = {}
+    for i = 1, #rows do
+        local row = rows[i]
+        local held = out[row.peer]
+        if not held or tostring(row.id) > tostring(held.id) then out[row.peer] = row end
+    end
+    return out
 end
 
 ---Messages between two users, limited to the most recent n, returned oldest-first. Read-only.

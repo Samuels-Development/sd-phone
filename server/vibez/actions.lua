@@ -703,11 +703,15 @@ function actions.toggleFollow(src, payload)
     return ok({ following = following })
 end
 
----Followers / following list for a profile, each card carrying the viewer's relationship to
----that user. Read-only.
+---@type integer Accounts one follow-list page carries. A page past the first is asked for with
+---the `nextOffset` the previous one returned.
+local FOLLOW_PAGE = 100
+
+---Followers / following list for a profile, one page at a time, each card carrying the viewer's
+---relationship to that user, read in the same query as the page. Read-only.
 ---@param src integer player server id
----@param payload table { handle?: string, kind?: string }
----@return table result { users }
+---@param payload table { handle?: string, kind?: string, offset?: integer }
+---@return table result { users, nextOffset? } nextOffset is set only when another page exists
 function actions.followList(src, payload)
     payload = type(payload) == 'table' and payload or {}
     local acc = viewerAccount(src)
@@ -715,15 +719,18 @@ function actions.followList(src, payload)
     local target = trim(payload.handle)
     if target == '' then target = acc.username else target = target:lower() end
     local kind = payload.kind == 'following' and 'following' or 'followers'
+    local offset = math.min(math.max(math.floor(tonumber(payload.offset) or 0), 0), 100000)
 
+    local rows = store.followList(target, kind, acc.username, FOLLOW_PAGE + 1, offset)
     local out = {}
-    for _, r in ipairs(store.followList(target, kind)) do
+    for i = 1, math.min(#rows, FOLLOW_PAGE) do
+        local r = rows[i]
         local card = userCard(r)
         card.isMe      = r.username == acc.username
-        card.following = (not card.isMe) and store.isFollowing(acc.username, r.username) or false
+        card.following = (not card.isMe) and flag(r.viewer_follows) or false
         out[#out + 1] = card
     end
-    return ok({ users = out })
+    return ok({ users = out, nextOffset = #rows > FOLLOW_PAGE and offset + FOLLOW_PAGE or nil })
 end
 
 ---Searches accounts by handle or display name (LIKE '%q%', 20 rows). Empty queries skip the DB;
