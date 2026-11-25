@@ -3,9 +3,11 @@
 --
 -- How it works
 --   * A DUI (off-screen CEF browser) loads web/dui/phone.html, which boots the very same web/build
---     bundle as the NUI frame and stretches the phone's screen element to fill the DUI viewport.
---   * Every SendNUIMessage push is mirrored into the DUI (SendDuiMessage), so it keeps the same state
---     as the NUI frame. NUI callbacks need no bridge: the DUI page is served from
+--     bundle as the NUI frame and stretches the phone's screen element to fill the DUI viewport. It is
+--     started the first time the phone is opened, not with the resource, and that first open boots it
+--     on the prop: the screen stays dark until the page reports ready.
+--   * From then on every SendNUIMessage push is mirrored into the DUI (SendDuiMessage), so it keeps the
+--     same state as the NUI frame. NUI callbacks need no bridge: the DUI page is served from
 --     https://cfx-nui-<resource>/, so its fetch('https://<resource>/<action>') lands on this
 --     resource's RegisterNUICallback handlers exactly like the frame's.
 --   * While the phone is open on foot (a "session"), the NUI frame is kept closed and unfocused, the
@@ -93,19 +95,25 @@ local HAND_SHIFT <const> = { offset = cfg.HandOffset or vec3(0.0, 0.0, 0.0), rot
 local GAIN_DAY <const>, GAIN_NIGHT <const> = (cfg.Brightness or {}).Day or 0.95, (cfg.Brightness or {}).Night or 0.62
 
 local dui, duiReady, duiFailed = nil, false, false
+---@type boolean True once the first phone open has asked for the DUI; pushes queue for it from then on.
+local duiWanted = false
+---@type boolean True once the runtime texture the DUI draws into exists, so the screen can be swapped for it.
+local rtReady = false
 local queue = {}
 local closer, opener
 local forceFullscreenOnce = false
 local keyboardUp = false
 local cam
 local sessionSeq = 0
+---@type fun() Closes the prop session and reopens the phone full-screen (assigned under "full-screen hand-off").
+local handOffToFullscreen
 
 local function log(...) print('^5[sd-phone:propscreen]^0', ...) end
 
 ---------------------------------------------------------------- DUI lifetime
 
 local function duiSend(data)
-    if not dui or duiFailed then return end
+    if not duiWanted or duiFailed then return end
     if not duiReady then
         if #queue < 400 then queue[#queue + 1] = data end
         return
@@ -113,7 +121,8 @@ local function duiSend(data)
     SendDuiMessage(dui, json.encode(data))
 end
 
----Turns the feature off for this session and drops the DUI; the phone keeps the full-screen UI.
+---Turns the feature off for this session and drops the DUI; the phone keeps the full-screen UI. A
+---session already on the prop, which the first open's is while the DUI boots, is handed to it.
 ---@param why string
 local function fail(why)
     if duiFailed then return end
@@ -121,15 +130,11 @@ local function fail(why)
     queue = {}
     log(('^1%s; prop screen disabled, using the full-screen UI^0'):format(why))
     if dui then DestroyDui(dui) dui = nil end
+    if M.active then handOffToFullscreen() end
 end
 
 local function createDui()
     if dui or duiFailed then return end
-    -- The art is not shipped with sd-phone: without the DUI model and its YTD there is nothing to
-    -- draw on, so say so once and stay on the full-screen UI.
-    if not IsModelInCdimage(joaat(MODEL)) then
-        return fail(('model %s is not streamed (see PropScreen in configs/phone.lua)'):format(MODEL))
-    end
     RequestStreamedTextureDict(MODEL_TXD, false)
     local t = GetGameTimer()
     while not HasStreamedTextureDictLoaded(MODEL_TXD) and GetGameTimer() - t < 5000 do Wait(50) end
@@ -142,12 +147,26 @@ local function createDui()
     while not IsDuiAvailable(dui) and GetGameTimer() - t < 10000 do Wait(50) end
     local txd = CreateRuntimeTxd(RT_TXD)
     CreateRuntimeTextureFromDuiHandle(txd, RT_TEX, GetDuiHandle(dui))
+    rtReady = true
     if cfg.Debug then log(('DUI created %dx%d (available=%s)'):format(W, H, tostring(IsDuiAvailable(dui)))) end
     -- The page announces itself through a NUI callback; no answer means the callback path is not
     -- reaching us, and the phone stays on the full-screen UI rather than a dead screen.
     SetTimeout(20000, function()
         if not duiReady then fail('DUI never reported ready') end
     end)
+end
+
+---Starts the DUI the first time the phone is opened rather than with the resource, so a player who
+---never takes the phone out never runs a second copy of it off-screen. Pushes queue from here until the
+---page reports ready. The art is not shipped with sd-phone: without the DUI model there is nothing to
+---draw on, so that is said once, here, and the phone stays on the full-screen UI.
+local function ensureDui()
+    if duiWanted or duiFailed then return end
+    if not IsModelInCdimage(joaat(MODEL)) then
+        return fail(('model %s is not streamed (see PropScreen in configs/phone.lua)'):format(MODEL))
+    end
+    duiWanted = true
+    CreateThread(createDui)
 end
 
 RegisterNUICallback('sd-phone:propscreen:ready', function(data, cb)
@@ -332,7 +351,7 @@ end
 
 ---Closes the prop session and reopens the phone on the stock full-screen UI (the next normal open
 ---is on the prop again).
-local function handOffToFullscreen()
+function handOffToFullscreen()
     if not M.active or not closer then return end
     forceFullscreenOnce = true
     closer()
@@ -428,7 +447,7 @@ local function inputLoop(seq)
                 for i = 1, #BLOCK do DisableControlAction(0, BLOCK[i], true) end
                 local mx, my, pressed, released, wheel, back = pointer()
                 local prop = pose.getProp()
-                local q = prop and projectQuad(prop)
+                local q = prop and dui and projectQuad(prop)
                 if q then
                     local u, v = quadToUv(q, mx, my)
                     if u then
@@ -450,11 +469,11 @@ local function inputLoop(seq)
                         end
                     end
                 end
-                if down and released then
+                if down and released and dui then
                     SendDuiMouseUp(dui, 'left')
                     down = false
                 end
-                if wheel ~= 0 then SendDuiMouseWheel(dui, wheel * 120, 0) end
+                if wheel ~= 0 and dui then SendDuiMouseWheel(dui, wheel * 120, 0) end
                 -- Back: right mouse or Backspace -> the UI's own escape (closes an app/sheet, at home closes)
                 if back then duiSend({ action = 'sd-phone:escape' }) end
                 if not typing then
@@ -561,8 +580,8 @@ local function startSession()
     CreateThread(function()
         RequestStreamedTextureDict(MODEL_TXD, false)
         local t = GetGameTimer()
-        while not HasStreamedTextureDictLoaded(MODEL_TXD) and GetGameTimer() - t < 3000 do Wait(0) end
-        if seq ~= sessionSeq then return end
+        while seq == sessionSeq and not (rtReady and HasStreamedTextureDictLoaded(MODEL_TXD)) and GetGameTimer() - t < 20000 do Wait(0) end
+        if seq ~= sessionSeq or not rtReady then return end
         AddReplaceTexture(MODEL_TXD, MODEL_TEX, RT_TXD, RT_TEX)
     end)
     CreateThread(function() pose.reweld() end)
@@ -589,12 +608,10 @@ AddEventHandler('sd-phone:client:openState', function(open)
     if not open then return endSession() end
     -- sd-tablet raises this event for its own open too: only the phone itself goes on the prop.
     if not companion.phoneOpen or M.active then return end
+    ensureDui()
     if forceFullscreenOnce then forceFullscreenOnce = false return end
     if duiFailed then return end
-    if not duiReady then
-        if cfg.Debug then log('DUI not ready yet, using the full-screen UI for this open') end
-        return
-    end
+    if cfg.Debug and not duiReady then log('DUI still starting, the screen lights once it reports ready') end
     if IsPedInAnyVehicle(PlayerPedId(), true) then return end
     if not ALLOW_FOLD and pose.isFolded() then return end
     startSession()
@@ -612,11 +629,6 @@ end)
 function M.bind(close, open)
     closer, opener = close, open
 end
-
-CreateThread(function()
-    Wait(1500)
-    createDui()
-end)
 
 AddEventHandler('onResourceStop', function(res)
     if res ~= RES then return end
