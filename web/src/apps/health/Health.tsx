@@ -78,12 +78,14 @@ export function Health({ onClose }: { onClose: () => void }) {
         if (typeof data.heartRate === 'number') setHr(data.heartRate);
     }, []));
 
+    const deckActive = useDeckActive();
     useEffect(() => {
+        if (!deckActive) return;
+        setNow(Date.now());
         const id = window.setInterval(() => setNow(Date.now()), 1000);
         return () => window.clearInterval(id);
-    }, []);
+    }, [deckActive]);
 
-    const deckActive = useDeckActive();
     const { data: summary, refetch: refetchSummary } = useAsyncData(apiSummary, [deckActive], { enabled: deckActive });
     useEffect(() => { refetchRef.current = refetchSummary; }, [refetchSummary]);
     const { data: board } = useAsyncData(apiLeaderboard, [deckActive], { enabled: deckActive });

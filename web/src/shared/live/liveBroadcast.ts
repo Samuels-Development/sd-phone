@@ -1,4 +1,5 @@
 import { blobToBase64, pickVideoMime } from '@/shared/liveMedia';
+import { holdDeck } from '@/shell/deckActive';
 import {
     FLAG_NONE,
     FRAME_DELTA,
@@ -197,6 +198,7 @@ export function startLiveBroadcast(o: LiveBroadcastOptions): LiveBroadcast {
     let handle: RelayStreamHandle | null = null;
     let current: LiveTransport = 'event';
     let stopped = false;
+    const release = holdDeck();
 
     const report = (next: LiveTransport) => {
         if (current === next) return;
@@ -257,6 +259,7 @@ export function startLiveBroadcast(o: LiveBroadcastOptions): LiveBroadcast {
     return {
         stop() {
             stopped = true;
+            release();
             encoding.stop();
             const dead = handle;
             handle = null;

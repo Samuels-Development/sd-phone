@@ -53,28 +53,44 @@ export const TIMER_PRESETS: Array<{ label: string; seconds: number }> = [
 ];
 
 
+const ZONE_FORMATS = {
+    clock:  { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true },
+    hour:   { hour: 'numeric', hour12: false },
+    day:    { day: 'numeric' },
+    offset: { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, day: 'numeric' },
+} satisfies Record<string, Intl.DateTimeFormatOptions>;
+
+type ZoneFormat = keyof typeof ZONE_FORMATS;
+
+const zoneFormatters = new Map<string, Intl.DateTimeFormat>();
+
+export function zoneFormatter(tz: string, kind: ZoneFormat): Intl.DateTimeFormat {
+    const key = `${kind}|${tz}`;
+    let fmt = zoneFormatters.get(key);
+    if (!fmt) {
+        fmt = new Intl.DateTimeFormat('en-US', { ...ZONE_FORMATS[kind], timeZone: tz });
+        zoneFormatters.set(key, fmt);
+    }
+    return fmt;
+}
+
 export function getZoneTime(tz: string, now: Date = new Date()): {
     h12: number; minutes: number; seconds: number; ampm: 'AM' | 'PM'; hours24: number;
 } {
-    const fmt = new Intl.DateTimeFormat('en-US', {
-        timeZone: tz, hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true,
-    });
-    const parts = fmt.formatToParts(now);
+    const parts = zoneFormatter(tz, 'clock').formatToParts(now);
     const get = (t: string) => parts.find(p => p.type === t)?.value ?? '';
     return {
         h12:    parseInt(get('hour')),
         minutes:parseInt(get('minute')),
         seconds:parseInt(get('second')),
         ampm:   get('dayPeriod').toUpperCase().includes('AM') ? 'AM' : 'PM',
-        hours24: parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(now)),
+        hours24: parseInt(zoneFormatter(tz, 'hour').format(now)),
     };
 }
 
 export function getOffsetLabel(tz: string, now: Date = new Date()): string {
     const localDay = now.getDate();
-    const zoneDay = parseInt(
-        new Intl.DateTimeFormat('en-US', { timeZone: tz, day: 'numeric' }).format(now),
-    );
+    const zoneDay = parseInt(zoneFormatter(tz, 'day').format(now));
     const localOffsetMin = -now.getTimezoneOffset();
     const zoneOffsetMin  = getZoneOffsetMinutes(tz, now);
     const diffH = (zoneOffsetMin - localOffsetMin) / 60;
@@ -88,8 +104,8 @@ export function getOffsetLabel(tz: string, now: Date = new Date()): string {
 }
 
 function getZoneOffsetMinutes(tz: string, now: Date): number {
-    const utcStr  = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC',  hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, day: 'numeric' }).format(now);
-    const zoneStr = new Intl.DateTimeFormat('en-US', { timeZone: tz,     hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, day: 'numeric' }).format(now);
+    const utcStr  = zoneFormatter('UTC', 'offset').format(now);
+    const zoneStr = zoneFormatter(tz, 'offset').format(now);
     const parse = (s: string) => {
         const m = s.match(/(\d+)\/(\d+)\/\d+,?\s*(\d+):(\d+):(\d+)/);
         if (!m) return 0;

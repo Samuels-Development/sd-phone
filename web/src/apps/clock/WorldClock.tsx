@@ -1,16 +1,20 @@
 import { useEffect, useState } from 'react';
 
+import { useDeckActive } from '@/shell/deckActive';
 import { useTheme } from '@/stores/themeStore';
 import { formatClockTime } from '@/lib/time';
 import { getOffsetLabel, getZoneTime, WORLD_CITIES } from './data';
 
 export function WorldClock() {
     const { hour24 } = useTheme('hour24');
+    const active = useDeckActive();
     const [now, setNow] = useState(() => new Date());
     useEffect(() => {
+        if (!active) return;
+        setNow(new Date());
         const id = window.setInterval(() => setNow(new Date()), 1000);
         return () => window.clearInterval(id);
-    }, []);
+    }, [active]);
 
     return (
         <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-4">

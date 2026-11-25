@@ -2,6 +2,7 @@ import { useEffect, useReducer, useState } from 'react';
 
 import { t } from '@/i18n';
 import { useSessionState } from '@/hooks/useSessionState';
+import { useDeckActive } from '@/shell/deckActive';
 import { DrumWheel } from '@/ui/DrumWheel';
 import { fmtTimer, fmtTimerLabel } from './data';
 import { addRecent, getRecents } from './clockApi';
@@ -28,11 +29,13 @@ export function Timer({ topPad = 0, isDark }: { topPad?: number; isDark: boolean
 
     const totalPicked = pickH * 3600 + pickM * 60 + pickS;
 
+    const active = useDeckActive();
     useEffect(() => {
-        if (status !== 'running') return;
+        if (status !== 'running' || !active) return;
+        tick();
         const id = window.setInterval(tick, 250);
         return () => window.clearInterval(id);
-    }, [status]);
+    }, [status, active]);
 
     function startTimer() {
         if (totalPicked === 0) return;

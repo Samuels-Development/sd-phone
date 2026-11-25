@@ -191,7 +191,7 @@ export function AppDeck({
             <div
                 ref={poolRef}
                 aria-hidden
-                style={{ position: 'absolute', inset: 0, visibility: 'hidden', pointerEvents: 'none', overflow: 'hidden' }}
+                style={{ position: 'absolute', inset: 0, visibility: 'hidden', contentVisibility: 'hidden', pointerEvents: 'none', overflow: 'hidden' }}
             />
             {deckIds.map(id => createPortal(
                 <AppHost

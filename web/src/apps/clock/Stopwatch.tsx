@@ -1,6 +1,7 @@
 import { useEffect, useReducer } from 'react';
 
 import { t } from '@/i18n';
+import { useDeckActive } from '@/shell/deckActive';
 import { fmtStopwatch } from './data';
 import { swElapsed, swLap, swReset, swStart, swStop, useStopwatch } from '@/stores/stopwatchStore';
 
@@ -8,12 +9,14 @@ import { swElapsed, swLap, swReset, swStart, swStop, useStopwatch } from '@/stor
 export function Stopwatch({ isDark }: { isDark: boolean }) {
     const { running, laps } = useStopwatch();
     const [, tick] = useReducer((n: number) => n + 1, 0);
+    const active = useDeckActive();
 
     useEffect(() => {
-        if (!running) return;
+        if (!running || !active) return;
+        tick();
         const id = window.setInterval(tick, 33);
         return () => window.clearInterval(id);
-    }, [running]);
+    }, [running, active]);
 
     const elapsed = swElapsed();
     const { main, cents } = fmtStopwatch(elapsed);

@@ -31,6 +31,7 @@ import { AppSwitcher } from '@/shell/AppSwitcher';
 import { asDesign } from '@/shell/shells';
 import { HOME_HOLD_MS, HOME_HOLD_SLOP, holdAction, swipeAction, tapAction, type HomeAction } from '@/shell/homeGesture';
 import { AppDeck, FullscreenStage, type DeckAppCtx } from '@/shell/AppDeck';
+import { deckHeld } from '@/shell/deckActive';
 import { Homescreen }  from '@/shell/Homescreen';
 import { useBadgeStore } from '@/stores/badgeStore';
 import { DEFAULT_PREF, prefFor, useNotifPrefsStore } from '@/stores/notifPrefsStore';
@@ -177,6 +178,8 @@ function AppResumeStage({ hasApp }: { hasApp: boolean }) {
 }
 
 const RETAIN_CAP = RECENTS_CAP;
+
+const RETAIN_IDLE_MS = 3 * 60_000;
 
 const ALARM_TEST_ID = '__alarm_test__';
 
@@ -1040,6 +1043,17 @@ function AppContent() {
     useEffect(() => { hydrateAlarms(); }, []);
     const phoneOpen = !!view;
     useEffect(() => { if (phoneOpen) hydrateAlarms(true); }, [phoneOpen]);
+    const hasRetained = retained.length > 0;
+    useEffect(() => {
+        if (phoneOpen || !hasRetained) return;
+        let timer = 0;
+        const release = () => {
+            if (deckHeld()) { timer = window.setTimeout(release, RETAIN_IDLE_MS); return; }
+            clearDeck();
+        };
+        timer = window.setTimeout(release, RETAIN_IDLE_MS);
+        return () => window.clearTimeout(timer);
+    }, [phoneOpen, hasRetained, clearDeck]);
     useAutoContrast(
         phoneOpen && !locked && setupCompleted && currentApp !== 'camera',
         `${currentApp ?? ''}|${theme}|${locked}`,
