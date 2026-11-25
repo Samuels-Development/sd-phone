@@ -47,8 +47,16 @@ local MAX_ACTION_DATA_BYTES = 16384
 local ACTION_GAP_MS = 1000
 
 ---@type integer Minimum gap between accepted sends, per character. A send rewrites the whole
----messages blob once per recipient, so this is the only thing bounding that cost per second.
+---messages blob once per recipient, so this bounds that cost per second.
 local SEND_GAP_MS = 2000
+---@type integer Rolling window for the flood limits below (ms), from configs/mail.lua.
+local FLOOD_WINDOW_MS = math.floor((tonumber(mailCfg.SendWindow) or 600) * 1000)
+---@type integer Player sends one character may make inside the window. The gap alone still let a
+---script send 300 mails in ten minutes, each rewriting up to 21 mailboxes.
+local MAX_SENDS = math.floor(tonumber(mailCfg.MaxSendsPerWindow) or 30)
+---@type integer Player mail one mailbox takes in inside the window, from every sender together;
+---past it the mailbox simply gets no copy. System mail from other resources is never counted.
+local MAX_RECEIVED = math.floor(tonumber(mailCfg.MaxReceivedPerWindow) or 40)
 ---@type integer Minimum gap between accepted draft saves, per character. Saving a draft is a
 ---button, not an autosave, so a real composer never comes close.
 local DRAFT_GAP_MS = 1000
@@ -540,6 +548,9 @@ function actions.send(source, payload)
     if not lib.table.contains(sender.logged_in_citizens, me.cid) then
         return fail('mail.notSignedIntoAccount', 'You are not signed into that account')
     end
+    if not util.rateLimit(me.cid, 'mail:sendBudget', FLOOD_WINDOW_MS, MAX_SENDS) then
+        return fail('mail.sendLimitReached', 'You have sent too much mail. Try again later')
+    end
 
     local toRaw = payload.to or {}
     if type(toRaw) ~= 'table' or #toRaw == 0 then return fail('mail.leastOneRecipientRequired', 'At least one recipient is required') end
@@ -580,22 +591,23 @@ function actions.send(source, payload)
     local pushes = {}
     for i = 1, #recipients do
         local addr = recipients[i]
-        local recipient = store.getAccount(addr)
-        if recipient then
-            local inboxMessage = {
-                id      = store.newId(),
-                folder  = 'inbox',
-                from    = { name = sender.display_name, email = sender.email },
-                to      = recipients,
-                subject = subject,
-                body    = body,
-                sentAt  = sentAt,
-                read    = false,
-                flagged = false,
-                attachments = attachments,
-            }
-            store.appendMessage(addr, inboxMessage, mailCfg.MaxMessagesPerAccount)
-
+        local inboxMessage = {
+            id      = store.newId(),
+            folder  = 'inbox',
+            from    = { name = sender.display_name, email = sender.email },
+            to      = recipients,
+            subject = subject,
+            body    = body,
+            sentAt  = sentAt,
+            read    = false,
+            flagged = false,
+            attachments = attachments,
+        }
+        local delivered, recipient = false, nil
+        if util.rateLimit('mailbox\0' .. addr, 'mail:receive', FLOOD_WINDOW_MS, MAX_RECEIVED) then
+            delivered, recipient = store.appendMessage(addr, inboxMessage, mailCfg.MaxMessagesPerAccount)
+        end
+        if delivered and recipient then
             for j = 1, #recipient.logged_in_citizens do
                 pushes[#pushes + 1] = {
                     citizenid = recipient.logged_in_citizens[j],
@@ -679,22 +691,21 @@ function actions.systemSend(mail)
     local pushes = {}
     for i = 1, #recipients do
         local addr = recipients[i]
-        local recipient = store.getAccount(addr)
-        if recipient then
-            local inboxMessage = {
-                id      = store.newId(),
-                folder  = 'inbox',
-                from    = { name = fromName, email = fromEmail },
-                to      = recipients,
-                subject = subject,
-                body    = body,
-                sentAt  = sentAt,
-                read    = false,
-                flagged = false,
-                attachments = attachments,
-                action  = action,
-            }
-            store.appendMessage(addr, inboxMessage, mailCfg.MaxMessagesPerAccount)
+        local inboxMessage = {
+            id      = store.newId(),
+            folder  = 'inbox',
+            from    = { name = fromName, email = fromEmail },
+            to      = recipients,
+            subject = subject,
+            body    = body,
+            sentAt  = sentAt,
+            read    = false,
+            flagged = false,
+            attachments = attachments,
+            action  = action,
+        }
+        local appended, recipient = store.appendMessage(addr, inboxMessage, mailCfg.MaxMessagesPerAccount)
+        if appended and recipient then
             delivered = delivered + 1
             sentId = sentId or inboxMessage.id
 

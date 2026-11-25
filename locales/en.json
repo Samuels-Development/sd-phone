@@ -2624,6 +2624,7 @@
     "selectedMessage": "1 Message",
     "selectedMessages": "{count} Messages",
     "send": "Send",
+    "sendLimitReached": "You have sent too much mail. Try again later",
     "senderAccountNotFound": "Sender account not found",
     "senderAccountRequired": "Sender account is required",
     "september": "September",

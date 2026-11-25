@@ -34,4 +34,12 @@ return {
 
     -- Max saved compose addresses kept per character.
     MaxSavedEmails = 100,
+
+    -- Flood limits on mail sent by players, over a rolling window in seconds. Each send rewrites
+    -- the sender's mailbox and every recipient's, so these bound that cost. MaxSendsPerWindow is
+    -- per character; MaxReceivedPerWindow is per mailbox from all senders together, and mail past
+    -- it is not delivered. Mail sent by other resources (sendMail) is never limited.
+    SendWindow           = 600,
+    MaxSendsPerWindow    = 30,
+    MaxReceivedPerWindow = 40,
 }
