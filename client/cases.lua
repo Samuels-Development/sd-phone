@@ -33,7 +33,19 @@ local GRAVITY <const> = vector3(0.0, 0.0, -9.81)
 ---@type number Share of a charm's motion kept from one sixtieth of a second to the next.
 local DAMPING <const> = 0.972
 ---@type number Metres from the camera beyond which a charm is left hanging as it was.
-local SWING_RANGE <const> = 30.0
+local SWING_RANGE <const> = 15.0
+---@type number Metres from the camera within which a charm moves every frame. Further out it moves at
+---STEP, where a few centimetres of chain swinging thirty times a second reads the same.
+local CLOSE_RANGE <const> = 3.0
+---@type number Seconds between moves of a charm further than CLOSE_RANGE from the camera.
+local STEP <const> = 1.0 / 30.0
+---@type number Metres a charm's links may still drift in one move for the chain to count as at rest.
+local REST_DRIFT <const> = 0.0002
+---@type integer Moves in a row a chain has to stay at rest before it stops being re-attached.
+local REST_MOVES <const> = 10
+---@type number Metres the corner a charm hangs from may move, or degrees the phone may turn, before a
+---chain at rest is woken.
+local WAKE_SHIFT <const>, WAKE_TURN <const> = 0.001, 0.5
 ---@type string This resource's name, for the photo sticker page's address.
 local RES <const> = GetCurrentResourceName()
 ---@type string The streamed texture dictionary the case models use (sd-phone-props).
@@ -54,8 +66,8 @@ local photoCache = {}
 local worn = {}
 ---@type integer Bumped by every dress, so a dress superseded while a model streamed stops.
 local generation = 0
----@type integer Props that currently carry a charm; the swing loop idles at zero.
-local swinging = 0
+---@type table<integer, table> Prop entity -> the charm hanging from it; the swing loop idles while empty.
+local chains = {}
 ---@type CaseDesign|nil The case this player owns and wears.
 local equipped
 ---@type integer Game timer of the last answer about the equipped case; -STALE_MS forces the first ask.
@@ -237,8 +249,8 @@ local function hang(parent, body, design, entry)
         if obj then segs[#segs + 1] = { obj = obj, len = DATA.SegmentLength[segment] or 0.01 } end
     end
     if #segs == 0 then return end
-    entry.chain = { parent = parent, pivot = pivot, segs = segs, pts = {}, prev = {} }
-    swinging = swinging + 1
+    entry.chain = { parent = parent, pivot = pivot, segs = segs, pts = {}, prev = {}, owed = 0.0, calm = 0 }
+    chains[parent] = entry.chain
 end
 
 ---Lists the trims a phone style fits to a body of a design, in the order they are created.
@@ -269,7 +281,7 @@ function cases.undress(parent)
     end
     if entry.photoSlot then release(entry.photoSlot) end
     if entry.chain then
-        swinging = swinging - 1
+        if chains[parent] == entry.chain then chains[parent] = nil end
         for i = 1, #entry.chain.segs do
             if DoesEntityExist(entry.chain.segs[i].obj) then DeleteObject(entry.chain.segs[i].obj) end
         end
@@ -442,11 +454,13 @@ function cases.styleOptions(look)
     }
 end
 
----Moves one hanging charm on by a frame: each segment's end keeps its momentum, falls, and is
+---Moves one hanging charm on by a step: each segment's end keeps its momentum, falls, and is
 ---pulled back to its length from the one above; then every segment is re-attached pointing down
----its own stretch of the chain.
+---its own stretch of the chain. The momentum carried is scaled by how long this step is against the
+---last one, so a charm moved every frame and one moved thirty times a second swing alike.
 ---@param chain table the charm (parent, pivot, segs, pts, prev)
----@param dt number seconds since the last frame
+---@param dt number seconds since the last step
+---@return number drift the furthest any link moved this step, in metres
 local function swing(chain, dt)
     local parent = chain.parent
     local pivot = GetOffsetFromEntityInWorldCoords(parent, chain.pivot.x, chain.pivot.y, chain.pivot.z)
@@ -458,10 +472,13 @@ local function swing(chain, dt)
             pts[i] = pivot - vector3(0.0, 0.0, drop)
             prev[i] = pts[i]
         end
+        chain.lastDt = nil
     end
 
-    local keep = DAMPING ^ (dt * 60.0)
+    local last = chain.lastDt
+    local keep = DAMPING ^ (dt * 60.0) * ((last and last > 0.0) and dt / last or 1.0)
     local fall = GRAVITY * (dt * dt)
+    chain.lastDt = dt
     for i = 1, #pts do
         local now = pts[i]
         pts[i] = now + (now - prev[i]) * keep + fall
@@ -469,11 +486,14 @@ local function swing(chain, dt)
     end
 
     local anchor = pivot
+    local drift = 0.0
     for i = 1, #pts do
         local reach = pts[i] - anchor
         local length = #reach
         if length > 0.000001 then pts[i] = anchor + reach * (segs[i].len / length) end
         anchor = pts[i]
+        local moved = #(pts[i] - prev[i])
+        if moved > drift then drift = moved end
     end
 
     anchor = pivot
@@ -491,6 +511,79 @@ local function swing(chain, dt)
         end
         anchor = pts[i]
     end
+    return drift
+end
+
+---@type integer Milliseconds the swing loop sleeps while no charm is near enough and on screen to move.
+local IDLE_MS <const> = 250
+---@type integer Milliseconds between moves of a charm beyond CLOSE_RANGE, and between checks on one at rest.
+local STEP_MS <const> = math.floor(STEP * 1000)
+
+---Shortest turn between two angles, in degrees.
+---@param a number
+---@param b number
+---@return number
+local function turnBetween(a, b)
+    return math.abs((a - b + 180.0) % 360.0 - 180.0)
+end
+
+---Where a charm's corner of the phone is and which way the phone faces: what has to change before a
+---chain at rest needs moving again.
+---@param chain table
+---@return vector3 corner, vector3 rotation
+local function anchorOf(chain)
+    local p = chain.pivot
+    return GetOffsetFromEntityInWorldCoords(chain.parent, p.x, p.y, p.z), GetEntityRotation(chain.parent, 2)
+end
+
+---Whether the phone under a chain at rest has moved or turned since it came to rest.
+---@param chain table
+---@return boolean
+local function stirred(chain)
+    local corner, rot = anchorOf(chain)
+    local rest = chain.rest
+    return #(corner - rest.corner) > WAKE_SHIFT or turnBetween(rot.x, rest.rot.x) > WAKE_TURN
+        or turnBetween(rot.y, rest.rot.y) > WAKE_TURN or turnBetween(rot.z, rest.rot.z) > WAKE_TURN
+end
+
+---Moves one charm on when it is due, and says how soon it wants looking at again. A charm off screen or
+---out of range is left as it was and starts again from hanging straight down when it comes back, as
+---whatever its phone did meanwhile would otherwise arrive as one violent jerk. Within CLOSE_RANGE it
+---moves every frame, further out every STEP. A chain that has come to rest is no longer re-attached
+---until its phone moves.
+---@param chain table
+---@param here vector3 the camera
+---@param dt number seconds since the loop last ran
+---@return integer wait milliseconds
+local function tick(chain, here, dt)
+    local parent = chain.parent
+    if not DoesEntityExist(parent) then return IDLE_MS end
+    local range = #(GetEntityCoords(parent) - here)
+    if range > SWING_RANGE or not IsEntityOnScreen(parent) then
+        if not chain.idle then
+            chain.idle, chain.pts, chain.prev, chain.rest, chain.calm, chain.owed = true, {}, {}, nil, 0, 0.0
+        end
+        return IDLE_MS
+    end
+    chain.idle = false
+    local close = range <= CLOSE_RANGE
+    chain.owed = chain.owed + dt
+    if chain.owed <= 0.0 or (not close and chain.owed < STEP) then return close and 0 or STEP_MS end
+    if chain.rest then
+        if not stirred(chain) then
+            chain.owed = 0.0
+            return STEP_MS
+        end
+        chain.rest, chain.calm, chain.lastDt = nil, 0, nil
+    end
+    local drift = swing(chain, math.min(chain.owed, 0.05))
+    chain.owed = 0.0
+    chain.calm = drift < REST_DRIFT and chain.calm + 1 or 0
+    if chain.calm >= REST_MOVES then
+        local corner, rot = anchorOf(chain)
+        chain.rest = { corner = corner, rot = rot }
+    end
+    return close and 0 or STEP_MS
 end
 
 ---Asks the server which case this character wears, once at a time, and reports a change.
@@ -555,21 +648,27 @@ do
     cases.setStyle(ok and saved or nil)
 end
 
--- Swings every hanging charm each frame, and idles while nobody in range carries one.
+-- Swings the hanging charms that are near and on screen, as often as the nearest of them asks, and
+-- idles while there are none. Consecutive frames take the frame time; a loop that slept takes the
+-- time it slept.
 CreateThread(function()
+    local last, slept = GetGameTimer(), IDLE_MS
     while true do
-        if swinging <= 0 then
+        if not next(chains) then
             Wait(500)
+            last, slept = GetGameTimer(), IDLE_MS
         else
-            Wait(0)
-            local dt = math.min(GetFrameTime(), 0.05)
+            local now = GetGameTimer()
+            local dt = slept == 0 and GetFrameTime() or (now - last) / 1000.0
+            last = now
             local here = GetFinalRenderedCamCoord()
-            for parent, entry in pairs(worn) do
-                local chain = entry.chain
-                if chain and DoesEntityExist(parent) and #(GetEntityCoords(parent) - here) < SWING_RANGE then
-                    swing(chain, dt)
-                end
+            local wait = IDLE_MS
+            for _, chain in pairs(chains) do
+                local want = tick(chain, here, dt)
+                if want < wait then wait = want end
             end
+            slept = wait
+            Wait(wait)
         end
     end
 end)
