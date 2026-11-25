@@ -1,6 +1,6 @@
----@type table Online-game engine (server.games.engine): lobbies, invites, move relay, wagers, stats.
+---@type table Online-game engine (server.games.engine): lobbies, invites, sessions, wagers, stats.
 local engine = require 'server.games.engine'
 
--- Wordle online: the generalized engine with two cosmetic sides ('a'/'b') racing the same word;
--- freeRelay lets each client push its own progress snapshots without turn enforcement.
-engine.register('wordle', { sides = { 'a', 'b' }, title = 'Wordle', currency = 'bank', freeRelay = true })
+-- Wordle online: two cosmetic sides ('a'/'b') racing the same word on one clock. The rules pick the
+-- word, colour every guess and decide the race.
+engine.register('wordle', { sides = { 'a', 'b' }, title = 'Wordle', currency = 'bank', rules = require 'server.games.rules.wordle' })

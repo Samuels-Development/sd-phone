@@ -1,5 +1,6 @@
----@type table Online-game engine (server.games.engine): lobbies, invites, move relay, wagers, stats.
+---@type table Online-game engine (server.games.engine): lobbies, invites, sessions, wagers, stats.
 local engine = require 'server.games.engine'
 
--- Connect Four online: the generalized engine with Red(1)/Yellow(2) sides, Red moves first.
-engine.register('connectfour', { sides = { '1', '2' }, title = 'Connect Four' })
+-- Connect Four online: Red(1)/Yellow(2) sides, Red moves first. The rules hold the board and call
+-- four in a row and the full-board draw.
+engine.register('connectfour', { sides = { '1', '2' }, title = 'Connect Four', rules = require 'server.games.rules.connectfour' })
