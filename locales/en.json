@@ -6929,6 +6929,7 @@
     "playerNotFound": "Player not found",
     "restoredMomentsAgoTryAgain": "Restored moments ago. Try again in a moment.",
     "takeSimOutPhoneS": "Take the SIM out of the phone's SIM tray instead.",
+    "tooManyPasswordAttempts": "Too many password attempts. Try again shortly.",
     "wrongBackupPassword": "Wrong backup password.",
     "wrongBackupPasswordSSaved": "Wrong backup password. It's saved in the Passwords app of your backed-up phone."
   },

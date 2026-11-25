@@ -499,6 +499,25 @@ local AUTO_SYNC_MIN_GAP = 300
 ---responsive, but enough that the ~88-statement run can't be looped at will.
 local MANUAL_SYNC_MIN_GAP = 30
 
+---@type integer Rolling window for backup-password checks (ms), shared by enabling and restoring.
+local GUESS_WINDOW = 300000
+
+---@type integer Backup-password checks one character may make inside GUESS_WINDOW.
+local GUESS_MAX = 10
+
+---@type integer Minimum gap between two backup-password checks by one character (ms).
+local GUESS_GAP = 1000
+
+---True when the character may have their backup password checked now. Called BEFORE the check
+---on both paths that take the password, under one shared key, so alternating between enabling
+---and restoring buys no extra guesses: one a second, ten per five minutes.
+---@param realCid string real (framework) citizenid
+---@return boolean
+local function mayCheckPassword(realCid)
+    return util.cooldown(realCid, 'sim:backupPassword', GUESS_GAP)
+        and util.rateLimit(realCid, 'sim:backupPassword', GUESS_WINDOW, GUESS_MAX)
+end
+
 ---Takes a fresh snapshot of `s.identity` into ITS profile, converting a legacy pointer row to
 ---a `cloud:` namespace on first use, and stamps the picker labels (colour + number).
 ---@param realCid string real (framework) citizenid
@@ -545,6 +564,9 @@ lib.callback.register('sd-phone:server:sim:backup:set', function(source, payload
         -- With no profiles left there is nothing the password protects: the entered password
         -- becomes the new one (also the recovery path for a forgotten password).
         if existing and simStore.profileCount(realCid) > 0 then
+            if not mayCheckPassword(realCid) then
+                return util.fail('sim.tooManyPasswordAttempts', 'Too many password attempts. Try again shortly.')
+            end
             if not accounts.verifyPassword(password, existing) then
                 return util.fail('sim.wrongBackupPasswordSSaved', 'Wrong backup password. It\'s saved in the Passwords app of your backed-up phone.')
             end
@@ -713,6 +735,9 @@ lib.callback.register('sd-phone:server:sim:backup:restore', function(source, pay
 
     local stored = simStore.getBackupPassword(realCid)
     if stored then
+        if not mayCheckPassword(realCid) then
+            return util.fail('sim.tooManyPasswordAttempts', 'Too many password attempts. Try again shortly.')
+        end
         local given = type(payload.password) == 'string' and payload.password or ''
         local accounts = require 'server.accounts.store'
         if not accounts.verifyPassword(given, stored) then
