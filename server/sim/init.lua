@@ -41,15 +41,13 @@ end
 
 -- Reachability: a player is "online as" EVERY identity whose SIM they carry, not just the
 -- active phone's - calls addressed to any of their numbers ring them (a pocketed phone rings).
+-- These four read the session index (server.sim.session) rather than resolving every online
+-- player per lookup.
 local baseGetAnySource = player.getAnySourceByIdentifier
 function player.getAnySourceByIdentifier(citizenid)
     if not state.active then return baseGetAnySource(citizenid) end
     if not citizenid or citizenid == '' then return nil end
-    for _, src in ipairs(GetPlayers()) do
-        local s = tonumber(src)
-        if s and session.hasIdentity(s, citizenid) then return s end
-    end
-    return nil
+    return session.sourceCarrying(citizenid)
 end
 
 -- Live-UI delivery: every push resolved through this lands only when `citizenid` is the phone
@@ -59,11 +57,7 @@ local baseGetSource = player.getSourceByIdentifier
 function player.getSourceByIdentifier(citizenid)
     if not state.active then return baseGetSource(citizenid) end
     if not citizenid or citizenid == '' then return nil end
-    for _, src in ipairs(GetPlayers()) do
-        local s = tonumber(src)
-        if s and session.identity(s) == citizenid then return s end
-    end
-    return nil
+    return session.sourceActingAs(citizenid)
 end
 
 -- Batch form of getSourceByIdentifier above, and it must track it: ACTIVE identity only, so a
@@ -71,28 +65,13 @@ end
 local baseActiveCidMap = player.activeCidMap
 function player.activeCidMap()
     if not state.active then return baseActiveCidMap() end
-    local out = {}
-    for _, src in ipairs(GetPlayers()) do
-        local s = tonumber(src)
-        if s then
-            local id = session.identity(s)
-            if id then out[id] = s end
-        end
-    end
-    return out
+    return session.actingMap()
 end
 
 local baseCidMap = player.onlineCidMap
 function player.onlineCidMap()
     if not state.active then return baseCidMap() end
-    local out = {}
-    for _, src in ipairs(GetPlayers()) do
-        local s = tonumber(src)
-        if s then
-            for identity in pairs(session.identities(s)) do out[identity] = s end
-        end
-    end
-    return out
+    return session.carryingMap()
 end
 
 ---Sends a simple ox_lib toast to a player.
