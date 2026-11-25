@@ -4,6 +4,10 @@ local framework = require 'bridge.shared.framework'
 local garages   = require 'bridge.server.garages'
 ---@type table Money bridge (bridge.server.money): fee debit and refund.
 local money     = require 'bridge.server.money'
+---@type table Player bridge (bridge.server.player): the character a request comes from. Always the
+---real identifier: a vehicle belongs to the character, and a SIM identity would give each phone its
+---own cooldown and its own lock on the same car.
+local player    = require 'bridge.server.player'
 ---@type table Shared server helpers (server.util): onCleanup.
 local util      = require 'server.util'
 ---@type table Garages app config (configs.garages): the Valet block.
@@ -39,10 +43,25 @@ do
     end
 end
 
----@type table<string, integer> citizenid -> os.time of that player's last delivery.
+---@type number Metres from the player a delivery may start: the distance the client looks for a
+---road at (DriveFrom when driven, a few metres when the car is simply placed) plus the slack its
+---road-node search and a few seconds of walking add.
+local MAX_SPAWN_DIST = (V.Drive ~= false and math.max(5, tonumber(V.DriveFrom) or 75) or 3.0) + 75.0
+
+---@type table<string, integer> citizenid -> os.time that character's last delivery started.
 local lastValet = {}
 
-util.onCleanup(function(_src, cid) if cid then lastValet[cid] = nil end end)
+---@type table<string, boolean> citizenid -> a delivery for that character is in flight.
+local busy = {}
+
+---Drops cooldowns that have run out. Swept rather than cleared per player, so a relog does not
+---reset a cooldown still running.
+util.onCleanup(function()
+    local now = os.time()
+    for cid, at in pairs(lastValet) do
+        if now - at >= COOLDOWN then lastValet[cid] = nil end
+    end
+end)
 
 ---@type table<string, boolean> Vehicle classes valet refuses; road delivery doesn't apply to them.
 local NON_ROAD = { Boat = true, Aircraft = true, Plane = true, Helicopter = true }
@@ -129,65 +148,92 @@ local function spawnVehicle(model, at)
     return nil
 end
 
----Deliver one of the caller's stored vehicles: validate, charge, spawn, then mark it out of its
----garage. Any failure before that last step refunds the fee and leaves the car stored.
-lib.callback.register('sd-phone:server:garages:valet', function(src, payload)
-    if not ENABLED then return { success = false, reason = 'disabled' } end
-    if type(payload) ~= 'table' or type(payload.plate) ~= 'string' then
-        return { success = false, reason = 'notFound' }
+---Hand back whatever a delivery that is not going ahead had already done: the spawned entity is
+---deleted, the fee refunded, and the cooldown put back to what it was, so a delivery that never
+---happened costs neither money nor the wait. Nothing is undone once the take-out committed.
+---@param src number
+---@param cid string caller's character identifier
+---@param ctx table delivery progress: started, prevValet, charged, entity, committed
+---@param why string refusal code
+---@return table response
+local function unwind(src, cid, ctx, why)
+    if not ctx.committed then
+        if ctx.entity then pcall(DeleteEntity, ctx.entity); ctx.entity = nil end
+        if ctx.charged then
+            ctx.charged = false
+            money.add(src, ACCOUNT, PRICE, 'Vehicle valet refund')
+        end
+        if ctx.started then lastValet[cid] = ctx.prevValet end
     end
+    return { success = false, reason = why }
+end
 
+---Whether a client-chosen spawn point lies within reach of where the server sees the player. The
+---point is the client's pick of a road node, so it is refused rather than pulled in: dragged toward
+---the player it would no longer be on that road, and often inside something.
+---@param src number
+---@param spawn { x: number, y: number, z: number }
+---@return boolean
+local function spawnInReach(src, spawn)
+    local ped = GetPlayerPed(src)
+    if not ped or ped == 0 then return false end
+    local at = GetEntityCoords(ped)
+    if not at then return false end
+    local dx, dy, dz = spawn.x - at.x, spawn.y - at.y, spawn.z - at.z
+    return (dx * dx + dy * dy + dz * dz) <= MAX_SPAWN_DIST * MAX_SPAWN_DIST
+end
+
+---Deliver one of the caller's stored vehicles: validate, start the cooldown, charge, spawn, then
+---mark it out of its garage. Any failure before that last step goes through unwind, which leaves
+---the car stored and refunds the fee. Progress is written to `ctx` as it happens so the caller
+---can unwind a delivery that raised part way through.
+---@param src number
+---@param payload table client request
+---@param cid string caller's character identifier
+---@param ctx table delivery progress, filled in here
+---@return table response
+local function deliver(src, payload, cid, ctx)
     local spawn = payload.spawn
     if type(spawn) ~= 'table' or not tonumber(spawn.x) or not tonumber(spawn.y) or not tonumber(spawn.z) then
         return { success = false, reason = 'noSpace' }
     end
     spawn = { x = tonumber(spawn.x), y = tonumber(spawn.y), z = tonumber(spawn.z), h = tonumber(spawn.h) or 0.0 }
+    if not spawnInReach(src, spawn) then return { success = false, reason = 'noSpace' } end
 
-    local cid = require('bridge.server.player').getIdentifier(src)
     local veh = garages.vehicleFor(src, payload.plate)
 
     local reason, detail = refuse(src, cid, veh, payload)
     if reason then return { success = false, reason = reason, detail = detail } end
     if not veh.model then return { success = false, reason = 'notFound' } end
 
-    if PRICE > 0 and not money.remove(src, ACCOUNT, PRICE, 'Vehicle valet') then
-        return { success = false, reason = 'funds' }
-    end
+    ctx.started, ctx.prevValet = true, lastValet[cid]
+    lastValet[cid] = os.time()
 
-    ---Hand the fee back and report why the delivery didn't happen.
-    ---@param why string refusal code
-    ---@return table response
-    local function refund(why)
-        if PRICE > 0 then money.add(src, ACCOUNT, PRICE, 'Vehicle valet refund') end
-        return { success = false, reason = why }
+    if PRICE > 0 then
+        if not money.remove(src, ACCOUNT, PRICE, 'Vehicle valet') then return unwind(src, cid, ctx, 'funds') end
+        ctx.charged = true
     end
 
     local netId
     if garages.spawnsOwnVehicles() then
         netId = garages.spawnOwned(src, veh, spawn)
-        if not netId then return refund('spawnFailed') end
+        if not netId then return unwind(src, cid, ctx, 'spawnFailed') end
+        ctx.committed = true
     else
-        local entity = spawnVehicle(veh.model, spawn)
-        if not entity then return refund('spawnFailed') end
+        ctx.entity = spawnVehicle(veh.model, spawn)
+        if not ctx.entity then return unwind(src, cid, ctx, 'spawnFailed') end
 
-        netId = NetworkGetNetworkIdFromEntity(entity)
-        if not netId or netId == 0 then
-            pcall(DeleteEntity, entity)
-            return refund('spawnFailed')
-        end
+        netId = NetworkGetNetworkIdFromEntity(ctx.entity)
+        if not netId or netId == 0 then return unwind(src, cid, ctx, 'spawnFailed') end
 
-        if not garages.takeOut(src, veh.plate, netId) then
-            pcall(DeleteEntity, entity)
-            return refund('takeOutFailed')
-        end
+        if not garages.takeOut(src, veh.plate, netId) then return unwind(src, cid, ctx, 'takeOutFailed') end
+        ctx.committed = true
 
         -- AI Core hands keys out on the server through its key layer, whichever key script runs.
         if framework.aicore then
             pcall(function() exports['ai-core']:GiveVehicleKeys(src, veh.plate, 'garage') end)
         end
     end
-
-    if cid then lastValet[cid] = os.time() end
 
     return {
         success = true,
@@ -197,6 +243,29 @@ lib.callback.register('sd-phone:server:garages:valet', function(src, payload)
         price   = PRICE,
         drive   = V.Drive ~= false,
     }
+end
+
+---The valet request. One delivery per character at a time: a second request while one is in
+---flight is refused outright, since both would read the car as stored and spawn it twice. The lock
+---is released on every path, including a delivery that raised, which is unwound before answering.
+lib.callback.register('sd-phone:server:garages:valet', function(src, payload)
+    if not ENABLED then return { success = false, reason = 'disabled' } end
+    if type(payload) ~= 'table' or type(payload.plate) ~= 'string' then
+        return { success = false, reason = 'notFound' }
+    end
+
+    local cid = player.getRealIdentifier(src)
+    if not cid then return { success = false, reason = 'notFound' } end
+    if busy[cid] then return { success = false, reason = 'cooldown' } end
+
+    busy[cid] = true
+    local ctx = {}
+    local ok, res = pcall(deliver, src, payload, cid, ctx)
+    busy[cid] = nil
+
+    if ok then return res end
+    print(('^1[sd-phone:garages]^0 valet delivery failed: %s'):format(tostring(res)))
+    return unwind(src, cid, ctx, 'spawnFailed')
 end)
 
 ---Whether valet is available, and what it costs, so the app can show or hide its button.

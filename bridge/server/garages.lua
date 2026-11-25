@@ -1088,6 +1088,10 @@ end
 
 ---Mark one of the caller's vehicles as out of its garage: the profile's state column to its
 ---`outState`, plus the garage column on systems carrying `outGarage`. The one write in this bridge.
+---The UPDATE only matches while every column it writes still holds the value just read as stored
+---(NULL-safe, so an empty garage column compares too), which makes it a compare-and-set: two
+---deliveries racing on one car both read it stored, but only the first write finds it so, and the
+---second commits nothing. A write that matched no row is a refusal, never a take-out.
 ---@param source number caller server id
 ---@param plate string
 ---@param netId number|nil network id of the spawned entity, for systems that track it
@@ -1104,20 +1108,24 @@ function garages.takeOut(source, plate, netId)
     local garageCol = PROFILE.outGarage and pickName(row, PROFILE.garage) or nil
     if not stateCol and not garageCol then return false end
 
-    local sets, args = {}, {}
+    local sets, args, conds, condArgs = {}, {}, { '`plate` = ?' }, { row.plate }
     if stateCol then
         sets[#sets + 1] = ('`%s` = ?'):format(stateCol)
         args[#args + 1] = PROFILE.outState
+        conds[#conds + 1] = ('`%s` <=> ?'):format(stateCol)
+        condArgs[#condArgs + 1] = row[stateCol]
     end
     if garageCol then
         sets[#sets + 1] = ('`%s` = ?'):format(garageCol)
         args[#args + 1] = PROFILE.outGarage
+        conds[#conds + 1] = ('`%s` <=> ?'):format(garageCol)
+        condArgs[#condArgs + 1] = row[garageCol]
     end
-    args[#args + 1] = row.plate
+    for i = 1, #condArgs do args[#args + 1] = condArgs[i] end
 
     local ok, affected = pcall(function()
-        return MySQL.update.await(
-            ('UPDATE `%s` SET %s WHERE `plate` = ?'):format(BASE.table, table.concat(sets, ', ')), args)
+        return MySQL.update.await(('UPDATE `%s` SET %s WHERE %s'):format(
+            BASE.table, table.concat(sets, ', '), table.concat(conds, ' AND ')), args)
     end)
     if not ok or (tonumber(affected) or 0) < 1 then return false end
 
