@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 import { fetchNui } from '@/core/nui';
 import type { ExternalNowPlayingTrack } from '@/core/types';
 import { useNuiEvent } from '@/hooks/useNuiEvent';
-import { isSourceAllowed, youtubeId, youtubePlaybackPossible } from './data';
+import { isSourceAllowed, playableTracks, youtubeId, youtubePlaybackPossible } from './data';
 import type { Track } from './data';
 
 declare global {
@@ -176,7 +176,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         const a = audioRef.current;
         if (!current) { a?.pause(); try { ytRef.current?.stopVideo?.(); } catch {} return; }
-        if (youtubeId(current.url) && !isSourceAllowed(current.url)) { a?.pause(); setPlaying(false); return; }
+        if (!isSourceAllowed(current.url)) { a?.pause(); try { ytRef.current?.stopVideo?.(); } catch {} setPlaying(false); return; }
         const vid = youtubeId(current.url);
         if (vid) {
             a?.pause();
@@ -218,8 +218,10 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     useEffect(() => { timeRef.current = time; }, [time]);
 
     const play = useCallback((track: Track, q?: Track[]) => {
+        if (!isSourceAllowed(track.url)) return;
+        const list = playableTracks(q && q.length ? q : [track]);
         wantPlay.current = true;
-        setQueue(q && q.length ? q : [track]);
+        setQueue(list.length ? list : [track]);
         setCurrent(track);
         setPlaying(true);
     }, []);
@@ -243,7 +245,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         if (dir === -1 && timeRef.current > 3) { seek(0); return; }
         setCurrent(cur => {
             if (!cur) return cur;
-            const list = queue.length ? queue : [cur];
+            const list = playableTracks(queue.length ? queue : [cur]);
             const idx = list.findIndex(t => t.id === cur.id);
             if (idx < 0) return cur;
             let n: number;

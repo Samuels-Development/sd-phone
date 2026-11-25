@@ -158,6 +158,10 @@ export function isSourceAllowed(url: string): boolean {
     return sourceRejection(url) === null;
 }
 
+export function playableTracks<T extends { url: string }>(tracks: readonly T[]): T[] {
+    return tracks.filter(track => typeof track?.url === 'string' && isSourceAllowed(track.url));
+}
+
 export async function fetchYouTubeMeta(url: string): Promise<{ title: string; artist: string }> {
     if (!isSourceAllowed(url)) return { title: '', artist: '' };
     try {

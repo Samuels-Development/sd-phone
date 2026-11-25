@@ -2,13 +2,133 @@
 local share = require 'server.share.core'
 ---@type table Shared server helpers (server.util): field-length caps for the share payload.
 local util  = require 'server.util'
+---@type table sd-phone config root (configs.config); Music holds the link allowlist (configs/music.lua).
+local config = require 'configs.config'
 
 ---@type integer Tracks carried by one shared playlist. A hand-built library playlist is a few
 ---dozen songs, so this only stops a scripted array.
 local MAX_SHARE_TRACKS = 200
 
+---@type table The Music section of the config, the same rules client/main.lua sends the UI.
+local rules = type(config.Music) == 'table' and config.Music or {}
+
+---@type string Pattern for an 11-character YouTube video id.
+local VIDEO_ID = ('[%w_%-]'):rep(11)
+
+---@type string[] Where a YouTube link carries its video id, matching youtubeId in
+---web/src/apps/music/data.ts. The `&v=` form comes first because that regex prefers it.
+local YOUTUBE_PATTERNS = {
+    'youtube%.com/watch%?.*&v=(' .. VIDEO_ID .. ')',
+    'youtube%.com/watch%?v=(' .. VIDEO_ID .. ')',
+    'youtube%.com/embed/(' .. VIDEO_ID .. ')',
+    'youtube%.com/shorts/(' .. VIDEO_ID .. ')',
+    'youtube%.com/live/(' .. VIDEO_ID .. ')',
+    'youtu%.be/(' .. VIDEO_ID .. ')',
+}
+
+---@type table<string, true> File extensions a direct audio link may end in when AllowAnyAudioLink is on.
+local AUDIO_EXTENSIONS = {
+    mp3 = true, ogg = true, oga = true, opus = true, wav = true, m4a = true, aac = true, flac = true, weba = true,
+}
+
+---Trims surrounding whitespace.
+---@param value string
+---@return string
+local function trim(value)
+    return (value:gsub('^%s+', ''):gsub('%s+$', ''))
+end
+
+---The YouTube video id a link points at, taken from the leftmost match like the UI's regex.
+---@param url string
+---@return string|nil id
+local function youtubeId(url)
+    local bestAt, bestId
+    for i = 1, #YOUTUBE_PATTERNS do
+        local at, _, id = url:find(YOUTUBE_PATTERNS[i])
+        if at and (not bestAt or at < bestAt) then bestAt, bestId = at, id end
+    end
+    return bestId
+end
+
+---@type table<string, true> Curated track URLs (AllowedTracks), which are allowed whatever else is set.
+local allowedTracks = {}
+for _, entry in ipairs(type(rules.AllowedTracks) == 'table' and rules.AllowedTracks or {}) do
+    local url = type(entry) == 'string' and entry or (type(entry) == 'table' and entry.url)
+    if type(url) == 'string' and trim(url) ~= '' then allowedTracks[trim(url)] = true end
+end
+
+---@type table<string, true> YouTube video ids allowed while AllowYouTube is off.
+local allowedVideos = {}
+for _, entry in ipairs(type(rules.AllowedVideos) == 'table' and rules.AllowedVideos or {}) do
+    if type(entry) == 'string' and entry ~= '' then
+        local id = youtubeId(entry) or trim(entry)
+        if id:match('^' .. VIDEO_ID .. '$') then allowedVideos[id] = true end
+    end
+end
+
+---@type string[] Trusted hosts, lower-cased; a leading dot also covers subdomains.
+local allowedHosts = {}
+for _, host in ipairs(type(rules.AllowedHosts) == 'table' and rules.AllowedHosts or {}) do
+    if type(host) == 'string' and host ~= '' then allowedHosts[#allowedHosts + 1] = host:lower() end
+end
+
+---True when `host` is one of AllowedHosts or, for a leading-dot entry, a subdomain of it.
+---@param host string lower-cased host name
+---@return boolean
+local function hostAllowed(host)
+    for i = 1, #allowedHosts do
+        local entry = allowedHosts[i]
+        if entry:sub(1, 1) == '.' then
+            if host == entry:sub(2) or host:sub(-#entry) == entry then return true end
+        elseif host == entry then
+            return true
+        end
+    end
+    return false
+end
+
+---Splits an http(s) link into its lower-cased host and its path.
+---@param url string
+---@return string|nil host
+---@return string|nil path
+local function parseWebUrl(url)
+    local scheme, rest = url:match('^(%a[%w+.-]*)://(.*)$')
+    if not scheme then return nil end
+
+    scheme = scheme:lower()
+    if scheme ~= 'http' and scheme ~= 'https' then return nil end
+
+    local authority = rest:match('^[^/?#]*')
+    local path = (rest:sub(#authority + 1):match('^[^?#]*'))
+    local host = authority:gsub('^.*@', ''):gsub(':%d*$', ''):lower()
+    if host == '' then return nil end
+
+    return host, path
+end
+
+---Whether the Music app accepts a link under configs/music.lua. Mirrors sourceRejection in
+---web/src/apps/music/data.ts, so a shared playlist can only carry links the recipient's phone
+---would play anyway, never a tracker that logs the listener's IP.
+---@param url string trimmed track URL
+---@return boolean
+local function sourceAllowed(url)
+    if allowedTracks[url] then return true end
+
+    local video = youtubeId(url)
+    if video then return rules.AllowYouTube == true or allowedVideos[video] == true end
+
+    local host, path = parseWebUrl(url)
+    if not host then return false end
+    if #allowedHosts > 0 then return hostAllowed(host) end
+    if rules.AllowAnyAudioLink ~= true then return false end
+
+    local extension = path:match('%.(%w+)$')
+    return extension ~= nil and AUDIO_EXTENSIONS[extension:lower()] == true
+end
+
 ---Rebuilds a client track as a fresh, field-capped table. Nothing nested is carried across, so a
----held share request can never retain an attacker-sized object graph.
+---held share request can never retain an attacker-sized object graph, and a link the Music
+---allowlist refuses drops the track.
 ---@param raw any client-supplied track
 ---@return table|nil track { id?, title, artist?, album?, url, addedAt? }
 local function safeTrack(raw)
@@ -16,6 +136,7 @@ local function safeTrack(raw)
     local title = util.limitedString(raw.title, 200)
     local url   = util.limitedString(raw.url, 512)
     if not title or not url then return nil end
+    if not sourceAllowed(url) then return nil end
     local addedAt = tonumber(raw.addedAt)
     return {
         id      = util.limitedString(raw.id, 40),
