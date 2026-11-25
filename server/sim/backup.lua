@@ -545,17 +545,18 @@ function backup.sync(fromId, cloudId)
     return rows
 end
 
----Restores a phone profile: copies `fromId`'s data onto `toId` (the current SIM identity), then
----grants the mailboxes and group chats the snapshot recorded at backup time (grantMail,
+---Restores a phone profile: copies the snapshot `fromId`'s data onto `toId` (the current SIM
+---identity), then grants the mailboxes and group chats it recorded at backup time (grantMail,
 ---grantGroups), each only while the source phone `liveFromId` still holds it. Nothing is read
 ---live off the source phone as something to hand over, so whoever holds it now keeps whatever
----they signed into or joined since. A legacy pointer backup recorded nothing and grants none.
----The source profile keeps its rows.
+---they signed into or joined since. The source profile keeps its rows.
 ---
----Nothing is written when `toId` is the profile's own phone, unless `allowSelf` (character mode,
+---Only a cloud snapshot restores. A legacy pointer backup names a live phone identity, and
+---copying from it would hand over whatever that phone holds today, so it writes nothing. Nor is
+---anything written when `toId` is the profile's own phone, unless `allowSelf` (character mode,
 ---where every phone is the character): elsewhere a self-restore would only copy the phone's data
 ---back over itself under fresh ids.
----@param fromId string backed-up identity (cloud snapshot, or a phone identity on legacy rows)
+---@param fromId string cloud snapshot identity
 ---@param toId string current SIM identity
 ---@param toNumber string current SIM bare-digit number
 ---@param liveFromId string|nil previously enrolled phone identity (defaults to fromId)
@@ -563,7 +564,7 @@ end
 ---@return integer rows total rows written
 function backup.restore(fromId, toId, toNumber, liveFromId, allowSelf)
     liveFromId = liveFromId or fromId
-    if toId == fromId then return 0 end
+    if not isCloud(fromId) or toId == fromId then return 0 end
     if toId == liveFromId and not allowSelf then return 0 end
 
     local rows = copyAll(fromId, toId)

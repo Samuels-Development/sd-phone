@@ -106,7 +106,8 @@ return {
     -- (stocks app cash and shares, casino chips, owned phone cases): it stays with the phone
     -- that holds it. Mailbox sign-ins and group chats come back only as they stood at backup
     -- time, and only while the old phone still has them. Outside DataOwner = 'character' a
-    -- backup never restores onto the phone it was taken from.
+    -- backup never restores onto the phone it was taken from. Backups made before cloud
+    -- snapshots can't be restored; the player is asked to make a new one.
     Backup = {
         Enabled = true,
 

@@ -6923,6 +6923,7 @@
     "noPhone": "No phone.",
     "noPhoneBackUp": "No phone to back up.",
     "noSimCardInstalled": "No SIM card is installed.",
+    "oldBackupMakeNew": "This is an old backup and can no longer be restored. Make a new Cloud Backup instead.",
     "phoneAlreadyHoldsBackedUp": "This phone already holds the backed-up data.",
     "phoneSSimBuilt": "This phone's SIM is built in.",
     "pickWhichBackupRestore": "Pick which backup to restore.",

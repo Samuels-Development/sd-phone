@@ -416,16 +416,14 @@ lib.callback.register('sd-phone:server:sim:get', function(source)
     end
 
     -- Backup profiles: one per phone. A profile restores once its snapshot exists (legacy
-    -- pointer rows restore from the live phone identity instead), and never onto the phone
-    -- that made it outside character mode.
+    -- pointer rows never do), and never onto the phone that made it outside character mode.
     local myProfile
     local profiles = {}
     local restorable = false
     for _, p in ipairs(simStore.listProfiles(realCid)) do
         local isCloud = lib.string.startsWith(p.identity, 'cloud:')
         local thisPhone = s ~= nil and s.identity == p.deviceIdentity
-        local canUse = (state.character or not thisPhone)
-            and ((isCloud and p.syncedAt ~= nil) or (not isCloud and (s == nil or s.identity ~= p.identity)))
+        local canUse = (state.character or not thisPhone) and isCloud and p.syncedAt ~= nil
         if thisPhone then myProfile = p end
         profiles[#profiles + 1] = {
             device     = p.deviceIdentity,
@@ -706,6 +704,9 @@ end)
 ---enrollment - the source phone keeps backing itself up. In device and sim mode a profile never
 ---restores onto the phone that made it, which already holds everything the backup does. Character
 ---mode allows it, since every phone there is the character: it brings back what was deleted.
+---A legacy pointer backup (made before cloud snapshots) is refused: it could only copy whatever
+---its phone holds today. With no pick, a character holding only such a backup is told so rather
+---than told they have none.
 lib.callback.register('sd-phone:server:sim:backup:restore', function(source, payload)
     if not (config.Sim.Backup and config.Sim.Backup.Enabled ~= false) then
         return util.fail('sim.cloudBackupDisabled', 'Cloud backup is disabled.')
@@ -724,16 +725,17 @@ lib.callback.register('sd-phone:server:sim:backup:restore', function(source, pay
         profile = simStore.getProfile(realCid, payload.device)
     else
         -- No pick: allowed only when exactly one profile can restore here.
-        local candidates = {}
+        local candidates, legacy = {}, nil
         for _, p in ipairs(simStore.listProfiles(realCid)) do
-            local isCloud = isCloudIdentity(p.identity)
-            local usable = (isCloud and p.syncedAt ~= nil) or (not isCloud and p.identity ~= s.identity)
-            if usable and (state.character or p.deviceIdentity ~= s.identity) then
+            local mine = not state.character and p.deviceIdentity == s.identity
+            if not isCloudIdentity(p.identity) then
+                if p.identity ~= s.identity then legacy = legacy or p end
+            elseif p.syncedAt ~= nil and not mine then
                 candidates[#candidates + 1] = p
             end
         end
         if #candidates > 1 then return util.fail('sim.pickWhichBackupRestore', 'Pick which backup to restore.') end
-        profile = candidates[1]
+        profile = candidates[1] or legacy
     end
     if not profile then return util.fail('sim.noCloudBackupFoundCharacter', 'No cloud backup found for this character.') end
     local isCloud = isCloudIdentity(profile.identity)
@@ -741,6 +743,9 @@ lib.callback.register('sd-phone:server:sim:backup:restore', function(source, pay
     local ownPhone = profile.deviceIdentity == s.identity and not state.character
     if ownPhone or (not isCloud and profile.identity == s.identity) then
         return util.fail('sim.phoneAlreadyHoldsBackedUp', 'This phone already holds the backed-up data.')
+    end
+    if not isCloud then
+        return util.fail('sim.oldBackupMakeNew', 'This is an old backup and can no longer be restored. Make a new Cloud Backup instead.')
     end
 
     local stored = simStore.getBackupPassword(realCid)
