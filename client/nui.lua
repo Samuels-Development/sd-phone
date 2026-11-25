@@ -84,8 +84,68 @@ local function remember(key, res)
     lastGood[key] = res
 end
 
+---@type integer Bytes a payload may carry when its action has no allowance of its own. The largest
+---ordinary payloads are an MDT draft or a home layout (60 KB), a drawn signature (150 KB) and an ID
+---headshot (256 KB); a megabyte clears them all.
+local DEFAULT_CAP <const> = 1024 * 1024
+---@type integer Room for the fields around the inline media an allowance below is sized by.
+local SLACK <const> = 64 * 1024
+---@type table<string, integer> Server callback -> bytes its payload may carry, for the few that carry a
+---recording or drawings inline. Each matches what that server handler accepts at most, so nothing
+---the server would take is refused here.
+local CAPS <const> = {
+    -- server/notes/actions.lua: MaxSketches sketches of at most 1 MB each, plus the body.
+    ['sd-phone:server:notes:save'] = ((config.Notes or {}).MaxSketches or 12) * 1024 * 1024
+        + ((config.Notes or {}).MaxBodyLength or 20000) + SLACK,
+    -- server/messages/actions.lua uploadVoice: one data URL of at most VoiceMemos.MaxAudioBytes.
+    ['sd-phone:server:messages:uploadVoice'] = ((config.VoiceMemos or {}).MaxAudioBytes or 8 * 1024 * 1024) + SLACK,
+    -- server/voicemail/init.lua MAX_AUDIO_BYTES: one data URL of at most 8 MB.
+    ['sd-phone:server:voicemail:upload'] = 8 * 1024 * 1024 + SLACK,
+}
+---@type integer Deepest nesting a payload may have. Nothing the phone sends goes past a handful.
+local MAX_DEPTH <const> = 16
+
+---@type integer Bytes counted so far by the walk below; reset by `fits`. Safe as an upvalue because
+---the walk never yields.
+local counted = 0
+
+---Counts a value's bytes the way its JSON would roughly spend them, stopping as soon as `cap` is
+---passed so an oversized payload costs no more than the cap to refuse.
+---@param value any
+---@param cap integer
+---@param depth integer nesting level, 1 at the root
+---@return boolean ok false once the count passes `cap` or the nesting passes MAX_DEPTH
+local function walk(value, cap, depth)
+    local kind = type(value)
+    if kind == 'string' then
+        counted = counted + #value + 2
+    elseif kind == 'table' then
+        if depth > MAX_DEPTH then return false end
+        counted = counted + 2
+        for key, item in pairs(value) do
+            counted = counted + (type(key) == 'string' and #key + 4 or 1)
+            if counted > cap or not walk(item, cap, depth + 1) then return false end
+        end
+    else
+        counted = counted + 8
+    end
+    return counted <= cap
+end
+
+---Whether a NUI payload is small enough to send to a server callback. A payload rides the ordinary
+---event channel, which carries it in one piece and stalls the net thread for everyone while it
+---lands, so anything past what the server could accept is refused here instead.
+---@param serverEvent string
+---@param payload any
+---@return boolean
+local function fits(serverEvent, payload)
+    counted = 0
+    return walk(payload, CAPS[serverEvent] or DEFAULT_CAP, 1)
+end
+
 ---Binds a NUI callback that forwards its payload to the matching server callback and returns the
----response envelope unchanged, falling back to a uniform failure when the server never answers.
+---response envelope unchanged, falling back to a uniform failure when the server never answers. A
+---payload too large for its action (`fits`) is refused without being sent.
 ---@param nuiAction string NUI action name the React app fetches
 ---@param serverEvent string server callback name to await
 ---@param onAccepted? fun() ran only when the server accepted the write, never on a rejection
@@ -98,6 +158,11 @@ local function proxy(nuiAction, serverEvent, onAccepted, transform)
     local cacheable = action ~= nil and CACHED[action] == true
 
     RegisterNUICallback(nuiAction, function(payload, cb)
+        if not fits(serverEvent, payload) then
+            cb({ success = false, message = 'That is too large to send' })
+            return
+        end
+
         local key = cacheable and cacheKey(action, payload) or nil
 
         if not reachable(serverEvent) then
