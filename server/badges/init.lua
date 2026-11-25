@@ -67,12 +67,14 @@ local counters = {
     birdy     = birdyCount,
 }
 
----@type integer How long a computed snapshot stays reusable for the client-facing fetch (ms).
----Shorter than any human can re-open the phone, so nobody ever sees a stale count.
-local SNAPSHOT_TTL = 2000
+---@type integer Backstop age (ms) past which a kept snapshot is recounted on the next fetch.
+---Every write the phone makes pushes the count it changed (push or pushApp), so this only
+---catches a count changed from outside sd-phone: another resource writing the tables directly.
+local SNAPSHOT_MAX_AGE = 10 * 60 * 1000
 
----@type table<string, { at: number, snap: table }> Last snapshot per citizenid. Written through by
----every push so a served snapshot can never disagree with a number already on the phone.
+---@type table<integer, { cid: string, at: integer, snap: table }> Counts per player, kept until a
+---write changes them. Keyed by server id and tagged with the identity they were counted for, so
+---switching to another phone (another identity) recounts instead of showing the last one's.
 local memo = {}
 
 ---Per-app unread counts for one character, keyed by home-screen app id, computed straight from
@@ -82,44 +84,80 @@ local memo = {}
 function badges.snapshot(cid)
     local out = {}
     for app, count in pairs(counters) do out[app] = count(cid) end
-    memo[cid] = { at = GetGameTimer(), snap = out }
     return out
 end
 
----The last snapshot when it is younger than SNAPSHOT_TTL, otherwise a fresh one. Only the
----client-driven fetch takes this path; a server-side push always recomputes.
----@param cid string framework per-character id
----@return table counts
-local function memoized(cid)
-    local hit = memo[cid]
-    if hit then
-        local age = GetGameTimer() - hit.at
-        if age >= 0 and age < SNAPSHOT_TTL then return hit.snap end
-    end
-    return badges.snapshot(cid)
+---Keeps a full recount as the player's snapshot.
+---@param source integer player server id
+---@param cid string identity it was counted for
+---@param snap table counts
+local function remember(source, cid, snap)
+    memo[source] = { cid = cid, at = GetGameTimer(), snap = snap }
 end
 
--- Best effort: a character who logs out keeps no entry, and one that outlives its player is
--- recomputed on the next fetch anyway.
-util.onCleanup(function(_, cid)
-    if type(cid) == 'string' then memo[cid] = nil end
-end)
+---The player's kept counts, recounting only what is missing: everything when nothing is kept for
+---this identity (or it is past SNAPSHOT_MAX_AGE), else just the apps badges.forget dropped.
+---@param source integer player server id
+---@param cid string the identity the phone is acting as
+---@return table counts
+local function cached(source, cid)
+    local hit = memo[source]
+    local age = hit and GetGameTimer() - hit.at
+    if not hit or hit.cid ~= cid or age < 0 or age >= SNAPSHOT_MAX_AGE then
+        local snap = badges.snapshot(cid)
+        remember(source, cid, snap)
+        return snap
+    end
+    for app, count in pairs(counters) do
+        if hit.snap[app] == nil then hit.snap[app] = count(cid) end
+    end
+    return hit.snap
+end
 
----@type integer How often the memo drops entries the TTL already made unusable (ms).
-local SWEEP_MS = 5 * 60 * 1000
-
--- Backstop for the sweep above, whose citizenid is best effort at disconnect. An entry past the
--- TTL is already ignored by memoized(), so dropping it here changes nothing a caller can see.
-CreateThread(function()
-    while true do
-        Wait(SWEEP_MS)
-        local now = GetGameTimer()
-        for cid, hit in pairs(memo) do
-            local age = now - hit.at
-            if age < 0 or age >= SNAPSHOT_TTL then memo[cid] = nil end
+---Drops kept counts for an identity, so the next fetch recounts them. For a change no push
+---reports, such as signing in or out of an app account.
+---@param cid string framework per-character id
+---@param apps string[]|nil apps to recount; nil recounts the whole snapshot
+function badges.forget(cid, apps)
+    for source, hit in pairs(memo) do
+        if hit.cid == cid then
+            if apps then
+                for i = 1, #apps do hit.snap[apps[i]] = nil end
+            else
+                memo[source] = nil
+            end
         end
     end
-end)
+end
+
+util.onCleanup(function(source) memo[source] = nil end)
+
+---@type string[] The apps whose badge belongs to a signed-in account rather than the character.
+local ACCOUNT_APPS = { 'photogram', 'vibez', 'birdy' }
+
+---Wraps one of the account store's session writers so the badge of the app it signs in or out of
+---is recounted on the next fetch. A sign-in changes whose notifications the badge counts without
+---writing to any of them, so no push follows it.
+---@param name string store function name
+---@param cidArg integer which argument carries the citizenid (the app is always the first)
+---@param allApps boolean|nil true when the writer signs out of every app at once
+local function recountOnSession(name, cidArg, allApps)
+    local original = acctStore[name]
+    if type(original) ~= 'function' then return end
+    acctStore[name] = function(...)
+        local results = table.pack(original(...))
+        local cid = select(cidArg, ...)
+        if type(cid) == 'string' then
+            badges.forget(cid, allApps and ACCOUNT_APPS or { (...) })
+        end
+        return table.unpack(results, 1, results.n)
+    end
+end
+
+recountOnSession('setSession', 2)
+recountOnSession('clearSession', 2)
+recountOnSession('clearAccountSession', 2)
+recountOnSession('clearAllSessions', 1, true)
 
 ---Recomputes a player's badge counts from the DB and pushes the exact numbers to their phone.
 ---A no-op when the source has no resolvable citizenid.
@@ -128,12 +166,16 @@ function badges.push(source)
     if not source or source <= 0 then return end
     local cid = player.getIdentifier(source)
     if not cid then return end
-    TriggerClientEvent('sd-phone:client:badges', source, badges.snapshot(cid))
+    local snap = badges.snapshot(cid)
+    remember(source, cid, snap)
+    TriggerClientEvent('sd-phone:client:badges', source, snap)
 end
 
 ---Recomputes ONE app's badge and pushes just that number, merged into whatever the phone already
----shows. A content fan-out only ever changes its own app's count, and a full snapshot costs seven
----store reads (one of them an unindexed mail scan) - paid per recipient.
+---shows. A content fan-out only ever changes its own app's count, and a full snapshot costs
+---about a dozen store reads (one of them an unindexed mail scan) - paid per recipient. The kept
+---counts are patched in place, so the next fetch agrees with what was pushed without recounting
+---the other apps.
 ---@param source number player server id
 ---@param app string home-screen app id; an unknown id is a no-op
 function badges.pushApp(source, app)
@@ -143,20 +185,18 @@ function badges.pushApp(source, app)
     local cid = player.getIdentifier(source)
     if not cid then return end
     local n = count(cid)
-    -- Patch the memo in place rather than ageing it: the fetch must agree with what was pushed,
-    -- but one app's recount says nothing about the other six.
-    local hit = memo[cid]
-    if hit then hit.snap[app] = n end
+    local hit = memo[source]
+    if hit and hit.cid == cid then hit.snap[app] = n end
     TriggerClientEvent('sd-phone:client:badgePatch', source, { [app] = n })
 end
 
----Fetched once by the React app on phone open. An unresolvable caller gets all-zero counts.
----Read-only, and memoised: the full snapshot is ten store reads, one of them an unindexed mail
----scan, so a repeat caller is served the last one.
+---Fetched by the React app on every phone open. An unresolvable caller gets all-zero counts.
+---Read-only, and served from the kept counts: the full snapshot is about a dozen store reads,
+---one of them an unindexed mail scan, and every write already pushed what it changed.
 lib.callback.register('sd-phone:server:badges:get', function(src)
     local cid = player.getIdentifier(src)
     if not cid then return { messages = 0, phone = 0, mail = 0, groups = 0, photogram = 0, vibez = 0, birdy = 0 } end
-    return memoized(cid)
+    return cached(src, cid)
 end)
 
 ---Recomputes and pushes a player's badge counts from another resource. A non-number source is
@@ -175,7 +215,9 @@ exports('getBadgeCounts', function(source)
     if type(source) ~= 'number' then return nil end
     local cid = player.getIdentifier(source)
     if not cid then return nil end
-    return badges.snapshot(cid)
+    local snap = badges.snapshot(cid)
+    remember(source, cid, snap)
+    return snap
 end)
 
 return badges
