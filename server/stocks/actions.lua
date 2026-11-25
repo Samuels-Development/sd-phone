@@ -29,6 +29,30 @@ local function cidOf(src) return player.getIdentifier(src) end
 local util = require 'server.util'
 local wholeDollars = util.wholeAmount
 
+---Seed cash for a wallet being created for `cid`. StartingCash is one grant per CHARACTER: under
+---unique phones every SIM opens a wallet of its own, and seeding each of them let a character mint
+---the grant again per SIM and withdraw it to the bank. Without unique phones the wallet being
+---created is the character's own row, which is the claim.
+---@param src integer player server id
+---@param cid string the wallet's identity (getIdentifier)
+---@return number
+local function startingCash(src, cid)
+    local amount = tonumber(ST.StartingCash) or 0
+    if amount <= 0 then return 0 end
+    local realCid = player.getRealIdentifier(src)
+    if not realCid then return 0 end
+    if realCid == cid then return amount end
+    return store.claimStartingCash(realCid) and amount or 0
+end
+
+---The caller's brokerage cash, creating their wallet on first use (startingCash seeds it).
+---@param src integer player server id
+---@param cid string the wallet's identity (getIdentifier)
+---@return number cash
+local function walletCash(src, cid)
+    return store.ensureWallet(cid, function() return startingCash(src, cid) end)
+end
+
 ---@type integer Rolling window the trade budget is measured over, in ms.
 local TRADE_WINDOW = 10000
 ---@type integer Buys plus sells one character may settle per window. The gate above only serialises
@@ -77,7 +101,7 @@ function actions.market(src)
     local cid = cidOf(src)
     if not cid then return { success = false } end
 
-    local cash = store.ensureWallet(cid, ST.StartingCash)
+    local cash = walletCash(src, cid)
 
     local holdings = {}
     for _, h in ipairs(store.listHoldings(cid)) do
@@ -127,7 +151,7 @@ function actions.deposit(src, payload)
         if not bank.removeMoney(src, amount, 'Brokerage deposit') then
             return { success = false, messageKey = 'stocks.couldNotTakeFromAccount', message = 'Could not take that from your account' }
         end
-        local cash = store.ensureWallet(cid, ST.StartingCash) + amount
+        local cash = walletCash(src, cid) + amount
         store.setWallet(cid, cash)
 
         return { success = true, data = { cash = cash, bank = bank.getBalance(src) or (bal - amount) } }
@@ -147,7 +171,7 @@ function actions.withdraw(src, payload)
         local amount = wholeDollars(payload.amount)
         if amount < (ST.MinTrade or 1) then return { success = false, messageKey = 'stocks.enterValidAmount', message = 'Enter a valid amount' } end
 
-        local cash = store.ensureWallet(cid, ST.StartingCash)
+        local cash = walletCash(src, cid)
         if cash < amount then return { success = false, messageKey = 'stocks.insufficientBrokerageCash', message = 'Insufficient brokerage cash' } end
 
         cash = cash - amount
@@ -187,7 +211,7 @@ function actions.buy(src, payload)
         local fee       = lib.math.round(amount * (ST.Commission or 0))
         local totalCost = amount + fee
 
-        local cash = store.ensureWallet(cid, ST.StartingCash)
+        local cash = walletCash(src, cid)
         if cash < totalCost then return { success = false, messageKey = 'stocks.insufficientBrokerageCash', message = 'Insufficient brokerage cash' } end
 
         local existing = store.getHolding(cid, symbol)
@@ -263,7 +287,7 @@ function actions.sell(src, payload)
             store.upsertHolding(cid, symbol, remaining, existing and tonumber(existing.avg_cost) or 0)
         end
 
-        local cash = store.ensureWallet(cid, ST.StartingCash) + net
+        local cash = walletCash(src, cid) + net
         store.setWallet(cid, cash)
 
         broadcastPrices()

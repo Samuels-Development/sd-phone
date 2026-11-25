@@ -40,17 +40,32 @@ function store.ensureSchema()
 end
 
 ---Reads a character's wallet cash, creating the row (seeded with `starting`) via INSERT IGNORE
----the first time.
+---the first time. `starting` may be a function, called only when the row is missing, so a seed
+---that has to be claimed is only claimed for a wallet actually being created.
 ---@param citizenid string framework per-character id
----@param starting? number seed cash for a brand-new wallet row (defaults to 0)
+---@param starting? number|fun(): number seed cash for a brand-new wallet row (defaults to 0)
 ---@return number cash
 function store.ensureWallet(citizenid, starting)
     local row = MySQL.single.await('SELECT cash FROM `phone_stock_wallet` WHERE citizenid = ?', { citizenid })
     if row then return tonumber(row.cash) or 0 end
+    local seed = tonumber(type(starting) == 'function' and starting() or starting) or 0
     MySQL.insert.await(
         'INSERT IGNORE INTO `phone_stock_wallet` (citizenid, cash, updated_at) VALUES (?, ?, ?)',
-        { citizenid, starting or 0, os.time() })
-    return starting or 0
+        { citizenid, seed, os.time() })
+    return seed
+end
+
+---Claims a character's one StartingCash grant by creating the wallet row of their REAL identity,
+---which under unique phones nothing trades from: that row existing is the record that the grant
+---has been spent, whether on a SIM wallet or (without unique phones) on that very row. True only
+---for the call that created it.
+---@param realCid string the character's real identifier
+---@return boolean claimed
+function store.claimStartingCash(realCid)
+    local created = MySQL.update.await(
+        'INSERT IGNORE INTO `phone_stock_wallet` (citizenid, cash, updated_at) VALUES (?, 0, ?)',
+        { realCid, os.time() })
+    return (tonumber(created) or 0) > 0
 end
 
 ---Persists a character's wallet cash (upsert, ABSOLUTE value).
