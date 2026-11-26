@@ -41,7 +41,10 @@ return {
     -- How a vehicle becomes a race class. Resolved from the model hash in this
     -- order: Models, then FromNativeClass, then Default. Editing these tables is
     -- the only way to change what a car counts as, both for joining a race and for
-    -- the class recorded against a finish.
+    -- the class recorded against a finish. The native class comes from the server
+    -- when its build has GetVehicleClassFromName, and from the base-game list in
+    -- shared/vehicleclasses.lua when it does not, so add-on vehicles need a line in
+    -- Models to be anything but Default.
     Vehicles = {
         -- Per-model overrides. Key is the spawn name in lowercase, value is the
         -- class letter. Anything not listed falls through to the native class

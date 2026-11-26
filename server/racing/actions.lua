@@ -127,6 +127,14 @@ end
 
 ---@type table<integer, string> GTA vehicle class to race class, for models with no override.
 local NATIVE_CLASS = type(VEHICLES.FromNativeClass) == 'table' and VEHICLES.FromNativeClass or {}
+
+---@type table<integer, integer> Model hash to native GTA class for every base-game vehicle, from
+---shared/vehicleclasses.lua. Server builds without GetVehicleClassFromName read the class here, so
+---a supercar is still a supercar there and not the default class.
+local GAME_CLASS = {}
+for nativeClass, models in pairs(require 'shared.vehicleclasses') do
+    for i = 1, #models do GAME_CLASS[u32(joaat(models[i]))] = nativeClass end
+end
 ---@type string Class a model falls back to when nothing else matches.
 local DEFAULT_CLASS = CLASS_RANK[VEHICLES.Default] and VEHICLES.Default or 'D'
 
@@ -279,6 +287,9 @@ end
 
 ---The race class a vehicle model belongs to. The only class resolver on the server: every caller
 ---passes the model actions.drivenModel read, so a client can never name its own class.
+---Resolved from the configured override, then the native GTA class through FromNativeClass, then
+---Default. The native class comes from GetVehicleClassFromName where the server build has it and
+---from the bundled base-game table where it does not; an add-on missing from both is Default.
 ---@param modelHash any joaat hash of the vehicle model, signed or unsigned
 ---@return string class 'D'|'C'|'B'|'A'|'S'
 function actions.classForModel(modelHash)
@@ -288,13 +299,11 @@ function actions.classForModel(modelHash)
     local override = MODEL_CLASS[u32(hash)]
     if override then return override end
 
-    -- Only newer server builds carry the model-name class lookup; without it every model that has
-    -- no explicit override falls to the configured default rather than erroring.
     if type(GetVehicleClassFromName) == 'function' then
         local called, native = pcall(GetVehicleClassFromName, math.floor(hash))
         if called and NATIVE_CLASS[native] then return NATIVE_CLASS[native] end
     end
-    return DEFAULT_CLASS
+    return NATIVE_CLASS[GAME_CLASS[u32(hash)]] or DEFAULT_CLASS
 end
 
 ---The model of the vehicle the player is driving, read from the server's own copy of the world.

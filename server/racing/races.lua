@@ -81,12 +81,20 @@ local function hashKey(v)
     return math.floor(n) % 4294967296
 end
 
----@type table<integer, string> Model hash -> display label. The client sends a hash and never a
----label, so the configured model list is the only vehicle name the server can vouch for.
+---@type table<integer, string> Model hash -> display label. The server reads the raced model
+---itself and never takes a label from the client, so it names a car from the configured model list
+---and the bundled base-game vehicle list; anything else is recorded as 'Unknown'.
 local MODEL_NAMES = {}
 for name in pairs((config.Vehicles or {}).Models or {}) do
     local key = hashKey(joaat(name))
     if key then MODEL_NAMES[key] = name:sub(1, 1):upper() .. name:sub(2) end
+end
+for _, models in pairs(require 'shared.vehicleclasses') do
+    for i = 1, #models do
+        local name = models[i]
+        local key = hashKey(joaat(name))
+        if key and not MODEL_NAMES[key] then MODEL_NAMES[key] = name:sub(1, 1):upper() .. name:sub(2) end
+    end
 end
 
 ---Current server id for a citizenid, or nil when they are offline.
