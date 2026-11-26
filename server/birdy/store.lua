@@ -199,6 +199,9 @@ local MAX_TAG_LEN = 64
 ---@type integer Tag rows written per INSERT when a batch of posts is indexed.
 local TAG_CHUNK = 200
 
+---@type integer Posts read per page by the one-time hashtag backfill.
+local BACKFILL_PAGE = 500
+
 ---Distinct lowercased hashtags in a post body, as the hashtag index stores them.
 ---@param body string|nil
 ---@return string[] tags
@@ -236,18 +239,24 @@ local function indexTags(posts)
     return #tagRows
 end
 
----Indexes every post that carries a '#' but has no hashtag rows: the whole history on the first
----boot after the index shipped, then only posts that reached the table some other way (an import,
----a hand edit). A post whose '#' is not a tag is looked at again each boot and adds nothing.
----@return integer indexed posts given rows
+---Indexes the hashtags of every existing post, once: on the first boot after the index shipped.
+---New posts are indexed as they are written, so later boots never rescan the history. Pages
+---through the posts in id order and yields between pages, so a long history cannot stall the
+---server thread on that boot.
+---@return { posts: integer, tags: integer } stats recorded with the migration
 local function backfillHashtags()
-    local rows = MySQL.query.await([[
-        SELECT p.id, p.body FROM phone_birdy_posts p
-        WHERE p.body LIKE '%#%'
-          AND NOT EXISTS (SELECT 1 FROM phone_birdy_hashtags h WHERE h.post_id = p.id)
-    ]]) or {}
-    indexTags(rows)
-    return #rows
+    local after, posts, tags = '', 0, 0
+    while true do
+        local rows = MySQL.query.await(
+            "SELECT id, body FROM phone_birdy_posts WHERE id > ? AND body LIKE '%#%' ORDER BY id LIMIT ?",
+            { after, BACKFILL_PAGE }) or {}
+        if #rows == 0 then break end
+        tags = tags + indexTags(rows)
+        posts = posts + #rows
+        after = rows[#rows].id
+        Wait(0)
+    end
+    return { posts = posts, tags = tags }
 end
 
 ---Creates every Birdy table idempotently and back-fills columns added after first release. Runs
@@ -453,7 +462,7 @@ function store.ensureSchema()
     util.ensureForeignKey('phone_birdy_poll_options', 'post_id', 'phone_birdy_posts', 'id', 'fk_birdy_poll_options_post')
     util.ensureForeignKey('phone_birdy_poll_votes', 'post_id', 'phone_birdy_posts', 'id', 'fk_birdy_poll_votes_post')
     util.ensureForeignKey('phone_birdy_hashtags', 'post_id', 'phone_birdy_posts', 'id', 'fk_birdy_hashtags_post')
-    backfillHashtags()
+    util.runOnce('birdy_hashtags_backfill', backfillHashtags)
 end
 
 ---Decodes a JSON column into a Lua table, tolerating nil / empty / corrupt values (always
