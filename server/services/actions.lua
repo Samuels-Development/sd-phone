@@ -356,7 +356,6 @@ function actions.setDuty(src, payload)
 
     local on = payload.on == true
     job.setDuty(src, on)
-    dutyMemo.map = nil
     store.setDuty(cid, myJob, on)
     TriggerClientEvent('sd-phone:client:services:dutyChanged', src, { job = myJob, duty = on })
     TriggerEvent('sd-phone:services:dutyChanged', src, myJob, on)
