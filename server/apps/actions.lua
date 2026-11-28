@@ -6,6 +6,7 @@ local player   = require 'bridge.server.player'
 local settings = require 'server.settings.store'
 local simState = require 'server.sim.state'
 local simSession = require 'server.sim.session'
+local service = require 'server.service'
 
 ---@type table Actions module; the table returned at end of file.
 local actions = {}
@@ -123,6 +124,10 @@ function actions.install(source, payload)
     local id = payload.id
     if type(id) ~= 'string' or not DOWNLOADABLE[id] then
         return fail('apps.appCanTDownloaded', 'That app can\'t be downloaded')
+    end
+
+    if not service.allows(source, 'data', cid) then
+        return fail('apps.noService', 'No Service')
     end
 
     local gate = WIFI_GATED[id]
