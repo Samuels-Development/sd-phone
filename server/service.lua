@@ -9,6 +9,8 @@ local player = require 'bridge.server.player'
 ---@type table Wi-Fi authority (server.wifi): a connection can carry what the masts will not. The
 ---dependency is one-way, server.wifi never requires this module back.
 local wifiServer = require 'server.wifi'
+local simState = require 'server.sim.state'
+local simSession = require 'server.sim.session'
 
 ---@type table Cell tower settings (configs/celltowers.lua).
 local cfg = config.CellTowers or {}
@@ -51,8 +53,25 @@ end
 
 ---@param source number|nil player server id
 ---@param capability string 'text' | 'call' | 'data'
+---@param deviceIdentity string|nil target phone identity for a queued app download
 ---@return boolean
-function service.allows(source, capability)
+function service.allows(source, capability, deviceIdentity)
+    if capability == 'data' and simState.active and simState.device then
+        local session = source and simSession.resolve(source)
+        local hasSim = session and session.hasSim or false
+        if deviceIdentity and session then
+            hasSim = false
+            for _, phone in ipairs(session.sims or {}) do
+                if phone.identity == deviceIdentity then
+                    hasSim = phone.hasSim == true
+                    break
+                end
+            end
+        end
+        if not hasSim then
+            return wifiServer.provides(source, capability)
+        end
+    end
     if #TOWERS == 0 then return true end
     if celltowers.allows(service.levelFor(source), capability, THRESHOLDS) then return true end
     return wifiServer.provides(source, capability)
@@ -77,11 +96,9 @@ RegisterNetEvent('sd-phone:server:service:report', function(payload)
     announced[source] = hasService
     if hasService then
         ---A verified return to service, for scripts that release work withheld in a dead zone.
-        ---@param source number player server id
         TriggerEvent('sd-phone:server:service:regained', source)
     else
         ---A verified loss of service, for scripts that react to a dead zone instead of polling.
-        ---@param source number player server id
         TriggerEvent('sd-phone:server:service:lost', source)
     end
 end)

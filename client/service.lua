@@ -21,6 +21,10 @@ local TICK_MS = 1000
 ---@type table Service module; the table returned at end of file.
 local service = {}
 
+-- A phone without a SIM may still use Wi-Fi, but cannot use cellular data in
+-- device-owned mode. Until the first server push, stock behaviour stays intact.
+local cellularDataAllowed = true
+
 ---@type number Last computed level, 0..1.
 local currentLevel = 1.0
 ---@type integer Last pushed bar count.
@@ -31,6 +35,20 @@ local currentData = true
 local barsOverride = nil
 ---@type boolean True while the phone is on screen; gates the tick entirely.
 local phoneOpen = false
+
+RegisterNetEvent('sd-phone:client:simState', function(state)
+    local allowed = not (type(state) == 'table' and state.enabled == true
+        and config.Sim and config.Sim.DataOwner == 'device' and state.hasSim ~= true)
+    if allowed == cellularDataAllowed then return end
+    cellularDataAllowed = allowed
+    currentData = cellularDataAllowed and celltowers.allows(currentLevel, 'data', THRESHOLDS)
+    if phoneOpen then
+        SendNUIMessage({
+            action = 'sd-phone:service',
+            data = { bars = service.bars(), level = currentLevel, data = currentData },
+        })
+    end
+end)
 
 ---Whether any mast is configured. False means the feature is off and every reading is full.
 ---@return boolean
@@ -61,6 +79,7 @@ end
 ---@return boolean
 function service.allows(capability)
     if wifiClient.provides(capability) then return true end
+    if capability == 'data' and not cellularDataAllowed then return false end
     return celltowers.allows(currentLevel, capability, THRESHOLDS)
 end
 
@@ -86,7 +105,7 @@ local function refresh(force)
     local pos = GetEntityCoords(cache.ped)
     local level = celltowers.level(pos.x, pos.y, TOWERS)
     local bars  = celltowers.bars(level, CUTOFFS)
-    local data  = celltowers.allows(level, 'data', THRESHOLDS)
+    local data  = cellularDataAllowed and celltowers.allows(level, 'data', THRESHOLDS)
     local regained = currentBars == 0 and bars > 0
     local lost     = currentBars > 0 and bars == 0
 
@@ -102,7 +121,7 @@ local function refresh(force)
     if lost then
         TriggerServerEvent('sd-phone:server:service:report', { lost = true })
     elseif regained or force then
-        TriggerServerEvent('sd-phone:server:service:report')
+        TriggerServerEvent('sd-phone:server:service:report', nil)
     end
 end
 
