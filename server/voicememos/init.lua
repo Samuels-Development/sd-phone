@@ -11,8 +11,6 @@ local actions  = require 'server.voicememos.actions'
 ---@type table Fivemanage uploader (server.photos.uploader): server-side media push, shared
 ---with Photos; the API key never leaves the server.
 local uploader = require 'server.photos.uploader'
----@type table Player bridge (bridge.server.player): citizenid for the shared upload budget.
-local player   = require 'bridge.server.player'
 ---@type table Shared media-upload budget (server.photos.mediaLimit): cooldown + rolling byte cap.
 local mediaLimit = require 'server.photos.mediaLimit'
 ---@type table Presigned upload slots (server.photos.presign): mint + claim for the direct path.

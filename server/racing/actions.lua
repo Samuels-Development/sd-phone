@@ -372,7 +372,6 @@ end
 ---Public alias of the check above: the phone's "Start creating" button opens the same recorder the
 ---/createtrack command does, so init.lua re-checks the same rule here before it fires the client
 ---event, rather than trusting the button having been hidden from an unprivileged caller.
----@param src integer player server id
 ---@return boolean
 actions.canCreate = canCreate
 

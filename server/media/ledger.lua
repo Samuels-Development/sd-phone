@@ -1,6 +1,3 @@
----@type table Shared server helpers (server.util): the fresh-install probe.
-local util = require 'server.util'
-
 ---@type table Ledger module; the table returned at end of file. Remembers every media URL this
 ---server has ever hosted, for every app, so a presigned-upload claim can be told apart from a URL
 ---that already belongs to something else.

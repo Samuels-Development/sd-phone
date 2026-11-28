@@ -32,7 +32,7 @@ local FEATURE = 'photogram:live'
 ---@type integer Concurrent viewers allowed on one stream (0 = unlimited).
 local MAX_VIEWERS = tonumber(CFG.MaxViewers) or 50
 ---@type integer Per-viewer latent-event send ceiling (bytes/s).
-local RELAY_BPS   = tonumber(CFG.RelayBytesPerSec) or 512 * 1024
+local RELAY_BPS   = tonumber(CFG.RelayBytesPerSec) or (512 * 1024)
 ---@type table Encoder hints handed to the broadcaster by live.start: target bitrate, capture
 ---fps, chunk cadence, and how often it re-anchors with a keyframe.
 local ENC = {

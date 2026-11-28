@@ -13,10 +13,7 @@ local share         = require 'server.share.core'
 local settings      = require 'server.settings.store'
 ---@type table Notifications module (server.notifications.init): identity-addressed banner routing.
 local notifications = require 'server.notifications.init'
----@type table Shared server helpers (server.util): the failure envelope for the export guards.
 local util          = require 'server.util'
-local fail          = util.fail
-
 -- Delivers an accepted document AirShare into the recipient's library.
 share.registerHandler('document', actions.deliverShare)
 share.registerHandler('signature-request', actions.deliverSignRequest)

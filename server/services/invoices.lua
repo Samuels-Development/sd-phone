@@ -114,7 +114,7 @@ local function notifyBusiness(jobName)
     if not jobName or BLACKLIST[jobName] then return end
     for _, tsrc in pairs(player.onlineCidMap()) do
         if job.getName(tsrc) == jobName then
-            TriggerClientEvent('sd-phone:client:services:invoices', tsrc, {})
+            TriggerClientEvent('sd-phone:client:services:invoices', tsrc)
         end
     end
 end
@@ -298,7 +298,7 @@ function invoices.create(src, payload)
             bodyVars = { name = label, amount = money },
             time = 'now',
         })
-        TriggerClientEvent('sd-phone:client:services:invoices', tsrc, {})
+        TriggerClientEvent('sd-phone:client:services:invoices', tsrc)
     end
 
     ---First-party hook: fires once per created invoice; targetSource is nil when the target is offline.
@@ -332,7 +332,7 @@ function invoices.cancel(src, payload)
     if not store.markCancelled(id) then return fail('services.invoiceNoLongerPending', 'That invoice is no longer pending') end
 
     local tsrc = player.getSourceByIdentifier(inv.target_cid)
-    if tsrc then TriggerClientEvent('sd-phone:client:services:invoices', tsrc, {}) end
+    if tsrc then TriggerClientEvent('sd-phone:client:services:invoices', tsrc) end
     notifyBusiness(myJob)
     return invoices.list(src)
 end
@@ -448,7 +448,7 @@ function invoices.personalCreate(src, payload)
             bodyVars = { name = senderShown, amount = money },
             time = 'now',
         })
-        TriggerClientEvent('sd-phone:client:services:invoices', tsrc, {})
+        TriggerClientEvent('sd-phone:client:services:invoices', tsrc)
     end
 
     ---First-party hook: fires once per created invoice; job is nil for a personal invoice.
@@ -480,7 +480,7 @@ function invoices.personalCancel(src, payload)
     if not store.markCancelled(id) then return fail('services.invoiceNoLongerPending', 'That invoice is no longer pending') end
 
     local tsrc = player.getSourceByIdentifier(inv.target_cid)
-    if tsrc then TriggerClientEvent('sd-phone:client:services:invoices', tsrc, {}) end
+    if tsrc then TriggerClientEvent('sd-phone:client:services:invoices', tsrc) end
     return invoices.personalSent(src)
 end
 
@@ -608,7 +608,7 @@ function invoices.pay(src, payload)
             body  = body,
             time  = 'now',
         })
-        if personal then TriggerClientEvent('sd-phone:client:services:invoices', ssrc, {}) end
+        if personal then TriggerClientEvent('sd-phone:client:services:invoices', ssrc) end
     end
     notifyBusiness(inv.job)
 

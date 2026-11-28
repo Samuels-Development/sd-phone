@@ -334,7 +334,7 @@ local function copyAppearance(from, to)
 
     -- An officer stood holding a rifle should not be replaced by one standing empty-handed.
     local weapon = GetSelectedPedWeapon(from)
-    if weapon and weapon ~= GetHashKey('WEAPON_UNARMED') then
+    if weapon and weapon ~= `WEAPON_UNARMED` then
         GiveWeaponToPed(to, weapon, 0, false, true)
     end
 end

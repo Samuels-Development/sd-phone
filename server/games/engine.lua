@@ -36,7 +36,7 @@ local invites = {}
 local inGame  = {}
 
 ---@type integer, integer Monotonic counters behind newId/newLobbyId.
-local nextId, nextLobby = 0, 0
+local nextLobby = 0
 
 local util = require 'server.util'
 local ok, fail = util.ok, util.fail

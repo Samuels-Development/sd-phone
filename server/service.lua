@@ -77,11 +77,9 @@ RegisterNetEvent('sd-phone:server:service:report', function(payload)
     announced[source] = hasService
     if hasService then
         ---A verified return to service, for scripts that release work withheld in a dead zone.
-        ---@param source number player server id
         TriggerEvent('sd-phone:server:service:regained', source)
     else
         ---A verified loss of service, for scripts that react to a dead zone instead of polling.
-        ---@param source number player server id
         TriggerEvent('sd-phone:server:service:lost', source)
     end
 end)

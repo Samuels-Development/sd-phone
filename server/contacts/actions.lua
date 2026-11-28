@@ -231,8 +231,8 @@ function actions.requestShare(source, target, payload, opts)
     local fields, refusal = validate(cid, payload)
     if not fields then return refusal end
 
-    local okSent, refusal = share.request(source, target, 'contact', fields, opts)
-    if not okSent then return refusal or fail('contacts.couldNotSendRequest', 'Could not send request') end
+    local okSent, requestRefusal = share.request(source, target, 'contact', fields, opts)
+    if not okSent then return requestRefusal or fail('contacts.couldNotSendRequest', 'Could not send request') end
     return ok()
 end
 

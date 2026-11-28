@@ -256,12 +256,9 @@ function refresh(force)
 
     local pos = GetEntityCoords(cache.ped)
     scanned = wifi.scan(pos.x, pos.y, pos.z, NETWORKS, DROP_BELOW)
-    local inReach = {}
     for i = 1, #scanned do
         scanned[i].bars = wifi.bars(scanned[i].strength)
-        inReach[scanned[i].id] = true
     end
-
 
     if joined then
         local strength = wifi.strength(pos.x, pos.y, pos.z, joined)
