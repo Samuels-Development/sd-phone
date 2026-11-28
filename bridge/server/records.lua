@@ -13,23 +13,6 @@ local aicore = framework.aicore and require 'bridge.server.aicore' or nil
 ---never leaks into server/mdt/. Nothing here writes, and no framework table is ever ALTERed.
 local records = {}
 
----@type { table: string, idCol: string } Framework citizen table: QBCore/QBox key characters by
----citizenid in `players`, ESX by identifier in `users`, ox_core by charId in `characters`, ND by
----charid in `nd_characters`.
----
----ox_core and ND both also HAVE an account table (`users` and `nd_users`), one row per player
----rather than per character - reaching ESX's branch here would read the wrong rows entirely.
-local PEOPLE
-if framework.name == 'esx' then
-    PEOPLE = { table = 'users',         idCol = 'identifier' }
-elseif framework.name == 'ox' then
-    PEOPLE = { table = 'characters',    idCol = 'charId' }
-elseif framework.name == 'nd' then
-    PEOPLE = { table = 'nd_characters', idCol = 'charid' }
-else
-    PEOPLE = { table = 'players',       idCol = 'citizenid' }
-end
-
 ---@type { table: string, idCol: string } Framework ownership table, picked the same way
 ---bridge/server/garages.lua picks it.
 local VEHICLES

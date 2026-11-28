@@ -6,9 +6,6 @@ local inventoryId = require 'bridge.shared.inventory_id'
 local player_mod  = require 'bridge.server.player'
 ---@type table|nil ox_core helpers (bridge.shared.oxcore); nil on every other framework.
 local ox          = framework.name == 'ox' and require 'bridge.shared.oxcore' or nil
----@type table|nil ND_Core helpers (bridge.shared.ndcore); nil on every other framework.
-local nd          = framework.name == 'nd' and require 'bridge.shared.ndcore' or nil
-
 ---@type table Money module; the table returned at end of file. Personal money + black-money
 ---operations. Black money is the black_money item on ox_inventory, the markedbills item with
 ---metadata worth on QBCore, and a true account on ESX; each path is dispatched once at module load.

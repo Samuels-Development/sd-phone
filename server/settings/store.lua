@@ -23,21 +23,6 @@ end
 ---@type fun(): string Random number candidate at config.Phone.Number.Length (server.util).
 local genNumber = util.randomNumber
 
----Returns a varchar column's declared character cap, or nil when the column is missing or not
----length-bounded (information_schema probe).
----@param tbl string table name
----@param name string column name
----@return number|nil length
-local function columnLength(tbl, name)
-    local row = MySQL.single.await([[
-        SELECT CHARACTER_MAXIMUM_LENGTH AS n FROM information_schema.columns
-        WHERE table_schema = DATABASE()
-          AND table_name = ?
-          AND column_name = ?
-    ]], { tbl, name })
-    return row and tonumber(row.n) or nil
-end
-
 ---Clamps a tone id to a lowercase slug capped at 64 chars; nil for empty/invalid input.
 ---@param id any client-supplied tone id
 ---@return string|nil clean lowercase [a-z0-9_-] slug, nil if unusable

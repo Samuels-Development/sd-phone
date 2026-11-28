@@ -78,7 +78,7 @@ end
 -- Mirroring off the lifecycle events rather than the call sites means every path that opens or
 -- closes a connection keeps the client cache honest, including the reconnect sweep.
 AddEventHandler('sd-phone:server:bluetooth:connected', function(src) pushState(src) end)
-AddEventHandler('sd-phone:server:bluetooth:disconnected', function(src) pushState(src) end)
+AddEventHandler('sd-phone:server:bluetooth:disconnected', function(src, _deviceId, _reason) pushState(src) end)
 
 -- The client-facing surface exists only while the feature does, so a switched-off server answers
 -- nothing rather than answering emptily.

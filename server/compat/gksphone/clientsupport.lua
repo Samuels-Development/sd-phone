@@ -88,6 +88,7 @@ end)
 
 ---Backs the client AddMapLocation / RemoveMapLocation / UpdateMapLocation trio, each acting on the
 ---caller's own Maps pins. `op` is one of add, remove, update.
+---@param b? table patch for update operations
 RegisterNetEvent('sd-phone:server:compat:gks:map', function(op, a, b)
     local src = source
     if op == 'add' then

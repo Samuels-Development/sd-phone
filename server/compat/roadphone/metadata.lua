@@ -5,9 +5,6 @@ local player = require 'bridge.server.player'
 ---@type table Settings persistence layer (server.settings.store): the phone's own stored state.
 local store = require 'server.settings.store'
 
----@type table Self-export proxy for sd-phone's own server surface.
-local sd = exports['sd-phone']
-
 local registerExport, stubMeta, warnOnce = shim.registerExport, shim.stubMeta, shim.warnOnce
 
 ---The acting identity behind a source: the SIM identity while unique phones are on, the character

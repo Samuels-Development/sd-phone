@@ -444,11 +444,11 @@ end)
 -- target and gksphone's -1 wildcard.
 
 registerExport('AddMapLocation', function(data)
-    TriggerServerEvent('sd-phone:server:compat:gks:map', 'add', data)
+    TriggerServerEvent('sd-phone:server:compat:gks:map', 'add', data, nil)
 end)
 
 registerExport('RemoveMapLocation', function(id)
-    TriggerServerEvent('sd-phone:server:compat:gks:map', 'remove', id)
+    TriggerServerEvent('sd-phone:server:compat:gks:map', 'remove', id, nil)
 end)
 
 registerExport('UpdateMapLocation', function(id, patch)

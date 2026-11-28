@@ -102,7 +102,7 @@ local function refresh(force)
     if lost then
         TriggerServerEvent('sd-phone:server:service:report', { lost = true })
     elseif regained or force then
-        TriggerServerEvent('sd-phone:server:service:report')
+        TriggerServerEvent('sd-phone:server:service:report', nil)
     end
 end
 

@@ -54,7 +54,7 @@ shim.registerExport('hireUser', function(jobName, citizenid, grade)
 
     jobstore.addSaved(cid, name, math.max(0, math.floor(tonumber(grade) or 0)))
     local src = player.getSourceByRealIdentifier(cid)
-    if src then TriggerClientEvent('sd-phone:client:services:jobsChanged', src, {}) end
+    if src then TriggerClientEvent('sd-phone:client:services:jobsChanged', src) end
     services.notifyRoster(name)
     return true
 end)

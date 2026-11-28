@@ -18,7 +18,7 @@ local mediaGuard    = require 'server.media.guard'
 local offers        = require 'server.voicemail.offers'
 
 local ok, fail = util.ok, util.fail
-local digits, trim = util.digits, util.trim
+local digits = util.digits
 
 ---@type table Actions module; the table returned at end of file.
 local actions = {}

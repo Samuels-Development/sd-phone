@@ -88,7 +88,7 @@ local function import(row)
             bodyVars = { name = label, amount = shown },
             time = 'now',
         })
-        TriggerClientEvent('sd-phone:client:services:invoices', tsrc, {})
+        TriggerClientEvent('sd-phone:client:services:invoices', tsrc)
     end
 end
 

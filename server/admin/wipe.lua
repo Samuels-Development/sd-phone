@@ -234,9 +234,9 @@ local function wipeCid(cid)
     -- so an account left standing keeps its slot and its address forever, and a "wiped" character
     -- cannot re-register the same email. Deleted after the sign-out pass, so an account shared with
     -- someone else has already had this character removed from it and is then left alone.
-    local owned = MySQL.query.await(
+    local ownedAccounts = MySQL.query.await(
         'SELECT email, logged_in_citizens FROM phone_mail_accounts WHERE created_by_cid = ?', { cid }) or {}
-    for _, m in ipairs(owned) do
+    for _, m in ipairs(ownedAccounts) do
         local signedIn = json.decode(m.logged_in_citizens or '[]') or {}
         local others = 0
         for _, c in ipairs(signedIn) do if c ~= cid then others = others + 1 end end
